@@ -250,6 +250,9 @@ class JdbcAuthorizationServiceTests {
                 Capability.BRAND_READ,
                 Capability.LOCATION_READ,
                 Capability.LEGAL_ENTITY_READ,
+                // ADR 0038 lines 503-513, wave P34: seeing a tenant's registered
+                // fiscal terminals and their health takes nothing out.
+                Capability.FISCAL_TERMINAL_READ,
                 Capability.CHANNEL_READ,
                 Capability.CATALOG_READ,
                 Capability.MEDIA_READ,

@@ -1648,4 +1648,114 @@ public class JdbcCatalogStore {
 
     /** One row of {@link #modifierGroupsForProduct}: a group a product has attached, and where. */
     public record AttachedGroup(UUID groupId, int sortOrder) {}
+
+    /**
+     * Every offered priceable node a brand has, with whether ADR 0038's four
+     * required fields are all present (ADR 0038, Settings 10.7 Tab 3).
+     *
+     * <p>Built locally by wave P34 in place of {@code P21}'s not-yet-merged
+     * fiscal workbench: the minimum coverage read this wave's Tab 3 needs — a
+     * per-brand unclassified count and the node list ordered by offering
+     * breadth — without the bulk-assign tool or the product-editor
+     * integration P21 owns.
+     *
+     * <p>A modifier option linked to a sellable variant is excluded, matching
+     * V0028's own migration comment: it is classified through the link and
+     * carries no classification of its own, so listing it here would double
+     * every dish that also appears as a modifier.
+     *
+     * <p>{@code categoryName} is null for {@code MODIFIER_OPTION} and
+     * {@code FEE} nodes — neither belongs to a category — and
+     * {@code locationCount} is the count of {@code AVAILABLE} location
+     * offerings for a {@code VARIANT}, zero for the other two kinds, which
+     * carry no per-location offering row at all.
+     */
+    public List<FiscalCoverageNodeRow> fiscalCoverageNodes(UUID tenantId, UUID brandId, String locale) {
+        return jdbc.sql("""
+                WITH variant_nodes AS (
+                    SELECT 'VARIANT' AS node_type, v.id AS node_id, t.name AS name,
+                           ct.name AS category_name,
+                           (SELECT count(*) FROM catalog.location_offerings lo
+                             WHERE lo.tenant_id = v.tenant_id AND lo.variant_id = v.id
+                               AND lo.status = 'AVAILABLE') AS location_count,
+                           (fc.id IS NULL OR fc.mxik_code IS NULL OR fc.package_code IS NULL
+                              OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified
+                    FROM catalog.variants v
+                    JOIN catalog.products p
+                        ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
+                    LEFT JOIN catalog.translations t
+                        ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
+                           AND t.brand_id = p.brand_id AND t.locale = :locale
+                    LEFT JOIN LATERAL (
+                        SELECT c.id, c.tenant_id
+                        FROM catalog.category_products cp
+                        JOIN catalog.categories c
+                            ON c.id = cp.category_id AND c.tenant_id = cp.tenant_id AND c.brand_id = cp.brand_id
+                        WHERE cp.product_id = p.id AND cp.tenant_id = p.tenant_id AND cp.brand_id = p.brand_id
+                        ORDER BY cp.sort_order, c.id
+                        LIMIT 1
+                    ) first_category ON true
+                    LEFT JOIN catalog.translations ct
+                        ON ct.entity_type = 'CATEGORY' AND ct.entity_id = first_category.id
+                           AND ct.tenant_id = first_category.tenant_id AND ct.locale = :locale
+                    LEFT JOIN catalog.fiscal_classifications fc
+                        ON fc.priceable_type = 'VARIANT' AND fc.priceable_id = v.id AND fc.tenant_id = v.tenant_id
+                    WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId
+                      AND v.status = 'ACTIVE' AND p.status = 'ACTIVE'
+                ),
+                modifier_nodes AS (
+                    SELECT 'MODIFIER_OPTION' AS node_type, o.id AS node_id, t.name AS name,
+                           CAST(NULL AS varchar) AS category_name,
+                           0 AS location_count,
+                           (fc.id IS NULL OR fc.mxik_code IS NULL OR fc.package_code IS NULL
+                              OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified
+                    FROM catalog.modifier_options o
+                    LEFT JOIN catalog.translations t
+                        ON t.entity_type = 'MODIFIER_OPTION' AND t.entity_id = o.id AND t.tenant_id = o.tenant_id
+                           AND t.brand_id = o.brand_id AND t.locale = :locale
+                    LEFT JOIN catalog.fiscal_classifications fc
+                        ON fc.priceable_type = 'MODIFIER_OPTION' AND fc.priceable_id = o.id AND fc.tenant_id = o.tenant_id
+                    WHERE o.tenant_id = :tenantId AND o.brand_id = :brandId AND o.status = 'ACTIVE'
+                      AND o.linked_variant_id IS NULL
+                ),
+                fee_nodes AS (
+                    SELECT 'FEE' AS node_type, f.id AS node_id, CAST(NULL AS varchar) AS name,
+                           CAST(NULL AS varchar) AS category_name,
+                           0 AS location_count,
+                           (fc.id IS NULL OR fc.mxik_code IS NULL OR fc.package_code IS NULL
+                              OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified
+                    FROM catalog.fees f
+                    LEFT JOIN catalog.fiscal_classifications fc
+                        ON fc.priceable_type = 'FEE' AND fc.priceable_id = f.id AND fc.tenant_id = f.tenant_id
+                    WHERE f.tenant_id = :tenantId AND f.brand_id = :brandId AND f.status = 'ACTIVE'
+                )
+                SELECT * FROM variant_nodes
+                UNION ALL SELECT * FROM modifier_nodes
+                UNION ALL SELECT * FROM fee_nodes
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locale", locale)
+                .query((row, number) -> new FiscalCoverageNodeRow(
+                        PriceableType.valueOf(row.getString("node_type")),
+                        row.getObject("node_id", UUID.class),
+                        row.getString("name"),
+                        row.getString("category_name"),
+                        row.getInt("location_count"),
+                        row.getBoolean("unclassified")))
+                .list();
+    }
+
+    /**
+     * One priceable node in the fiscal coverage report: what it is, what it is
+     * called, where it sits, how many locations sell it, and whether ADR 0038's
+     * four required fields are all present.
+     */
+    public record FiscalCoverageNodeRow(
+            PriceableType nodeType,
+            UUID nodeId,
+            @Nullable String name,
+            @Nullable String categoryName,
+            int locationCount,
+            boolean unclassified) {}
 }

@@ -23,6 +23,8 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.application.CatalogQueryService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableType;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.media.api.MediaAssetId;
@@ -536,6 +538,98 @@ class CatalogQueryServiceTests {
                 .satisfies(row -> assertThat(row.sortOrder()).isEqualTo(9));
     }
 
+    // ----------------------------------------------------- fiscal coverage (P34)
+
+    @Test
+    @DisplayName(
+            "the coverage report counts an unclassified variant and vivifies the brand's delivery fee unclassified")
+    void fiscalCoverageCountsUnclassifiedNodesAndTheDeliveryFee() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "PLOV",
+                "Osh",
+                null,
+                LOCALE,
+                "SKU-PLOV",
+                "PIECE",
+                FiscalClassification.of("10101001001000000", "1", 796, "Osh"),
+                ACTOR);
+        var lagman = authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "LAGMAN",
+                "Lag'mon",
+                null,
+                LOCALE,
+                "SKU-LAGMAN",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
+
+        CatalogQueryService.FiscalCoverageSummary coverage = query.fiscalCoverage(TENANT, BRAND);
+
+        assertThat(coverage.totalNodes())
+                .as("two products' default variants plus the auto-vivified delivery fee")
+                .isEqualTo(3);
+        assertThat(coverage.unclassifiedCount()).isEqualTo(2);
+        assertThat(coverage.nodes())
+                .as("the delivery fee sorts first even though it has no offering breadth to rank by")
+                .first()
+                .satisfies(node -> assertThat(node.nodeType()).isEqualTo(PriceableType.FEE));
+        assertThat(coverage.nodes())
+                .extracting(CatalogQueryService.FiscalCoverageNode::nodeId)
+                .contains(store.variantsForProduct(TENANT, BRAND, lagman.productId())
+                        .getFirst()
+                        .id());
+    }
+
+    @Test
+    @DisplayName("classifying the delivery fee removes it from the unclassified list")
+    void classifyingTheDeliveryFeeClearsItFromCoverage() {
+        authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        query.fiscalCoverage(TENANT, BRAND);
+        authoring.classifyFee(
+                TENANT, BRAND, "DELIVERY", FiscalClassification.of("10101001001000000", "1", 796, "Yetkazish"), ACTOR);
+
+        CatalogQueryService.FiscalCoverageSummary coverage = query.fiscalCoverage(TENANT, BRAND);
+
+        assertThat(coverage.nodes()).noneMatch(node -> node.nodeType() == PriceableType.FEE);
+    }
+
+    @Test
+    @DisplayName("the unclassified list orders by offering breadth: the variant sold in more locations comes first")
+    void fiscalCoverageOrdersByOfferingBreadth() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        var popular = authoring.createProduct(
+                TENANT, BRAND, catalogId, "POPULAR", "Ommabop", null, LOCALE, "SKU-POP", "PIECE", UNCLASSIFIED, ACTOR);
+        var rare = authoring.createProduct(
+                TENANT, BRAND, catalogId, "RARE", "Kam", null, LOCALE, "SKU-RARE", "PIECE", UNCLASSIFIED, ACTOR);
+        UUID popularVariant = store.variantsForProduct(TENANT, BRAND, popular.productId())
+                .getFirst()
+                .id();
+        UUID rareVariant = store.variantsForProduct(TENANT, BRAND, rare.productId())
+                .getFirst()
+                .id();
+        UUID locationOne = seedLocation(TENANT, BRAND, "COVL1");
+        UUID locationTwo = seedLocation(TENANT, BRAND, "COVL2");
+        store.upsertOffering(TENANT, BRAND, locationOne, popularVariant, OfferingStatus.AVAILABLE, "DELIVERY,PICKUP");
+        store.upsertOffering(TENANT, BRAND, locationTwo, popularVariant, OfferingStatus.AVAILABLE, "DELIVERY,PICKUP");
+        store.upsertOffering(TENANT, BRAND, locationOne, rareVariant, OfferingStatus.AVAILABLE, "DELIVERY,PICKUP");
+
+        List<CatalogQueryService.FiscalCoverageNode> unclassifiedVariants =
+                query.fiscalCoverage(TENANT, BRAND).nodes().stream()
+                        .filter(node -> node.nodeType() == PriceableType.VARIANT)
+                        .toList();
+
+        assertThat(unclassifiedVariants)
+                .extracting(CatalogQueryService.FiscalCoverageNode::nodeId)
+                .containsExactly(popularVariant, rareVariant);
+    }
+
     // --------------------------------------------------------------- fixtures
 
     /**
@@ -568,6 +662,22 @@ class CatalogQueryServiceTests {
                 .param("objectKey", "tenants/" + tenantId + "/media/" + assetId)
                 .update();
         return assetId;
+    }
+
+    private UUID seedLocation(UUID tenantId, UUID brandId, String code) {
+        UUID locationId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.locations (
+                    id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, :code, :slug, :code, 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", locationId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("code", code)
+                .param("slug", code.toLowerCase(Locale.ROOT))
+                .update();
+        return locationId;
     }
 
     private void insertTenantAndBrand(UUID tenantId, UUID brandId, String tenantSlug, String brandCode) {

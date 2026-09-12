@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -117,6 +118,33 @@ public class LegalEntityController {
         return LegalEntityView.of(legalEntities.require(tenantId, entityId));
     }
 
+    @PutMapping("/{entityId}")
+    @RequiresCapability(value = Capability.LEGAL_ENTITY_MANAGE, mutating = true)
+    @Operation(
+            summary = "Correct a registered entity's own fields",
+            description = "Everything but the taxpayer number and the lifecycle status: legal "
+                    + "and short name, VAT registration and certificate, tax profile, registered "
+                    + "address and contact phone. There was no way to fix any of these before this "
+                    + "endpoint existed — a registered entity could never be corrected.")
+    LegalEntityView update(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID entityId,
+            @Valid @RequestBody UpdateLegalEntityRequest request,
+            @RequestParam int expectedVersion) {
+        return LegalEntityView.of(legalEntities.update(
+                tenantId,
+                entityId,
+                new LegalEntityService.UpdateLegalEntityCommand(
+                        request.legalName(),
+                        request.shortName(),
+                        request.vatRegistered(),
+                        request.vatCertificateReference(),
+                        request.taxProfileId(),
+                        request.registeredAddress(),
+                        request.contactPhone()),
+                expectedVersion));
+    }
+
     @PostMapping("/{entityId}/activate")
     @RequiresCapability(value = Capability.LEGAL_ENTITY_MANAGE, mutating = true)
     @Operation(
@@ -125,6 +153,31 @@ public class LegalEntityController {
     LegalEntityView activate(
             @PathVariable UUID tenantId, @PathVariable UUID entityId, @RequestParam int expectedVersion) {
         return LegalEntityView.of(legalEntities.activate(tenantId, entityId, expectedVersion));
+    }
+
+    @PostMapping("/{entityId}/suspend")
+    @RequiresCapability(value = Capability.LEGAL_ENTITY_MANAGE, mutating = true)
+    @Operation(
+            summary = "Suspend a legal entity",
+            description = "Its assignments are untouched. A branch it still holds blocks rather "
+                    + "than silently falling through to another company. Permitted from ACTIVE.")
+    LegalEntityView suspend(
+            @PathVariable UUID tenantId, @PathVariable UUID entityId, @RequestParam int expectedVersion) {
+        return LegalEntityView.of(legalEntities.suspend(tenantId, entityId, expectedVersion));
+    }
+
+    @PostMapping("/{entityId}/archive")
+    @RequiresCapability(value = Capability.LEGAL_ENTITY_MANAGE, mutating = true)
+    @Operation(
+            summary = "Archive a legal entity",
+            description = "Ends its life on the platform. Permitted from DRAFT or SUSPENDED, "
+                    + "never from ACTIVE — an active entity must be suspended first, so a branch "
+                    + "it still sells as never loses its seller without an operator seeing that "
+                    + "happen. The row survives: every fiscal document it ever issued must still "
+                    + "resolve a name and an INN years later.")
+    LegalEntityView archive(
+            @PathVariable UUID tenantId, @PathVariable UUID entityId, @RequestParam int expectedVersion) {
+        return LegalEntityView.of(legalEntities.archive(tenantId, entityId, expectedVersion));
     }
 
     /**
@@ -186,6 +239,17 @@ public class LegalEntityController {
             @NotBlank @Pattern(regexp = "[0-9]{9}") @Schema(description = "Nine-digit Uzbek INN", example = "123456789")
             String tin,
 
+            boolean vatRegistered,
+            @Size(max = 100) String vatCertificateReference,
+            UUID taxProfileId,
+            @Size(max = 500) String registeredAddress,
+
+            @Size(max = 32) @Pattern(regexp = "\\+[1-9][0-9]{7,14}") @Schema(example = "+998712000000")
+            String contactPhone) {}
+
+    record UpdateLegalEntityRequest(
+            @NotBlank @Size(max = 200) String legalName,
+            @Size(max = 200) String shortName,
             boolean vatRegistered,
             @Size(max = 100) String vatCertificateReference,
             UUID taxProfileId,

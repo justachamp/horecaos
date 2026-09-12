@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.fiscal.api.FiscalTerminalDirectory;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.payments.application.CapturedMoneyPort;
 import uz.horecaos.platform.payments.domain.CaptureTiming;
@@ -118,14 +119,26 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
      */
     private static final String OPERATOR_RESPONSIBILITY = "OPERATOR";
 
+    /**
+     * ADR 0038: a fiscal-capable POS, courier terminal or kiosk belonging to
+     * the entity. See {@link #responsibilityOf}.
+     */
+    private static final String TERMINAL_RESPONSIBILITY = "TERMINAL";
+
     private final JdbcSettlementStore store;
     private final OrderSettlementService settlements;
     private final Clock clock;
+    private final FiscalTerminalDirectory fiscalTerminals;
 
-    public CheckoutSettlementPlanner(JdbcSettlementStore store, OrderSettlementService settlements, Clock clock) {
+    public CheckoutSettlementPlanner(
+            JdbcSettlementStore store,
+            OrderSettlementService settlements,
+            Clock clock,
+            FiscalTerminalDirectory fiscalTerminals) {
         this.store = store;
         this.settlements = settlements;
         this.clock = clock;
+        this.fiscalTerminals = fiscalTerminals;
     }
 
     @Override
@@ -188,7 +201,7 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
                         request.tenantId(),
                         method.get().code(),
                         method.get().code(),
-                        responsibilityOf(method.get()),
+                        responsibilityOf(request.tenantId(), request.locationId(), method.get()),
                         false),
                 Math.subtractExact(request.totalMinor(), redeemed)));
 
@@ -485,24 +498,40 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
      * answer here breaks the build, which is the only way this file can stop
      * registering a party who never agreed to be liable.
      *
-     * <p><strong>{@code CASH} is left as this file has always registered it, and it
-     * is an open question rather than a settled one.</strong> ADR 0038's table puts
-     * cash under {@code TERMINAL} — a fiscal-capable POS, courier terminal or kiosk
-     * belonging to the entity — and that responsibility is specified and not built:
-     * {@code fiscal.fiscal_terminals} does not exist in the schema, the activation
-     * precondition ADR 0038 requires ("cash requires a fiscal-capable terminal bound
-     * to the location") has nowhere to run, and declaring {@code TERMINAL} here
-     * would assert equipment no tenant has yet registered. Changing the declared
-     * fiscal agent for this market's dominant tender is a decision for whoever owns
-     * ADR 0038's rollout, not a side effect of a marketplace fix — but the value
-     * below is wrong in the other direction and should not be allowed to settle
-     * quietly into the registry.
+     * <p><strong>{@code CASH} now asks {@code fiscal.fiscal_terminals} (wave P34)
+     * rather than answering {@code OPERATOR} unconditionally.</strong> ADR 0038's
+     * table puts cash under {@code TERMINAL} — a fiscal-capable POS, courier
+     * terminal or kiosk belonging to the entity — and {@link FiscalTerminalDirectory}
+     * is now the one place that can say whether {@code locationId} actually has one
+     * bound. Where it does, {@code TERMINAL} is declared, which is what ADR 0038
+     * always meant; where it does not, {@code OPERATOR} is kept as the same
+     * conservative fallback this file has always registered, because declaring
+     * equipment a tenant has not yet registered would be a fiscal lie in the other
+     * direction.
+     *
+     * <p><strong>This is deliberately not yet a hard refusal.</strong> ADR 0038's
+     * own activation precondition — "cash requires a fiscal-capable terminal bound
+     * to the location" — belongs at the point a channel or payment method is
+     * activated for a location, which is the payment-method registry wave's
+     * surface (row 1.2c), not a change to the live checkout path every existing
+     * cash order and every unrelated test currently exercises. Wiring the refusal
+     * in here as well would make this file the second place that decision is made.
+     *
+     * <p>Package-private rather than {@code private} so {@code
+     * CheckoutSettlementPlannerFiscalResponsibilityTests} can exercise every
+     * branch directly, against a fake {@link FiscalTerminalDirectory}, without
+     * a full checkout — the same reason a settlement-shaped test would need a
+     * tenant, a brand, a location, a catalog and a channel just to reach one
+     * {@code switch}.
      */
-    private static String responsibilityOf(PaymentMethod method) {
+    String responsibilityOf(UUID tenantId, UUID locationId, PaymentMethod method) {
         return switch (method) {
             case CLICK, PAYME, TELEGRAM -> PARTNER_RESPONSIBILITY;
             case MARKETPLACE -> MARKETPLACE_RESPONSIBILITY;
-            case CASH -> OPERATOR_RESPONSIBILITY;
+            case CASH ->
+                fiscalTerminals.hasCapableTerminal(tenantId, locationId)
+                        ? TERMINAL_RESPONSIBILITY
+                        : OPERATOR_RESPONSIBILITY;
         };
     }
 

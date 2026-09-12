@@ -48,6 +48,25 @@ public enum Capability {
      */
     LEGAL_ENTITY_MANAGE("legal-entity.manage", "legal-entity", "manage"),
 
+    /**
+     * ADR 0038 lines 503-513: seeing a tenant's registered fiscal terminals and
+     * their health.
+     */
+    FISCAL_TERMINAL_READ("fiscal-terminal.read", "fiscal-terminal", "read"),
+
+    /**
+     * ADR 0038 lines 503-513: registering a terminal, checking its connectivity,
+     * and suspending, reactivating or retiring one.
+     *
+     * <p>Held the same way {@link #INTEGRATION_INSTALLATION_MANAGE} is — the
+     * owner and the tenant administrator, never finance or a brand manager —
+     * because this is IT equipment registration, not the fiscal-identity
+     * decision {@link #LEGAL_ENTITY_MANAGE} is: an admin who pairs a POS box to
+     * a branch is not thereby deciding which company issues that branch's
+     * receipts.
+     */
+    FISCAL_TERMINAL_MANAGE("fiscal-terminal.manage", "fiscal-terminal", "manage"),
+
     /** ADR 0036: the tenant-owned sales channel registry and its three matrices. */
     CHANNEL_READ("channel.read", "channel", "read"),
     CHANNEL_MANAGE("channel.manage", "channel", "manage"),

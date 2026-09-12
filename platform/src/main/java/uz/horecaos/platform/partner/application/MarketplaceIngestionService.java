@@ -334,6 +334,7 @@ public class MarketplaceIngestionService {
                         venue.brandId(),
                         orderId,
                         null,
+                        venue.locationId(),
                         totals.currency(),
                         totals.customerPaidTotalMinor(),
                         MARKETPLACE_TENDER,

@@ -279,7 +279,8 @@ class OrderAmendmentAndOutcomeTests {
                 settlementStore,
                 new uz.horecaos.platform.payments.settlement.OrderSettlementService(
                         settlementStore, NO_REDEMPTION, clock),
-                clock);
+                clock,
+                new uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalTerminalStore(jdbc, objectMapper));
 
         carts = new CartService(
                 cartStore,

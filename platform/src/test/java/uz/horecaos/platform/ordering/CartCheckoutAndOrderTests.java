@@ -41,6 +41,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.application.CustomerBlacklistService;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
+import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalTerminalStore;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
@@ -303,7 +304,8 @@ class CartCheckoutAndOrderTests {
         intentStore = new JdbcPaymentIntentStore(jdbc);
         paymentAttemptStore = new JdbcPaymentAttemptStore(jdbc);
         settlements = new OrderSettlementService(settlementStore, redemption, clock);
-        settlementPlanner = new CheckoutSettlementPlanner(settlementStore, settlements, clock);
+        settlementPlanner = new CheckoutSettlementPlanner(
+                settlementStore, settlements, clock, new JdbcFiscalTerminalStore(jdbc, new ObjectMapper()));
         loyaltyBalances = new uz.horecaos.platform.loyalty.application.LoyaltyQueryService(loyaltyStore, clock);
         // The production sweep, over the production store. The hold this suite
         // takes at checkout is the hold this sweep decides about, and the two

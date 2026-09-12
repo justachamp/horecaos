@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -237,6 +238,54 @@ class LegalEntityControllerEndpointTests {
                 .contains("RESOURCE_CONFLICT")
                 .contains("taxpayer number");
         assertThat(entityCount()).isEqualTo(1);
+    }
+
+    @Test
+    void anOwnerCorrectsSuspendsAndArchivesAnEntity() throws Exception {
+        mvc.perform(post(ENTITIES)
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "register-lifecycle")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(registerBody("LIFECYCLE", "723456789")));
+        UUID entityId = entityId();
+
+        MvcResult updated = mvc.perform(put(ENTITIES + "/" + entityId)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "update-1")
+                        .queryParam("expectedVersion", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"legalName":"Corrected Name MCHJ","vatRegistered":false,
+                                 "registeredAddress":"Yunusabad","contactPhone":"+998907654321"}
+                                """))
+                .andReturn();
+        assertThat(updated.getResponse().getStatus())
+                .as("a registered entity could never be corrected before this endpoint existed")
+                .isEqualTo(200);
+        assertThat(updated.getResponse().getContentAsString()).contains("\"legalName\":\"Corrected Name MCHJ\"");
+
+        mvc.perform(post(ENTITIES + "/" + entityId + "/activate")
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "activate-lifecycle")
+                .queryParam("expectedVersion", "2"));
+
+        MvcResult suspended = mvc.perform(post(ENTITIES + "/" + entityId + "/suspend")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "suspend-1")
+                        .queryParam("expectedVersion", "3"))
+                .andReturn();
+        assertThat(suspended.getResponse().getStatus())
+                .as("a retired company could only be left ACTIVE before this endpoint existed")
+                .isEqualTo(200);
+        assertThat(suspended.getResponse().getContentAsString()).contains("\"status\":\"SUSPENDED\"");
+
+        MvcResult archived = mvc.perform(post(ENTITIES + "/" + entityId + "/archive")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "archive-1")
+                        .queryParam("expectedVersion", "4"))
+                .andReturn();
+        assertThat(archived.getResponse().getStatus()).isEqualTo(200);
+        assertThat(archived.getResponse().getContentAsString()).contains("\"status\":\"ARCHIVED\"");
     }
 
     @Test
