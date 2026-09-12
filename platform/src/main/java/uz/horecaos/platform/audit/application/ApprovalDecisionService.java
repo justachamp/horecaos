@@ -216,6 +216,48 @@ public class ApprovalDecisionService {
     public record TenantPendingApproval(@Nullable UUID tenantId, PendingApproval approval) {}
 
     /**
+     * What this tenant has already decided — Staff 9.4's own gap, named in
+     * the gap map verbatim: "a manager also cannot see what she approved last
+     * week". Newest decision first, the opposite order from {@link #pending},
+     * where the request closest to lapsing belongs on top; a history read has
+     * no lapse to race against, so it reads the way a log does.
+     *
+     * <p>The maker's free-text reason is withheld for the identical reason as
+     * {@link #pending}. Unlike that method, {@code mayDecide} is meaningless
+     * here — a decided request cannot be decided again — so this shape omits
+     * it rather than returning a value that is always false.
+     */
+    public List<DecidedApprovalHistoryEntry> decided(UUID tenantId, @Nullable String actionCode, int limit) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT r.id, r.tenant_id, r.action_code, r.parameters_hash,
+                       r.scope_type, r.scope_id, r.threshold_description,
+                       r.policy_version, r.status, r.requested_by, r.requested_at, r.expires_at,
+                       r.decided_by, r.decided_at,
+                       r.subject_tenant_id, r.subject_json::text AS subject_json,
+                       subject.display_name AS subject_tenant_name,
+                       p.required_approver_capability
+                  FROM audit.approval_requests r
+                  JOIN audit.approval_policies p ON p.id = r.policy_id
+                  LEFT JOIN tenant.tenants subject ON subject.id = r.subject_tenant_id
+                 WHERE r.tenant_id = :tenantId
+                   AND r.status IN ('APPROVED', 'DECLINED')
+                """);
+        if (actionCode != null && !actionCode.isBlank()) {
+            sql.append(" AND r.action_code = :actionCode");
+        }
+        sql.append(" ORDER BY r.decided_at DESC LIMIT :limit");
+
+        var statement = jdbc.sql(sql.toString()).param("tenantId", tenantId).param("limit", limit);
+        if (actionCode != null && !actionCode.isBlank()) {
+            statement = statement.param("actionCode", actionCode);
+        }
+
+        return statement.query(ApprovalDecisionService::mapRequestWithDecision).list().stream()
+                .map(row -> DecidedApprovalHistoryEntry.of(row, subjectOf(row)))
+                .toList();
+    }
+
+    /**
      * Approves or declines one pending request.
      *
      * @throws ApiException {@code RESOURCE_NOT_FOUND} when the request is not
@@ -589,4 +631,49 @@ public class ApprovalDecisionService {
 
     /** The outcome of a decision, as the approver's console sees it. */
     public record DecidedApproval(UUID id, String actionCode, String status, String decidedBy, Instant decidedAt) {}
+
+    /**
+     * One already-decided request, as Staff 9.4's decided-history read shows
+     * it — {@link PendingApproval}'s own shape, minus {@code mayDecide} and
+     * {@code expiresAt} (meaningless once decided), plus who decided it and
+     * when.
+     */
+    public record DecidedApprovalHistoryEntry(
+            UUID id,
+            String actionCode,
+            String parametersHash,
+            String scopeType,
+            UUID scopeId,
+            String thresholdDescription,
+            int policyVersion,
+            String requiredApproverCapability,
+            String status,
+            String requestedBy,
+            Instant requestedAt,
+            String decidedBy,
+            Instant decidedAt,
+            @Nullable UUID subjectTenantId,
+            @Nullable String subjectTenantName,
+            Map<String, String> subject) {
+
+        private static DecidedApprovalHistoryEntry of(RequestRow row, Map<String, String> subject) {
+            return new DecidedApprovalHistoryEntry(
+                    row.id(),
+                    row.actionCode(),
+                    row.parametersHash(),
+                    row.scopeType(),
+                    row.scopeId(),
+                    row.thresholdDescription(),
+                    row.policyVersion(),
+                    row.requiredApproverCapability(),
+                    row.status(),
+                    row.requestedBy(),
+                    row.requestedAt(),
+                    Objects.requireNonNull(row.decidedBy(), "A decided request has a decider"),
+                    Objects.requireNonNull(row.decidedAt(), "A decided request has a decision time"),
+                    row.subjectTenantId(),
+                    row.subjectTenantName(),
+                    subject);
+        }
+    }
 }
