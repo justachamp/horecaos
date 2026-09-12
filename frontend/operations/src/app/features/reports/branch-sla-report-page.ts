@@ -5,6 +5,8 @@ import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { HistogramChart } from '../../shared/ui/charts/histogram-chart';
+import { ChartCategory } from '../../shared/ui/charts/chart-model';
 import { LocationView, LocationsApi } from '../settings/locations/locations-api';
 import { ProvenanceBanner } from './provenance-banner';
 import { formatCount, formatShare } from './report-formatting';
@@ -46,7 +48,9 @@ interface BranchRow {
 interface SlaRow {
   readonly locationId: string;
   readonly name: string;
-  readonly buckets: Readonly<Record<string, { readonly count: number; readonly sharePercent: number }>>;
+  readonly buckets: Readonly<
+    Record<string, { readonly count: number; readonly sharePercent: number }>
+  >;
   readonly total: number;
 }
 
@@ -75,7 +79,7 @@ type LoadState = 'loading' | 'ready' | 'denied' | 'error' | 'singleLocation';
  */
 @Component({
   selector: 'q-branch-sla-report-page',
-  imports: [TPipe, ProvenanceBanner],
+  imports: [TPipe, ProvenanceBanner, HistogramChart],
   templateUrl: './branch-sla-report-page.html',
   styleUrl: './branch-sla-report-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -96,6 +100,27 @@ export class BranchSlaReportPage {
 
   protected readonly slaBucketCodes = SLA_BUCKETS;
   protected readonly requestedTo = computed(() => this.filters.range().to);
+
+  /**
+   * The tenant-wide handover-time distribution across every branch's own SLA
+   * row — a histogram over `sla_bucket_set.v1`'s six fixed buckets (IA X.19),
+   * this screen's first chart. The per-branch table beside it keeps the exact
+   * counts; this answers "is the whole tenant's handover time skewed slow"
+   * at a glance, which a six-column-per-branch table cannot.
+   */
+  protected readonly slaHistogram = computed<readonly ChartCategory[]>(() => {
+    const totals = new Map<SlaBucketCode, number>(SLA_BUCKETS.map((code) => [code, 0]));
+    for (const branchRow of this.slaRows()) {
+      for (const code of SLA_BUCKETS) {
+        totals.set(code, (totals.get(code) ?? 0) + branchRow.buckets[code].count);
+      }
+    }
+    return SLA_BUCKETS.map((code) => ({
+      key: code,
+      label: this.bucketLabel(code),
+      value: totals.get(code) ?? 0,
+    }));
+  });
 
   constructor() {
     void this.load();
@@ -139,7 +164,9 @@ export class BranchSlaReportPage {
         this.state.set('singleLocation');
         return;
       }
-      const nameById = new Map<string, string>(locations.map((loc: LocationView) => [loc.id, loc.displayName]));
+      const nameById = new Map<string, string>(
+        locations.map((loc: LocationView) => [loc.id, loc.displayName]),
+      );
       const range = this.filters.range();
 
       const [query, sla, prepByLocation] = await Promise.all([
