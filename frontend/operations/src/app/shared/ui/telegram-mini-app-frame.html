@@ -1,0 +1,18 @@
+<figure class="q-telegram-mini-app-frame" data-testid="q-telegram-mini-app-frame">
+  <div class="q-telegram-mini-app-frame__bezel">
+    <div class="q-telegram-mini-app-frame__notch" aria-hidden="true"></div>
+    <div class="q-telegram-mini-app-frame__screen">
+      <div class="q-telegram-mini-app-frame__header" data-testid="q-telegram-mini-app-frame-header">
+        <span class="q-telegram-mini-app-frame__back" aria-hidden="true">‹</span>
+        <span class="q-telegram-mini-app-frame__title q-emphasis">{{ title() }}</span>
+        <span class="q-telegram-mini-app-frame__close" aria-hidden="true">✕</span>
+      </div>
+      <div class="q-telegram-mini-app-frame__body" data-testid="q-telegram-mini-app-frame-body">
+        <ng-content />
+      </div>
+    </div>
+  </div>
+  @if (caption(); as text) {
+    <figcaption class="q-caption q-telegram-mini-app-frame__caption">{{ text }}</figcaption>
+  }
+</figure>

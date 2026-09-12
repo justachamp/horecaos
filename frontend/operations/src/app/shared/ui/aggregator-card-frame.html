@@ -1,0 +1,8 @@
+<figure class="q-aggregator-card-frame" data-testid="q-aggregator-card-frame">
+  <div class="q-aggregator-card-frame__card" data-testid="q-aggregator-card-frame-card">
+    <ng-content />
+  </div>
+  @if (caption(); as text) {
+    <figcaption class="q-caption q-aggregator-card-frame__caption">{{ text }}</figcaption>
+  }
+</figure>
