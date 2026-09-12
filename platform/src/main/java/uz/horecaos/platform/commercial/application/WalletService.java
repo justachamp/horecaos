@@ -1257,7 +1257,10 @@ public class WalletService {
                     .by(ActorRef.systemJob("wallet-settlement"))
                     .at(ResourceScope.tenant(tenantId))
                     .target("commercial.statement", statementId)
-                    .because("the tenant's card token changed while this attempt was pending")
+                    .because("the tenant's card token changed while this attempt was pending -- its own "
+                            + "charge() call may still be outstanding against the old card, this fact is not "
+                            + "proof no charge happened on it, and a late success for it will be recorded "
+                            + "separately as commercial.wallet.card_charge_after_supersede for reconciliation")
                     .changed(
                             freshId == null
                                     ? Map.of(
@@ -1301,6 +1304,16 @@ public class WalletService {
         switch (outcome) {
             case CardCharger.Outcome.Failed failed -> {
                 if (!attempts.settle(attempt.attemptId(), "FAILED", failed.reason(), now)) {
+                    // Either a racing pass already told this exact attempt
+                    // apart -- the ordinary "told twice" case -- or this
+                    // attempt was superseded while its charge() call was
+                    // still outstanding and the provider's real answer is a
+                    // decline: a decline is nothing owed and nothing paid
+                    // either way, on the old card or the new one, so there is
+                    // nothing to record for it and no reconciliation for
+                    // finance to do. Unlike the Succeeded case below, no
+                    // read-back is needed to tell the two apart, because both
+                    // resolve identically here: write nothing.
                     return 0;
                 }
                 // The tenant id and the statement, never the token and never the
@@ -1339,113 +1352,240 @@ public class WalletService {
             case CardCharger.Outcome.Succeeded succeeded -> {
                 wallet.lockBilling(tenantId, now);
                 if (!attempts.settle(attempt.attemptId(), "SUCCEEDED", succeeded.providerReference(), now)) {
-                    // A racing settlement pass for this tenant already recorded
-                    // this exact attempt: both asked under the same key, as ADR
-                    // 0095 says a retry may, and both were told it succeeded.
-                    // That is one charge, told twice, not two charges.
-                    log.debug(
-                            "A card charge for statement {} of tenant {} was already recorded by a racing "
-                                    + "settlement pass",
-                            attempt.statementNumber(),
-                            tenantId);
-                    return 0;
+                    return recordLateSucceededOutcome(tenantId, attempt, succeeded, now);
                 }
                 countCardCharge("succeeded");
-                // What the statement still owes, re-read under the lock this
-                // pass had to let go of around the provider call, and clamped
-                // before anything is written — never after. A transfer that
-                // arrived meanwhile has already paid part of it, and money the
-                // statement no longer owes is never quietly credited as extra
-                // paid balance: that is the one shape a card charged twice
-                // would take at this table, so a surplus is refused here and
-                // audited instead, for finance to reconcile against the
-                // provider by hand.
-                StatementPayment statement = openStatement(tenantId, attempt.currency(), attempt.statementId());
-                long owed = statement == null ? 0 : Math.max(statement.dueMinor(), 0);
-                long applied = Math.min(attempt.amountMinor(), owed);
-                if (applied < attempt.amountMinor()) {
-                    long surplus = attempt.amountMinor() - applied;
-                    log.warn(
-                            "A card charge for statement {} of tenant {} succeeded for {} but only {} was still "
-                                    + "owed; the surplus of {} is refused, not credited, and needs reconciling "
-                                    + "against the provider by hand",
-                            attempt.statementNumber(),
-                            tenantId,
-                            attempt.amountMinor(),
-                            applied,
-                            surplus);
-                    audit.record(AuditFact.of("commercial.wallet.card_charge_surplus_refused", AuditClass.BUSINESS)
-                            .by(ActorRef.systemJob("wallet-settlement"))
-                            .at(ResourceScope.tenant(tenantId))
-                            .target("commercial.statement", attempt.statementId())
-                            .outcome(AuditFact.Outcome.REJECTED)
-                            .because("the card charge succeeded for more than the statement still owed")
-                            .changed(Map.of(
-                                    "amountMinor",
-                                    attempt.amountMinor(),
-                                    "appliedMinor",
-                                    applied,
-                                    "providerReference",
-                                    succeeded.providerReference()))
-                            .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
-                            .correlatedBy(attempt.statementId().toString())
-                            .occurredAt(now)
-                            .build());
-                }
-                if (applied <= 0) {
-                    return 0;
-                }
-                audit.record(AuditFact.of("commercial.wallet.card_charged", AuditClass.BUSINESS)
-                        .by(ActorRef.systemJob("wallet-settlement"))
-                        .at(ResourceScope.tenant(tenantId))
-                        .target("commercial.statement", attempt.statementId())
-                        .because("the statement's remainder was charged to the tenant's card")
-                        .changed(Map.of("amountMinor", applied, "providerReference", succeeded.providerReference()))
-                        .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
-                        .correlatedBy(attempt.statementId().toString())
-                        .occurredAt(now)
-                        .build());
-                // The money actually credited, never more than the statement
-                // still owed: the provider's own reference is what proves the
-                // charge happened, and V0211's unique index on it is what
-                // stops a retry crediting it twice.
-                appendMoneyIn(new WalletEntry(
-                        Ids.newId(),
-                        tenantId,
-                        WalletEntry.PAID,
-                        WalletEntry.TOP_UP,
-                        applied,
-                        attempt.currency(),
-                        null,
-                        null,
-                        null,
-                        null,
-                        succeeded.providerReference(),
-                        "card charge for statement %s".formatted(attempt.statementNumber()),
-                        SYSTEM_CARD_CHARGER,
-                        null,
-                        null,
-                        now));
-                wallet.append(new WalletEntry(
-                        Ids.newId(),
-                        tenantId,
-                        WalletEntry.PAID,
-                        WalletEntry.STATEMENT_PAYMENT,
-                        -applied,
-                        attempt.currency(),
-                        attempt.statementId(),
-                        null,
-                        null,
-                        null,
-                        null,
-                        "statement %s paid by card".formatted(attempt.statementNumber()),
-                        SYSTEM_CARD_CHARGER,
-                        null,
-                        null,
-                        now));
-                return applied;
+                return applySuccessfulCharge(tenantId, attempt, succeeded, now);
             }
         }
+    }
+
+    /**
+     * {@code attempts.settle} found {@code attempt} no longer {@code PENDING}
+     * by the time the provider's {@code Succeeded} answer for it came back.
+     * Two different histories look identical from that call alone, and only
+     * a read-back of the row tells them apart:
+     *
+     * <ul>
+     *   <li>the row is already {@code SUCCEEDED} — a racing settlement pass
+     *       for this tenant already recorded this exact attempt: both asked
+     *       under the same key, as ADR 0095 says a retry may, and both were
+     *       told it succeeded. That is one charge, told twice, not two
+     *       charges, and today's behaviour of writing nothing a second time
+     *       is correct.
+     *   <li>the row is {@code SUPERSEDED} — the tenant's card was swapped
+     *       while this attempt's own {@code charge()} call was still
+     *       outstanding, {@link #supersedeAndMintFresh} settled it
+     *       {@code SUPERSEDED} and minted a fresh attempt under the new card
+     *       believing the old charge would never land, and now it has: a
+     *       real, previously unrecorded charge against a card the tenant no
+     *       longer has on file. This is not the benign case above and must
+     *       not be treated as one, or the money it moved vanishes from the
+     *       books with no audit trail pointing at it.
+     *   <li>the row is {@code FAILED} or {@code NOT_CONFIGURED} — a racing
+     *       pass already told this exact attempt apart with a different
+     *       answer and got there first. This {@code Succeeded} report no
+     *       longer has anywhere to land; nothing is recorded for it.
+     * </ul>
+     */
+    private long recordLateSucceededOutcome(
+            UUID tenantId, CardAttempt attempt, CardCharger.Outcome.Succeeded succeeded, Instant now) {
+        JdbcCardChargeAttemptStore.AttemptRecord stored = attempts.find(tenantId, attempt.attemptId())
+                .orElseThrow(() -> new IllegalStateException("card charge attempt " + attempt.attemptId()
+                        + " vanished after this settlement pass " + "itself read it"));
+        return switch (stored.outcome()) {
+            case "SUPERSEDED" -> recordChargeAfterSupersede(tenantId, attempt, succeeded, now);
+            case "SUCCEEDED" -> {
+                log.debug(
+                        "A card charge for statement {} of tenant {} was already recorded by a racing "
+                                + "settlement pass",
+                        attempt.statementNumber(),
+                        tenantId);
+                yield 0L;
+            }
+            default -> {
+                // FAILED or NOT_CONFIGURED: a racing pass told this attempt
+                // apart with a different, and by definition equally true,
+                // answer before this one arrived. Nothing to reconcile --
+                // there is no second charge to account for, only one report
+                // of the one thing that happened arriving late.
+                log.debug(
+                        "A card charge for statement {} of tenant {} reports Succeeded, but a racing pass had "
+                                + "already settled the attempt {}; nothing to record for this late answer",
+                        attempt.statementNumber(),
+                        tenantId,
+                        stored.outcome());
+                yield 0L;
+            }
+        };
+    }
+
+    /**
+     * A charge succeeded for real, on a card the tenant no longer has on
+     * file, after its attempt had already been settled {@code SUPERSEDED}
+     * and a fresh attempt charged and recorded in its place (ADR 0095). This
+     * is real money the books must not drop: the row is moved from
+     * {@code SUPERSEDED} to {@code SUCCEEDED} — keeping the provider's own
+     * reference, so the row still names what actually happened — and the
+     * amount is routed through exactly {@link #applySuccessfulCharge}, the
+     * same clamp-before-append and surplus-refused path an ordinary success
+     * takes. The statement this attempt was charged for is very likely
+     * already paid in full by the attempt that superseded it, so most or all
+     * of this money is expected to land as a refused surplus rather than a
+     * ledger entry — which is exactly right: it still must not vanish
+     * unaudited. An unambiguous audit fact names this attempt (and the fresh
+     * one that replaced it, when it can still be found) so finance can
+     * refund the old card by hand.
+     */
+    private long recordChargeAfterSupersede(
+            UUID tenantId, CardAttempt attempt, CardCharger.Outcome.Succeeded succeeded, Instant now) {
+        if (!attempts.settleSupersededSuccess(attempt.attemptId(), succeeded.providerReference(), now)) {
+            // A racing report already moved this exact SUPERSEDED row to
+            // SUCCEEDED -- the same "told twice" idempotency settle() already
+            // gives a PENDING row, just entered through the SUPERSEDED door.
+            log.debug(
+                    "A card charge for statement {} of tenant {}, superseded while its own charge was in "
+                            + "flight, was already recorded as charged by a racing report",
+                    attempt.statementNumber(),
+                    tenantId);
+            return 0;
+        }
+        countCardCharge("succeeded_after_supersede");
+        log.warn(
+                "A card charge for statement {} of tenant {} succeeded on a card the tenant no longer has on "
+                        + "file: attempt {} was superseded while its own charge() call was still outstanding, "
+                        + "and its real success has only now arrived. Recorded as commercial.wallet"
+                        + ".card_charge_after_supersede for finance to reconcile by hand.",
+                attempt.statementNumber(),
+                tenantId,
+                attempt.attemptId());
+        Optional<UUID> supersededBy =
+                attempts.findMostRecentOtherAttempt(tenantId, attempt.statementId(), attempt.attemptId());
+        audit.record(AuditFact.of("commercial.wallet.card_charge_after_supersede", AuditClass.BUSINESS)
+                .by(ActorRef.systemJob("wallet-settlement"))
+                .at(ResourceScope.tenant(tenantId))
+                .target("commercial.statement", attempt.statementId())
+                .because("this attempt's own charge succeeded on the provider's side only after it had "
+                        + "already been settled SUPERSEDED and replaced by a fresh attempt under a different "
+                        + "card; the money is real, was never credited, and needs reconciling against the "
+                        + "provider by hand")
+                .changed(supersededBy
+                        .<Map<String, Object>>map(newAttemptId -> Map.of(
+                                "supersededAttemptId", attempt.attemptId().toString(),
+                                "newAttemptId", newAttemptId.toString(),
+                                "providerReference", succeeded.providerReference()))
+                        .orElseGet(() -> Map.of(
+                                "supersededAttemptId",
+                                attempt.attemptId().toString(),
+                                "providerReference",
+                                succeeded.providerReference())))
+                .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
+                .correlatedBy(attempt.statementId().toString())
+                .occurredAt(now)
+                .build());
+        return applySuccessfulCharge(tenantId, attempt, succeeded, now);
+    }
+
+    /**
+     * Credits the money for a card charge whose attempt is now durably
+     * recorded {@code SUCCEEDED} — shared by the ordinary success path and
+     * {@link #recordChargeAfterSupersede}, since both are the same thing from
+     * here on: money the provider says it took, clamped to what the
+     * statement still owes and never credited past that. What the statement
+     * still owes is re-read under the lock this pass had to let go of around
+     * the provider call, and clamped before anything is written — never
+     * after. A transfer that arrived meanwhile has already paid part of it,
+     * and money the statement no longer owes is never quietly credited as
+     * extra paid balance: that is the one shape a card charged twice would
+     * take at this table, so a surplus is refused here and audited instead,
+     * for finance to reconcile against the provider by hand.
+     */
+    private long applySuccessfulCharge(
+            UUID tenantId, CardAttempt attempt, CardCharger.Outcome.Succeeded succeeded, Instant now) {
+        StatementPayment statement = openStatement(tenantId, attempt.currency(), attempt.statementId());
+        long owed = statement == null ? 0 : Math.max(statement.dueMinor(), 0);
+        long applied = Math.min(attempt.amountMinor(), owed);
+        if (applied < attempt.amountMinor()) {
+            long surplus = attempt.amountMinor() - applied;
+            log.warn(
+                    "A card charge for statement {} of tenant {} succeeded for {} but only {} was still "
+                            + "owed; the surplus of {} is refused, not credited, and needs reconciling "
+                            + "against the provider by hand",
+                    attempt.statementNumber(),
+                    tenantId,
+                    attempt.amountMinor(),
+                    applied,
+                    surplus);
+            audit.record(AuditFact.of("commercial.wallet.card_charge_surplus_refused", AuditClass.BUSINESS)
+                    .by(ActorRef.systemJob("wallet-settlement"))
+                    .at(ResourceScope.tenant(tenantId))
+                    .target("commercial.statement", attempt.statementId())
+                    .outcome(AuditFact.Outcome.REJECTED)
+                    .because("the card charge succeeded for more than the statement still owed")
+                    .changed(Map.of(
+                            "amountMinor",
+                            attempt.amountMinor(),
+                            "appliedMinor",
+                            applied,
+                            "providerReference",
+                            succeeded.providerReference()))
+                    .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
+                    .correlatedBy(attempt.statementId().toString())
+                    .occurredAt(now)
+                    .build());
+        }
+        if (applied <= 0) {
+            return 0;
+        }
+        audit.record(AuditFact.of("commercial.wallet.card_charged", AuditClass.BUSINESS)
+                .by(ActorRef.systemJob("wallet-settlement"))
+                .at(ResourceScope.tenant(tenantId))
+                .target("commercial.statement", attempt.statementId())
+                .because("the statement's remainder was charged to the tenant's card")
+                .changed(Map.of("amountMinor", applied, "providerReference", succeeded.providerReference()))
+                .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
+                .correlatedBy(attempt.statementId().toString())
+                .occurredAt(now)
+                .build());
+        // The money actually credited, never more than the statement
+        // still owed: the provider's own reference is what proves the
+        // charge happened, and V0211's unique index on it is what
+        // stops a retry crediting it twice.
+        appendMoneyIn(new WalletEntry(
+                Ids.newId(),
+                tenantId,
+                WalletEntry.PAID,
+                WalletEntry.TOP_UP,
+                applied,
+                attempt.currency(),
+                null,
+                null,
+                null,
+                null,
+                succeeded.providerReference(),
+                "card charge for statement %s".formatted(attempt.statementNumber()),
+                SYSTEM_CARD_CHARGER,
+                null,
+                null,
+                now));
+        wallet.append(new WalletEntry(
+                Ids.newId(),
+                tenantId,
+                WalletEntry.PAID,
+                WalletEntry.STATEMENT_PAYMENT,
+                -applied,
+                attempt.currency(),
+                attempt.statementId(),
+                null,
+                null,
+                null,
+                null,
+                "statement %s paid by card".formatted(attempt.statementNumber()),
+                SYSTEM_CARD_CHARGER,
+                null,
+                null,
+                now));
+        return applied;
     }
 
     private @Nullable StatementPayment openStatement(UUID tenantId, String currency, UUID statementId) {

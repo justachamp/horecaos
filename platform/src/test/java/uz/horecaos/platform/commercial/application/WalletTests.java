@@ -1986,6 +1986,104 @@ class WalletTests {
     }
 
     @Test
+    void aSupersededAttemptsLateSuccessIsRecordedForFinanceToReconcile() {
+        startOnPlan(START, MONTHLY);
+        inTxDo(() ->
+                wallet.setPaymentMethod(PILOT, PaymentMethod.CARD, "vault:old-card", MAKER, "the owner asked", "c"));
+        clock.set(CLOSE);
+        inTx(() -> statements.issue(PILOT, "2026-09", MAKER, "September close", "corr"));
+
+        // Attempt X is minted fresh and its own charge() call is made to take
+        // real wall-clock time, exactly as settleOneCardRemainder's own
+        // Javadoc says a call to a provider HorecaOS does not control can:
+        // before it answers, the owner swaps the card and a second,
+        // overlapping settlement pass runs to completion right here --
+        // supersedes X, mints a fresh attempt Y under the new card, charges
+        // it, and pays the statement in full. Only then does X's own charge()
+        // call answer: Succeeded, on a card the tenant no longer has on file.
+        LateAnsweringWhileSupersededCharger charger = new LateAnsweringWhileSupersededCharger(
+                "vault:new-card", "CLICK-FRESH", new CardCharger.Outcome.Succeeded("CLICK-STALE-SUCCESS"));
+        walletChargingWith(charger).settleCardRemainders(PILOT);
+
+        assertThat(attemptOutcomes())
+                .as("both attempts end SUCCEEDED and settled: Y, which actually paid the statement, and X, "
+                        + "whose own charge is now known to have succeeded too, on the card the tenant no "
+                        + "longer has on file")
+                .containsExactlyInAnyOrder("SUCCEEDED:settled", "SUCCEEDED:settled");
+        assertThat(jdbc.sql("""
+                        SELECT outcome FROM commercial.card_charge_attempts
+                         WHERE tenant_id = :id AND provider_detail = 'CLICK-STALE-SUCCESS'
+                        """).param("id", PILOT).query(String.class).single())
+                .as("X's own late success is recorded against X's own row, keeping its own provider "
+                        + "reference, never left SUPERSEDED as if that charge never landed")
+                .isEqualTo("SUCCEEDED");
+        assertThat(statementPayment("2026-09").dueMinor())
+                .as("the statement was already paid in full by Y before X's answer ever arrived")
+                .isZero();
+        assertThat(statementPayment("2026-09").paidMinor()).isEqualTo(MONTHLY);
+        assertThat(ledgerSize())
+                .as("X's charge is real money but the statement owes nothing more: its whole amount lands "
+                        + "as a refused surplus, never a second TOP_UP/STATEMENT_PAYMENT pair on top of a "
+                        + "statement Y already paid off -- that second pair is the double payment this fix "
+                        + "exists to prevent, not merely a double record of one payment")
+                .isEqualTo(2L);
+        assertThat(wallet.balances(PILOT).paidMinor())
+                .as("nothing left spendable either: X's money is refused as surplus, not credited as extra "
+                        + "paid balance")
+                .isZero();
+        assertThat(auditedActions())
+                .as("X's charge is neither silently dropped nor silently credited on top of Y's: it is "
+                        + "named on its own audit fact, and the amount it could not be credited for is "
+                        + "refused and audited too")
+                .contains(
+                        "commercial.wallet.card_attempt_superseded",
+                        "commercial.wallet.card_charged",
+                        "commercial.wallet.card_charge_after_supersede",
+                        "commercial.wallet.card_charge_surplus_refused");
+        assertThat(changeDocument("commercial.wallet.card_charge_after_supersede"))
+                .as("naming X, the fresh attempt Y that replaced it, and the provider's own reference for "
+                        + "X's charge -- never a card token -- so finance can find the old card's charge and "
+                        + "refund it by hand")
+                .containsEntry("providerReference", "CLICK-STALE-SUCCESS")
+                .containsKeys("supersededAttemptId", "newAttemptId");
+    }
+
+    @Test
+    void aSupersededAttemptsLateFailureWritesNothing() {
+        startOnPlan(START, MONTHLY);
+        inTxDo(() ->
+                wallet.setPaymentMethod(PILOT, PaymentMethod.CARD, "vault:old-card", MAKER, "the owner asked", "c"));
+        clock.set(CLOSE);
+        inTx(() -> statements.issue(PILOT, "2026-09", MAKER, "September close", "corr"));
+
+        // The symmetric case: X's own charge() call is superseded exactly as
+        // above, but when it finally answers, the provider says the charge
+        // never happened at all. There is no money to reconcile either way,
+        // on the old card or the new one -- nothing is recorded for it.
+        LateAnsweringWhileSupersededCharger charger = new LateAnsweringWhileSupersededCharger(
+                "vault:new-card", "CLICK-FRESH", new CardCharger.Outcome.Failed("DECLINED-LATE"));
+        walletChargingWith(charger).settleCardRemainders(PILOT);
+
+        assertThat(attemptOutcomes())
+                .as("X's history is not overwritten by a late decline for an attempt already retired: it "
+                        + "stays exactly what it was, SUPERSEDED, and Y -- the attempt that actually paid "
+                        + "the statement -- stays SUCCEEDED")
+                .containsExactlyInAnyOrder("SUPERSEDED:settled", "SUCCEEDED:settled");
+        assertThat(auditedActions())
+                .as("a late decline for a charge that was never real money moving has nothing to "
+                        + "reconcile: no card_charge_after_supersede, and no card_charge_declined either, "
+                        + "since this decline belongs to an attempt already retired, not to a live one")
+                .contains("commercial.wallet.card_attempt_superseded", "commercial.wallet.card_charged")
+                .doesNotContain(
+                        "commercial.wallet.card_charge_after_supersede", "commercial.wallet.card_charge_declined");
+        assertThat(ledgerSize())
+                .as("only Y's TOP_UP and STATEMENT_PAYMENT -- nothing was ever written for X")
+                .isEqualTo(2L);
+        assertThat(statementPayment("2026-09").dueMinor()).isZero();
+        assertThat(statementPayment("2026-09").paidMinor()).isEqualTo(MONTHLY);
+    }
+
+    @Test
     void theCardIsNeverAskedFromInsideSomebodyElsesTransaction() {
         startOnPlan(START, MONTHLY);
         inTxDo(() ->
@@ -2271,6 +2369,57 @@ class WalletTests {
             } catch (java.sql.SQLException unreachable) {
                 throw new IllegalStateException("could not plant the racing attempt", unreachable);
             }
+        }
+    }
+
+    /**
+     * A charger whose {@code charge()} call for the one fresh attempt this
+     * test ever mints does not answer at once: before returning, it
+     * simulates the owner swapping the card and a second, overlapping
+     * settlement pass running to completion, right here, deterministically --
+     * exactly what {@code settleOneCardRemainder}'s own Javadoc says a call
+     * to a provider HorecaOS does not control can let happen for real. That
+     * second pass finds the attempt still {@code PENDING} under a card token
+     * that no longer matches, supersedes it, mints a fresh attempt under the
+     * card now on file, charges it, and pays the statement -- all before this
+     * call's own answer is given. Only then does it answer: whatever the test
+     * says the stale attempt's own charge actually did, on a card the tenant
+     * no longer has on file by the time the answer lands.
+     */
+    private final class LateAnsweringWhileSupersededCharger implements CardCharger {
+
+        private final String newCardToken;
+        private final String freshProviderReference;
+        private final Outcome staleOutcome;
+        private int calls;
+
+        LateAnsweringWhileSupersededCharger(String newCardToken, String freshProviderReference, Outcome staleOutcome) {
+            this.newCardToken = newCardToken;
+            this.freshProviderReference = freshProviderReference;
+            this.staleOutcome = staleOutcome;
+        }
+
+        @Override
+        public Outcome charge(
+                UUID tenantId,
+                @Nullable String cardTokenReference,
+                long amountMinor,
+                String currency,
+                String idempotencyKey) {
+            calls++;
+            if (calls > 1) {
+                throw new AssertionError("the stale attempt in this test is answered once and never recharged");
+            }
+            inTxDo(() -> wallet.setPaymentMethod(
+                    tenantId, PaymentMethod.CARD, newCardToken, MAKER, "the card expired", "c"));
+            walletChargingWith(new RecordingCharger(new Outcome.Succeeded(freshProviderReference)))
+                    .settleCardRemainders(tenantId);
+            return staleOutcome;
+        }
+
+        @Override
+        public StatusOutcome status(String idempotencyKey) {
+            throw new AssertionError("this attempt is fresh when charged; status() is never asked about it");
         }
     }
 
