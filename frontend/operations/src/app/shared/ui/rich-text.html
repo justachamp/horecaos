@@ -1,0 +1,52 @@
+<div class="q-rich-text" role="group" [attr.aria-label]="ariaLabel()" data-testid="q-rich-text">
+  @for (block of blocks(); track block.id) {
+    <div
+      class="q-rich-text__block"
+      [class.q-rich-text__block--heading]="block.kind === 'heading'"
+      data-testid="q-rich-text-block"
+    >
+      <div class="q-rich-text__toolbar">
+        <select
+          class="q-rich-text__kind q-caption"
+          [attr.aria-label]="blockTypeLabel()"
+          [value]="block.kind"
+          [disabled]="disabled()"
+          (change)="setKind(block.id, $any($event.target).value)"
+          data-testid="q-rich-text-kind"
+        >
+          @for (entry of kindEntries(); track entry[0]) {
+            <option [value]="entry[0]">{{ entry[1] }}</option>
+          }
+        </select>
+        <button
+          type="button"
+          class="q-rich-text__remove"
+          [attr.aria-label]="removeBlockLabel()"
+          [disabled]="disabled() || blocks().length === 1"
+          (click)="removeBlock(block.id)"
+          data-testid="q-rich-text-remove"
+        >
+          ✕
+        </button>
+      </div>
+      <textarea
+        class="q-body q-rich-text__text"
+        [value]="block.text"
+        [disabled]="disabled()"
+        [attr.placeholder]="placeholder()"
+        [attr.rows]="block.kind === 'heading' ? 1 : 3"
+        (input)="onTextInput(block.id, $event)"
+        data-testid="q-rich-text-textarea"
+      ></textarea>
+    </div>
+  }
+  <button
+    type="button"
+    class="q-rich-text__add secondary"
+    [disabled]="disabled()"
+    (click)="addBlockAfter(blocks()[blocks().length - 1].id)"
+    data-testid="q-rich-text-add"
+  >
+    + {{ addBlockLabel() }}
+  </button>
+</div>

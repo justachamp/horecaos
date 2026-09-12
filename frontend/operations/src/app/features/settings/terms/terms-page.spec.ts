@@ -181,12 +181,13 @@ describe('TermsPage', () => {
       },
     );
 
-    const setValue = (id: string, value: string) => {
-      const el = fixture.nativeElement.querySelector(id) as HTMLTextAreaElement;
-      el.value = value;
-      el.dispatchEvent(new Event('input'));
-    };
-    setValue('#terms-ru', 'Новые правила');
+    // The three `q-rich-text` editors render in ru/uz/en order — the first
+    // `q-rich-text-textarea` on the page is the Russian one.
+    const ruEditor = fixture.nativeElement.querySelectorAll(
+      '[data-testid="q-rich-text-textarea"]',
+    )[0] as HTMLTextAreaElement;
+    ruEditor.value = 'Новые правила';
+    ruEditor.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
     const submit = fixture.nativeElement.querySelector(
@@ -197,8 +198,11 @@ describe('TermsPage', () => {
     await flushMicrotasks();
     fixture.detectChanges();
 
+    // `q-rich-text` always emits sanitized HTML, even for one plain block —
+    // see this file's own note above the `openIssues` this wave reports on
+    // the storefront's still-plain-text rendering of this same field.
     expect(publish).toHaveBeenCalledWith('tenant-1', 'brand-1', {
-      contentsByLocale: { ru: 'Новые правила' },
+      contentsByLocale: { ru: '<p>Новые правила</p>' },
       note: undefined,
     });
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Published as version 3');

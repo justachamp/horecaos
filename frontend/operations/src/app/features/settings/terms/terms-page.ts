@@ -1,9 +1,11 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { RichText, RichTextBlockKindLabels } from '../../../shared/ui/rich-text';
+import { sanitizeRichHtml } from '../../../shared/ui/rich-text-sanitizer';
 import { describeApiError } from '../../orders/order-errors';
 import { BrandProfileApi, BrandView } from '../brand-profile/brand-profile-api';
 import {
@@ -42,7 +44,7 @@ type PageState = 'loading' | 'ready' | 'denied' | 'error';
  */
 @Component({
   selector: 'q-terms-page',
-  imports: [TPipe],
+  imports: [TPipe, RichText],
   templateUrl: './terms-page.html',
   styleUrl: './terms-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -66,6 +68,14 @@ export class TermsPage {
   protected readonly editUz = signal('');
   protected readonly editEn = signal('');
   protected readonly note = signal('');
+
+  /** `q-rich-text`'s own shape, row `X.31` — one set of labels for all three locale editors. */
+  protected readonly richTextKindLabels = computed<RichTextBlockKindLabels>(() => ({
+    paragraph: this.i18n.t('ui.richText.kind.paragraph'),
+    heading: this.i18n.t('ui.richText.kind.heading'),
+    bullet: this.i18n.t('ui.richText.kind.bullet'),
+    numbered: this.i18n.t('ui.richText.kind.numbered'),
+  }));
 
   protected readonly publishSubmitting = signal(false);
   protected readonly publishError = signal<string | null>(null);
@@ -202,6 +212,19 @@ export class TermsPage {
     } catch (error) {
       this.handleLoadFailure(error);
     }
+  }
+
+  /**
+   * The published version's own stored content, re-sanitized before it ever
+   * reaches `[innerHTML]` — `q-rich-text` only ever emits sanitized HTML, but
+   * this read has no way to know a given row came from that editor rather
+   * than an older plain-text publish or a direct write elsewhere, and a
+   * preview is exactly where an unsanitized value would run. A legacy
+   * plain-text value passes through unchanged: nothing in it is a tag.
+   */
+  protected previewHtml(preview: TermsVersionView, locale: string): string | null {
+    const content = preview.contentsByLocale[locale];
+    return content === undefined ? null : sanitizeRichHtml(content);
   }
 
   private async loadBrandData(brandId: string): Promise<void> {

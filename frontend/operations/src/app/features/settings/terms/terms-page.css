@@ -48,10 +48,9 @@
   margin-top: 0;
 }
 
-.textarea {
-  height: 140px;
-  resize: vertical;
-  font: inherit;
+q-rich-text {
+  display: block;
+  margin-top: 4px;
 }
 
 .form__actions {
