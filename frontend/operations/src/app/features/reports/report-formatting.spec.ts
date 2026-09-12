@@ -5,7 +5,6 @@ import {
   ddmmyyyy,
   formatAverage,
   formatCount,
-  formatDeltaPercent,
   formatSecondsDuration,
   formatShare,
   formatSignedMinutes,
@@ -98,13 +97,6 @@ describe('formatAverage', () => {
   });
 });
 
-describe('formatDeltaPercent', () => {
-  it('computes a signed percentage change', () => {
-    expect(formatDeltaPercent(120, 100)).toBe('+20%');
-    expect(formatDeltaPercent(80, 100)).toBe('−20%');
-  });
-
-  it('is null against a zero comparison — nothing to divide by', () => {
-    expect(formatDeltaPercent(50, 0)).toBeNull();
-  });
-});
+// formatDeltaPercent moved to shared/ui/charts/kpi-tile.ts as `deltaOf` (IA
+// X.20 — "the same average-check tile is implemented twice... with no shared
+// definition of the delta"). Its tests moved with it: see kpi-tile.spec.ts.

@@ -1,0 +1,42 @@
+.q-chart__gridline {
+  stroke: var(--q-viz-grid);
+  stroke-width: 1;
+}
+
+.q-chart__axis-label {
+  fill: var(--q-viz-axis);
+}
+
+.q-chart__bar {
+  cursor: pointer;
+}
+
+.q-chart__tooltip {
+  position: absolute;
+  transform: translate(-50%, -120%);
+  pointer-events: none;
+  background: var(--q-inverse);
+  color: var(--q-inverse-ink);
+  padding: 6px 10px;
+  border-radius: var(--q-radius);
+  white-space: nowrap;
+}
+
+table[chart-table] {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table[chart-table] th,
+table[chart-table] td {
+  padding: 4px 8px;
+  text-align: right;
+  border-bottom: 1px solid var(--q-hairline);
+  font-variant-numeric: tabular-nums;
+}
+
+table[chart-table] th[scope='row'] {
+  text-align: left;
+  font-weight: 400;
+  color: var(--q-ink-muted);
+}

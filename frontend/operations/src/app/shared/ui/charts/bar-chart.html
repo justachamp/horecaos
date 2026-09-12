@@ -1,0 +1,132 @@
+<q-chart-frame [ariaLabel]="ariaLabel()" data-testid="q-bar-chart">
+  <svg chart-graphic [attr.viewBox]="'0 0 ' + width + ' ' + height()" role="presentation">
+    @if (orientation() === 'vertical') {
+      @for (tick of ticks(); track tick.value) {
+        <line
+          class="q-chart__gridline"
+          x1="48"
+          [attr.x2]="width - 16"
+          [attr.y1]="tick.position"
+          [attr.y2]="tick.position"
+        />
+        <text
+          class="q-chart__axis-label q-caption"
+          x="40"
+          [attr.y]="tick.position"
+          text-anchor="end"
+          dominant-baseline="middle"
+        >
+          {{ tick.label }}
+        </text>
+      }
+      @for (bar of bars(); track bar.key) {
+        <text
+          class="q-chart__axis-label q-caption"
+          [attr.x]="bar.x + bar.width / 2"
+          [attr.y]="height() - 8"
+          text-anchor="middle"
+        >
+          {{ bar.label }}
+        </text>
+      }
+    } @else {
+      @for (tick of ticks(); track tick.value) {
+        <line
+          class="q-chart__gridline"
+          [attr.x1]="tick.position"
+          [attr.x2]="tick.position"
+          y1="0"
+          [attr.y2]="height() - 18"
+        />
+      }
+      @for (tick of ticks(); track tick.value) {
+        <text
+          class="q-chart__axis-label q-caption"
+          [attr.x]="tick.position"
+          [attr.y]="height() - 6"
+          text-anchor="middle"
+        >
+          {{ tick.label }}
+        </text>
+      }
+    }
+
+    @for (bar of bars(); track bar.key) {
+      @if (orientation() === 'horizontal') {
+        <text
+          class="q-chart__bar-label q-body-sm"
+          x="0"
+          [attr.y]="bar.y + bar.height / 2"
+          dominant-baseline="middle"
+        >
+          {{ bar.label }}
+        </text>
+      }
+      <rect
+        class="q-chart__bar"
+        [attr.x]="bar.x"
+        [attr.y]="bar.y"
+        [attr.width]="bar.width"
+        [attr.height]="bar.height"
+        [style.fill]="bar.color"
+        rx="2"
+        (mouseenter)="showHover(bar)"
+        (mouseleave)="clearHover()"
+      />
+      @if (orientation() === 'horizontal') {
+        <text
+          class="q-chart__bar-value q-caption q-tnum"
+          [attr.x]="bar.x + bar.width + 6"
+          [attr.y]="bar.y + bar.height / 2"
+          dominant-baseline="middle"
+        >
+          {{ bar.value }}
+        </text>
+      }
+    }
+  </svg>
+
+  @if (hover(); as tip) {
+    <div
+      chart-tooltip
+      class="q-chart__tooltip"
+      role="tooltip"
+      data-testid="q-bar-chart-tooltip"
+      [style.left.%]="(tip.x / width) * 100"
+      [style.top.%]="(tip.y / height()) * 100"
+    >
+      {{ tip.label }}: {{ tip.value }}
+    </div>
+  }
+
+  <ul chart-legend class="q-chart__legend-list" data-testid="q-bar-chart-legend">
+    @for (bar of bars(); track bar.key) {
+      <li class="q-chart__legend-item q-caption">
+        <span class="q-chart__swatch" [style.background]="bar.color"></span>
+        {{ bar.label }}
+      </li>
+    }
+  </ul>
+
+  <table chart-table data-testid="q-bar-chart-table">
+    <caption class="q-visually-hidden">
+      {{
+        ariaLabel()
+      }}
+    </caption>
+    <thead>
+      <tr>
+        <th scope="col"></th>
+        <th scope="col">{{ ariaLabel() }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (bar of bars(); track bar.key) {
+        <tr>
+          <th scope="row">{{ bar.label }}</th>
+          <td>{{ bar.value }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</q-chart-frame>

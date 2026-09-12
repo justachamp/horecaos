@@ -63,16 +63,6 @@ export function formatCount(value: number): string {
   return negative ? `−${grouped}` : grouped;
 }
 
-/** A signed percentage delta, `+12%` / `−4%` / `0%`, from a current and a comparison value. */
-export function formatDeltaPercent(current: number, comparison: number): string | null {
-  if (comparison === 0) {
-    return null;
-  }
-  const percent = Math.round(((current - comparison) / comparison) * 100);
-  const sign = percent > 0 ? '+' : percent < 0 ? '−' : '';
-  return `${sign}${Math.abs(percent)}%`;
-}
-
 /**
  * An hourly average to one decimal place — `5.3`, never rounded to a whole
  * count. The decimal is deliberate: it is the one visual cue on 7.8's demand

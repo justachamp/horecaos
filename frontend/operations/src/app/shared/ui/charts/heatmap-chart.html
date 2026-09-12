@@ -1,0 +1,89 @@
+<q-chart-frame [ariaLabel]="ariaLabel()" data-testid="q-heatmap-chart">
+  <svg chart-graphic [attr.viewBox]="'0 0 ' + width + ' ' + height()" role="presentation">
+    @for (row of rowLabelPositions(); track row.key) {
+      <text class="q-chart__row-label q-caption" x="0" [attr.y]="row.y" dominant-baseline="middle">
+        {{ row.label }}
+      </text>
+    }
+
+    @for (cell of cells(); track cell.rowKey + '|' + cell.colKey) {
+      @if (cell.value === null) {
+        <rect
+          class="q-chart__cell q-chart__cell--empty"
+          [attr.x]="cell.x"
+          [attr.y]="cell.y"
+          [attr.width]="cell.width"
+          [attr.height]="cell.height"
+          (mouseenter)="showHover(cell)"
+          (mouseleave)="clearHover()"
+        />
+      } @else {
+        <rect
+          class="q-chart__cell"
+          [attr.x]="cell.x"
+          [attr.y]="cell.y"
+          [attr.width]="cell.width"
+          [attr.height]="cell.height"
+          [style.fill]="cell.color"
+          (mouseenter)="showHover(cell)"
+          (mouseleave)="clearHover()"
+        />
+      }
+    }
+  </svg>
+
+  @if (hover(); as tip) {
+    <div
+      chart-tooltip
+      class="q-chart__tooltip"
+      role="tooltip"
+      data-testid="q-heatmap-chart-tooltip"
+      [style.left.%]="(tip.x / width) * 100"
+      [style.top.%]="(tip.y / height()) * 100"
+    >
+      {{ tip.rowLabel }}, {{ tip.colLabel }}: {{ tip.text }}
+    </div>
+  }
+
+  <div chart-legend class="q-chart__scale-legend" data-testid="q-heatmap-chart-legend">
+    <span class="q-caption">{{ 'ui.charts.sequential.low' | t }}</span>
+    <span class="q-chart__scale-swatches">
+      @for (step of [1, 2, 3, 4, 5]; track step) {
+        <span class="q-chart__swatch" [style.background]="'var(--q-viz-seq-' + step + ')'"></span>
+      }
+    </span>
+    <span class="q-caption">{{ 'ui.charts.sequential.high' | t }}</span>
+  </div>
+
+  <table chart-table data-testid="q-heatmap-chart-table">
+    <caption class="q-visually-hidden">
+      {{
+        ariaLabel()
+      }}
+    </caption>
+    <thead>
+      <tr>
+        <th scope="col"></th>
+        @for (label of colLabels(); track label) {
+          <th scope="col">{{ label }}</th>
+        }
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of rows(); track row.key) {
+        <tr>
+          <th scope="row">{{ row.label }}</th>
+          @for (cell of row.cells; track cell.key) {
+            <td>
+              {{
+                cell.value === null
+                  ? ('ui.charts.tooltip.noData' | t)
+                  : valueFormatter()(cell.value)
+              }}
+            </td>
+          }
+        </tr>
+      }
+    </tbody>
+  </table>
+</q-chart-frame>
