@@ -3098,11 +3098,38 @@ export interface StaffSignInRequest {
   username: string;
 }
 
+export interface StatementLineView {
+  amount?: ApiMoney;
+  description?: string;
+  kind?: string;
+  lineNumber?: number;
+  quantity?: number;
+  referenceCode?: string;
+  unitPrice?: ApiMoney;
+}
+
 export interface StatementResponse {
   amountPayableMinor?: number;
   complianceFlag?: boolean;
   periodId?: string;
   statementHash?: string;
+}
+
+export interface StatementView {
+  issueReason?: string;
+  issuedAt?: string;
+  issuedBy?: string;
+  lines?: Array<StatementLineView>;
+  number?: string;
+  periodEnd?: string;
+  periodKey?: string;
+  periodStart?: string;
+  statementId?: string;
+  status?: string;
+  total?: ApiMoney;
+  voidReason?: string;
+  voidedAt?: string;
+  voidedBy?: string;
 }
 
 export interface StationCapacityRequest {
@@ -3743,6 +3770,9 @@ export interface Operations {
   "quote": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/quotes"; request: { parameters: { header: { "Idempotency-Key"?: string }; path: { brandId: string; tenantId: string } }; body: QuoteRequestBody }; responses: { "200": QuoteResponse } };
   "accept": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/quotes/{quoteId}/acceptance"; request: { parameters: { path: { brandId: string; quoteId: string; tenantId: string } }; body: AcceptanceRequest }; responses: { "200": AcceptanceResponse } };
   "entitlements": { method: "GET"; path: "/api/v1/tenants/{tenantId}/commercial/entitlements"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CommercialOperationsControllerEntitlementSnapshotResponse } };
+  "statements": { method: "GET"; path: "/api/v1/tenants/{tenantId}/commercial/statements"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<StatementView> } };
+  "oneStatement": { method: "GET"; path: "/api/v1/tenants/{tenantId}/commercial/statements/{statementId}"; request: { parameters: { path: { statementId: string; tenantId: string } } }; responses: { "200": StatementView } };
+  "statementExport": { method: "GET"; path: "/api/v1/tenants/{tenantId}/commercial/statements/{statementId}/export"; request: { parameters: { path: { statementId: string; tenantId: string } } }; responses: { "200": string } };
   "subscription": { method: "GET"; path: "/api/v1/tenants/{tenantId}/commercial/subscription"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CommercialOperationsControllerSubscriptionResponse } };
   "usage": { method: "GET"; path: "/api/v1/tenants/{tenantId}/commercial/usage"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<CommercialOperationsControllerUsageResponse> } };
   "list": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers"; request: { parameters: { path: { tenantId: string }; query: { cursor?: string; limit?: number; query?: string; status?: string } } }; responses: { "200": PageCustomerSummaryResponse } };

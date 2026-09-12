@@ -2,10 +2,14 @@ package uz.horecaos.platform.commercial.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,9 +19,11 @@ import uz.horecaos.platform.commercial.api.EntitlementService;
 import uz.horecaos.platform.commercial.api.EntitlementSnapshot;
 import uz.horecaos.platform.commercial.api.EntitlementValue;
 import uz.horecaos.platform.commercial.application.PlanCatalogService;
+import uz.horecaos.platform.commercial.application.StatementService;
 import uz.horecaos.platform.commercial.application.SubscriptionService;
 import uz.horecaos.platform.commercial.application.UsageMeteringService;
 import uz.horecaos.platform.commercial.domain.PlanVersion;
+import uz.horecaos.platform.commercial.domain.Statement;
 import uz.horecaos.platform.commercial.domain.Subscription;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcUsageStore;
 import uz.horecaos.platform.iam.api.Capability;
@@ -38,11 +44,19 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * a second read path keeps "what the plan says" answerable one way.
  *
  * <p>Deliberately thin: ADR 0021's own status line is explicit that there is no
- * period close and no invoice export yet, and the platform-wide plan catalogue
- * (an inline-purchase source) is a {@code ScopeType.PLATFORM} read a tenant
- * grant cannot satisfy — a tenant does not yet browse and buy a module from
- * this screen, and the screen says so rather than a stub inviting a click that
- * goes nowhere.
+ * period close yet, and the platform-wide plan catalogue (an inline-purchase
+ * source) is a {@code ScopeType.PLATFORM} read a tenant grant cannot satisfy —
+ * a tenant does not yet browse and buy a module from this screen, and the
+ * screen says so rather than a stub inviting a click that goes nowhere.
+ *
+ * <p>Finance 8/X.4 adds the one read that was already tenant-scoped and simply
+ * unreachable from here: {@code statements}/{@code oneStatement}/{@code
+ * statementExport} below mirror {@code CommercialStatementController}'s three
+ * reads (ADR 0088) — same {@link StatementService}, same {@code
+ * COMMERCIAL_USAGE_READ} capability, same wire shape — at a path this
+ * console's own OpenAPI group can reach, so it stops calling
+ * {@code /api/v1/control-plane/**} for its own invoices. Issuing and voiding a
+ * statement stay HorecaOS-staff-only and stay on the control-plane controller.
  */
 @RestController
 @RequestMapping("/api/v1/tenants/{tenantId}/commercial")
@@ -53,16 +67,19 @@ public class CommercialOperationsController {
     private final EntitlementService entitlements;
     private final UsageMeteringService usage;
     private final PlanCatalogService plans;
+    private final StatementService statements;
 
     public CommercialOperationsController(
             SubscriptionService subscriptions,
             EntitlementService entitlements,
             UsageMeteringService usage,
-            PlanCatalogService plans) {
+            PlanCatalogService plans,
+            StatementService statements) {
         this.subscriptions = subscriptions;
         this.entitlements = entitlements;
         this.usage = usage;
         this.plans = plans;
+        this.statements = statements;
     }
 
     @GetMapping("/subscription")
@@ -102,6 +119,51 @@ public class CommercialOperationsController {
     public ResponseEntity<List<UsageResponse>> usage(@PathVariable UUID tenantId) {
         return ResponseEntity.ok(
                 usage.totals(tenantId).stream().map(UsageResponse::of).toList());
+    }
+
+    @GetMapping("/statements")
+    @RequiresCapability(value = Capability.COMMERCIAL_USAGE_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "Every statement this tenant has been issued",
+            description = "Newest month first, void ones included. Mirrors "
+                    + "CommercialStatementController.list (ADR 0088).")
+    public ResponseEntity<List<CommercialStatementController.StatementView>> statements(@PathVariable UUID tenantId) {
+        return ResponseEntity.ok(statements.list(tenantId).stream()
+                .map(CommercialStatementController.StatementView::of)
+                .toList());
+    }
+
+    // Named oneStatement, not statement: OperationsCourierController already has a
+    // statement() (the settlement-period download), and springdoc would otherwise
+    // silently rename one of the two operationIds to "statement_1" in the
+    // generated client — a rename callers would not see coming.
+    @GetMapping("/statements/{statementId}")
+    @RequiresCapability(value = Capability.COMMERCIAL_USAGE_READ, scope = ScopeType.TENANT)
+    @Operation(summary = "One issued statement with its lines")
+    public ResponseEntity<CommercialStatementController.StatementView> oneStatement(
+            @PathVariable UUID tenantId, @PathVariable UUID statementId) {
+        return ResponseEntity.ok(
+                CommercialStatementController.StatementView.of(statements.find(tenantId, statementId)));
+    }
+
+    @GetMapping(path = "/statements/{statementId}/export", produces = "text/csv")
+    @RequiresCapability(value = Capability.COMMERCIAL_USAGE_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "One issued statement as CSV",
+            description = "For the accounting system an invoice is made in. Amounts are integer "
+                    + "minor units of the statement's currency.")
+    public ResponseEntity<String> statementExport(@PathVariable UUID tenantId, @PathVariable UUID statementId) {
+        Statement statement = statements.find(tenantId, statementId);
+        String filename = "statement-" + statement.number() + ".csv";
+        return ResponseEntity.ok()
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(filename)
+                                .build()
+                                .toString())
+                .body(CommercialStatementController.csv(statement));
     }
 
     // ---------------------------------------------------------- wire records
