@@ -1,0 +1,79 @@
+<q-modal
+  [title]="'delivery.liveMap.reveal.title' | t"
+  [dismissible]="!busy()"
+  (dismiss)="close()"
+  data-testid="track-reveal-dialog"
+>
+  <p class="reveal-dialog__notice q-caption">{{ 'delivery.liveMap.reveal.notice' | t }}</p>
+
+  <label class="reveal-dialog__field">
+    <span class="q-body-sm">{{ 'delivery.liveMap.reveal.from' | t }}</span>
+    <input
+      type="datetime-local"
+      class="reveal-dialog__input q-body-sm"
+      [value]="from()"
+      (input)="setFrom($any($event.target).value)"
+      data-testid="track-reveal-dialog-from"
+    />
+  </label>
+
+  <label class="reveal-dialog__field">
+    <span class="q-body-sm">{{ 'delivery.liveMap.reveal.to' | t }}</span>
+    <input
+      type="datetime-local"
+      class="reveal-dialog__input q-body-sm"
+      [value]="to()"
+      (input)="setTo($any($event.target).value)"
+      data-testid="track-reveal-dialog-to"
+    />
+    @if (windowInvalid()) {
+      <span class="q-caption reveal-dialog__error" data-testid="track-reveal-dialog-window-error">
+        {{ 'delivery.liveMap.reveal.windowInvalid' | t }}
+      </span>
+    }
+  </label>
+
+  <label class="reveal-dialog__field">
+    <span class="q-body-sm">{{ 'delivery.liveMap.reveal.purpose' | t }}</span>
+    <textarea
+      class="reveal-dialog__textarea q-body-sm"
+      rows="3"
+      [value]="purpose()"
+      (input)="setPurpose($any($event.target).value)"
+      [placeholder]="'delivery.liveMap.reveal.purposePlaceholder' | t"
+      [attr.aria-invalid]="purposeTooShort() ? 'true' : null"
+      data-testid="track-reveal-dialog-purpose"
+    ></textarea>
+    @if (purposeTooShort()) {
+      <span class="q-caption reveal-dialog__error" data-testid="track-reveal-dialog-purpose-error">
+        {{ 'delivery.liveMap.reveal.purposeTooShort' | t }}
+      </span>
+    }
+  </label>
+
+  @if (errorText(); as error) {
+    <p class="q-caption reveal-dialog__error" role="alert" data-testid="track-reveal-dialog-error">
+      {{ error }}
+    </p>
+  }
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="reveal-dialog__dismiss q-body-sm"
+      (click)="close()"
+      [disabled]="busy()"
+    >
+      {{ 'delivery.liveMap.reveal.dismiss' | t }}
+    </button>
+    <button
+      type="button"
+      class="reveal-dialog__confirm q-body-sm"
+      (click)="submit()"
+      [disabled]="busy()"
+      data-testid="track-reveal-dialog-confirm"
+    >
+      {{ 'delivery.liveMap.reveal.confirm' | t }}
+    </button>
+  </ng-container>
+</q-modal>

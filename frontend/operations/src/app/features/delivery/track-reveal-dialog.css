@@ -1,0 +1,56 @@
+/* The backdrop, panel and button row are `q-modal` (ADR 0101); this file is
+ * only the dialog's own fields, projected into it — see
+ * `order-reason-dialog.css`'s identical note on why projected content is
+ * still styled from the declaring component. */
+
+.reveal-dialog__notice {
+  margin: 0 0 12px;
+  color: var(--q-ink-muted);
+}
+
+.reveal-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.reveal-dialog__input,
+.reveal-dialog__textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+}
+
+.reveal-dialog__textarea {
+  resize: vertical;
+}
+
+.reveal-dialog__error {
+  color: var(--q-error-text);
+}
+
+.reveal-dialog__dismiss,
+.reveal-dialog__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.reveal-dialog__confirm {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.reveal-dialog__confirm:disabled,
+.reveal-dialog__dismiss:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
