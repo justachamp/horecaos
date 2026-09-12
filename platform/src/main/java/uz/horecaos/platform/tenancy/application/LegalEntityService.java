@@ -99,6 +99,52 @@ public class LegalEntityService {
         return entity;
     }
 
+    /**
+     * Corrects a registered entity's own fields — everything but its {@code tin}
+     * and its lifecycle status.
+     *
+     * <p>Wave P34: until this method existed there was no way to fix a typo'd
+     * legal name, add a VAT certificate reference discovered after
+     * registration, or record a registered address at all — a registered
+     * entity could never be corrected, only replaced by archiving it and
+     * registering a new one under a fresh code, which V0053's own comment
+     * warns loses the code a fiscal document or merchant binding may already
+     * point at.
+     *
+     * <p>{@code tin} is deliberately absent from {@link UpdateLegalEntityCommand}
+     * for the same reason it is absent from {@link #transition}'s callers: a
+     * changed taxpayer number is a different company, not a correction, and
+     * belongs to a fresh registration and a new location assignment from the
+     * date it took effect.
+     */
+    @Transactional
+    public LegalEntity update(UUID tenantId, UUID entityId, UpdateLegalEntityCommand command, int expectedVersion) {
+        LegalEntity entity = require(tenantId, entityId);
+        entity.rename(command.legalName(), command.shortName());
+        entity.applyVatRegistration(command.vatRegistered(), command.vatCertificateReference());
+        entity.useTaxProfile(command.taxProfileId());
+        entity.describeRegistration(command.registeredAddress(), command.contactPhone());
+
+        Instant now = clock.instant();
+        if (!store.update(entity, expectedVersion, now)) {
+            throw new TenantResourceConflictException(
+                    "Legal entity %s has moved on from version %d".formatted(entityId, expectedVersion));
+        }
+
+        audit.record(AuditFact.of("legal-entity.updated", AuditClass.BUSINESS)
+                .by(actor())
+                .at(ResourceScope.tenant(tenantId))
+                .target("LegalEntity", entity.id().value())
+                .targetVersion((long) entity.version())
+                .because("Corrected legal entity " + entity.code())
+                .changed(Map.of(
+                        "legalName", command.legalName(), "vatRegistered", String.valueOf(command.vatRegistered())))
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
+        return entity;
+    }
+
     @Transactional
     public LegalEntity activate(UUID tenantId, UUID entityId, int expectedVersion) {
         LegalEntity entity = transition(tenantId, entityId, expectedVersion, LegalEntity::activate);
@@ -290,6 +336,16 @@ public class LegalEntityService {
             String legalName,
             @Nullable String shortName,
             String tin,
+            boolean vatRegistered,
+            @Nullable String vatCertificateReference,
+            @Nullable UUID taxProfileId,
+            @Nullable String registeredAddress,
+            @Nullable String contactPhone) {}
+
+    /** Everything {@link #update} may correct. No {@code tin}: see that method's own doc. */
+    public record UpdateLegalEntityCommand(
+            String legalName,
+            @Nullable String shortName,
             boolean vatRegistered,
             @Nullable String vatCertificateReference,
             @Nullable UUID taxProfileId,

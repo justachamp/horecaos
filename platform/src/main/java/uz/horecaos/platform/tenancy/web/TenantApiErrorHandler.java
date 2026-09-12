@@ -26,7 +26,15 @@ import uz.horecaos.platform.web.api.ErrorCode;
             SalesChannelController.class,
             ServiceScheduleController.class,
             LocationServiceOperationsController.class,
-            LegalEntityController.class
+            LegalEntityController.class,
+            // Wave P34: added alongside OperationsLegalEntityController#update,
+            // #suspend and #archive. Its pre-existing register/activate/assign
+            // endpoints raised the same TenantResourceNotFoundException,
+            // TenantResourceConflictException and bare IllegalStateException as
+            // the control-plane controller and had no handler here to catch
+            // them — an unknown entity or a stale version on the operations
+            // surface fell straight through to an unmapped 500.
+            OperationsLegalEntityController.class
         })
 public class TenantApiErrorHandler {
 

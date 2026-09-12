@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -38,11 +39,14 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * only the tenant's own
  * highest authority may move it, exactly as {@code
  * PAYMENT_MERCHANT_BINDING_MANAGE} is gated. This controller exposes exactly
- * what {@link LegalEntityController} exposes over HTTP today — register, list,
- * get, activate, assign, and a location's assignment history — under the same
- * capability, and adds nothing beyond it: {@code suspend} and {@code archive}
- * have no HTTP surface on control-plane either and are left that way here, and
- * no new maker-checker gate is introduced. {@link LegalEntityService#assign}'s
+ * what {@link LegalEntityController} exposes over HTTP — register, list, get,
+ * update, activate, suspend, archive, assign, and a location's assignment
+ * history — under the same capability, one HTTP method per
+ * {@link LegalEntityService} operation on each surface (wave P34 closed the
+ * gap: {@code update}, {@code suspend} and {@code archive} used to have no
+ * HTTP surface on either controller, so a registered entity could never be
+ * corrected and a retired company could only be left {@code ACTIVE}), and no
+ * new maker-checker gate is introduced. {@link LegalEntityService#assign}'s
  * mandatory {@code approvalReference} field is already the evidence hook for a
  * decision made through the tenant's general ADR 0027 approval console when
  * one is warranted; inventing a second, endpoint-local approval gate on top of
@@ -112,6 +116,31 @@ public class OperationsLegalEntityController {
         return LegalEntityController.LegalEntityView.of(legalEntities.require(tenantId, entityId));
     }
 
+    @PutMapping("/{entityId}")
+    @RequiresCapability(value = Capability.LEGAL_ENTITY_MANAGE, mutating = true)
+    @Operation(
+            summary = "Correct a registered entity's own fields",
+            description = "Everything but the taxpayer number and the lifecycle status. Mirrors "
+                    + "LegalEntityController#update exactly.")
+    LegalEntityController.LegalEntityView update(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID entityId,
+            @Valid @RequestBody LegalEntityController.UpdateLegalEntityRequest request,
+            @RequestParam int expectedVersion) {
+        return LegalEntityController.LegalEntityView.of(legalEntities.update(
+                tenantId,
+                entityId,
+                new LegalEntityService.UpdateLegalEntityCommand(
+                        request.legalName(),
+                        request.shortName(),
+                        request.vatRegistered(),
+                        request.vatCertificateReference(),
+                        request.taxProfileId(),
+                        request.registeredAddress(),
+                        request.contactPhone()),
+                expectedVersion));
+    }
+
     @PostMapping("/{entityId}/activate")
     @RequiresCapability(value = Capability.LEGAL_ENTITY_MANAGE, mutating = true)
     @Operation(
@@ -120,6 +149,28 @@ public class OperationsLegalEntityController {
     LegalEntityController.LegalEntityView activate(
             @PathVariable UUID tenantId, @PathVariable UUID entityId, @RequestParam int expectedVersion) {
         return LegalEntityController.LegalEntityView.of(legalEntities.activate(tenantId, entityId, expectedVersion));
+    }
+
+    @PostMapping("/{entityId}/suspend")
+    @RequiresCapability(value = Capability.LEGAL_ENTITY_MANAGE, mutating = true)
+    @Operation(
+            summary = "Suspend a legal entity",
+            description = "Its assignments are untouched. Permitted from ACTIVE. Mirrors "
+                    + "LegalEntityController#suspend exactly.")
+    LegalEntityController.LegalEntityView suspend(
+            @PathVariable UUID tenantId, @PathVariable UUID entityId, @RequestParam int expectedVersion) {
+        return LegalEntityController.LegalEntityView.of(legalEntities.suspend(tenantId, entityId, expectedVersion));
+    }
+
+    @PostMapping("/{entityId}/archive")
+    @RequiresCapability(value = Capability.LEGAL_ENTITY_MANAGE, mutating = true)
+    @Operation(
+            summary = "Archive a legal entity",
+            description = "Permitted from DRAFT or SUSPENDED. The row survives. Mirrors "
+                    + "LegalEntityController#archive exactly.")
+    LegalEntityController.LegalEntityView archive(
+            @PathVariable UUID tenantId, @PathVariable UUID entityId, @RequestParam int expectedVersion) {
+        return LegalEntityController.LegalEntityView.of(legalEntities.archive(tenantId, entityId, expectedVersion));
     }
 
     /**
