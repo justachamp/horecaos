@@ -303,7 +303,7 @@ public class OperationsCourierController {
         return ResponseEntity.accepted().build();
     }
 
-    @PostMapping("/couriers/{courierId}/branch-bindings/{locationId}/removal")
+    @PostMapping("/couriers/{courierId}/branch-bindings/{brandId}/{locationId}/removal")
     @RequiresCapability(
             value = Capability.COURIER_ENGAGEMENT_MANAGE,
             scope = ResourceScope.ScopeType.LOCATION,
@@ -312,10 +312,14 @@ public class OperationsCourierController {
             summary = "Unbind a courier from a branch",
             description = "Scoped to the branch named in the path: the manager of the branch a "
                     + "courier is leaving can release the binding without holding the roster "
-                    + "across the whole tenant. A tenant-wide grant still covers it (ADR 0025).")
+                    + "across the whole tenant. A tenant-wide grant still covers it (ADR 0025). "
+                    + "brandId carries the scope only, the same convention CallStatsController "
+                    + "uses — the unbind itself is keyed on (tenant, courier, location), which is "
+                    + "already unique.")
     public ResponseEntity<Void> unbindCourierFromBranch(
             @PathVariable UUID tenantId,
             @PathVariable UUID courierId,
+            @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @Valid @RequestBody CourierRosterReasonRequest body) {
 

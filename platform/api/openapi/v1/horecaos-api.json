@@ -31890,9 +31890,9 @@
         "tags" : [ "Courier operations" ]
       }
     },
-    "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/branch-bindings/{locationId}/removal" : {
+    "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/branch-bindings/{brandId}/{locationId}/removal" : {
       "post" : {
-        "description" : "Scoped to the branch named in the path: the manager of the branch a courier is leaving can release the binding without holding the roster across the whole tenant. A tenant-wide grant still covers it (ADR 0025).",
+        "description" : "Scoped to the branch named in the path: the manager of the branch a courier is leaving can release the binding without holding the roster across the whole tenant. A tenant-wide grant still covers it (ADR 0025). brandId carries the scope only, the same convention CallStatsController uses — the unbind itself is keyed on (tenant, courier, location), which is already unique.",
         "operationId" : "unbindCourierFromBranch",
         "parameters" : [ {
           "in" : "path",
@@ -31905,6 +31905,14 @@
         }, {
           "in" : "path",
           "name" : "courierId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
           "required" : true,
           "schema" : {
             "format" : "uuid",

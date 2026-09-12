@@ -442,6 +442,32 @@ class CourierComplianceFileTests {
         assertThat(store.listGroups(OTHER_TENANT)).isEmpty();
     }
 
+    @Test
+    @DisplayName("a courier cannot be bound to another tenant's branch")
+    void aCourierCannotBeBoundToAnotherTenantsBranch() {
+        UUID otherTenantBrandId = brandIdFor(OTHER_TENANT);
+        UUID otherTenantLocationId = locationIdFor(OTHER_TENANT, "CENTRE");
+
+        // fk_courier_binding_location is keyed on (tenant_id, brand_id,
+        // location_id) against tenant.locations (V0221), so a bind naming a
+        // real brand and location that both belong to a different tenant must
+        // find no matching row and be refused by the database, exactly as
+        // groupsAndBindingsAreTenantScoped proves for group membership above.
+        assertThat(catchThrowable(() -> roster.bindToBranch(
+                        TENANT,
+                        courierId,
+                        otherTenantBrandId,
+                        otherTenantLocationId,
+                        true,
+                        manager(),
+                        "cross-tenant binding attempt",
+                        "corr-b4")))
+                .isNotNull();
+        assertThat(store.bindingsOf(TENANT, courierId))
+                .as("the refused cross-tenant bind must leave the courier's own bindings untouched")
+                .isEmpty();
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private CourierEngagementService.ComplianceFile wholeFile() {
