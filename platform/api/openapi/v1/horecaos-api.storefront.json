@@ -129,6 +129,20 @@
         },
         "type" : "object"
       },
+      "AnalyticsConfigResponse" : {
+        "properties" : {
+          "ga4MeasurementId" : {
+            "type" : "string"
+          },
+          "gtmContainerId" : {
+            "type" : "string"
+          },
+          "searchConsoleVerificationToken" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApiMoney" : {
         "properties" : {
           "amountMinor" : {
@@ -1965,6 +1979,43 @@
         },
         "summary" : "Find the nearest pickup locations with a published storefront menu",
         "tags" : [ "Storefront pickup locations" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/analytics" : {
+      "get" : {
+        "description" : "No installation, no binding, or a suspended one: every field is null, which the storefront reads as 'inject nothing'. Cacheable — these values change only when an operator reconfigures analytics, never per request.",
+        "operationId" : "analyticsConfig",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AnalyticsConfigResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This brand's analytics installs, for client-side injection",
+        "tags" : [ "Storefront analytics" ]
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts" : {
@@ -4486,6 +4537,9 @@
   }, {
     "description" : "A customer's own profile, their own saved addresses, and the products they marked",
     "name" : "Customer self-service"
+  }, {
+    "description" : "Public, non-secret analytics identifiers for a brand",
+    "name" : "Storefront analytics"
   }, {
     "description" : "What delivery costs here, and the evidence for it",
     "name" : "Delivery fee"

@@ -49,6 +49,12 @@ export interface AdmissionResponse {
   tenantId?: string;
 }
 
+export interface AnalyticsConfigResponse {
+  ga4MeasurementId?: string;
+  gtmContainerId?: string;
+  searchConsoleVerificationToken?: string;
+}
+
 export interface ApiMoney {
   amountMinor?: number;
   currency?: string;
@@ -575,6 +581,7 @@ export interface Operations {
   "balance": { method: "GET"; path: "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": BalanceResponse } };
   "entries": { method: "GET"; path: "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}/entries"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": Array<LoyaltyStorefrontControllerEntryResponse> } };
   "nearbyPickupLocations": { method: "GET"; path: "/api/v1/storefront/pickup-locations"; request: { parameters: { query: { lat: number; limit?: number; lon: number } } }; responses: { "200": PickupLocations } };
+  "analyticsConfig": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/analytics"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": AnalyticsConfigResponse } };
   "createCart": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateCartRequest }; responses: { "200": CartResponse } };
   "readCart": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": CartResponse } };
   "readDestination": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/destination"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": DestinationResponse } };
