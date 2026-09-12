@@ -88,7 +88,12 @@ class ApprovalPolicyServiceTests {
         JdbcAuditRecorder recorder =
                 new JdbcAuditRecorder(jdbc, JsonMapper.builder().build());
         authoring = new ApprovalPolicyService(jdbc, recorder, clock);
-        approvals = new JdbcApprovalService(jdbc, recorder, clock, new SimpleMeterRegistry());
+        approvals = new JdbcApprovalService(
+                jdbc,
+                recorder,
+                clock,
+                new SimpleMeterRegistry(),
+                JsonMapper.builder().build());
 
         insertTenant(TENANT, "tenant-policy-one");
         insertTenant(OTHER_TENANT, "tenant-policy-two");

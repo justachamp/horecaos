@@ -98,7 +98,11 @@ class PlatformGrantServiceTests {
         GrantManagementService grantManagement =
                 new GrantManagementService(jdbc, authorization, authorization, event -> {}, CLOCK);
         ApprovalService approvals = new JdbcApprovalService(
-                jdbc, new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()), CLOCK, new SimpleMeterRegistry());
+                jdbc,
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                CLOCK,
+                new SimpleMeterRegistry(),
+                JsonMapper.builder().build());
         service = new PlatformGrantService(new PlatformGrantAuthorityAdapter(grantManagement), approvals);
     }
 
@@ -214,7 +218,11 @@ class PlatformGrantServiceTests {
 
     private void decide(UUID requestId) {
         var approvals = new JdbcApprovalService(
-                jdbc, new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()), CLOCK, new SimpleMeterRegistry());
+                jdbc,
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                CLOCK,
+                new SimpleMeterRegistry(),
+                JsonMapper.builder().build());
         approvals.decide(
                 requestId, ApprovalService.Decision.APPROVE, ActorRef.user("second-signer", null), "looks right");
     }

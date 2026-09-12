@@ -43,6 +43,30 @@ public enum ApprovalAction {
     INTEGRATION_FAILURE_RESOLVE("integration.failure.resolve", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
 
     /**
+     * ADR 0095: a correction to a tenant's wallet, of either money kind, up or
+     * down. Fail-closed like {@link #TENANT_COUNTRY_CHANGE} and governed from
+     * the first day by the platform-scope policy V0211 seeds: a wallet is
+     * money, and the failure mode of "no policy configured yet" must be
+     * "nothing moves", never "one person moves it".
+     */
+    WALLET_ADJUSTMENT("commercial.wallet.adjustment", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
+
+    /** ADR 0095: granting bonus money, with the expiry it lapses on. Fail-closed, same reasoning. */
+    WALLET_BONUS_GRANT("commercial.wallet.bonus-grant", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
+
+    /** ADR 0095: refunding paid money to a leaving tenant, naming the payout. Fail-closed, same reasoning. */
+    WALLET_REFUND("commercial.wallet.refund", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
+
+    /**
+     * ADR 0095: taking back an activation deposit recorded against the wrong
+     * tenant, which also re-arms the obligation the mis-record cleared.
+     * Fail-closed, same reasoning: it both removes paid money and makes money
+     * owed again, and one person doing either on their own word is the control
+     * a finance review asks for first.
+     */
+    WALLET_DEPOSIT_REVERSAL("commercial.wallet.deposit-reversal", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
+
+    /**
      * ADR 0025, Gap A of the 2026-08-30 proving run: granting or revoking a
      * {@code PLATFORM}-scope role — the highest-authority action this
      * platform's own grant model can express, since {@code PLATFORM_ADMIN}

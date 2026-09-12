@@ -40,6 +40,9 @@ const PENDING: PendingApprovalResponse = {
   requestedAt: '2026-09-01T00:00:00Z',
   expiresAt: '2026-09-02T00:00:00Z',
   mayDecide: true,
+  subjectTenantId: null,
+  subjectTenantName: null,
+  subject: {},
 };
 
 const TENANT: TenantSummaryView = {
@@ -94,7 +97,8 @@ class FakeAccessApi {
   readonly listTenantRoles = vi.fn<() => Promise<TenantRoleDescriptor[]>>();
   readonly revokeTenantGrant = vi.fn<(...args: string[]) => Promise<void>>();
   readonly grantTenant = vi.fn<(...args: unknown[]) => Promise<{ grantId: string }>>();
-  readonly pendingApprovals = vi.fn<() => Promise<{ items: PendingApprovalResponse[]; nextCursor: string | null }>>();
+  readonly pendingApprovals =
+    vi.fn<() => Promise<{ items: PendingApprovalResponse[]; nextCursor: string | null }>>();
   readonly decide = vi.fn();
 }
 
@@ -137,13 +141,18 @@ describe('Staff', () => {
   }
 
   async function chooseTenant(): Promise<void> {
-    const select = fixture.nativeElement.querySelector('select[name="tenant"]') as HTMLSelectElement;
+    const select = fixture.nativeElement.querySelector(
+      'select[name="tenant"]',
+    ) as HTMLSelectElement;
     select.value = 'tenant-1';
     select.dispatchEvent(new Event('change'));
     await settle();
   }
 
-  function button(label: string, within: ParentNode = fixture.nativeElement): HTMLButtonElement | undefined {
+  function button(
+    label: string,
+    within: ParentNode = fixture.nativeElement,
+  ): HTMLButtonElement | undefined {
     return (Array.from(within.querySelectorAll('button')) as HTMLButtonElement[]).find(
       (b) => b.textContent?.trim() === label,
     );
@@ -155,7 +164,11 @@ describe('Staff', () => {
   });
 
   it('shows the awaiting-approval outcome distinctly when granting is policy-gated', async () => {
-    api.grantPlatform.mockResolvedValue({ outcome: 'AWAITING_APPROVAL', grantId: null, approvalRequestId: 'req-9' });
+    api.grantPlatform.mockResolvedValue({
+      outcome: 'AWAITING_APPROVAL',
+      grantId: null,
+      approvalRequestId: 'req-9',
+    });
     api.listPlatformGrants.mockResolvedValue([GRANT]);
 
     const form = fixture.nativeElement.querySelectorAll('.panel')[0].querySelector('form');
@@ -171,7 +184,11 @@ describe('Staff', () => {
     form.dispatchEvent(new Event('submit', { cancelable: true }));
     await settle();
 
-    expect(api.grantPlatform).toHaveBeenCalledWith('new-admin', 'platform-support', 'onboarding a new support engineer');
+    expect(api.grantPlatform).toHaveBeenCalledWith(
+      'new-admin',
+      'platform-support',
+      'onboarding a new support engineer',
+    );
     expect(fixture.nativeElement.textContent).toContain('Ожидает вторую подпись');
   });
 
@@ -184,11 +201,14 @@ describe('Staff', () => {
     expect(table.textContent).toContain('Chilonzor');
 
     // Scoped to the tenant table: the platform grants above carry a revoke button with the same label.
-    const inTable = (label: string) => button(label, fixture.nativeElement.querySelector('.tenantGrants'));
+    const inTable = (label: string) =>
+      button(label, fixture.nativeElement.querySelector('.tenantGrants'));
     inTable(ru['staff.revoke.action'])!.click();
     await settle();
     expect(inTable(ru['staff.revokeTenant.confirm'])!.disabled).toBe(true);
-    const reason = fixture.nativeElement.querySelector('input[name="revokeReason"]') as HTMLInputElement;
+    const reason = fixture.nativeElement.querySelector(
+      'input[name="revokeReason"]',
+    ) as HTMLInputElement;
     reason.value = 'left the company';
     reason.dispatchEvent(new Event('input'));
     await settle();
@@ -205,18 +225,24 @@ describe('Staff', () => {
     api.grantTenant.mockResolvedValue({ grantId: 'tg-2' });
 
     const set = async (name: string, value: string, event = 'change') => {
-      const el = fixture.nativeElement.querySelector(`.grantForm [name="${name}"]`) as HTMLInputElement;
+      const el = fixture.nativeElement.querySelector(
+        `.grantForm [name="${name}"]`,
+      ) as HTMLInputElement;
       el.value = value;
       el.dispatchEvent(new Event(event));
       await settle();
     };
     await set('principal', 'new-manager', 'input');
     await set('role', 'location-manager');
-    expect(fixture.nativeElement.querySelector('.grantForm button[type="submit"]').disabled).toBe(true);
+    expect(fixture.nativeElement.querySelector('.grantForm button[type="submit"]').disabled).toBe(
+      true,
+    );
     await set('brand', 'brand-1');
     await set('location', 'location-1');
     await set('reason', 'runs the Chilonzor branch', 'input');
-    (fixture.nativeElement.querySelector('.grantForm button[type="submit"]') as HTMLButtonElement).click();
+    (
+      fixture.nativeElement.querySelector('.grantForm button[type="submit"]') as HTMLButtonElement
+    ).click();
     await settle();
 
     expect(api.grantTenant).toHaveBeenCalledWith(
@@ -231,7 +257,11 @@ describe('Staff', () => {
 
   it('decides a pending approval in the chosen tenant, removing it once decided', async () => {
     api.pendingApprovals.mockResolvedValue({ items: [PENDING], nextCursor: null });
-    api.decide.mockResolvedValue({ id: 'req-1', actionCode: 'tenant.activate', status: 'APPROVED' });
+    api.decide.mockResolvedValue({
+      id: 'req-1',
+      actionCode: 'tenant.activate',
+      status: 'APPROVED',
+    });
     await chooseTenant();
 
     expect(fixture.nativeElement.textContent).toContain('tenant.activate');
@@ -242,12 +272,20 @@ describe('Staff', () => {
     button('Одобрить')!.click();
     await settle();
 
-    expect(api.decide).toHaveBeenCalledWith('tenant-1', 'req-1', 'APPROVE', 'reviewed, looks correct');
+    expect(api.decide).toHaveBeenCalledWith(
+      'tenant-1',
+      'req-1',
+      'APPROVE',
+      'reviewed, looks correct',
+    );
     expect(fixture.nativeElement.textContent).not.toContain('tenant.activate');
   });
 
   it('refuses to let the requester decide their own request', async () => {
-    api.pendingApprovals.mockResolvedValue({ items: [{ ...PENDING, mayDecide: false }], nextCursor: null });
+    api.pendingApprovals.mockResolvedValue({
+      items: [{ ...PENDING, mayDecide: false }],
+      nextCursor: null,
+    });
     await chooseTenant();
 
     expect(fixture.nativeElement.textContent).toContain('Вы запросили это');

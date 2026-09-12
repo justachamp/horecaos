@@ -504,7 +504,12 @@ class ExternalCallTransactionBoundaryTests {
 
         @Bean
         ApprovalService approvalService(JdbcClient client, AuditRecorder recorder, Clock clock) {
-            return new JdbcApprovalService(client, recorder, clock, new SimpleMeterRegistry());
+            return new JdbcApprovalService(
+                    client,
+                    recorder,
+                    clock,
+                    new SimpleMeterRegistry(),
+                    JsonMapper.builder().build());
         }
 
         @Bean

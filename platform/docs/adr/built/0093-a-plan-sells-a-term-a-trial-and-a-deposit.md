@@ -1,7 +1,7 @@
 # ADR 0093: A plan sells a term, a trial and a deposit
 
 - Decision status: Accepted
-- Implementation status: Partial — V0205's `commercial.plan_version_terms` and `commercial.plan_term_discounts` with their activation trigger, `subscriptions.term_months`; `PlanTerms`, term-aware `PlanCatalogService`, `SubscriptionService` and `StatementService`, and V0206's `EARLY_EXIT` line repaying the discount when a term is left early, tested in `PlanTermsTests` and `ModulesStatementsAndArrearsTests`; the plan catalog's draft form and the entitlements screen's start form. The deposit is still billed as a statement line until the wallet (ADR 0095) holds it
+- Implementation status: Built — V0205's `commercial.plan_version_terms` and `commercial.plan_term_discounts` with their activation trigger, `subscriptions.term_months`; `PlanTerms`, term-aware `PlanCatalogService`, `SubscriptionService` and `StatementService`, and V0206's `EARLY_EXIT` line repaying the discount when a term is left early, tested in `PlanTermsTests` and `ModulesStatementsAndArrearsTests`; the plan catalog's draft form and the entitlements screen's start form. The deposit is now the wallet's (ADR 0095): V0211's `subscriptions.deposit_due_minor` makes it due when the subscription starts, paying it is a `DEPOSIT` top-up, the first statement is paid from it, the statement bills no deposit line, and what is still owed is read back on the tenant's subscription as `activationDepositDueMinor` and shown on the Entitlements screen
 - Date proposed: 2026-09-11
 - Date decided: 2026-09-11
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; accepted by Ayubkhon Abbosov (platform owner) on 2026-09-11, who answered its open inputs the same day
@@ -53,7 +53,7 @@ Items 5 and 6 are the platform owner's decisions of 2026-09-11.
 ### Positive
 
 - A longer commitment can be sold at a better price, and the statement shows the discount on its line.
-- A deposit is billed once, with the plan it belongs to.
+- A deposit is asked for once, with the plan it belongs to: due the moment the subscription starts, paid into the wallet, and credited to the first statement (ADR 0095).
 
 ### Negative
 
@@ -67,8 +67,16 @@ Items 5 and 6 are the platform owner's decisions of 2026-09-11.
 
 - Drafting a version takes `trialDays`, `activationDepositMinor` and `termDiscounts`;
   plan reads return `terms`.
-- Starting a subscription takes `termMonths`; the subscription read returns it.
+- Starting a subscription takes `termMonths`; the subscription read returns it,
+  together with `activationDepositDueMinor` — what this subscription still owes
+  as its deposit, in the plan version's currency, zero once it is paid. The
+  deposit stopped being a statement line when ADR 0095 made it a wallet top-up,
+  so this read is the only place the obligation is visible before somebody
+  tries to record a payment against it.
 - V0205: the two terms tables, `subscriptions.term_months`, and `DEPOSIT` among statement line kinds.
+- V0211 (ADR 0095): `subscriptions.deposit_due_minor`, set from
+  `activation_deposit_minor` when the subscription starts, cleared when the
+  deposit is recorded, and restored by an approved `DEPOSIT_REVERSAL`.
 
 ## Rollout and rollback
 
@@ -82,7 +90,9 @@ Additive; existing versions sell no terms and existing subscriptions are month t
 ## Exit criteria
 
 A 12-month subscription on a plan offering 10% off bills its monthly price
-less 10%, and its deposit once in its first month.
+less 10%; its activation deposit is due from the moment it starts, is readable
+on the subscription and on the Entitlements screen, is paid into the wallet as
+a `DEPOSIT` top-up, and pays down its first statement (ADR 0095 item 6).
 
 ## References
 

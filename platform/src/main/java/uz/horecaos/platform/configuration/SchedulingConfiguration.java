@@ -191,7 +191,12 @@ public class SchedulingConfiguration {
      * class's own doc for the race its two-replica test caught before the lock
      * existed. ADR 0089 added {@code CommercialArrearsReviewSweeper.sweepOnce},
      * an hourly read of past-due subscriptions that raises an incident and
-     * holds nothing across it. Anything adding a {@code
+     * holds nothing across it. ADR 0095 added the last one so far: {@code
+     * WalletBonusExpirySweeper.sweepOnce}, which lapses a bonus grant's
+     * unspent remainder on its expiry date, one grant and one short
+     * transaction at a time through {@code WalletService.expireGrantIfDue} —
+     * so this pass never holds more than one tenant's wallet lock at once.
+     * Anything adding a {@code
      * @Scheduled} method here should expect the same off-by-one wave 73/77 hit,
      * and trust {@code SchedulerPoolSizeTests}, which counts them, over the
      * number written here. ADR 0098 added the last one so far: {@code
@@ -199,7 +204,7 @@ public class SchedulingConfiguration {
      * relay — without it a staff member who forgot their password could ask
      * for a reset and no email would ever leave.
      */
-    static final int DEFAULT_POOL_SIZE = 57;
+    static final int DEFAULT_POOL_SIZE = 58;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

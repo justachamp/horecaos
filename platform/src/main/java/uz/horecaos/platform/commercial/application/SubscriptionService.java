@@ -142,7 +142,30 @@ public class SubscriptionService {
                 null,
                 1);
 
-        subscriptions.insert(subscription, termMonths, now);
+        // ADR 0095, item 6: an activation deposit becomes due the moment the
+        // subscription starts. Paying it is a wallet top-up, not a statement
+        // line -- see WalletService.recordDeposit.
+        //
+        // Which is why this combination is refused rather than sold. A plan
+        // version priced in a second currency stays a legitimate configuration
+        // and its statements are invoiced in that currency (ADR 0095); its
+        // activation deposit is the one thing that could then be collected by
+        // nothing at all. The wallet takes money in in its own currency only,
+        // and the statement stopped carrying a deposit line, so deposit_due_minor
+        // would stand for the life of the subscription with no path back to
+        // zero -- visible in the control plane, chaseable only out of band, and
+        // mendable only by hand-written SQL.
+        String billingCurrency = subscriptions.billingCurrencyOf(tenantId);
+        if (terms.activationDepositMinor() > 0 && !version.currency().equals(billingCurrency)) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    ("This version is priced in %s and the tenant is billed in %s; its activation deposit "
+                                    + "could be neither recorded in the wallet nor billed on a statement. Sell "
+                                    + "this version without an activation deposit, or bill the tenant in %s.")
+                            .formatted(version.currency(), billingCurrency, version.currency()),
+                    Map.of("planCurrency", version.currency(), "billingCurrency", billingCurrency));
+        }
+        subscriptions.insert(subscription, termMonths, terms.activationDepositMinor(), now);
 
         EntitlementSnapshot snapshot = entitlements.snapshot(tenantId);
         Map<String, Object> change = new HashMap<>();
@@ -313,6 +336,20 @@ public class SubscriptionService {
 
     public Optional<Subscription> live(UUID tenantId) {
         return subscriptions.findLive(tenantId);
+    }
+
+    /**
+     * What the live subscription still owes as its activation deposit, in the
+     * minor units of the plan version that sells it (ADR 0093, ADR 0095);
+     * zero when none is due or it has already been recorded as paid.
+     *
+     * <p>Read so the console can show it. ADR 0095 item 6 moved the deposit off
+     * the statement and into the wallet, which left the amount owed written on
+     * this column and readable nowhere: staff could only press "Record the
+     * activation deposit" and learn from the refusal whether one was due.
+     */
+    public long activationDepositDueMinor(UUID tenantId) {
+        return subscriptions.liveDepositDue(tenantId);
     }
 
     public List<Subscription> history(UUID tenantId) {

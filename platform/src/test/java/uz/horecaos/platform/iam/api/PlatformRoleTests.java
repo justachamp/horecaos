@@ -44,6 +44,10 @@ class PlatformRoleTests {
             Capability.COMMERCIAL_PLAN_ACTIVATE,
             Capability.COMMERCIAL_USAGE_ADJUST,
             Capability.COMMERCIAL_STATEMENT_ISSUE,
+            // ADR 0095: a tenant that could grant itself a bonus, record its own
+            // transfer or change its own payment method would be deciding what it
+            // owes -- the same reasoning as COMMERCIAL_STATEMENT_ISSUE above.
+            Capability.COMMERCIAL_WALLET_MANAGE,
             Capability.MIGRATION_READ,
             Capability.MIGRATION_SCOPE_MANAGE,
             Capability.MIGRATION_RUN_EXECUTE,

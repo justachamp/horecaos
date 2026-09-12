@@ -53,6 +53,7 @@ const SUBSCRIPTION: SubscriptionView = {
   version: 4,
   allowedNext: ['CANCELLATION_SCHEDULED', 'PAST_DUE', 'SUSPENDED', 'TERMINATED'],
   termMonths: 1,
+  activationDepositDueMinor: 0,
 };
 
 const version = (id: string, n: number, status: string) => ({
@@ -141,6 +142,21 @@ describe('Entitlements', () => {
     expect(firstRow.textContent).not.toContain(ru['commerce.off']);
     expect(firstRow.textContent).toContain(ru['commerce.mode.METER_ONLY']);
     expect(firstRow.textContent).toContain(ru['commerce.mode.HARD']);
+  });
+
+  it('says what the subscription still owes as its deposit, and says nothing when it owes none', async () => {
+    // The deposit was stored on the subscription and read by no screen, so
+    // finance had no way to tell a tenant what to pay, or to see that it had
+    // paid. It is in the plan version's currency, which this screen holds.
+    await create({ ...SUBSCRIPTION, activationDepositDueMinor: 5_000_000 });
+
+    expect(el('.depositDue').textContent).toContain('5 000 000');
+    expect(fixture.nativeElement.textContent).toContain(ru['entitlements.subscription.depositDue']);
+
+    TestBed.resetTestingModule();
+    await create(SUBSCRIPTION);
+    expect(el('.depositDue')).toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain(ru['entitlements.subscription.depositDue']);
   });
 
   it('offers only the moves the server allows, and sends the version it read', async () => {

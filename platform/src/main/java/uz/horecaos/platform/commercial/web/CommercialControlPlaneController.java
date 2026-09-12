@@ -90,7 +90,8 @@ public class CommercialControlPlaneController {
 
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(live.version()))
-                .body(SubscriptionResponse.of(live, subscriptions.termMonths(live.id())));
+                .body(SubscriptionResponse.of(
+                        live, subscriptions.termMonths(live.id()), subscriptions.activationDepositDueMinor(tenantId)));
     }
 
     @GetMapping("/tenants/{tenantId}/entitlements")
@@ -183,7 +184,19 @@ public class CommercialControlPlaneController {
         }
     }
 
-    /** A subscription as the console shows it, with the statuses it may move to next. */
+    /**
+     * A subscription as the console shows it, with the statuses it may move to
+     * next.
+     *
+     * @param activationDepositDueMinor what the subscription still owes as its
+     *                                  activation deposit, in the minor units
+     *                                  of the plan version's currency; zero
+     *                                  when none is due or it has been paid.
+     *                                  ADR 0095 item 6 moved the deposit off
+     *                                  the statement and into the wallet, so
+     *                                  this is the only read that says money
+     *                                  is owed before anyone tries to record it
+     */
     public record SubscriptionResponse(
             UUID subscriptionId,
             UUID planVersionId,
@@ -195,9 +208,10 @@ public class CommercialControlPlaneController {
             @Nullable String suspensionReason,
             long version,
             List<String> allowedNext,
-            int termMonths) {
+            int termMonths,
+            long activationDepositDueMinor) {
 
-        static SubscriptionResponse of(Subscription subscription, int termMonths) {
+        static SubscriptionResponse of(Subscription subscription, int termMonths, long activationDepositDueMinor) {
             return new SubscriptionResponse(
                     subscription.id(),
                     subscription.planVersionId(),
@@ -213,7 +227,8 @@ public class CommercialControlPlaneController {
                             .map(Enum::name)
                             .sorted()
                             .toList(),
-                    termMonths);
+                    termMonths,
+                    activationDepositDueMinor);
         }
 
         private static @Nullable String text(java.time.@Nullable Instant instant) {

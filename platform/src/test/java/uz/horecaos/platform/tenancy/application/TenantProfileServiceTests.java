@@ -87,7 +87,12 @@ class TenantProfileServiceTests {
         Clock clock = Clock.fixed(Instant.parse("2026-09-11T09:00:00Z"), ZoneOffset.UTC);
         JdbcAuditRecorder audit =
                 new JdbcAuditRecorder(jdbc, JsonMapper.builder().build());
-        approvals = new JdbcApprovalService(jdbc, audit, clock, new SimpleMeterRegistry());
+        approvals = new JdbcApprovalService(
+                jdbc,
+                audit,
+                clock,
+                new SimpleMeterRegistry(),
+                JsonMapper.builder().build());
         profiles = new TenantProfileService(new JdbcTenantProfileStore(jdbc), approvals, audit, clock);
     }
 

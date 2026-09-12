@@ -85,7 +85,11 @@ class JdbcApprovalServiceTests {
         clock = new MutableClock(Instant.parse("2026-08-20T10:00:00Z"));
         meters = new SimpleMeterRegistry();
         approvals = new JdbcApprovalService(
-                jdbc, new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()), clock, meters);
+                jdbc,
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                clock,
+                meters,
+                JsonMapper.builder().build());
         insertTenant(TENANT, "tenant-approval");
         insertTenant(OTHER_TENANT, "tenant-approval-two");
     }

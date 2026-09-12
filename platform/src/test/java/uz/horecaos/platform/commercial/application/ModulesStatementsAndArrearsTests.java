@@ -3,6 +3,7 @@ package uz.horecaos.platform.commercial.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -10,6 +11,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
@@ -17,11 +19,15 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService;
 import uz.horecaos.platform.commercial.api.EnforcementMode;
 import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.commercial.api.EntitlementSource;
@@ -34,12 +40,17 @@ import uz.horecaos.platform.commercial.domain.PlanTerms;
 import uz.horecaos.platform.commercial.domain.Statement;
 import uz.horecaos.platform.commercial.domain.StatementLine;
 import uz.horecaos.platform.commercial.domain.SubscriptionStatus;
+import uz.horecaos.platform.commercial.infrastructure.NotConfiguredCardCharger;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcArrearsStore;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcCardChargeAttemptStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcModuleStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcPlanStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcStatementStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcSubscriptionStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcUsageStore;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcWalletStore;
+import uz.horecaos.platform.commercial.web.CommercialControlPlaneController;
+import uz.horecaos.platform.commercial.web.CommercialControlPlaneController.SubscriptionResponse;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationResolver;
 import uz.horecaos.platform.web.api.ApiException;
@@ -74,6 +85,8 @@ class ModulesStatementsAndArrearsTests {
     private ModuleCatalogService modules;
     private StatementService statements;
     private ArrearsService arrears;
+    private WalletService wallet;
+    private CommercialControlPlaneController controlPlane;
 
     @BeforeAll
     static void startDatabase() {
@@ -96,7 +109,9 @@ class ModulesStatementsAndArrearsTests {
         jdbc.sql("""
                 TRUNCATE TABLE commercial.usage_aggregates, commercial.usage_adjustments,
                     commercial.usage_events, commercial.entitlement_overrides,
-                    commercial.subscriptions, commercial.statement_lines, commercial.statements,
+                    commercial.card_charge_attempts, commercial.wallet_entries,
+                    commercial.subscriptions, commercial.tenant_billing,
+                    commercial.statement_lines, commercial.statements,
                     commercial.tenant_modules, commercial.modules
                 """).update();
         jdbc.sql("TRUNCATE TABLE commercial.plan_entitlements, commercial.plan_versions, commercial.plans CASCADE")
@@ -117,6 +132,23 @@ class ModulesStatementsAndArrearsTests {
                 new JdbcUsageStore(jdbc, JsonMapper.builder().build());
         JdbcModuleStore moduleStore = new JdbcModuleStore(jdbc);
         JdbcStatementStore statementStore = new JdbcStatementStore(jdbc);
+        JdbcWalletStore walletStore = new JdbcWalletStore(jdbc);
+        ApprovalService approvals = new JdbcApprovalService(
+                jdbc,
+                audit,
+                clock,
+                new SimpleMeterRegistry(),
+                JsonMapper.builder().build());
+        wallet = new WalletService(
+                walletStore,
+                subscriptionStore,
+                new JdbcCardChargeAttemptStore(jdbc),
+                approvals,
+                new NotConfiguredCardCharger(),
+                audit,
+                new SimpleMeterRegistry(),
+                new TransactionTemplate(new DataSourceTransactionManager(db.dataSource())),
+                clock);
 
         EnforcementCeiling ceiling = new EnforcementCeiling(new JdbcConfigurationResolver(jdbc));
         entitlements =
@@ -126,8 +158,9 @@ class ModulesStatementsAndArrearsTests {
         subscriptions = new SubscriptionService(subscriptionStore, planStore, entitlements, audit, clock);
         modules = new ModuleCatalogService(moduleStore, audit, clock);
         statements = new StatementService(
-                subscriptionStore, planStore, moduleStore, statementStore, usageStore, audit, clock);
+                subscriptionStore, planStore, moduleStore, statementStore, usageStore, wallet, audit, clock);
         arrears = new ArrearsService(new JdbcArrearsStore(jdbc), statementStore);
+        controlPlane = new CommercialControlPlaneController(plans, subscriptions, entitlements, metering);
     }
 
     // ------------------------------------------------------------- modules
@@ -303,10 +336,14 @@ class ModulesStatementsAndArrearsTests {
     // ------------------------------------------------------------ plan terms
 
     @Test
-    void aTwelveMonthTermIsBilledAtItsDiscountAndTheDepositOnceInTheMonthItStarted() {
+    void aTwelveMonthTermIsBilledAtItsDiscountAndItsDepositBecomesDueInTheWalletInstead() {
         UUID versionId = activeTermsPlan();
-        subscriptions.start(PILOT, versionId, null, 12, AUTHOR, "a year up front", "corr");
+        UUID subscriptionId = subscriptions.start(PILOT, versionId, null, 12, AUTHOR, "a year up front", "corr");
         clock.set(SEPTEMBER);
+
+        // ADR 0095, item 6 (decided 2026-09-11): the deposit is credited to the
+        // first statement through the wallet, not billed as a line.
+        assertThat(depositDue(subscriptionId)).isEqualTo(500_000L);
 
         Statement july = statements.draft(PILOT, "2026-07");
         assertThat(july.lines())
@@ -314,14 +351,20 @@ class ModulesStatementsAndArrearsTests {
                 .containsExactly(
                         // The fourteen-day trial ends inside July, and nothing is
                         // prorated: a month only partly in trial bills in full.
-                        org.assertj.core.groups.Tuple.tuple("PLAN", 1_080_000L, 1L),
-                        org.assertj.core.groups.Tuple.tuple("DEPOSIT", 500_000L, 1L));
+                        org.assertj.core.groups.Tuple.tuple("PLAN", 1_080_000L, 1L));
         assertThat(july.lines().getFirst().description()).contains("12-month term, 10% off");
 
         Statement august = statements.draft(PILOT, "2026-08");
         assertThat(august.lines())
                 .extracting(StatementLine::kind, StatementLine::amountMinor)
                 .containsExactly(org.assertj.core.groups.Tuple.tuple("PLAN", 1_080_000L));
+    }
+
+    private long depositDue(UUID subscriptionId) {
+        return jdbc.sql("SELECT deposit_due_minor FROM commercial.subscriptions WHERE id = :id")
+                .param("id", subscriptionId)
+                .query(Long.class)
+                .single();
     }
 
     /**
@@ -381,6 +424,38 @@ class ModulesStatementsAndArrearsTests {
         assertThat(live.status()).isEqualTo(SubscriptionStatus.TRIALING);
         assertThat(live.trialEndAt()).isEqualTo(JULY.plus(java.time.Duration.ofDays(14)));
         assertThat(subscriptions.termMonths(live.id())).isEqualTo(1);
+    }
+
+    /**
+     * ADR 0095 item 6 took the deposit line off the statement, which left the
+     * amount owed written on {@code subscriptions.deposit_due_minor} and
+     * readable in exactly one place: this response. Nothing tested that place.
+     * The service delegate was proven twice over and the one line that wires it
+     * to the console not at all — and the wiring is where it can go wrong
+     * silently, because {@code liveDepositDue} takes a tenant id and answers
+     * zero, not an error, for a subscription id.
+     */
+    @Test
+    void theSubscriptionReadTheConsoleUsesNamesTheActivationDepositStillOwed() {
+        UUID versionId = activeTermsPlan();
+        subscriptions.start(PILOT, versionId, null, 12, AUTHOR, "a year up front", "corr");
+
+        SubscriptionResponse owing =
+                Objects.requireNonNull(controlPlane.subscription(PILOT).getBody());
+
+        assertThat(owing.activationDepositDueMinor())
+                .as("a tenant owing an activation deposit sees nothing owed anywhere else")
+                .isEqualTo(500_000);
+        assertThat(owing.termMonths())
+                .as("and the term beside it, which reaches the response through the same wiring")
+                .isEqualTo(12);
+
+        wallet.recordDeposit(PILOT, "MT103-DEP", AUTHOR, "the activation deposit", "corr");
+
+        assertThat(Objects.requireNonNull(controlPlane.subscription(PILOT).getBody())
+                        .activationDepositDueMinor())
+                .as("and stops saying so the moment it is recorded")
+                .isZero();
     }
 
     @Test

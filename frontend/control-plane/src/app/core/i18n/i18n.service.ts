@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { ApiError } from '../api/problem';
-import { Money, formatAmount } from '../api/money';
+import { Money, formatAmount, formatMinorUnits, hasDisplayScale } from '../api/money';
 import { APP_CONFIG } from '../config/app-config';
 import { MessageKey, Messages, en } from './messages.en';
 import { ru } from './messages.ru';
@@ -89,7 +89,28 @@ export class I18nService {
   /** `84 000 so'm`. The suffix is localised; the grouping never is. */
   money(money: Money): string {
     const amount = formatAmount(money);
-    return money.currency === 'UZS' ? `${amount} ${this.t('money.uzsSuffix')}` : `${amount} ${money.currency}`;
+    return money.currency === 'UZS'
+      ? `${amount} ${this.t('money.uzsSuffix')}`
+      : `${amount} ${money.currency}`;
+  }
+
+  /**
+   * The same, except that a currency with no declared display scale is
+   * rendered in stored minor units and said to be, rather than throwing.
+   *
+   * <p>For an amount that arrives from the server in whatever currency a
+   * tenant holds — the approvals queue's subject, above all. `money()` throws
+   * on an undeclared currency, and a throw during change detection truncates
+   * the table at that row: one tenant billed in a currency this console has no
+   * scale for stopped every approver deciding every platform request under it.
+   * A reader can decide on an unscaled figure that says it is unscaled; a
+   * reader cannot decide on a row that never drew.
+   */
+  moneyOrRaw(money: Money): string {
+    if (hasDisplayScale(money.currency)) {
+      return this.money(money);
+    }
+    return this.t('money.unscaled', { amount: formatMinorUnits(money), currency: money.currency });
   }
 
   /** `21.08.2026`, in the console's timezone rather than the browser's. */

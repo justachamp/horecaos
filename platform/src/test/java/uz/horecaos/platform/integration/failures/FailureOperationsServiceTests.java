@@ -87,7 +87,11 @@ class FailureOperationsServiceTests {
         JdbcAuditRecorder recorder =
                 new JdbcAuditRecorder(jdbc, JsonMapper.builder().build());
         approvals = new uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService(
-                jdbc, recorder, clock, new SimpleMeterRegistry());
+                jdbc,
+                recorder,
+                clock,
+                new SimpleMeterRegistry(),
+                JsonMapper.builder().build());
         // A real transaction manager over the same DataSource, because the two
         // properties these tests exist for are both properties of a boundary: the
         // approval request has to survive the exception that reports it, and an

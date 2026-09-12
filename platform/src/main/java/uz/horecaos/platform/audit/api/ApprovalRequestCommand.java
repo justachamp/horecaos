@@ -2,6 +2,7 @@ package uz.horecaos.platform.audit.api;
 
 import java.time.Duration;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.iam.api.ResourceScope;
 
 /**
@@ -13,6 +14,14 @@ import uz.horecaos.platform.iam.api.ResourceScope;
  *                       the command record rather than from a hand-written field
  *                       list — every call site that wrote its own list had lost a
  *                       field that changes what happens
+ * @param subject        what the checker is shown about the proposal, or null
+ *                       where the action's own console already names its
+ *                       subject. Built by {@link ApprovalParameters.Builder#sign()}
+ *                       from the same pass that produced {@code parametersHash},
+ *                       so the console can never render something the signature
+ *                       does not cover. Required in practice for a
+ *                       {@code PLATFORM}-scope request, which carries no tenant
+ *                       and would otherwise identify nothing at all
  */
 public record ApprovalRequestCommand(
         String actionCode,
@@ -20,9 +29,21 @@ public record ApprovalRequestCommand(
         ResourceScope scope,
         ActorRef requester,
         String reason,
-        Duration validity) {
+        Duration validity,
+        @Nullable ApprovalSubject subject) {
 
     public static final Duration DEFAULT_VALIDITY = Duration.ofHours(24);
+
+    /** A request whose subject the raising console already names. */
+    public ApprovalRequestCommand(
+            String actionCode,
+            String parametersHash,
+            ResourceScope scope,
+            ActorRef requester,
+            String reason,
+            Duration validity) {
+        this(actionCode, parametersHash, scope, requester, reason, validity, null);
+    }
 
     public ApprovalRequestCommand {
         Objects.requireNonNull(actionCode, "An action code is required");

@@ -30,16 +30,41 @@
         @for (row of waiting(); track row.request.id) {
           <tr [attr.data-request]="row.request.id">
             <td class="q-body-sm">
-              {{ i18n.t(actionKey(row.request.actionCode)) }}
+              <span class="actionLabel">{{ actionLabel(row.request.actionCode) }}</span>
+              @if (subjectLine(row); as subject) {
+                <div class="q-body-sm subject">{{ subject }}</div>
+              }
+              @for (field of subjectDetail(row); track field.key) {
+                <div class="q-caption subjectDetail" [attr.data-subject-field]="field.key">
+                  {{ field.label }}: {{ field.value }}
+                </div>
+              }
               <div class="q-caption muted">{{ row.request.thresholdDescription }}</div>
             </td>
-            <td class="q-body-sm"><a [routerLink]="['/tenants', row.tenantId]">{{ directory.nameOf(row.tenantId) }}</a></td>
-            <td class="q-body-sm">{{ row.request.requestedBy }} · {{ i18n.dateTime(asDate(row.request.requestedAt)) }}</td>
+            <td class="q-body-sm">
+              @if (subjectTenantId(row); as tenantId) {
+                <a [routerLink]="['/tenants', tenantId]">{{
+                  row.request.subjectTenantName ?? directory.nameOf(tenantId)
+                }}</a>
+                @if (row.tenantId === null) {
+                  <div class="q-caption muted">{{ tenantName(row) }}</div>
+                }
+              } @else {
+                <span class="q-caption muted">{{ tenantName(row) }}</span>
+              }
+            </td>
+            <td class="q-body-sm">
+              {{ row.request.requestedBy }} · {{ i18n.dateTime(asDate(row.request.requestedAt)) }}
+            </td>
             <td class="q-body-sm q-tnum">{{ i18n.dateTime(asDate(row.request.expiresAt)) }}</td>
             <td class="q-body-sm">
               @if (row.request.mayDecide) {
-                <button type="button" class="approveToggle" (click)="open(row, 'APPROVE')">{{ i18n.t('platformApprovals.approve') }}</button>
-                <button type="button" class="declineToggle" (click)="open(row, 'DECLINE')">{{ i18n.t('platformApprovals.decline') }}</button>
+                <button type="button" class="approveToggle" (click)="open(row, 'APPROVE')">
+                  {{ i18n.t('platformApprovals.approve') }}
+                </button>
+                <button type="button" class="declineToggle" (click)="open(row, 'DECLINE')">
+                  {{ i18n.t('platformApprovals.decline') }}
+                </button>
               } @else {
                 <span class="q-caption muted">{{ i18n.t('platformApprovals.notYours') }}</span>
               }
@@ -49,9 +74,26 @@
             <tr>
               <td colspan="5">
                 <div class="changeForm">
-                  <input class="q-body-sm" name="decisionReason" [placeholder]="i18n.t('common.reason')" [value]="reason()" (input)="reason.set($any($event.target).value)" />
-                  <button type="button" class="confirmChange confirmDecision" [disabled]="busy() || reason().trim().length === 0" (click)="confirm(row)">
-                    {{ i18n.t(deciding()?.decision === 'APPROVE' ? 'platformApprovals.approve' : 'platformApprovals.decline') }}
+                  <input
+                    class="q-body-sm"
+                    name="decisionReason"
+                    [placeholder]="i18n.t('common.reason')"
+                    [value]="reason()"
+                    (input)="reason.set($any($event.target).value)"
+                  />
+                  <button
+                    type="button"
+                    class="confirmChange confirmDecision"
+                    [disabled]="busy() || reason().trim().length === 0"
+                    (click)="confirm(row)"
+                  >
+                    {{
+                      i18n.t(
+                        deciding()?.decision === 'APPROVE'
+                          ? 'platformApprovals.approve'
+                          : 'platformApprovals.decline'
+                      )
+                    }}
                   </button>
                 </div>
               </td>

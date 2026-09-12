@@ -54,8 +54,10 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * is. A draft is computed every time it is asked for; issuing freezes it with
  * a number, and a mistake is corrected by voiding and issuing again.
  *
- * <p>It records what is owed, before tax. How it is paid, and the tax on it,
- * stay outside this module.
+ * <p>It records what is owed, before tax. The tax on it stays outside this
+ * module. How it is paid does not: issuing a statement pays it from the
+ * tenant's wallet at once, bonus first, then paid money (ADR 0095) — see
+ * {@link WalletService#applyAvailableFunds}.
  */
 @Service
 public class StatementService {
@@ -65,6 +67,7 @@ public class StatementService {
     private final JdbcModuleStore modules;
     private final JdbcStatementStore statements;
     private final JdbcUsageStore usage;
+    private final WalletService wallet;
     private final AuditRecorder audit;
     private final Clock clock;
 
@@ -74,6 +77,7 @@ public class StatementService {
             JdbcModuleStore modules,
             JdbcStatementStore statements,
             JdbcUsageStore usage,
+            WalletService wallet,
             AuditRecorder audit,
             Clock clock) {
         this.subscriptions = subscriptions;
@@ -81,6 +85,7 @@ public class StatementService {
         this.modules = modules;
         this.statements = statements;
         this.usage = usage;
+        this.wallet = wallet;
         this.audit = audit;
         this.clock = clock;
     }
@@ -146,16 +151,10 @@ public class StatementService {
                         wholeMonthInTrial ? 0 : 1,
                         terms.monthlyPriceOn(version.priceMinor(), termMonths)));
             }
-            Instant started = subscription.startAt();
-            if (terms.activationDepositMinor() > 0 && !started.isBefore(start) && started.isBefore(end)) {
-                lines.add(StatementLine.of(
-                        lines.size() + 1,
-                        StatementLine.DEPOSIT,
-                        reference,
-                        version.planCode() + " v" + version.versionNumber() + ", activation deposit",
-                        1,
-                        terms.activationDepositMinor()));
-            }
+            // ADR 0095, item 6 (decided 2026-09-11): the activation deposit is a
+            // paid wallet top-up, not a statement line -- see WalletService
+            // .recordDeposit. A DEPOSIT line survives only on statements issued
+            // before the wallet existed; nothing here writes a new one.
             addEarlyExit(lines, subscription, version, terms, termMonths, reference, month, zone, start, end);
             addOverage(lines, tenantId, version, periodKey, start, end);
         }
@@ -250,6 +249,11 @@ public class StatementService {
                 .correlatedBy(correlationId)
                 .occurredAt(now)
                 .build());
+
+        // ADR 0095, item 3: paid from the wallet at once. This pass also settles
+        // any older open statement the tenant's existing balance had not yet
+        // reached, oldest first, before it reaches this new one.
+        wallet.applyAvailableFunds(tenantId);
         return new IssuedRef(id, number);
     }
 
@@ -271,6 +275,12 @@ public class StatementService {
                 .correlatedBy(correlationId)
                 .occurredAt(now)
                 .build());
+
+        // ADR 0095: the statement was paid from the wallet when it was issued,
+        // and it no longer stands. What it drew goes back to the grant or the
+        // balance it came from, and is then free to pay whatever else is open.
+        wallet.reverseStatementPayments(tenantId, statementId, String.valueOf(statement.number()));
+        wallet.applyAvailableFunds(tenantId);
     }
 
     /** The id and number an issued statement was filed under. */

@@ -1284,7 +1284,7 @@ class RefundAndRemedyTests {
         private final List<ApprovalRequestCommand> requests = new CopyOnWriteArrayList<>();
         private final AtomicInteger consumed = new AtomicInteger();
         private ApprovalOutcome answer =
-                new ApprovalOutcome.Approved(UUID.randomUUID(), "checker-1", consumed::incrementAndGet);
+                new ApprovalOutcome.Approved(UUID.randomUUID(), "maker-1", "checker-1", consumed::incrementAndGet);
 
         @Override
         public ApprovalOutcome requireApproval(ApprovalRequestCommand command) {

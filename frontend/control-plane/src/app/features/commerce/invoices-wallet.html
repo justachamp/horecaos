@@ -88,6 +88,8 @@
               <th class="q-caption">{{ i18n.t('statements.column.number') }}</th>
               <th class="q-caption">{{ i18n.t('statements.preview.month') }}</th>
               <th class="q-caption num">{{ i18n.t('statements.total') }}</th>
+              <th class="q-caption num">{{ i18n.t('statements.column.paid') }}</th>
+              <th class="q-caption num">{{ i18n.t('statements.column.due') }}</th>
               <th class="q-caption">{{ i18n.t('statements.column.status') }}</th>
               <th class="q-caption"></th>
             </tr>
@@ -98,6 +100,8 @@
                 <td class="q-body-sm q-tnum"><button type="button" class="link" (click)="show(statement)">{{ statement.number }}</button></td>
                 <td class="q-body-sm q-tnum">{{ statement.periodKey }}</td>
                 <td class="q-body-sm q-tnum num">{{ statement.total ? i18n.money(statement.total) : '—' }}</td>
+                <td class="q-body-sm q-tnum num paid">{{ paidOf(statement) }}</td>
+                <td class="q-body-sm q-tnum num due" [class.settled]="settled(statement)">{{ dueOf(statement) }}</td>
                 <td class="q-body-sm">
                   <span class="chip" [class.live]="statement.status === 'ISSUED'">{{ i18n.t(statusKey(statement.status)) }}</span>
                   @if (statement.issuedAt) {
@@ -116,7 +120,7 @@
               </tr>
               @if (voiding() === statement.statementId) {
                 <tr>
-                  <td colspan="5">
+                  <td colspan="7">
                     <span class="confirm">
                       <input class="q-body-sm" name="voidReason" [placeholder]="i18n.t('common.reason')" [value]="voidReason()" (input)="voidReason.set($any($event.target).value)" />
                       <button type="button" class="confirmVoid" [disabled]="busy() || voidReason().trim().length === 0" (click)="confirmVoid(statement)">{{ i18n.t('statements.void.submit') }}</button>
@@ -126,7 +130,7 @@
               }
               @if (open()?.statementId === statement.statementId && open(); as detail) {
                 <tr>
-                  <td colspan="5">
+                  <td colspan="7">
                     <table class="innerTable">
                       <tbody>
                         @for (line of detail.lines; track line.lineNumber) {
@@ -148,9 +152,234 @@
       </div>
     }
   </section>
-}
 
-<section class="panel wallet">
-  <h2 class="q-subhead">{{ i18n.t('statements.wallet.title') }}</h2>
-  <p class="q-body-sm muted">{{ i18n.t('statements.wallet.body') }}</p>
-</section>
+  <section class="panel wallet">
+    <header class="planHeader">
+      <h2 class="q-subhead">{{ i18n.t('wallet.title') }}</h2>
+      <span class="q-caption muted">{{ i18n.t('wallet.lead') }}</span>
+    </header>
+
+    @if (walletError(); as message) {
+      <p class="q-body-sm state error">{{ message }}</p>
+    } @else if (wallet(); as balances) {
+      <div class="balances">
+        <div class="balance paidBalance">
+          <span class="q-caption muted">{{ i18n.t('wallet.paid') }}</span>
+          <strong class="q-subhead q-tnum">{{ i18n.money(balances.paidBalance) }}</strong>
+          <span class="q-caption muted">{{ i18n.t('wallet.paid.hint') }}</span>
+        </div>
+        <div class="balance bonusBalance">
+          <span class="q-caption muted">{{ i18n.t('wallet.bonus') }}</span>
+          <!--
+            The spendable figure leads, because it is the one a statement can
+            actually draw on. The ledger sum follows only while the two differ,
+            which is the window between a grant's expiry date and the sweep that
+            writes its lapse; repeating the same number twice the rest of the
+            time would be noise in a tile read at a glance.
+          -->
+          <strong class="q-subhead q-tnum">{{ i18n.money(balances.bonusSpendableBalance) }}</strong>
+          @if (balances.bonusSpendableBalance.amountMinor !== balances.bonusBalance.amountMinor) {
+            <span class="q-caption muted bonusLedger">{{ i18n.t('wallet.bonus.inLedger', { amount: i18n.money(balances.bonusBalance) }) }}</span>
+          }
+          <span class="q-caption muted">{{ i18n.t('wallet.bonus.hint') }}</span>
+        </div>
+        <div class="balance method">
+          <span class="q-caption muted">{{ i18n.t('wallet.method') }}</span>
+          <strong class="q-subhead methodName">{{ methodLabel(balances.paymentMethod) }}</strong>
+          <span class="q-caption muted">{{ i18n.t('wallet.method.hint') }}</span>
+        </div>
+      </div>
+
+      @if (balances.paymentMethod === 'CARD') {
+        <p class="q-caption muted cardNote">{{ i18n.t('wallet.card.notConnected') }}</p>
+      }
+
+      @if (session.has('COMMERCIAL_WALLET_MANAGE')) {
+        <div class="walletActions">
+          <button type="button" class="openTransfer" (click)="openForm('transfer')">{{ i18n.t('wallet.transfer.open') }}</button>
+          <button type="button" class="openDeposit" (click)="openForm('deposit')">{{ i18n.t('wallet.deposit.open') }}</button>
+          <button type="button" class="openAdjustment" (click)="openForm('adjustment')">{{ i18n.t('wallet.adjustment.open') }}</button>
+          <button type="button" class="openGrant" (click)="openForm('grant')">{{ i18n.t('wallet.grant.open') }}</button>
+          <button type="button" class="openRefund" (click)="openForm('refund')">{{ i18n.t('wallet.refund.open') }}</button>
+          <button type="button" class="openMethod" (click)="openForm('method')">{{ i18n.t('wallet.method.change') }}</button>
+        </div>
+
+        @switch (form()) {
+          @case ('transfer') {
+            <form class="walletForm transferForm" (submit)="recordTransfer($event)">
+              <p class="q-caption muted">{{ i18n.t('wallet.transfer.note') }}</p>
+              <input class="q-body-sm" name="amount" [placeholder]="i18n.t('wallet.field.amount')" [value]="amount()" (input)="amount.set($any($event.target).value)" />
+              <input class="q-body-sm" name="bankReference" [placeholder]="i18n.t('wallet.field.bankReference')" [value]="reference()" (input)="reference.set($any($event.target).value)" />
+              <input class="q-body-sm" name="reason" [placeholder]="i18n.t('common.reason')" [value]="reason()" (input)="reason.set($any($event.target).value)" />
+              <button type="submit" [disabled]="!canSubmit('transfer')">{{ i18n.t('wallet.transfer.submit') }}</button>
+            </form>
+          }
+          @case ('deposit') {
+            <form class="walletForm depositForm" (submit)="recordDeposit($event)">
+              <p class="q-caption muted">{{ i18n.t('wallet.deposit.note') }}</p>
+              <input class="q-body-sm" name="bankReference" [placeholder]="i18n.t('wallet.field.bankReference')" [value]="reference()" (input)="reference.set($any($event.target).value)" />
+              <input class="q-body-sm" name="reason" [placeholder]="i18n.t('common.reason')" [value]="reason()" (input)="reason.set($any($event.target).value)" />
+              <button type="submit" [disabled]="!canSubmit('deposit')">{{ i18n.t('wallet.deposit.submit') }}</button>
+            </form>
+          }
+          @case ('adjustment') {
+            <form class="walletForm adjustmentForm" (submit)="proposeAdjustment($event)">
+              <p class="q-caption muted">{{ i18n.t('wallet.adjustment.note') }}</p>
+              <select class="q-body-sm" name="moneyKind" [value]="moneyKind()" (change)="chooseKind($any($event.target).value)">
+                <option value="PAID">{{ i18n.t('wallet.kind.PAID') }}</option>
+                <option value="BONUS">{{ i18n.t('wallet.kind.BONUS') }}</option>
+              </select>
+              @if (moneyKind() === 'BONUS') {
+                @if (grants().length === 0) {
+                  <span class="q-caption muted noGrants">{{ i18n.t('wallet.adjustment.noGrant') }}</span>
+                } @else {
+                  <!--
+                    The same [selected], for the same reason. This one happens to
+                    agree today only because opening the form pins grantId to the
+                    first grant, which is an accident rather than a rule.
+                  -->
+                  <select class="q-body-sm" name="grantId" [value]="grantId()" (change)="grantId.set($any($event.target).value)">
+                    @for (grant of grants(); track grant.grantId) {
+                      <option [value]="grant.grantId" [selected]="grant.grantId === grantId()">{{ i18n.money(grant.remaining) }} · {{ i18n.day(asDate(grant.expiresAt)) }}</option>
+                    }
+                  </select>
+                }
+              }
+              <input class="q-body-sm" name="amount" [placeholder]="i18n.t('wallet.field.signedAmount')" [value]="amount()" (input)="amount.set($any($event.target).value)" />
+              <input class="q-body-sm" name="reason" [placeholder]="i18n.t('common.reason')" [value]="reason()" (input)="reason.set($any($event.target).value)" />
+              <button type="submit" [disabled]="!canSubmit('adjustment')">{{ i18n.t('wallet.adjustment.submit') }}</button>
+            </form>
+          }
+          @case ('grant') {
+            <form class="walletForm grantForm" (submit)="proposeBonusGrant($event)">
+              <p class="q-caption muted">{{ i18n.t('wallet.grant.note') }}</p>
+              <input class="q-body-sm" name="amount" [placeholder]="i18n.t('wallet.field.amount')" [value]="amount()" (input)="amount.set($any($event.target).value)" />
+              <label class="q-caption expires">
+                {{ i18n.t('wallet.field.expiresOn') }}
+                <input type="date" class="q-body-sm" name="expiresOn" [value]="expiresOn()" (change)="expiresOn.set($any($event.target).value)" />
+              </label>
+              <input class="q-body-sm" name="reason" [placeholder]="i18n.t('common.reason')" [value]="reason()" (input)="reason.set($any($event.target).value)" />
+              <button type="submit" [disabled]="!canSubmit('grant')">{{ i18n.t('wallet.grant.submit') }}</button>
+            </form>
+          }
+          @case ('refund') {
+            <form class="walletForm refundForm" (submit)="proposeRefund($event)">
+              <p class="q-caption muted">{{ i18n.t('wallet.refund.note') }}</p>
+              <input class="q-body-sm" name="amount" [placeholder]="i18n.t('wallet.field.amount')" [value]="amount()" (input)="amount.set($any($event.target).value)" />
+              <input class="q-body-sm" name="payoutReference" [placeholder]="i18n.t('wallet.field.payoutReference')" [value]="reference()" (input)="reference.set($any($event.target).value)" />
+              <input class="q-body-sm" name="reason" [placeholder]="i18n.t('common.reason')" [value]="reason()" (input)="reason.set($any($event.target).value)" />
+              <button type="submit" [disabled]="!canSubmit('refund')">{{ i18n.t('wallet.refund.submit') }}</button>
+            </form>
+          }
+          @case ('method') {
+            <form class="walletForm methodForm" (submit)="changePaymentMethod($event)">
+              <p class="q-caption muted">{{ i18n.t('wallet.method.note') }}</p>
+              <!--
+                [selected] on each option, not [value] on the select alone: an
+                option list built by @for is materialised after the select's own
+                bindings run, so an assignment to a select with no options yet is
+                discarded and every tenant reads as the first one. That showed
+                INVOICE for a CARD tenant, and an untouched submit then re-sent
+                CARD while the banner named it as the change just made.
+              -->
+              <select class="q-body-sm" name="paymentMethod" [value]="method()" (change)="method.set($any($event.target).value)">
+                @for (option of methods; track option) {
+                  <option [value]="option" [selected]="option === method()">{{ methodLabel(option) }}</option>
+                }
+              </select>
+              @if (method() === 'CARD') {
+                <input class="q-body-sm" name="cardTokenReference" [placeholder]="i18n.t('wallet.field.cardToken')" [value]="cardToken()" (input)="cardToken.set($any($event.target).value)" />
+              }
+              <input class="q-body-sm" name="reason" [placeholder]="i18n.t('common.reason')" [value]="reason()" (input)="reason.set($any($event.target).value)" />
+              <button type="submit" [disabled]="!canSubmit('method')">{{ i18n.t('wallet.method.submit') }}</button>
+            </form>
+          }
+        }
+        <p class="q-caption muted approvalsNote">
+          {{ i18n.t('wallet.approvals.note') }}
+          <a class="approvalsLink" [routerLink]="['/compliance/approvals']">{{ i18n.t('wallet.approvals.link') }}</a>
+        </p>
+      }
+
+      @if (grants().length > 0) {
+        <h3 class="q-caption grantsTitle">{{ i18n.t('wallet.grants.title') }}</h3>
+        <div class="scroll">
+          <table class="table grantsTable">
+            <thead>
+              <tr>
+                <th class="q-caption num">{{ i18n.t('wallet.column.granted') }}</th>
+                <th class="q-caption num">{{ i18n.t('wallet.column.remaining') }}</th>
+                <th class="q-caption">{{ i18n.t('wallet.column.lapses') }}</th>
+                <th class="q-caption">{{ i18n.t('common.reason') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (grant of grants(); track grant.grantId) {
+                <tr [attr.data-grant]="grant.grantId">
+                  <td class="q-body-sm q-tnum num">{{ i18n.money(grant.granted) }}</td>
+                  <td class="q-body-sm q-tnum num">{{ i18n.money(grant.remaining) }}</td>
+                  <td class="q-body-sm">{{ i18n.day(asDate(grant.expiresAt)) }}</td>
+                  <td class="q-body-sm">{{ grant.reason }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <h3 class="q-caption ledgerTitle">{{ i18n.t('wallet.ledger.title') }}</h3>
+      @if (ledger().length === 0) {
+        <p class="q-body-sm muted">{{ i18n.t('wallet.ledger.none') }}</p>
+      } @else {
+        <div class="scroll">
+          <table class="table ledger">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ i18n.t('wallet.column.when') }}</th>
+                <th class="q-caption">{{ i18n.t('wallet.column.entry') }}</th>
+                <th class="q-caption num">{{ i18n.t('statements.column.amount') }}</th>
+                <th class="q-caption">{{ i18n.t('wallet.column.reference') }}</th>
+                <th class="q-caption">{{ i18n.t('wallet.column.who') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (entry of ledger(); track entry.entryId) {
+                <tr [attr.data-entry]="entry.entryType">
+                  <td class="q-body-sm">{{ i18n.dateTime(asDate(entry.createdAt)) }}</td>
+                  <td class="q-body-sm">
+                    <span class="entryLabel">{{ entryLabel(entry.entryType) }}</span>
+                    <span class="chip" [class.bonus]="entry.moneyKind === 'BONUS'">{{ i18n.t(entry.moneyKind === 'BONUS' ? 'wallet.kind.BONUS' : 'wallet.kind.PAID') }}</span>
+                    <div class="q-caption muted">{{ entry.reason }}</div>
+                  </td>
+                  <td class="q-body-sm q-tnum num">{{ i18n.money(entry.amount) }}</td>
+                  <td class="q-body-sm">{{ entry.externalReference ?? '—' }}</td>
+                  <td class="q-body-sm">
+                    {{ entry.recordedBy }}
+                    @if (entry.approvedBy) {
+                      <div class="q-caption muted approvedBy">{{ i18n.t('wallet.approvedBy', { approver: entry.approvedBy }) }}</div>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (ledgerCursor() !== null) {
+          <button type="button" class="q-body-sm loadMore" [disabled]="loadingMoreLedger()" (click)="loadMoreLedger()">
+            {{ loadingMoreLedger() ? i18n.t('tenants.loadingMore') : i18n.t('tenants.loadMore') }}
+          </button>
+        }
+        <!--
+          The caption may not claim the balances are the sum of these rows while
+          rows are missing: the balances are sums over the whole ledger, and the
+          table is one page of it until the reader asks for the rest.
+        -->
+        <p class="q-caption muted ledgerNote">
+          {{ ledgerCursor() === null ? i18n.t('wallet.ledger.appendOnly') : i18n.t('wallet.ledger.appendOnlyTruncated', { count: ledger().length }) }}
+        </p>
+      }
+    } @else {
+      <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+    }
+  </section>
+}

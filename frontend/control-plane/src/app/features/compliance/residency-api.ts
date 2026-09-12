@@ -44,9 +44,17 @@ export interface BusinessTypeView {
   readonly tenants: number;
 }
 
-/** A platform decision waiting in one tenant. */
+/**
+ * A platform decision waiting for a second signature.
+ *
+ * `tenantId` is null when the request is itself PLATFORM-scoped: a wallet
+ * correction, bonus grant, refund or deposit reversal is HorecaOS's own
+ * decision about a tenant's account rather than the tenant's, so it is raised
+ * above every tenant's queue and carries no tenant at all (ADR 0095). Such a
+ * row is decided through `decidePlatform`, not through a tenant's route.
+ */
 export interface PlatformPendingApproval {
-  readonly tenantId: string;
+  readonly tenantId: string | null;
   readonly request: PendingApprovalResponse;
 }
 
@@ -84,5 +92,22 @@ export class ResidencyApi {
 
   async platformApprovals(): Promise<PlatformPendingApproval[]> {
     return firstValueFrom(this.api.get<PlatformPendingApproval[]>('/api/v1/control-plane/approval-requests'));
+  }
+
+  /**
+   * Decides a request that belongs to no tenant. The tenant routes are keyed
+   * on the tenant and cannot reach one; this one cannot reach a tenant's own.
+   */
+  async decidePlatform(
+    requestId: string,
+    decision: 'APPROVE' | 'DECLINE',
+    reason: string,
+  ): Promise<{ id: string; actionCode: string; status: string }> {
+    return firstValueFrom(
+      this.api.post<{ id: string; actionCode: string; status: string }>(
+        `/api/v1/control-plane/approval-requests/${requestId}/decision`,
+        { decision, reason },
+      ),
+    );
   }
 }
