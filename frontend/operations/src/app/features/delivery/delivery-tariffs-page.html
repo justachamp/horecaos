@@ -22,6 +22,18 @@
         <span class="q-body-sm">{{ error }}</span>
       </div>
     }
+    @if (rowError(); as error) {
+      <div class="tariffs__error-band" role="alert" data-testid="tariff-row-error">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+    @if (draftProblems().length > 0) {
+      <ul class="tariffs__problems" data-testid="tariff-problems">
+        @for (problem of draftProblems(); track problem) {
+          <li class="q-body-sm">{{ problem }}</li>
+        }
+      </ul>
+    }
 
     <table class="tariffs__table">
       <thead>
@@ -30,6 +42,8 @@
           <th>{{ 'delivery.tariffs.column.name' | t }}</th>
           <th>{{ 'delivery.tariffs.column.version' | t }}</th>
           <th>{{ 'delivery.tariffs.column.feeSource' | t }}</th>
+          <th>{{ 'delivery.tariffs.column.distanceMode' | t }}</th>
+          <th>{{ 'delivery.tariffs.column.reach' | t }}</th>
           <th>{{ 'delivery.tariffs.column.default' | t }}</th>
           <th></th>
         </tr>
@@ -51,48 +65,176 @@
               } @else {
                 <span class="status-badge">{{ 'delivery.tariffs.notActivated' | t }}</span>
               }
+              @if (pendingVersion(tariff); as pending) {
+                <span class="status-badge" data-testid="tariff-pending-draft">
+                  {{ 'delivery.tariffs.draftPending' | t: { version: pending } }}
+                </span>
+              }
             </td>
-            <td>{{ tariff.feeSource || '—' }}</td>
+            <td>
+              {{ tariff.feeSource ? (feeSourceKey(tariff.feeSource) | t) : '—' }}
+            </td>
+            <td>
+              {{ tariff.distanceMode ? (distanceModeKey(tariff.distanceMode) | t) : '—' }}
+            </td>
+            <td class="q-tnum">{{ tariff.maxDistanceMeters ?? '—' }}</td>
             <td>{{ tariff.brandDefault ? ('delivery.tariffs.default.yes' | t) : '—' }}</td>
             <td class="tariffs__action-col">
-              <button type="button" (click)="$event.stopPropagation(); openDraftForm(tariff)">
+              @if (pendingVersion(tariff); as pending) {
+                <button
+                  type="button"
+                  data-testid="tariff-activate"
+                  [disabled]="busyTariffId() === tariff.tariffId"
+                  (click)="$event.stopPropagation(); activate(tariff, pending)"
+                >
+                  {{ 'delivery.tariffs.activate.action' | t }}
+                </button>
+              }
+              <button
+                type="button"
+                data-testid="tariff-bind"
+                (click)="$event.stopPropagation(); openBindForm(tariff)"
+              >
+                {{ 'delivery.tariffs.bind.action' | t }}
+              </button>
+              <button
+                type="button"
+                data-testid="tariff-draft"
+                (click)="$event.stopPropagation(); openDraftForm(tariff)"
+              >
                 {{ 'delivery.tariffs.draft.action' | t }}
               </button>
             </td>
           </tr>
           @if (isExpanded(tariff)) {
             <tr class="tariff-detail-row">
-              <td colspan="6">
+              <td colspan="8">
                 @if (detailFor(tariff); as detail) {
                   @if (detail.activeVersion; as active) {
-                    <table class="tariff-bands">
-                      <thead>
-                        <tr>
-                          <th>{{ 'delivery.tariffs.band.from' | t }}</th>
-                          <th>{{ 'delivery.tariffs.band.to' | t }}</th>
-                          <th>{{ 'delivery.tariffs.band.base' | t }}</th>
-                          <th>{{ 'delivery.tariffs.band.perKm' | t }}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        @for (band of active.bands; track band.fromMeters) {
+                    <div class="tariff-detail">
+                      <div class="tariff-detail__facts">
+                        <span class="q-caption">
+                          {{ 'delivery.tariffs.detail.currency' | t }}: {{ active.currency }}
+                        </span>
+                        <span class="q-caption">
+                          {{ 'delivery.tariffs.detail.distanceMode' | t }}:
+                          {{ distanceModeKey(active.distanceMode) | t }}
+                        </span>
+                        <span class="q-caption">
+                          {{ 'delivery.tariffs.detail.reach' | t }}:
+                          {{ active.maxDistanceMeters }}
+                        </span>
+                        <span class="q-caption">
+                          {{ 'delivery.tariffs.detail.minFee' | t }}: {{ active.minFeeMinor }}
+                        </span>
+                        <span class="q-caption">
+                          {{ 'delivery.tariffs.detail.maxFee' | t }}:
+                          {{ active.maxFeeMinor ?? '—' }}
+                        </span>
+                        <span class="q-caption">
+                          {{ 'delivery.tariffs.detail.accrual' | t }}:
+                          {{ accrualKey(active.distanceAccrual) | t }}
+                        </span>
+                        <span class="q-caption">
+                          {{ 'delivery.tariffs.detail.rounding' | t }}:
+                          @if (active.feeRoundingStepMinor) {
+                            {{ active.feeRoundingStepMinor }} /
+                            {{ roundingKey(active.feeRoundingRule) | t }}
+                          } @else {
+                            —
+                          }
+                        </span>
+                      </div>
+
+                      @if (fallsBackToRadius(active)) {
+                        <p
+                          class="tariff-detail__fallback q-body-sm"
+                          data-testid="tariff-radius-fallback"
+                        >
+                          {{
+                            'delivery.tariffs.detail.radiusFallback'
+                              | t: { factor: active.roadFactorBasisPoints / 10000 }
+                          }}
+                        </p>
+                      }
+
+                      <table class="tariff-bands">
+                        <thead>
                           <tr>
-                            <td class="q-tnum">{{ band.fromMeters }}</td>
-                            <td class="q-tnum">{{ band.toMeters }}</td>
-                            <td class="q-tnum">{{ band.baseMinor }}</td>
-                            <td class="q-tnum">{{ band.perKmMinor }}</td>
+                            <th>{{ 'delivery.tariffs.band.set' | t }}</th>
+                            <th>{{ 'delivery.tariffs.band.from' | t }}</th>
+                            <th>{{ 'delivery.tariffs.band.to' | t }}</th>
+                            <th>{{ 'delivery.tariffs.band.base' | t }}</th>
+                            <th>{{ 'delivery.tariffs.band.perKm' | t }}</th>
                           </tr>
-                        }
-                      </tbody>
-                    </table>
-                    @if (active.timeRules.length > 0) {
-                      <p class="q-caption">
-                        {{
-                          'delivery.tariffs.detail.timeRules'
-                            | t: { count: active.timeRules.length }
-                        }}
-                      </p>
-                    }
+                        </thead>
+                        <tbody>
+                          @for (band of active.bands; track band.bandSet + '#' + band.fromMeters) {
+                            <tr data-testid="tariff-band-row">
+                              <td class="q-mono">{{ band.bandSet }}</td>
+                              <td class="q-tnum">{{ band.fromMeters }}</td>
+                              <td class="q-tnum">{{ band.toMeters }}</td>
+                              <td class="q-tnum">{{ band.baseMinor }}</td>
+                              <td class="q-tnum">{{ band.perKmMinor }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+
+                      @if (active.timeRules.length > 0) {
+                        <h3 class="q-caption">{{ 'delivery.tariffs.detail.timeRulesHead' | t }}</h3>
+                        <table class="tariff-bands">
+                          <thead>
+                            <tr>
+                              <th>{{ 'delivery.tariffs.rule.days' | t }}</th>
+                              <th>{{ 'delivery.tariffs.rule.window' | t }}</th>
+                              <th>{{ 'delivery.tariffs.rule.bandSet' | t }}</th>
+                              <th>{{ 'delivery.tariffs.rule.multiplier' | t }}</th>
+                              <th>{{ 'delivery.tariffs.rule.surcharge' | t }}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (rule of active.timeRules; track rule.priority) {
+                              <tr data-testid="tariff-time-rule-row">
+                                <td>{{ describeDayMask(rule.dayMask) }}</td>
+                                <td class="q-tnum">{{ rule.fromTime }}–{{ rule.toTime }}</td>
+                                <td class="q-mono">{{ rule.bandSet ?? '—' }}</td>
+                                <td class="q-tnum">×{{ rule.multiplierBasisPoints / 10000 }}</td>
+                                <td class="q-tnum">{{ rule.surchargeMinor }}</td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      }
+
+                      @if (active.discounts.length > 0) {
+                        <h3 class="q-caption">{{ 'delivery.tariffs.detail.discountsHead' | t }}</h3>
+                        <table class="tariff-bands">
+                          <thead>
+                            <tr>
+                              <th>{{ 'delivery.tariffs.discount.kind' | t }}</th>
+                              <th>{{ 'delivery.tariffs.discount.value' | t }}</th>
+                              <th>{{ 'delivery.tariffs.rule.days' | t }}</th>
+                              <th>{{ 'delivery.tariffs.rule.window' | t }}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (discount of active.discounts; track discount.priority) {
+                              <tr data-testid="tariff-discount-row">
+                                <td>{{ discountKindKey(discount.kind) | t }}</td>
+                                <td class="q-tnum">
+                                  {{ discount.amountMinor ?? discount.allowanceMeters }}
+                                </td>
+                                <td>{{ describeDayMask(discount.dayMask) }}</td>
+                                <td class="q-tnum">
+                                  {{ discount.fromTime }}–{{ discount.toTime }}
+                                </td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      }
+                    </div>
                   } @else {
                     <span class="q-caption">{{ 'delivery.tariffs.notActivated' | t }}</span>
                   }
@@ -104,7 +246,7 @@
           }
         } @empty {
           <tr>
-            <td colspan="6">
+            <td colspan="8">
               <p class="q-body-sm" data-testid="tariffs-empty">
                 {{ 'delivery.tariffs.empty' | t }}
               </p>
@@ -150,60 +292,366 @@
     </div>
   }
 
-  @if (draftingTariffId()) {
+  @if (draftingTariff(); as tariff) {
     <div class="dialog-backdrop" (click)="closeDraftForm()">
-      <div class="dialog" (click)="$event.stopPropagation()">
-        <h2 class="q-subhead">{{ 'delivery.tariffs.draft.title' | t }}</h2>
+      <div class="dialog dialog--wide" (click)="$event.stopPropagation()">
+        <h2 class="q-subhead">{{ 'delivery.tariffs.draft.title' | t: { code: tariff.code } }}</h2>
         <p class="q-caption">{{ 'delivery.tariffs.draft.hint' | t }}</p>
-        <label class="field">
-          <span class="q-caption">{{ 'delivery.tariffs.draft.currency' | t }}</span>
-          <input
-            type="text"
-            [value]="draftCurrency()"
-            (input)="draftCurrency.set($any($event.target).value)"
-          />
-        </label>
-        <label class="field">
-          <span class="q-caption">{{ 'delivery.tariffs.draft.maxDistance' | t }}</span>
-          <input
-            type="number"
-            [value]="draftMaxDistanceMeters()"
-            (input)="draftMaxDistanceMeters.set(+$any($event.target).value)"
-          />
-        </label>
-        <label class="field">
-          <span class="q-caption">{{ 'delivery.tariffs.draft.minFee' | t }}</span>
-          <input
-            type="number"
-            [value]="draftMinFeeMinor()"
-            (input)="draftMinFeeMinor.set(+$any($event.target).value)"
-          />
-        </label>
-        <label class="field">
-          <span class="q-caption">{{ 'delivery.tariffs.draft.base' | t }}</span>
-          <input
-            type="number"
-            [value]="draftBaseMinor()"
-            (input)="draftBaseMinor.set(+$any($event.target).value)"
-          />
-        </label>
-        <label class="field">
-          <span class="q-caption">{{ 'delivery.tariffs.draft.perKm' | t }}</span>
-          <input
-            type="number"
-            [value]="draftPerKmMinor()"
-            (input)="draftPerKmMinor.set(+$any($event.target).value)"
-          />
-        </label>
+
+        <div class="field-row">
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.tariffs.draft.currency' | t }}</span>
+            <input
+              type="text"
+              [value]="draftCurrency()"
+              (input)="draftCurrency.set($any($event.target).value)"
+            />
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.tariffs.draft.maxDistance' | t }}</span>
+            <input
+              type="number"
+              [value]="draftMaxDistanceMeters()"
+              (input)="draftMaxDistanceMeters.set(+$any($event.target).value)"
+            />
+          </label>
+        </div>
+
+        <div class="field-row">
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.tariffs.draft.feeSource' | t }}</span>
+            <select
+              data-testid="tariff-fee-source"
+              [value]="draftFeeSource()"
+              (change)="draftFeeSource.set($any($event.target).value)"
+            >
+              <option value="TARIFF">{{ 'delivery.tariffs.feeSource.TARIFF' | t }}</option>
+              <option value="PROVIDER_QUOTE">
+                {{ 'delivery.tariffs.feeSource.PROVIDER_QUOTE' | t }}
+              </option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.tariffs.draft.distanceMode' | t }}</span>
+            <select
+              data-testid="tariff-distance-mode"
+              [value]="draftDistanceMode()"
+              (change)="draftDistanceMode.set($any($event.target).value)"
+            >
+              <option value="RADIUS">{{ 'delivery.tariffs.distanceMode.RADIUS' | t }}</option>
+              <option value="ROAD">{{ 'delivery.tariffs.distanceMode.ROAD' | t }}</option>
+            </select>
+          </label>
+        </div>
+
+        @if (draftDistanceMode() === 'ROAD') {
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.tariffs.draft.routingInstallation' | t }}</span>
+            <input
+              type="text"
+              data-testid="tariff-routing-installation"
+              [value]="draftRoutingInstallationId()"
+              (input)="draftRoutingInstallationId.set($any($event.target).value)"
+            />
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.tariffs.draft.roadFactor' | t }}</span>
+            <input
+              type="number"
+              [value]="draftRoadFactorBasisPoints()"
+              (input)="draftRoadFactorBasisPoints.set(+$any($event.target).value)"
+            />
+          </label>
+          @if (roadNeedsRouting()) {
+            <p class="dialog__warning q-body-sm" data-testid="tariff-road-warning">
+              {{ 'delivery.tariffs.draft.roadNeedsRouting' | t }}
+            </p>
+          } @else {
+            <p class="q-caption" data-testid="tariff-road-fallback-note">
+              {{ 'delivery.tariffs.draft.roadFallbackNote' | t }}
+            </p>
+          }
+        }
+
+        <div class="field-row">
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.tariffs.draft.minFee' | t }}</span>
+            <input
+              type="number"
+              [value]="draftMinFeeMinor()"
+              (input)="draftMinFeeMinor.set(+$any($event.target).value)"
+            />
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.tariffs.draft.maxFee' | t }}</span>
+            <input
+              type="number"
+              [value]="draftMaxFeeMinor()"
+              (input)="
+                draftMaxFeeMinor.set($any($event.target).value ? +$any($event.target).value : null)
+              "
+            />
+          </label>
+        </div>
+
+        <div class="field-row">
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.tariffs.draft.roundingStep' | t }}</span>
+            <input
+              type="number"
+              data-testid="tariff-rounding-step"
+              [value]="draftRoundingStepMinor()"
+              (input)="
+                draftRoundingStepMinor.set(
+                  $any($event.target).value ? +$any($event.target).value : null
+                )
+              "
+            />
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.tariffs.draft.accrual' | t }}</span>
+            <select
+              data-testid="tariff-accrual"
+              [value]="draftAccrual()"
+              (change)="draftAccrual.set($any($event.target).value)"
+            >
+              <option value="STARTED_KILOMETRE">
+                {{ 'delivery.tariffs.accrual.STARTED_KILOMETRE' | t }}
+              </option>
+              <option value="PRORATED_METRE">
+                {{ 'delivery.tariffs.accrual.PRORATED_METRE' | t }}
+              </option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="q-caption">{{ 'delivery.tariffs.draft.roundingRule' | t }}</span>
+            <select
+              [value]="draftRoundingRule()"
+              (change)="draftRoundingRule.set($any($event.target).value)"
+            >
+              <option value="">—</option>
+              <option value="HALF_UP">{{ 'delivery.tariffs.rounding.HALF_UP' | t }}</option>
+              <option value="HALF_EVEN">{{ 'delivery.tariffs.rounding.HALF_EVEN' | t }}</option>
+            </select>
+          </label>
+        </div>
+
+        <section class="editor">
+          <div class="editor__head">
+            <h3 class="q-caption">{{ 'delivery.tariffs.draft.bandsHead' | t }}</h3>
+            <button type="button" data-testid="tariff-add-band" (click)="addBand()">
+              {{ 'delivery.tariffs.draft.addBand' | t }}
+            </button>
+          </div>
+          <p class="q-caption">{{ 'delivery.tariffs.draft.bandsHint' | t }}</p>
+          @for (band of draftBands(); track $index) {
+            <div class="editor__row" data-testid="tariff-band-editor-row">
+              <input
+                class="editor__cell editor__cell--set"
+                type="text"
+                [placeholder]="'delivery.tariffs.band.set' | t"
+                [value]="band.bandSet"
+                (input)="updateBand($index, 'bandSet', $any($event.target).value)"
+              />
+              <input
+                class="editor__cell"
+                type="number"
+                [value]="band.fromMeters"
+                (input)="updateBand($index, 'fromMeters', $any($event.target).value)"
+              />
+              <input
+                class="editor__cell"
+                type="number"
+                [value]="band.toMeters"
+                (input)="updateBand($index, 'toMeters', $any($event.target).value)"
+              />
+              <input
+                class="editor__cell"
+                type="number"
+                [value]="band.baseMinor"
+                (input)="updateBand($index, 'baseMinor', $any($event.target).value)"
+              />
+              <input
+                class="editor__cell"
+                type="number"
+                [value]="band.perKmMinor"
+                (input)="updateBand($index, 'perKmMinor', $any($event.target).value)"
+              />
+              <button type="button" (click)="removeBand($index)">
+                {{ 'delivery.tariffs.draft.remove' | t }}
+              </button>
+            </div>
+          }
+        </section>
+
+        <section class="editor">
+          <div class="editor__head">
+            <h3 class="q-caption">{{ 'delivery.tariffs.draft.timeRulesHead' | t }}</h3>
+            <button type="button" data-testid="tariff-add-time-rule" (click)="addTimeRule()">
+              {{ 'delivery.tariffs.draft.addTimeRule' | t }}
+            </button>
+          </div>
+          <p class="q-caption">{{ 'delivery.tariffs.draft.timeRulesHint' | t }}</p>
+          @for (rule of draftTimeRules(); track $index) {
+            <div class="editor__row" data-testid="tariff-time-rule-editor-row">
+              <input
+                class="editor__cell"
+                type="number"
+                [value]="rule.dayMask"
+                (input)="updateTimeRule($index, 'dayMask', $any($event.target).value)"
+              />
+              <input
+                class="editor__cell"
+                type="time"
+                [value]="rule.fromTime"
+                (input)="updateTimeRule($index, 'fromTime', $any($event.target).value)"
+              />
+              <input
+                class="editor__cell"
+                type="time"
+                [value]="rule.toTime"
+                (input)="updateTimeRule($index, 'toTime', $any($event.target).value)"
+              />
+              <input
+                class="editor__cell editor__cell--set"
+                type="text"
+                [placeholder]="'delivery.tariffs.rule.bandSet' | t"
+                [value]="rule.bandSet"
+                (input)="updateTimeRule($index, 'bandSet', $any($event.target).value)"
+              />
+              <input
+                class="editor__cell"
+                type="number"
+                [value]="rule.multiplierBasisPoints"
+                (input)="updateTimeRule($index, 'multiplierBasisPoints', $any($event.target).value)"
+              />
+              <input
+                class="editor__cell"
+                type="number"
+                [value]="rule.surchargeMinor"
+                (input)="updateTimeRule($index, 'surchargeMinor', $any($event.target).value)"
+              />
+              <button type="button" (click)="removeTimeRule($index)">
+                {{ 'delivery.tariffs.draft.remove' | t }}
+              </button>
+            </div>
+          }
+        </section>
+
+        <section class="editor">
+          <div class="editor__head">
+            <h3 class="q-caption">{{ 'delivery.tariffs.draft.discountsHead' | t }}</h3>
+            <button type="button" data-testid="tariff-add-discount" (click)="addDiscount()">
+              {{ 'delivery.tariffs.draft.addDiscount' | t }}
+            </button>
+          </div>
+          @for (discount of draftDiscounts(); track $index) {
+            <div class="editor__row" data-testid="tariff-discount-editor-row">
+              <select
+                class="editor__cell editor__cell--set"
+                [value]="discount.kind"
+                (change)="updateDiscount($index, 'kind', $any($event.target).value)"
+              >
+                <option value="AMOUNT">{{ 'delivery.tariffs.discountKind.AMOUNT' | t }}</option>
+                <option value="DISTANCE_ALLOWANCE">
+                  {{ 'delivery.tariffs.discountKind.DISTANCE_ALLOWANCE' | t }}
+                </option>
+              </select>
+              @if (discount.kind === 'AMOUNT') {
+                <input
+                  class="editor__cell"
+                  type="number"
+                  [value]="discount.amountMinor"
+                  (input)="updateDiscount($index, 'amountMinor', $any($event.target).value)"
+                />
+              } @else {
+                <input
+                  class="editor__cell"
+                  type="number"
+                  [value]="discount.allowanceMeters"
+                  (input)="updateDiscount($index, 'allowanceMeters', $any($event.target).value)"
+                />
+              }
+              <input
+                class="editor__cell"
+                type="number"
+                [value]="discount.dayMask"
+                (input)="updateDiscount($index, 'dayMask', $any($event.target).value)"
+              />
+              <input
+                class="editor__cell"
+                type="time"
+                [value]="discount.fromTime"
+                (input)="updateDiscount($index, 'fromTime', $any($event.target).value)"
+              />
+              <input
+                class="editor__cell"
+                type="time"
+                [value]="discount.toTime"
+                (input)="updateDiscount($index, 'toTime', $any($event.target).value)"
+              />
+              <button type="button" (click)="removeDiscount($index)">
+                {{ 'delivery.tariffs.draft.remove' | t }}
+              </button>
+            </div>
+          }
+        </section>
+
         @if (draftError(); as error) {
           <p class="dialog__error q-body-sm">{{ error }}</p>
+        }
+        @if (draftProblems().length > 0) {
+          <ul class="dialog__problems">
+            @for (problem of draftProblems(); track problem) {
+              <li class="q-body-sm">{{ problem }}</li>
+            }
+          </ul>
         }
         <div class="dialog__actions">
           <button type="button" (click)="closeDraftForm()">
             {{ 'delivery.dialog.cancel' | t }}
           </button>
-          <button type="button" [disabled]="!canDraft()" (click)="submitDraft()">
+          <button
+            type="button"
+            data-testid="tariff-draft-submit"
+            [disabled]="!canDraft()"
+            (click)="submitDraft()"
+          >
             {{ 'delivery.tariffs.draft.submit' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (bindingTariffId()) {
+    <div class="dialog-backdrop" (click)="closeBindForm()">
+      <div class="dialog" (click)="$event.stopPropagation()">
+        <h2 class="q-subhead">{{ 'delivery.tariffs.bind.title' | t }}</h2>
+        <p class="q-caption">{{ 'delivery.tariffs.bind.hint' | t }}</p>
+        <label class="field">
+          <span class="q-caption">{{ 'delivery.tariffs.bind.branch' | t }}</span>
+          <select
+            data-testid="tariff-bind-select"
+            [value]="bindLocationId()"
+            (change)="bindLocationId.set($any($event.target).value)"
+          >
+            @for (branch of branchOptions(); track branch.id) {
+              <option [value]="branch.id">{{ branch.displayName }}</option>
+            }
+          </select>
+        </label>
+        <div class="dialog__actions">
+          <button type="button" (click)="closeBindForm()">
+            {{ 'delivery.dialog.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            data-testid="tariff-bind-submit"
+            [disabled]="!bindLocationId()"
+            (click)="submitBind()"
+          >
+            {{ 'delivery.tariffs.bind.submit' | t }}
           </button>
         </div>
       </div>

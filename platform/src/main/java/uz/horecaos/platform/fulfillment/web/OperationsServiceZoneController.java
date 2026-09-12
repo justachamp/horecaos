@@ -6,10 +6,13 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService;
 import uz.horecaos.platform.fulfillment.domain.BranchOrigin;
 import uz.horecaos.platform.fulfillment.domain.zone.ZoneRole;
+import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
@@ -196,6 +200,70 @@ public class OperationsServiceZoneController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/{zoneId}/versions")
+    @RequiresCapability(value = Capability.DELIVERY_ZONE_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Every version of one zone, newest first",
+            description = "ADR 0037 versions a zone for the auditor; this is the same history for "
+                    + "the operator who produced it. Without it the only lifecycle verb a console "
+                    + "can reach is 'activate', and a wrong radius is permanent.")
+    public ResponseEntity<List<ZoneVersionResponse>> versions(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID zoneId) {
+        try {
+            return ResponseEntity.ok(zones.listVersions(tenantId, brandId, zoneId).stream()
+                    .map(ZoneVersionResponse::of)
+                    .toList());
+        } catch (ServiceZoneService.DeliveryResourceNotFoundException missing) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
+        }
+    }
+
+    @PostMapping("/{zoneId}/versions/{version}/deactivate")
+    @RequiresCapability(value = Capability.DELIVERY_ZONE_ACTIVATE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Retire the live version and put nothing in its place",
+            description = "The zone then covers nothing — ADR 0037's safe direction. Deliberately "
+                    + "the same capability as activation: deciding a drawing stops governing is "
+                    + "the same class of decision as deciding it starts.")
+    public ResponseEntity<ServiceZoneController.VersionView> deactivate(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID zoneId,
+            @PathVariable int version) {
+
+        try {
+            zones.deactivate(tenantId, brandId, zoneId, version);
+            return ResponseEntity.ok(new ServiceZoneController.VersionView(zoneId, version, "RETIRED"));
+        } catch (ServiceZoneService.ZoneActivationRefusedException refused) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, refused.getMessage(), Map.of("problems", refused.problems()));
+        } catch (ServiceZoneService.DeliveryResourceNotFoundException missing) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
+        }
+    }
+
+    @DeleteMapping("/{zoneId}/locations/{locationId}")
+    @RequiresCapability(value = Capability.DELIVERY_ZONE_MANAGE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Stop this zone applying to a branch",
+            description = "Closes the binding's validity window; the row stays, because a fee "
+                    + "resolution six weeks old names the binding that applied. A branch that was "
+                    + "not bound answers not-found rather than success — the two are identical on "
+                    + "screen and one of them means the wrong row was clicked.")
+    public ResponseEntity<Void> unbind(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID zoneId,
+            @PathVariable UUID locationId) {
+
+        try {
+            zones.unbindLocation(tenantId, brandId, zoneId, locationId);
+            return ResponseEntity.noContent().build();
+        } catch (ServiceZoneService.DeliveryResourceNotFoundException missing) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
+        }
+    }
+
     private ZoneRole resolveRole(UUID tenantId, UUID brandId, UUID zoneId) {
         return zones.roleOf(tenantId, brandId, zoneId)
                 .orElseThrow(
@@ -233,6 +301,49 @@ public class OperationsServiceZoneController {
             if ((circle == null) == (geoJson == null)) {
                 throw new IllegalArgumentException("A version is either a circle or a polygon; supply exactly one");
             }
+        }
+    }
+
+    /**
+     * One row of {@link #versions}.
+     *
+     * <p>{@code activatedAt} and {@code retiredAt} are the lifecycle, not
+     * decoration: a version that was live and is not any more is the single
+     * most useful row on this list, and it is indistinguishable from a
+     * never-activated draft without both stamps.
+     */
+    public record ZoneVersionResponse(
+            int version,
+            String status,
+            int priority,
+            String currency,
+            @Nullable UUID deliveryTariffId,
+            @Nullable Long freeDeliveryFromMinor,
+            @Nullable Long minBasketMinor,
+            double areaSquareMeters,
+            @Nullable UUID regionId,
+            @Nullable UUID originLocationId,
+            @Nullable String shapeKind,
+            @Nullable Instant createdAt,
+            @Nullable Instant activatedAt,
+            @Nullable Instant retiredAt) {
+
+        static ZoneVersionResponse of(JdbcServiceZoneStore.ZoneVersionRow row) {
+            return new ZoneVersionResponse(
+                    row.version(),
+                    row.status(),
+                    row.priority(),
+                    row.currency(),
+                    row.deliveryTariffId(),
+                    row.freeDeliveryFromMinor(),
+                    row.minBasketMinor(),
+                    row.areaSquareMeters(),
+                    row.regionId(),
+                    row.originLocationId(),
+                    row.shapeKind(),
+                    row.createdAt(),
+                    row.activatedAt(),
+                    row.retiredAt());
         }
     }
 }

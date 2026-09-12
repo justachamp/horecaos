@@ -30,6 +30,26 @@ export interface ZoneDetailResponse {
   readonly boundLocationIds: readonly string[];
 }
 
+/** Mirrors `OperationsServiceZoneController.ZoneVersionResponse`. */
+export interface ZoneVersionResponse {
+  readonly version: number;
+  /** `DRAFT` | `ACTIVE` | `RETIRED` | `DISCARDED`. */
+  readonly status: string;
+  readonly priority: number;
+  readonly currency: string;
+  readonly deliveryTariffId?: string | null;
+  readonly freeDeliveryFromMinor?: number | null;
+  readonly minBasketMinor?: number | null;
+  readonly areaSquareMeters: number;
+  readonly regionId?: string | null;
+  readonly originLocationId?: string | null;
+  /** `CIRCLE` | `POLYGON`. */
+  readonly shapeKind?: string | null;
+  readonly createdAt?: string | null;
+  readonly activatedAt?: string | null;
+  readonly retiredAt?: string | null;
+}
+
 export interface CreateZoneRequest {
   readonly role: 'DELIVERY' | 'CATCHMENT';
   readonly code: string;
@@ -45,11 +65,23 @@ export interface ZoneView {
 }
 
 /**
- * A circle drawn around a branch — the only shape this wave's frontend
- * offers. No `MapCanvas`/`PolygonEditor` exists in this design system (IA
- * Part 4's own "Pilot blockers" table names it as missing entirely), so a
- * free-hand polygon is not buildable this wave; the backend's circle-draft
- * path (`ServiceZoneController.CircleRequest`) is real and does not need one.
+ * A circle drawn around a branch — the only shape this console offers. No
+ * `MapCanvas`/`PolygonEditor` exists in this design system (IA Part 4's own
+ * "Pilot blockers" table names it as missing entirely, and ADR 0015 still
+ * owes the provider decision ADR 0037 inherited), so a free-hand polygon is
+ * not buildable yet; the backend's circle-draft path
+ * (`ServiceZoneController.CircleRequest`) is real and needs no map.
+ *
+ * `deliveryTariffId` is the field this wave exists for. It has been on the
+ * wire contract and on this interface since the screen shipped, and the page
+ * never set it — so every zone a console user had ever drawn carried a null
+ * tariff and ADR 0037's zone-beats-branch precedence could not be reached
+ * from the product. `null` is still a legal value and still means "fall
+ * through to the branch binding, then the brand default"; what changed is
+ * that an operator can now choose.
+ *
+ * There is no `actorId`. The operations surface reads the actor from the
+ * caller's own token — see `delivery-paths.ts`.
  */
 export interface DraftCircleVersionRequest {
   readonly originLocationId: string;
@@ -60,7 +92,6 @@ export interface DraftCircleVersionRequest {
   readonly deliveryTariffId?: string | null;
   readonly freeDeliveryFromMinor?: number | null;
   readonly minBasketMinor?: number | null;
-  readonly actorId: string;
 }
 
 export interface VersionView {
@@ -70,10 +101,8 @@ export interface VersionView {
 }
 
 /**
- * Delivery zones (operations §3.6) — `ServiceZoneController` (ADR 0037,
- * `control-plane` OpenAPI surface — see `delivery-paths.ts`'s own doc for
- * why this operations-app service reaches across surfaces the same way
- * `catalog-api.ts` already does).
+ * Delivery zones (operations §3.6) — `OperationsServiceZoneController`
+ * (ADR 0037, ADR 0104, `operations` OpenAPI surface).
  */
 @Injectable({ providedIn: 'root' })
 export class DeliveryZonesApi {
@@ -91,6 +120,13 @@ export class DeliveryZonesApi {
       this.api.get<ZoneDetailResponse>(deliveryZonePaths.zone(scope, zoneId)),
     );
     return result.value;
+  }
+
+  async versions(scope: BrandScope, zoneId: string): Promise<readonly ZoneVersionResponse[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly ZoneVersionResponse[]>(deliveryZonePaths.zoneVersions(scope, zoneId)),
+    );
+    return result.value ?? [];
   }
 
   async create(scope: BrandScope, request: CreateZoneRequest): Promise<ZoneView> {
@@ -115,7 +151,6 @@ export class DeliveryZonesApi {
       deliveryTariffId: request.deliveryTariffId ?? null,
       freeDeliveryFromMinor: request.freeDeliveryFromMinor ?? null,
       minBasketMinor: request.minBasketMinor ?? null,
-      actorId: request.actorId,
     };
     return firstValueFrom(
       this.api.post<DraftCircleVersionWireRequest, VersionView>(
@@ -125,16 +160,21 @@ export class DeliveryZonesApi {
     );
   }
 
-  async activate(
-    scope: BrandScope,
-    zoneId: string,
-    version: number,
-    actorId: string,
-  ): Promise<VersionView> {
+  async activate(scope: BrandScope, zoneId: string, version: number): Promise<VersionView> {
     return firstValueFrom(
-      this.api.post<{ actorId: string }, VersionView>(
+      this.api.post<Record<string, never>, VersionView>(
         deliveryZonePaths.zoneVersionActivate(scope, zoneId, version),
-        command({ actorId }),
+        command({}),
+      ),
+    );
+  }
+
+  /** Retires the live version. The zone then covers nothing, deliberately. */
+  async deactivate(scope: BrandScope, zoneId: string, version: number): Promise<VersionView> {
+    return firstValueFrom(
+      this.api.post<Record<string, never>, VersionView>(
+        deliveryZonePaths.zoneVersionDeactivate(scope, zoneId, version),
+        command({}),
       ),
     );
   }
@@ -147,9 +187,23 @@ export class DeliveryZonesApi {
       ),
     );
   }
+
+  /**
+   * Closes the binding's validity window server-side; the row survives,
+   * because a fee resolution six weeks old names the binding that applied.
+   */
+  async unbindLocation(scope: BrandScope, zoneId: string, locationId: string): Promise<void> {
+    await firstValueFrom(
+      this.api.send<Record<string, never>, void>(
+        'DELETE',
+        deliveryZonePaths.zoneLocation(scope, zoneId, locationId),
+        command({}),
+      ),
+    );
+  }
 }
 
-/** The wire shape `ServiceZoneController.DraftVersionRequest` expects for a circle draft. */
+/** The wire shape `OperationsServiceZoneController.DraftVersionRequest` expects for a circle draft. */
 interface DraftCircleVersionWireRequest {
   readonly circle: { readonly originLocationId: string; readonly radiusMeters: number };
   readonly regionId: string | null;
@@ -158,5 +212,4 @@ interface DraftCircleVersionWireRequest {
   readonly deliveryTariffId: string | null;
   readonly freeDeliveryFromMinor: number | null;
   readonly minBasketMinor: number | null;
-  readonly actorId: string;
 }

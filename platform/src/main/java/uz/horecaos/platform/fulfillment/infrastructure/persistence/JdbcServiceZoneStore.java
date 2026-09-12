@@ -357,6 +357,53 @@ public class JdbcServiceZoneStore {
                 .map(VersionStatus::valueOf);
     }
 
+    /**
+     * Every version of one zone, newest first (ADR 0104).
+     *
+     * <p>ADR 0037's versioning was built for the auditor — a payout dispute six
+     * weeks later asking whether that address was inside that polygon — and
+     * until this read existed the operator who produced the versions could not
+     * see them. Without it "activate" is the only lifecycle verb anyone can
+     * reach, and a wrong radius is permanent.
+     *
+     * <p>Unpaginated: a zone accumulates one version per edit and the realistic
+     * count is single digits. ADR 0104 accepts that trade-off by name.
+     */
+    public List<ZoneVersionRow> listVersions(UUID tenantId, UUID zoneId) {
+        return jdbc.sql("""
+                SELECT version, status, priority, currency, delivery_tariff_id,
+                       free_delivery_from_minor, min_basket_minor, area_sq_meters,
+                       region_id, origin_location_id,
+                       authoring_shape ->> 'kind' AS shape_kind,
+                       created_at, activated_at, retired_at
+                  FROM fulfillment.service_zone_versions
+                 WHERE tenant_id = :tenantId AND zone_id = :zoneId
+                 ORDER BY version DESC
+                """)
+                .param("tenantId", tenantId)
+                .param("zoneId", zoneId)
+                .query((row, number) -> new ZoneVersionRow(
+                        row.getInt("version"),
+                        row.getString("status"),
+                        row.getInt("priority"),
+                        row.getString("currency"),
+                        row.getObject("delivery_tariff_id", UUID.class),
+                        row.getObject("free_delivery_from_minor", Long.class),
+                        row.getObject("min_basket_minor", Long.class),
+                        row.getDouble("area_sq_meters"),
+                        row.getObject("region_id", UUID.class),
+                        row.getObject("origin_location_id", UUID.class),
+                        row.getString("shape_kind"),
+                        instantOf(row.getObject("created_at", OffsetDateTime.class)),
+                        instantOf(row.getObject("activated_at", OffsetDateTime.class)),
+                        instantOf(row.getObject("retired_at", OffsetDateTime.class))))
+                .list();
+    }
+
+    private static @Nullable Instant instantOf(@Nullable OffsetDateTime value) {
+        return value == null ? null : value.toInstant();
+    }
+
     // ------------------------------------------------------------------ writes
 
     public void insertZone(
@@ -504,7 +551,89 @@ public class JdbcServiceZoneStore {
                 .update();
     }
 
+    /**
+     * Retires the live version and puts nothing in its place (ADR 0104).
+     *
+     * <p>The zone then covers nothing, which is ADR 0037's stated safe
+     * direction: "a half-configured zone is visibly inert rather than quietly
+     * serving the whole brand". {@code status = 'ACTIVE'} in the predicate is
+     * what makes this idempotent against a race — the second caller updates
+     * zero rows and is told so.
+     *
+     * @return 1 when this call was the one that retired it, 0 otherwise
+     */
+    public int deactivateVersion(UUID tenantId, UUID zoneId, int version, Instant now) {
+        return jdbc.sql("""
+                UPDATE fulfillment.service_zone_versions
+                SET status = 'RETIRED', retired_at = :now
+                WHERE tenant_id = :tenantId AND zone_id = :zoneId AND version = :version
+                  AND status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("zoneId", zoneId)
+                .param("version", version)
+                .param("now", timestamp(now))
+                .update();
+    }
+
+    /**
+     * Closes a binding's validity window rather than deleting the row (ADR 0104).
+     *
+     * <p>A {@code delivery_fee_resolutions} row six weeks old names the binding
+     * that applied, so deleting it turns evidence into a dangling reference —
+     * the same argument V0025 makes for archiving a zone instead of deleting it.
+     * {@link #boundLocations} already excludes a window that has closed, so the
+     * zone stops applying to the branch the moment this returns.
+     *
+     * <p>{@code GREATEST(:now, valid_from + 1 microsecond)} exists for {@code
+     * ck_zone_binding_window}, which requires {@code valid_until > valid_from}:
+     * a binding opened and closed inside the same clock tick — which a test with
+     * a fixed clock produces, and a fast operator can produce too — would
+     * otherwise violate it. Such a binding covered nothing either way.
+     *
+     * @return how many open windows were closed; 0 when the branch was not bound
+     */
+    public int unbindLocation(UUID tenantId, UUID zoneId, UUID locationId, Instant now) {
+        return jdbc.sql("""
+                UPDATE fulfillment.zone_location_bindings
+                SET valid_until = GREATEST(:now, valid_from + interval '1 microsecond')
+                WHERE tenant_id = :tenantId AND zone_id = :zoneId AND location_id = :locationId
+                  AND valid_until IS NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("zoneId", zoneId)
+                .param("locationId", locationId)
+                .param("now", timestamp(now))
+                .update();
+    }
+
     // --------------------------------------------------------------- row types
+
+    /**
+     * One version of a zone as the console's version list reads it.
+     *
+     * @param status {@code DRAFT}, {@code ACTIVE}, {@code RETIRED} or {@code
+     *               DISCARDED} — the four {@code ck_zone_version_status} allows
+     * @param shapeKind {@code CIRCLE} or {@code POLYGON}, read out of {@code
+     *                  authoring_shape} rather than inferred from {@code
+     *                  origin_location_id}: a polygon has no origin, but so does
+     *                  a circle whose branch was later deleted
+     */
+    public record ZoneVersionRow(
+            int version,
+            String status,
+            int priority,
+            String currency,
+            @Nullable UUID deliveryTariffId,
+            @Nullable Long freeDeliveryFromMinor,
+            @Nullable Long minBasketMinor,
+            double areaSquareMeters,
+            @Nullable UUID regionId,
+            @Nullable UUID originLocationId,
+            @Nullable String shapeKind,
+            @Nullable Instant createdAt,
+            @Nullable Instant activatedAt,
+            @Nullable Instant retiredAt) {}
 
     /**
      * A location as this module reads it.

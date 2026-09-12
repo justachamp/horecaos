@@ -780,6 +780,13 @@ export const routes: Routes = [
               import('./features/delivery/delivery-zones-page').then((m) => m.DeliveryZonesPage),
           },
           {
+            // IA §3.6b. Tenant-scoped, not brand-scoped: a region's bounding
+            // box constrains the geocoder for every brand (ADR 0104).
+            path: 'regions',
+            loadComponent: () =>
+              import('./features/delivery/regions-page').then((m) => m.RegionsPage),
+          },
+          {
             path: 'tariffs',
             loadComponent: () =>
               import('./features/delivery/delivery-tariffs-page').then(
