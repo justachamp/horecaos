@@ -1,0 +1,33 @@
+.q-diff-viewer {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 12px;
+}
+
+.q-diff-viewer__row {
+  display: contents;
+}
+
+.q-diff-viewer__field {
+  color: var(--q-ink-muted);
+  align-self: start;
+}
+
+.q-diff-viewer__value {
+  color: var(--q-ink);
+  word-break: break-word;
+}
+
+.q-diff-viewer__before {
+  color: var(--q-ink-subtle);
+  text-decoration: line-through;
+}
+
+.q-diff-viewer__arrow {
+  margin: 0 4px;
+  color: var(--q-ink-subtle);
+}
+
+.q-diff-viewer__empty {
+  color: var(--q-ink-muted);
+}

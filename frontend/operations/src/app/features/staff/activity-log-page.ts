@@ -1,13 +1,21 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
 import { CurrentTenant } from '../../core/auth/current-tenant';
 import { ApiError } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { DiffViewer } from '../../shared/ui/diff-viewer';
+import { Timeline, TimelineBadge, TimelineEntry, TimelineTone } from '../../shared/ui/timeline';
 import { describeApiError } from '../orders/order-errors';
 import { ActivityLogApi, AuditEventDetail, AuditEventView } from './activity-log-api';
 
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
+
+const OUTCOME_TONE: Readonly<Record<AuditEventView['outcome'], TimelineTone>> = {
+  SUCCEEDED: 'success',
+  REJECTED: 'warning',
+  FAILED: 'danger',
+};
 type ClassFilter = 'ALL' | 'BUSINESS' | 'SECURITY';
 
 function isoDaysAgo(days: number): string {
@@ -37,7 +45,7 @@ function isoDaysAgo(days: number): string {
  */
 @Component({
   selector: 'q-activity-log-page',
-  imports: [TPipe],
+  imports: [TPipe, Timeline, DiffViewer],
   templateUrl: './activity-log-page.html',
   styleUrl: './activity-log-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -118,21 +126,41 @@ export class ActivityLogPage {
     }
   }
 
-  protected async openEvent(event: AuditEventView): Promise<void> {
+  /**
+   * `q-timeline`'s own shape, row `X.26` — one map per event, nothing this
+   * screen still owns beyond scope formatting and the outcome's tone.
+   */
+  protected readonly timelineEntries = computed<readonly TimelineEntry[]>(() =>
+    this.events().map((event) => ({
+      id: event.id,
+      timestamp: event.recordedAt,
+      actor: {
+        kind: event.actorType,
+        displayName: event.actorDisplay,
+        subject: event.actorSubject,
+      },
+      title: event.actionCode,
+      detail: this.scopeLabel(event),
+      badge: this.outcomeBadge(event),
+      selectable: true,
+    })),
+  );
+
+  protected async openEvent(eventId: string): Promise<void> {
     const tenantId = this.tenant.tenantId();
     if (!tenantId) {
       return;
     }
-    if (this.openEventId() === event.id) {
+    if (this.openEventId() === eventId) {
       this.openEventId.set(null);
       this.openDetail.set(null);
       return;
     }
-    this.openEventId.set(event.id);
+    this.openEventId.set(eventId);
     this.openDetail.set(null);
     this.detailLoading.set(true);
     try {
-      this.openDetail.set(await this.api.detail(tenantId, event.id));
+      this.openDetail.set(await this.api.detail(tenantId, eventId));
     } catch {
       // The row itself is already on screen; a failed detail fetch just leaves the drawer empty.
     } finally {
@@ -145,24 +173,14 @@ export class ActivityLogPage {
     this.openDetail.set(null);
   }
 
-  protected actorLabel(event: AuditEventView): string {
-    return event.actorDisplay ?? event.actorSubject ?? '—';
-  }
-
   protected scopeLabel(event: AuditEventView): string {
-    return event.scopeType === 'PLATFORM' ? this.i18n.t('staff.activity.scope.platform') : (event.scopeId ?? '—');
+    return event.scopeType === 'PLATFORM'
+      ? this.i18n.t('staff.activity.scope.platform')
+      : (event.scopeId ?? '—');
   }
 
-  protected changeEntries(detail: AuditEventDetail): readonly (readonly [string, unknown])[] {
-    return detail.changeDocument ? Object.entries(detail.changeDocument) : [];
-  }
-
-  protected formatFieldChange(value: unknown): string {
-    if (value && typeof value === 'object' && 'before' in value && 'after' in value) {
-      const change = value as { before: unknown; after: unknown };
-      return `${formatValue(change.before)} → ${formatValue(change.after)}`;
-    }
-    return formatValue(value);
+  private outcomeBadge(event: AuditEventView): TimelineBadge {
+    return { label: event.outcome, tone: OUTCOME_TONE[event.outcome] };
   }
 
   private describe(error: unknown): string {
@@ -171,11 +189,4 @@ export class ActivityLogPage {
     }
     return this.i18n.t('error.unknown.noReference');
   }
-}
-
-function formatValue(value: unknown): string {
-  if (value === null || value === undefined) {
-    return '—';
-  }
-  return typeof value === 'string' ? value : JSON.stringify(value);
 }

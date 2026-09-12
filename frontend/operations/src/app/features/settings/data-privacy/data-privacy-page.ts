@@ -4,6 +4,7 @@ import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { ApiError } from '../../../core/api/problem-details';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { ActorChip } from '../../../shared/ui/actor-chip';
 import { describeApiError } from '../../orders/order-errors';
 import { ActivityLogApi, AuditEventView } from '../../staff/activity-log-api';
 import { PII_ACTION_CODES, piiEgressLabelKey } from './pii-audit-labels';
@@ -64,7 +65,7 @@ function isoDaysAgo(days: number): string {
  */
 @Component({
   selector: 'q-data-privacy-page',
-  imports: [TPipe],
+  imports: [TPipe, ActorChip],
   templateUrl: './data-privacy-page.html',
   styleUrl: './data-privacy-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -112,10 +113,6 @@ export class DataPrivacyPage {
         this.state.set('error');
       }
     }
-  }
-
-  protected actorLabel(event: AuditEventView): string {
-    return event.actorDisplay ?? event.actorSubject ?? '—';
   }
 
   protected actionLabel(event: AuditEventView): string {

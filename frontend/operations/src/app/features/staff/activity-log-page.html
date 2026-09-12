@@ -31,7 +31,11 @@
       </button>
     </div>
 
-    <select class="range-select" [value]="rangeDays()" (change)="setRangeDays($any($event.target).valueAsNumber ?? 7)">
+    <select
+      class="range-select"
+      [value]="rangeDays()"
+      (change)="setRangeDays($any($event.target).valueAsNumber ?? 7)"
+    >
       <option [value]="1">{{ 'staff.activity.range.today' | t }}</option>
       <option [value]="7">{{ 'staff.activity.range.7d' | t }}</option>
       <option [value]="30">{{ 'staff.activity.range.30d' | t }}</option>
@@ -71,75 +75,44 @@
       </div>
     }
     @case ('ready') {
-      <table class="table">
-        <thead>
-          <tr>
-            <th class="q-caption">{{ 'staff.activity.column.when' | t }}</th>
-            <th class="q-caption">{{ 'staff.activity.column.who' | t }}</th>
-            <th class="q-caption">{{ 'staff.activity.column.what' | t }}</th>
-            <th class="q-caption">{{ 'staff.activity.column.where' | t }}</th>
-            <th class="q-caption">{{ 'staff.activity.column.outcome' | t }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (event of events(); track event.id) {
-            <tr class="row" (click)="openEvent(event)">
-              <td class="q-body-sm q-mono">{{ event.recordedAt }}</td>
-              <td class="q-body-sm">
-                <span class="actor-icon" [class]="'actor-icon--' + event.actorType.toLowerCase()"></span>
-                {{ actorLabel(event) }}
-              </td>
-              <td class="q-body-sm q-mono">{{ event.actionCode }}</td>
-              <td class="q-body-sm">{{ scopeLabel(event) }}</td>
-              <td class="q-body-sm">
-                <span class="outcome-badge" [class]="'outcome-badge--' + event.outcome.toLowerCase()">
-                  {{ event.outcome }}
-                </span>
-              </td>
-            </tr>
-            @if (openEventId() === event.id) {
-              <tr class="detail-row">
-                <td colspan="5">
-                  @if (detailLoading()) {
-                    <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
-                  } @else if (openDetail(); as detail) {
-                    <div class="detail-grid">
-                      <span class="q-caption">{{ 'staff.activity.detail.reason' | t }}</span>
-                      <span class="q-body-sm">{{ detail.reason ?? '—' }}</span>
-                      <span class="q-caption">{{ 'staff.activity.detail.correlationId' | t }}</span>
-                      <span class="q-body-sm q-mono">{{ detail.correlationId }}</span>
-                      <span class="q-caption">{{ 'staff.activity.detail.target' | t }}</span>
-                      <span class="q-body-sm">{{ detail.targetType ?? '—' }} · {{ detail.targetId ?? '—' }}</span>
-                      <span class="q-caption">{{ 'staff.activity.detail.capability' | t }}</span>
-                      <span class="q-body-sm q-mono">{{ detail.capabilityUsed ?? '—' }}</span>
-                    </div>
-                    @if (changeEntries(detail).length > 0) {
-                      <div class="diff">
-                        <span class="q-caption">{{ 'staff.activity.detail.changes' | t }}</span>
-                        @for (entry of changeEntries(detail); track entry[0]) {
-                          <div class="diff-row">
-                            <span class="q-body-sm q-mono diff-row__field">{{ entry[0] }}</span>
-                            <span class="q-body-sm diff-row__value">{{ formatFieldChange(entry[1]) }}</span>
-                          </div>
-                        }
-                      </div>
-                    }
-                  } @else {
-                    <p class="q-body-sm muted">{{ 'staff.activity.detail.unavailable' | t }}</p>
-                  }
-                  <button type="button" class="secondary close-drawer" (click)="closeDrawer()">
-                    {{ 'staff.activity.detail.close' | t }}
-                  </button>
-                </td>
-              </tr>
+      <q-timeline
+        [entries]="timelineEntries()"
+        [emptyLabel]="'staff.activity.empty' | t"
+        [selectedId]="openEventId()"
+        (select)="openEvent($event)"
+      />
+
+      @if (openEventId()) {
+        <div class="detail-panel" data-testid="activity-log-detail">
+          @if (detailLoading()) {
+            <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+          } @else if (openDetail(); as detail) {
+            <div class="detail-grid">
+              <span class="q-caption">{{ 'staff.activity.detail.reason' | t }}</span>
+              <span class="q-body-sm">{{ detail.reason ?? '—' }}</span>
+              <span class="q-caption">{{ 'staff.activity.detail.correlationId' | t }}</span>
+              <span class="q-body-sm q-mono">{{ detail.correlationId }}</span>
+              <span class="q-caption">{{ 'staff.activity.detail.target' | t }}</span>
+              <span class="q-body-sm"
+                >{{ detail.targetType ?? '—' }} · {{ detail.targetId ?? '—' }}</span
+              >
+              <span class="q-caption">{{ 'staff.activity.detail.capability' | t }}</span>
+              <span class="q-body-sm q-mono">{{ detail.capabilityUsed ?? '—' }}</span>
+            </div>
+            @if (detail.changeDocument) {
+              <div class="diff">
+                <span class="q-caption">{{ 'staff.activity.detail.changes' | t }}</span>
+                <q-diff-viewer [document]="detail.changeDocument" />
+              </div>
             }
-          } @empty {
-            <tr>
-              <td class="q-body-sm empty" colspan="5">{{ 'staff.activity.empty' | t }}</td>
-            </tr>
+          } @else {
+            <p class="q-body-sm muted">{{ 'staff.activity.detail.unavailable' | t }}</p>
           }
-        </tbody>
-      </table>
+          <button type="button" class="secondary close-drawer" (click)="closeDrawer()">
+            {{ 'staff.activity.detail.close' | t }}
+          </button>
+        </div>
+      }
     }
   }
 </div>

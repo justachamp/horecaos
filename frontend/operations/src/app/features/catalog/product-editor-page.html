@@ -419,7 +419,13 @@
                       @for (event of historyEvents(); track event.id) {
                         <tr>
                           <td class="q-mono">{{ event.recordedAt }}</td>
-                          <td>{{ historyActorLabel(event) }}</td>
+                          <td>
+                            <q-actor-chip
+                              [kind]="event.actorType"
+                              [displayName]="event.actorDisplay"
+                              [subject]="event.actorSubject"
+                            />
+                          </td>
                           <td>{{ variantLabel(event.targetId) }}</td>
                           <td>{{ event.reason ?? '—' }}</td>
                         </tr>

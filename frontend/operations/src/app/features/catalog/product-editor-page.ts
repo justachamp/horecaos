@@ -9,6 +9,7 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { ActorChip } from '../../shared/ui/actor-chip';
 import { describeApiError } from '../orders/order-errors';
 import { ActivityLogApi, AuditEventView } from '../staff/activity-log-api';
 import { CatalogApi } from './catalog-api';
@@ -99,7 +100,7 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
  */
 @Component({
   selector: 'q-product-editor-page',
-  imports: [TPipe, RouterLink],
+  imports: [TPipe, RouterLink, ActorChip],
   templateUrl: './product-editor-page.html',
   styleUrl: './product-editor-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -333,10 +334,6 @@ export class ProductEditorPage implements OnInit {
       return variantId;
     }
     return variant.translations[this.editingLocale()]?.name ?? variant.sku ?? variantId;
-  }
-
-  protected historyActorLabel(event: AuditEventView): string {
-    return event.actorDisplay ?? event.actorSubject ?? '—';
   }
 
   /**
