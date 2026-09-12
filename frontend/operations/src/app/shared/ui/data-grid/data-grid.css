@@ -1,0 +1,118 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.q-data-grid {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border: 1px solid var(--q-hairline);
+}
+
+.q-data-grid__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.q-data-grid__toolbar button {
+  padding: 4px 12px;
+  border: 1px solid var(--q-primary);
+  background: var(--q-canvas);
+  color: var(--q-primary);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
+
+.q-data-grid__discard {
+  border-color: var(--q-hairline) !important;
+  color: var(--q-ink-muted) !important;
+}
+
+.q-data-grid__header,
+.q-data-grid__row {
+  display: grid;
+}
+
+.q-data-grid__header {
+  border-bottom: 1px solid var(--q-hairline);
+  background: var(--q-surface-1);
+}
+
+.q-data-grid__header-cell {
+  padding: 8px 12px;
+  color: var(--q-ink-subtle);
+}
+
+.q-data-grid__body {
+  flex: 1;
+  overflow: auto;
+}
+
+.q-data-grid__viewport {
+  height: 100%;
+}
+
+.q-data-grid__row {
+  height: 36px;
+}
+
+.q-data-grid__row[data-row-error] {
+  background: var(--q-error-tint);
+}
+
+.q-data-grid__cell {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--q-hairline);
+  border-right: 1px solid var(--q-hairline);
+  outline: none;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.q-data-grid__num-col {
+  justify-content: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+
+.q-data-grid__cell--active {
+  box-shadow: inset 0 0 0 2px var(--q-primary);
+}
+
+.q-data-grid__cell--selected {
+  background: var(--q-info-tint);
+}
+
+.q-data-grid__cell--dirty::after {
+  content: '';
+  position: absolute;
+}
+
+.q-data-grid__cell--dirty {
+  background: var(--q-warning-tint);
+  position: relative;
+}
+
+.q-data-grid__cell--editing {
+  padding: 0;
+}
+
+.q-data-grid__input {
+  width: 100%;
+  height: 100%;
+  border: none;
+  padding: 0 12px;
+  background: var(--q-canvas);
+  box-shadow: inset 0 0 0 2px var(--q-primary);
+}
+
+.q-data-grid__input:focus {
+  outline: none;
+}

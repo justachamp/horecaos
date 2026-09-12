@@ -3110,6 +3110,31 @@ export const messagesEn = {
 
   // --- shell/access-denied-page (operations IA §9.1c) ---------------------
   'shell.accessDenied.backHome': 'Back to Today',
+
+  // shared/ui — q-data-table (X.18)
+  'shared.dataTable.views.toggle': 'Views',
+  'shared.dataTable.views.remove': 'Remove view',
+  'shared.dataTable.views.namePlaceholder': 'View name',
+  'shared.dataTable.views.save': 'Save',
+  'shared.dataTable.columns.toggle': 'Columns',
+  'shared.dataTable.bulk.selected': '{count} selected',
+  'shared.dataTable.bulk.clear': 'Clear',
+  'shared.dataTable.selectAll': 'Select all rows on this page',
+  'shared.dataTable.selectRow': 'Select row',
+  'shared.dataTable.rowMenu.toggle': 'Row actions',
+  'shared.dataTable.loadMore': 'Load more',
+  'shared.dataTable.loading': 'Loading…',
+
+  // shared/ui — q-data-grid (X.6)
+  'shared.dataGrid.unsavedCount': '{count} unsaved',
+  'shared.dataGrid.save': 'Save',
+  'shared.dataGrid.saving': 'Saving…',
+  'shared.dataGrid.discard': 'Discard',
+
+  // shared/ui — q-matrix-grid (X.7)
+  'shared.matrixGrid.toggleRow': 'Toggle every cell in this row',
+  'shared.matrixGrid.toggleColumn': 'Toggle every cell in this column',
+  'shared.matrixGrid.unavailable': 'Not available on this channel',
 } as const;
 
 /** Every key the application may ask for. Derived, never hand-maintained. */
