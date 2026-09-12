@@ -114,6 +114,11 @@ public interface OrderSettlementPort {
      * @param customerAccountId       null for a guest checkout, which has no
      *                                balance to draw on and therefore no balance
      *                                tender
+     * @param locationId              the branch the order was placed at. ADR 0038:
+     *                                a cash tender's fiscal responsibility is
+     *                                {@code TERMINAL} only where this location has
+     *                                its own fiscal-capable equipment bound, which
+     *                                is a per-branch fact and not a per-tenant one
      * @param totalMinor              the order total in whole som — the figure the
      *                                tenders must sum to exactly, delivery fee, tax
      *                                and promotions included, because that is the
@@ -129,6 +134,7 @@ public interface OrderSettlementPort {
             UUID brandId,
             UUID orderId,
             @Nullable UUID customerAccountId,
+            UUID locationId,
             String currency,
             long totalMinor,
             String paymentMethodCode,

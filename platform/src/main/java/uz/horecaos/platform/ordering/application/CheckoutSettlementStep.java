@@ -75,6 +75,7 @@ class CheckoutSettlementStep {
                         command.brandId(),
                         orderId,
                         cart.customerAccountId(),
+                        cart.locationId(),
                         quote.currency(),
                         quote.totalMinor(),
                         paymentMethodCode,

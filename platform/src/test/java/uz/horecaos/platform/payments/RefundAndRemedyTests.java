@@ -29,12 +29,14 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
+import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalTerminalStore;
 import uz.horecaos.platform.loyalty.api.PointsRedemptionPort;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.payments.api.EntitlementBenefit;
@@ -171,7 +173,8 @@ class RefundAndRemedyTests {
         orders = new StubOrders();
 
         settlements = new OrderSettlementService(settlementStore, points, clock);
-        planner = new CheckoutSettlementPlanner(settlementStore, settlements, clock);
+        planner = new CheckoutSettlementPlanner(
+                settlementStore, settlements, clock, new JdbcFiscalTerminalStore(jdbc, new ObjectMapper()));
         // A no-op publisher: this suite's own StubOrders is a fake OrderDirectory
         // with no JdbcOrderStore behind it, so there is nothing here for
         // PaymentProjectionTrigger to write to. What recordRefund now publishes is
