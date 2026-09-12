@@ -1,0 +1,32 @@
+:host {
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+
+.wallboard-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  text-align: center;
+}
+
+.wallboard-tile__value {
+  color: var(--q-ink);
+}
+
+.wallboard-tile--muted .wallboard-tile__value {
+  color: var(--q-ink-muted);
+}
+
+.wallboard-tile__label {
+  margin-top: 8px;
+  color: var(--q-ink-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.32px;
+}

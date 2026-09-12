@@ -1,0 +1,127 @@
+<div class="wallboard" data-testid="wallboard-shell">
+  <header class="wallboard__header">
+    <div class="wallboard__brand q-headline">{{ 'wallboard.title' | t }}</div>
+
+    <div
+      class="wallboard__freshness"
+      [attr.data-state]="freshnessState()"
+      role="status"
+      data-testid="wallboard-freshness"
+    >
+      <span
+        class="wallboard__freshness-label q-display-tv q-tnum"
+        data-testid="wallboard-freshness-label"
+        >{{ freshnessLabel() }}</span
+      >
+    </div>
+
+    @if (!isFullscreen()) {
+      <button
+        type="button"
+        class="wallboard__fullscreen-enter q-body"
+        (click)="enterFullscreen()"
+        data-testid="wallboard-fullscreen-enter"
+      >
+        {{ 'wallboard.fullscreen.enter' | t }}
+      </button>
+    }
+  </header>
+
+  @if (!firstLoadComplete()) {
+    <div class="wallboard__skeleton" data-testid="wallboard-skeleton">
+      @for (i of [1, 2]; track i) {
+        <div class="wallboard__skeleton-tile"></div>
+      }
+    </div>
+  } @else if (denied()) {
+    <div class="wallboard__denied" data-testid="wallboard-denied">
+      <p class="q-headline">{{ 'wallboard.denied' | t }}</p>
+    </div>
+  } @else {
+    @if (lastError(); as error) {
+      <div class="wallboard__error-band" role="alert" data-testid="wallboard-error">
+        <span class="q-body">{{ errorMessage(error) }}</span>
+        <span class="wallboard__error-ref q-mono q-body-sm">{{ errorReference(error) }}</span>
+      </div>
+    }
+
+    <section class="wallboard__counters" data-testid="wallboard-counters">
+      <q-wallboard-tile
+        [value]="inProgressCount()"
+        [label]="'wallboard.counters.inProgress' | t"
+        data-testid="wallboard-counter-in-progress"
+      />
+      <q-wallboard-tile
+        [value]="cancelledCount()"
+        [label]="'wallboard.counters.cancelled' | t"
+        tone="muted"
+        data-testid="wallboard-counter-cancelled"
+      />
+    </section>
+
+    <section class="wallboard__mixes">
+      <div class="wallboard-mix-card" data-testid="wallboard-source-mix">
+        <h2 class="q-title">{{ 'wallboard.mix.source.title' | t }}</h2>
+        @if (sourceMix().length === 0) {
+          <p class="q-subhead wallboard__empty">{{ 'wallboard.mix.empty' | t }}</p>
+        } @else {
+          @for (slice of sourceMix(); track slice.key) {
+            <div class="wallboard-mix-row">
+              <span class="wallboard-mix-row__label q-subhead">{{ slice.key }}</span>
+              <span class="wallboard-mix-row__bar"
+                ><span [style.width.%]="mixShare(slice, sourceMix())"></span
+              ></span>
+              <span class="wallboard-mix-row__count q-tnum q-title">{{ slice.count }}</span>
+            </div>
+          }
+        }
+      </div>
+
+      <div class="wallboard-mix-card" data-testid="wallboard-type-mix">
+        <h2 class="q-title">{{ 'wallboard.mix.type.title' | t }}</h2>
+        @if (typeMix().length === 0) {
+          <p class="q-subhead wallboard__empty">{{ 'wallboard.mix.empty' | t }}</p>
+        } @else {
+          @for (slice of typeMix(); track slice.key) {
+            <div class="wallboard-mix-row">
+              <span class="wallboard-mix-row__label q-subhead">{{ typeMixLabel(slice.key) }}</span>
+              <span class="wallboard-mix-row__bar"
+                ><span [style.width.%]="mixShare(slice, typeMix())"></span
+              ></span>
+              <span class="wallboard-mix-row__count q-tnum q-title">{{ slice.count }}</span>
+            </div>
+          }
+        }
+      </div>
+    </section>
+
+    <section class="wallboard__branches" data-testid="wallboard-branches">
+      <h2 class="q-title">{{ 'wallboard.branches.title' | t }}</h2>
+      @if (!branchesAvailable()) {
+        <p class="q-subhead wallboard__empty" data-testid="wallboard-branches-unavailable">
+          {{ 'wallboard.branches.unavailable' | t }}
+        </p>
+      } @else if (branches().length === 0) {
+        <p class="q-subhead wallboard__empty">{{ 'wallboard.branches.empty' | t }}</p>
+      } @else {
+        <table class="wallboard-branch-table">
+          <tbody>
+            @for (branch of branches(); track branch.locationId; let i = $index) {
+              <tr data-testid="wallboard-branch-row">
+                <td class="wallboard-branch-table__rank q-title">{{ i + 1 }}</td>
+                <td class="q-subhead">{{ branch.displayName }}</td>
+                <td class="wallboard-branch-table__num q-mono q-tnum q-title">
+                  {{ branch.inProgress }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+
+    <section class="wallboard__operators" data-testid="wallboard-operators">
+      <p class="q-subhead wallboard__locked">{{ 'wallboard.operators.notBuilt' | t }}</p>
+    </section>
+  }
+</div>

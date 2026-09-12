@@ -1,0 +1,230 @@
+/* Chrome-less by design (IA "Templates needed" §c) — no rail, no top bar.
+   :host fills the routed outlet edge to edge, which is the whole point of
+   living outside the console `Shell` in app.routes.ts. */
+:host {
+  display: block;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--q-surface-1);
+}
+
+.wallboard {
+  min-height: 100%;
+  padding: 32px 48px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ---- header: brand + freshness + fullscreen entry ------------------------ */
+
+.wallboard__header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.wallboard__brand {
+  color: var(--q-ink-subtle);
+}
+
+.wallboard__freshness {
+  margin-left: auto;
+  padding: 4px 32px;
+  border-radius: var(--q-radius);
+  background: var(--q-surface-2);
+}
+
+.wallboard__freshness[data-state='fresh'] {
+  background: var(--q-success-tint);
+}
+.wallboard__freshness[data-state='fresh'] .wallboard__freshness-label {
+  color: var(--q-success-text);
+}
+
+.wallboard__freshness[data-state='aging'] {
+  background: var(--q-warning-tint);
+}
+.wallboard__freshness[data-state='aging'] .wallboard__freshness-label {
+  color: var(--q-warning-text);
+}
+
+.wallboard__freshness[data-state='stale'] {
+  background: var(--q-error-tint);
+}
+.wallboard__freshness[data-state='stale'] .wallboard__freshness-label {
+  color: var(--q-error-text);
+}
+
+.wallboard__freshness[data-state='loading'] .wallboard__freshness-label {
+  color: var(--q-ink-subtle);
+}
+
+.wallboard__fullscreen-enter {
+  padding: 12px 24px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.wallboard__fullscreen-enter:hover {
+  border-color: var(--q-ink-subtle);
+}
+
+/* ---- skeleton / denied / error -------------------------------------------- */
+
+.wallboard__skeleton {
+  display: flex;
+  gap: 24px;
+}
+
+.wallboard__skeleton-tile {
+  flex: 1;
+  height: 220px;
+  border: 1px solid var(--q-hairline);
+  position: relative;
+  overflow: hidden;
+}
+
+.wallboard__skeleton-tile::after {
+  content: '';
+  position: absolute;
+  inset: 24px;
+  background: var(--q-canvas);
+}
+
+.wallboard__denied {
+  padding: 96px 24px;
+  text-align: center;
+  color: var(--q-ink-muted);
+}
+
+.wallboard__error-band {
+  padding: 12px 24px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+  border: 1px solid var(--q-hairline);
+}
+
+.wallboard__error-ref {
+  margin-left: 12px;
+  color: var(--q-error-text);
+}
+
+/* ---- oversized counters --------------------------------------------------- */
+
+.wallboard__counters {
+  display: flex;
+  gap: 24px;
+}
+
+/* ---- source / type mix ----------------------------------------------------- */
+
+.wallboard__mixes {
+  display: flex;
+  gap: 24px;
+}
+
+.wallboard-mix-card {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 32px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.wallboard-mix-card h2 {
+  margin: 0 0 16px;
+}
+
+.wallboard-mix-row {
+  display: grid;
+  grid-template-columns: 1fr 3fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.wallboard-mix-row__label {
+  color: var(--q-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallboard-mix-row__bar {
+  display: block;
+  height: 16px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  overflow: hidden;
+}
+
+.wallboard-mix-row__bar span {
+  display: block;
+  height: 100%;
+  background: var(--q-primary);
+}
+
+.wallboard-mix-row__count {
+  color: var(--q-ink-muted);
+  text-align: right;
+  min-width: 3ch;
+}
+
+/* ---- branch leaderboard ----------------------------------------------------- */
+
+.wallboard__branches {
+  padding: 24px 32px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.wallboard__branches h2 {
+  margin: 0 0 16px;
+}
+
+.wallboard-branch-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.wallboard-branch-table td {
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--q-hairline);
+  color: var(--q-ink);
+}
+
+.wallboard-branch-table tr:last-child td {
+  border-bottom: none;
+}
+
+.wallboard-branch-table__rank {
+  width: 56px;
+  color: var(--q-ink-subtle);
+}
+
+.wallboard-branch-table__num {
+  text-align: right;
+}
+
+/* ---- shared empty / locked note --------------------------------------------- */
+
+.wallboard__empty,
+.wallboard__locked {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+/* ---- operators (locked — IA 9.2 not built; see today-page.css's own note) --- */
+
+.wallboard__operators {
+  padding: 16px 32px;
+  background: var(--q-surface-1);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
