@@ -13,6 +13,7 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { MoneyInput } from '../../shared/ui/money-input';
 import { describeApiError } from '../orders/order-errors';
 import {
   ActiveVersionResponse,
@@ -131,7 +132,7 @@ const DISCOUNT_KIND_KEYS: Readonly<Record<string, MessageKey>> = {
  */
 @Component({
   selector: 'q-delivery-tariffs-page',
-  imports: [TPipe],
+  imports: [TPipe, MoneyInput],
   templateUrl: './delivery-tariffs-page.html',
   styleUrl: './delivery-tariffs-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

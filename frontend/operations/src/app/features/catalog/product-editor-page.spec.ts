@@ -118,6 +118,76 @@ describe('ProductEditorPage', () => {
     );
   });
 
+  it('marks uz — the catalog’s own default locale — even while the UI runs in ru', async () => {
+    configure({ productDetail: () => of(productDetail()) });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+
+    const localeGroup = harness.routeNativeElement!.querySelector(
+      '[data-testid="editor-locale-group"]',
+    )!;
+    expect(
+      localeGroup
+        .querySelector('[data-testid="q-localized-field-group-tab-uz"]')
+        ?.querySelector('[data-testid="q-localized-field-group-default-marker"]'),
+    ).not.toBeNull();
+    expect(
+      localeGroup
+        .querySelector('[data-testid="q-localized-field-group-tab-ru"]')
+        ?.querySelector('[data-testid="q-localized-field-group-default-marker"]'),
+    ).toBeNull();
+  });
+
+  it('shows ru complete and uz/en incomplete, from the loaded translations', async () => {
+    configure({ productDetail: () => of(productDetail()) });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+
+    const localeGroup = harness.routeNativeElement!.querySelector(
+      '[data-testid="editor-locale-group"]',
+    )!;
+    expect(
+      localeGroup
+        .querySelector('[data-testid="q-localized-field-group-tab-ru"]')
+        ?.querySelector('[data-testid="q-localized-field-group-complete"]'),
+    ).not.toBeNull();
+    expect(
+      localeGroup
+        .querySelector('[data-testid="q-localized-field-group-tab-uz"]')
+        ?.querySelector('[data-testid="q-localized-field-group-incomplete"]'),
+    ).not.toBeNull();
+  });
+
+  it('switches the editing locale from the locale group, updating the shown name', async () => {
+    configure({
+      productDetail: () =>
+        of(
+          productDetail({
+            translations: {
+              ru: { name: 'Плов', description: null },
+              uz: { name: 'Osh', description: null },
+            },
+          }),
+        ),
+    });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+
+    (
+      harness.routeNativeElement!.querySelector(
+        '[data-testid="q-localized-field-group-tab-uz"]',
+      ) as HTMLButtonElement
+    ).click();
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement!.querySelector('.editor__name')?.textContent).toContain(
+      'Osh',
+    );
+  });
+
   it('renders the not-found panel on a 404 rather than a blank editor', async () => {
     configure({
       productDetail: () =>

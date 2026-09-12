@@ -4,9 +4,13 @@
   @if (!firstLoadComplete()) {
     <p class="q-body-sm capacity__state">{{ 'kitchen.capacity.loading' | t }}</p>
   } @else if (denied()) {
-    <p class="q-body-sm capacity__state" data-testid="capacity-denied">{{ 'kitchen.capacity.denied' | t }}</p>
+    <p class="q-body-sm capacity__state" data-testid="capacity-denied">
+      {{ 'kitchen.capacity.denied' | t }}
+    </p>
   } @else if (lastError()) {
-    <p class="q-body-sm capacity__state" data-testid="capacity-error">{{ 'kitchen.capacity.loadError' | t }}</p>
+    <p class="q-body-sm capacity__state" data-testid="capacity-error">
+      {{ 'kitchen.capacity.loadError' | t }}
+    </p>
   } @else {
     <section class="card">
       <h2 class="q-subhead">{{ 'kitchen.capacity.card1.title' | t }}</h2>
@@ -58,25 +62,22 @@
 
           <label class="capacity__field">
             <span class="q-caption">{{ 'kitchen.capacity.form.weekday' | t }}</span>
-            <select
-              [value]="formWeekday()"
-              (change)="formWeekday.set(+$any($event.target).value)"
+            <q-day-of-week-toggle
+              mode="single"
+              [selected]="formWeekdaySelection()"
+              (selectedChange)="onFormWeekdayChange($event)"
               data-testid="capacity-form-weekday"
-            >
-              @for (day of WEEKDAYS; track day) {
-                <option [value]="day">{{ weekdayLabel(day) }}</option>
-              }
-            </select>
+            />
           </label>
 
           <label class="capacity__field">
             <span class="q-caption">{{ 'kitchen.capacity.form.from' | t }}</span>
-            <input type="time" [value]="formFrom()" (input)="formFrom.set($any($event.target).value)" />
+            <q-time-input [value]="formFrom()" (valueChange)="formFrom.set($event)" />
           </label>
 
           <label class="capacity__field">
             <span class="q-caption">{{ 'kitchen.capacity.form.to' | t }}</span>
-            <input type="time" [value]="formTo()" (input)="formTo.set($any($event.target).value)" />
+            <q-time-input [value]="formTo()" (valueChange)="formTo.set($event)" />
           </label>
 
           <label class="capacity__field">
@@ -95,7 +96,9 @@
             <p class="q-caption capacity__error">{{ 'kitchen.capacity.form.incomplete' | t }}</p>
           }
           @if (formError()) {
-            <p class="q-caption capacity__error" data-testid="capacity-form-error">{{ formError() }}</p>
+            <p class="q-caption capacity__error" data-testid="capacity-form-error">
+              {{ formError() }}
+            </p>
           }
 
           <button
@@ -104,7 +107,11 @@
             [disabled]="formSubmitting()"
             data-testid="capacity-form-submit"
           >
-            {{ formSubmitting() ? ('kitchen.capacity.form.saving' | t) : ('kitchen.capacity.form.save' | t) }}
+            {{
+              formSubmitting()
+                ? ('kitchen.capacity.form.saving' | t)
+                : ('kitchen.capacity.form.save' | t)
+            }}
           </button>
         </form>
       }
