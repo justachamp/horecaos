@@ -155,9 +155,16 @@ export const settingsPaths = {
 
   // ---------------------------------------------------------- 10.7 Fiscalization
 
-  /** `LegalEntityController` (control-plane surface). */
+  /**
+   * `OperationsLegalEntityController` — wave P34 moved this off `CONTROL_PLANE`
+   * (`LegalEntityController`), which published the identical six operations and
+   * had no caller left to preserve cross-surface, the same move wave 53 made
+   * for {@link integrationInstallations}. The control-plane path stays
+   * published (`OpenApiContractTests`) but this app no longer reaches across
+   * surfaces for it.
+   */
   legalEntities(scope: LocationScope): string {
-    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/legal-entities`;
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/legal-entities`;
   },
 
   legalEntity(scope: LocationScope, entityId: string): string {
@@ -168,12 +175,77 @@ export const settingsPaths = {
     return `${this.legalEntity(scope, entityId)}/activate`;
   },
 
+  /** Wave P34: there was no HTTP surface for this on either controller before. */
+  legalEntitySuspend(scope: LocationScope, entityId: string): string {
+    return `${this.legalEntity(scope, entityId)}/suspend`;
+  },
+
+  /** Wave P34: there was no HTTP surface for this on either controller before. */
+  legalEntityArchive(scope: LocationScope, entityId: string): string {
+    return `${this.legalEntity(scope, entityId)}/archive`;
+  },
+
   legalEntityAssign(scope: LocationScope, entityId: string): string {
     return `${this.legalEntity(scope, entityId)}/assignments`;
   },
 
   legalEntityAssignmentHistory(scope: LocationScope): string {
     return `${this.legalEntities(scope)}/brands/${enc(scope.brandId)}/locations/${enc(scope.locationId)}/assignments`;
+  },
+
+  // ------------------------------------------------- 10.7 Fiscal terminals (Tab 2)
+
+  /** `OperationsFiscalTerminalController` — wave P34, new this wave. */
+  fiscalTerminals(scope: LocationScope): string {
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/fiscal-terminals`;
+  },
+
+  fiscalTerminal(scope: LocationScope, terminalId: string): string {
+    return `${this.fiscalTerminals(scope)}/${enc(terminalId)}`;
+  },
+
+  fiscalTerminalHealthCheck(scope: LocationScope, terminalId: string): string {
+    return `${this.fiscalTerminal(scope, terminalId)}/health-checks`;
+  },
+
+  fiscalTerminalSuspend(scope: LocationScope, terminalId: string): string {
+    return `${this.fiscalTerminal(scope, terminalId)}/suspend`;
+  },
+
+  fiscalTerminalReactivate(scope: LocationScope, terminalId: string): string {
+    return `${this.fiscalTerminal(scope, terminalId)}/reactivate`;
+  },
+
+  fiscalTerminalRetire(scope: LocationScope, terminalId: string): string {
+    return `${this.fiscalTerminal(scope, terminalId)}/retire`;
+  },
+
+  // ------------------------------------------------- 10.7 Fiscal coverage (Tab 3)
+
+  /**
+   * `CatalogQueryController.fiscalCoverage` — control-plane surface, wave P34.
+   * The minimum this wave builds locally in place of `P21`'s not-yet-merged
+   * fiscal workbench: a per-brand unclassified count and node list. Cross-surface
+   * for the same reason `salesChannels` and `orderOutcomeReasons` above are: the
+   * endpoint's controller has no operations-native mirror.
+   */
+  catalogFiscalCoverage(scope: LocationScope): string {
+    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/catalog/fiscal-coverage`;
+  },
+
+  /** `CatalogAuthoringController.classifyFee` — control-plane surface, pre-existing. */
+  catalogFeeFiscalClassification(scope: LocationScope, feeCode: string): string {
+    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/catalog/fees/${enc(feeCode)}/fiscal-classification`;
+  },
+
+  /** `CatalogAuthoringController.classifyVariant` — control-plane surface, pre-existing. */
+  catalogVariantFiscalClassification(scope: LocationScope, variantId: string): string {
+    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/catalog/variants/${enc(variantId)}/fiscal-classification`;
+  },
+
+  /** `CatalogAuthoringController.classifyModifierOption` — control-plane surface, pre-existing. */
+  catalogModifierOptionFiscalClassification(scope: LocationScope, optionId: string): string {
+    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/catalog/modifier-options/${enc(optionId)}/fiscal-classification`;
   },
 
   // ---------------------------------------------------------- 10.8 Integrations (moved from control-plane)
