@@ -49,7 +49,14 @@
             </td>
             <td class="q-body-sm">{{ credentialLabel(installation.secretReference) }}</td>
             <td class="q-body-sm">{{ lastRotatedLabel(installation.lastSecretRotatedAt) }}</td>
-            <td class="q-body-sm">
+            <td class="q-body-sm actions">
+              <button
+                type="button"
+                class="q-body-sm link"
+                (click)="openInstallationDetail(installation)"
+              >
+                {{ i18n.t('settings.integrations.detail.manage') }}
+              </button>
               <button
                 type="button"
                 class="q-body-sm link"
@@ -132,6 +139,13 @@
       </tbody>
     </table>
   </section>
+
+  <!-- ADR 0106, gap-map row 10.8c: the marketplace liveness matrix, built and
+       capability-gated well before this wave, never rendered in this app
+       until now — and a tenant's own error taxonomy and inbox replay beside
+       it, tenant-checked rather than trusting an optional platform filter. -->
+  <app-liveness-panel />
+  <app-failure-inbox-panel />
 }
 
 @if (showConnectPanel()) {
@@ -169,5 +183,15 @@
     [errorMessage]="rotateError()"
     (confirm)="onRotateConfirm($event)"
     (cancel)="rotating.set(null)"
+  />
+}
+
+@if (detailInstallation(); as installation) {
+  <app-installation-detail-panel
+    [installation]="installation"
+    [scopeNames]="scopeNames()"
+    (dismiss)="closeInstallationDetail()"
+    (changed)="onInstallationDetailChanged()"
+    (rotateCredential)="onRotateFromDetail(installation)"
   />
 }

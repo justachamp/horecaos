@@ -64,7 +64,7 @@ The pilot blockers, and what forces each:
 | `DateRangePicker`, `TimeInput`, `DayOfWeekToggle`, `ScheduleGrid` | Venue and delivery hours; prep-time bands; every report filter |
 | `MediaUploader` with aspect-ratio crop | Logos, banners, product images with per-aggregator variants |
 | `ImportWizard` — dropzone, dry-run diff, row-level results | Excel catalog import; customer CSV; bulk geozone upload |
-| `SecretInput` — masked, reveal-once, rotate | Provider credentials, per ADR 0028 |
+| `SecretInput` — masked, reveal-once at entry, rotate | Provider credentials, per ADR 0028 |
 | `StatusPill` overlay and dual-state variants | Lateness is an overlay on a status, never a status |
 | `LockedState` and `DeniedState`, distinct from `EmptyState` | A plan lock is an upsell; a capability denial is a wall |
 | `Toast`, `InlineAlert` | Every mutation in both applications |

@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 
 import { I18n } from '../../../core/i18n/i18n';
+import { SecretInput } from '../../../shared/ui/secret-input/secret-input';
 import { LegalEntityView } from '../fiscalization/fiscalization-api';
 import { InstallationView } from './integrations-api';
 
@@ -72,6 +73,7 @@ export interface IntegrationBindingOption {
 @Component({
   selector: 'app-register-merchant-binding-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [SecretInput],
   template: `
     <div class="backdrop" (click)="cancel.emit()">
       <div
@@ -198,16 +200,11 @@ export interface IntegrationBindingOption {
             [disabled]="submitting()"
           />
 
-          <label class="q-caption field-label" for="rmb-value">{{
-            i18n.t('settings.integrations.registerBinding.value')
-          }}</label>
-          <input
-            id="rmb-value"
-            class="q-body field"
-            type="password"
-            autocomplete="off"
+          <q-secret-input
+            fieldId="rmb-value"
+            [label]="i18n.t('settings.integrations.registerBinding.value')"
             [value]="secretValue()"
-            (input)="secretValue.set(inputValue($event))"
+            (valueChange)="secretValue.set($event)"
             [disabled]="submitting()"
           />
 

@@ -3075,4 +3075,83 @@ export const messagesRu: MessageCatalogue = {
 
   // --- shell/access-denied-page (operations IA §9.1c) ---------------------
   'shell.accessDenied.backHome': 'На главную',
+
+  // --- shared/ui q-secret-input (ADR 0106, gap-map row X.14) --------------
+  'secretInput.reveal': 'Показать',
+  'secretInput.hide': 'Скрыть',
+  'secretInput.configured': 'Настроено',
+  'secretInput.notConfigured': 'Не задано',
+  'secretInput.copyReference': 'Скопировать ссылку',
+  'secretInput.copied': 'Скопировано',
+  'secretInput.rotate': 'Сменить',
+  'secretInput.lastRotated': 'Последняя смена',
+  'secretInput.lastUsed': 'Последнее использование',
+  'secretInput.neverUsed': 'Никогда',
+
+  // --- settings/integrations installation detail (ADR 0106, row 10.8a) ---
+  'settings.integrations.detail.manage': 'Управлять',
+  'settings.integrations.detail.title': 'Подключение: подробности',
+  'settings.integrations.detail.credential': 'Учётные данные',
+  'settings.integrations.detail.reconcile.title': 'Проверка соединения',
+  'settings.integrations.detail.reconcile.action': 'Проверить сейчас',
+  'settings.integrations.detail.reconcile.running': 'Проверка…',
+  'settings.integrations.detail.reconcile.status': 'Статус',
+  'settings.integrations.detail.reconcile.adapter': 'Версия адаптера',
+  'settings.integrations.detail.bindings.title': 'Привязки',
+  'settings.integrations.detail.bindings.loading': 'Загрузка…',
+  'settings.integrations.detail.bindings.column.scope': 'Применяется к',
+  'settings.integrations.detail.bindings.column.status': 'Статус',
+  'settings.integrations.detail.bindings.column.actions': 'Действия',
+  'settings.integrations.detail.bindings.activate': 'Активировать',
+  'settings.integrations.detail.bindings.activate.reasonPrompt': 'Причина запуска этой привязки:',
+  'settings.integrations.detail.bindings.suspend': 'Приостановить',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Причина приостановки этой привязки:',
+  'settings.integrations.detail.bindings.empty': 'Привязок пока нет.',
+  'settings.integrations.detail.bindings.wholeTenant': 'Вся компания',
+  'settings.integrations.detail.cloposSettings.title': 'Приём заказов',
+  'settings.integrations.detail.cloposSettings.requireClerkApproval':
+    'Кассир должен подтвердить экспортированный заказ',
+  'settings.integrations.detail.cloposSettings.hint':
+    'Отключите, когда заказы Clopos можно принимать автоматически, без подтверждения на кассе.',
+  'settings.integrations.detail.partnerClients.title': 'Клиенты партнёрского API',
+  'settings.integrations.detail.partnerClients.issue': 'Выпустить клиента',
+  'settings.integrations.detail.partnerClients.issue.labelPrompt':
+    'Название для этого клиента (для вашего удобства):',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Причина выпуска этого клиента:',
+  'settings.integrations.detail.partnerClients.issuedOnce':
+    'Скопируйте этот секрет сейчас — он больше не будет показан:',
+  'settings.integrations.detail.partnerClients.issuedDismiss': 'Я скопировал(а)',
+  'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
+  'settings.integrations.detail.partnerClients.revoke': 'Отозвать',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Причина отзыва этого клиента:',
+  'settings.integrations.detail.partnerClients.empty': 'Клиенты партнёрского API ещё не выпущены.',
+
+  // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------
+  'settings.integrations.liveness.title': 'Живость маркетплейсов',
+  'settings.integrations.liveness.lead':
+    'Когда каждый канал в последний раз доставлял заказ — мёртвая интеграция не выдаёт ошибок, поэтому только здесь тишина канала становится заметной.',
+  'settings.integrations.liveness.column.provider': 'Провайдер',
+  'settings.integrations.liveness.column.direction': 'Направление',
+  'settings.integrations.liveness.column.lastSuccess': 'Последний успех',
+  'settings.integrations.liveness.column.silence': 'Молчит',
+  'settings.integrations.liveness.column.alert': 'Статус',
+  'settings.integrations.liveness.empty': 'Привязок маркетплейсов пока нет.',
+  'settings.integrations.liveness.never': 'Никогда',
+  'settings.integrations.liveness.noneYet': '— (пока ничего не поступало)',
+  'settings.integrations.liveness.silenceMinutes': '{minutes} мин',
+
+  // --- settings/integrations tenant failure surface (ADR 0106, row 10.8c) -
+  'settings.integrations.failures.title': 'Сбои и повтор',
+  'settings.integrations.failures.lead':
+    'Только ваши собственные зависшие входящие сообщения — никогда чужого арендатора и никогда содержимое самого сообщения.',
+  'settings.integrations.failures.deadLettered': 'В очереди сбоев',
+  'settings.integrations.failures.waiting': 'В ожидании',
+  'settings.integrations.failures.column.consumer': 'Обработчик',
+  'settings.integrations.failures.column.eventType': 'Тип события',
+  'settings.integrations.failures.column.errorCode': 'Код ошибки',
+  'settings.integrations.failures.column.attempts': 'Попытки',
+  'settings.integrations.failures.column.actions': 'Действия',
+  'settings.integrations.failures.replay': 'Повторить',
+  'settings.integrations.failures.replay.reasonPrompt': 'Причина повтора этого сообщения:',
+  'settings.integrations.failures.empty': 'Сбойных сообщений сейчас нет.',
 };
