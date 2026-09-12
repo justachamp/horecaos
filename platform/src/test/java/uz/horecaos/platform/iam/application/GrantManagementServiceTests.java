@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
@@ -555,6 +557,71 @@ class GrantManagementServiceTests {
         assertThat(view.revokedAt()).isNull();
         assertThat(view.revokedBy()).isNull();
         assertThat(view.revokedReason()).isNull();
+    }
+
+    // ----------------------------------------------------------------- Staff 9.3c: bulk correlation
+
+    /**
+     * The premise {@code GrantAuditListener:43} used to break, proven at the
+     * one place it can actually be observed: {@code GrantChanged} carries the
+     * request's own correlation id, not the grant's, so N revokes made under
+     * one {@code X-Correlation-Id} (exactly what {@code CorrelationIdFilter}
+     * puts in MDC, and what {@code staff-page.ts}'s {@code Promise.allSettled}
+     * fan-out now sends on every call) write N audit rows sharing one
+     * correlation id instead of N different ones.
+     */
+    @Test
+    void aBulkRevokeAcrossManyGrantsSharesOneCorrelationIdWhenTheRequestSuppliesOne() {
+        UUID first = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-7", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION), "Hired", null),
+                OWNER);
+        UUID second = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-7", OWN_ROLE_CODE, ResourceScope.tenant(TENANT), "Hired", null),
+                OWNER);
+
+        MDC.put("correlationId", "bulk-suspend-42");
+        try {
+            service.revoke(TENANT, first, OWNER, "Left the company");
+            service.revoke(TENANT, second, OWNER, "Left the company");
+        } finally {
+            MDC.remove("correlationId");
+        }
+
+        List<String> correlationIds = jdbc.sql("""
+                SELECT correlation_id FROM audit.audit_events
+                 WHERE action_code = 'iam.grant.revoked' AND target_id IN (:first, :second)
+                """)
+                .param("first", first)
+                .param("second", second)
+                .query(String.class)
+                .list();
+
+        assertThat(correlationIds)
+                .as("a bulk action's N revokes must be groupable by one id, not N different ones")
+                .hasSize(2)
+                .containsOnly("bulk-suspend-42");
+    }
+
+    /** With nothing in MDC — a system-initiated grant, say — the old, still-useful fallback holds. */
+    @Test
+    void withoutARequestCorrelationIdARevokeFallsBackToItsOwnGrantId() {
+        UUID grantId = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-8", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION), "Hired", null),
+                OWNER);
+
+        assertThat(MDC.get("correlationId")).as("this fixture never sets one").isNull();
+        service.revoke(TENANT, grantId, OWNER, "Left");
+
+        String correlationId =
+                jdbc.sql("""
+                SELECT correlation_id FROM audit.audit_events
+                 WHERE action_code = 'iam.grant.revoked' AND target_id = :grantId
+                """).param("grantId", grantId).query(String.class).single();
+
+        assertThat(correlationId).isEqualTo(grantId.toString());
     }
 
     // ----------------------------------------------------------------- Gap A: grant()/revoke() already work at
