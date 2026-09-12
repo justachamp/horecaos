@@ -4,6 +4,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { MessageKey } from '../core/i18n/messages.en';
 import { TPipe } from '../core/i18n/t.pipe';
 import { DeniedState } from '../shared/ui/denied-state';
+import { NAV_ITEMS } from './navigation';
 
 /**
  * Where `capability.guard.ts` sends a direct URL into a rail section the
@@ -44,8 +45,16 @@ export class AccessDeniedPage {
    * The denied section's own rail label, if the guard could name one —
    * `navigation.ts`'s `NavItem.label` is already a `MessageKey`, so the
    * guard passes it straight through rather than a second, translated copy.
+   *
+   * Resolved against `NAV_ITEMS` rather than cast straight off the query
+   * string: `section` is user-editable (a hand-typed URL, a stale bookmark,
+   * a shared link), not limited to what `capabilityGuard` itself produced,
+   * and a label `navigation.ts` no longer carries — renamed or removed in a
+   * later wave — must not be trusted as a `MessageKey`. The same
+   * lookup-with-fallback pattern `capability-sentences.ts`'s
+   * `capabilitySentence` uses for an unknown code.
    */
-  protected readonly sectionLabel: MessageKey | null = this.route.snapshot.queryParamMap.get(
-    'section',
-  ) as MessageKey | null;
+  protected readonly sectionLabel: MessageKey | null =
+    NAV_ITEMS.find((item) => item.label === this.route.snapshot.queryParamMap.get('section'))
+      ?.label ?? null;
 }

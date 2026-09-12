@@ -55,4 +55,11 @@ describe('AccessDeniedPage', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('[data-testid="q-denied-state-capability"]')).toBeNull();
   });
+
+  it('renders no heading when the section is not a live MessageKey', async () => {
+    const fixture = await open({ capability: 'IAM_GRANT_MANAGE', section: 'not-a-real-key' });
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('h1')).toBeNull();
+  });
 });
