@@ -720,9 +720,91 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.referenceData.creating': 'Yaratilmoqda…',
   'settings.referenceData.archive.confirm':
     '"{name}" endi taklif qilinmaydi. Allaqachon qayd etilgan natijalarga taʼsir qilmaydi. Davom etasizmi?',
+  'settings.referenceData.field.status': 'Holati',
+  'settings.referenceData.field.allowedFulfillmentModes': 'Ruxsat etilgan bajarish usullari',
+  'settings.referenceData.fulfillmentModes.required':
+    'Bu sabab amal qiladigan kamida bitta bajarish usulini tanlang.',
+  'settings.referenceData.edit': 'Tahrirlash',
+  'settings.referenceData.edit.title': 'Sababni tahrirlash',
+  'settings.referenceData.edit.versionWarning':
+    'Saqlash yangi versiya yaratadi. Allaqachon qayd etilgan natijalar oʻzi yozilgan versiyani saqlab qoladi — bu oʻtgan yilgi voronkani qayta yozmaydi.',
+  'settings.referenceData.save': 'Saqlash',
+  'settings.referenceData.saving': 'Saqlanmoqda…',
+  'settings.referenceData.status.ACTIVE': 'Faol',
+  'settings.referenceData.status.ARCHIVED': 'Oʻchirilgan',
+
   'settings.referenceData.calendar.title': 'Ishlab chiqarish kalendari',
+  'settings.referenceData.calendar.lead':
+    'Tenantning oʻz dam olish kunlari, oʻz yopilishlari va ish kuni boshlanadigan chegara (ADR 0043).',
+  'settings.referenceData.calendar.timezone': 'Vaqt mintaqasi: {zone}',
+  'settings.referenceData.calendar.boundary.title': 'Ish kuni chegarasi',
+  'settings.referenceData.calendar.boundary.label': 'Ish kuni boshlanadi',
+  'settings.referenceData.calendar.boundary.version': 'Chegara versiyasi {version}',
+  'settings.referenceData.calendar.boundary.save': 'Chegarani koʻchirish',
+  'settings.referenceData.calendar.boundary.confirm':
+    'Chegarani koʻchirish har bir kelgusi buyurtma qaysi ish kuniga yozilishini oʻzgartiradi va qayta hisoblash tugagunicha ochiq qoladi. Davom etasizmi?',
+  'settings.referenceData.calendar.boundary.reason':
+    'Operatsiyalar sozlamalari ekranidan oʻzgartirildi',
+  'settings.referenceData.calendar.boundary.recutOutstanding':
+    '{date} sanasigacha qayta hisoblash tugallanmagan: shu davrni qamrab oluvchi hisobotlar ikkita chegara taʼrifini aralashtirib yuborishi mumkin.',
+  'settings.referenceData.calendar.boundary.result.CHANGED':
+    'Chegara koʻchirildi. Qayta hisoblash endi ochiq.',
+  'settings.referenceData.calendar.boundary.result.AWAITING_APPROVAL':
+    'Kuchga kirishidan oldin ikkinchi imzoni kutmoqda.',
+  'settings.referenceData.calendar.boundary.result.DECLINED': 'Oʻzgartirish rad etildi.',
+  'settings.referenceData.calendar.boundary.result.UNCHANGED': 'Allaqachon shu vaqtga oʻrnatilgan.',
+  'settings.referenceData.calendar.weekend.title': 'Dam olish kunlari',
+  'settings.referenceData.calendar.weekend.lead':
+    'Tenant ishlamaydigan kunlar. Boʻsh boʻlsa — har kuni ishlaydi, bugungi standart holat.',
+  'settings.referenceData.calendar.weekend.save': 'Dam olish kunlarini saqlash',
+  'settings.referenceData.calendar.weekend.reason':
+    'Operatsiyalar sozlamalari ekranidan oʻzgartirildi',
+  'settings.referenceData.calendar.weekday.1': 'Dush',
+  'settings.referenceData.calendar.weekday.2': 'Sesh',
+  'settings.referenceData.calendar.weekday.3': 'Chor',
+  'settings.referenceData.calendar.weekday.4': 'Pay',
+  'settings.referenceData.calendar.weekday.5': 'Jum',
+  'settings.referenceData.calendar.weekday.6': 'Shan',
+  'settings.referenceData.calendar.weekday.7': 'Yak',
+  'settings.referenceData.calendar.holidays.title': 'Tenantning oʻz yopilishlari',
+  'settings.referenceData.calendar.holidays.lead':
+    'Platformaning oʻz bayram kunlariga qoʻshimcha — ularning oʻrnini bosmaydi.',
+  'settings.referenceData.calendar.holidays.name': 'Nomi',
+  'settings.referenceData.calendar.holidays.month': 'Oy',
+  'settings.referenceData.calendar.holidays.day': 'Kun',
+  'settings.referenceData.calendar.holidays.date': 'Yoki bir martalik sana',
+  'settings.referenceData.calendar.holidays.add': 'Qoʻshish',
+  'settings.referenceData.calendar.holidays.remove': 'Oʻchirish',
+  'settings.referenceData.calendar.holidays.empty': 'Hali yoʻq.',
+  'settings.referenceData.calendar.holidays.reason':
+    'Operatsiyalar sozlamalari ekranidan oʻzgartirildi',
+
   'settings.referenceData.slaBuckets.title': 'SLA chegaralari',
+  'settings.referenceData.slaBuckets.lead':
+    'Ataylab faqat oʻqish uchun (ADR 0043): chegaralar har bir relizda qatʼiy belgilangan, shunda oʻtgan chorakda chizilgan grafik maʼnosini yoʻqotmaydi. Tenant tomonidan sozlanmaydi — ADR 0107 ga qarang.',
+  'settings.referenceData.slaBuckets.version': 'Versiya {version}',
+  'settings.referenceData.slaBuckets.column.code': 'Oraliq',
+  'settings.referenceData.slaBuckets.column.range': 'Buyurtmadan oʻtgan daqiqalar',
+  'settings.referenceData.slaBuckets.openEnded': '{from}+ daq',
+  'settings.referenceData.slaBuckets.range': '{from}–{to} daq',
+
   'settings.referenceData.tags.title': 'Filial teglari',
+  'settings.referenceData.tags.lead':
+    'Tarmoq boʻylab umumiy teglar reyestri va qaysi filial qaysi tegni koʻtarishi.',
+  'settings.referenceData.tags.registry.title': 'Teglar reyestri',
+  'settings.referenceData.tags.field.code': 'Kod',
+  'settings.referenceData.tags.field.name': 'Koʻrsatiladigan nomi',
+  'settings.referenceData.tags.create': 'Teg qoʻshish',
+  'settings.referenceData.tags.create.reason': 'Operatsiyalar sozlamalari ekranidan yaratildi',
+  'settings.referenceData.tags.archive': 'Arxivlash',
+  'settings.referenceData.tags.archive.confirm':
+    '"{name}" endi taklif qilinmaydi. Uni allaqachon koʻtargan filiallar saqlab qoladi. Davom etasizmi?',
+  'settings.referenceData.tags.archive.reason': 'Operatsiyalar sozlamalari ekranidan arxivlandi',
+  'settings.referenceData.tags.assign.reason': 'Operatsiyalar sozlamalari ekranidan oʻzgartirildi',
+  'settings.referenceData.tags.matrix.title': 'Qaysi filial qaysi tegni koʻtaradi',
+  'settings.referenceData.tags.matrix.empty': 'Hali koʻrsatish uchun filiallar yoʻq.',
+  'settings.referenceData.tags.count': 'Filiallar: {count}',
+  'settings.referenceData.tags.empty': 'Hali teglar yoʻq.',
 
   // 10.2 Filiallar
   'settings.locations.title': 'Filiallar',
@@ -2148,6 +2230,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.provenance.asOf': 'Maʼlumot holati: {time}',
   'reports.provenance.closedThrough': '{date} sanasigacha yopilgan',
   'reports.provenance.neverClosed': 'hali birorta opervkun yopilmagan',
+  'reports.provenance.businessDayStart': 'ish kuni {time} da boshlanadi',
   'reports.provenance.settling':
     'Bugungi kun hisob-kitob oynasi ichida — koʻrsatkichlar hali oʻzgarishi mumkin.',
   'reports.provenance.divergence':

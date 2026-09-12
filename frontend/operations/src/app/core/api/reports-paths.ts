@@ -57,4 +57,37 @@ export const reportsPaths = {
   demandHistory(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/demand-history`;
   },
+
+  /**
+   * 10.10c: the version card — which bucket definitions the `/sla-buckets`
+   * distribution above was computed under. Read-only; `ReportingController`
+   * mirrors `SlaBucketController`'s platform-admin read at tenant scope.
+   */
+  slaBucketSet(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/sla-bucket-set`;
+  },
+} as const;
+
+/**
+ * 10.10b: `BusinessCalendarController` — a tenant's weekend, its own
+ * holidays, and its business-day boundary. Sibling of {@link reportsPaths}'s
+ * own base path, same `TENANT` scope, different capability
+ * (`TENANT_CONFIGURATION_WRITE` for the three writes).
+ */
+export const businessCalendarPaths = {
+  root(tenantId: string): string {
+    return `/api/v1/tenants/${encodeURIComponent(tenantId)}/business-calendar`;
+  },
+  boundary(tenantId: string): string {
+    return `${this.root(tenantId)}/boundary`;
+  },
+  weekend(tenantId: string): string {
+    return `${this.root(tenantId)}/weekend`;
+  },
+  holidays(tenantId: string): string {
+    return `${this.root(tenantId)}/holidays`;
+  },
+  holiday(tenantId: string, holidayId: string): string {
+    return `${this.holidays(tenantId)}/${encodeURIComponent(holidayId)}`;
+  },
 } as const;

@@ -711,9 +711,88 @@ export const messagesRu: MessageCatalogue = {
   'settings.referenceData.creating': 'Создание…',
   'settings.referenceData.archive.confirm':
     '«{name}» больше не будет предлагаться. На уже зафиксированные результаты это не влияет. Продолжить?',
+  'settings.referenceData.field.status': 'Статус',
+  'settings.referenceData.field.allowedFulfillmentModes': 'Допустимые способы выполнения',
+  'settings.referenceData.fulfillmentModes.required':
+    'Выберите хотя бы один способ выполнения, для которого действует эта причина.',
+  'settings.referenceData.edit': 'Изменить',
+  'settings.referenceData.edit.title': 'Изменить причину',
+  'settings.referenceData.edit.versionWarning':
+    'Сохранение создаёт новую версию. Уже зафиксированные результаты сохраняют версию, с которой были записаны — прошлогодняя воронка не переписывается.',
+  'settings.referenceData.save': 'Сохранить',
+  'settings.referenceData.saving': 'Сохранение…',
+  'settings.referenceData.status.ACTIVE': 'Активна',
+  'settings.referenceData.status.ARCHIVED': 'Отключена',
+
   'settings.referenceData.calendar.title': 'Производственный календарь',
+  'settings.referenceData.calendar.lead':
+    'Собственные выходные тенанта, его собственные закрытия и граница, с которой начинается рабочий день (ADR 0043).',
+  'settings.referenceData.calendar.timezone': 'Часовой пояс: {zone}',
+  'settings.referenceData.calendar.boundary.title': 'Граница рабочего дня',
+  'settings.referenceData.calendar.boundary.label': 'Рабочий день начинается в',
+  'settings.referenceData.calendar.boundary.version': 'Версия границы {version}',
+  'settings.referenceData.calendar.boundary.save': 'Сдвинуть границу',
+  'settings.referenceData.calendar.boundary.confirm':
+    'Сдвиг границы меняет, к какой рабочей дате относится каждый будущий заказ, и оставляет пересчёт незавершённым, пока он не будет проведён. Продолжить?',
+  'settings.referenceData.calendar.boundary.reason': 'Изменено на экране настроек операций',
+  'settings.referenceData.calendar.boundary.recutOutstanding':
+    'Пересчёт не завершён по {date}: отчёты за этот период могут смешивать два определения границы.',
+  'settings.referenceData.calendar.boundary.result.CHANGED':
+    'Граница сдвинута. Пересчёт теперь не завершён.',
+  'settings.referenceData.calendar.boundary.result.AWAITING_APPROVAL':
+    'Ожидает второй подписи, прежде чем изменение вступит в силу.',
+  'settings.referenceData.calendar.boundary.result.DECLINED': 'Изменение отклонено.',
+  'settings.referenceData.calendar.boundary.result.UNCHANGED': 'Уже установлено на это время.',
+  'settings.referenceData.calendar.weekend.title': 'Выходные',
+  'settings.referenceData.calendar.weekend.lead':
+    'Дни, когда тенант не работает. Пусто означает работу каждый день — сегодняшнее значение по умолчанию.',
+  'settings.referenceData.calendar.weekend.save': 'Сохранить выходные',
+  'settings.referenceData.calendar.weekend.reason': 'Изменено на экране настроек операций',
+  'settings.referenceData.calendar.weekday.1': 'Пн',
+  'settings.referenceData.calendar.weekday.2': 'Вт',
+  'settings.referenceData.calendar.weekday.3': 'Ср',
+  'settings.referenceData.calendar.weekday.4': 'Чт',
+  'settings.referenceData.calendar.weekday.5': 'Пт',
+  'settings.referenceData.calendar.weekday.6': 'Сб',
+  'settings.referenceData.calendar.weekday.7': 'Вс',
+  'settings.referenceData.calendar.holidays.title': 'Собственные закрытия тенанта',
+  'settings.referenceData.calendar.holidays.lead':
+    'Дополнительно к собственным государственным праздникам платформы — никогда не заменяют их.',
+  'settings.referenceData.calendar.holidays.name': 'Название',
+  'settings.referenceData.calendar.holidays.month': 'Месяц',
+  'settings.referenceData.calendar.holidays.day': 'День',
+  'settings.referenceData.calendar.holidays.date': 'Или разовая дата',
+  'settings.referenceData.calendar.holidays.add': 'Добавить',
+  'settings.referenceData.calendar.holidays.remove': 'Удалить',
+  'settings.referenceData.calendar.holidays.empty': 'Пока нет.',
+  'settings.referenceData.calendar.holidays.reason': 'Изменено на экране настроек операций',
+
   'settings.referenceData.slaBuckets.title': 'Границы SLA',
+  'settings.referenceData.slaBuckets.lead':
+    'Только для чтения по замыслу (ADR 0043): границы фиксированы для каждого релиза, чтобы график, построенный в прошлом квартале, сохранял смысл. Не настраивается тенантом — см. ADR 0107.',
+  'settings.referenceData.slaBuckets.version': 'Версия {version}',
+  'settings.referenceData.slaBuckets.column.code': 'Интервал',
+  'settings.referenceData.slaBuckets.column.range': 'Минуты с момента заказа',
+  'settings.referenceData.slaBuckets.openEnded': '{from}+ мин',
+  'settings.referenceData.slaBuckets.range': '{from}–{to} мин',
+
   'settings.referenceData.tags.title': 'Теги филиалов',
+  'settings.referenceData.tags.lead':
+    'Общий для сети реестр тегов и то, какой филиал какой тег несёт.',
+  'settings.referenceData.tags.registry.title': 'Реестр тегов',
+  'settings.referenceData.tags.field.code': 'Код',
+  'settings.referenceData.tags.field.name': 'Отображаемое название',
+  'settings.referenceData.tags.create': 'Добавить тег',
+  'settings.referenceData.tags.create.reason': 'Создано на экране настроек операций',
+  'settings.referenceData.tags.archive': 'В архив',
+  'settings.referenceData.tags.archive.confirm':
+    '«{name}» больше не будет предлагаться. Филиалы, уже несущие этот тег, сохранят его. Продолжить?',
+  'settings.referenceData.tags.archive.reason': 'Отправлено в архив на экране настроек операций',
+  'settings.referenceData.tags.assign.reason': 'Изменено на экране настроек операций',
+  'settings.referenceData.tags.matrix.title': 'Какой филиал несёт какой тег',
+  'settings.referenceData.tags.matrix.empty': 'Пока нет филиалов для отображения.',
+  'settings.referenceData.tags.count': 'Филиалов: {count}',
+  'settings.referenceData.tags.empty': 'Пока нет тегов.',
 
   // 10.2 Филиалы
   'settings.locations.title': 'Филиалы',
@@ -2136,6 +2215,7 @@ export const messagesRu: MessageCatalogue = {
   'reports.provenance.asOf': 'Данные на {time}',
   'reports.provenance.closedThrough': 'закрыто по {date}',
   'reports.provenance.neverClosed': 'ни один опердень ещё не закрыт',
+  'reports.provenance.businessDayStart': 'опердень начинается в {time}',
   'reports.provenance.settling':
     'Сегодняшний день ещё пересчитывается после окна расчётов. Цифры могут измениться.',
   'reports.provenance.divergence':
