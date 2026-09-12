@@ -373,26 +373,41 @@ export class StaffPage {
     }
   }
 
+  /**
+   * ADR 0039's "N independent operations" is also Staff 9.3c's "N audit rows
+   * that must correlate as one action": one id minted once, sent on every
+   * revoke in the fan-out, so {@code GrantAuditListener} writes it as every
+   * row's own `correlation_id` instead of each grant's own id. Without this
+   * the activity log's «Часть массового действия» chip found exactly one row
+   * for a batch of twelve.
+   */
   private async suspend(tenantId: string, subject: string, reason: string): Promise<void> {
     const targets = this.grantsToSuspend(subject);
+    const correlationId = crypto.randomUUID();
     const outcomes = await Promise.allSettled(
-      targets.map((grant) => this.api.revoke(tenantId, grant.id, reason)),
+      targets.map((grant) => this.api.revoke(tenantId, grant.id, reason, correlationId)),
     );
     this.reportOutcomes(outcomes.length, outcomes.filter((o) => o.status === 'fulfilled').length);
   }
 
+  /** Same bulk-correlation reasoning as {@link suspend}, for a restore's fan-out of grants. */
   private async restore(tenantId: string, subject: string, reason: string): Promise<void> {
     const targets = this.grantsToRestore(subject);
+    const correlationId = crypto.randomUUID();
     const outcomes = await Promise.allSettled(
       targets.map((grant) => {
         const { brandId, locationId } = this.resolveScopeIdentifiers(grant);
-        return this.api.grant(tenantId, {
-          principalSubject: subject,
-          roleCode: grant.roleCode,
-          brandId,
-          locationId,
-          reason,
-        });
+        return this.api.grant(
+          tenantId,
+          {
+            principalSubject: subject,
+            roleCode: grant.roleCode,
+            brandId,
+            locationId,
+            reason,
+          },
+          correlationId,
+        );
       }),
     );
     this.reportOutcomes(outcomes.length, outcomes.filter((o) => o.status === 'fulfilled').length);

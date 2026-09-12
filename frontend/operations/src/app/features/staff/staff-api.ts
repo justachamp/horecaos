@@ -97,25 +97,39 @@ export class StaffApi {
     return result.value ?? [];
   }
 
-  async grant(tenantId: string, request: GrantRequest): Promise<{ grantId: string }> {
+  /**
+   * @param correlationId Staff 9.3c: shared across a bulk fan-out — see
+   *                       {@link ApiClient}'s `MutateOptions.correlationId` —
+   *                       so N grants made under one operator action audit as
+   *                       one action, not N. Omit for an ordinary single grant.
+   */
+  async grant(
+    tenantId: string,
+    request: GrantRequest,
+    correlationId?: string,
+  ): Promise<{ grantId: string }> {
     return firstValueFrom(
       this.api.post<GrantRequest, { grantId: string }>(
         staffPaths.grants(tenantId),
         command(request),
+        { correlationId },
       ),
     );
   }
 
+  /** @param correlationId see {@link grant}'s own doc — the same bulk-fan-out case, for revoke. */
   async revoke(
     tenantId: string,
     grantId: string,
     reason: string,
+    correlationId?: string,
   ): Promise<{ changed: boolean; outcome: string }> {
     const response = await firstValueFrom(
       this.api.send<ReasonRequest, { changed: boolean; outcome: string }>(
         'DELETE',
         staffPaths.grant(tenantId, grantId),
         command({ reason }),
+        { correlationId },
       ),
     );
     return response.body as { changed: boolean; outcome: string };

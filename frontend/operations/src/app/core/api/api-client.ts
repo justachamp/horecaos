@@ -4,6 +4,7 @@ import { Observable, catchError, map, throwError } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
 import { Versioned, parseETag, toETag } from './aggregate-version';
+import { CORRELATION_ID_HEADER } from './correlation-id.interceptor';
 import { Command, IdempotencyKey } from './idempotency';
 import { CursorState, Page, pageParams } from './page';
 import { ApiError, ApiErrorCode, ProblemDetails, isProblemDetails } from './problem-details';
@@ -27,6 +28,17 @@ export interface MutateOptions {
    */
   readonly expectedVersion?: number;
   readonly params?: QueryParams;
+  /**
+   * Overrides the correlation id `correlationIdInterceptor` would otherwise
+   * mint fresh for this one request.
+   *
+   * Staff 9.3c: a bulk action is N calls that must correlate as one action,
+   * not N. Mint a single id once for the whole batch and pass it on every
+   * call in the fan-out — `staff-page.ts`'s `suspend`/`restore` are the
+   * callers this exists for. Leave it unset for an ordinary single-intent
+   * mutation; the interceptor's own fresh id is exactly right there.
+   */
+  readonly correlationId?: string;
 }
 
 /**
@@ -39,6 +51,8 @@ export interface MutateOptions {
  *
  * Bearer tokens and correlation ids are *not* added here — they are interceptors,
  * because they apply to every request including ones this class does not make.
+ * `MutateOptions.correlationId` is the one exception: it is still the
+ * interceptor's header, this class only lets a caller pre-fill it.
  */
 @Injectable({ providedIn: 'root' })
 export class ApiClient {
@@ -124,7 +138,7 @@ export class ApiClient {
     return this.http
       .request<TResponse>(method, this.url(path), {
         body: intent.body,
-        headers: mutationHeaders(intent.key, options.expectedVersion),
+        headers: mutationHeaders(intent.key, options.expectedVersion, options.correlationId),
         params: toHttpParams(options.params),
         observe: 'response',
       })
@@ -142,10 +156,16 @@ export class ApiClient {
 function mutationHeaders(
   key: IdempotencyKey,
   expectedVersion: number | undefined,
+  correlationId: string | undefined,
 ): Record<string, string> {
   const headers: Record<string, string> = { 'Idempotency-Key': key };
   if (expectedVersion !== undefined) {
     headers['If-Match'] = toETag(expectedVersion);
+  }
+  if (correlationId !== undefined) {
+    // Sets the same header `correlationIdInterceptor` would otherwise mint
+    // fresh; the interceptor only fills in a header that is not already set.
+    headers[CORRELATION_ID_HEADER] = correlationId;
   }
   return headers;
 }
