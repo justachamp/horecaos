@@ -589,4 +589,43 @@ describe('CouriersPage', () => {
       'he never rides there',
     );
   });
+
+  it('unbinds under the binding’s brand, not the operator’s current one', async () => {
+    // The operator is scoped to brand b1; the courier's other branch was bound
+    // under brand b2. Only a page that reads brandId off the binding itself
+    // sends b2 — one that reads it off the current scope sends b1 and this
+    // assertion goes red. That is the regression the P19 fix guards against.
+    const unbindBranch = vi.fn().mockResolvedValue(undefined);
+    const boundElsewhere: CourierDetailResponse = {
+      ...DETAIL,
+      branches: [
+        ...DETAIL.branches,
+        { locationId: 'l9', brandId: 'b2', locationName: 'Yunusobod', primary: false },
+      ],
+    };
+    const host = await render(
+      {
+        roster: vi.fn().mockResolvedValue([COURIER]),
+        types: vi.fn().mockResolvedValue([]),
+        courier: vi.fn().mockResolvedValue(boundElsewhere),
+        unbindBranch,
+      },
+      BRANCH_OPTIONS,
+    );
+
+    await click(host, 'courier-open');
+    await click(host, 'unbind-branch-l9');
+
+    type(host, 'unbind-branch-reason', 'moved to the other brand’s roster');
+    await click(host, 'unbind-branch-confirm');
+
+    expect(unbindBranch).toHaveBeenCalledWith(
+      't1',
+      'courier-1',
+      'b2',
+      'l9',
+      'moved to the other brand’s roster',
+    );
+    expect(unbindBranch).not.toHaveBeenCalledWith('t1', 'courier-1', 'b1', 'l9', expect.anything());
+  });
 });
