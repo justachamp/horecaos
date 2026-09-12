@@ -460,6 +460,178 @@ public class JdbcPartnerStore {
                 .update();
     }
 
+    // -------------------------------------------------- partner client lifecycle
+
+    /**
+     * ADR 0040 confines a partner credential to a {@code MARKETPLACE}
+     * installation — the only category whose credentials run in both
+     * directions (see {@code ProviderCategory.MARKETPLACE}'s own doc
+     * comment). Checked before issuance rather than left to the schema, so a
+     * tenant asking to issue a client against a POS installation gets a
+     * legible refusal rather than a foreign-key-shaped one.
+     */
+    public boolean isMarketplaceInstallation(UUID tenantId, UUID installationId) {
+        return Boolean.TRUE.equals(jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM integration.installations
+                     WHERE tenant_id = :tenantId AND id = :installationId
+                       AND provider_category = 'MARKETPLACE'
+                )
+                """)
+                .param("tenantId", tenantId)
+                .param("installationId", installationId)
+                .query(Boolean.class)
+                .single());
+    }
+
+    /**
+     * Issues a new {@code ACTIVE} credential row. The unique index on {@code
+     * (tenant_id, installation_id) WHERE status IN ('PENDING', 'ACTIVE')}
+     * (V0038) is the actual "one live credential per installation" rule; a
+     * caller that races this raises {@link org.springframework.dao.DuplicateKeyException},
+     * which {@code PartnerApiClientService} translates into a legible refusal
+     * rather than a second, silently-orphaned Keycloak client.
+     */
+    public void insertClient(
+            UUID id,
+            UUID tenantId,
+            UUID installationId,
+            String clientId,
+            String keycloakClientRef,
+            String secretReference,
+            Instant rotatedAt,
+            Instant expiresAt) {
+        jdbc.sql("""
+                INSERT INTO partner.api_clients
+                    (id, tenant_id, installation_id, client_id, keycloak_client_ref,
+                     secret_reference, status, secret_rotated_at, secret_expires_at)
+                VALUES (:id, :tenantId, :installationId, :clientId, :keycloakClientRef,
+                        :secretReference, 'ACTIVE', :rotatedAt, :expiresAt)
+                """)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("installationId", installationId)
+                .param("clientId", clientId)
+                .param("keycloakClientRef", keycloakClientRef)
+                .param("secretReference", secretReference)
+                .param("rotatedAt", OffsetDateTime.ofInstant(rotatedAt, ZoneOffset.UTC))
+                .param("expiresAt", OffsetDateTime.ofInstant(expiresAt, ZoneOffset.UTC))
+                .update();
+    }
+
+    public Optional<PartnerClientView> findClientView(UUID tenantId, UUID clientRowId) {
+        return jdbc.sql("""
+                SELECT id, client_id, status, secret_reference, secret_rotated_at,
+                       secret_expires_at, last_authenticated_at, version
+                  FROM partner.api_clients
+                 WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("id", clientRowId)
+                .query((row, number) -> new PartnerClientView(
+                        row.getObject("id", UUID.class),
+                        row.getString("client_id"),
+                        row.getString("status"),
+                        row.getString("secret_reference"),
+                        instant(row.getObject("secret_rotated_at", OffsetDateTime.class)),
+                        instant(row.getObject("secret_expires_at", OffsetDateTime.class)),
+                        instant(row.getObject("last_authenticated_at", OffsetDateTime.class)),
+                        row.getInt("version")))
+                .optional();
+    }
+
+    public List<PartnerClientView> listClients(UUID tenantId, UUID installationId) {
+        return jdbc.sql("""
+                SELECT id, client_id, status, secret_reference, secret_rotated_at,
+                       secret_expires_at, last_authenticated_at, version
+                  FROM partner.api_clients
+                 WHERE tenant_id = :tenantId AND installation_id = :installationId
+                 ORDER BY created_at DESC
+                """)
+                .param("tenantId", tenantId)
+                .param("installationId", installationId)
+                .query((row, number) -> new PartnerClientView(
+                        row.getObject("id", UUID.class),
+                        row.getString("client_id"),
+                        row.getString("status"),
+                        row.getString("secret_reference"),
+                        instant(row.getObject("secret_rotated_at", OffsetDateTime.class)),
+                        instant(row.getObject("secret_expires_at", OffsetDateTime.class)),
+                        instant(row.getObject("last_authenticated_at", OffsetDateTime.class)),
+                        row.getInt("version")))
+                .list();
+    }
+
+    /** The Keycloak reference a rotate or revoke needs, checked against this tenant. */
+    public Optional<ClientKeycloakRef> findClientKeycloakRef(UUID tenantId, UUID clientRowId) {
+        return jdbc.sql("""
+                SELECT keycloak_client_ref, status, version
+                  FROM partner.api_clients
+                 WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("id", clientRowId)
+                .query((row, number) -> new ClientKeycloakRef(
+                        row.getString("keycloak_client_ref"), row.getString("status"), row.getInt("version")))
+                .optional();
+    }
+
+    /** @return false when {@code expectedVersion} was stale — somebody else rotated first */
+    public boolean rotateClientSecret(
+            UUID tenantId,
+            UUID clientRowId,
+            int expectedVersion,
+            String secretReference,
+            Instant rotatedAt,
+            Instant expiresAt) {
+        return jdbc.sql("""
+                UPDATE partner.api_clients
+                   SET secret_reference = :secretReference,
+                       secret_rotated_at = :rotatedAt,
+                       secret_expires_at = :expiresAt,
+                       status = 'ACTIVE',
+                       version = version + 1,
+                       updated_at = now()
+                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
+                   AND status IN ('PENDING', 'ACTIVE')
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", clientRowId)
+                        .param("secretReference", secretReference)
+                        .param("rotatedAt", OffsetDateTime.ofInstant(rotatedAt, ZoneOffset.UTC))
+                        .param("expiresAt", OffsetDateTime.ofInstant(expiresAt, ZoneOffset.UTC))
+                        .param("expectedVersion", expectedVersion)
+                        .update()
+                == 1;
+    }
+
+    /** @return false when {@code expectedVersion} was stale or the row was already RETIRED */
+    public boolean revokeClient(UUID tenantId, UUID clientRowId, int expectedVersion) {
+        return jdbc.sql("""
+                UPDATE partner.api_clients
+                   SET status = 'RETIRED', version = version + 1, updated_at = now()
+                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
+                   AND status <> 'RETIRED'
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", clientRowId)
+                        .param("expectedVersion", expectedVersion)
+                        .update()
+                == 1;
+    }
+
+    public record PartnerClientView(
+            UUID id,
+            String clientId,
+            String status,
+            @Nullable String secretReference,
+            @Nullable Instant secretRotatedAt,
+            @Nullable Instant secretExpiresAt,
+            @Nullable Instant lastAuthenticatedAt,
+            int version) {}
+
+    public record ClientKeycloakRef(@Nullable String keycloakClientRef, String status, int version) {}
+
     // ---------------------------------------------------------------- watermarks
 
     /**

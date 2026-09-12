@@ -93,7 +93,8 @@ class StorefrontAnalyticsConfigControllerTests {
     void aPartialConfigurationAnswersOnlyWhatIsActuallyBound() {
         bindAnalyticsInstallation("GOOGLE_TAG_MANAGER", "gtmContainerId", "GTM-ABC1234", BRAND, "ACTIVE", "ACTIVE");
 
-        var body = Objects.requireNonNull(controller.analyticsConfig(TENANT, BRAND).getBody());
+        var body =
+                Objects.requireNonNull(controller.analyticsConfig(TENANT, BRAND).getBody());
 
         assertThat(body.gtmContainerId()).isEqualTo("GTM-ABC1234");
         assertThat(body.ga4MeasurementId()).isNull();
@@ -107,7 +108,8 @@ class StorefrontAnalyticsConfigControllerTests {
         bindAnalyticsInstallation(
                 "GOOGLE_SEARCH_CONSOLE", "searchConsoleVerificationToken", "verify-token-1", BRAND, "ACTIVE", "ACTIVE");
 
-        var body = Objects.requireNonNull(controller.analyticsConfig(TENANT, BRAND).getBody());
+        var body =
+                Objects.requireNonNull(controller.analyticsConfig(TENANT, BRAND).getBody());
 
         assertThat(body.gtmContainerId()).isEqualTo("GTM-ABC1234");
         assertThat(body.ga4MeasurementId()).isEqualTo("G-XYZ987");
@@ -119,7 +121,8 @@ class StorefrontAnalyticsConfigControllerTests {
         bindAnalyticsInstallation(
                 "GOOGLE_TAG_MANAGER", "gtmContainerId", "GTM-SUSPENDED", BRAND, "ACTIVE", "SUSPENDED");
 
-        var body = Objects.requireNonNull(controller.analyticsConfig(TENANT, BRAND).getBody());
+        var body =
+                Objects.requireNonNull(controller.analyticsConfig(TENANT, BRAND).getBody());
 
         assertThat(body.gtmContainerId()).isNull();
     }
@@ -128,7 +131,8 @@ class StorefrontAnalyticsConfigControllerTests {
     void aDraftInstallationContributesNothingEvenIfSomehowBound() {
         bindAnalyticsInstallation("GOOGLE_TAG_MANAGER", "gtmContainerId", "GTM-DRAFT", BRAND, "DRAFT", "ACTIVE");
 
-        var body = Objects.requireNonNull(controller.analyticsConfig(TENANT, BRAND).getBody());
+        var body =
+                Objects.requireNonNull(controller.analyticsConfig(TENANT, BRAND).getBody());
 
         assertThat(body.gtmContainerId()).isNull();
     }
@@ -137,7 +141,8 @@ class StorefrontAnalyticsConfigControllerTests {
     void oneBrandsAnalyticsNeverLeaksIntoAnothers() {
         bindAnalyticsInstallation("GOOGLE_TAG_MANAGER", "gtmContainerId", "GTM-FOR-BRAND", BRAND, "ACTIVE", "ACTIVE");
 
-        var body = Objects.requireNonNull(controller.analyticsConfig(TENANT, OTHER_BRAND).getBody());
+        var body = Objects.requireNonNull(
+                controller.analyticsConfig(TENANT, OTHER_BRAND).getBody());
 
         assertThat(body.gtmContainerId()).isNull();
     }
