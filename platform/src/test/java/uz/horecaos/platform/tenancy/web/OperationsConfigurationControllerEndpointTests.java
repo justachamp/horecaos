@@ -121,7 +121,7 @@ class OperationsConfigurationControllerEndpointTests {
                         .with(tokenFor(OWNER))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "cfg-tenant-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(setBody("TENANT", null, null, 180, null, "tenant-wide shorter window")))
+                        .content(setBody("TENANT", null, null, false, 180, null, "tenant-wide shorter window")))
                 .andReturn();
         assertThat(tenantSet.getResponse().getStatus()).isEqualTo(200);
 
@@ -150,7 +150,7 @@ class OperationsConfigurationControllerEndpointTests {
                         .with(tokenFor(OWNER))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "cfg-location-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(setBody("LOCATION", BRAND, LOCATION, 90, null, "this branch closes early")))
+                        .content(setBody("LOCATION", BRAND, LOCATION, false, 90, null, "this branch closes early")))
                 .andReturn();
         assertThat(locationSet.getResponse().getStatus()).isEqualTo(200);
 
@@ -163,6 +163,58 @@ class OperationsConfigurationControllerEndpointTests {
         assertThat(locationResolved.getResponse().getContentAsString())
                 .contains("\"value\":90")
                 .contains("\"winningScope\":\"LOCATION\"");
+    }
+
+    @Test
+    void explicitNullSetThroughHttpContinuesResolutionPerAdr0030() throws Exception {
+        // CART_EXPIRY_MINUTES does not declare explicitNullTerminates() (see
+        // ConfigurationKeys.java), so an explicit null at BRAND must continue
+        // past it to the TENANT value below — ADR 0030's other outcome,
+        // EXPLICIT_NULL_TERMINATED, has no tenant-visible key declaring
+        // explicitNullTerminates()=true anywhere in ConfigurationKeys today
+        // (ConfigurationKeysTests.everyFeatureFlagIsOffByDefault... asserts it
+        // false for every feature flag, and grepping the registry finds no
+        // other caller of that builder method outside the synthetic key
+        // ScopeResolutionTests builds for the pure-function unit test), so
+        // this test proves the one outcome a real key can exercise through
+        // real HTTP against the real DB — not the FakeValueAuthor double
+        // OperationsConfigurationControllerTests uses.
+        assertThat(ConfigurationKeys.CART_EXPIRY_MINUTES.explicitNullTerminates())
+                .isFalse();
+        String code = ConfigurationKeys.CART_EXPIRY_MINUTES.code();
+
+        MvcResult tenantSet = mvc.perform(post(CONFIG + "/keys/" + code + "/values")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "cfg-null-tenant")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(setBody("TENANT", null, null, false, 180, null, "tenant-wide window")))
+                .andReturn();
+        assertThat(tenantSet.getResponse().getStatus()).isEqualTo(200);
+
+        MvcResult brandNulled = mvc.perform(post(CONFIG + "/keys/" + code + "/values")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "cfg-null-brand")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(setBody("BRAND", BRAND, null, true, null, null, "deliberately unset at brand level")))
+                .andReturn();
+        assertThat(brandNulled.getResponse().getStatus()).isEqualTo(200);
+        assertThat(brandNulled.getResponse().getContentAsString())
+                .as("the write itself must round-trip explicitNull, not just forward it")
+                .contains("\"explicitNull\":true")
+                .contains("\"value\":null");
+
+        MvcResult brandResolved = mvc.perform(get(CONFIG + "/keys/" + code + "/resolution")
+                        .with(tokenFor(OWNER))
+                        .queryParam("scopeType", "BRAND")
+                        .queryParam("brandId", BRAND.toString()))
+                .andReturn();
+        assertThat(brandResolved.getResponse().getContentAsString())
+                .as("an explicit null at BRAND must continue resolution to the TENANT value below it, "
+                        + "through this endpoint's own resolver wiring, not a fake")
+                .contains("\"value\":180")
+                .contains("\"source\":\"SCOPED_VALUE\"")
+                .contains("\"winningScope\":\"TENANT\"")
+                .contains("\"scopeType\":\"BRAND\",\"outcome\":\"EXPLICIT_NULL_CONTINUED\"");
     }
 
     @Test
@@ -180,7 +232,7 @@ class OperationsConfigurationControllerEndpointTests {
                         .with(tokenFor(LOCATION_STAFF))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "cfg-staff-refused")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(setBody("TENANT", null, null, 300, null, "should be refused")))
+                        .content(setBody("TENANT", null, null, false, 300, null, "should be refused")))
                 .andReturn();
 
         assertThat(refused.getResponse().getStatus()).isEqualTo(403);
@@ -203,7 +255,7 @@ class OperationsConfigurationControllerEndpointTests {
                         .with(tokenFor(OTHER_TENANT_OWNER))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "cfg-cross-tenant")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(setBody("TENANT", null, null, 999, null, "hack")))
+                        .content(setBody("TENANT", null, null, false, 999, null, "hack")))
                 .andReturn();
         assertThat(writeRefused.getResponse().getStatus()).isEqualTo(403);
 
@@ -235,7 +287,7 @@ class OperationsConfigurationControllerEndpointTests {
                         .with(tokenFor(OWNER))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "cfg-platform-only")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(setBody("TENANT", null, null, 60, null, "should be refused")))
+                        .content(setBody("TENANT", null, null, false, 60, null, "should be refused")))
                 .andReturn();
         assertThat(writeRefused.getResponse().getStatus()).isEqualTo(404);
     }
@@ -248,7 +300,7 @@ class OperationsConfigurationControllerEndpointTests {
                         .with(tokenFor(OWNER))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "cfg-platform-scope")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(setBody("PLATFORM", null, null, 60, null, "should be refused")))
+                        .content(setBody("PLATFORM", null, null, false, 60, null, "should be refused")))
                 .andReturn();
 
         assertThat(refused.getResponse().getStatus()).isEqualTo(400);
@@ -258,16 +310,18 @@ class OperationsConfigurationControllerEndpointTests {
             String scopeType,
             @Nullable UUID brandId,
             @Nullable UUID locationId,
+            boolean explicitNull,
             @Nullable Integer integerValue,
             @Nullable Long expectedVersion,
             String reason) {
         return """
-                {"scopeType":"%s","brandId":%s,"locationId":%s,"explicitNull":false,
+                {"scopeType":"%s","brandId":%s,"locationId":%s,"explicitNull":%s,
                  "integerValue":%s,"expectedVersion":%s,"reason":"%s"}
                 """.formatted(
                         scopeType,
                         brandId == null ? "null" : "\"" + brandId + "\"",
                         locationId == null ? "null" : "\"" + locationId + "\"",
+                        explicitNull,
                         integerValue == null ? "null" : integerValue,
                         expectedVersion == null ? "null" : expectedVersion,
                         reason);
