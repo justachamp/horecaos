@@ -85,7 +85,12 @@ class PlatformRoleTests {
             // same reason: it is a self-employed person's tax identifier, ADR 0029
             // protected, and reading one is a purposeful act rather than a
             // standing permission.
-            Capability.COURIER_REGISTRATION_REVEAL);
+            Capability.COURIER_REGISTRATION_REVEAL,
+            // IA 3.3's compliance file: a passport, a ПИНФЛ, a home address and
+            // a third party's telephone number. Its own capability doc says why
+            // it is not the registration reveal; it is on this list for the same
+            // reason that one is, one level further up.
+            Capability.COURIER_PII_REVEAL);
 
     /**
      * The guard this test used to be passed for the wrong reason: {@code

@@ -75,6 +75,44 @@ class EndpointCapabilityDeclarationTests {
     }
 
     @Test
+    void aDeclaredScopeNamesOnlyPathVariablesTheRouteActuallyDeclares() {
+        // The mirror image of the test above. CapabilityEnforcementInterceptor.scopeOf()
+        // resolves a scope by reading tenantId/brandId/locationId path variables
+        // unconditionally for the declared scope type — a LOCATION declaration
+        // always reads brandId, a BRAND or LOCATION declaration always reads
+        // brandId, whether or not the route's own @*Mapping actually names it. A
+        // scope declared narrower than the path supports does not fail loudly at
+        // startup: it throws IllegalStateException on the first real request,
+        // which GlobalApiErrorHandler has no handler for, so it surfaces as an
+        // unmapped 500 rather than ADR 0031's structured refusal. See the P19
+        // unbindCourierFromBranch incident this test was added to catch.
+        List<String> tooNarrow = new ArrayList<>();
+
+        for (Method handler : allHandlers()) {
+            RequiresCapability declaration = handler.getAnnotation(RequiresCapability.class);
+            if (declaration == null) {
+                continue;
+            }
+            String path = pathOf(handler);
+            String where = handler.getDeclaringClass().getSimpleName() + "#" + handler.getName();
+            ScopeType scope = declaration.scope();
+
+            if ((scope == ScopeType.BRAND || scope == ScopeType.LOCATION) && !path.contains("{brandId}")) {
+                tooNarrow.add(where + " requires " + scope + " but the path has no {brandId}");
+            }
+            if (scope == ScopeType.LOCATION && !path.contains("{locationId}")) {
+                tooNarrow.add(where + " requires LOCATION but the path has no {locationId}");
+            }
+        }
+
+        assertThat(tooNarrow)
+                .as("a BRAND or LOCATION scope reads brandId (and LOCATION also reads locationId) "
+                        + "from the path unconditionally; declaring one the route cannot supply is "
+                        + "not a stricter check, it is a 500 on every call")
+                .isEmpty();
+    }
+
+    @Test
     void everyMutatingEndpointDeclaresHowItIsAuthorized() {
         List<String> undeclared = new ArrayList<>();
 

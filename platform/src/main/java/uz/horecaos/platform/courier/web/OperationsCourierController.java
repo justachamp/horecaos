@@ -11,8 +11,11 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -32,11 +35,13 @@ import uz.horecaos.platform.courier.application.CourierPolicyResolver;
 import uz.horecaos.platform.courier.application.CourierRateCardService;
 import uz.horecaos.platform.courier.application.CourierRosterQueryService;
 import uz.horecaos.platform.courier.application.CourierRosterQueryService.RosterEntry;
+import uz.horecaos.platform.courier.application.CourierRosterService;
 import uz.horecaos.platform.courier.application.CourierSettlementService;
 import uz.horecaos.platform.courier.application.CourierShiftService;
 import uz.horecaos.platform.courier.application.DeliveryCostQueryService;
 import uz.horecaos.platform.courier.application.PartnerInvoiceService;
 import uz.horecaos.platform.courier.domain.AdjustmentOrigin;
+import uz.horecaos.platform.courier.domain.ComplianceField;
 import uz.horecaos.platform.courier.domain.CostBasis;
 import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
 import uz.horecaos.platform.courier.domain.PartnerChargeType;
@@ -54,6 +59,8 @@ import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftS
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore.HandoverRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore.ShiftRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.BranchBindingRow;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierGroupRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierTypeRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore.InvoiceLineRow;
@@ -89,6 +96,7 @@ public class OperationsCourierController {
     private final PartnerInvoiceService partnerInvoices;
     private final JdbcCourierLedgerStore ledger;
     private final CourierRosterQueryService rosterQuery;
+    private final CourierRosterService roster;
     private final JdbcCourierStore courierStore;
     private final CourierRateCardService rateCards;
     private final JdbcCourierRateCardStore rateCardStore;
@@ -107,6 +115,7 @@ public class OperationsCourierController {
             PartnerInvoiceService partnerInvoices,
             JdbcCourierLedgerStore ledger,
             CourierRosterQueryService rosterQuery,
+            CourierRosterService roster,
             JdbcCourierStore courierStore,
             CourierRateCardService rateCards,
             JdbcCourierRateCardStore rateCardStore,
@@ -123,6 +132,7 @@ public class OperationsCourierController {
         this.partnerInvoices = partnerInvoices;
         this.ledger = ledger;
         this.rosterQuery = rosterQuery;
+        this.roster = roster;
         this.courierStore = courierStore;
         this.rateCards = rateCards;
         this.rateCardStore = rateCardStore;
@@ -146,6 +156,175 @@ public class OperationsCourierController {
         return ResponseEntity.ok(rosterQuery.roster(tenantId).stream()
                 .map(RosterEntryResponse::of)
                 .toList());
+    }
+
+    @GetMapping("/couriers/{courierId}")
+    @RequiresCapability(Capability.COURIER_READ)
+    @Operation(
+            summary = "One courier, with the standing of their compliance file (IA 3.3)",
+            description = "The detail pane behind the roster. Says which documents are on file "
+                    + "and never what any of them contains — presence is what a manager needs to "
+                    + "chase a missing licence, and reading a passport is the separate, audited "
+                    + "act courier.pii.reveal gates. ПИНФЛ in particular is absent from every "
+                    + "read on this controller.")
+    public ResponseEntity<CourierDetailResponse> courier(@PathVariable UUID tenantId, @PathVariable UUID courierId) {
+
+        return rosterQuery
+                .detail(tenantId, courierId)
+                .map(detail -> ResponseEntity.ok(CourierDetailResponse.of(detail)))
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such courier: " + courierId));
+    }
+
+    @PostMapping("/couriers/{courierId}/compliance-file")
+    @RequiresCapability(value = Capability.COURIER_ENGAGEMENT_MANAGE, mutating = true)
+    @Operation(
+            summary = "Record or correct the compliance file (IA 3.3)",
+            description = "Writes the fields the request carries, clears the ones it names in "
+                    + "`clear`, and leaves every other field exactly as it was. It cannot be a "
+                    + "whole-file replace: nothing outside a reveal holds these plaintexts, so a "
+                    + "pane correcting a plate has no passport to send back and a replace would "
+                    + "erase it.")
+    public ResponseEntity<Void> recordComplianceFile(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID courierId,
+            @Valid @RequestBody CourierComplianceFileRequest body) {
+
+        engagements.recordComplianceFile(
+                tenantId, courierId, body.toCommand(), actor(), body.reason(), correlationId());
+        return ResponseEntity.accepted().build();
+    }
+
+    @GetMapping("/couriers/{courierId}/compliance-file")
+    @RequiresCapability(Capability.COURIER_PII_REVEAL)
+    @Operation(
+            summary = "Reveal the compliance file under a declared purpose (ADR 0029)",
+            description = "The only path out of these nine columns. Requires a purpose, which is "
+                    + "written as an audit fact naming which fields were opened. A field with no "
+                    + "value is absent from the answer rather than present and empty: \"no "
+                    + "licence is on file\" and \"the licence field is blank\" are different "
+                    + "statements.")
+    public ResponseEntity<CourierComplianceRevealResponse> revealComplianceFile(
+            @PathVariable UUID tenantId, @PathVariable UUID courierId, @RequestParam @NotBlank String purpose) {
+
+        Map<ComplianceField, String> revealed =
+                engagements.revealComplianceFile(tenantId, courierId, purpose, actor(), correlationId());
+        return ResponseEntity.ok(CourierComplianceRevealResponse.of(revealed));
+    }
+
+    // ------------------------------------------------------- groups and branches
+
+    @GetMapping("/courier-groups")
+    @RequiresCapability(Capability.COURIER_READ)
+    @Operation(summary = "Every courier group the tenant has authored (IA 3.3)")
+    public ResponseEntity<List<CourierGroupResponse>> courierGroups(@PathVariable UUID tenantId) {
+        return ResponseEntity.ok(
+                roster.groups(tenantId).stream().map(CourierGroupResponse::of).toList());
+    }
+
+    @PostMapping("/courier-groups")
+    @RequiresCapability(value = Capability.COURIER_ENGAGEMENT_MANAGE, mutating = true)
+    @Operation(
+            summary = "Author a courier group",
+            description = "A label over the roster — «night», «bicycles» — and not an "
+                    + "authorization: nothing in dispatch reads a group.")
+    public ResponseEntity<CourierGroupIdResponse> createCourierGroup(
+            @PathVariable UUID tenantId, @Valid @RequestBody CreateCourierGroupRequest body) {
+
+        return ResponseEntity.ok(new CourierGroupIdResponse(roster.createGroup(
+                tenantId, body.code(), body.displayName(), actor(), body.reason(), correlationId())));
+    }
+
+    @PostMapping("/courier-groups/{groupId}/archival")
+    @RequiresCapability(value = Capability.COURIER_ENGAGEMENT_MANAGE, mutating = true)
+    @Operation(
+            summary = "Archive a courier group",
+            description = "Archived rather than deleted: a group named on a past shift plan is "
+                    + "history, and its members stay listed.")
+    public ResponseEntity<Void> archiveCourierGroup(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID groupId,
+            @Valid @RequestBody CourierRosterReasonRequest body) {
+
+        roster.archiveGroup(tenantId, groupId, actor(), body.reason(), correlationId());
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/couriers/{courierId}/groups")
+    @RequiresCapability(value = Capability.COURIER_ENGAGEMENT_MANAGE, mutating = true)
+    @Operation(summary = "Put a courier in a group", description = "Repeating the call changes nothing.")
+    public ResponseEntity<Void> joinCourierGroup(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID courierId,
+            @Valid @RequestBody CourierGroupMembershipRequest body) {
+
+        roster.addToGroup(tenantId, body.groupId(), courierId, actor(), body.reason(), correlationId());
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/couriers/{courierId}/groups/{groupId}/removal")
+    @RequiresCapability(value = Capability.COURIER_ENGAGEMENT_MANAGE, mutating = true)
+    @Operation(
+            summary = "Take a courier out of a group",
+            description = "A POST on a sub-resource rather than a DELETE, so that the reason "
+                    + "every write on this controller records travels in a body instead of a "
+                    + "query string — ADR 0029 keeps reasons out of URLs.")
+    public ResponseEntity<Void> leaveCourierGroup(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID courierId,
+            @PathVariable UUID groupId,
+            @Valid @RequestBody CourierRosterReasonRequest body) {
+
+        roster.removeFromGroup(tenantId, groupId, courierId, actor(), body.reason(), correlationId());
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/couriers/{courierId}/branch-bindings")
+    @RequiresCapability(value = Capability.COURIER_ENGAGEMENT_MANAGE, mutating = true)
+    @Operation(
+            summary = "Bind a courier to a branch (IA 3.3)",
+            description = "Until now a courier was attached to a branch only by having opened a "
+                    + "shift there, so the attachment existed exactly while somebody was working. "
+                    + "At most one branch is primary; binding a second as primary stands the "
+                    + "first down in the same call.")
+    public ResponseEntity<Void> bindCourierToBranch(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID courierId,
+            @Valid @RequestBody CourierBranchBindingRequest body) {
+
+        roster.bindToBranch(
+                tenantId,
+                courierId,
+                body.brandId(),
+                body.locationId(),
+                body.primary(),
+                actor(),
+                body.reason(),
+                correlationId());
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/couriers/{courierId}/branch-bindings/{brandId}/{locationId}/removal")
+    @RequiresCapability(
+            value = Capability.COURIER_ENGAGEMENT_MANAGE,
+            scope = ResourceScope.ScopeType.LOCATION,
+            mutating = true)
+    @Operation(
+            summary = "Unbind a courier from a branch",
+            description = "Scoped to the branch named in the path: the manager of the branch a "
+                    + "courier is leaving can release the binding without holding the roster "
+                    + "across the whole tenant. A tenant-wide grant still covers it (ADR 0025). "
+                    + "brandId carries the scope only, the same convention CallStatsController "
+                    + "uses — the unbind itself is keyed on (tenant, courier, location), which is "
+                    + "already unique.")
+    public ResponseEntity<Void> unbindCourierFromBranch(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID courierId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @Valid @RequestBody CourierRosterReasonRequest body) {
+
+        roster.unbindFromBranch(tenantId, courierId, locationId, actor(), body.reason(), correlationId());
+        return ResponseEntity.accepted().build();
     }
 
     @GetMapping("/courier-types")
@@ -299,15 +478,18 @@ public class OperationsCourierController {
     @PostMapping("/couriers")
     @RequiresCapability(value = Capability.COURIER_ENGAGEMENT_MANAGE, mutating = true)
     @Operation(
-            summary = "Register a courier and open their engagement",
+            summary = "Register a courier, open their engagement, and file what documents exist",
             description = "Opens in PENDING_VERIFICATION. Onboarding somebody and attesting to "
                     + "their registration are different acts by different people, and this call "
-                    + "deliberately cannot do the second.")
+                    + "deliberately cannot do the second. The compliance fields are optional and "
+                    + "may be filed here or later: an incomplete file is a state the roster is "
+                    + "built to show, and refusing the registration over a missing passport would "
+                    + "only teach operators to type something into the box.")
     public ResponseEntity<CourierResponse> register(
             @PathVariable UUID tenantId, @Valid @RequestBody RegisterCourierRequest body) {
 
-        CourierEngagementService.Registration registration =
-                engagements.register(new CourierEngagementService.NewCourier(
+        CourierEngagementService.Registration registration = engagements.register(
+                new CourierEngagementService.NewCourier(
                         tenantId,
                         body.courierTypeId(),
                         body.principalSubject(),
@@ -316,7 +498,8 @@ public class OperationsCourierController {
                         body.engagedFrom(),
                         actor(),
                         body.reason(),
-                        correlationId()));
+                        correlationId()),
+                body.compliance());
 
         return ResponseEntity.ok(
                 new CourierResponse(registration.courierId(), registration.engagementId(), "PENDING_VERIFICATION"));
@@ -657,13 +840,245 @@ public class OperationsCourierController {
 
     // --------------------------------------------------------------- payloads
 
+    /**
+     * The widened register form (IA 3.3).
+     *
+     * <p>{@code principalSubject} is still a Keycloak subject created outside
+     * this console, and stays that way: ADR 0042 forbids deriving a courier's
+     * password from a passport number, and this wave adds no provisioning path
+     * that would tempt somebody to.
+     *
+     * <p>Every compliance field is optional and none of them is echoed back by
+     * any response on this controller.
+     */
     record RegisterCourierRequest(
             @NotNull UUID courierTypeId,
             @NotBlank String principalSubject,
             @NotBlank @Size(max = 32) String displayReference,
             @NotBlank String fullName,
             @NotNull LocalDate engagedFrom,
+            @Nullable @Size(max = 32) String passport,
+            @Nullable @Size(max = 32) String pinfl,
+            @Nullable @Size(max = 32) String drivingLicence,
+            @Nullable @Size(max = 64) String vehicleRegistration,
+            @Nullable @Size(max = 32) String vehiclePlate,
+            @Nullable @Size(max = 24) String vehicleFuelType,
+            @Nullable UUID photoMediaId,
+            @Nullable @Size(max = 512) String homeAddress,
+            @Nullable @Size(max = 256) String emergencyContact,
+            @Nullable @Size(max = 256) String referral,
+            @Nullable @Size(max = 2000) String remarks,
+            @NotBlank String reason) {
+
+        CourierEngagementService.ComplianceFile compliance() {
+            Map<ComplianceField, String> recorded = new EnumMap<>(ComplianceField.class);
+            put(recorded, ComplianceField.PASSPORT, passport);
+            put(recorded, ComplianceField.PINFL, pinfl);
+            put(recorded, ComplianceField.DRIVING_LICENCE, drivingLicence);
+            put(recorded, ComplianceField.VEHICLE_REGISTRATION, vehicleRegistration);
+            put(recorded, ComplianceField.VEHICLE_PLATE, vehiclePlate);
+            put(recorded, ComplianceField.ADDRESS, homeAddress);
+            put(recorded, ComplianceField.EMERGENCY_CONTACT, emergencyContact);
+            put(recorded, ComplianceField.REFERRAL, referral);
+            put(recorded, ComplianceField.NOTES, remarks);
+            return new CourierEngagementService.ComplianceFile(
+                    recorded, Set.of(), blankToNull(vehicleFuelType), photoMediaId);
+        }
+    }
+
+    /**
+     * A compliance-file write.
+     *
+     * <p>Three-valued, and it has to be: a field sent is written, a field named
+     * in {@code clear} is removed, a field mentioned in neither is untouched.
+     * See {@code CourierEngagementService.recordComplianceFile} for why a
+     * two-valued API would erase a passport every time somebody fixed a plate.
+     *
+     * <p>The free-text field is called {@code remarks} rather than {@code notes}
+     * throughout this controller for a mechanical reason worth stating: ADR
+     * 0029's classifier flags a response component whose name contains "note",
+     * and a request record sharing a name with a response is how that check gets
+     * argued with instead of obeyed. The column is still {@code protected_notes}
+     * and the field is still {@link ComplianceField#NOTES}.
+     */
+    record CourierComplianceFileRequest(
+            @Nullable @Size(max = 32) String passport,
+            @Nullable @Size(max = 32) String pinfl,
+            @Nullable @Size(max = 32) String drivingLicence,
+            @Nullable @Size(max = 64) String vehicleRegistration,
+            @Nullable @Size(max = 32) String vehiclePlate,
+            @Nullable @Size(max = 24) String vehicleFuelType,
+            @Nullable UUID photoMediaId,
+            @Nullable @Size(max = 512) String homeAddress,
+            @Nullable @Size(max = 256) String emergencyContact,
+            @Nullable @Size(max = 256) String referral,
+            @Nullable @Size(max = 2000) String remarks,
+            @Nullable List<String> clear,
+            @NotBlank String reason) {
+
+        CourierEngagementService.ComplianceFile toCommand() {
+            Map<ComplianceField, String> recorded = new EnumMap<>(ComplianceField.class);
+            put(recorded, ComplianceField.PASSPORT, passport);
+            put(recorded, ComplianceField.PINFL, pinfl);
+            put(recorded, ComplianceField.DRIVING_LICENCE, drivingLicence);
+            put(recorded, ComplianceField.VEHICLE_REGISTRATION, vehicleRegistration);
+            put(recorded, ComplianceField.VEHICLE_PLATE, vehiclePlate);
+            put(recorded, ComplianceField.ADDRESS, homeAddress);
+            put(recorded, ComplianceField.EMERGENCY_CONTACT, emergencyContact);
+            put(recorded, ComplianceField.REFERRAL, referral);
+            put(recorded, ComplianceField.NOTES, remarks);
+
+            Set<ComplianceField> cleared = EnumSet.noneOf(ComplianceField.class);
+            for (String name : clear == null ? List.<String>of() : clear) {
+                cleared.add(parseComplianceField(name));
+            }
+            // A field both written and cleared in one call is a contradiction,
+            // and silently letting one win would be worse than refusing.
+            Set<ComplianceField> both = EnumSet.copyOf(cleared);
+            both.retainAll(recorded.keySet());
+            if (!both.isEmpty()) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED, "A field cannot be recorded and cleared in the same request");
+            }
+
+            return new CourierEngagementService.ComplianceFile(
+                    recorded, cleared, blankToNull(vehicleFuelType), photoMediaId);
+        }
+    }
+
+    record CreateCourierGroupRequest(
+            @NotBlank @Size(max = 32) String code,
+            @NotBlank @Size(max = 120) String displayName,
             @NotBlank String reason) {}
+
+    record CourierGroupIdResponse(UUID groupId) {}
+
+    record CourierRosterReasonRequest(@NotBlank String reason) {}
+
+    record CourierGroupMembershipRequest(
+            @NotNull UUID groupId, @NotBlank String reason) {}
+
+    record CourierBranchBindingRequest(
+            @NotNull UUID brandId,
+            @NotNull UUID locationId,
+            boolean primary,
+            @NotBlank String reason) {}
+
+    record CourierGroupResponse(UUID groupId, String code, String displayName, String status, int memberCount) {
+
+        static CourierGroupResponse of(CourierGroupRow row) {
+            return new CourierGroupResponse(row.id(), row.code(), row.displayName(), row.status(), row.memberCount());
+        }
+    }
+
+    record CourierBranchBindingResponse(UUID locationId, UUID brandId, String locationName, boolean primary) {
+
+        static CourierBranchBindingResponse of(BranchBindingRow row) {
+            return new CourierBranchBindingResponse(row.locationId(), row.brandId(), row.locationName(), row.primary());
+        }
+    }
+
+    /**
+     * One courier's detail pane (IA 3.3).
+     *
+     * <p>{@code complianceFieldsOnFile} is the whole of what this response says
+     * about the documents: their names, never their contents. A manager chasing
+     * an expiring licence needs to know the field is empty, and needs no reveal
+     * to learn it.
+     */
+    record CourierDetailResponse(
+            UUID courierId,
+            String displayReference,
+            String status,
+            UUID courierTypeId,
+            String courierTypeName,
+            String vehicleClass,
+            int activeAssignments,
+            int concurrencyCeiling,
+            @Nullable UUID engagementId,
+            @Nullable String engagementStatus,
+            @Nullable String warningState,
+            @Nullable LocalDate reverificationDueOn,
+            List<String> complianceFieldsOnFile,
+            @Nullable String vehicleFuelType,
+            @Nullable UUID photoMediaId,
+            @Nullable Instant complianceUpdatedAt,
+            List<CourierGroupResponse> groups,
+            List<CourierBranchBindingResponse> branches) {
+
+        static CourierDetailResponse of(CourierRosterQueryService.CourierDetail detail) {
+            var courier = detail.entry().courier();
+            var compliance = detail.compliance();
+            return new CourierDetailResponse(
+                    courier.id(),
+                    courier.displayReference(),
+                    courier.status(),
+                    courier.courierTypeId(),
+                    courier.courierTypeName(),
+                    courier.vehicleClass(),
+                    detail.entry().activeAssignments(),
+                    courier.maxConcurrentAssignments(),
+                    courier.engagementId(),
+                    courier.engagementStatus(),
+                    courier.warningState(),
+                    courier.reverificationDueOn(),
+                    compliance.onFile().stream().map(Enum::name).sorted().toList(),
+                    compliance.vehicleFuelType(),
+                    compliance.photoMediaId(),
+                    compliance.complianceUpdatedAt(),
+                    detail.groups().stream().map(CourierGroupResponse::of).toList(),
+                    detail.branches().stream()
+                            .map(CourierBranchBindingResponse::of)
+                            .toList());
+        }
+    }
+
+    /**
+     * The revealed file (ADR 0029).
+     *
+     * <p>A list of field/value pairs rather than eleven named components, for one
+     * reason: a field with nothing on file is absent from the list, and a record
+     * of nullable components cannot express that difference — every absent
+     * document would arrive as an explicit null, and a screen rendering the
+     * response would show empty boxes where it should show nothing at all.
+     *
+     * <p>This is a {@code GET} and therefore never enters the idempotency
+     * record's stored body; the values here exist only for the duration of the
+     * response the caller asked for by name, with a purpose, under audit.
+     */
+    record CourierComplianceRevealResponse(List<RevealedComplianceField> fields) {
+
+        static CourierComplianceRevealResponse of(Map<ComplianceField, String> revealed) {
+            return new CourierComplianceRevealResponse(revealed.entrySet().stream()
+                    .map(entry -> new RevealedComplianceField(entry.getKey().name(), entry.getValue()))
+                    .toList());
+        }
+    }
+
+    record RevealedComplianceField(String field, String value) {}
+
+    private static void put(Map<ComplianceField, String> target, ComplianceField field, @Nullable String value) {
+        String trimmed = blankToNull(value);
+        if (trimmed != null) {
+            target.put(field, trimmed);
+        }
+    }
+
+    private static @Nullable String blankToNull(@Nullable String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static ComplianceField parseComplianceField(String name) {
+        try {
+            return ComplianceField.valueOf(name);
+        } catch (IllegalArgumentException unknown) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown compliance field: " + name);
+        }
+    }
 
     record VerifyRequest(
             @NotBlank String registrationIdentifier,

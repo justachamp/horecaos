@@ -41,7 +41,54 @@ export interface CourierTypeResponse {
   readonly offerTtlSeconds: number;
 }
 
-export interface RegisterCourierRequest {
+/**
+ * The nine protected fields of a courier's compliance file (IA 3.3), by the
+ * name the backend's `ComplianceField` gives each.
+ *
+ * `NOTES` is the enum name; the request field carrying it is `remarks`, which
+ * is not an oversight — see `CourierComplianceFileRequest`'s own doc on the
+ * controller for why an ADR 0029 response must not have a component whose name
+ * contains "note".
+ */
+export type ComplianceFieldName =
+  | 'PASSPORT'
+  | 'PINFL'
+  | 'DRIVING_LICENCE'
+  | 'VEHICLE_REGISTRATION'
+  | 'VEHICLE_PLATE'
+  | 'ADDRESS'
+  | 'EMERGENCY_CONTACT'
+  | 'REFERRAL'
+  | 'NOTES';
+
+/** `PETROL | DIESEL | GAS | ELECTRIC | HYBRID | NONE`, or absent. */
+export type VehicleFuelType = 'PETROL' | 'DIESEL' | 'GAS' | 'ELECTRIC' | 'HYBRID' | 'NONE';
+
+/**
+ * What a compliance-file write carries.
+ *
+ * Three-valued, and it must be: a field sent is written, a field named in
+ * `clear` is removed, a field in neither is untouched. The console never holds
+ * these plaintexts outside a reveal, so it cannot re-send the eight fields it
+ * did not change, and a whole-file replace would erase them.
+ */
+export interface CourierComplianceFileRequest {
+  readonly passport?: string | null;
+  readonly pinfl?: string | null;
+  readonly drivingLicence?: string | null;
+  readonly vehicleRegistration?: string | null;
+  readonly vehiclePlate?: string | null;
+  readonly vehicleFuelType?: VehicleFuelType | null;
+  readonly photoMediaId?: string | null;
+  readonly homeAddress?: string | null;
+  readonly emergencyContact?: string | null;
+  readonly referral?: string | null;
+  readonly remarks?: string | null;
+  readonly clear?: readonly ComplianceFieldName[];
+  readonly reason: string;
+}
+
+export interface RegisterCourierRequest extends CourierComplianceFileRequest {
   readonly courierTypeId: string;
   /** The Keycloak courier-client subject this person signs in as — provisioned outside this console. */
   readonly principalSubject: string;
@@ -50,6 +97,44 @@ export interface RegisterCourierRequest {
   /** ISO date. */
   readonly engagedFrom: string;
   readonly reason: string;
+}
+
+/** Mirrors `OperationsCourierController.CourierGroupResponse`. */
+export interface CourierGroupResponse {
+  readonly groupId: string;
+  readonly code: string;
+  readonly displayName: string;
+  readonly status: 'ACTIVE' | 'ARCHIVED';
+  readonly memberCount: number;
+}
+
+/** Mirrors `OperationsCourierController.CourierBranchBindingResponse`. */
+export interface CourierBranchBindingResponse {
+  readonly locationId: string;
+  readonly brandId: string;
+  readonly locationName: string;
+  readonly primary: boolean;
+}
+
+/**
+ * Mirrors `OperationsCourierController.CourierDetailResponse`.
+ *
+ * `complianceFieldsOnFile` is presence, never content: it says a passport
+ * exists so a manager can chase a missing licence without anybody exercising
+ * `courier.pii.reveal`.
+ */
+export interface CourierDetailResponse extends RosterEntryResponse {
+  readonly complianceFieldsOnFile: readonly ComplianceFieldName[];
+  readonly vehicleFuelType?: VehicleFuelType | null;
+  readonly photoMediaId?: string | null;
+  readonly complianceUpdatedAt?: string | null;
+  readonly groups: readonly CourierGroupResponse[];
+  readonly branches: readonly CourierBranchBindingResponse[];
+}
+
+/** Mirrors `OperationsCourierController.CourierComplianceRevealResponse`. */
+export interface CourierComplianceRevealResponse {
+  readonly fields: readonly { readonly field: ComplianceFieldName; readonly value: string }[];
 }
 
 export interface CourierResponse {
@@ -228,6 +313,131 @@ export class CouriersApi {
       this.api.post<SuspendEngagementRequest, void>(
         courierPaths.courierEngagementSuspend(tenantId, engagementId),
         command(request),
+      ),
+    );
+  }
+
+  // ---------------------------------------------- IA 3.3, the compliance file
+
+  async courier(tenantId: string, courierId: string): Promise<CourierDetailResponse> {
+    const result = await firstValueFrom(
+      this.api.get<CourierDetailResponse>(courierPaths.courier(tenantId, courierId)),
+    );
+    return result.value;
+  }
+
+  async recordComplianceFile(
+    tenantId: string,
+    courierId: string,
+    request: CourierComplianceFileRequest,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.post<CourierComplianceFileRequest, void>(
+        courierPaths.courierComplianceFile(tenantId, courierId),
+        command(request),
+      ),
+    );
+  }
+
+  /**
+   * The ADR 0029 reveal. Every call is audited against the purpose the operator
+   * typed, so the purpose is a required argument here rather than a defaulted
+   * one — a default would be the same sentence on every reveal the platform
+   * ever records.
+   */
+  async revealComplianceFile(
+    tenantId: string,
+    courierId: string,
+    purpose: string,
+  ): Promise<CourierComplianceRevealResponse> {
+    const result = await firstValueFrom(
+      this.api.get<CourierComplianceRevealResponse>(
+        courierPaths.courierComplianceFile(tenantId, courierId),
+        { params: { purpose } },
+      ),
+    );
+    return result.value;
+  }
+
+  async groups(tenantId: string): Promise<readonly CourierGroupResponse[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly CourierGroupResponse[]>(courierPaths.courierGroups(tenantId)),
+    );
+    return result.value ?? [];
+  }
+
+  async createGroup(
+    tenantId: string,
+    code: string,
+    displayName: string,
+    reason: string,
+  ): Promise<{ groupId: string }> {
+    return firstValueFrom(
+      this.api.post<{ code: string; displayName: string; reason: string }, { groupId: string }>(
+        courierPaths.courierGroups(tenantId),
+        command({ code, displayName, reason }),
+      ),
+    );
+  }
+
+  async joinGroup(
+    tenantId: string,
+    courierId: string,
+    groupId: string,
+    reason: string,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.post<{ groupId: string; reason: string }, void>(
+        courierPaths.courierGroupMemberships(tenantId, courierId),
+        command({ groupId, reason }),
+      ),
+    );
+  }
+
+  async leaveGroup(
+    tenantId: string,
+    courierId: string,
+    groupId: string,
+    reason: string,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.post<{ reason: string }, void>(
+        courierPaths.courierGroupRemoval(tenantId, courierId, groupId),
+        command({ reason }),
+      ),
+    );
+  }
+
+  async bindBranch(
+    tenantId: string,
+    courierId: string,
+    brandId: string,
+    locationId: string,
+    primary: boolean,
+    reason: string,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.post<
+        { brandId: string; locationId: string; primary: boolean; reason: string },
+        void
+      >(
+        courierPaths.courierBranchBindings(tenantId, courierId),
+        command({ brandId, locationId, primary, reason }),
+      ),
+    );
+  }
+
+  async unbindBranch(
+    tenantId: string,
+    courierId: string,
+    brandId: string,
+    locationId: string,
+    reason: string,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.post<{ reason: string }, void>(
+        courierPaths.courierBranchUnbinding(tenantId, courierId, brandId, locationId),
+        command({ reason }),
       ),
     );
   }

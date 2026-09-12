@@ -3,10 +3,12 @@ package uz.horecaos.platform.courier.application;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.EnumMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +16,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.courier.domain.ComplianceField;
 import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
 import uz.horecaos.platform.courier.domain.EngagementStatus;
 import uz.horecaos.platform.courier.domain.RegistrationWarningState;
@@ -24,6 +27,7 @@ import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
+import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.web.api.ApiException;
@@ -90,6 +94,24 @@ public class CourierEngagementService {
      */
     @Transactional
     public Registration register(NewCourier command) {
+        return register(command, ComplianceFile.empty());
+    }
+
+    /**
+     * Registers the person and records whatever of the compliance file the
+     * operator already has (IA 3.3).
+     *
+     * <p>One transaction, because the alternative — register, then a second call
+     * to file the documents — leaves a window in which a courier exists with a
+     * name and nothing else, and the window is exactly as long as the operator
+     * takes to be interrupted. A partial file is still accepted: an incomplete
+     * file is a state the roster is built to show, and refusing the registration
+     * would make the honest answer "type something in the passport box".
+     */
+    @Transactional
+    public Registration register(NewCourier command, ComplianceFile file) {
+        requireOwnPhoto(command.tenantId(), file.photoMediaId());
+
         UUID courierId = UUID.randomUUID();
         String protectedName = protection
                 .protect(
@@ -108,6 +130,8 @@ public class CourierEngagementService {
                 protectedName,
                 "ACTIVE",
                 1));
+
+        writeComplianceFile(command.tenantId(), courierId, file, command.actor().subject());
 
         UUID engagementId = UUID.randomUUID();
         couriers.insertEngagement(new EngagementRow(
@@ -139,7 +163,13 @@ public class CourierEngagementService {
                         "engagementType",
                         "SELF_EMPLOYED",
                         "status",
-                        EngagementStatus.PENDING_VERIFICATION.name()))
+                        EngagementStatus.PENDING_VERIFICATION.name(),
+                        // Which documents were filed, never what any of them said.
+                        // A field name is a fact about the form; its contents are
+                        // the thing ADR 0029 keeps out of an audit trail, which is
+                        // read by more people than the record is.
+                        "complianceFieldsRecorded",
+                        fieldNames(file.recorded().keySet())))
                 .usingCapability("courier.engagement.manage")
                 .correlatedBy(command.correlationId())
                 .occurredAt(clock.instant())
@@ -279,7 +309,7 @@ public class CourierEngagementService {
 
         String revealed = protection.reveal(
                 tenantId,
-                uz.horecaos.platform.iam.api.protection.ProtectedValue.deserialize(stored),
+                ProtectedValue.deserialize(stored),
                 new FieldProtection.RecordRef(
                         "fulfillment.courier_engagements", "protected_registration_ref", engagementId),
                 purpose);
@@ -295,6 +325,164 @@ public class CourierEngagementService {
                 .build());
 
         return revealed;
+    }
+
+    // ------------------------------------------------------- the compliance file
+
+    /**
+     * Records or corrects the compliance file of a courier who is already on the
+     * roster (IA 3.3).
+     *
+     * <p>Writes what the call carries and clears what it names; a field it
+     * mentions in neither is left exactly as it was. That asymmetry is forced by
+     * ADR 0029 rather than chosen: nothing outside a reveal holds the plaintext
+     * of these columns, so a detail pane correcting a plate cannot re-send the
+     * passport it never read, and a whole-row replace would erase it.
+     */
+    @Transactional
+    public void recordComplianceFile(
+            UUID tenantId, UUID courierId, ComplianceFile file, ActorRef actor, String reason, String correlationId) {
+
+        requireCourier(tenantId, courierId);
+        requireOwnPhoto(tenantId, file.photoMediaId());
+
+        if (file.recorded().isEmpty()
+                && file.cleared().isEmpty()
+                && file.vehicleFuelType() == null
+                && file.photoMediaId() == null) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "The request records no field, clears none, and changes nothing");
+        }
+
+        writeComplianceFile(tenantId, courierId, file, actor.subject());
+
+        audit.record(AuditFact.of("courier.compliance.recorded", AuditClass.BUSINESS)
+                .by(actor)
+                .at(ResourceScope.tenant(tenantId))
+                .target("courier", courierId)
+                .because(reason)
+                .changed(Map.of(
+                        // Field names only, on both sides. What a passport number
+                        // is remains unknown to the audit trail, and "which
+                        // documents did this manager touch" stays answerable.
+                        "complianceFieldsRecorded",
+                        fieldNames(file.recorded().keySet()),
+                        "complianceFieldsCleared",
+                        fieldNames(file.cleared())))
+                .usingCapability("courier.engagement.manage")
+                .correlatedBy(correlationId)
+                .occurredAt(clock.instant())
+                .build());
+    }
+
+    /**
+     * Decrypts the compliance file under a declared purpose (ADR 0029, IA 3.3).
+     *
+     * <p>The one path out of these nine columns, and the only reason the
+     * {@code courier.pii.reveal} capability exists. Absent fields are absent from
+     * the answer rather than present and empty: "no licence is on file" and "the
+     * licence field is blank" are different statements and only one of them is
+     * true.
+     *
+     * <p>One audit fact for the whole file rather than one per field. The fact
+     * ADR 0027 wants recorded is that somebody opened this courier's documents
+     * for this stated reason; nine facts differing only in a field name would
+     * make that harder to read, not easier, and would still not say which the
+     * reader's eye actually landed on.
+     */
+    @Transactional
+    public Map<ComplianceField, String> revealComplianceFile(
+            UUID tenantId, UUID courierId, String purpose, ActorRef actor, String correlationId) {
+
+        requireCourier(tenantId, courierId);
+
+        Map<ComplianceField, String> stored = couriers.readComplianceFile(tenantId, courierId);
+        Map<ComplianceField, String> revealed = new EnumMap<>(ComplianceField.class);
+        stored.forEach((field, ciphertext) -> revealed.put(
+                field,
+                protection.reveal(
+                        tenantId,
+                        ProtectedValue.deserialize(ciphertext),
+                        new FieldProtection.RecordRef("fulfillment.couriers", field.column(), courierId),
+                        purpose)));
+
+        audit.record(AuditFact.of("courier.compliance.revealed", AuditClass.SECURITY)
+                .by(actor)
+                .at(ResourceScope.tenant(tenantId))
+                .target("courier", courierId)
+                .because(purpose)
+                .changed(Map.of("complianceFieldsRevealed", fieldNames(revealed.keySet())))
+                .usingCapability("courier.pii.reveal")
+                .correlatedBy(correlationId)
+                .occurredAt(clock.instant())
+                .build());
+
+        return revealed;
+    }
+
+    /**
+     * Protects each supplied value under its own field's class and hands the
+     * ciphertexts to the store.
+     *
+     * <p>Every value is bound by AAD to this row <em>and this column</em>, so a
+     * ciphertext moved from the passport column to the notes column fails to
+     * decrypt rather than quietly revealing the wrong document.
+     */
+    private void writeComplianceFile(UUID tenantId, UUID courierId, ComplianceFile file, String actorSubject) {
+        Map<ComplianceField, String> ciphertexts = new EnumMap<>(ComplianceField.class);
+        file.recorded()
+                .forEach((field, plaintext) -> ciphertexts.put(
+                        field,
+                        protection
+                                .protect(
+                                        tenantId,
+                                        field.dataClass(),
+                                        new FieldProtection.RecordRef(
+                                                "fulfillment.couriers", field.column(), courierId),
+                                        plaintext)
+                                .serialize()));
+
+        couriers.recordComplianceFile(
+                tenantId,
+                courierId,
+                ciphertexts,
+                file.cleared(),
+                file.vehicleFuelType(),
+                file.photoMediaId(),
+                actorSubject,
+                clock.instant());
+    }
+
+    /**
+     * Refuses a photograph that is not this tenant's own verified asset.
+     *
+     * <p>The same rule {@link #requireOwnEvidence} states for an attestation
+     * scan, and the same answer for both halves of the refusal, for the reason
+     * {@link #NO_SUCH_EVIDENCE} gives: distinguishing "not yours" from "does not
+     * exist" would make this endpoint an existence oracle for asset ids. The
+     * message differs only because the operator is looking at a photograph
+     * field, and an error naming evidence would send them to the wrong form.
+     */
+    private void requireOwnPhoto(UUID tenantId, @Nullable UUID photoMediaId) {
+        if (photoMediaId == null) {
+            return;
+        }
+        if (!media.allDisplayable(tenantId, Set.of(new MediaAssetId(photoMediaId)))) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "The photograph is not an available media asset in this tenant");
+        }
+    }
+
+    /** The tenant predicate, stated once, before anything reads or writes this row. */
+    private void requireCourier(UUID tenantId, UUID courierId) {
+        if (couriers.findCourier(tenantId, courierId).isEmpty()) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such courier: " + courierId);
+        }
+    }
+
+    /** Sorted so two runs of the same change produce the same audit line. */
+    private static String fieldNames(Set<ComplianceField> fields) {
+        return fields.stream().map(Enum::name).sorted().collect(Collectors.joining(","));
     }
 
     /** The engagement dispatch reads. Absent means this courier has none. */
@@ -389,4 +577,38 @@ public class CourierEngagementService {
             String correlationId) {}
 
     public record Registration(UUID courierId, UUID engagementId) {}
+
+    /**
+     * The compliance file as a command carries it (IA 3.3).
+     *
+     * <p>Three-valued on purpose. A field in {@code recorded} is written; a field
+     * in {@code cleared} is removed; a field in neither is untouched. "Untouched"
+     * has to be expressible because the caller cannot see what it is not
+     * changing — see {@link #recordComplianceFile} for why that is a property of
+     * ADR 0029 rather than of this API.
+     *
+     * @param recorded plaintext to protect, per field
+     * @param cleared fields to remove, stated rather than implied by absence
+     * @param vehicleFuelType {@code PETROL|DIESEL|GAS|ELECTRIC|HYBRID|NONE}; null
+     *     leaves it alone. Held in clear: an attribute of a vehicle, and the
+     *     planning question it answers is an aggregate
+     * @param photoMediaId a media asset this tenant owns; null leaves it alone.
+     *     There is no clear-the-photo here: the image is governed by media's own
+     *     retention and visibility, and detaching an asset is that module's act
+     */
+    public record ComplianceFile(
+            Map<ComplianceField, String> recorded,
+            Set<ComplianceField> cleared,
+            @Nullable String vehicleFuelType,
+            @Nullable UUID photoMediaId) {
+
+        public ComplianceFile {
+            recorded = Map.copyOf(recorded);
+            cleared = Set.copyOf(cleared);
+        }
+
+        public static ComplianceFile empty() {
+            return new ComplianceFile(Map.of(), Set.of(), null, null);
+        }
+    }
 }

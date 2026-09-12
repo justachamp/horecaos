@@ -483,9 +483,10 @@ export const operationsPaths = {
 
 /**
  * The in-house courier roster (ADR 0042, `OperationsCourierController`) —
- * tenant-scoped, not brand- or location-scoped: `fulfillment.couriers` carries
- * no `brand_id`/`location_id` column at all (§3.3's branch-bindings ownership
- * is not built — see the wave's final report). Kept apart from {@link
+ * tenant-scoped, not brand- or location-scoped: `fulfillment.couriers` itself
+ * carries no `brand_id`/`location_id` column. Courier groups and branch
+ * bindings are first-class relations (IA 3.3, V0221) reached through their
+ * own paths below rather than through this one. Kept apart from {@link
  * operationsPaths} for the same reason {@link mediaPaths} is: every call here
  * takes a bare `tenantId`.
  */
@@ -498,6 +499,60 @@ export const courierPaths = {
   /** Register a courier and open their engagement. Mutation: key required. */
   courierRegistrations(tenantId: string): string {
     return this.couriers(tenantId);
+  },
+
+  /** One courier, with which compliance fields are on file — never their contents (IA 3.3). */
+  courier(tenantId: string, courierId: string): string {
+    return `${this.couriers(tenantId)}/${encodeURIComponent(courierId)}`;
+  },
+
+  /**
+   * The compliance file. `POST` records or corrects it (mutation: key required);
+   * `GET` with a `purpose` query parameter is the audited ADR 0029 reveal and is
+   * the only path that returns a passport, a ПИНФЛ or a home address.
+   */
+  courierComplianceFile(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/compliance-file`;
+  },
+
+  /** Courier groups (IA 3.3). Same path for `POST` (author one). */
+  courierGroups(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-groups`;
+  },
+
+  /** Put a courier in a group (`POST`) — idempotent. Mutation: key required. */
+  courierGroupMemberships(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/groups`;
+  },
+
+  /**
+   * Take a courier out of a group (`POST`). A sub-resource rather than a
+   * `DELETE` because the reason travels in the body: ADR 0029 keeps reasons out
+   * of URLs. Mutation: key required.
+   */
+  courierGroupRemoval(tenantId: string, courierId: string, groupId: string): string {
+    return `${this.courierGroupMemberships(tenantId, courierId)}/${encodeURIComponent(groupId)}/removal`;
+  },
+
+  /** Which branches a courier rides for (`POST` to bind). Mutation: key required. */
+  courierBranchBindings(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/branch-bindings`;
+  },
+
+  /**
+   * Unbind a courier from one branch (`POST`). Mutation: key required.
+   * `brandId` carries the LOCATION-scoped capability check only — the server
+   * looks up the binding by courier and location, which is already unique —
+   * but it must be a real path segment: the interceptor reads it off the URL
+   * template, not the request body.
+   */
+  courierBranchUnbinding(
+    tenantId: string,
+    courierId: string,
+    brandId: string,
+    locationId: string,
+  ): string {
+    return `${this.courierBranchBindings(tenantId, courierId)}/${encodeURIComponent(brandId)}/${encodeURIComponent(locationId)}/removal`;
   },
 
   /** Vehicle classes, for the registration form's picker. */
