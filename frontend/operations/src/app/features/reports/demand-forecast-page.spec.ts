@@ -45,7 +45,11 @@ function response(overrides: Partial<DemandHistoryResponse> = {}): DemandHistory
     minimumSampleSize: 3,
     sampleDates: ['2026-08-25', '2026-08-18', '2026-08-11', '2026-08-04'],
     hours: hours({
-      18: { ordersByDate: { '2026-08-25': 8, '2026-08-18': 6, '2026-08-11': 4, '2026-08-04': 2 }, totalOrders: 20, averageOrders: 5 },
+      18: {
+        ordersByDate: { '2026-08-25': 8, '2026-08-18': 6, '2026-08-11': 4, '2026-08-04': 2 },
+        totalOrders: 20,
+        averageOrders: 5,
+      },
     }),
     provenance: provenance(),
     ...overrides,
@@ -136,7 +140,9 @@ describe('DemandForecastPage', () => {
         Promise.resolve(
           response({
             sampleDates: ['2026-08-25'],
-            hours: hours({ 12: { ordersByDate: { '2026-08-25': 7 }, totalOrders: 7, averageOrders: null } }),
+            hours: hours({
+              12: { ordersByDate: { '2026-08-25': 7 }, totalOrders: 7, averageOrders: null },
+            }),
           }),
         ),
     });
@@ -169,7 +175,62 @@ describe('DemandForecastPage', () => {
     await flushMicrotasks();
     fixture.detectChanges();
 
-    expect(demandHistory).toHaveBeenLastCalledWith('t1', { locationId: 'l1', weekday: 4, sampleSize: 4 });
+    expect(demandHistory).toHaveBeenLastCalledWith('t1', {
+      locationId: 'l1',
+      weekday: 4,
+      sampleSize: 4,
+    });
+  });
+
+  describe('the week overview heatmap (IA X.19)', () => {
+    it('is not fetched on load — only the current weekday call fires', async () => {
+      const demandHistory = vi.fn().mockResolvedValue(response());
+      await render({ demandHistory });
+
+      expect(demandHistory).toHaveBeenCalledTimes(1);
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="q-heatmap-chart"]'),
+      ).toBeNull();
+    });
+
+    it('fetches all seven weekdays and renders the heatmap once the operator asks', async () => {
+      const demandHistory = vi
+        .fn()
+        .mockImplementation((_tenantId: string, params: { weekday: number }) =>
+          Promise.resolve(response({ weekday: params.weekday })),
+        );
+      await render({ demandHistory });
+
+      const host = fixture.nativeElement as HTMLElement;
+      host
+        .querySelector<HTMLButtonElement>('[data-testid="forecast-week-overview-button"]')
+        ?.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      // One call for the initial weekday's own table, seven more for the grid.
+      expect(demandHistory).toHaveBeenCalledTimes(8);
+      expect(host.querySelector('[data-testid="q-heatmap-chart"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="forecast-week-overview-button"]')).toBeNull();
+    });
+
+    it('shows an honest error rather than a half-drawn grid when a weekday call fails', async () => {
+      const demandHistory = vi
+        .fn()
+        .mockResolvedValueOnce(response())
+        .mockRejectedValue(new ApiError('INTERNAL', 500, null, 'corr-week'));
+      await render({ demandHistory });
+
+      const host = fixture.nativeElement as HTMLElement;
+      host
+        .querySelector<HTMLButtonElement>('[data-testid="forecast-week-overview-button"]')
+        ?.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(host.querySelector('[data-testid="forecast-week-overview-error"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="q-heatmap-chart"]')).toBeNull();
+    });
   });
 
   it('surfaces a load failure and retries on request', async () => {
