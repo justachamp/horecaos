@@ -10,8 +10,14 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -59,7 +65,9 @@ import uz.horecaos.platform.pricing.api.CartPricingPort;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.Cursor;
 import uz.horecaos.platform.web.api.ErrorCode;
+import uz.horecaos.platform.web.api.Page;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 import uz.horecaos.platform.web.idempotency.Idempotent;
 
@@ -121,10 +129,15 @@ public class OperationsOrderController {
     @GetMapping
     @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.LOCATION)
     @Operation(
-            summary = "The branch's orders, newest first",
-            description = "Filterable by status. An empty filter returns everything rather than "
-                    + "silently hiding the closed ones, because a branch reconciling a shift "
-                    + "needs the orders that are over as much as the ones that are live.")
+            summary = "The branch's orders, newest first (superseded by GET .../orders/board)",
+            deprecated = true,
+            description = "The released v1 shape: a bare array, filterable by status, capped at "
+                    + "five hundred and with no way to ask for the five hundred and first. "
+                    + "Frozen, not removed — it is published in v1 and callers exist. New work "
+                    + "uses `GET .../orders/board` (ADR 0102), which takes the board's whole "
+                    + "filter set and pages with a cursor. Both read the same rows and return "
+                    + "the same `OrderSummaryResponse`, so a caller that has not moved yet still "
+                    + "gains every field ADR 0102 added.")
     public ResponseEntity<List<OrderSummaryResponse>> list(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -132,12 +145,179 @@ public class OperationsOrderController {
             @RequestParam(required = false) List<String> status,
             @RequestParam(defaultValue = "100") @jakarta.validation.constraints.Max(500) int limit) {
 
-        List<String> statuses = status == null ? List.of() : status;
-        statuses.forEach(OperationsOrderController::requireKnownStatus);
-
-        return ResponseEntity.ok(orderQuery.forLocation(tenantId, brandId, locationId, statuses, limit).stream()
+        JdbcOrderStore.OrderListQuery query =
+                boardQuery(tenantId, brandId, locationId, status, null, null, null, null, null, null, null, null);
+        return ResponseEntity.ok(orderQuery.forLocation(query, null, limit).stream()
                 .map(OrderSummaryResponse::of)
                 .toList());
+    }
+
+    @GetMapping("/board")
+    @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "The order board: the branch's orders, filtered and paged",
+            description = "orders.md §2.4 (ADR 0102): the board's filter set, every predicate "
+                    + "applied in the database rather than in the browser. An empty status "
+                    + "filter returns everything rather than silently hiding the closed ones, "
+                    + "because a branch reconciling a shift needs the orders that are over as "
+                    + "much as the ones that are live. `reference` narrows this branch's orders "
+                    + "by the order's own number or by an aggregator's or a POS's identifier "
+                    + "(ADR 0040), normalised so `0911-142`, `0911 142` and `#0911142` are one "
+                    + "query — it is a filter, not the tenant-wide search of orders.md §2.8, "
+                    + "which needs an endpoint at its own scope: nothing here reaches past this "
+                    + "location. It is not a phone lookup either: a phone number goes in a POST "
+                    + "body, never a query string (orders.md §2.8, ADR 0029). Keyset-paginated "
+                    + "(ADR 0031): pass the previous page's `nextCursor` back as `cursor`. "
+                    + "Changing a filter invalidates the cursor — start the list again — because "
+                    + "a window cut for one filter set says nothing about another.")
+    public Page<OrderSummaryResponse> board(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestParam(required = false) List<String> status,
+            @RequestParam(required = false) @Nullable Instant from,
+            @RequestParam(required = false) @Nullable Instant to,
+            @RequestParam(required = false) @Nullable String channelCode,
+            @RequestParam(required = false) @Nullable String fulfillmentMode,
+            @RequestParam(required = false) @Nullable UUID courierId,
+            @RequestParam(required = false) @Nullable String paymentMethodCode,
+            @RequestParam(required = false) @Nullable String createdByActorId,
+            @RequestParam(required = false) @Nullable String reference,
+            @RequestParam(required = false) @Nullable String cursor,
+            @RequestParam(required = false) @Nullable Integer limit) {
+
+        JdbcOrderStore.OrderListQuery query = boardQuery(
+                tenantId,
+                brandId,
+                locationId,
+                status,
+                from,
+                to,
+                channelCode,
+                fulfillmentMode,
+                courierId,
+                paymentMethodCode,
+                createdByActorId,
+                reference);
+
+        String filterHash = filterHashOf(query);
+        @Nullable UUID cursorOrderId = null;
+        if (cursor != null && !cursor.isBlank()) {
+            Cursor decoded = Cursor.decodeUnsigned(cursor, filterHash)
+                    .orElseThrow(() -> new ApiException(
+                            ErrorCode.INVALID_REQUEST,
+                            "This cursor was issued for a different filter set; start the list again"));
+            cursorOrderId = parseCursorOrderId(decoded.sortKey());
+        }
+
+        int pageSize = Page.limitOrDefault(limit);
+        List<JdbcOrderStore.OrderBoardRow> rows;
+        try {
+            rows = orderQuery.forLocation(query, cursorOrderId, pageSize);
+        } catch (OrderQueryService.UnknownCursorException unknown) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "This cursor does not name an order of this branch");
+        }
+
+        List<OrderSummaryResponse> items =
+                rows.stream().map(OrderSummaryResponse::of).toList();
+
+        // A short page is the end of the collection. A full one may or may not
+        // be, and answering "maybe" with a cursor costs the caller one empty
+        // request, where answering "no" wrongly loses them every order after it.
+        String nextCursor = items.size() < pageSize
+                ? null
+                : new Cursor(rows.getLast().order().orderId().toString(), filterHash).encodeUnsigned();
+
+        return new Page<>(items, nextCursor);
+    }
+
+    /** Validates the board's filter parameters and assembles the query both reads share. */
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    private static JdbcOrderStore.OrderListQuery boardQuery(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            @Nullable List<String> status,
+            @Nullable Instant from,
+            @Nullable Instant to,
+            @Nullable String channelCode,
+            @Nullable String fulfillmentMode,
+            @Nullable UUID courierId,
+            @Nullable String paymentMethodCode,
+            @Nullable String createdByActorId,
+            @Nullable String reference) {
+
+        List<String> statuses = status == null ? List.of() : status;
+        statuses.forEach(OperationsOrderController::requireKnownStatus);
+        requireKnownFulfillmentMode(fulfillmentMode);
+        requireSearchableReference(reference);
+
+        return new JdbcOrderStore.OrderListQuery(
+                tenantId,
+                brandId,
+                locationId,
+                statuses,
+                from,
+                to,
+                channelCode,
+                fulfillmentMode == null ? null : fulfillmentMode.toUpperCase(Locale.ROOT),
+                courierId,
+                paymentMethodCode,
+                createdByActorId,
+                reference);
+    }
+
+    /**
+     * The cursor's filter fingerprint, hashed so the token stays short and does
+     * not restate the caller's own query back to them in a readable form.
+     */
+    private static String filterHashOf(JdbcOrderStore.OrderListQuery query) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(query.fingerprint().getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(Arrays.copyOf(digest, 12));
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable", impossible);
+        }
+    }
+
+    private static UUID parseCursorOrderId(String sortKey) {
+        try {
+            return UUID.fromString(sortKey);
+        } catch (IllegalArgumentException malformed) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "This cursor is not usable; start the list again");
+        }
+    }
+
+    private static void requireKnownFulfillmentMode(@Nullable String mode) {
+        if (mode == null) {
+            return;
+        }
+        try {
+            FulfillmentMode.valueOf(mode.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException unknown) {
+            // Dropping an unknown mode would answer "no orders" for a typo, which
+            // reads to an operator as a branch that has stopped taking delivery.
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown fulfillment mode \"%s\"".formatted(mode));
+        }
+    }
+
+    /**
+     * A reference that normalises to nothing must not fall through to "no
+     * filter applied" ({@link JdbcOrderStore.OrderListQuery#normalisedReference()}
+     * turns it into {@code null}, indistinguishable from the caller never
+     * having supplied {@code reference} at all). Left unguarded, a search for
+     * {@code "#"} or {@code " - "} would answer with the location's entire
+     * board instead of the empty result a nonsense reference search should
+     * return — the opposite of what a filter parameter promises.
+     */
+    private static void requireSearchableReference(@Nullable String reference) {
+        if (reference == null || reference.isBlank()) {
+            return;
+        }
+        if (JdbcOrderStore.normalisedExternalReference(reference) == null) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "This reference has nothing searchable in it");
+        }
     }
 
     // ------------------------------------------------------- operator order intake (ADR 0039)
@@ -254,10 +434,16 @@ public class OperationsOrderController {
                     + "to the list above. Внимание's live severity queue (late orders, stuck "
                     + "processes) is not among these — it is derived per render from the promise "
                     + "and the clock, never stored, so a count of it would be wrong five seconds "
-                    + "after being cached.")
+                    + "after being cached. `from`/`to` are the board's own period and mean "
+                    + "exactly what they mean on the list above, so a badge and the tab beneath "
+                    + "it count the same orders.")
     public ResponseEntity<OrderCountsResponse> counts(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
-        return ResponseEntity.ok(OrderCountsResponse.of(orderQuery.counts(tenantId, brandId, locationId)));
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestParam(required = false) @Nullable Instant from,
+            @RequestParam(required = false) @Nullable Instant to) {
+        return ResponseEntity.ok(OrderCountsResponse.of(orderQuery.counts(tenantId, brandId, locationId, from, to)));
     }
 
     @GetMapping("/drafts")
@@ -1328,7 +1514,17 @@ public class OperationsOrderController {
     }
 
     /**
-     * One order, as the branch's queue renders it.
+     * One order, as the branch's queue renders it (ADR 0102).
+     *
+     * <p><strong>No field here is personal data.</strong> The customer's name,
+     * phone, address and notes live behind the detail read and its ADR 0029
+     * reveals; this row says only whether an order belongs to an account or to a
+     * guest. A field whose name suggests a person — a name, a phone, an email,
+     * an address, a note, a comment — does not belong on a list that renders on
+     * a screen standing open in a branch all day, and
+     * {@code OrderBoardQueryTests} asserts that over this record's components
+     * rather than over one instance, so a field added later fails rather than
+     * ships.
      *
      * @param actions the IA 1.2 server-supplied {@code actions[]} array
      *                (orders.md §4.2): exactly what {@link OrderActionsPolicy}
@@ -1336,6 +1532,24 @@ public class OperationsOrderController {
      *                permits for this order's status and fulfilment mode right
      *                now. The client renders this list and never computes
      *                availability itself.
+     * @param promisedAt ADR 0036's promise, decided once at checkout. Null when
+     *                   the basis is {@code NOT_PROMISED}; the basis is what
+     *                   says which of those two a missing time means, so the
+     *                   pair travels together and orders.md §2.7 derives
+     *                   lateness from it at render time — nothing stores it
+     * @param customerAccountId null for a guest order. Present with
+     *                   {@code guestReferenceHash} it is the account/guest
+     *                   discriminator the Клиент column needs to render
+     *                   <em>Гость</em> without reading the encrypted snapshot
+     * @param guestReferenceHash a keyed hash, never the reference itself — a
+     *                   guest order is not attributable to a person from it,
+     *                   the same rule {@code DraftCartResponse} already follows
+     * @param processAttention {@code MANUAL_ACTION_REQUIRED} — orders.md §2.7's
+     *                   {@code BLOCKED} rail — or {@code FAILED_RETRYABLE}, or
+     *                   null. Absent on a summary read outside the board, where
+     *                   no process state was projected: absent means "not
+     *                   asked", and the detail screen reads the processes
+     *                   themselves
      */
     public record OrderSummaryResponse(
             UUID orderId,
@@ -1348,9 +1562,30 @@ public class OperationsOrderController {
             int version,
             Instant createdAt,
             @Nullable Instant approvalDeadlineAt,
-            List<OrderActionResponse> actions) {
+            List<OrderActionResponse> actions,
+            @Nullable Instant promisedAt,
+            String promiseBasis,
+            String paymentStatusProjection,
+            @Nullable UUID customerAccountId,
+            @Nullable String guestReferenceHash,
+            long feeMinor,
+            long discountMinor,
+            @Nullable String createdByActorType,
+            @Nullable String createdByActorId,
+            @Nullable String acceptedByActorType,
+            @Nullable String acceptedByActorId,
+            @Nullable String processAttention) {
 
+        /**
+         * The summary of an order read outside the board — the detail read's own
+         * header — where no process state was projected alongside it.
+         */
         static OrderSummaryResponse of(JdbcOrderStore.OrderRow order) {
+            return of(new JdbcOrderStore.OrderBoardRow(order, null));
+        }
+
+        static OrderSummaryResponse of(JdbcOrderStore.OrderBoardRow row) {
+            JdbcOrderStore.OrderRow order = row.order();
             return new OrderSummaryResponse(
                     order.orderId(),
                     order.publicOrderNumber(),
@@ -1362,7 +1597,19 @@ public class OperationsOrderController {
                     order.version(),
                     order.createdAt(),
                     order.approvalDeadlineAt(),
-                    OrderActionResponse.allFor(order.status(), order.fulfillmentMode()));
+                    OrderActionResponse.allFor(order.status(), order.fulfillmentMode()),
+                    order.promise().promisedAt(),
+                    order.promise().basis().name(),
+                    order.paymentStatusProjection(),
+                    order.customerAccountId(),
+                    order.guestReferenceHash(),
+                    order.feeMinor(),
+                    order.discountMinor(),
+                    order.createdByActorType(),
+                    order.createdByActorId(),
+                    order.acceptedByActorType(),
+                    order.acceptedByActorId(),
+                    row.processAttention());
         }
     }
 

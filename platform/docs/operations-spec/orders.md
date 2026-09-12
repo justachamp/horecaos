@@ -278,20 +278,20 @@ Primary row, always visible:
 | Филиал | multi-select dropdown, searchable, with a live active-order count per branch | all branches the actor is scoped to | `tenant.locations` via `location_id` |
 | Канал | multi-select, `<optgroup>` by `system_type` | all | `tenant.sales_channels.display_name`, matched via `channel_id`; the row displays `channel_code_snapshot` |
 | Тип | segmented control Доставка / Самовывоз / В зале | all | `fulfillment_mode` |
-| Оплата | multi-select | all | `payment_status_projection` + method (**not built — ADR 0013**) |
-| Курьер | searchable single-select, with an "Без курьера" option | all | **built, not read by ordering — ADR 0014** `fulfillment.assignment_attempts.courier_id` |
+| Оплата | multi-select | all | `payment_status_projection`, **built** on the row (ADR 0102); the method beside it is `payments.payment_intents.payment_method_code`, filterable as `?paymentMethodCode=` on `.../orders/board` but not yet rendered on the row |
+| Курьер | searchable single-select, with an "Без курьера" option | all | `?courierId=` on `.../orders/board` is **built** (ADR 0102), matched through `fulfillment.shipments.courier_id`. "Без курьера" is not: an absence filter is a different predicate and this wave did not build it, and the courier's *name* on the row is still **built, not read by ordering — ADR 0014** |
 
 Secondary row behind **⋯ ещё**, and a chip appears in the primary row for each
 one that is set:
 
 | Filter | Control | Source |
 |---|---|---|
-| Мои заказы | toggle | `created_by_actor_id` is **built** (ADR 0039, V0029), written on every order; the `= me` filter on the list query is not |
+| Мои заказы | toggle | **built** — `?createdByActorId=` on `.../orders/board` (ADR 0102), over `created_by_actor_id` (ADR 0039, V0029). The client supplies its own subject; there is no server-side `me` |
 | Только опаздывающие | toggle | derived, §2.7 |
 | С проблемой | toggle | `order_process_states.status` in the two failure states |
 | Требуется звонок | toggle | `callback_requested` is **built** (ADR 0039, V0029, set via the `SET_CALLBACK_REQUESTED` amendment command); the filter on the list query is not |
 | Агрегатор | multi-select of bindings | **built, not read by ordering — ADR 0040** `marketplace_binding_id` (V0038) |
-| Способ оплаты | multi-select | **not built — ADR 0013** |
+| Способ оплаты | multi-select | `?paymentMethodCode=` on `.../orders/board` is **built** (ADR 0102) over `payments.payment_intents`; one code at a time, not a multi-select, until somebody needs more |
 | Фискализация | multi-select of `PENDING/BLOCKED/FAILED/ISSUED` | **not built — ADR 0038** `fiscal.fiscal_documents.status` |
 
 A control that is filtering shows it in its own border and fill (Togora §2b),
@@ -313,13 +313,13 @@ the rest; `Филиал` auto-hides for a single-location tenant.
 | 1 | selection | checkbox | — | §2.10; header checkbox selects the loaded page only, and says so |
 | 2 | severity rail | 4 px left border | derived §2.7 | transparent when normal, so rows stay aligned |
 | 3 | **№** | mono text + copy | `ordering.orders.public_order_number` | scoped per location per business date (`order_number_counters`), so it is short and repeats across branches — always render the branch beside it when several are in view. Under it: the severity caption (§2.7) and any external reference badge (§2.8) |
-| 4 | **Время** | time | `created_at` | second line: the promise — `→ 15:20`. `ordering.orders.promised_at` is **built** (ADR 0036, V0023, written at checkout) but not yet read by the board query; `fulfillment.delivery_plans.promised_delivery_end` / `estimated_ready_at` are also **built, not read by ordering — ADR 0014** |
+| 4 | **Время** | time | `created_at` | second line: the promise — `→ 15:20`. `promisedAt` and `promiseBasis` are on the row (ADR 0102, from `ordering.orders.promised_at`, ADR 0036/V0023); `fulfillment.delivery_plans.promised_delivery_end` / `estimated_ready_at` remain **built, not read by ordering — ADR 0014**, and §2.7 explains why the order's own promise is the one this column needs |
 | 5 | **Филиал** | text | `tenant.locations.display_name` | |
 | 6 | **Тип / канал** | icon pair + text | `fulfillment_mode`, `channel_code_snapshot`, `tenant.sales_channels.system_type` | one cell; the channel icon carries a `title` and an accessible name |
 | 7 | **Клиент** | text + masked phone | `order_customer_snapshots.display_name_encrypted`, `contact_encrypted` | §1.5. Guest orders (`guest_reference_hash` set) show **Гость** |
 | 8 | **Позиции** | count + first line | `count(order_lines)`, `order_lines.product_name_snapshot` of line 1 | `4 поз · Лагман…` — enough to recognise an order on the phone |
 | 9 | **Сумма** | mono money | `total_minor`, `currency` | right-aligned |
-| 10 | **Оплата** | badge + method | `payment_status_projection`; method **not built — ADR 0013** | `NOT_REQUIRED` renders as **Наличными** once ADR 0013 lands, and as `—` before |
+| 10 | **Оплата** | badge + method | `paymentStatusProjection` on the row (ADR 0102); the method is filterable but not yet on the row — **not built — ADR 0013** | `NOT_REQUIRED` renders as **Наличными** once ADR 0013 lands, and as `—` before |
 | 11 | **Статус** | badge | `status` | §1.1 vocabulary; `AWAITING_APPROVAL` additionally shows the countdown to `approval_deadline_at` |
 | 12 | **Курьер** | name + shift dot | **built, not read by ordering — ADR 0014 / 0042** (`fulfillment.shipments.courier_id`, `fulfillment.couriers`, both built) | `—` when unassigned; a hollow dot when the courier is off shift (§2.9) |
 | 13 | ⋯ | overflow menu | — | §2.9 |
@@ -379,11 +379,14 @@ this document originally expected: `ordering.orders.promised_at` (+
 the kitchen figure alone for pickup and dine-in, so a separate
 `promised_delivery_end` / `estimated_ready_at` split is not needed for this
 purpose (`fulfillment.delivery_plans` carries its own copy of both, built by
-ADR 0014's `V0054`, for the dispatch board's separate reasons). What is
-missing is narrower than "the promise": neither `OrderQueryService` nor
-`OperationsOrderController` reads `promised_at` yet, so the board and the
-detail have nothing to compute severity from today, even though checkout has
-written a real promise on every order since `V0023`.
+ADR 0014's `V0054`, for the dispatch board's separate reasons). ADR 0102 closed the
+part of this that was a missing read: `OrderQueryService` and
+`OperationsOrderController` now carry `promisedAt` and `promiseBasis` on every
+board row, alongside a `processAttention` flag that is `MANUAL_ACTION_REQUIRED`
+or `FAILED_RETRYABLE`. So the two inputs the table below needs — the promise and
+`BLOCKED` — are both on the client. What is still missing is the derivation
+itself: the levels, their precedence and the terminal-order rule have no owner
+(§11).
 
 ```
 ordering.lateness            (ADR 0030 document, per fulfilment mode)
@@ -429,19 +432,36 @@ four kinds of thing, in this order, and **says which one it matched**:
 
 1. **Our order number** — `public_order_number`, exact or prefix. Scoped per
    location per day, so `142` legitimately matches several orders; results
-   show branch and date and the operator picks.
+   show branch and date and the operator picks. The **exact** half is **built**
+   (ADR 0102): `?reference=` on `.../orders/board` matches this branch's orders
+   by their own number, normalised the same way an external reference is, so
+   `0911-142`, `0911 142` and `#0911142` are one query. The **prefix** half is
+   not, and deliberately: a prefix over one branch's whole history widens
+   silently — `1` matches a third of it — and a filter that returns a board
+   cannot say "matched: our order number, 6 hits" the way a search endpoint
+   can. It belongs to the endpoint §11 says nobody owns yet.
 2. **A phone number** — detected by pattern (`+998…`, `9 digits`, `90…`).
    Issued as `POST /api/v1/operations/customer-lookups` with the number **in
    the body**, never a query string (ADR 0039 — and the number must not land in
-   an access log, a browser history or a `Referer`). Resolves through ADR 0015's
+   an access log, a browser history or a `Referer`). This is why the board's
+   `?reference=` filter takes an order number and an external reference and
+   refuses a phone: ADR 0102 states the refusal rather than leaving it to be
+   discovered. Resolves through ADR 0015's
    keyed `normalized_hash`, which is deliberately not unique: several accounts
    may come back and the operator picks from masked name plus last-order date.
    Every lookup is a `SECURITY`-class ADR 0027 audit fact.
-3. **An aggregator's id** — the table is **built, not read by ordering's
-   search — ADR 0040** (V0038), written by the marketplace intake
-   (`JdbcMarketplaceOrderIntake`):
-   `ordering.order_external_references.reference_value_normalised`, matched
-   across the tenant. Normalisation uppercases and strips whitespace, hyphens
+3. **An aggregator's id** — **partly built** (ADR 0102). `?reference=` on
+   `.../orders/board` matches
+   `ordering.order_external_references.reference_value_normalised` (V0038,
+   written by `JdbcMarketplaceOrderIntake`) **within the branch being viewed**,
+   normalising the operator's text the same way the intake normalised the
+   partner's. The tenant-wide form this section describes is not built and
+   cannot be: `GET .../locations/{id}/orders` is `ORDER_READ` at `LOCATION`, and
+   answering across branches from it would turn one branch's grant into a
+   tenant-wide order enumerator. It needs its own endpoint and its own
+   capability, and §11 records that nobody owns deciding which; when it exists
+   it matches across the tenant.
+   Normalisation uppercases and strips whitespace, hyphens
    and a leading `#`, so an operator reading `YE-2291-04` off a courier's phone
    finds `ye229104`. Several rows may match — disambiguate by provider and
    branch in the result. Reference types: `PARTNER_ORDER_ID`,
@@ -1413,18 +1433,37 @@ missing table at all: it is a table that exists and is written, that the
 reads **built, not read by ordering** below, distinct from genuinely
 **not built**.
 
+[ADR 0102](../adr/built/0102-the-order-board-query-reads-what-the-board-shows-wave-p04.md)
+closed several of those in one pass and is the reason three rows below are
+narrower than they were. **`GET .../orders/board`** is the query the console
+should call: it carries the promise and its basis, the payment projection, the
+account/guest discriminator, the fee and discount, both attribution pairs and a
+process-failure flag; it filters by period, channel, mode, courier, payment
+method, creating actor and external reference; and it pages with a cursor
+instead of truncating at five hundred. The older `GET .../orders` is frozen and
+deprecated — its bare-array response is published in v1 and the contract gate
+refuses to change it — but it returns the same widened row, so a screen that has
+not moved still gets the new fields.
+
+What ADR 0102 deliberately did *not* do is widen scope: the `reference`
+parameter narrows this location's orders — by their own number or by an
+aggregator's — and is not §2.8's tenant-wide search, which still has no owner.
+It refuses a phone number for the reason §2.8 already gives: a number in a
+query string lands in an access log.
+
 | Missing | Owner | Blocks |
 |---|---|---|
 | The seven financial amendment commands' consequences in payment, inventory, fiscal and POS — `ADD_LINES`, `CHANGE_LINE_QUANTITY`, `REMOVE_LINES`, `CHANGE_PAYMENT_METHOD`, `CHANGE_DELIVERY_ADDRESS`, `CHANGE_FULFILLMENT_TIME`, `CHANGE_CONTACT` | ADR 0039 (+ 0013, 0017, 0038, 0011/0012) | The financial half of amendment; §4.4. (`order_revisions`, `order_amendments`, `order_amendment_commands`, `order_lines.revision_from/to` and the three non-financial commands are **built** — V0029.) |
 | Operator-assisted order **creation** — `POST /api/v1/operations/orders` and the phone-lookup endpoint beside it (`POST /api/v1/operations/customer-lookups`); no `ORDER_PLACE` capability is declared either | ADR 0039 | The entire New order screen; §5. An operator cannot take an order by phone today — every other action in this document presumes an order that already exists |
-| Мои заказы filter (`created_by_actor_id = me` on the order-list query) and operator leaderboards (`reporting.fact_order` has no operator column) | ADR 0039 + 0043 | §2.4, §3.12. (`orders.created_by_actor_type/id`, `accepted_by_actor_type/id` and `accepted_at` are themselves **built** — V0029 — written by `JdbcOrderStore`.) |
+| Operator leaderboards (`reporting.fact_order` has no operator column) | ADR 0043 | §3.12. The Мои заказы filter itself is now **built** — ADR 0102 put `createdByActorId` on `GET .../orders/board`, and `createdBy`/`acceptedBy` on the row — so what is left is the report, not the board. |
 | Требуется звонок filter on the order-list query | ADR 0039 | §2.4. (The column, `SET_CALLBACK_REQUESTED` and its resolution are **built** — V0029.) |
 | The §2.10 result panel and **Повторить проблемные** | ADR 0039 | `bulk_operations`/`bulk_operation_items` and the endpoint that writes them are **built** — V0193, `OrderBulkActionService` — for `ADVANCE` and `CANCEL`; nothing renders the outcome list yet. `Назначить курьера`, `Печать в POS` and `Фискализировать` as bulk actions remain not built |
 | `customer_accounts.origin`, `created_by_actor_id` | ADR 0039 (extends 0015) | Operator-created customers and their marketing suppression; §5.3 |
 | Payment method on the order, transactions, refunds, invoice re-issue, reaching an **operations** screen | ADR 0013 is now Partial (Click/Payme adapters, the attempt state machine and the storefront checkout session are built — `POST /api/v1/storefront/.../payment-sessions`), but that is the customer-facing checkout path, not an operations panel; refunds are [ADR 0048](../adr/partial/0048-refunds-as-bookkeeping-and-the-order-remedy-model.md)'s scope now, itself Partial | The Оплата panel beyond the projection; §3.9, §4.9 |
 | `fiscal.fiscal_documents`, `_lines`, `_unit_marks` | ADR 0038 | The Фискализация panel, the fiscal chip, manual retry; §3.9, §4.10 |
-| The order board and detail reading the promise, the shipment, the courier and the zone at all | ADR 0014 + 0036 + 0037 (nothing left to build; a join to write) | The promise clock, **the whole late overlay**, courier assignment, provider dispatch, the quote-delta confirmation; §2.7, §3.8, §4.7. (`ordering.orders.promised_at` — ADR 0036, V0023 — and `fulfillment.delivery_plans`, `shipments`, `delivery_quotes`, `assignment_attempts`, `service_zones`, `delivery_fee_resolutions` — ADR 0014/0037, V0025/V0032/V0054 — are all **built** and already serve the dispatch board; `OrderQueryService` and `OperationsOrderController` simply do not join to any of them yet.) |
-| The order board and detail reading the marketplace columns | ADR 0040 (nothing left to build; a join to write) | Aggregator id search, externally priced orders, the handover code; §2.8, §3.5, §3.8. (`ordering.orders.origin`, `pricing_authority`, `entry_mode`, `marketplace_binding_id`, `order_external_references`, `order_external_pricing` and `order_handover_challenges` are all **built** — V0038 — and written by `JdbcMarketplaceOrderIntake`.) |
+| The order board and detail rendering the shipment, the courier and the zone | ADR 0014 + 0037 (nothing left to build; a join to write) | Courier assignment, provider dispatch, the quote-delta confirmation, the Курьер column's name and shift dot; §3.8, §4.7. Narrowed by ADR 0102: the board now carries `promisedAt` and `promiseBasis` — so **§2.7's late overlay has its input** and needs only the derived levels, which nothing owns (see below) — and filters by `courierId` through `fulfillment.shipments`. What it still does not do is *render* a courier: the row has no courier name, no shift state and no zone, because those are reads into `fulfillment` this wave did not build. |
+| The order board and detail reading the marketplace columns | ADR 0040 (nothing left to build; a join to write) | Externally priced orders, the aggregator chip, the handover code; §3.5, §3.8. (`ordering.orders.origin`, `pricing_authority`, `entry_mode`, `marketplace_binding_id`, `order_external_pricing` and `order_handover_challenges` are all **built** — V0038 — and written by `JdbcMarketplaceOrderIntake`.) |
+| §2.8's search as a *tenant-wide* lookup, with its own capability and scope, and its prefix and phone resolution kinds | unowned | §2.8's four resolution kinds. ADR 0102 built the narrow half of two of them: `?reference=` filters **this location's** orders by exact `public_order_number` (kind 1) and by `ordering.order_external_references` (kind 3), both normalised the same way the intake writes a reference. Not built: the prefix match, the phone (kind 2 — it needs `POST /operations/customer-lookups`, which §5 also waits on), the raw `orders.id` paste (kind 4), and the cross-branch scope all four are specified at. The search §2.8 describes crosses branches, so it cannot sit on an `ORDER_READ`@`LOCATION` endpoint without turning a branch grant into a tenant-wide order enumerator — it needs an endpoint and a capability of its own, and nobody owns deciding which. |
 | The order timeline reading the kitchen ticket | ADR 0041 (nothing left to build; a join to write) | The production lane of the timeline; §1.2, §3.10. (`kitchen.tickets`/`ticket_events` are **built** — V0030 — and serve the kitchen board itself.) |
 | Shift enforcement on assignment | ADR 0042 | The off-shift courier state; §4.7. (`fulfillment.courier_shifts` is itself **built** — V0040.) |
 | `GET /operations/streams` and the `ORDER_QUEUE` / `ORDER_DETAIL` / `COUNTERS` channels | ADR 0045 | Live counts and live rows; §1.6 |
@@ -1440,8 +1479,11 @@ rather than an unbuilt one:
    `BLOCKED`, and the rule that terminal orders are never flagged, do not.
    Togora's report already names this: a "threat" is a computed comparison of a
    promise time, a live estimate and a boundary, and the ordering module's own
-   query layer has no such concept yet, even though the promise it would read
-   has existed since V0023. §2.7 specifies it; something must own building it.
+   query layer has no such concept yet. What has changed since this was written
+   is the input, not the concept: ADR 0102 puts `promisedAt`, `promiseBasis` and
+   the `MANUAL_ACTION_REQUIRED` / `FAILED_RETRYABLE` flag on every board row, so
+   `BLOCKED` is now readable and the promise is now on the client. §2.7
+   specifies the rest; something must still own building it.
 2. **The operator→courier note and the internal operator note.** ADR 0039's
    command set is closed and carries only `SET_KITCHEN_NOTE`. The legacy
    dashboard had three note channels and staff use all three. Adding two

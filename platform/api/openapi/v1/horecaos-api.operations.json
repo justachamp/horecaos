@@ -5438,6 +5438,12 @@
       },
       "OperationsOrderControllerOrderSummaryResponse" : {
         "properties" : {
+          "acceptedByActorId" : {
+            "type" : "string"
+          },
+          "acceptedByActorType" : {
+            "type" : "string"
+          },
           "actions" : {
             "items" : {
               "$ref" : "#/components/schemas/OrderActionResponse"
@@ -5455,14 +5461,48 @@
             "format" : "date-time",
             "type" : "string"
           },
+          "createdByActorId" : {
+            "type" : "string"
+          },
+          "createdByActorType" : {
+            "type" : "string"
+          },
           "currency" : {
             "type" : "string"
+          },
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "discountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "feeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
           },
           "fulfillmentMode" : {
             "type" : "string"
           },
+          "guestReferenceHash" : {
+            "type" : "string"
+          },
           "orderId" : {
             "format" : "uuid",
+            "type" : "string"
+          },
+          "paymentStatusProjection" : {
+            "type" : "string"
+          },
+          "processAttention" : {
+            "type" : "string"
+          },
+          "promiseBasis" : {
+            "type" : "string"
+          },
+          "promisedAt" : {
+            "format" : "date-time",
             "type" : "string"
           },
           "publicOrderNumber" : {
@@ -6055,6 +6095,20 @@
           "items" : {
             "items" : {
               "$ref" : "#/components/schemas/InstallationView"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PageOperationsOrderControllerOrderSummaryResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OperationsOrderControllerOrderSummaryResponse"
             },
             "type" : "array"
           },
@@ -18814,7 +18868,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/tickets" : {
       "get" : {
         "description" : "Live tickets by default, soonest due first. Pass stream=buffer for the held ones, ordered by when they will fire.",
-        "operationId" : "board",
+        "operationId" : "board_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19284,7 +19338,8 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders" : {
       "get" : {
-        "description" : "Filterable by status. An empty filter returns everything rather than silently hiding the closed ones, because a branch reconciling a shift needs the orders that are over as much as the ones that are live.",
+        "deprecated" : true,
+        "description" : "The released v1 shape: a bare array, filterable by status, capped at five hundred and with no way to ask for the five hundred and first. Frozen, not removed — it is published in v1 and callers exist. New work uses `GET .../orders/board` (ADR 0102), which takes the board's whole filter set and pages with a cursor. Both read the same rows and return the same `OrderSummaryResponse`, so a caller that has not moved yet still gains every field ADR 0102 added.",
         "operationId" : "list_3",
         "parameters" : [ {
           "in" : "path",
@@ -19346,7 +19401,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "The branch's orders, newest first",
+        "summary" : "The branch's orders, newest first (superseded by GET .../orders/board)",
         "tags" : [ "Operations orders" ]
       },
       "post" : {
@@ -19411,6 +19466,135 @@
         "tags" : [ "Operations orders" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/board" : {
+      "get" : {
+        "description" : "orders.md §2.4 (ADR 0102): the board's filter set, every predicate applied in the database rather than in the browser. An empty status filter returns everything rather than silently hiding the closed ones, because a branch reconciling a shift needs the orders that are over as much as the ones that are live. `reference` narrows this branch's orders by the order's own number or by an aggregator's or a POS's identifier (ADR 0040), normalised so `0911-142`, `0911 142` and `#0911142` are one query — it is a filter, not the tenant-wide search of orders.md §2.8, which needs an endpoint at its own scope: nothing here reaches past this location. It is not a phone lookup either: a phone number goes in a POST body, never a query string (orders.md §2.8, ADR 0029). Keyset-paginated (ADR 0031): pass the previous page's `nextCursor` back as `cursor`. Changing a filter invalidates the cursor — start the list again — because a window cut for one filter set says nothing about another.",
+        "operationId" : "board",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channelCode",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "fulfillmentMode",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "courierId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "paymentMethodCode",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "createdByActorId",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "reference",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageOperationsOrderControllerOrderSummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The order board: the branch's orders, filtered and paged",
+        "tags" : [ "Operations orders" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/bulk-actions" : {
       "post" : {
         "description" : "ADR 0039. N independent commands under one bulk operation id, never one all-or-nothing transaction: each order is applied through the same single-order service a lone request would use, in its own transaction, so one already-settled order cannot fail the other hundred and ninety-nine. Always 202 with a per-item outcome list, capped at 200 orders. ADVANCE targets PREPARING, READY or FULFILLING only; CANCEL names a reason from GET .../reject-reasons' sibling, the tenant's outcome-reason registry, exactly like a single cancellation. A resubmission carrying the same Idempotency-Key changes nothing and returns the outcome already recorded, applied or failed alike — a re-run does not retry the failures.",
@@ -19468,7 +19652,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/counts" : {
       "get" : {
-        "description" : "orders.md §2.3: each tab shows a live count computed before the tab's own filters apply, and until ADR 0045's COUNTERS signal exists this is what computes them. One aggregate over the location's orders, scoped identically to the list above. Внимание's live severity queue (late orders, stuck processes) is not among these — it is derived per render from the promise and the clock, never stored, so a count of it would be wrong five seconds after being cached.",
+        "description" : "orders.md §2.3: each tab shows a live count computed before the tab's own filters apply, and until ADR 0045's COUNTERS signal exists this is what computes them. One aggregate over the location's orders, scoped identically to the list above. Внимание's live severity queue (late orders, stuck processes) is not among these — it is derived per render from the promise and the clock, never stored, so a count of it would be wrong five seconds after being cached. `from`/`to` are the board's own period and mean exactly what they mean on the list above, so a badge and the tab beneath it count the same orders.",
         "operationId" : "counts_1",
         "parameters" : [ {
           "in" : "path",
@@ -19492,6 +19676,22 @@
           "required" : true,
           "schema" : {
             "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
             "type" : "string"
           }
         } ],

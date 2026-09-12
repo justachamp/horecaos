@@ -320,7 +320,22 @@ public class OrderQueryService implements OrderCountsQuery {
     /** The board's tab badges for one location, one aggregate (orders.md §2.3). */
     @Transactional(readOnly = true)
     public OrderCountsRow counts(UUID tenantId, UUID brandId, UUID locationId) {
-        return orders.counts(tenantId, brandId, locationId);
+        return counts(tenantId, brandId, locationId, null, null);
+    }
+
+    /**
+     * The same badges over the board's period (ADR 0102).
+     *
+     * <p>The period is the one the list is filtered by. A badge computed over a
+     * different population than the tab it sits on is worse than no badge: it
+     * reads as a count of what the tab will show, and an operator who clicks
+     * through to five rows under a badge saying nineteen concludes the list is
+     * broken.
+     */
+    @Transactional(readOnly = true)
+    public OrderCountsRow counts(
+            UUID tenantId, UUID brandId, UUID locationId, @Nullable Instant from, @Nullable Instant to) {
+        return orders.counts(tenantId, brandId, locationId, from, to);
     }
 
     /** {@link OrderCountsQuery}: the same read, in the type another module is allowed to see. */
@@ -360,9 +375,33 @@ public class OrderQueryService implements OrderCountsQuery {
         });
     }
 
+    /**
+     * One page of the branch's board (ADR 0102).
+     *
+     * <p>Every filter is the query's, not this method's: the store builds one
+     * statement from {@link JdbcOrderStore.OrderListQuery} and returns exactly
+     * the page asked for. Nothing is filtered after the fact here, because a
+     * page trimmed after it was cut is a page whose size no longer says whether
+     * more orders exist.
+     *
+     * @param cursorOrderId the last order of the previous page, or null for the
+     *                      first. Resolved inside the caller's own location
+     *                      scope, exactly as {@link #forCustomer} resolves its
+     *                      own
+     * @throws UnknownCursorException when the cursor names no order at this
+     *                                location — including one belonging to
+     *                                another tenant, which answers identically
+     */
     @Transactional(readOnly = true)
-    public List<OrderRow> forLocation(UUID tenantId, UUID brandId, UUID locationId, List<String> statuses, int limit) {
-        return orders.listForLocation(tenantId, brandId, locationId, statuses, limit);
+    public List<JdbcOrderStore.OrderBoardRow> forLocation(
+            JdbcOrderStore.OrderListQuery query, @Nullable UUID cursorOrderId, int limit) {
+
+        @Nullable Instant before = null;
+        if (cursorOrderId != null) {
+            before = orders.locationOrderCursor(query.tenantId(), query.brandId(), query.locationId(), cursorOrderId)
+                    .orElseThrow(UnknownCursorException::new);
+        }
+        return orders.listForLocation(query, before, cursorOrderId, limit);
     }
 
     /**
