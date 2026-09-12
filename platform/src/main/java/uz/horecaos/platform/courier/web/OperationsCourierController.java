@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -40,6 +41,9 @@ import uz.horecaos.platform.courier.application.CourierSettlementService;
 import uz.horecaos.platform.courier.application.CourierShiftService;
 import uz.horecaos.platform.courier.application.DeliveryCostQueryService;
 import uz.horecaos.platform.courier.application.PartnerInvoiceService;
+import uz.horecaos.platform.courier.application.PlannedShiftService;
+import uz.horecaos.platform.courier.application.PlannedShiftService.NewPlannedShift;
+import uz.horecaos.platform.courier.application.PlannedShiftService.RosterComparison;
 import uz.horecaos.platform.courier.domain.AdjustmentOrigin;
 import uz.horecaos.platform.courier.domain.ComplianceField;
 import uz.horecaos.platform.courier.domain.CostBasis;
@@ -65,6 +69,7 @@ import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore.InvoiceLineRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore.InvoiceRow;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcPlannedShiftStore.PlannedShiftRow;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -103,6 +108,7 @@ public class OperationsCourierController {
     private final JdbcCourierShiftStore shiftStore;
     private final CourierPolicyResolver policyResolver;
     private final JdbcDeliveryCostStore deliveryCostStore;
+    private final PlannedShiftService plannedShifts;
     private final CurrentActor currentActor;
 
     public OperationsCourierController(
@@ -122,6 +128,7 @@ public class OperationsCourierController {
             JdbcCourierShiftStore shiftStore,
             CourierPolicyResolver policyResolver,
             JdbcDeliveryCostStore deliveryCostStore,
+            PlannedShiftService plannedShifts,
             CurrentActor currentActor) {
         this.engagements = engagements;
         this.shifts = shifts;
@@ -139,6 +146,7 @@ public class OperationsCourierController {
         this.shiftStore = shiftStore;
         this.policyResolver = policyResolver;
         this.deliveryCostStore = deliveryCostStore;
+        this.plannedShifts = plannedShifts;
         this.currentActor = currentActor;
     }
 
@@ -438,16 +446,122 @@ public class OperationsCourierController {
     @Operation(
             summary = "The branch's shifts, newest first (IA 3.5, Посещаемость)",
             description = "Open, closed and everything between — including AWAITING_APPROVAL, "
-                    + "which is the manager's own worklist on this screen.")
+                    + "which is the manager's own worklist on this screen. from/to window the read "
+                    + "to a period; omitted, the read falls back to the most recent `limit` shifts "
+                    + "the way this endpoint always has.")
     public ResponseEntity<List<ShiftResponse>> courierShifts(
             @PathVariable UUID tenantId,
             @RequestParam UUID brandId,
             @RequestParam UUID locationId,
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to,
             @RequestParam(defaultValue = "200") int limit) {
 
-        return ResponseEntity.ok(shiftStore.atLocation(tenantId, brandId, locationId, Math.min(limit, 500)).stream()
-                .map(ShiftResponse::of)
+        List<ShiftRow> rows = shiftStore.atLocation(tenantId, brandId, locationId, from, to, Math.min(limit, 500));
+        Map<UUID, String> names = courierStore.displayReferencesOf(
+                tenantId, rows.stream().map(ShiftRow::courierId).collect(Collectors.toSet()));
+        return ResponseEntity.ok(rows.stream()
+                .map(row -> ShiftResponse.of(row, names.get(row.courierId())))
                 .toList());
+    }
+
+    // ------------------------------------------------------------ roster entries
+
+    @GetMapping("/courier-roster-entries")
+    @RequiresCapability(Capability.COURIER_SHIFT_READ)
+    @Operation(
+            summary = "The branch's planned shifts (IA 3.5's roster, over P02's ScheduleGrid)",
+            description = "The plan a manager authored, as distinct from what a courier actually "
+                    + "opened. from/to window the read; both default to the surrounding week when "
+                    + "omitted so the grid always has something to draw.")
+    public ResponseEntity<List<PlannedShiftResponse>> rosterEntries(
+            @PathVariable UUID tenantId,
+            @RequestParam UUID brandId,
+            @RequestParam UUID locationId,
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to,
+            @RequestParam(defaultValue = "200") int limit) {
+
+        List<PlannedShiftRow> rows =
+                plannedShifts.atLocation(tenantId, brandId, locationId, from, to, Math.min(limit, 500));
+        Map<UUID, String> names = courierStore.displayReferencesOf(
+                tenantId, rows.stream().map(PlannedShiftRow::courierId).collect(Collectors.toSet()));
+        return ResponseEntity.ok(rows.stream()
+                .map(row -> PlannedShiftResponse.of(row, names.get(row.courierId()), null))
+                .toList());
+    }
+
+    @GetMapping("/courier-roster-entries/comparison")
+    @RequiresCapability(Capability.COURIER_SHIFT_READ)
+    @Operation(
+            summary = "Planned versus actual, for one period (IA 3.5)",
+            description = "Every planned entry in the window, each carrying whichever actual shift "
+                    + "of the same courier overlapped it — COVERED, PENDING (the window has not "
+                    + "elapsed) or UNCOVERED. The comparison is computed at read time; nothing here "
+                    + "writes MISSED onto the entry itself.")
+    public ResponseEntity<List<PlannedShiftResponse>> rosterComparison(
+            @PathVariable UUID tenantId,
+            @RequestParam UUID brandId,
+            @RequestParam UUID locationId,
+            @RequestParam Instant from,
+            @RequestParam Instant to,
+            @RequestParam(defaultValue = "200") int limit) {
+
+        List<RosterComparison> rows =
+                plannedShifts.comparisonAt(tenantId, brandId, locationId, from, to, Math.min(limit, 500));
+        Map<UUID, String> names = courierStore.displayReferencesOf(
+                tenantId, rows.stream().map(row -> row.entry().courierId()).collect(Collectors.toSet()));
+        return ResponseEntity.ok(rows.stream()
+                .map(row -> PlannedShiftResponse.of(
+                        row.entry(), names.get(row.entry().courierId()), row))
+                .toList());
+    }
+
+    @PostMapping("/courier-roster-entries")
+    @RequiresCapability(value = Capability.COURIER_SHIFT_APPROVE, mutating = true)
+    @Operation(
+            summary = "Plan a courier's shift ahead of time",
+            description = "Lands as DRAFT. Refused when the courier has no live engagement, the "
+                    + "same precondition a courier's own shift-open checks.")
+    public ResponseEntity<PlannedShiftResponse> draftRosterEntry(
+            @PathVariable UUID tenantId, @Valid @RequestBody DraftRosterEntryRequest body) {
+
+        PlannedShiftRow entry = plannedShifts.draft(new NewPlannedShift(
+                tenantId,
+                body.brandId(),
+                body.locationId(),
+                body.courierId(),
+                body.plannedStart(),
+                body.plannedEnd(),
+                actorUuid(),
+                actor(),
+                body.reason()));
+        Map<UUID, String> names = courierStore.displayReferencesOf(tenantId, Set.of(entry.courierId()));
+        return ResponseEntity.ok(PlannedShiftResponse.of(entry, names.get(entry.courierId()), null));
+    }
+
+    @PostMapping("/courier-roster-entries/{entryId}/publish")
+    @RequiresCapability(value = Capability.COURIER_SHIFT_APPROVE, mutating = true)
+    @Operation(summary = "Publish a planned shift, making it a visible offer")
+    public ResponseEntity<Void> publishRosterEntry(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID entryId,
+            @Valid @RequestBody RosterEntryReasonRequest body) {
+
+        plannedShifts.publish(tenantId, entryId, actor(), actorUuid(), body.reason());
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/courier-roster-entries/{entryId}/cancel")
+    @RequiresCapability(value = Capability.COURIER_SHIFT_APPROVE, mutating = true)
+    @Operation(summary = "Cancel a planned shift that is still DRAFT or PUBLISHED")
+    public ResponseEntity<Void> cancelRosterEntry(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID entryId,
+            @Valid @RequestBody RosterEntryReasonRequest body) {
+
+        plannedShifts.cancel(tenantId, entryId, actor(), body.reason());
+        return ResponseEntity.accepted().build();
     }
 
     // ------------------------------------------------------------------- policy
@@ -830,6 +944,16 @@ public class OperationsCourierController {
 
     private ActorRef actor() {
         return ActorRef.user(currentActor.get().subject(), null);
+    }
+
+    /**
+     * The caller's own authenticated identity as a {@code created_by}/{@code
+     * published_by} column expects it. Production Keycloak subjects are UUIDs;
+     * a service account or malformed token fails loudly here rather than
+     * writing a fabricated identity onto a roster row.
+     */
+    private UUID actorUuid() {
+        return UUID.fromString(currentActor.get().subject());
     }
 
     private String correlationId() {
@@ -1286,9 +1410,17 @@ public class OperationsCourierController {
 
     record ActivateRateCardRequest(@NotBlank String reason) {}
 
+    /**
+     * @param courierDisplayReference the non-personal handle (ADR 0029), never
+     *                                the decrypted name — null only when the
+     *                                courier row itself has since been removed,
+     *                                which {@code fulfillment.couriers} never
+     *                                does today
+     */
     record ShiftResponse(
             UUID shiftId,
             UUID courierId,
+            @Nullable String courierDisplayReference,
             String status,
             String dutyState,
             Instant openedAt,
@@ -1297,10 +1429,11 @@ public class OperationsCourierController {
             long breakSeconds,
             @Nullable UUID approvalRequestId) {
 
-        static ShiftResponse of(ShiftRow shift) {
+        static ShiftResponse of(ShiftRow shift, @Nullable String courierDisplayReference) {
             return new ShiftResponse(
                     shift.id(),
                     shift.courierId(),
+                    courierDisplayReference,
                     shift.status().name(),
                     shift.dutyState().name(),
                     shift.openedAt(),
@@ -1310,6 +1443,62 @@ public class OperationsCourierController {
                     shift.approvalRequestId());
         }
     }
+
+    /**
+     * One planned shift on the wire (IA 3.5's roster grid). {@code comparison}
+     * is present only from {@link #rosterComparison}; the plain roster read
+     * leaves it null rather than computing a per-row match nobody asked for.
+     */
+    record PlannedShiftResponse(
+            UUID entryId,
+            UUID courierId,
+            @Nullable String courierDisplayReference,
+            String status,
+            Instant plannedStart,
+            Instant plannedEnd,
+            @Nullable Instant publishedAt,
+            @Nullable Instant respondedAt,
+            @Nullable RosterComparisonView comparison) {
+
+        static PlannedShiftResponse of(
+                PlannedShiftRow entry, @Nullable String courierDisplayReference, @Nullable RosterComparison compared) {
+            return new PlannedShiftResponse(
+                    entry.id(),
+                    entry.courierId(),
+                    courierDisplayReference,
+                    entry.status().name(),
+                    entry.plannedStart(),
+                    entry.plannedEnd(),
+                    entry.publishedAt(),
+                    entry.respondedAt(),
+                    compared == null ? null : RosterComparisonView.of(compared));
+        }
+    }
+
+    /** @param coverage {@code COVERED}, {@code PENDING} or {@code UNCOVERED} — see {@link RosterComparison}. */
+    record RosterComparisonView(
+            String coverage,
+            @Nullable UUID matchedShiftId,
+            @Nullable String matchedDutyState) {
+
+        static RosterComparisonView of(RosterComparison comparison) {
+            ShiftRow matched = comparison.matchedShift();
+            return new RosterComparisonView(
+                    comparison.coverage(),
+                    matched == null ? null : matched.id(),
+                    matched == null ? null : matched.dutyState().name());
+        }
+    }
+
+    record DraftRosterEntryRequest(
+            @NotNull UUID brandId,
+            @NotNull UUID locationId,
+            @NotNull UUID courierId,
+            @NotNull Instant plannedStart,
+            @NotNull Instant plannedEnd,
+            @NotBlank String reason) {}
+
+    record RosterEntryReasonRequest(@NotBlank String reason) {}
 
     record CourierPolicyResponse(
             int reverificationDays,

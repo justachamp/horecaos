@@ -8,6 +8,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -135,6 +136,32 @@ public class JdbcCourierStore {
                 .param("id", courierId)
                 .query(JdbcCourierStore::mapCourier)
                 .optional();
+    }
+
+    /**
+     * {@code display_reference} for a batch of couriers, keyed by id. The
+     * non-personal handle (ADR 0029) a shift or roster list names a courier by
+     * when it must show more than a bare id, and never the decrypted name.
+     */
+    public Map<UUID, String> displayReferencesOf(UUID tenantId, Collection<UUID> courierIds) {
+        if (courierIds.isEmpty()) {
+            // NamedParameterJdbcTemplate renders an empty collection as `IN ()`,
+            // which PostgreSQL rejects. An empty question also has an answer.
+            return Map.of();
+        }
+        return jdbc
+                .sql("""
+                SELECT id, display_reference
+                  FROM fulfillment.couriers
+                 WHERE tenant_id = :tenantId AND id IN (:courierIds)
+                """)
+                .param("tenantId", tenantId)
+                .param("courierIds", courierIds)
+                .query((ResultSet rs, int rowNumber) ->
+                        Map.entry(rs.getObject("id", UUID.class), rs.getString("display_reference")))
+                .list()
+                .stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     /**
