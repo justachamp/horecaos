@@ -40,8 +40,12 @@
           </p>
         }
         <div class="terms-content text-sm leading-relaxed text-zinc-300" [attr.lang]="selectedLangId()">
-          @for (section of body() | termsSections; track $index) {
-            <section class="mt-4 block first:mt-0">{{ section }}</section>
+          @if (bodyIsHtml()) {
+            <div class="terms-content__html" [innerHTML]="body()"></div>
+          } @else {
+            @for (section of body() | termsSections; track $index) {
+              <section class="mt-4 block first:mt-0">{{ section }}</section>
+            }
           }
         </div>
       }

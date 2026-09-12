@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
@@ -8,6 +8,22 @@ import { LangService } from '../../services/lang.service';
 import { TermsService } from '../../services/terms.service';
 
 type LoadState = 'loading' | 'ready' | 'error';
+
+/**
+ * The operations console's `q-rich-text` editor (row `X.31`) writes
+ * `contentsByLocale` as sanitized block HTML — `<p>`, `<h1>`/`<h2>`/`<h3>`,
+ * `<ul>`/`<ol>`/`<li>`, `<blockquote>`, plus the inline `<strong>`/`<em>`/
+ * `<b>`/`<i>`/`<br>` `rich-text-sanitizer.ts` allows through — instead of the
+ * plain text every version published before that wave carries. Matched
+ * against that exact allowlist, not a bare `<`, so a legacy plain-text
+ * version that happens to contain a literal "<" (e.g. "price < X") is never
+ * misread as markup.
+ */
+const RICH_TEXT_TAG = /<(p|h1|h2|h3|ul|ol|li|blockquote|strong|em|b|i|br)(?:[\s/>]|$)/i;
+
+function looksLikeRichTextHtml(value: string): boolean {
+  return RICH_TEXT_TAG.test(value);
+}
 
 /**
  * The terms of service every tenant's customer reads (ADR 0067).
@@ -44,6 +60,16 @@ export class TermsOfConditionsComponent {
 
   readonly state = signal<LoadState>('loading');
   readonly body = signal('');
+  /**
+   * Whether `body()` is `q-rich-text` HTML rather than legacy plain text —
+   * see {@link looksLikeRichTextHtml}. The template renders the two
+   * differently: HTML through `[innerHTML]` (Angular's own sanitizer runs on
+   * every such binding, on top of what `rich-text-sanitizer.ts` already did
+   * on the way in), plain text through `TermsSectionsPipe`'s numbered-point
+   * split, which a block editor's own `<p>`/`<li>` tags already make
+   * redundant for HTML content.
+   */
+  readonly bodyIsHtml = computed(() => looksLikeRichTextHtml(this.body()));
   readonly isPlatformDefault = signal(false);
   readonly accepting = signal(false);
   readonly acceptError = signal<string | null>(null);

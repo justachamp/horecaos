@@ -62,6 +62,36 @@ describe('TermsOfConditionsComponent', () => {
     expect(text).toContain('Our own words, not a legacy brand.');
   });
 
+  it('renders q-rich-text HTML as markup, not escaped tag text', async () => {
+    const { fixture, terms } = setUp(null);
+    terms.current.mockResolvedValue(
+      document({ body: '<h2>1. Purpose</h2><p>We <strong>collect</strong> what we need.</p>' }),
+    );
+
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.terms-content__html h2')?.textContent).toBe('1. Purpose');
+    expect(el.querySelector('.terms-content__html strong')?.textContent).toBe('collect');
+    // Never as literal, escaped tag text -- the regression this test guards.
+    expect(el.textContent ?? '').not.toContain('<h2>');
+  });
+
+  it('still splits a legacy plain-text body by numbered point, not as HTML', async () => {
+    const { fixture, terms } = setUp(null);
+    terms.current.mockResolvedValue(document({ body: '1. First point. 2. Second point.' }));
+
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.terms-content__html')).toBeNull();
+    expect(el.querySelectorAll('.terms-content section').length).toBe(2);
+  });
+
   it('shows a notice when serving the platform default', async () => {
     const { fixture, terms } = setUp(null);
     terms.current.mockResolvedValue(document({ isPlatformDefault: true }));
