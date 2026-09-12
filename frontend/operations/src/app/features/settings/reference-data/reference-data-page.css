@@ -144,3 +144,86 @@
 .denied {
   color: var(--q-ink-muted);
 }
+
+.row-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.mode-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  margin: 0 4px 4px 0;
+  border-radius: var(--q-radius);
+  background: var(--q-surface-2);
+  color: var(--q-ink-muted);
+}
+
+.mode-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.mode-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hint {
+  color: var(--q-ink-subtle);
+  margin-top: 4px;
+}
+
+.calendar__subhead {
+  margin: 20px 0 4px;
+}
+
+.boundary-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.field--inline {
+  width: auto;
+  margin-top: 0;
+}
+
+.field--narrow {
+  width: 90px;
+  margin-top: 0;
+}
+
+.weekend-save {
+  margin-top: 12px;
+}
+
+.holiday-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.matrix-scroll {
+  overflow-x: auto;
+}
+
+.matrix th,
+.matrix td {
+  text-align: center;
+}
+
+.matrix th:first-child,
+.matrix td:first-child {
+  text-align: left;
+}
+
+.matrix__cell input {
+  cursor: pointer;
+}

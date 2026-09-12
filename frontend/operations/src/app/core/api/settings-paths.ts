@@ -13,9 +13,13 @@ import { LocationScope } from './operations-paths';
  * several of them cross-surface: a
  * meaningful share of the tenant's own configuration (brands and their
  * locations' provisioning fields, sales channels, the order acceptance
- * policy, legal entities, cancellation/completion reasons) was built for
- * control-plane before this wave and still answers only on
- * {@link CONTROL_PLANE}. Moving any one of those paths is a breaking change —
+ * policy, legal entities) was built for control-plane before this wave and
+ * still answers only on {@link CONTROL_PLANE}. Cancellation/completion
+ * reasons left this list in wave P37: {@link orderOutcomeReasons} now calls
+ * `OperationsOrderOutcomeReasonController`, the same wave-53 shape {@link
+ * integrationInstallations} used, because this screen was the control-plane
+ * path's only caller. Moving any one of the paths still on this list is a
+ * breaking change —
  * `OpenApiContractTests` enforces that every published path stays published,
  * and refuses even a baseline refresh that would drop one — so this app calls
  * them where they already live, the same cross-surface shape ADR 0065 already
@@ -340,9 +344,16 @@ export const settingsPaths = {
 
   // ---------------------------------------------------------- 10.10 Reference data
 
-  /** `OrderOutcomeReasonController` (control-plane surface). */
+  /**
+   * `OperationsOrderOutcomeReasonController` — moved off `CONTROL_PLANE` this
+   * wave (P37), the same wave-53 shape {@link integrationInstallations} used:
+   * `OrderOutcomeReasonController`'s original control-plane-prefixed mapping
+   * had no caller of its own to preserve cross-surface (this screen was its
+   * only caller, and it was reaching across surfaces to reach it), so this
+   * app now calls the operations-native mirror instead.
+   */
   orderOutcomeReasons(scope: LocationScope): string {
-    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/order-outcome-reasons`;
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/order-outcome-reasons`;
   },
 
   orderOutcomeReasonCategories(scope: LocationScope): string {
@@ -351,6 +362,26 @@ export const settingsPaths = {
 
   orderOutcomeReason(scope: LocationScope, reasonId: string): string {
     return `${this.orderOutcomeReasons(scope)}/${enc(reasonId)}`;
+  },
+
+  // ---------------------------------------------------------- 10.10d Branch tags
+
+  /** `BranchTagController` — the tenant-wide registry and assignment read. */
+  branchTags(scope: LocationScope): string {
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/branch-tags`;
+  },
+
+  branchTagAssignments(scope: LocationScope): string {
+    return `${this.branchTags(scope)}/assignments`;
+  },
+
+  branchTagArchive(scope: LocationScope, tagId: string): string {
+    return `${this.branchTags(scope)}/${enc(tagId)}/archive`;
+  },
+
+  /** One branch's own tags — set as a whole, per `BranchTagController.setTagsOfLocation`. */
+  locationBranchTags(scope: LocationScope): string {
+    return `${this.location(scope)}/branch-tags`;
   },
 
   // ---------------------------------------------------------- 10.12 Terms of service

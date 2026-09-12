@@ -844,9 +844,88 @@ export const messagesEn = {
   'settings.referenceData.creating': 'Creating…',
   'settings.referenceData.archive.confirm':
     '"{name}" will stop being offered. Outcomes already recorded under it are unaffected. Continue?',
+  'settings.referenceData.field.status': 'Status',
+  'settings.referenceData.field.allowedFulfillmentModes': 'Allowed fulfilment modes',
+  'settings.referenceData.fulfillmentModes.required':
+    'Pick at least one fulfilment mode this reason is valid for.',
+  'settings.referenceData.edit': 'Edit',
+  'settings.referenceData.edit.title': 'Edit reason',
+  'settings.referenceData.edit.versionWarning':
+    'Saving creates a new version. Outcomes already recorded keep the version they were recorded with — this never rewrites last year’s funnel.',
+  'settings.referenceData.save': 'Save',
+  'settings.referenceData.saving': 'Saving…',
+  'settings.referenceData.status.ACTIVE': 'Active',
+  'settings.referenceData.status.ARCHIVED': 'Archived',
+
   'settings.referenceData.calendar.title': 'Business calendar',
+  'settings.referenceData.calendar.lead':
+    'This tenant’s own weekend, its own closures, and the boundary a business day starts on (ADR 0043).',
+  'settings.referenceData.calendar.timezone': 'Timezone: {zone}',
+  'settings.referenceData.calendar.boundary.title': 'Business-day boundary',
+  'settings.referenceData.calendar.boundary.label': 'Business day starts at',
+  'settings.referenceData.calendar.boundary.version': 'Boundary version {version}',
+  'settings.referenceData.calendar.boundary.save': 'Move boundary',
+  'settings.referenceData.calendar.boundary.confirm':
+    'Moving the boundary changes which business date every future order is filed under, and leaves a recut outstanding until it is reprocessed. Continue?',
+  'settings.referenceData.calendar.boundary.reason': 'Changed from the operations settings screen',
+  'settings.referenceData.calendar.boundary.recutOutstanding':
+    'A recut is outstanding through {date}: reports spanning that date may mix two boundary definitions.',
+  'settings.referenceData.calendar.boundary.result.CHANGED':
+    'Boundary moved. A recut is now outstanding.',
+  'settings.referenceData.calendar.boundary.result.AWAITING_APPROVAL':
+    'Waiting for a second signature before this takes effect.',
+  'settings.referenceData.calendar.boundary.result.DECLINED': 'The change was declined.',
+  'settings.referenceData.calendar.boundary.result.UNCHANGED': 'Already set to that time.',
+  'settings.referenceData.calendar.weekend.title': 'Weekend',
+  'settings.referenceData.calendar.weekend.lead':
+    'Days this tenant does not trade. Empty means it trades every day, today’s assumed default.',
+  'settings.referenceData.calendar.weekend.save': 'Save weekend',
+  'settings.referenceData.calendar.weekend.reason': 'Changed from the operations settings screen',
+  'settings.referenceData.calendar.weekday.1': 'Mon',
+  'settings.referenceData.calendar.weekday.2': 'Tue',
+  'settings.referenceData.calendar.weekday.3': 'Wed',
+  'settings.referenceData.calendar.weekday.4': 'Thu',
+  'settings.referenceData.calendar.weekday.5': 'Fri',
+  'settings.referenceData.calendar.weekday.6': 'Sat',
+  'settings.referenceData.calendar.weekday.7': 'Sun',
+  'settings.referenceData.calendar.holidays.title': 'This tenant’s own closures',
+  'settings.referenceData.calendar.holidays.lead':
+    'Additional to the platform’s own public holidays — never a replacement for them.',
+  'settings.referenceData.calendar.holidays.name': 'Name',
+  'settings.referenceData.calendar.holidays.month': 'Month',
+  'settings.referenceData.calendar.holidays.day': 'Day',
+  'settings.referenceData.calendar.holidays.date': 'Or a one-off date',
+  'settings.referenceData.calendar.holidays.add': 'Add',
+  'settings.referenceData.calendar.holidays.remove': 'Remove',
+  'settings.referenceData.calendar.holidays.empty': 'None yet.',
+  'settings.referenceData.calendar.holidays.reason': 'Changed from the operations settings screen',
+
   'settings.referenceData.slaBuckets.title': 'SLA boundaries',
+  'settings.referenceData.slaBuckets.lead':
+    'Read-only by design (ADR 0043): the buckets are fixed per release so a chart drawn last quarter keeps its meaning. Not tenant-configurable — see ADR 0107.',
+  'settings.referenceData.slaBuckets.version': 'Version {version}',
+  'settings.referenceData.slaBuckets.column.code': 'Bucket',
+  'settings.referenceData.slaBuckets.column.range': 'Elapsed minutes',
+  'settings.referenceData.slaBuckets.openEnded': '{from}+ min',
+  'settings.referenceData.slaBuckets.range': '{from}–{to} min',
+
   'settings.referenceData.tags.title': 'Branch tags',
+  'settings.referenceData.tags.lead':
+    'A chain-wide tag registry, and which branch carries which tag.',
+  'settings.referenceData.tags.registry.title': 'Tag registry',
+  'settings.referenceData.tags.field.code': 'Code',
+  'settings.referenceData.tags.field.name': 'Display name',
+  'settings.referenceData.tags.create': 'Add tag',
+  'settings.referenceData.tags.create.reason': 'Created from the operations settings screen',
+  'settings.referenceData.tags.archive': 'Archive',
+  'settings.referenceData.tags.archive.confirm':
+    '"{name}" will stop being offered. Branches already carrying it keep it. Continue?',
+  'settings.referenceData.tags.archive.reason': 'Archived from the operations settings screen',
+  'settings.referenceData.tags.assign.reason': 'Changed from the operations settings screen',
+  'settings.referenceData.tags.matrix.title': 'Which branch carries which tag',
+  'settings.referenceData.tags.matrix.empty': 'No branches to show yet.',
+  'settings.referenceData.tags.count': '{count} branches',
+  'settings.referenceData.tags.empty': 'No tags yet.',
 
   // 10.2 Locations
   'settings.locations.title': 'Locations',
@@ -2332,6 +2411,7 @@ export const messagesEn = {
   'reports.provenance.asOf': 'Data as of {time}',
   'reports.provenance.closedThrough': 'closed through {date}',
   'reports.provenance.neverClosed': 'no business day closed yet',
+  'reports.provenance.businessDayStart': 'business day starts {time}',
   'reports.provenance.settling':
     'Today is still inside its settle window — figures may still change.',
   'reports.provenance.divergence':

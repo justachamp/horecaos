@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.reporting.domain.BusinessDayBoundary;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
@@ -42,9 +43,19 @@ public class BusinessDayService {
         return store.findBoundary(tenantId).map(JdbcReportingStore.StoredBoundary::recutCompletedThrough);
     }
 
-    /** Records a boundary. The caller is responsible for the ADR 0027 approval. */
+    /**
+     * Records a boundary. The caller is responsible for the ADR 0027 approval.
+     *
+     * @param recutCompletedThrough null to mark a recut outstanding — the normal
+     *                              case immediately after a boundary change, before
+     *                              {@code DayCloseService} has caught the historical
+     *                              range up
+     */
     public void setBoundary(
-            UUID tenantId, BusinessDayBoundary boundary, LocalDate effectiveFrom, LocalDate recutCompletedThrough) {
+            UUID tenantId,
+            BusinessDayBoundary boundary,
+            LocalDate effectiveFrom,
+            @Nullable LocalDate recutCompletedThrough) {
         store.upsertBoundary(tenantId, boundary, effectiveFrom, recutCompletedThrough);
     }
 

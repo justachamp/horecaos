@@ -20,8 +20,11 @@
         <tr>
           <th class="q-caption">{{ 'settings.referenceData.field.internalName' | t }}</th>
           <th class="q-caption">{{ 'settings.referenceData.field.customerText' | t }}</th>
+          <th class="q-caption">{{ 'settings.referenceData.field.systemCategory' | t }}</th>
           <th class="q-caption">{{ 'settings.referenceData.field.stockDisposition' | t }}</th>
           <th class="q-caption">{{ 'settings.referenceData.field.liabilityParty' | t }}</th>
+          <th class="q-caption">{{ 'settings.referenceData.field.customerRefund' | t }}</th>
+          <th class="q-caption">{{ 'settings.referenceData.field.status' | t }}</th>
           <th class="q-caption"></th>
         </tr>
       </thead>
@@ -30,9 +33,20 @@
           <tr>
             <td class="q-body-sm">{{ reason.internalName }}</td>
             <td class="q-body-sm">{{ reason.customerTexts['ru'] }}</td>
+            <td class="q-body-sm">{{ reason.systemCategory }}</td>
             <td class="q-body-sm">{{ reason.stockDisposition }}</td>
             <td class="q-body-sm">{{ reason.liabilityParty }}</td>
+            <td class="q-body-sm">{{ reason.customerRefund }}</td>
             <td class="q-body-sm">
+              <q-status-pill
+                [label]="statusLabel(reason.status)"
+                [tone]="reason.status === 'ACTIVE' ? 'success' : 'none'"
+              />
+            </td>
+            <td class="q-body-sm row-actions">
+              <button type="button" class="q-body-sm link" (click)="openEditForm(reason)">
+                {{ 'settings.referenceData.edit' | t }}
+              </button>
               <button type="button" class="q-body-sm link" (click)="archive(reason)">
                 {{ 'settings.referenceData.disable' | t }}
               </button>
@@ -40,7 +54,7 @@
           </tr>
         } @empty {
           <tr>
-            <td class="q-body-sm empty" colspan="5">{{ 'settings.referenceData.empty' | t }}</td>
+            <td class="q-body-sm empty" colspan="8">{{ 'settings.referenceData.empty' | t }}</td>
           </tr>
         }
       </tbody>
@@ -59,6 +73,11 @@
         <tr>
           <th class="q-caption">{{ 'settings.referenceData.field.internalName' | t }}</th>
           <th class="q-caption">{{ 'settings.referenceData.field.customerText' | t }}</th>
+          <th class="q-caption">{{ 'settings.referenceData.field.systemCategory' | t }}</th>
+          <th class="q-caption">
+            {{ 'settings.referenceData.field.allowedFulfillmentModes' | t }}
+          </th>
+          <th class="q-caption">{{ 'settings.referenceData.field.status' | t }}</th>
           <th class="q-caption"></th>
         </tr>
       </thead>
@@ -67,7 +86,22 @@
           <tr>
             <td class="q-body-sm">{{ reason.internalName }}</td>
             <td class="q-body-sm">{{ reason.customerTexts['ru'] }}</td>
+            <td class="q-body-sm">{{ reason.systemCategory }}</td>
             <td class="q-body-sm">
+              @for (mode of reason.allowedFulfillmentModes; track mode) {
+                <span class="mode-chip q-caption">{{ mode }}</span>
+              }
+            </td>
+            <td class="q-body-sm">
+              <q-status-pill
+                [label]="statusLabel(reason.status)"
+                [tone]="reason.status === 'ACTIVE' ? 'success' : 'none'"
+              />
+            </td>
+            <td class="q-body-sm row-actions">
+              <button type="button" class="q-body-sm link" (click)="openEditForm(reason)">
+                {{ 'settings.referenceData.edit' | t }}
+              </button>
               <button type="button" class="q-body-sm link" (click)="archive(reason)">
                 {{ 'settings.referenceData.disable' | t }}
               </button>
@@ -75,7 +109,7 @@
           </tr>
         } @empty {
           <tr>
-            <td class="q-body-sm empty" colspan="3">{{ 'settings.referenceData.empty' | t }}</td>
+            <td class="q-body-sm empty" colspan="6">{{ 'settings.referenceData.empty' | t }}</td>
           </tr>
         }
       </tbody>
@@ -203,6 +237,27 @@
             <option value="NONE">NONE</option>
             <option value="DISCRETIONARY">DISCRETIONARY</option>
           </select>
+        } @else {
+          <span class="q-caption">{{
+            'settings.referenceData.field.allowedFulfillmentModes' | t
+          }}</span>
+          <div class="mode-checks">
+            @for (mode of fulfillmentModes; track mode) {
+              <label class="mode-check q-body-sm">
+                <input
+                  type="checkbox"
+                  [checked]="newAllowedModes().includes(mode)"
+                  (change)="toggleNewMode(mode)"
+                />
+                {{ mode }}
+              </label>
+            }
+          </div>
+          @if (newAllowedModes().length === 0) {
+            <p class="q-caption hint">
+              {{ 'settings.referenceData.fulfillmentModes.required' | t }}
+            </p>
+          }
         }
 
         @if (createError(); as message) {
@@ -235,27 +290,485 @@
     </div>
   }
 
+  @if (editingReason(); as reason) {
+    <q-modal
+      [title]="'settings.referenceData.edit.title' | t"
+      [dismissible]="!editSubmitting()"
+      (dismiss)="editingReason.set(null)"
+    >
+      <q-inline-alert
+        severity="warning"
+        [text]="'settings.referenceData.edit.versionWarning' | t"
+      />
+
+      <label class="q-caption" for="edit-internal-name">{{
+        'settings.referenceData.field.internalName' | t
+      }}</label>
+      <input
+        id="edit-internal-name"
+        class="q-body field"
+        type="text"
+        [value]="editInternalName()"
+        (input)="editInternalName.set($any($event.target).value)"
+        [disabled]="editSubmitting()"
+      />
+
+      <label class="q-caption" for="edit-category">{{
+        'settings.referenceData.field.systemCategory' | t
+      }}</label>
+      <select
+        id="edit-category"
+        class="q-body field"
+        [value]="editSystemCategory()"
+        (change)="editSystemCategory.set($any($event.target).value)"
+        [disabled]="editSubmitting()"
+      >
+        @for (
+          category of reason.kind === 'CANCELLATION'
+            ? cancellationCategories()
+            : completionCategories();
+          track category
+        ) {
+          <option [value]="category">{{ category }}</option>
+        }
+      </select>
+
+      <label class="q-caption" for="edit-text-ru">{{
+        'settings.referenceData.field.customerTextRu' | t
+      }}</label>
+      <input
+        id="edit-text-ru"
+        class="q-body field"
+        type="text"
+        [value]="editTextRu()"
+        (input)="editTextRu.set($any($event.target).value)"
+        [disabled]="editSubmitting()"
+      />
+
+      <label class="q-caption" for="edit-text-uz">{{
+        'settings.referenceData.field.customerTextUz' | t
+      }}</label>
+      <input
+        id="edit-text-uz"
+        class="q-body field"
+        type="text"
+        [value]="editTextUz()"
+        (input)="editTextUz.set($any($event.target).value)"
+        [disabled]="editSubmitting()"
+      />
+
+      <label class="q-caption" for="edit-text-en">{{
+        'settings.referenceData.field.customerTextEn' | t
+      }}</label>
+      <input
+        id="edit-text-en"
+        class="q-body field"
+        type="text"
+        [value]="editTextEn()"
+        (input)="editTextEn.set($any($event.target).value)"
+        [disabled]="editSubmitting()"
+      />
+
+      @if (reason.kind === 'CANCELLATION') {
+        <label class="q-caption" for="edit-stock">{{
+          'settings.referenceData.field.stockDisposition' | t
+        }}</label>
+        <select
+          id="edit-stock"
+          class="q-body field"
+          [value]="editStockDisposition()"
+          (change)="editStockDisposition.set($any($event.target).value)"
+        >
+          <option value="RELEASE">RELEASE</option>
+          <option value="RETURN_TO_STOCK">RETURN_TO_STOCK</option>
+          <option value="WRITE_OFF">WRITE_OFF</option>
+          <option value="NO_EFFECT">NO_EFFECT</option>
+        </select>
+
+        <label class="q-caption" for="edit-liability">{{
+          'settings.referenceData.field.liabilityParty' | t
+        }}</label>
+        <select
+          id="edit-liability"
+          class="q-body field"
+          [value]="editLiabilityParty()"
+          (change)="editLiabilityParty.set($any($event.target).value)"
+        >
+          <option value="TENANT">TENANT</option>
+          <option value="CUSTOMER">CUSTOMER</option>
+          <option value="COURIER_PARTNER">COURIER_PARTNER</option>
+          <option value="PLATFORM">PLATFORM</option>
+        </select>
+
+        <label class="q-caption" for="edit-refund">{{
+          'settings.referenceData.field.customerRefund' | t
+        }}</label>
+        <select
+          id="edit-refund"
+          class="q-body field"
+          [value]="editCustomerRefund()"
+          (change)="editCustomerRefund.set($any($event.target).value)"
+        >
+          <option value="FULL">FULL</option>
+          <option value="NONE">NONE</option>
+          <option value="DISCRETIONARY">DISCRETIONARY</option>
+        </select>
+      } @else {
+        <span class="q-caption">{{
+          'settings.referenceData.field.allowedFulfillmentModes' | t
+        }}</span>
+        <div class="mode-checks">
+          @for (mode of fulfillmentModes; track mode) {
+            <label class="mode-check q-body-sm">
+              <input
+                type="checkbox"
+                [checked]="editAllowedModes().includes(mode)"
+                (change)="toggleEditMode(mode)"
+              />
+              {{ mode }}
+            </label>
+          }
+        </div>
+        @if (editAllowedModes().length === 0) {
+          <p class="q-caption hint">{{ 'settings.referenceData.fulfillmentModes.required' | t }}</p>
+        }
+      }
+
+      @if (editError(); as message) {
+        <p class="q-body-sm error" role="alert">{{ message }}</p>
+      }
+
+      <ng-container qModalActions>
+        <button
+          type="button"
+          class="q-body secondary"
+          (click)="editingReason.set(null)"
+          [disabled]="editSubmitting()"
+        >
+          {{ 'settings.referenceData.cancel' | t }}
+        </button>
+        <button
+          type="button"
+          class="q-body primary"
+          (click)="submitEdit()"
+          [disabled]="!canSaveEdit()"
+        >
+          {{
+            editSubmitting()
+              ? ('settings.referenceData.saving' | t)
+              : ('settings.referenceData.save' | t)
+          }}
+        </button>
+      </ng-container>
+    </q-modal>
+  }
+
   <section class="card">
     <h2 class="q-subhead">{{ 'settings.referenceData.calendar.title' | t }}</h2>
-    <p class="q-body-sm">
-      {{
-        'notBuilt.body'
-          | t: { spec: 'operations-spec/settings.md §10.10 (Производственный календарь)' }
-      }}
-    </p>
+    <p class="q-body-sm lead">{{ 'settings.referenceData.calendar.lead' | t }}</p>
+
+    @if (calendarLoading()) {
+      <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+    } @else if (calendar(); as cal) {
+      @if (calendarError(); as message) {
+        <q-inline-alert severity="error" [text]="message" />
+      }
+
+      <p class="q-body-sm">
+        {{ 'settings.referenceData.calendar.timezone' | t: { zone: cal.timezone } }}
+      </p>
+
+      <h3 class="q-body calendar__subhead">
+        {{ 'settings.referenceData.calendar.boundary.title' | t }}
+      </h3>
+      <p class="q-caption">
+        {{
+          'settings.referenceData.calendar.boundary.version' | t: { version: cal.boundaryVersion }
+        }}
+      </p>
+      @if (cal.recutCompletedThrough) {
+        <q-inline-alert
+          severity="warning"
+          [text]="
+            'settings.referenceData.calendar.boundary.recutOutstanding'
+              | t: { date: cal.recutCompletedThrough }
+          "
+        />
+      }
+      <div class="boundary-row">
+        <label class="q-caption" for="boundary-time">{{
+          'settings.referenceData.calendar.boundary.label' | t
+        }}</label>
+        <input
+          id="boundary-time"
+          type="time"
+          class="q-body field field--inline"
+          [value]="boundaryDraft()"
+          (input)="boundaryDraft.set($any($event.target).value)"
+          [disabled]="boundarySaving()"
+        />
+        <button
+          type="button"
+          class="q-body primary"
+          (click)="saveBoundary()"
+          [disabled]="boundarySaving() || !boundaryChanged()"
+        >
+          {{ 'settings.referenceData.calendar.boundary.save' | t }}
+        </button>
+      </div>
+      @if (boundaryResult(); as result) {
+        <q-inline-alert
+          [severity]="
+            result.status === 'CHANGED'
+              ? 'success'
+              : result.status === 'DECLINED'
+                ? 'error'
+                : 'info'
+          "
+          [text]="boundaryResultLabel(result.status)"
+        />
+      }
+
+      <h3 class="q-body calendar__subhead">
+        {{ 'settings.referenceData.calendar.weekend.title' | t }}
+      </h3>
+      <p class="q-caption">{{ 'settings.referenceData.calendar.weekend.lead' | t }}</p>
+      <div class="mode-checks">
+        @for (day of weekdays; track day) {
+          <label class="mode-check q-body-sm">
+            <input
+              type="checkbox"
+              [checked]="weekendDraft().includes(day)"
+              (change)="toggleWeekendDraft(day)"
+              [disabled]="weekendSaving()"
+            />
+            {{ weekdayLabel(day) }}
+          </label>
+        }
+      </div>
+      <button
+        type="button"
+        class="q-body secondary weekend-save"
+        (click)="saveWeekend()"
+        [disabled]="weekendSaving() || !weekendChanged()"
+      >
+        {{ 'settings.referenceData.calendar.weekend.save' | t }}
+      </button>
+
+      <h3 class="q-body calendar__subhead">
+        {{ 'settings.referenceData.calendar.holidays.title' | t }}
+      </h3>
+      <p class="q-caption">{{ 'settings.referenceData.calendar.holidays.lead' | t }}</p>
+      <table class="table">
+        <tbody>
+          @for (holiday of cal.holidays; track holiday.holidayId) {
+            <tr>
+              <td class="q-body-sm">{{ holiday.name }}</td>
+              <td class="q-body-sm">
+                {{ holiday.date ?? holiday.day + '.' + holiday.month }}
+              </td>
+              <td class="q-body-sm">
+                <button
+                  type="button"
+                  class="q-body-sm link"
+                  (click)="removeHoliday(holiday.holidayId)"
+                >
+                  {{ 'settings.referenceData.calendar.holidays.remove' | t }}
+                </button>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="3">
+                {{ 'settings.referenceData.calendar.holidays.empty' | t }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      <div class="holiday-form">
+        <input
+          class="q-body field field--inline"
+          type="text"
+          [placeholder]="'settings.referenceData.calendar.holidays.name' | t"
+          [value]="newHolidayName()"
+          (input)="newHolidayName.set($any($event.target).value)"
+        />
+        <input
+          class="q-body field field--narrow"
+          type="number"
+          min="1"
+          max="12"
+          [placeholder]="'settings.referenceData.calendar.holidays.month' | t"
+          [value]="newHolidayMonth()"
+          (input)="newHolidayMonth.set($any($event.target).value)"
+        />
+        <input
+          class="q-body field field--narrow"
+          type="number"
+          min="1"
+          max="31"
+          [placeholder]="'settings.referenceData.calendar.holidays.day' | t"
+          [value]="newHolidayDay()"
+          (input)="newHolidayDay.set($any($event.target).value)"
+        />
+        <input
+          class="q-body field field--inline"
+          type="date"
+          [attr.aria-label]="'settings.referenceData.calendar.holidays.date' | t"
+          [value]="newHolidayDate()"
+          (input)="newHolidayDate.set($any($event.target).value)"
+        />
+        <button
+          type="button"
+          class="q-body secondary"
+          (click)="addHoliday()"
+          [disabled]="!canAddHoliday()"
+        >
+          {{ 'settings.referenceData.calendar.holidays.add' | t }}
+        </button>
+      </div>
+    } @else if (calendarError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    }
   </section>
 
   <section class="card">
     <h2 class="q-subhead">{{ 'settings.referenceData.slaBuckets.title' | t }}</h2>
-    <p class="q-body-sm">
-      {{ 'notBuilt.body' | t: { spec: 'operations-spec/settings.md §10.10 (Границы SLA)' } }}
-    </p>
+    <p class="q-body-sm lead">{{ 'settings.referenceData.slaBuckets.lead' | t }}</p>
+
+    @if (slaLoading()) {
+      <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+    } @else if (slaBucketSet(); as buckets) {
+      <p class="q-caption">
+        {{ 'settings.referenceData.slaBuckets.version' | t: { version: buckets.version } }}
+      </p>
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'settings.referenceData.slaBuckets.column.code' | t }}</th>
+            <th class="q-caption">{{ 'settings.referenceData.slaBuckets.column.range' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (bucket of buckets.buckets; track bucket.code) {
+            <tr>
+              <td class="q-body-sm">{{ bucket.code }}</td>
+              <td class="q-body-sm">
+                {{
+                  bucket.toMinutesExclusive === null
+                    ? ('settings.referenceData.slaBuckets.openEnded'
+                      | t: { from: bucket.fromMinutes })
+                    : ('settings.referenceData.slaBuckets.range'
+                      | t: { from: bucket.fromMinutes, to: bucket.toMinutesExclusive })
+                }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    } @else if (slaError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    }
   </section>
 
   <section class="card">
     <h2 class="q-subhead">{{ 'settings.referenceData.tags.title' | t }}</h2>
-    <p class="q-body-sm">
-      {{ 'notBuilt.body' | t: { spec: 'operations-spec/settings.md §10.10 (Теги филиалов)' } }}
-    </p>
+    <p class="q-body-sm lead">{{ 'settings.referenceData.tags.lead' | t }}</p>
+
+    @if (tagsLoading()) {
+      <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+    } @else {
+      @if (tagsError(); as message) {
+        <q-inline-alert severity="error" [text]="message" />
+      }
+
+      <h3 class="q-body calendar__subhead">
+        {{ 'settings.referenceData.tags.registry.title' | t }}
+      </h3>
+      <table class="table">
+        <tbody>
+          @for (tag of branchTags(); track tag.tagId) {
+            <tr>
+              <td class="q-body-sm">{{ tag.displayName }}</td>
+              <td class="q-body-sm q-mono">{{ tag.code }}</td>
+              <td class="q-body-sm">
+                {{ 'settings.referenceData.tags.count' | t: { count: tagCount(tag.tagId) } }}
+              </td>
+              <td class="q-body-sm">
+                <button type="button" class="q-body-sm link" (click)="archiveTag(tag)">
+                  {{ 'settings.referenceData.tags.archive' | t }}
+                </button>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="4">
+                {{ 'settings.referenceData.tags.empty' | t }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      <div class="holiday-form">
+        <input
+          class="q-body field field--narrow"
+          type="text"
+          [placeholder]="'settings.referenceData.tags.field.code' | t"
+          [value]="newTagCode()"
+          (input)="newTagCode.set($any($event.target).value)"
+        />
+        <input
+          class="q-body field field--inline"
+          type="text"
+          [placeholder]="'settings.referenceData.tags.field.name' | t"
+          [value]="newTagName()"
+          (input)="newTagName.set($any($event.target).value)"
+        />
+        <button
+          type="button"
+          class="q-body secondary"
+          (click)="createTag()"
+          [disabled]="!canCreateTag()"
+        >
+          {{ 'settings.referenceData.tags.create' | t }}
+        </button>
+      </div>
+
+      <h3 class="q-body calendar__subhead">{{ 'settings.referenceData.tags.matrix.title' | t }}</h3>
+      @if (branchTags().length === 0 || locationOptions().length === 0) {
+        <p class="q-body-sm empty">{{ 'settings.referenceData.tags.matrix.empty' | t }}</p>
+      } @else {
+        <div class="matrix-scroll">
+          <table class="table matrix">
+            <thead>
+              <tr>
+                <th class="q-caption"></th>
+                @for (location of locationOptions(); track location.id) {
+                  <th class="q-caption">{{ location.displayName }}</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (tag of branchTags(); track tag.tagId) {
+                <tr>
+                  <td class="q-body-sm">{{ tag.displayName }}</td>
+                  @for (location of locationOptions(); track location.id) {
+                    <td class="q-body-sm matrix__cell">
+                      <input
+                        type="checkbox"
+                        [checked]="locationHasTag(location.id, tag.tagId)"
+                        [disabled]="matrixSaving() === location.id + ':' + tag.tagId"
+                        (change)="toggleAssignment(location.id, tag.tagId)"
+                      />
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
   </section>
 }
