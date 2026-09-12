@@ -22,6 +22,20 @@ describe('message catalogues', () => {
     expect(Object.keys(catalogues).sort()).toEqual([...LOCALES].sort());
   });
 
+  it('uses one apostrophe codepoint throughout the uz-Latn catalogue (row X.40)', () => {
+    // U+02BB (MODIFIER LETTER TURNED COMMA) is the standard mark for oʻ/gʻ
+    // and the tutuq belgisi alike in this catalogue's own established
+    // majority style. U+2018/U+2019 (curly quotes) and U+02BC (modifier
+    // letter apostrophe) crept in as the same mark typed a different way —
+    // "yo‘q", "e’lon", "maʼlumot" all read the same word three ways — which
+    // renders inconsistently across fonts and defeats a search for either.
+    const strayApostrophes = ['‘', '’', 'ʼ'];
+    const offendingKeys = Object.entries(messagesUzLatn)
+      .filter(([, value]) => strayApostrophes.some((mark) => value.includes(mark)))
+      .map(([key]) => key);
+    expect(offendingKeys).toEqual([]);
+  });
+
   for (const [locale, catalogue] of Object.entries(catalogues)) {
     it(`has no blank message in ${locale}`, () => {
       const blank = Object.entries(catalogue)

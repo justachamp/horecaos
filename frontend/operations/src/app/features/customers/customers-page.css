@@ -99,7 +99,7 @@
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   color: var(--q-ink-muted);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 /* The empty row, the denied branch and the two notice bands are
@@ -119,7 +119,7 @@
   padding: 0 16px;
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .primary {

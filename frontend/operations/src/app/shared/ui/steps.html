@@ -1,0 +1,19 @@
+<ol class="q-steps" data-testid="q-steps" [attr.aria-label]="ariaLabel()">
+  @for (step of steps(); track step.id; let last = $last) {
+    <li
+      class="q-steps__item"
+      [class.q-steps__item--complete]="step.state === 'complete'"
+      [class.q-steps__item--current]="step.state === 'current'"
+      [class.q-steps__item--upcoming]="step.state === 'upcoming'"
+      [class.q-steps__item--danger]="step.tone === 'danger'"
+      [attr.aria-current]="step.state === 'current' ? 'step' : null"
+      data-testid="q-steps-item"
+    >
+      <span class="q-steps__marker" aria-hidden="true"></span>
+      <span class="q-steps__label q-caption">{{ step.label }}</span>
+      @if (!last) {
+        <span class="q-steps__connector" aria-hidden="true"></span>
+      }
+    </li>
+  }
+</ol>

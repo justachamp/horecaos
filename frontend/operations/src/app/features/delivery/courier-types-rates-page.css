@@ -22,7 +22,7 @@
   color: var(--q-primary);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .rates__table {
@@ -33,14 +33,14 @@
 .rates__table th {
   text-align: left;
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
   background: var(--q-surface-1);
 }
 
 .rates__table td {
   padding: 10px 12px;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   border-top: 1px solid var(--q-hairline);
 }
 
@@ -59,7 +59,7 @@
   color: var(--q-success-text);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .rates__activate:disabled {
@@ -71,7 +71,7 @@
   padding: 2px 8px;
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .rates__empty {
@@ -125,7 +125,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
   color: var(--q-ink-muted);
 }
 
@@ -134,12 +134,12 @@
   padding: 6px 8px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .rates__form-error {
   color: var(--q-error-text);
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .rates__modal-actions {

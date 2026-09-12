@@ -36,7 +36,7 @@
   background: var(--q-canvas);
   color: var(--q-ink-muted);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .pill--on {
@@ -108,7 +108,7 @@
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   color: var(--q-ink-muted);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .outcome-badge--rejected,
@@ -146,22 +146,6 @@
 }
 
 .close-drawer {
-  margin-top: 12px;
-}
-
-.bulk-chip {
-  display: inline-block;
-  margin-top: 12px;
-  padding: 4px 10px;
-  border: 1px solid var(--q-warning);
-  border-radius: var(--q-radius);
-  background: var(--q-canvas);
-  color: var(--q-warning);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.load-more {
   margin-top: 12px;
 }
 

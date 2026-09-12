@@ -207,7 +207,7 @@
   text-align: left;
   padding: 4px 8px;
   color: var(--q-ink-subtle);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   font-weight: 400;
   letter-spacing: 0.32px;
   border-bottom: 1px solid var(--q-hairline);

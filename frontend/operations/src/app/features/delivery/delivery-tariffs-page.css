@@ -20,7 +20,7 @@
   color: #fff;
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .tariffs__table {
@@ -31,7 +31,7 @@
 .tariffs__table th {
   text-align: left;
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
   border-bottom: 1px solid var(--q-hairline);
 }
@@ -46,7 +46,7 @@
 
 .tariff-row td {
   padding: 8px 12px;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   border-bottom: 1px solid var(--q-hairline);
   vertical-align: middle;
 }
@@ -63,7 +63,7 @@
 .tariff-bands th,
 .tariff-bands td {
   padding: 4px 10px;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
   text-align: right;
 }
 
@@ -84,7 +84,7 @@
   background: var(--q-canvas);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .tariffs__action-col button + button {
@@ -95,7 +95,7 @@
   padding: 2px 8px;
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .status-badge--live {
@@ -164,7 +164,7 @@
   padding: 6px 10px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .field--checkbox input {
@@ -189,7 +189,7 @@
   background: var(--q-canvas);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .dialog__actions button:last-child {
@@ -256,7 +256,7 @@
   padding: 4px 8px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 /* The band-set column is text where its neighbours are numbers, and a blank

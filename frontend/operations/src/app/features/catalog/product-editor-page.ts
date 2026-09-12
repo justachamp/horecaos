@@ -16,6 +16,7 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { ActorChip } from '../../shared/ui/actor-chip';
 import { LocalizedFieldGroup } from '../../shared/ui/localized-field-group';
 import { describeApiError } from '../orders/order-errors';
 import { ActivityLogApi, AuditEventView } from '../staff/activity-log-api';
@@ -116,7 +117,7 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
  */
 @Component({
   selector: 'q-product-editor-page',
-  imports: [TPipe, RouterLink, LocalizedFieldGroup],
+  imports: [TPipe, RouterLink, LocalizedFieldGroup, ActorChip],
   templateUrl: './product-editor-page.html',
   styleUrl: './product-editor-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

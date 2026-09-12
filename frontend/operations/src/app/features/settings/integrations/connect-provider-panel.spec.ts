@@ -274,6 +274,44 @@ describe('ConnectProviderPanel', () => {
   });
 
   /**
+   * Row `X.33`: this drawer rendered no step indicator at all before
+   * `q-steps` existed — an operator on the connect step had no way to tell
+   * a bind step followed at all.
+   */
+  describe('the step indicator', () => {
+    function stepItems(): NodeListOf<HTMLElement> {
+      return host().querySelectorAll('[data-testid="q-steps-item"]');
+    }
+
+    it('renders both steps, with connect current and bind upcoming, on the connect step', async () => {
+      await render();
+
+      const steps = stepItems();
+      expect(steps).toHaveLength(2);
+      expect(steps[0].textContent).toContain('Connect');
+      expect(steps[0].className).toContain('q-steps__item--current');
+      expect(steps[1].textContent).toContain('Bind');
+      expect(steps[1].className).toContain('q-steps__item--upcoming');
+    });
+
+    it('marks connect complete and bind current once the drawer moves to the bind step', async () => {
+      await TestBed.configureTestingModule({ imports: [ConnectProviderPanel] }).compileComponents();
+      TestBed.inject(I18n).setLocale('en');
+      fixture = TestBed.createComponent(ConnectProviderPanel);
+      fixture.componentRef.setInput('providers', [TELEGRAM, CLICK]);
+      fixture.componentRef.setInput('phase', 'bind');
+      fixture.componentRef.setInput('brands', [BRAND_ONE]);
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      const steps = stepItems();
+      expect(steps[0].className).toContain('q-steps__item--complete');
+      expect(steps[1].className).toContain('q-steps__item--current');
+    });
+  });
+
+  /**
    * The bind step (wave 66): reachable once the parent flips `phase` to
    * `'bind'` after a successful connect (`integrations-page.spec.ts` proves
    * that hand-off), and — the thing this suite itself must prove — a real

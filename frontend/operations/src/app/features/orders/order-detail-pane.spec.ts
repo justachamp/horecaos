@@ -578,13 +578,95 @@ describe('OrderDetailPane: timeline (§3.10)', () => {
     configure({ get: apiGet({ value: detail(), version: 3 }, entries) });
     const fixture = await render();
 
-    const gap = fixture.nativeElement.querySelector('[data-testid="order-detail-timeline-gap"]');
+    // `q-timeline` (row X.26) renders the gap row now — the order lane's
+    // hand-rolled `<ol>` is gone, but the gap notice's own text is unchanged.
+    const gap = fixture.nativeElement.querySelector('[data-testid="q-timeline-gap"]');
     expect(gap?.textContent).toContain('2');
+  });
+
+  it('renders a transition through q-timeline — row X.26, the same component the audit list uses', async () => {
+    const entries: OrderTimelineEntry[] = [
+      {
+        sequence: 1,
+        fromStatus: 'RECEIVED',
+        toStatus: 'CONFIRMED',
+        trigger: 'APPROVAL_DECISION',
+        actorType: 'USER',
+        occurredAt: '2026-08-30T09:00:00Z',
+      },
+    ];
+    configure({ get: apiGet({ value: detail(), version: 3 }, entries) });
+    const fixture = await render();
+
+    const row = fixture.nativeElement.querySelector(
+      '[data-testid="order-detail-timeline"] [data-testid="q-timeline-entry"]',
+    );
+    expect(row?.textContent).toContain('Received');
+    expect(row?.textContent).toContain('Confirmed');
+    expect(row?.textContent).toContain('Approval decision');
   });
 
   it('renders the production and delivery lanes as not built, never silently dropped', async () => {
     configure({ get: apiGet({ value: detail(), version: 3 }) });
     const fixture = await render();
     expect(fixture.nativeElement.textContent).toContain('not built yet');
+  });
+});
+
+describe('OrderDetailPane: lifecycle rail (row X.33)', () => {
+  function lifecycleSteps(fixture: Awaited<ReturnType<typeof render>>): NodeListOf<HTMLElement> {
+    return (fixture.nativeElement as HTMLElement).querySelectorAll(
+      '[data-testid="order-detail-lifecycle"] [data-testid="q-steps-item"]',
+    );
+  }
+
+  it('marks the order’s current happy-path status current on the rail', async () => {
+    configure({
+      get: apiGet({
+        value: detail({ summary: { ...detail().summary, status: 'PREPARING' } }),
+        version: 3,
+      }),
+    });
+    const fixture = await render();
+
+    const steps = lifecycleSteps(fixture);
+    expect(steps).toHaveLength(6);
+    expect(steps[2].className).toContain('q-steps__item--current');
+    expect(steps[2].textContent).toContain('Preparing');
+  });
+
+  it('appends a cancellation to the happy-path steps the timeline shows the order having reached', async () => {
+    const entries: OrderTimelineEntry[] = [
+      {
+        sequence: 1,
+        fromStatus: 'RECEIVED',
+        toStatus: 'CONFIRMED',
+        trigger: 'APPROVAL_DECISION',
+        actorType: 'USER',
+        occurredAt: '2026-08-30T09:00:00Z',
+      },
+    ];
+    configure({
+      get: apiGet(
+        { value: detail({ summary: { ...detail().summary, status: 'CANCELLED' } }), version: 3 },
+        entries,
+      ),
+    });
+    const fixture = await render();
+
+    const steps = lifecycleSteps(fixture);
+    expect(steps).toHaveLength(3);
+    expect(steps[2].className).toContain('q-steps__item--danger');
+  });
+
+  it('does not render the rail before the order has loaded', async () => {
+    configure({ get: apiGet(new ApiError(ApiErrorCode.NETWORK_UNREACHABLE, 0, null, null)) });
+    const fixture = await render();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="order-detail-lifecycle"]',
+      ),
+    ).toBeNull();
   });
 });

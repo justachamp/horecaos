@@ -20,7 +20,7 @@
   color: #fff;
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .couriers__table {
@@ -31,14 +31,14 @@
 .couriers__table th {
   text-align: left;
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
   border-bottom: 1px solid var(--q-hairline);
 }
 
 .couriers__table td {
   padding: 8px 12px;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   border-bottom: 1px solid var(--q-hairline);
   vertical-align: middle;
 }
@@ -55,14 +55,14 @@
   background: var(--q-canvas);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .status-badge {
   padding: 2px 8px;
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   margin-right: 4px;
 }
 
@@ -94,7 +94,7 @@
   background: var(--q-canvas);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .couriers__reveal button:disabled {
@@ -161,7 +161,7 @@
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--q-type-caption-sm);
 }
 
 .couriers__inline-form {
@@ -179,7 +179,7 @@
 
 .couriers__primary {
   margin-left: 6px;
-  font-size: 11px;
+  font-size: var(--q-type-caption-sm);
   color: var(--q-ink-subtle);
 }
 
@@ -238,7 +238,7 @@
   padding: 6px 10px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .dialog__error {
@@ -258,7 +258,7 @@
   background: var(--q-canvas);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .dialog__actions button:last-child {

@@ -69,7 +69,7 @@ import { ProvenanceResponse } from './reporting-api';
     }
     .provenance__band {
       padding: 6px 10px;
-      font-size: 13px;
+      font-size: var(--q-type-body-xs);
       border-left: 3px solid transparent;
     }
     .provenance__band--amber {

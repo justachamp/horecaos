@@ -362,35 +362,24 @@
     <section class="pane__section" [attr.aria-label]="'orders.detail.section.timeline' | t">
       <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.timeline' | t }}</h2>
 
+      @if (lifecycleSteps(); as steps) {
+        <q-steps
+          class="pane__lifecycle-rail"
+          [steps]="steps"
+          [ariaLabel]="'orders.detail.timeline.lifecycle' | t"
+          data-testid="order-detail-lifecycle"
+        />
+      }
+
       <div class="pane__timeline-lane">
         <p class="q-caption pane__timeline-lane-label">
           {{ 'orders.detail.timeline.lane.commercial' | t }}
         </p>
-        @if (timeline(); as entries) {
+        @if (commercialTimelineEntries(); as entries) {
           @if (entries.length === 0) {
             <p class="q-body-sm pane__state-inline">{{ 'orders.detail.timeline.empty' | t }}</p>
           } @else {
-            <ol class="pane__timeline-entries" data-testid="order-detail-timeline">
-              @for (entry of entries; track entry.sequence; let i = $index) {
-                @if (missingSequenceBefore(entries, i); as missing) {
-                  <li class="pane__timeline-gap" data-testid="order-detail-timeline-gap">
-                    {{ 'orders.detail.timeline.gap' | t: { sequence: missing } }}
-                  </li>
-                }
-                <li class="pane__timeline-entry">
-                  <span class="q-body-sm"
-                    >{{ statusLabel(entry.fromStatus) }} → {{ statusLabel(entry.toStatus) }}</span
-                  >
-                  <span class="q-caption pane__timeline-meta">
-                    {{ triggerLabel(entry.trigger) }}
-                    @if (entry.reasonCode) {
-                      · {{ entry.reasonCode }}
-                    }
-                    · {{ formatOccurredAt(entry.occurredAt) }}
-                  </span>
-                </li>
-              }
-            </ol>
+            <q-timeline [entries]="entries" data-testid="order-detail-timeline" />
           }
         } @else if (timelineError()) {
           <p class="q-body-sm pane__state-inline">{{ 'orders.detail.timeline.error' | t }}</p>

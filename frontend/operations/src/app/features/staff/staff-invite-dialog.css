@@ -41,5 +41,5 @@
   border-radius: var(--q-radius);
   background: var(--q-canvas);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }

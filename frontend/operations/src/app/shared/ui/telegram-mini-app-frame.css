@@ -1,0 +1,72 @@
+.q-telegram-mini-app-frame {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+}
+
+.q-telegram-mini-app-frame__bezel {
+  width: 280px;
+  aspect-ratio: 9 / 19.5;
+  background: var(--q-ink);
+  border-radius: 28px;
+  padding: 10px 8px;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.q-telegram-mini-app-frame__notch {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 84px;
+  height: 18px;
+  background: var(--q-ink);
+  border-radius: 10px;
+  z-index: 1;
+}
+
+.q-telegram-mini-app-frame__screen {
+  width: 100%;
+  height: 100%;
+  background: var(--q-canvas);
+  border-radius: 18px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.q-telegram-mini-app-frame__header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--q-info-text);
+  color: var(--q-inverse-ink);
+}
+
+.q-telegram-mini-app-frame__back,
+.q-telegram-mini-app-frame__close {
+  flex: none;
+}
+
+.q-telegram-mini-app-frame__title {
+  flex: 1;
+  color: var(--q-inverse-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.q-telegram-mini-app-frame__body {
+  flex: 1;
+  overflow: auto;
+}
+
+.q-telegram-mini-app-frame__caption {
+  margin-top: 8px;
+  color: var(--q-ink-muted);
+  text-align: center;
+}

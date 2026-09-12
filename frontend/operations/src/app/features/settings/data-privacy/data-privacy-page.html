@@ -247,7 +247,13 @@
           @for (event of egressEvents(); track event.id) {
             <tr>
               <td class="q-body-sm q-mono">{{ event.recordedAt }}</td>
-              <td class="q-body-sm">{{ actorLabel(event) }}</td>
+              <td class="q-body-sm">
+                <q-actor-chip
+                  [kind]="event.actorType"
+                  [displayName]="event.actorDisplay"
+                  [subject]="event.actorSubject"
+                />
+              </td>
               <td class="q-body-sm">{{ actionLabel(event) }}</td>
               <td class="q-body-sm">{{ event.reason ?? '—' }}</td>
               <td class="q-body-sm q-mono">{{ targetLabel(event) }}</td>

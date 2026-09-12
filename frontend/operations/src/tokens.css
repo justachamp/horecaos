@@ -129,6 +129,31 @@ body {
    this file today. */
 .q-display-tv { font-size: 128px; font-weight: 600; line-height: 1.05; letter-spacing: -0.01em; }
 
+/* Type-scale corrections (T22, row X.40). Every closed-scale step's own
+   font-size as a custom property, for the CSS rule that sets font-size
+   alongside colour, weight or spacing that is genuinely the component's
+   own — a `.q-*` utility class does not fit there without moving markup
+   `var(--q-type-*)` closes the raw-px hole without moving. Filled 249 raw
+   `font-size: Npx` declarations across `frontend/operations` that a new
+   ESLint rule (P02) fails the build on. `--q-type-caption-sm` (11px),
+   `--q-type-body-xs` (13px) and `--q-type-body-lg` (18px) are new — the
+   scale had no step at any of the three sizes fixing those call sites
+   turned up; every other property below names an existing step's own
+   font-size and changes no rendered size anywhere. */
+:root {
+  --q-type-caption-sm: 11px;
+  --q-type-caption: 12px;
+  --q-type-body-xs: 13px;
+  --q-type-body-sm: 14px;
+  --q-type-body: 16px;
+  --q-type-body-lg: 18px;
+  --q-type-subhead: 20px;
+  --q-type-title: 24px;
+  --q-type-data-lg: 28px;
+  --q-type-headline: 32px;
+  --q-type-display: 42px;
+}
+
 /* Only transform and opacity animate. Console table data never animates. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

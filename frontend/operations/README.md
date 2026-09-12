@@ -18,16 +18,16 @@ This repository contains **foundations, not screens**. The smallest thing that
 proves the shape is right and lets the next person start on a view instead of on
 plumbing.
 
-| Area | State |
-|---|---|
-| Angular 22 workspace, standalone, zoneless, Vitest | Builds and tests |
-| Design tokens, vendored and applied | `src/tokens.css`, verified in a browser |
-| Shell — rail, top bar, always-visible late count, F2 | Built |
-| Routing — two real routes, eleven honest placeholders | Built |
-| Authentication — first-party sign-in page, backend exchanges credentials with Keycloak | Built and verified live |
-| API client — Problem Details, idempotency, `If-Match`, cursor pages | Built and tested |
-| Localisation — runtime switching, build-time completeness | Built and tested |
-| Money and time formatting | Built and tested |
+| Area                                                                                   | State                                   |
+| -------------------------------------------------------------------------------------- | --------------------------------------- |
+| Angular 22 workspace, standalone, zoneless, Vitest                                     | Builds and tests                        |
+| Design tokens, vendored and applied                                                    | `src/tokens.css`, verified in a browser |
+| Shell — rail, top bar, always-visible late count, F2                                   | Built                                   |
+| Routing — two real routes, eleven honest placeholders                                  | Built                                   |
+| Authentication — first-party sign-in page, backend exchanges credentials with Keycloak | Built and verified live                 |
+| API client — Problem Details, idempotency, `If-Match`, cursor pages                    | Built and tested                        |
+| Localisation — runtime switching, build-time completeness                              | Built and tested                        |
+| Money and time formatting                                                              | Built and tested                        |
 
 ### Deliberately absent
 
@@ -39,8 +39,8 @@ plumbing.
   route, because it teaches operators habits the finished one has to break.
 - **A generated API client.** ADR 0031 requires types generated from the OpenAPI
   document and ADR 0035 requires pinning a published version of it in CI. No
-  document is published yet, so `src/app/core/api` hand-writes the *conventions*
-  — which are stable — and hand-writes no *response types*, which are not.
+  document is published yet, so `src/app/core/api` hand-writes the _conventions_
+  — which are stable — and hand-writes no _response types_, which are not.
 - **Live updates.** ADR 0045 is not built. `ServiceStatus` is where the polling
   fallback goes, and it says so.
 - **Any capability check.** Deliberate, not missing. See "Authorization" below.
@@ -169,6 +169,48 @@ deployment. A shared terminal changes hands between operators mid-shift.
 
 Content names — dishes, brands, branches, people — are never message keys. They
 are tenant data in the language the tenant wrote them.
+
+**What a fourth locale (Kazakh or Georgian, per `X.40`'s own roadmap line)
+would actually cost** — recorded here rather than assumed, since a closed
+three-locale set is declared independently in more places than the frontend
+alone:
+
+- **Two enums** — `legal.domain.TermsLocale` and `notifications.domain.
+MessageLocale`, each `RU`/`UZ_LATN`/`EN`, each declared locally rather than
+  shared across module boundaries (`TermsLocale`'s own doc comment explains
+  why: neither lives in an `api` package another module may depend on).
+- **Three closed-set declarations** that either require every locale before
+  accepting a write or reject one outside the set — `notifications.
+application.NotificationTemplateService` (via `MessageLocale.required()`,
+  a template version needs all three before it can be saved or activated),
+  `ordering.application.OrderOutcomeReasonService.REQUIRED_LOCALES`, and
+  `marketing.domain.AudiencePredicate.SUPPORTED_LOCALES`.
+- **A hard-coded reference list on this side of the fence** — `core/i18n/
+i18n.ts`'s own `LOCALES` — mirrored again inside `features/marketing/
+audience-predicates.ts`.
+- **A SQL fallback CASE** — `JdbcCatalogStore`'s translation ordering
+  (`ORDER BY CASE t.locale WHEN 'ru' THEN 0 WHEN 'uz-Latn' THEN 1 WHEN 'en'
+THEN 2 ELSE 3 END`, twice in that file), which decides which locale's
+  translation a caller sees when it asked for none in particular.
+- **Nine append-only `CHECK` constraints** across `platform/src/main/
+resources/db/migration` — `ck_template_version_locale` (V0026),
+  `ck_notification_locale` (V0026), `ck_customer_metrics_locale` (V0043),
+  `ck_outcome_reason_text_locale` (V0029), `ck_order_reject_reason_text_locale`
+  (V0119) and `ck_terms_content_locale` (V0160) all spell the set
+  `('ru', 'uz-Latn', 'en')`; `ck_owner_invitation_locale` (V0210),
+  `ck_owner_invitation_event_locale` (V0215) and `ck_password_reset_locale`
+  (V0213) spell it `('uz', 'ru', 'en')` instead — three of the nine, not the
+  one this row's own brief named, already disagree with the other six about
+  `uz` versus `uz-Latn`. Migrations are append-only, so fixing that drift is
+  its own forward migration, not a same-wave edit — recorded here, not fixed
+  here.
+
+A fourth locale is every one of those, plus a font and a `dir` decision (kk
+and ka are both left-to-right Latin/Cyrillic-adjacent, so no bidi work, but
+neither face ships in the bundled `@ibm/plex-sans` Cyrillic/Latin-Extended
+subset above), plus the parity work every wave that ever wrote `.ru`/`.uz-
+Latn`/`.en` beside a message key would owe a fourth field. None of it is a
+frontend-only change, which is why it stays a roadmap line and not a task.
 
 ---
 

@@ -1,0 +1,40 @@
+.q-kiosk-frame {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+}
+
+.q-kiosk-frame__bezel {
+  width: 220px;
+  aspect-ratio: 9 / 16;
+  background: var(--q-ink);
+  border-radius: 10px;
+  padding: 14px 12px 22px;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.q-kiosk-frame__screen {
+  width: 100%;
+  height: 100%;
+  background: var(--q-canvas);
+  overflow: auto;
+}
+
+.q-kiosk-frame__stand {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 6px;
+  background: var(--q-ink-subtle);
+  border-radius: 3px;
+}
+
+.q-kiosk-frame__caption {
+  margin-top: 8px;
+  color: var(--q-ink-muted);
+  text-align: center;
+}

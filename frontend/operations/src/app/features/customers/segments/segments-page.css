@@ -128,7 +128,7 @@
   padding: 0 16px;
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .primary {

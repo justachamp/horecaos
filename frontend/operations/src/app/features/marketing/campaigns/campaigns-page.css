@@ -45,7 +45,7 @@
   background: none;
   color: var(--q-ink-muted);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   border-bottom: 2px solid transparent;
 }
 
@@ -89,7 +89,7 @@
   color: #fff;
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .campaigns__table {
@@ -100,14 +100,14 @@
 .campaigns__table th {
   text-align: left;
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
   border-bottom: 1px solid var(--q-hairline);
 }
 
 .campaigns__table td {
   padding: 8px 12px;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   border-bottom: 1px solid var(--q-hairline);
   vertical-align: middle;
 }
@@ -129,7 +129,7 @@
   padding: 2px 8px;
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .skeleton {
@@ -185,7 +185,7 @@
   padding: 6px 10px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .predicate-row {
@@ -204,7 +204,7 @@
   padding: 4px 8px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .dialog__error {
@@ -225,7 +225,7 @@
   background: var(--q-canvas);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .dialog__actions button:last-child {

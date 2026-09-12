@@ -11,6 +11,7 @@ import {
 
 import { I18n } from '../../../core/i18n/i18n';
 import { SecretInput } from '../../../shared/ui/secret-input/secret-input';
+import { StepItem, Steps } from '../../../shared/ui/steps';
 import { BrandView } from '../brand-profile/brand-profile-api';
 import { LocationView } from '../locations/locations-api';
 import { ProviderConnectDeclaration } from './integrations-api';
@@ -67,7 +68,7 @@ export interface BindSubmission {
 @Component({
   selector: 'app-connect-provider-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SecretInput],
+  imports: [SecretInput, Steps],
   template: `
     <div class="backdrop" (click)="cancel.emit()">
       <div
@@ -93,6 +94,17 @@ export interface BindSubmission {
             ✕
           </button>
         </div>
+
+        <q-steps
+          class="steps"
+          [steps]="steps()"
+          [ariaLabel]="
+            i18n.t('settings.integrations.connect.steps.progress', {
+              current: phase() === 'connect' ? 1 : 2,
+              total: 2,
+            })
+          "
+        />
 
         @if (phase() === 'connect') {
           <div class="body">
@@ -298,12 +310,17 @@ export interface BindSubmission {
       margin: 0;
     }
 
+    .steps {
+      display: block;
+      padding: 16px 24px 0;
+    }
+
     .close {
       background: none;
       border: none;
       color: var(--q-ink-muted);
       cursor: pointer;
-      font-size: 16px;
+      font-size: var(--q-type-body);
     }
 
     .body {
@@ -422,6 +439,20 @@ export class ConnectProviderPanel {
   protected readonly selectedDeclaration = computed(() =>
     this.providers().find((declaration) => declaration.providerType === this.providerType()),
   );
+
+  /** `q-steps`'s own shape, row `X.33` — this drawer's first consumer. */
+  protected readonly steps = computed<readonly StepItem[]>(() => [
+    {
+      id: 'connect',
+      label: this.i18n.t('settings.integrations.connect.steps.connect'),
+      state: this.phase() === 'connect' ? 'current' : 'complete',
+    },
+    {
+      id: 'bind',
+      label: this.i18n.t('settings.integrations.connect.steps.bind'),
+      state: this.phase() === 'connect' ? 'upcoming' : 'current',
+    },
+  ]);
 
   protected readonly bindLocationsForBrand = computed(() =>
     this.locations().filter((location) => location.brandId === this.bindBrandId()),

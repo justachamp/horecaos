@@ -1,0 +1,19 @@
+<div class="q-otp-input" role="group" [attr.aria-label]="ariaLabel()" data-testid="q-otp-input">
+  @for (index of indexes(); track index) {
+    <input
+      #cell
+      class="q-otp-input__cell q-body"
+      type="text"
+      inputmode="numeric"
+      autocomplete="one-time-code"
+      maxlength="1"
+      [value]="digits()[index] ?? ''"
+      [disabled]="disabled()"
+      [attr.aria-label]="cellLabelPrefix() + ' ' + (index + 1)"
+      (input)="onCellInput(index, $event)"
+      (keydown)="onCellKeydown(index, $event)"
+      (paste)="onPaste($event)"
+      data-testid="q-otp-input-cell"
+    />
+  }
+</div>

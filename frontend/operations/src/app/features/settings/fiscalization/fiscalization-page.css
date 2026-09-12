@@ -136,7 +136,7 @@
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   color: var(--q-ink-muted);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .status-badge--good {

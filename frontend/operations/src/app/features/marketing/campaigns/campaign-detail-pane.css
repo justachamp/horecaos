@@ -28,7 +28,7 @@
 .pane__close {
   border: none;
   background: none;
-  font-size: 20px;
+  font-size: var(--q-type-subhead);
   line-height: 1;
   cursor: pointer;
   color: var(--q-ink-muted);
@@ -45,7 +45,7 @@
   padding: 2px 8px;
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   flex-shrink: 0;
 }
 
@@ -59,12 +59,12 @@
 
 .facts dt {
   color: var(--q-ink-subtle);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .facts dd {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .facts .q-caption {
@@ -77,14 +77,14 @@
   margin-bottom: 12px;
   background: var(--q-warning-tint);
   color: var(--q-warning-text);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .resume-note {
   padding: 8px 12px;
   margin-bottom: 12px;
   background: var(--q-surface-1);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .error-band {
@@ -107,7 +107,7 @@
   color: #fff;
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .actions button:disabled {
@@ -129,14 +129,14 @@
 .recipients__table th {
   text-align: left;
   padding: 6px 8px;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
   border-bottom: 1px solid var(--q-hairline);
 }
 
 .recipients__table td {
   padding: 6px 8px;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
   border-bottom: 1px solid var(--q-hairline);
 }
 
@@ -169,7 +169,7 @@
   padding: 6px 10px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .dialog__actions {
@@ -184,7 +184,7 @@
   background: var(--q-canvas);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .dialog__actions button:last-child {
