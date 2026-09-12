@@ -78,6 +78,23 @@ describe('MoneyInput', () => {
     expect(emitted).toBe(0);
   });
 
+  it('refuses a typed negative amount instead of silently flipping its sign', () => {
+    const fixture = render();
+    let emitted: number | undefined;
+    fixture.componentInstance.valueMinorChange.subscribe((v) => (emitted = v));
+    const input = field(fixture);
+
+    input.value = '-500';
+    input.dispatchEvent(new Event('input'));
+
+    // Stripping non-digit characters (spaces, a dot) is deliberate — but a
+    // leading minus is a sign, not noise. Silently dropping it would turn a
+    // typed "-500" into +500, the opposite of what was typed. There is no
+    // negative-amount call site today, so the honest outcome is the same one
+    // an empty field already produces: reset to 0, not a flipped magnitude.
+    expect(emitted).toBe(0);
+  });
+
   it('shows the som suffix in Russian', () => {
     const fixture = render();
 

@@ -75,6 +75,50 @@ describe('PercentInput', () => {
     expect(emitted).toBe(5000);
   });
 
+  it('never leaves the field non-numeric on empty input', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('basisPoints', 1000);
+    fixture.detectChanges();
+    let emitted: number | undefined;
+    fixture.componentInstance.basisPointsChange.subscribe((v) => (emitted = v));
+    const input = field(fixture);
+
+    input.value = '';
+    input.dispatchEvent(new Event('input'));
+
+    // Unlike a stale-value early return, clearing the field must emit — the
+    // same contract MoneyInput.onInput already holds (money-input.spec.ts's
+    // "never leaves the field non-numeric on empty input"), so a clear-then-
+    // submit never silently resubmits the pre-edit percentage.
+    expect(emitted).toBe(0);
+  });
+
+  it('clamps a typed negative value to the minimum, the same as a stripped sign would', () => {
+    const fixture = render();
+    let emitted: number | undefined;
+    fixture.componentInstance.basisPointsChange.subscribe((v) => (emitted = v));
+    const input = field(fixture);
+
+    input.value = '-5';
+    input.dispatchEvent(new Event('input'));
+
+    expect(emitted).toBe(0);
+  });
+
+  it('clamps a typed negative value to a caller-supplied minimum', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('min', 200);
+    fixture.detectChanges();
+    let emitted: number | undefined;
+    fixture.componentInstance.basisPointsChange.subscribe((v) => (emitted = v));
+    const input = field(fixture);
+
+    input.value = '-5';
+    input.dispatchEvent(new Event('input'));
+
+    expect(emitted).toBe(200);
+  });
+
   it('normalises the field on blur', () => {
     const fixture = render();
     const input = field(fixture);

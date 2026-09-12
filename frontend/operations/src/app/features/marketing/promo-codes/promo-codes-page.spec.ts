@@ -197,6 +197,36 @@ describe('PromoCodesPage', () => {
     expect(page['canSubmit']()).toBe(false);
   });
 
+  it('reflects a cleared percent field rather than resubmitting the pre-edit amount', async () => {
+    const draft = vi.fn();
+    await render(fakeApi({ draft }));
+    const host = fixture.nativeElement as HTMLElement;
+    const page = fixture.componentInstance;
+    page['openForm']();
+    page['formName'].set('Clear test');
+    page['formCode'].set('CLEARTST');
+    fixture.detectChanges();
+
+    const percentField = host.querySelector<HTMLInputElement>(
+      '[data-testid="q-percent-input-field"]',
+    )!;
+    percentField.value = '';
+    percentField.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Before PercentInput.onInput emitted on empty input, it returned early
+    // and left `formBasisPoints` at its stale default (1000 — the form's own
+    // opening default) — `canSubmit` would wrongly stay true, and hitting
+    // submit right after clearing would silently draft the pre-edit 10%
+    // discount as if the operator had never touched the field.
+    expect(page['formBasisPoints']()).toBe(0);
+    expect(page['canSubmit']()).toBe(false);
+
+    await page['submit']();
+
+    expect(draft).not.toHaveBeenCalled();
+  });
+
   it('refuses a percentage outside 0-100% before it ever reaches the server', async () => {
     await render(fakeApi());
     const page = fixture.componentInstance;

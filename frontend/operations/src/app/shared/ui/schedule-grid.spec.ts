@@ -131,8 +131,15 @@ describe('ScheduleGrid', () => {
     checkbox.checked = false;
     checkbox.dispatchEvent(new Event('change'));
 
-    expect(emitted?.[0].closedAllDay).toBe(false);
-    expect(emitted?.[0].opensAt).not.toBeNull();
+    // The exact default window, not just that some non-null value showed up —
+    // a regression that reopened onto a zero-length or otherwise nonsensical
+    // window (e.g. '00:00'/'00:00') must not read as a passing test.
+    expect(emitted?.[0]).toEqual({
+      date: '2026-12-31',
+      closedAllDay: false,
+      opensAt: '09:00',
+      closesAt: '18:00',
+    });
   });
 
   it('adds a new dated exception from the date field', () => {

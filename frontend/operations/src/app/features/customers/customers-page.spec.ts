@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
@@ -116,9 +117,14 @@ describe('CustomersPage', () => {
     fixture.detectChanges();
 
     (combobox.querySelector('[data-testid="q-combobox-option"]') as HTMLElement).click();
+    await flushMicrotasks();
     fixture.detectChanges();
 
-    expect(host.querySelector('[data-testid="customers-create-button"]')).not.toBeNull();
+    // The create button is unconditional chrome, present before and after
+    // this click regardless of whether navigation happened — asserting on it
+    // proves nothing about the selection. What `openCustomer` actually
+    // promises is a navigation to the selected customer's id.
+    expect(TestBed.inject(Location).path()).toBe('/customer-1');
   });
 
   it('opens the create dialog with the typed text when the combobox’s create-on-miss row is activated', async () => {

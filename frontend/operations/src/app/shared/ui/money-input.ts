@@ -72,8 +72,17 @@ export class MoneyInput {
     // to digits `1`,`2`,`5`,`0`,`0`,`0`) and the decimal-rejection behaviour
     // (`"125.50"`'s `.` is dropped, never read as cents a currency with no
     // minor unit cannot have).
+    //
+    // A leading `-` is refused rather than stripped along with the rest of
+    // the noise: silently dropping the sign would turn a typed "-500" into
+    // 500, the exact opposite of what the operator typed. This field has no
+    // negative-amount call site today (a delivery fee, a discount amount),
+    // so a sign is treated as an invalid entry and the value resets to 0,
+    // the same "cleared field" outcome an empty input already produces.
+    const isNegative = raw.trimStart().startsWith('-');
     const digitsOnly = raw.replace(/[^\d]/g, '');
-    const value = digitsOnly === '' ? 0 : Math.min(Number(digitsOnly), Number.MAX_SAFE_INTEGER);
+    const value =
+      isNegative || digitsOnly === '' ? 0 : Math.min(Number(digitsOnly), Number.MAX_SAFE_INTEGER);
     this.lastEmitted = value;
     this.displayText.set(this.formatted(value));
     this.valueMinorChange.emit(value);

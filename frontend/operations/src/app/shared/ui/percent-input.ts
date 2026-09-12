@@ -57,10 +57,11 @@ export class PercentInput {
   protected onInput(raw: string): void {
     this.displayText.set(raw);
     const parsed = Number.parseFloat(raw.replace(',', '.'));
-    if (!Number.isFinite(parsed)) {
-      return;
-    }
-    const basisPoints = Math.round(parsed * 100);
+    // An empty or otherwise unparsable field is not "leave the model alone" —
+    // that would let a cleared field silently keep submitting the pre-edit
+    // percentage (see MoneyInput.onInput, which emits 0 on empty the same
+    // way). Treat it as zero and clamp exactly like a valid value.
+    const basisPoints = Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
     const clamped = Math.min(this.max(), Math.max(this.min(), basisPoints));
     this.lastEmitted = clamped;
     this.basisPointsChange.emit(clamped);
