@@ -1588,6 +1588,114 @@
         "required" : [ "bands" ],
         "type" : "object"
       },
+      "BatchImportRequest" : {
+        "properties" : {
+          "dryRun" : {
+            "type" : "boolean"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BatchImportZoneRow"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "rows" ],
+        "type" : "object"
+      },
+      "BatchImportResponse" : {
+        "properties" : {
+          "accepted" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "dryRun" : {
+            "type" : "boolean"
+          },
+          "rejected" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RowOutcomeResponse"
+            },
+            "type" : "array"
+          },
+          "totalRows" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "BatchImportZoneRow" : {
+        "properties" : {
+          "code" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "currency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "deliveryTariffId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "displayNameEn" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "displayNameRu" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "displayNameUz" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "externalRef" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "freeDeliveryFromMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "geoJson" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "minBasketMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "regionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "role" : {
+            "enum" : [ "DELIVERY", "CATCHMENT" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "currency", "displayNameEn", "displayNameRu", "displayNameUz", "externalRef", "geoJson", "role" ],
+        "type" : "object"
+      },
       "BeginRequest" : {
         "properties" : {
           "deviceClass" : {
@@ -6128,6 +6236,36 @@
         },
         "type" : "object"
       },
+      "DraftRosterEntryRequest" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "courierId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "plannedEnd" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "plannedStart" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reason" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "brandId", "courierId", "locationId", "plannedEnd", "plannedStart", "reason" ],
+        "type" : "object"
+      },
       "DueCredential" : {
         "properties" : {
           "daysOld" : {
@@ -9686,6 +9824,9 @@
             "format" : "date-time",
             "type" : "string"
           },
+          "courierDisplayReference" : {
+            "type" : "string"
+          },
           "courierId" : {
             "format" : "uuid",
             "type" : "string"
@@ -12385,6 +12526,44 @@
           "versionNumber" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "PlannedShiftResponse" : {
+        "properties" : {
+          "comparison" : {
+            "$ref" : "#/components/schemas/RosterComparisonView"
+          },
+          "courierDisplayReference" : {
+            "type" : "string"
+          },
+          "courierId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "entryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "plannedEnd" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "plannedStart" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "publishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "respondedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -15614,6 +15793,31 @@
         "required" : [ "reason" ],
         "type" : "object"
       },
+      "RosterComparisonView" : {
+        "properties" : {
+          "coverage" : {
+            "type" : "string"
+          },
+          "matchedDutyState" : {
+            "type" : "string"
+          },
+          "matchedShiftId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RosterEntryReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "RosterEntryResponse" : {
         "properties" : {
           "activeAssignments" : {
@@ -15854,6 +16058,38 @@
           },
           "subscribed" : {
             "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "RowOutcomeResponse" : {
+        "properties" : {
+          "accepted" : {
+            "type" : "boolean"
+          },
+          "areaSquareMeters" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "error" : {
+            "type" : "string"
+          },
+          "externalRef" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "warnings" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "zoneId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -31940,6 +32176,53 @@
         "tags" : [ "Service zones" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/import-batch" : {
+      "post" : {
+        "description" : "Every accepted row lands as a new zone's DRAFT version, exactly like drafting one by hand — never activated by this endpoint. dryRun runs every check a real import would (geometry validity, the area ceiling, the region's bounding box) and then rolls the whole batch back, so an operator sees the outcome before committing it. A coordinate-order mistake still produces a valid polygon that ships nowhere near where it should — that is exactly why ADR 0037 gates activation behind rendering the shape on a map beside its source (X.4), which this endpoint does not attempt.",
+        "operationId" : "importBatch",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BatchImportRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BatchImportResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Bulk-import legacy zone geometry (operations gap map row 3.6c, ADR 0037)",
+        "tags" : [ "Service zones" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}" : {
       "get" : {
         "operationId" : "detail_2",
@@ -32913,6 +33196,267 @@
         "tags" : [ "Courier operations" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/courier-roster-entries" : {
+      "get" : {
+        "description" : "The plan a manager authored, as distinct from what a courier actually opened. from/to window the read; both default to the surrounding week when omitted so the grid always has something to draw.",
+        "operationId" : "rosterEntries",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 200,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PlannedShiftResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The branch's planned shifts (IA 3.5's roster, over P02's ScheduleGrid)",
+        "tags" : [ "Courier operations" ]
+      },
+      "post" : {
+        "description" : "Lands as DRAFT. Refused when the courier has no live engagement, the same precondition a courier's own shift-open checks.",
+        "operationId" : "draftRosterEntry",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DraftRosterEntryRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlannedShiftResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Plan a courier's shift ahead of time",
+        "tags" : [ "Courier operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/courier-roster-entries/comparison" : {
+      "get" : {
+        "description" : "Every planned entry in the window, each carrying whichever actual shift of the same courier overlapped it — COVERED, PENDING (the window has not elapsed) or UNCOVERED. The comparison is computed at read time; nothing here writes MISSED onto the entry itself.",
+        "operationId" : "rosterComparison",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 200,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PlannedShiftResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Planned versus actual, for one period (IA 3.5)",
+        "tags" : [ "Courier operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/courier-roster-entries/{entryId}/cancel" : {
+      "post" : {
+        "operationId" : "cancelRosterEntry",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entryId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RosterEntryReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Cancel a planned shift that is still DRAFT or PUBLISHED",
+        "tags" : [ "Courier operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/courier-roster-entries/{entryId}/publish" : {
+      "post" : {
+        "operationId" : "publishRosterEntry",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entryId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RosterEntryReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Publish a planned shift, making it a visible offer",
+        "tags" : [ "Courier operations" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/courier-settlement-periods" : {
       "get" : {
         "description" : "CLOSED periods (statement hashed, payout not yet authorised) sort first by the largest amount payable. Optionally filtered to one status.",
@@ -33095,7 +33639,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/courier-shifts" : {
       "get" : {
-        "description" : "Open, closed and everything between — including AWAITING_APPROVAL, which is the manager's own worklist on this screen.",
+        "description" : "Open, closed and everything between — including AWAITING_APPROVAL, which is the manager's own worklist on this screen. from/to window the read to a period; omitted, the read falls back to the most recent `limit` shifts the way this endpoint always has.",
         "operationId" : "courierShifts",
         "parameters" : [ {
           "in" : "path",
@@ -33119,6 +33663,22 @@
           "required" : true,
           "schema" : {
             "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
             "type" : "string"
           }
         }, {

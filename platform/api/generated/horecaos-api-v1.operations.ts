@@ -333,6 +333,35 @@ export interface BandsRequest {
   bands: Array<LocationServiceOperationsControllerBandRequest>;
 }
 
+export interface BatchImportRequest {
+  dryRun?: boolean;
+  rows: Array<BatchImportZoneRow>;
+}
+
+export interface BatchImportResponse {
+  accepted?: number;
+  dryRun?: boolean;
+  rejected?: number;
+  rows?: Array<RowOutcomeResponse>;
+  totalRows?: number;
+}
+
+export interface BatchImportZoneRow {
+  code: string;
+  currency: string;
+  deliveryTariffId?: string;
+  displayNameEn: string;
+  displayNameRu: string;
+  displayNameUz: string;
+  externalRef: string;
+  freeDeliveryFromMinor?: number;
+  geoJson: string;
+  minBasketMinor?: number;
+  priority?: number;
+  regionId?: string;
+  role: "DELIVERY" | "CATCHMENT";
+}
+
 export interface BindRequest {
   brandId?: string;
   capabilities: Array<string>;
@@ -1195,6 +1224,15 @@ export interface DraftRedemptionPolicyRequest {
   validUntil?: string;
 }
 
+export interface DraftRosterEntryRequest {
+  brandId: string;
+  courierId: string;
+  locationId: string;
+  plannedEnd: string;
+  plannedStart: string;
+  reason: string;
+}
+
 export interface DutySessionResponse {
   collectionGate?: string;
   courierId?: string;
@@ -1754,6 +1792,7 @@ export interface OperationsCourierControllerShiftResponse {
   approvalRequestId?: string;
   breakSeconds?: number;
   closedAt?: string;
+  courierDisplayReference?: string;
   courierId?: string;
   dutyState?: string;
   openedAt?: string;
@@ -2275,6 +2314,18 @@ export interface PlanQueueResponse {
   sourceAt?: string;
   status?: string;
   version?: number;
+}
+
+export interface PlannedShiftResponse {
+  comparison?: RosterComparisonView;
+  courierDisplayReference?: string;
+  courierId?: string;
+  entryId?: string;
+  plannedEnd?: string;
+  plannedStart?: string;
+  publishedAt?: string;
+  respondedAt?: string;
+  status?: string;
 }
 
 export interface PreferenceResponse {
@@ -2817,6 +2868,16 @@ export interface RevokeResponse {
   changed?: boolean;
 }
 
+export interface RosterComparisonView {
+  coverage?: string;
+  matchedDutyState?: string;
+  matchedShiftId?: string;
+}
+
+export interface RosterEntryReasonRequest {
+  reason: string;
+}
+
 export interface RosterEntryResponse {
   activeAssignments?: number;
   concurrencyCeiling?: number;
@@ -2888,6 +2949,16 @@ export interface RoutingRuleRequest {
 export interface RoutingRuleResponse {
   layer?: string;
   ruleId?: string;
+}
+
+export interface RowOutcomeResponse {
+  accepted?: boolean;
+  areaSquareMeters?: number;
+  error?: string;
+  externalRef?: string;
+  version?: number;
+  warnings?: Array<string>;
+  zoneId?: string;
 }
 
 export interface RowResponse {
@@ -3540,6 +3611,7 @@ export interface Operations {
   "summary": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews/summary"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { locationId?: string; submittedFrom?: string; submittedTo?: string } } }; responses: { "200": OperationsReviewControllerSummaryResponse } };
   "list_9": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<ZoneSummaryResponse> } };
   "create_3": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateZoneRequest }; responses: { "200": ZoneView } };
+  "importBatch": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/import-batch"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: BatchImportRequest }; responses: { "200": BatchImportResponse } };
   "detail_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } } }; responses: { "200": ZoneDetailResponse } };
   "bind_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/locations"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } }; body: ServiceZoneControllerBindLocationRequest }; responses: { "200": unknown } };
   "unbind": { method: "DELETE"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; zoneId: string } } }; responses: { "200": unknown } };
@@ -3562,11 +3634,16 @@ export interface Operations {
   "createCourierGroup": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-groups"; request: { parameters: { path: { tenantId: string } }; body: CreateCourierGroupRequest }; responses: { "200": CourierGroupIdResponse } };
   "archiveCourierGroup": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-groups/{groupId}/archival"; request: { parameters: { path: { groupId: string; tenantId: string } }; body: CourierRosterReasonRequest }; responses: { "200": unknown } };
   "courierPolicy": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-policy"; request: { parameters: { path: { tenantId: string }; query: { brandId?: string; locationId?: string } } }; responses: { "200": CourierPolicyResponse } };
+  "rosterEntries": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-roster-entries"; request: { parameters: { path: { tenantId: string }; query: { brandId: string; from?: string; limit?: number; locationId: string; to?: string } } }; responses: { "200": Array<PlannedShiftResponse> } };
+  "draftRosterEntry": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-roster-entries"; request: { parameters: { path: { tenantId: string } }; body: DraftRosterEntryRequest }; responses: { "200": PlannedShiftResponse } };
+  "rosterComparison": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-roster-entries/comparison"; request: { parameters: { path: { tenantId: string }; query: { brandId: string; from: string; limit?: number; locationId: string; to: string } } }; responses: { "200": Array<PlannedShiftResponse> } };
+  "cancelRosterEntry": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-roster-entries/{entryId}/cancel"; request: { parameters: { path: { entryId: string; tenantId: string } }; body: RosterEntryReasonRequest }; responses: { "200": unknown } };
+  "publishRosterEntry": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-roster-entries/{entryId}/publish"; request: { parameters: { path: { entryId: string; tenantId: string } }; body: RosterEntryReasonRequest }; responses: { "200": unknown } };
   "settlementPeriods": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-settlement-periods"; request: { parameters: { path: { tenantId: string }; query: { limit?: number; status?: string } } }; responses: { "200": Array<SettlementPeriodResponse> } };
   "closePeriod": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-settlement-periods/{periodId}/close"; request: { parameters: { path: { periodId: string; tenantId: string } }; body: CloseperiodRequest }; responses: { "200": StatementResponse } };
   "authorisePayout": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-settlement-periods/{periodId}/payouts"; request: { parameters: { path: { periodId: string; tenantId: string } }; body: PayoutRequest }; responses: { "200": PayoutResponse } };
   "statement": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-settlement-periods/{periodId}/statement"; request: { parameters: { path: { periodId: string; tenantId: string } } }; responses: { "200": {  } } };
-  "courierShifts": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-shifts"; request: { parameters: { path: { tenantId: string }; query: { brandId: string; limit?: number; locationId: string } } }; responses: { "200": Array<OperationsCourierControllerShiftResponse> } };
+  "courierShifts": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-shifts"; request: { parameters: { path: { tenantId: string }; query: { brandId: string; from?: string; limit?: number; locationId: string; to?: string } } }; responses: { "200": Array<OperationsCourierControllerShiftResponse> } };
   "approveShift": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-shifts/{shiftId}/approve"; request: { parameters: { path: { shiftId: string; tenantId: string } }; body: ApproveHoursRequest }; responses: { "200": unknown } };
   "closeShift": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-shifts/{shiftId}/close"; request: { parameters: { path: { shiftId: string; tenantId: string } }; body: ManagerCloseRequest }; responses: { "200": unknown } };
   "types": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-types"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<CourierTypeResponse> } };
