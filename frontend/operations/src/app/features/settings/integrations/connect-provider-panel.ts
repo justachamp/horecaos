@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 
 import { I18n } from '../../../core/i18n/i18n';
+import { StepItem, Steps } from '../../../shared/ui/steps';
 import { BrandView } from '../brand-profile/brand-profile-api';
 import { LocationView } from '../locations/locations-api';
 import { ProviderConnectDeclaration } from './integrations-api';
@@ -66,6 +67,7 @@ export interface BindSubmission {
 @Component({
   selector: 'app-connect-provider-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [Steps],
   template: `
     <div class="backdrop" (click)="cancel.emit()">
       <div
@@ -91,6 +93,17 @@ export interface BindSubmission {
             ✕
           </button>
         </div>
+
+        <q-steps
+          class="steps"
+          [steps]="steps()"
+          [ariaLabel]="
+            i18n.t('settings.integrations.connect.steps.progress', {
+              current: phase() === 'connect' ? 1 : 2,
+              total: 2,
+            })
+          "
+        />
 
         @if (phase() === 'connect') {
           <div class="body">
@@ -197,7 +210,9 @@ export interface BindSubmission {
               }
             </select>
             @if (brands().length === 0) {
-              <p class="q-caption hint">{{ i18n.t('settings.integrations.connect.bind.noBrands') }}</p>
+              <p class="q-caption hint">
+                {{ i18n.t('settings.integrations.connect.bind.noBrands') }}
+              </p>
             }
 
             <label class="q-caption field-label" for="connect-bind-location">{{
@@ -210,7 +225,9 @@ export interface BindSubmission {
               (change)="onBindLocationChange($event)"
               [disabled]="bindSubmitting()"
             >
-              <option value="">{{ i18n.t('settings.integrations.connect.bind.locationAny') }}</option>
+              <option value="">
+                {{ i18n.t('settings.integrations.connect.bind.locationAny') }}
+              </option>
               @for (location of bindLocationsForBrand(); track location.id) {
                 <option [value]="location.id">{{ location.displayName }}</option>
               }
@@ -282,12 +299,17 @@ export interface BindSubmission {
       margin: 0;
     }
 
+    .steps {
+      display: block;
+      padding: 16px 24px 0;
+    }
+
     .close {
       background: none;
       border: none;
       color: var(--q-ink-muted);
       cursor: pointer;
-      font-size: 16px;
+      font-size: var(--q-type-body);
     }
 
     .body {
@@ -406,6 +428,20 @@ export class ConnectProviderPanel {
   protected readonly selectedDeclaration = computed(() =>
     this.providers().find((declaration) => declaration.providerType === this.providerType()),
   );
+
+  /** `q-steps`'s own shape, row `X.33` — this drawer's first consumer. */
+  protected readonly steps = computed<readonly StepItem[]>(() => [
+    {
+      id: 'connect',
+      label: this.i18n.t('settings.integrations.connect.steps.connect'),
+      state: this.phase() === 'connect' ? 'current' : 'complete',
+    },
+    {
+      id: 'bind',
+      label: this.i18n.t('settings.integrations.connect.steps.bind'),
+      state: this.phase() === 'connect' ? 'upcoming' : 'current',
+    },
+  ]);
 
   protected readonly bindLocationsForBrand = computed(() =>
     this.locations().filter((location) => location.brandId === this.bindBrandId()),

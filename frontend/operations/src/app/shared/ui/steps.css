@@ -1,0 +1,71 @@
+.q-steps {
+  display: flex;
+  align-items: flex-start;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.q-steps__item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+}
+
+.q-steps__marker {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--q-hairline);
+  background: var(--q-canvas);
+  z-index: 1;
+}
+
+.q-steps__item--complete .q-steps__marker {
+  background: var(--q-primary);
+  border-color: var(--q-primary);
+}
+
+.q-steps__item--current .q-steps__marker {
+  border-color: var(--q-primary);
+  background: var(--q-canvas);
+}
+
+.q-steps__item--current.q-steps__item--danger .q-steps__marker {
+  border-color: var(--q-error);
+}
+
+.q-steps__label {
+  margin-top: 6px;
+  color: var(--q-ink-subtle);
+}
+
+.q-steps__item--complete .q-steps__label {
+  color: var(--q-ink-muted);
+}
+
+.q-steps__item--current .q-steps__label {
+  color: var(--q-ink);
+  font-weight: 600;
+}
+
+.q-steps__item--current.q-steps__item--danger .q-steps__label {
+  color: var(--q-error-text);
+}
+
+.q-steps__connector {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--q-hairline);
+}
+
+.q-steps__item--complete .q-steps__connector {
+  background: var(--q-primary);
+}
