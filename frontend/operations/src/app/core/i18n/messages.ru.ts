@@ -204,6 +204,7 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.section.customer': 'Клиент',
   'orders.detail.section.address': 'Адрес и доставка',
   'orders.detail.section.timeline': 'Хронология',
+  'orders.detail.timeline.lifecycle': 'Жизненный цикл заказа',
 
   'orders.detail.lines.column.number': '#',
   'orders.detail.lines.column.name': 'Наименование',
@@ -514,6 +515,9 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.connect.bind.submit': 'Привязать',
   'settings.integrations.connect.bind.submitting': 'Привязка…',
   'settings.integrations.connect.bind.skip': 'Пропустить пока',
+  'settings.integrations.connect.steps.connect': 'Подключение',
+  'settings.integrations.connect.steps.bind': 'Привязка',
+  'settings.integrations.connect.steps.progress': 'Шаг {current} из {total}',
 
   'settings.integrations.rotate.installationAction': 'Обновить учётные данные',
   'settings.integrations.rotate.bindingAction': 'Обновить учётные данные',
@@ -3029,6 +3033,13 @@ export const messagesRu: MessageCatalogue = {
   'ui.alert.dismiss': 'Скрыть сообщение',
   'ui.toast.dismiss': 'Скрыть',
   'ui.splitPane.handle': 'Изменить ширину панели',
+  'ui.richText.kind.paragraph': 'Абзац',
+  'ui.richText.kind.heading': 'Заголовок',
+  'ui.richText.kind.bullet': 'Маркированный список',
+  'ui.richText.kind.numbered': 'Нумерованный список',
+  'ui.richText.blockType': 'Тип блока',
+  'ui.richText.addBlock': 'Добавить блок',
+  'ui.richText.removeBlock': 'Удалить блок',
 
   'orders.action.applied': 'Заказ обновлён',
   'customers.create.done': 'Клиент создан',

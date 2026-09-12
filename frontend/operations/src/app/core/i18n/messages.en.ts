@@ -216,6 +216,7 @@ export const messagesEn = {
   'orders.detail.section.customer': 'Customer',
   'orders.detail.section.address': 'Address and delivery',
   'orders.detail.section.timeline': 'Timeline',
+  'orders.detail.timeline.lifecycle': 'Order lifecycle',
 
   'orders.detail.lines.column.number': '#',
   'orders.detail.lines.column.name': 'Item',
@@ -542,6 +543,9 @@ export const messagesEn = {
   'settings.integrations.connect.bind.submit': 'Bind',
   'settings.integrations.connect.bind.submitting': 'Binding…',
   'settings.integrations.connect.bind.skip': 'Skip for now',
+  'settings.integrations.connect.steps.connect': 'Connect',
+  'settings.integrations.connect.steps.bind': 'Bind',
+  'settings.integrations.connect.steps.progress': 'Step {current} of {total}',
 
   'settings.integrations.rotate.installationAction': 'Rotate credential',
   'settings.integrations.rotate.bindingAction': 'Rotate credential',
@@ -3056,6 +3060,13 @@ export const messagesEn = {
   'ui.alert.dismiss': 'Dismiss this message',
   'ui.toast.dismiss': 'Dismiss',
   'ui.splitPane.handle': 'Resize the detail pane',
+  'ui.richText.kind.paragraph': 'Paragraph',
+  'ui.richText.kind.heading': 'Heading',
+  'ui.richText.kind.bullet': 'Bullet list',
+  'ui.richText.kind.numbered': 'Numbered list',
+  'ui.richText.blockType': 'Block type',
+  'ui.richText.addBlock': 'Add block',
+  'ui.richText.removeBlock': 'Remove block',
 
   // Announced after a mutation settles, by the toast host in the shell. No
   // order number and no customer data: a toast is transient text on a shared
