@@ -840,6 +840,31 @@ public class JdbcOrderStore {
                 .optional();
     }
 
+    /**
+     * Every order at this tenant carrying this human-facing number, newest
+     * first — never exactly one by construction. {@code uq_order_number} is
+     * {@code (tenant_id, location_id, public_order_number)}, not
+     * {@code (tenant_id, public_order_number)}: a multi-location tenant can
+     * have "0001" open at two branches on the same day, and the counter
+     * itself resets every business day, so the same number recurs at one
+     * branch across weeks. A caller with only the number an operator was
+     * given on a call has to be shown the candidates and pick, the same way
+     * {@code OperatorCustomerLookupService} hands back candidates for a phone
+     * number rather than guessing which customer it means.
+     */
+    public List<OrderRow> findByPublicOrderNumber(UUID tenantId, String publicOrderNumber, int limit) {
+        return jdbc.sql(SELECT_ORDER + """
+                 WHERE tenant_id = :tenantId AND public_order_number = :number
+                 ORDER BY created_at DESC
+                 LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("number", publicOrderNumber)
+                .param("limit", limit)
+                .query(JdbcOrderStore::mapOrder)
+                .list();
+    }
+
     public Optional<OrderRow> findByIdempotencyKey(UUID tenantId, String idempotencyKey) {
         return jdbc.sql(SELECT_ORDER + " WHERE tenant_id = :tenantId AND idempotency_key = :key")
                 .param("tenantId", tenantId)

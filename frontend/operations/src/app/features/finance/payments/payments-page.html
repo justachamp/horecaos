@@ -3,6 +3,63 @@
   <p class="q-body-sm lead">{{ 'finance.payments.lead' | t }}</p>
 
   <section class="lookup">
+    <label class="q-caption" for="order-number">{{
+      'finance.payments.lookup.byNumber.label' | t
+    }}</label>
+    <div class="lookup__row">
+      <input
+        id="order-number"
+        class="q-body field"
+        type="text"
+        [value]="orderNumberInput()"
+        (input)="orderNumberInput.set($any($event.target).value)"
+        [placeholder]="'finance.payments.lookup.byNumber.placeholder' | t"
+      />
+      <button
+        type="button"
+        class="q-body primary"
+        [disabled]="!canLookupByNumber()"
+        (click)="lookupByNumber()"
+      >
+        {{
+          lookupByNumberLoading()
+            ? ('finance.payments.lookup.byNumber.searching' | t)
+            : ('finance.payments.lookup.byNumber.action' | t)
+        }}
+      </button>
+    </div>
+    @if (lookupByNumberError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    }
+    @if (
+      !lookupByNumberLoading() &&
+      lookupCandidates().length === 0 &&
+      orderNumberInput().trim().length > 0 &&
+      !lookupByNumberError()
+    ) {
+      <p class="q-body-sm empty">{{ 'finance.payments.lookup.byNumber.empty' | t }}</p>
+    }
+    @if (lookupCandidates().length > 0) {
+      <p class="q-body-sm note">{{ 'finance.payments.lookup.byNumber.multiple' | t }}</p>
+      <table class="table">
+        <tbody>
+          @for (candidate of lookupCandidates(); track candidate.orderId) {
+            <tr>
+              <td class="q-body-sm q-mono">{{ candidate.publicOrderNumber }}</td>
+              <td class="q-body-sm">{{ orderStatusLabel(candidate.status) }}</td>
+              <td class="q-body-sm q-mono">{{ money(candidate.total) }}</td>
+              <td class="q-body-sm">{{ candidate.createdAt }}</td>
+              <td class="q-body-sm">
+                <button type="button" class="q-body-sm link" (click)="pickCandidate(candidate)">
+                  {{ 'finance.payments.lookup.byNumber.pick' | t }}
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+
     <label class="q-caption" for="order-id">{{ 'finance.payments.lookup.label' | t }}</label>
     <div class="lookup__row">
       <input
@@ -33,7 +90,7 @@
       </h2>
       <dl class="kv">
         <dt class="q-caption">{{ 'finance.payments.order.status' | t }}</dt>
-        <dd class="q-body-sm">{{ order.orderStatus }}</dd>
+        <dd class="q-body-sm">{{ orderStatusLabel(order.orderStatus) }}</dd>
         <dt class="q-caption">{{ 'finance.payments.order.total' | t }}</dt>
         <dd class="q-body-sm q-mono">{{ money(order.orderTotal) }}</dd>
       </dl>
@@ -50,7 +107,7 @@
           <dd class="q-body-sm q-mono">{{ money(intent.amount) }}</dd>
           <dt class="q-caption">{{ 'finance.payments.intent.status' | t }}</dt>
           <dd class="q-body-sm">
-            <span class="status-badge">{{ intent.status }}</span>
+            <span class="status-badge">{{ intentStatusLabel(intent.status) }}</span>
           </dd>
           <dt class="q-caption">{{ 'finance.payments.captured' | t }}</dt>
           <dd class="q-body-sm q-mono">{{ money(order.captured) }}</dd>
@@ -75,7 +132,7 @@
                 <tr>
                   <td class="q-body-sm">{{ attempt.providerType }}</td>
                   <td class="q-body-sm">
-                    <span class="status-badge">{{ attempt.status }}</span>
+                    <span class="status-badge">{{ attemptStatusLabel(attempt.status) }}</span>
                   </td>
                   <td class="q-body-sm">{{ attempt.presentationKind ?? '—' }}</td>
                   <td class="q-body-sm q-mono">{{ money(attempt.amount) }}</td>
@@ -193,62 +250,165 @@
             <option value="DELIVERY_FEE_REIMBURSEMENT">
               {{ 'finance.remedyType.DELIVERY_FEE_REIMBURSEMENT' | t }}
             </option>
+            <option value="FUTURE_DISCOUNT">{{ 'finance.remedyType.FUTURE_DISCOUNT' | t }}</option>
           </select>
 
-          <label class="q-caption" for="remedy-amount">{{
-            'finance.payments.remedy.amount.label' | t: { currency: order.orderTotal.currency }
-          }}</label>
-          <input
-            id="remedy-amount"
-            class="q-body field"
-            type="number"
-            min="1"
-            step="1"
-            [value]="remedyAmount()"
-            (input)="remedyAmount.set($any($event.target).value)"
-          />
+          @if (remedyKind() === 'FUTURE_DISCOUNT') {
+            <label class="q-caption" for="discount-applies-to">{{
+              'finance.payments.remedy.discount.appliesTo.label' | t
+            }}</label>
+            <select
+              id="discount-applies-to"
+              class="q-body field"
+              [value]="discountAppliesTo()"
+              (change)="discountAppliesTo.set($any($event.target).value)"
+            >
+              @for (scope of entitlementScopes; track scope) {
+                <option [value]="scope">{{ entitlementScopeLabel(scope) }}</option>
+              }
+            </select>
 
-          <label class="q-caption" for="remedy-channel">{{
-            'finance.payments.remedy.channel.label' | t
-          }}</label>
-          <select
-            id="remedy-channel"
-            class="q-body field"
-            [value]="remedyChannel()"
-            (change)="remedyChannel.set($any($event.target).value)"
-          >
-            <option value="CASH_DRAWER">{{ 'finance.executionChannel.CASH_DRAWER' | t }}</option>
-            <option value="PROVIDER_CONSOLE">
-              {{ 'finance.executionChannel.PROVIDER_CONSOLE' | t }}
-            </option>
-            <option value="BANK_TRANSFER">
-              {{ 'finance.executionChannel.BANK_TRANSFER' | t }}
-            </option>
-          </select>
+            <label class="q-caption" for="discount-benefit">{{
+              'finance.payments.remedy.discount.benefit.label' | t
+            }}</label>
+            <select
+              id="discount-benefit"
+              class="q-body field"
+              [value]="discountBenefit()"
+              (change)="discountBenefit.set($any($event.target).value)"
+            >
+              @for (benefit of entitlementBenefits; track benefit) {
+                <option [value]="benefit">{{ entitlementBenefitLabel(benefit) }}</option>
+              }
+            </select>
 
-          @if (remedyChannel() === 'PROVIDER_CONSOLE') {
-            <label class="q-caption" for="remedy-provider-reference">{{
-              'finance.payments.remedy.providerReference.label' | t
+            @if (discountBenefit() === 'PERCENT') {
+              <label class="q-caption" for="discount-percent">{{
+                'finance.payments.remedy.discount.percent.label' | t
+              }}</label>
+              <input
+                id="discount-percent"
+                class="q-body field"
+                type="number"
+                min="1"
+                step="1"
+                [value]="discountPercentBasisPoints()"
+                (input)="discountPercentBasisPoints.set($any($event.target).value)"
+              />
+              <label class="q-caption" for="discount-maximum">{{
+                'finance.payments.remedy.discount.maximum.label'
+                  | t: { currency: order.orderTotal.currency }
+              }}</label>
+              <input
+                id="discount-maximum"
+                class="q-body field"
+                type="number"
+                min="1"
+                step="1"
+                [value]="discountMaximum()"
+                (input)="discountMaximum.set($any($event.target).value)"
+              />
+            } @else {
+              <label class="q-caption" for="discount-amount">{{
+                'finance.payments.remedy.discount.amount.label'
+                  | t: { currency: order.orderTotal.currency }
+              }}</label>
+              <input
+                id="discount-amount"
+                class="q-body field"
+                type="number"
+                min="1"
+                step="1"
+                [value]="discountAmount()"
+                (input)="discountAmount.set($any($event.target).value)"
+              />
+            }
+
+            <label class="q-caption" for="discount-uses">{{
+              'finance.payments.remedy.discount.uses.label' | t
             }}</label>
             <input
-              id="remedy-provider-reference"
+              id="discount-uses"
               class="q-body field"
-              type="text"
-              [value]="remedyProviderReference()"
-              (input)="remedyProviderReference.set($any($event.target).value)"
+              type="number"
+              min="1"
+              step="1"
+              [value]="discountUses()"
+              (input)="discountUses.set($any($event.target).value)"
             />
+
+            <label class="q-caption" for="discount-valid-for-days">{{
+              'finance.payments.remedy.discount.validForDays.label' | t
+            }}</label>
+            <input
+              id="discount-valid-for-days"
+              class="q-body field"
+              type="number"
+              min="1"
+              step="1"
+              [value]="discountValidForDays()"
+              (input)="discountValidForDays.set($any($event.target).value)"
+            />
+          } @else {
+            <label class="q-caption" for="remedy-amount">{{
+              'finance.payments.remedy.amount.label' | t: { currency: order.orderTotal.currency }
+            }}</label>
+            <input
+              id="remedy-amount"
+              class="q-body field"
+              type="number"
+              min="1"
+              step="1"
+              [value]="remedyAmount()"
+              (input)="remedyAmount.set($any($event.target).value)"
+            />
+
+            <label class="q-caption" for="remedy-channel">{{
+              'finance.payments.remedy.channel.label' | t
+            }}</label>
+            <select
+              id="remedy-channel"
+              class="q-body field"
+              [value]="remedyChannel()"
+              (change)="remedyChannel.set($any($event.target).value)"
+            >
+              <option value="CASH_DRAWER">{{ 'finance.executionChannel.CASH_DRAWER' | t }}</option>
+              <option value="PROVIDER_CONSOLE">
+                {{ 'finance.executionChannel.PROVIDER_CONSOLE' | t }}
+              </option>
+              <option value="BANK_TRANSFER">
+                {{ 'finance.executionChannel.BANK_TRANSFER' | t }}
+              </option>
+            </select>
+
+            @if (remedyChannel() === 'PROVIDER_CONSOLE') {
+              <label class="q-caption" for="remedy-provider-reference">{{
+                'finance.payments.remedy.providerReference.label' | t
+              }}</label>
+              <input
+                id="remedy-provider-reference"
+                class="q-body field"
+                type="text"
+                [value]="remedyProviderReference()"
+                (input)="remedyProviderReference.set($any($event.target).value)"
+              />
+            }
           }
 
           <label class="q-caption" for="remedy-reason-code">{{
             'finance.payments.remedy.reasonCode.label' | t
           }}</label>
-          <input
+          <select
             id="remedy-reason-code"
             class="q-body field"
-            type="text"
             [value]="remedyReasonCode()"
-            (input)="remedyReasonCode.set($any($event.target).value)"
-          />
+            (change)="remedyReasonCode.set($any($event.target).value)"
+          >
+            <option value="">{{ 'finance.payments.remedy.reasonCode.placeholder' | t }}</option>
+            @for (code of reasonCodes; track code) {
+              <option [value]="code">{{ reasonCodeLabel(code) }}</option>
+            }
+          </select>
 
           <label class="q-caption" for="remedy-reason">{{
             'finance.payments.remedy.reason.label' | t

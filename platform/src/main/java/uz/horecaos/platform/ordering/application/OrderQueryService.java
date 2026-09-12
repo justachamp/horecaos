@@ -405,6 +405,16 @@ public class OrderQueryService implements OrderCountsQuery {
     }
 
     /**
+     * Resolves the human-facing number an operator was given on a call to the
+     * order(s) it names — plural, per {@link JdbcOrderStore#findByPublicOrderNumber}'s
+     * own doc, since the number is unique only per location per business day.
+     */
+    @Transactional(readOnly = true)
+    public List<OrderRow> byPublicOrderNumber(UUID tenantId, String publicOrderNumber, int limit) {
+        return orders.findByPublicOrderNumber(tenantId, publicOrderNumber, limit);
+    }
+
+    /**
      * A page of one customer's own orders (ADR 0019, ADR 0031).
      *
      * <p>The account is a predicate of the query, exactly as it is in

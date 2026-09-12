@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CurrentTenant } from '../../../core/auth/current-tenant';
+import { OrderLookupApi } from '../../../core/api/order-lookup-api';
 import { I18n } from '../../../core/i18n/i18n';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { OrderPaymentView, PaymentsApi, RemedyView } from './payments-api';
@@ -91,10 +92,12 @@ describe('PaymentsPage', () => {
     remediesOfOrder: ReturnType<typeof vi.fn>;
     recordRefund: ReturnType<typeof vi.fn>;
     reimburseDeliveryFee: ReturnType<typeof vi.fn>;
+    grantFutureDiscount: ReturnType<typeof vi.fn>;
     unverifiedRemedies: ReturnType<typeof vi.fn>;
     remedyTotals: ReturnType<typeof vi.fn>;
     verifyRemedy: ReturnType<typeof vi.fn>;
   };
+  let orderLookup: { byNumber: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     api = {
@@ -117,17 +120,22 @@ describe('PaymentsPage', () => {
         .fn()
         .mockResolvedValue({ ...UNVERIFIED_REMEDY, approvalStatus: 'NOT_REQUIRED' }),
       reimburseDeliveryFee: vi.fn().mockResolvedValue({ ...UNVERIFIED_REMEDY }),
+      grantFutureDiscount: vi
+        .fn()
+        .mockResolvedValue({ ...UNVERIFIED_REMEDY, remedyType: 'FUTURE_DISCOUNT' }),
       unverifiedRemedies: vi
         .fn()
         .mockResolvedValue({ items: [UNVERIFIED_REMEDY], nextCursor: null }),
       remedyTotals: vi.fn().mockResolvedValue([]),
       verifyRemedy: vi.fn().mockResolvedValue({ recorded: true }),
     };
+    orderLookup = { byNumber: vi.fn().mockResolvedValue([]) };
 
     await TestBed.configureTestingModule({
       imports: [PaymentsPage],
       providers: [
         { provide: PaymentsApi, useValue: api },
+        { provide: OrderLookupApi, useValue: orderLookup },
         { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
       ],
     }).compileComponents();
@@ -224,9 +232,9 @@ describe('PaymentsPage', () => {
     amount.dispatchEvent(new Event('input'));
     const reasonCode = fixture.nativeElement.querySelector(
       '#remedy-reason-code',
-    ) as HTMLInputElement;
+    ) as HTMLSelectElement;
     reasonCode.value = 'ITEM_MISSING';
-    reasonCode.dispatchEvent(new Event('input'));
+    reasonCode.dispatchEvent(new Event('change'));
     const reason = fixture.nativeElement.querySelector('#remedy-reason') as HTMLInputElement;
     reason.value = 'Missing side dish';
     reason.dispatchEvent(new Event('input'));
@@ -286,6 +294,7 @@ describe('PaymentsPage', () => {
         imports: [PaymentsPage],
         providers: [
           { provide: PaymentsApi, useValue: api },
+          { provide: OrderLookupApi, useValue: orderLookup },
           {
             provide: CurrentTenant,
             useValue: {
@@ -304,6 +313,148 @@ describe('PaymentsPage', () => {
     deniedFixture.detectChanges();
 
     expect((deniedFixture.nativeElement as HTMLElement).textContent).toContain('not permitted');
+  });
+
+  it('finds an order by its public number and loads it when there is exactly one match', async () => {
+    orderLookup.byNumber.mockResolvedValue([
+      {
+        orderId: 'order-1',
+        publicOrderNumber: '482',
+        brandId: 'brand-1',
+        locationId: 'loc-1',
+        status: 'CONFIRMED',
+        total: { amountMinor: 45_000, currency: 'UZS' },
+        createdAt: '2026-08-30T09:00:00Z',
+      },
+    ]);
+
+    const input = fixture.nativeElement.querySelector('#order-number') as HTMLInputElement;
+    input.value = '482';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'Find',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(orderLookup.byNumber).toHaveBeenCalledWith(TENANT_ID, '482');
+    expect(api.orderPayment).toHaveBeenCalledWith(TENANT_ID, 'order-1');
+  });
+
+  it('lists every candidate when the number is ambiguous, and picking one loads it', async () => {
+    orderLookup.byNumber.mockResolvedValue([
+      {
+        orderId: 'order-1',
+        publicOrderNumber: '0042',
+        brandId: 'brand-1',
+        locationId: 'loc-1',
+        status: 'CONFIRMED',
+        total: { amountMinor: 45_000, currency: 'UZS' },
+        createdAt: '2026-08-30T09:00:00Z',
+      },
+      {
+        orderId: 'order-2',
+        publicOrderNumber: '0042',
+        brandId: 'brand-1',
+        locationId: 'loc-2',
+        status: 'CONFIRMED',
+        total: { amountMinor: 82_000, currency: 'UZS' },
+        createdAt: '2026-08-30T10:00:00Z',
+      },
+    ]);
+
+    const input = fixture.nativeElement.querySelector('#order-number') as HTMLInputElement;
+    input.value = '0042';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'Find',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.orderPayment).not.toHaveBeenCalled();
+    const pickButtons = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).filter((button) => button.textContent?.trim() === 'Use this order');
+    expect(pickButtons).toHaveLength(2);
+
+    (pickButtons[1] as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.orderPayment).toHaveBeenCalledWith(TENANT_ID, 'order-2');
+  });
+
+  it('grants a future discount through its own endpoint, reaching the third RemedyType', async () => {
+    api.orderPayment.mockResolvedValue(CASH_ORDER);
+
+    const input = fixture.nativeElement.querySelector('#order-id') as HTMLInputElement;
+    input.value = 'order-1';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'Look up',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const remedyToggle = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).find((button) => button.textContent?.trim() === 'Record a remedy') as HTMLButtonElement;
+    remedyToggle.click();
+    fixture.detectChanges();
+
+    const kind = fixture.nativeElement.querySelector('#remedy-kind') as HTMLSelectElement;
+    kind.value = 'FUTURE_DISCOUNT';
+    kind.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const percent = fixture.nativeElement.querySelector('#discount-percent') as HTMLInputElement;
+    percent.value = '1000';
+    percent.dispatchEvent(new Event('input'));
+    const max = fixture.nativeElement.querySelector('#discount-maximum') as HTMLInputElement;
+    max.value = '20000';
+    max.dispatchEvent(new Event('input'));
+    const reasonCode = fixture.nativeElement.querySelector(
+      '#remedy-reason-code',
+    ) as HTMLSelectElement;
+    reasonCode.value = 'GOODWILL';
+    reasonCode.dispatchEvent(new Event('change'));
+    const reason = fixture.nativeElement.querySelector('#remedy-reason') as HTMLInputElement;
+    reason.value = 'Apology for the wait';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const submit = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+    ).find((button) => button.textContent?.trim() === 'Record') as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
+    submit.click();
+    await flushMicrotasks();
+
+    expect(api.grantFutureDiscount).toHaveBeenCalledWith(
+      TENANT_ID,
+      'order-1',
+      expect.objectContaining({
+        appliesTo: 'SUBTOTAL',
+        benefit: 'PERCENT',
+        percentBasisPoints: 1000,
+        maximumMinor: 20000,
+        uses: 1,
+        validForDays: 30,
+        reasonCode: 'GOODWILL',
+        reason: 'Apology for the wait',
+      }),
+    );
+    expect(api.recordRefund).not.toHaveBeenCalled();
   });
 
   it('describes a refused re-issue by its specific reason, not a generic conflict', async () => {

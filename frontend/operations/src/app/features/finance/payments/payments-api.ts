@@ -7,6 +7,22 @@ import { IdempotencyKey, newIdempotencyKey } from '../../../core/api/idempotency
 import { Page, firstPage } from '../../../core/api/page';
 import { Money } from '../../../core/format/money';
 
+/** Mirrors `PaymentIntentStatus` (Java) — coarser than an attempt's own status. */
+export type PaymentIntentStatus =
+  'PENDING' | 'AUTHORIZING' | 'PAID' | 'CANCELLED' | 'EXPIRED' | 'FAILED';
+
+/** Mirrors `PaymentAttemptStatus` (Java) — one provider-facing attempt's own status. */
+export type PaymentAttemptStatus =
+  | 'INITIATED'
+  | 'PRESENTED'
+  | 'RESERVED'
+  | 'CAPTURED'
+  | 'CANCELLED'
+  | 'EXPIRED'
+  | 'REVERSED'
+  | 'FAILED'
+  | 'UNCERTAIN';
+
 /** Mirrors `OperationsPaymentController.PaymentIntentResponse`. */
 export interface PaymentIntentView {
   readonly intentId: string;
@@ -14,7 +30,7 @@ export interface PaymentIntentView {
   readonly method: 'CASH' | 'CLICK' | 'PAYME' | 'TELEGRAM' | 'MARKETPLACE';
   readonly providerType: string | null;
   readonly amount: Money;
-  readonly status: 'PENDING' | 'AUTHORIZING' | 'PAID' | 'CANCELLED' | 'EXPIRED' | 'FAILED';
+  readonly status: PaymentIntentStatus;
   readonly createdAt: string;
   readonly settledAt: string | null;
 }
@@ -23,7 +39,7 @@ export interface PaymentIntentView {
 export interface PaymentAttemptView {
   readonly attemptId: string;
   readonly providerType: string;
-  readonly status: string;
+  readonly status: PaymentAttemptStatus;
   readonly presentationKind: string | null;
   readonly amount: Money;
   readonly live: boolean;
@@ -62,6 +78,12 @@ export type ExecutionChannel = 'PROVIDER_CONSOLE' | 'CASH_DRAWER' | 'BANK_TRANSF
 export type RemedyType = 'ORDER_REFUND' | 'DELIVERY_FEE_REIMBURSEMENT' | 'FUTURE_DISCOUNT';
 export type VerificationState = 'UNVERIFIED' | 'CONFIRMED' | 'DISPUTED';
 export type SettlementBasis = 'OPERATOR_ATTESTED' | 'PLATFORM_SETTLED' | 'MIXED' | 'NOT_MONEY';
+
+/** Mirrors `EntitlementScope` (Java) — what a future-discount grant applies to. */
+export type EntitlementScope = 'SUBTOTAL' | 'DELIVERY_FEE' | 'BOTH';
+
+/** Mirrors `EntitlementBenefit` (Java) — how a future-discount grant is valued. */
+export type EntitlementBenefit = 'PERCENT' | 'FIXED_AMOUNT';
 
 /** Mirrors `OperationsRemedyController.RemedyResponse`. */
 export interface RemedyView {
@@ -103,6 +125,24 @@ export interface RefundRequestInput {
   readonly providerReference?: string;
   readonly executedBy?: string;
   readonly executedAt?: string;
+  readonly correlationId?: string;
+}
+
+/**
+ * A future-discount grant, as the console submits it. Mirrors
+ * `OperationsRemedyController.FutureDiscountRequest` — set exactly one of
+ * `percentBasisPoints` (with `maximumMinor`) or `amountMinor` for `benefit`.
+ */
+export interface FutureDiscountRequestInput {
+  readonly appliesTo: EntitlementScope;
+  readonly benefit: EntitlementBenefit;
+  readonly percentBasisPoints?: number;
+  readonly amountMinor?: number;
+  readonly maximumMinor?: number;
+  readonly uses: number;
+  readonly validForDays: number;
+  readonly reasonCode: string;
+  readonly reason: string;
   readonly correlationId?: string;
 }
 
@@ -172,6 +212,21 @@ export class PaymentsApi {
     input: RefundRequestInput,
   ): Promise<RemedyView> {
     return this.submitRemedy(financePaths.orderDeliveryFeeReimbursements(tenantId, orderId), input);
+  }
+
+  /** `OperationsRemedyController.grantFutureDiscount` — the third `RemedyType`. */
+  async grantFutureDiscount(
+    tenantId: string,
+    orderId: string,
+    input: FutureDiscountRequestInput,
+  ): Promise<RemedyView> {
+    const key: IdempotencyKey = newIdempotencyKey();
+    return firstValueFrom(
+      this.api.post<FutureDiscountRequestInput & { idempotencyKey: string }, RemedyView>(
+        financePaths.orderFutureDiscounts(tenantId, orderId),
+        { key, body: { ...input, idempotencyKey: key } },
+      ),
+    );
   }
 
   /**
