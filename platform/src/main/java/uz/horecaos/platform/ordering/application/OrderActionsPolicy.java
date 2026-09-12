@@ -41,6 +41,33 @@ public final class OrderActionsPolicy {
     private OrderActionsPolicy() {}
 
     /**
+     * Whether the {@code AMEND} branch below actually adds the action, rather
+     * than only computing it.
+     *
+     * <p><b>Wave P05 adversarial review.</b> This wave built {@code AMEND}'s
+     * gate — {@code ORDER_AMEND} plus {@link #canAmend} — the same way as the
+     * other four codes, and for one build emitted it unconditionally. That was
+     * a defect, not the "harmless, inert" case {@code COMPLETE}/{@code
+     * RESOLVE}/{@code ASSIGN_COURIER}/{@code ISSUE_INVOICE} are in: {@code
+     * ORDER_AMEND} already reaches five real {@code PlatformRole}s, and the
+     * console has no translated label or working click handler for {@code
+     * AMEND} — {@code order-actions.ts}'s {@code actionLabel} falls to its
+     * untranslated {@code default} case, printing the raw string
+     * {@code "AMEND"} in every locale, and {@code onActionClick}'s
+     * {@code default} case silently no-ops the click. A real operator holding
+     * {@code ORDER_AMEND} would see a permanently dead, out-of-language button
+     * on every open order.
+     *
+     * <p>This constant is the fix: the gate stays built and tested exactly as
+     * wave P10 (the amendment client) will need it, but emission is held back
+     * behind one named switch rather than deleted and rewritten later. Wave
+     * P10 flips this to {@code true} once {@code order-actions.ts} has a real
+     * {@code AMEND} case and {@code order-queue.ts} has a real handler; ADR
+     * 0105 documents the same decision.
+     */
+    private static final boolean AMEND_EMISSION_ENABLED = false;
+
+    /**
      * Every action legal on an order at this status and fulfilment mode, for a
      * principal holding exactly {@code grantedCapabilities} — in a stable
      * order: the decision first, then every legal advance, then amend, then
@@ -97,10 +124,13 @@ public final class OrderActionsPolicy {
         // carry, and stay enforced only by the endpoint itself, exactly as
         // orders.md §4.2 expects for a "temporarily unavailable" case. The
         // three built commands (kitchen note, callback flag, change-due) are
-        // never subject to the cut point, so offering AMEND up to the moment
-        // the order ends is correct for what a client can actually complete
-        // today.
-        if (grantedCapabilities.contains(Capability.ORDER_AMEND) && canAmend(status)) {
+        // never subject to the cut point, so the gate below is correct for
+        // what a client can actually complete today.
+        //
+        // The gate is built and tested; emission is not. AMEND_EMISSION_ENABLED
+        // (see its own doc) holds this branch inert until wave P10 ships a
+        // console that can render and click AMEND — see ADR 0105.
+        if (AMEND_EMISSION_ENABLED && grantedCapabilities.contains(Capability.ORDER_AMEND) && canAmend(status)) {
             actions.add(new OrderAction(OrderActionCode.AMEND, null));
         }
 

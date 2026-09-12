@@ -12,19 +12,26 @@ package uz.horecaos.platform.ordering.application;
  * <p><b>Wave P05.</b> Widened past the original four ({@link #APPROVE}, {@link
  * #REJECT}, {@link #ADVANCE}, {@link #CANCEL}) to name every mutation {@code
  * OperationsOrderController} already serves without a code that reaches it.
- * {@link #AMEND} is emitted by {@link OrderActionsPolicy#availableFor} today.
- * {@link #COMPLETE}, {@link #RESOLVE}, {@link #ASSIGN_COURIER} and {@link
- * #ISSUE_INVOICE} are declared here — so the wire contract and the frontend's
- * forward-compatible rendering (an unrecognised code renders its raw name
- * rather than nothing, {@code order-actions.ts}) both name them — but are not
- * yet emitted: each needs state {@code availableFor(status, mode,
- * grantedCapabilities)} does not carry.
+ * {@link #COMPLETE}, {@link #AMEND}, {@link #RESOLVE}, {@link #ASSIGN_COURIER}
+ * and {@link #ISSUE_INVOICE} are declared here — so the wire contract names
+ * them, and the frontend's forward-compatible rendering (an unrecognised code
+ * renders its raw name rather than nothing, {@code order-actions.ts}) is ready
+ * to receive whichever ships first — but none of the five is emitted by
+ * {@link OrderActionsPolicy#availableFor} yet:
  *
  * <ul>
  *   <li>{@link #COMPLETE} needs the order's fulfilment-mode-appropriate
  *       completion reason from the tenant registry to pick correctly between
  *       «Доставлен» and «Доставлен сторонней службой» (orders.md §4.6); wired
  *       by the wave that owns the completion dialog (gap map {@code P09}).
+ *   <li>{@link #AMEND} is the one exception with a built, tested gate ({@code
+ *       ORDER_AMEND} plus {@code OrderActionsPolicy.canAmend}) — this wave
+ *       built it, then held it back behind {@code
+ *       OrderActionsPolicy.AMEND_EMISSION_ENABLED} after an adversarial
+ *       review found {@code order-actions.ts} has no translated label or
+ *       click handler for it and {@code ORDER_AMEND} already reaches five
+ *       real {@code PlatformRole}s. Wave {@code P10} ships the amendment
+ *       client and flips the constant; see ADR 0105.
  *   <li>{@link #RESOLVE} targets {@code POST .../amendments/{id}/confirmation}
  *       and only makes sense while a specific amendment is {@code
  *       AWAITING_CUSTOMER_CONFIRMATION} — a fact {@link OrderActionsPolicy}
@@ -59,8 +66,9 @@ public enum OrderActionCode {
 
     /**
      * {@code POST .../amendments}, opening the amendment submenu (orders.md
-     * §4.4). Emitted whenever the order has not ended and the principal holds
-     * {@code ORDER_AMEND}.
+     * §4.4). The gate is built (whenever the order has not ended and the
+     * principal holds {@code ORDER_AMEND}) but not yet emitted — see the
+     * class doc and {@code OrderActionsPolicy.AMEND_EMISSION_ENABLED}.
      */
     AMEND,
 

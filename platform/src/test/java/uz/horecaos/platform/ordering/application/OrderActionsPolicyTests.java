@@ -181,18 +181,29 @@ class OrderActionsPolicyTests {
     }
 
     /**
-     * {@code AMEND} mirrors {@code OrderAmendmentService.propose}'s own status
-     * guard: legal on any order that has not ended, regardless of the
-     * fulfilment mode or the advance/cancel state — and gated on {@code
-     * ORDER_AMEND} exactly like the endpoint it targets.
+     * {@code AMEND}'s gate ({@code canAmend}: legal on any order that has not
+     * ended, regardless of fulfilment mode or advance/cancel state, mirroring
+     * {@code OrderAmendmentService.propose}'s own status guard) is built and
+     * correct — but wave P05's adversarial review found the console has no
+     * translated label or click handler for a code {@code ORDER_AMEND}
+     * already reaches five real roles with, so emission is held behind
+     * {@code OrderActionsPolicy.AMEND_EMISSION_ENABLED} until wave P10 ships
+     * the amendment client (ADR 0105). This test proves the hold, not the
+     * gate: {@code AMEND} must never appear in {@code actions[]} today, on
+     * any status or mode, even for a principal holding every other action
+     * capability there is. {@link #amendsGateIsBuiltButDisabled} is the
+     * companion assertion that the gate itself still exists and is not simply
+     * deleted code.
      */
     @Test
-    void amendAppearsOnEveryNonTerminalStatusWhenGrantedAndNeverWithoutIt() {
+    void amendIsNeverEmittedTodayRegardlessOfStatusModeOrGrant() {
         for (OrderStatus status : OrderStatus.values()) {
             for (FulfillmentMode mode : FulfillmentMode.values()) {
-                boolean withGrant = OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS).stream()
+                boolean withFullGrant = OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS).stream()
                         .anyMatch(a -> a.code() == OrderActionCode.AMEND);
-                assertThat(withGrant).as("%s/%s amend, granted", status, mode).isEqualTo(!status.terminal());
+                assertThat(withFullGrant)
+                        .as("%s/%s must never offer AMEND while emission is held back", status, mode)
+                        .isFalse();
 
                 boolean withoutGrant =
                         OrderActionsPolicy.availableFor(status, mode, EnumSet.noneOf(Capability.class)).stream()
@@ -201,6 +212,23 @@ class OrderActionsPolicyTests {
                         .as("%s/%s amend, ungranted", status, mode)
                         .isFalse();
             }
+        }
+    }
+
+    /**
+     * The gate {@code AMEND_EMISSION_ENABLED} holds back is exactly the one
+     * described in ADR 0105 and the class doc — proved here by reading {@code
+     * canAmend} directly, the same predicate the (currently inert) {@code
+     * AMEND} branch in {@code availableFor} uses. If this ever disagreed with
+     * {@code availableFor}'s own guard, flipping the constant on for wave P10
+     * would emit something other than what was designed and tested here.
+     */
+    @Test
+    void amendsGateIsBuiltButDisabled() {
+        for (OrderStatus status : OrderStatus.values()) {
+            assertThat(OrderActionsPolicy.canAmend(status))
+                    .as("%s canAmend", status)
+                    .isEqualTo(!status.terminal());
         }
     }
 
@@ -236,21 +264,32 @@ class OrderActionsPolicyTests {
      * {@code SUPPORT_AGENT} holds exactly the inverse of {@code
      * LOCATION_STAFF} among these four: {@code ORDER_CANCEL} and {@code
      * ORDER_AMEND}, never {@code ORDER_APPROVE} or {@code ORDER_ADVANCE}.
+     * {@code ORDER_AMEND} is held, but {@code AMEND} itself is never emitted
+     * today (see {@link #amendIsNeverEmittedTodayRegardlessOfStatusModeOrGrant}),
+     * so this role's only visible action right now is {@code CANCEL}.
      */
     @Test
-    void supportAgentOnlyEverOffersCancelAndAmend() {
+    void supportAgentOnlyEverOffersCancelToday() {
         Set<Capability> granted = PlatformRole.SUPPORT_AGENT.capabilities();
+        assertThat(granted)
+                .as("support-agent must hold ORDER_AMEND for this test to prove AMEND stays hidden despite the grant")
+                .contains(Capability.ORDER_AMEND);
         for (OrderStatus status : OrderStatus.values()) {
             for (FulfillmentMode mode : FulfillmentMode.values()) {
                 List<OrderActionCode> codes = codesOf(status, mode, granted);
                 assertThat(codes)
                         .as("support-agent at %s/%s", status, mode)
-                        .doesNotContain(OrderActionCode.APPROVE, OrderActionCode.REJECT, OrderActionCode.ADVANCE);
+                        .doesNotContain(
+                                OrderActionCode.APPROVE,
+                                OrderActionCode.REJECT,
+                                OrderActionCode.ADVANCE,
+                                OrderActionCode.AMEND);
             }
         }
-        // RECEIVED is cancellable and amendable; support-agent's grant covers both.
+        // RECEIVED is cancellable and amendable; support-agent's grant covers
+        // both, but only CANCEL is visible while AMEND emission is held back.
         assertThat(codesOf(OrderStatus.RECEIVED, FulfillmentMode.DELIVERY, granted))
-                .containsExactlyInAnyOrder(OrderActionCode.CANCEL, OrderActionCode.AMEND);
+                .containsExactly(OrderActionCode.CANCEL);
     }
 
     /**
@@ -313,6 +352,13 @@ class OrderActionsPolicyTests {
      * emitting a code from {@link OrderActionsPolicy#availableFor} without
      * this test being forced to take a position on whether that code has a
      * real route.
+     *
+     * <p>{@code AMEND} answers {@code true} here — its route ({@code POST
+     * .../amendments}) genuinely exists and its gate is built — even though
+     * {@link #amendIsNeverEmittedTodayRegardlessOfStatusModeOrGrant} proves it
+     * is not emitted today. "Has a route" and "is emitted" are different
+     * questions for exactly this code: the hold is a frontend-readiness
+     * decision (ADR 0105), not a missing endpoint.
      */
     private static boolean hasRealRouteToday(OrderActionCode code) {
         return switch (code) {
