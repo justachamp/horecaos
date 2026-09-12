@@ -1,0 +1,99 @@
+<div class="simulator">
+  <div class="candidate">
+    <span class="q-caption">{{ 'ui.ruleSimulator.candidate' | t }}</span>
+    @for (descriptor of typesInUse(); track descriptor.type) {
+      <label class="candidate-field">
+        <span class="q-caption">{{ typeLabel(descriptor.type) }}</span>
+        @switch (descriptor.valueKind) {
+          @case ('DAY_OF_WEEK_SET') {
+            <div class="dow-chips">
+              @for (day of days; track day) {
+                <button
+                  type="button"
+                  class="dow-chip"
+                  [class.dow-chip--active]="isDayActive(descriptor.type, day)"
+                  [attr.aria-pressed]="isDayActive(descriptor.type, day)"
+                  (click)="setDay(descriptor.type, day)"
+                >
+                  {{ dayLabel(day) }}
+                </button>
+              }
+            </div>
+          }
+          @case ('DATE') {
+            <input
+              type="date"
+              class="candidate-input"
+              [value]="valueOf(descriptor.type)"
+              (input)="setValue(descriptor.type, $any($event.target).value)"
+            />
+          }
+          @case ('DATE_RANGE') {
+            <input
+              type="date"
+              class="candidate-input"
+              [value]="valueOf(descriptor.type)"
+              (input)="setValue(descriptor.type, $any($event.target).value)"
+            />
+          }
+          @case ('TEXT_SET') {
+            <input
+              type="text"
+              class="candidate-input"
+              [value]="valueOf(descriptor.type)"
+              (input)="setValue(descriptor.type, $any($event.target).value)"
+            />
+          }
+          @case ('REFERENCE') {
+            <input
+              type="text"
+              class="candidate-input"
+              [value]="valueOf(descriptor.type)"
+              (input)="setValue(descriptor.type, $any($event.target).value)"
+            />
+          }
+          @default {
+            <input
+              type="number"
+              class="candidate-input"
+              [value]="valueOf(descriptor.type)"
+              (input)="setValue(descriptor.type, $any($event.target).value)"
+            />
+          }
+        }
+      </label>
+    }
+  </div>
+
+  <div class="results">
+    @if (results().length === 0) {
+      <p class="q-body-sm results-empty">{{ 'ui.ruleSimulator.noRules' | t }}</p>
+    } @else {
+      <ol class="results-list" role="list">
+        @for (result of results(); track result.rule.id) {
+          <li class="result-row" [class.result-row--matched]="result.state === 'matched'">
+            <span class="result-row__label q-body-sm">{{ result.rule.label }}</span>
+            <span
+              class="result-row__state q-caption"
+              [class.result-row__state--matched]="result.state === 'matched'"
+              [class.result-row__state--disabled]="result.state === 'disabled'"
+              >{{
+                (result.state === 'matched'
+                  ? 'ui.ruleSimulator.matched'
+                  : result.state === 'disabled'
+                    ? 'ui.ruleSimulator.disabledRule'
+                    : 'ui.ruleSimulator.notMatched'
+                ) | t
+              }}</span
+            >
+            @if (result.state === 'matched') {
+              <span class="result-row__outcome q-caption">
+                {{ 'ui.ruleSimulator.outcome' | t }}: {{ result.rule.outcome }}
+              </span>
+            }
+          </li>
+        }
+      </ol>
+    }
+  </div>
+</div>

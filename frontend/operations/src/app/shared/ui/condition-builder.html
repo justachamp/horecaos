@@ -1,0 +1,203 @@
+<div class="conditions">
+  @if (heading(); as label) {
+    <span class="q-caption">{{ label }}</span>
+  }
+
+  @for (group of groups(); track group.id; let gi = $index) {
+    <div class="condition-group" [class.condition-group--framed]="allowGroups()">
+      @if (allowGroups()) {
+        <div class="condition-group__header">
+          <select
+            class="condition-group__combinator"
+            [attr.aria-label]="'ui.conditionBuilder.matchAll' | t"
+            [value]="group.combinator"
+            (change)="setGroupCombinator(gi, $any($event.target).value)"
+          >
+            <option value="AND">{{ 'ui.conditionBuilder.matchAll' | t }}</option>
+            <option value="OR">{{ 'ui.conditionBuilder.matchAny' | t }}</option>
+          </select>
+          @if (canRemoveGroup()) {
+            <button
+              type="button"
+              class="predicate-row__remove"
+              [attr.aria-label]="'ui.conditionBuilder.removeGroup' | t"
+              (click)="removeGroup(gi)"
+            >
+              ×
+            </button>
+          }
+        </div>
+      }
+
+      @for (row of group.rows; track row.id; let ri = $index) {
+        <div class="predicate-row">
+          <select
+            class="predicate-row__type"
+            [attr.aria-label]="typeLabel(row.type)"
+            [value]="row.type"
+            (change)="updateRow(gi, ri, { type: $any($event.target).value })"
+          >
+            @for (descriptor of catalogue(); track descriptor.type) {
+              <option [value]="descriptor.type">{{ typeLabel(descriptor.type) }}</option>
+            }
+          </select>
+          <select
+            class="predicate-row__operator"
+            [attr.aria-label]="operatorLabel(row.operator)"
+            [value]="row.operator"
+            (change)="updateRow(gi, ri, { operator: $any($event.target).value })"
+          >
+            @for (operator of operatorsFor(row.type); track operator) {
+              <option [value]="operator">{{ operatorLabel(operator) }}</option>
+            }
+          </select>
+
+          @switch (valueKindOf(row.type)) {
+            @case ('NUMERIC') {
+              <input
+                type="number"
+                class="predicate-row__value"
+                [value]="row.numericLow"
+                (input)="updateRow(gi, ri, { numericLow: $any($event.target).value })"
+              />
+              @if (row.operator === 'BETWEEN') {
+                <span class="q-caption">—</span>
+                <input
+                  type="number"
+                  class="predicate-row__value"
+                  [value]="row.numericHigh"
+                  (input)="updateRow(gi, ri, { numericHigh: $any($event.target).value })"
+                />
+              }
+            }
+            @case ('MONEY_MINOR') {
+              <input
+                type="number"
+                class="predicate-row__value"
+                [value]="row.numericLow"
+                (input)="updateRow(gi, ri, { numericLow: $any($event.target).value })"
+              />
+              @if (row.operator === 'BETWEEN') {
+                <span class="q-caption">—</span>
+                <input
+                  type="number"
+                  class="predicate-row__value"
+                  [value]="row.numericHigh"
+                  (input)="updateRow(gi, ri, { numericHigh: $any($event.target).value })"
+                />
+              }
+              <span class="q-caption value-hint">{{
+                'ui.conditionBuilder.minorUnitsHint' | t
+              }}</span>
+            }
+            @case ('PERCENT') {
+              <input
+                type="number"
+                class="predicate-row__value"
+                [value]="row.numericLow"
+                (input)="updateRow(gi, ri, { numericLow: $any($event.target).value })"
+              />
+              @if (row.operator === 'BETWEEN') {
+                <span class="q-caption">—</span>
+                <input
+                  type="number"
+                  class="predicate-row__value"
+                  [value]="row.numericHigh"
+                  (input)="updateRow(gi, ri, { numericHigh: $any($event.target).value })"
+                />
+              }
+              <span class="q-caption value-hint">%</span>
+            }
+            @case ('DATE') {
+              <input
+                type="date"
+                class="predicate-row__value"
+                [value]="row.dateLow"
+                (input)="updateRow(gi, ri, { dateLow: $any($event.target).value })"
+              />
+            }
+            @case ('DATE_RANGE') {
+              <input
+                type="date"
+                class="predicate-row__value"
+                [value]="row.dateLow"
+                (input)="updateRow(gi, ri, { dateLow: $any($event.target).value })"
+              />
+              <span class="q-caption">—</span>
+              <input
+                type="date"
+                class="predicate-row__value"
+                [value]="row.dateHigh"
+                (input)="updateRow(gi, ri, { dateHigh: $any($event.target).value })"
+              />
+            }
+            @case ('DAY_OF_WEEK_SET') {
+              <div class="dow-chips">
+                @for (day of days; track day) {
+                  <button
+                    type="button"
+                    class="dow-chip"
+                    [class.dow-chip--active]="row.dayOfWeekValues.includes(day)"
+                    [attr.aria-pressed]="row.dayOfWeekValues.includes(day)"
+                    (click)="toggleDay(gi, ri, day)"
+                  >
+                    {{ dayLabel(day) }}
+                  </button>
+                }
+              </div>
+            }
+            @default {
+              @if (fixedValuesOf(row.type); as fixed) {
+                <div class="fixed-chips">
+                  @for (option of fixed; track option.value) {
+                    <button
+                      type="button"
+                      class="dow-chip"
+                      [class.dow-chip--active]="selectedFixedValues(row).includes(option.value)"
+                      [attr.aria-pressed]="selectedFixedValues(row).includes(option.value)"
+                      (click)="toggleFixedValue(gi, ri, option.value)"
+                    >
+                      {{ option.label }}
+                    </button>
+                  }
+                </div>
+              } @else {
+                <input
+                  type="text"
+                  class="predicate-row__value predicate-row__value--wide"
+                  [value]="row.textValues"
+                  [placeholder]="'ui.conditionBuilder.textValuesPlaceholder' | t"
+                  (input)="updateRow(gi, ri, { textValues: $any($event.target).value })"
+                />
+              }
+            }
+          }
+
+          <button
+            type="button"
+            class="predicate-row__remove"
+            [disabled]="!canRemoveAnyRow()"
+            [attr.aria-label]="'ui.conditionBuilder.removeCondition' | t"
+            (click)="removeRow(gi, ri)"
+          >
+            ×
+          </button>
+        </div>
+      }
+
+      <button type="button" class="secondary add-row" (click)="addRow(gi)">
+        {{ 'ui.conditionBuilder.addCondition' | t }}
+      </button>
+    </div>
+
+    @if (allowGroups() && gi < groups().length - 1) {
+      <div class="group-joiner q-caption">{{ 'ui.conditionBuilder.groupJoinerOr' | t }}</div>
+    }
+  }
+
+  @if (allowGroups()) {
+    <button type="button" class="secondary add-group" (click)="addGroup()">
+      {{ 'ui.conditionBuilder.addGroup' | t }}
+    </button>
+  }
+</div>

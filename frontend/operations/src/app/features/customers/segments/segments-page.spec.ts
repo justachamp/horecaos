@@ -7,12 +7,7 @@ import { BrandScope } from '../../../core/api/catalog-paths';
 import { CurrentBrand } from '../../../core/auth/current-brand';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { I18n } from '../../../core/i18n/i18n';
-import {
-  AudienceDetail,
-  AudiencePredicate,
-  AudienceSummary,
-  SegmentsApi,
-} from './segments-api';
+import { AudienceDetail, AudiencePredicate, AudienceSummary, SegmentsApi } from './segments-api';
 import { SegmentsPage } from './segments-page';
 
 const SCOPE: BrandScope = { tenantId: 'tenant-1', brandId: 'brand-1' };
@@ -89,7 +84,9 @@ describe('SegmentsPage', () => {
       detail: vi.fn().mockResolvedValue(detail()),
       define: vi.fn().mockResolvedValue('audience-new'),
       redefine: vi.fn().mockResolvedValue(2),
-      buildSnapshot: vi.fn().mockResolvedValue({ snapshotId: 's1', candidates: 200, members: 150, excluded: 50 }),
+      buildSnapshot: vi
+        .fn()
+        .mockResolvedValue({ snapshotId: 's1', candidates: 200, members: 150, excluded: 50 }),
     };
     await TestBed.configureTestingModule({
       imports: [SegmentsPage],
@@ -185,9 +182,7 @@ describe('SegmentsPage', () => {
 
     it('never calls define while the name is blank — the default predicate row alone is not enough', async () => {
       // Only the predicate's numeric value is filled; the name is left blank.
-      const numericInput = host().querySelector(
-        '.predicate-row__value',
-      ) as HTMLInputElement;
+      const numericInput = host().querySelector('.predicate-row__value') as HTMLInputElement;
       setInput(numericInput, '30');
 
       expect(saveButton().disabled).toBe(true);
@@ -209,9 +204,7 @@ describe('SegmentsPage', () => {
 
     it('defines a new audience with exactly the typed name and predicate once the form is complete', async () => {
       setInput(nameInput(), 'New regulars');
-      const numericInput = host().querySelector(
-        '.predicate-row__value',
-      ) as HTMLInputElement;
+      const numericInput = host().querySelector('.predicate-row__value') as HTMLInputElement;
       setInput(numericInput, '30');
 
       expect(saveButton().disabled).toBe(false);
@@ -249,14 +242,14 @@ describe('SegmentsPage', () => {
 
       expect(api.detail).toHaveBeenCalledWith(SCOPE, 'audience-1');
 
-      const numericInput = host().querySelector(
-        '.predicate-row__value',
-      ) as HTMLInputElement;
+      const numericInput = host().querySelector('.predicate-row__value') as HTMLInputElement;
       numericInput.value = '45';
       numericInput.dispatchEvent(new Event('input'));
       fixture.detectChanges();
 
-      (host().querySelector('.builder-panel .panel__actions .primary') as HTMLButtonElement).click();
+      (
+        host().querySelector('.builder-panel .panel__actions .primary') as HTMLButtonElement
+      ).click();
       await flushMicrotasks();
       fixture.detectChanges();
 
@@ -275,7 +268,9 @@ describe('SegmentsPage', () => {
       api.redefine.mockRejectedValueOnce(
         new ApiError(ApiErrorCode.VALIDATION_FAILED, 422, null, null),
       );
-      (host().querySelector('.builder-panel .panel__actions .primary') as HTMLButtonElement).click();
+      (
+        host().querySelector('.builder-panel .panel__actions .primary') as HTMLButtonElement
+      ).click();
       await flushMicrotasks();
       fixture.detectChanges();
 
@@ -284,6 +279,140 @@ describe('SegmentsPage', () => {
       const message = host().querySelector('.builder-panel .error-text')?.textContent ?? '';
       expect(message.length).toBeGreaterThan(0);
       expect(message).not.toContain('VALIDATION_FAILED');
+    });
+  });
+
+  describe('regression — extracting q-condition-builder changes nothing this page sends', () => {
+    // `X.25`: the predicate editor used to be markup hand-rolled directly
+    // inside this page; it is now `q-condition-builder`, rendered as a child
+    // component. These two tests exercise the value kinds the single-row
+    // tests above never touched — BETWEEN numeric, multi-row, TEXT_SET and
+    // DATE_RANGE — proving the wire shape this page produces is unchanged.
+
+    it('sends a BETWEEN numeric predicate and a second, comma-split text-set predicate exactly as the old hand-rolled builder did', async () => {
+      await render([summary()]);
+      (host().querySelector('.header button.primary') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      const nameInput = host().querySelector(
+        '.builder-panel input[type="text"]',
+      ) as HTMLInputElement;
+      nameInput.value = 'Big spenders, ru/uz';
+      nameInput.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const typeSelects = () => host().querySelectorAll<HTMLSelectElement>('.predicate-row__type');
+      typeSelects()[0].value = 'NET_SPEND_MINOR';
+      typeSelects()[0].dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+
+      const operatorSelects = () =>
+        host().querySelectorAll<HTMLSelectElement>('.predicate-row__operator');
+      operatorSelects()[0].value = 'BETWEEN';
+      operatorSelects()[0].dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+
+      const numericInputs = () =>
+        host().querySelectorAll<HTMLInputElement>('.predicate-row__value[type="number"]');
+      numericInputs()[0].value = '100000';
+      numericInputs()[0].dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      numericInputs()[1].value = '500000';
+      numericInputs()[1].dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      (host().querySelector('.add-row') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      typeSelects()[1].value = 'ACQUISITION_CHANNEL';
+      typeSelects()[1].dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+
+      const textInput = host().querySelector('.predicate-row__value--wide') as HTMLInputElement;
+      textInput.value = 'organic, referral';
+      textInput.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const saveButton = host().querySelector(
+        '.builder-panel .panel__actions .primary',
+      ) as HTMLButtonElement;
+      expect(saveButton.disabled).toBe(false);
+      saveButton.click();
+      await flushMicrotasks();
+
+      expect(api.define).toHaveBeenCalledWith(SCOPE, {
+        name: 'Big spenders, ru/uz',
+        description: null,
+        predicates: [
+          {
+            type: 'NET_SPEND_MINOR',
+            operator: 'BETWEEN',
+            numericLow: 100000,
+            numericHigh: 500000,
+            dateLow: null,
+            dateHigh: null,
+            textValues: null,
+            audienceId: null,
+          },
+          {
+            type: 'ACQUISITION_CHANNEL',
+            operator: 'IN',
+            numericLow: null,
+            numericHigh: null,
+            dateLow: null,
+            dateHigh: null,
+            textValues: ['organic', 'referral'],
+            audienceId: null,
+          },
+        ],
+      });
+    });
+
+    it('round-trips a DATE_RANGE predicate through edit and redefine with both bounds intact', async () => {
+      await render([summary()]);
+      api.detail.mockResolvedValueOnce(
+        detail({
+          predicates: [
+            {
+              type: 'REGISTERED_BETWEEN',
+              operator: 'BETWEEN',
+              numericLow: null,
+              numericHigh: null,
+              dateLow: '2026-01-01',
+              dateHigh: '2026-03-31',
+              textValues: null,
+              audienceId: null,
+            },
+          ],
+        }),
+      );
+      (host().querySelector('.table .link') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      const dateInputs = host().querySelectorAll<HTMLInputElement>(
+        '.predicate-row__value[type="date"]',
+      );
+      expect(dateInputs).toHaveLength(2);
+      expect(dateInputs[0].value).toBe('2026-01-01');
+      expect(dateInputs[1].value).toBe('2026-03-31');
+
+      (
+        host().querySelector('.builder-panel .panel__actions .primary') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+
+      expect(api.redefine).toHaveBeenCalledWith(SCOPE, 'audience-1', [
+        {
+          type: 'REGISTERED_BETWEEN',
+          operator: 'BETWEEN',
+          numericLow: null,
+          numericHigh: null,
+          dateLow: '2026-01-01',
+          dateHigh: '2026-03-31',
+          textValues: null,
+          audienceId: null,
+        },
+      ]);
     });
   });
 
