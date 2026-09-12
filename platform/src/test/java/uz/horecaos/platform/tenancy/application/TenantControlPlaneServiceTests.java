@@ -490,6 +490,17 @@ class TenantControlPlaneServiceTests {
                     assertThat(event.displayName()).isEqualTo("Oshxona No.1");
                 });
         assertThat(h.actions()).contains("brand.revised");
+
+        // Staff 9.3a: a per-field diff, not the root-level {before, after} pair
+        // of whole snapshots ChangeDocuments.diff replaced.
+        var fact = h.audited.stream()
+                .filter(f -> f.actionCode().equals("brand.revised"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(fact.changeDocument()).doesNotContainKeys("before", "after");
+        @SuppressWarnings("unchecked")
+        var codeChange = (java.util.Map<String, Object>) fact.changeDocument().get("code");
+        assertThat(codeChange).containsEntry("before", "OSHXONA").containsEntry("after", "OSHXONA_1");
     }
 
     @Test

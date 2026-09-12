@@ -22,6 +22,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.domain.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -535,7 +536,9 @@ public class TenantControlPlaneService {
                 "Brand",
                 brandId.value(),
                 "Control-plane brand correction",
-                Map.of("before", before, "after", identityOf(brand.code(), brand.slug(), brand.displayName(), null)));
+                // Staff 9.3a: a per-field diff, not a root-level {before, after}
+                // pair of whole snapshots — see ChangeDocuments.diff's own doc.
+                ChangeDocuments.diff(before, identityOf(brand.code(), brand.slug(), brand.displayName(), null)));
         return toView(requireBrand(tenantId, brandId));
     }
 
@@ -788,10 +791,10 @@ public class TenantControlPlaneService {
                 "Location",
                 locationId.value(),
                 "Control-plane location correction",
-                Map.of(
-                        "before",
+                // Staff 9.3a: a per-field diff, not a root-level {before, after}
+                // pair of whole snapshots — see ChangeDocuments.diff's own doc.
+                ChangeDocuments.diff(
                         before,
-                        "after",
                         identityOf(
                                 location.code(),
                                 location.slug(),
