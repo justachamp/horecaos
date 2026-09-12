@@ -647,7 +647,7 @@ services:
     # phase-one implementation of the same interface a hyperscaler's object
     # store provides in the scaling phase, satisfying ADR 0061's "no
     # provider primitives" requirement for media storage on the pilot box.
-    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    image: quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z
     <<: *hardening
     restart: unless-stopped
     command: ["server", "/data", "--console-address", ":9090"]
