@@ -131,11 +131,45 @@ class CourierApplicantRetentionSweeperTests {
                 .isEqualTo("ACTIVE");
     }
 
+    @Test
+    @DisplayName("a tenant's own configured retention lengthens the window, never shortens it")
+    void aTenantsLongerRetentionGovernsItsOwnApplicants() {
+        CourierApplicantRetentionSweeper sweeper = sweeperAt(Instant.now());
+        assertThat(sweeper.effectiveRetentionMonths())
+                .as("no stored row: the platform default from @Value governs")
+                .isEqualTo(12);
+
+        jdbc.sql("""
+                INSERT INTO tenant.configuration_values (id, key_code, scope_type, tenant_id,
+                    value_type, integer_value, set_by)
+                VALUES (:id, :keyCode, 'TENANT', :tenantId, 'INTEGER', 24, 'a-test')
+                """)
+                .param("id", UUID.randomUUID())
+                .param(
+                        "keyCode",
+                        uz.horecaos.platform.courier.api.CourierConfigurationKeys.APPLICANT_RETENTION_MONTHS_CODE)
+                .param("tenantId", tenantId)
+                .update();
+        assertThat(sweeper.effectiveRetentionMonths())
+                .as("the tenant asked for a longer window than the platform default")
+                .isEqualTo(24);
+
+        jdbc.sql("UPDATE tenant.configuration_values SET integer_value = 3 WHERE key_code = :keyCode")
+                .param(
+                        "keyCode",
+                        uz.horecaos.platform.courier.api.CourierConfigurationKeys.APPLICANT_RETENTION_MONTHS_CODE)
+                .update();
+        assertThat(sweeper.effectiveRetentionMonths())
+                .as("a value below the platform default never shortens the shared sweep")
+                .isEqualTo(12);
+    }
+
     // ------------------------------------------------------------- fixtures
 
     private CourierApplicantRetentionSweeper sweeperAt(Instant now) {
         return new CourierApplicantRetentionSweeper(
                 new CourierApplicantRetentionSweeper.Eraser(couriers, protection, facts::add),
+                jdbc,
                 Clock.fixed(now, ZoneOffset.UTC),
                 12,
                 100);

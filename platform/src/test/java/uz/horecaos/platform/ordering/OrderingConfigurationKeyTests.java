@@ -29,6 +29,24 @@ class OrderingConfigurationKeyTests {
     }
 
     @Test
+    @DisplayName("the cart retention declaration is identical on both sides")
+    void theRetentionKeysAgree() {
+        assertThat(registered(OrderingConfigurationKeys.CART_RETENTION_DAYS_CODE))
+                .isEqualTo(OrderingConfigurationKeys.CART_RETENTION_DAYS);
+    }
+
+    @Test
+    @DisplayName("the retention default matches CartRetentionSweeper's own @Value default")
+    void theRetentionDefaultMatchesTheSweeper() {
+        // The sweeper's own @Value("${horecaos.ordering.cart-retention.days:90}")
+        // and this key's declared default must agree, the same discipline
+        // theDefaultMatchesTheCode below applies to the expiry key: a wired
+        // key whose default disagrees with the code silently changes behaviour
+        // for every tenant that has not overridden it.
+        assertThat(OrderingConfigurationKeys.CART_RETENTION_DAYS.defaultValue()).isEqualTo(90);
+    }
+
+    @Test
     @DisplayName("the declared default matches what CartService actually does")
     void theDefaultMatchesTheCode() {
         // 2026-09-10's correction: an earlier draft declared 60 (one hour) while

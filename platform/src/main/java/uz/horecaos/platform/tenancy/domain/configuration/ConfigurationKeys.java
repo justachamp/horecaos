@@ -88,6 +88,43 @@ public final class ConfigurationKeys {
      * and {@code InventoryService.reserveForQuote} for where that is actually
      * enforced.
      */
+    /**
+     * ADR 0092/0109: days an abandoned cart is kept before {@code
+     * CartRetentionSweeper} deletes it. Declared here so a stored row for it
+     * passes the startup validator, and declared identically in {@code
+     * ordering.api.OrderingConfigurationKeys} where it is consumed, for the
+     * reason recorded on {@link #COMMERCIAL_ENFORCEMENT_CEILING}: this
+     * registry is internal to tenancy, and a reference the other way would
+     * make the modules cyclic.
+     */
+    public static final ConfigurationKey<Integer> ORDERING_CART_RETENTION_DAYS = ConfigurationKey.of(
+                    "ordering.cart_retention_days", Integer.class)
+            .defaultValue(90)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Days an abandoned cart (one that expired without becoming an order) "
+                    + "is kept before it is deleted outright.")
+            .build();
+
+    /**
+     * ADR 0092/0109: months an unverified courier applicant's engagement is
+     * kept before {@code CourierApplicantRetentionSweeper} erases their name.
+     * Declared here so a stored row for it passes the startup validator, and
+     * declared identically in {@code courier.api.CourierConfigurationKeys}
+     * where it is consumed, for the reason recorded on {@link
+     * #COMMERCIAL_ENFORCEMENT_CEILING}.
+     */
+    public static final ConfigurationKey<Integer> COURIER_APPLICANT_RETENTION_MONTHS = ConfigurationKey.of(
+                    "courier.applicant_retention_months", Integer.class)
+            .defaultValue(12)
+            .ownedBy("courier")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Months an unverified courier applicant's engagement is kept before "
+                    + "their name is erased and the application archived.")
+            .build();
+
     public static final ConfigurationKey<Integer> INVENTORY_RESERVATION_TTL_SECONDS = ConfigurationKey.of(
                     "inventory.reservation_ttl_seconds", Integer.class)
             .defaultValue(900)
@@ -151,6 +188,7 @@ public final class ConfigurationKeys {
                     "telemetry.track_retention_days", Integer.class)
             .defaultValue(30)
             .ownedBy("telemetry")
+            .tenantVisible()
             .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
             .describedAs("Days a courier's track is kept at coordinate precision before its "
                     + "daily partition is dropped. Must be at least the ADR 0042 settlement "
@@ -269,6 +307,8 @@ public final class ConfigurationKeys {
 
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
+            ORDERING_CART_RETENTION_DAYS,
+            COURIER_APPLICANT_RETENTION_MONTHS,
             QUOTE_TTL_SECONDS,
             INVENTORY_RESERVATION_TTL_SECONDS,
             COMMERCIAL_ENFORCEMENT_CEILING,
