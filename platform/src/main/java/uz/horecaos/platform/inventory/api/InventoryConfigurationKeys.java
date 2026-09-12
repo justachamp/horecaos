@@ -1,12 +1,13 @@
 package uz.horecaos.platform.inventory.api;
 
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 
 /**
  * The inventory module's ADR 0030 configuration keys.
  *
- * <p>There is exactly one: how long a stock reservation is held before
- * expiry. Wired 2026-09-10. Unlike {@code pricing.api.PricingConfigurationKeys}
+ * <p>{@link #RESERVATION_TTL_SECONDS} was the first: how long a stock
+ * reservation is held before expiry. Wired 2026-09-10. Unlike {@code pricing.api.PricingConfigurationKeys}
  * and {@code ordering.api.OrderingConfigurationKeys}, the declared default
  * (900 seconds) already agreed with {@link
  * uz.horecaos.platform.inventory.application.InventoryService#RESERVATION_TTL}
@@ -57,6 +58,39 @@ public final class InventoryConfigurationKeys {
             .defaultValue(900)
             .ownedBy("inventory")
             .describedAs("Seconds an inventory reservation is held before expiry.")
+            .build();
+
+    /** The code both declarations share (gap map row {@code 4.4d}, wave P46). */
+    public static final String CATALOG_USE_STOCK_LOGIC_CODE = "catalog.use_stock_logic";
+
+    /**
+     * Whether the tenant tracks counted stock ({@link
+     * uz.horecaos.platform.inventory.api.TrackingMode#QUANTITY}) rather than
+     * only the binary available/sold-out state — settings.md's catalog base
+     * settings, "turn quantity tracking on for the whole company in one
+     * place" rather than per variant per location, which is unusable on a
+     * six-hundred-item catalogue.
+     *
+     * <p><strong>Off by default, and turning it on does not turn anything
+     * on.</strong> {@code QUANTITY} tracking is not implemented — {@link
+     * uz.horecaos.platform.inventory.application.InventoryService.UnsupportedTrackingModeException}
+     * still refuses every attempt to use it, flag or no flag. This key exists
+     * so the setting can be authored and inherited through the operations
+     * surface before its enforcement ships, and so {@code InventoryService}
+     * can tell an operator which of the two true things is going on — the
+     * tenant has not turned it on, or the tenant has and the platform still
+     * cannot honour it — rather than one generic failure either way.
+     * Registering a key whose enforcement does not exist is worse than no
+     * key only if the key pretends to work; this one does not.
+     */
+    public static final ConfigurationKey<Boolean> CATALOG_USE_STOCK_LOGIC = ConfigurationKey.of(
+                    CATALOG_USE_STOCK_LOGIC_CODE, Boolean.class)
+            .defaultValue(false)
+            .ownedBy("inventory")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Turns counted-stock tracking on for the whole tenant. Not yet enforced: "
+                    + "QUANTITY tracking mode is still refused either way.")
             .build();
 
     private InventoryConfigurationKeys() {}

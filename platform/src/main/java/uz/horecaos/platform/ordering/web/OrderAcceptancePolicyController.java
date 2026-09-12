@@ -26,6 +26,8 @@ import uz.horecaos.platform.ordering.domain.AcceptanceMode;
 import uz.horecaos.platform.ordering.domain.ApprovalChannel;
 import uz.horecaos.platform.ordering.domain.ApprovalTimeoutAction;
 import uz.horecaos.platform.ordering.domain.OrderAcceptancePolicy;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -74,8 +76,8 @@ public class OrderAcceptancePolicyController {
                     + "what a specific brand or location actually resolves, including any override.")
     AcceptancePolicyResponse effective(
             @PathVariable UUID tenantId,
-            @RequestParam(required = false) UUID brandId,
-            @RequestParam(required = false) UUID locationId) {
+            @RequestParam(required = false) @Nullable UUID brandId,
+            @RequestParam(required = false) @Nullable UUID locationId) {
         return AcceptancePolicyResponse.of(acceptancePolicies.resolveAt(scopeOf(tenantId, brandId, locationId)));
     }
 
@@ -95,8 +97,20 @@ public class OrderAcceptancePolicyController {
         return ResponseEntity.ok(AcceptancePolicyResponse.of(published));
     }
 
-    private static ResourceScope scopeOf(UUID tenantId, UUID brandId, UUID locationId) {
+    /**
+     * TENANT when neither is given, BRAND when only {@code brandId} is, and
+     * LOCATION when both are — the same rule {@code
+     * OperationsConfigurationController.scopeOf} enforces, and previously
+     * unenforced here: a {@code locationId} with no {@code brandId} used to
+     * reach {@link ResourceScope#location} directly and fail its own {@code
+     * Objects.requireNonNull} as a raw NPE (a 500) rather than the ADR 0031
+     * validation refusal a malformed request deserves.
+     */
+    private static ResourceScope scopeOf(UUID tenantId, @Nullable UUID brandId, @Nullable UUID locationId) {
         if (locationId != null) {
+            if (brandId == null) {
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, "locationId requires brandId");
+            }
             return ResourceScope.location(tenantId, brandId, locationId);
         }
         if (brandId != null) {
@@ -106,8 +120,8 @@ public class OrderAcceptancePolicyController {
     }
 
     public record AuthorRequest(
-            UUID brandId,
-            UUID locationId,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
             @NotNull AcceptanceMode mode,
             @NotNull ApprovalChannel approvalChannel,
             int approvalTimeoutSeconds,
