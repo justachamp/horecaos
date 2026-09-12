@@ -3095,6 +3095,7 @@ export const messagesRu: MessageCatalogue = {
   'shared.dataGrid.save': 'Сохранить',
   'shared.dataGrid.saving': 'Сохранение…',
   'shared.dataGrid.discard': 'Отменить',
+  'shared.dataGrid.saveError': 'Не удалось сохранить. Изменения не потеряны — попробуйте ещё раз.',
 
   // shared/ui — q-matrix-grid (X.7)
   'shared.matrixGrid.toggleRow': 'Переключить всю строку',

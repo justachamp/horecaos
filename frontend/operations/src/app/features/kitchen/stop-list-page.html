@@ -74,9 +74,11 @@
     } @else {
       <q-data-table
         viewId="kitchen.stopList"
+        [scopeKey]="scopeKey()"
         [columns]="columns()"
         [rows]="visibleItems()"
         [rowId]="rowIdFn"
+        [(filters)]="filters"
         [(selectedIds)]="selectedIds"
         [bulkActions]="bulkActions()"
         [bulkActionsDisabled]="!bulkReason().trim()"

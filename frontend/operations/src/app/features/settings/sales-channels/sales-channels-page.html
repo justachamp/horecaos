@@ -4,7 +4,9 @@
 @if (loading()) {
   <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
 } @else if (denied()) {
-  <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+  <p class="q-body-sm denied" data-testid="sales-channels-denied">
+    {{ 'settings.scope.denied' | t }}
+  </p>
 } @else if (loadError(); as message) {
   <p class="q-body-sm error" role="alert">{{ message }}</p>
 } @else {

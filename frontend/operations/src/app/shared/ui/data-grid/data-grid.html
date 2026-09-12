@@ -65,6 +65,16 @@
     </div>
   }
 
+  @if (saveError()) {
+    <q-inline-alert
+      severity="error"
+      messageKey="shared.dataGrid.saveError"
+      [dismissible]="true"
+      (dismiss)="dismissSaveError()"
+      data-testid="dg-save-error"
+    />
+  }
+
   <div class="q-data-grid__header" role="row" [style.grid-template-columns]="gridTemplateColumns()">
     @for (col of columns(); track col.key) {
       <div

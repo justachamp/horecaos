@@ -3130,6 +3130,7 @@ export const messagesEn = {
   'shared.dataGrid.save': 'Save',
   'shared.dataGrid.saving': 'Saving…',
   'shared.dataGrid.discard': 'Discard',
+  'shared.dataGrid.saveError': 'The save failed. Your changes are still here — try again.',
 
   // shared/ui — q-matrix-grid (X.7)
   'shared.matrixGrid.toggleRow': 'Toggle every cell in this row',

@@ -1,6 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Observable, of } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { I18n } from '../../../core/i18n/i18n';
@@ -61,10 +61,26 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * By `data-row`/`data-col` attribute, not by flat DOM position — under
+ * `q-data-grid`'s CDK-virtualized branch (past `VIRTUALIZE_THRESHOLD` rows)
+ * only the rendered window's rows appear in the DOM at all, so a positional
+ * `querySelectorAll(...)[ri * columns + ci]` would silently pick the wrong
+ * cell (or none) the moment virtualization is active. The row/col attributes
+ * are the same in both branches, so this one helper covers both.
+ */
 function cellAt(fixture: ComponentFixture<TestHost>, ri: number, ci: number): HTMLElement {
-  return fixture.nativeElement.querySelectorAll('[data-testid="dg-cell"]')[
-    ri * COLUMNS.length + ci
-  ] as HTMLElement;
+  return fixture.nativeElement.querySelector(
+    `[data-testid="dg-cell"][data-row="${ri}"][data-col="${ci}"]`,
+  ) as HTMLElement;
+}
+
+function manyRows(count: number): readonly Row[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `r${i}`,
+    name: `Row ${i}`,
+    priceMinor: String(1000 + i),
+  }));
 }
 
 function mousedown(el: HTMLElement, options: MouseEventInit = {}): void {
@@ -276,6 +292,95 @@ describe('DataGrid', () => {
     expect(host.lastSaved()?.items.length).toBe(2);
   });
 
+  it('surfaces a whole-request save failure to the operator without losing the pending edit', async () => {
+    const failingSaveFn = vi.fn(() => throwError(() => new Error('network')));
+    host.saveFn.set(failingSaveFn);
+    fixture.detectChanges();
+
+    cellAt(fixture, 0, 1).dispatchEvent(new Event('dblclick', { bubbles: true }));
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector(
+      '[data-testid="dg-input"]',
+    ) as HTMLInputElement;
+    input.value = '50000';
+    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    (fixture.nativeElement.querySelector('[data-testid="dg-save"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // A rejected batch is not the same as a successful one that happened to
+    // apply nothing — the pending edit must survive it untouched.
+    expect(cellAt(fixture, 0, 1).className).toContain('q-data-grid__cell--dirty');
+    expect(cellAt(fixture, 0, 1).textContent?.trim()).toBe('50000');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="dg-dirty-count"]').textContent,
+    ).toContain('1');
+    expect(host.lastSaved()).toBeNull();
+
+    // The toolbar leaves its saving state...
+    const saveButton = fixture.nativeElement.querySelector(
+      '[data-testid="dg-save"]',
+    ) as HTMLButtonElement;
+    expect(saveButton.disabled).toBe(false);
+    expect(saveButton.textContent?.trim()).toBe('Save');
+
+    // ...but "it failed" must not look like "nothing happened": an explicit,
+    // dismissible error is shown.
+    const alert = fixture.nativeElement.querySelector('[data-testid="dg-save-error"]');
+    expect(alert).toBeTruthy();
+    expect(alert?.textContent).toContain('failed');
+
+    // Retrying with a working saveFn clears the error and applies the edit.
+    const retrySaveFn = vi.fn(() =>
+      of<DataGridBatchResult>({ items: [{ rowId: 'r1', status: 'APPLIED' as const }] }),
+    );
+    host.saveFn.set(retrySaveFn);
+    fixture.detectChanges();
+    saveButton.click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="dg-save-error"]')).toBeFalsy();
+    expect(cellAt(fixture, 0, 1).className).not.toContain('q-data-grid__cell--dirty');
+  });
+
+  it('dismisses the save-error alert without touching the pending edits', async () => {
+    const failingSaveFn = vi.fn(() => throwError(() => new Error('network')));
+    host.saveFn.set(failingSaveFn);
+    fixture.detectChanges();
+
+    cellAt(fixture, 0, 1).dispatchEvent(new Event('dblclick', { bubbles: true }));
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector(
+      '[data-testid="dg-input"]',
+    ) as HTMLInputElement;
+    input.value = '50000';
+    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    (fixture.nativeElement.querySelector('[data-testid="dg-save"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="dg-save-error"]')).toBeTruthy();
+
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="q-inline-alert-dismiss"]',
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="dg-save-error"]')).toBeFalsy();
+    expect(cellAt(fixture, 0, 1).className).toContain('q-data-grid__cell--dirty');
+  });
+
   it('discards every pending edit and error at once', async () => {
     cellAt(fixture, 0, 1).dispatchEvent(new Event('dblclick', { bubbles: true }));
     fixture.detectChanges();
@@ -294,5 +399,64 @@ describe('DataGrid', () => {
 
     expect(fixture.nativeElement.querySelector('[data-testid="dg-toolbar"]')).toBeFalsy();
     expect(cellAt(fixture, 0, 1).textContent?.trim()).toBe('25000');
+  });
+
+  // ------------------------------------------------------------ virtualization
+
+  it('keyboard-navigates and fills down correctly once virtualization kicks in past 150 rows', async () => {
+    // A fresh component mounted directly at 200 rows — not the shared
+    // `beforeEach` fixture, which renders once at 3 (non-virtualized) rows
+    // first, since a real browser's `cdk-virtual-scroll-viewport` measures
+    // and scrolls in a way jsdom cannot reproduce reliably. What this test
+    // *can* prove without simulating real scrolling is that the CDK branch
+    // itself — `*cdkVirtualFor`, its `index`, and the shared `rowTpl` — wires
+    // navigation and fill-down the same way the plain-list branch does, over
+    // rows deep enough into a 200-row set that a naive positional lookup
+    // (rather than this file's `[data-row]`/`[data-col]`-based `cellAt`)
+    // would already be picking the wrong element.
+    fixture = TestBed.createComponent(TestHost);
+    host = fixture.componentInstance;
+    host.rows.set(manyRows(200));
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // Past VIRTUALIZE_THRESHOLD, the CDK viewport renders, not the plain list.
+    expect(fixture.nativeElement.querySelector('[data-testid="dg-viewport"]')).toBeTruthy();
+
+    const top = 10;
+    const bottom = 12;
+
+    // Arrow-key nav within the virtualized branch.
+    mousedown(cellAt(fixture, top, 1));
+    fixture.detectChanges();
+    keydown(scroller(), 'ArrowDown');
+    fixture.detectChanges();
+    keydown(scroller(), 'ArrowDown');
+    fixture.detectChanges();
+    expect(cellAt(fixture, bottom, 1).className).toContain('q-data-grid__cell--active');
+    expect(cellAt(fixture, top, 1).className).not.toContain('q-data-grid__cell--active');
+
+    // Fill-down across the same virtualized range.
+    cellAt(fixture, top, 1).dispatchEvent(new Event('dblclick', { bubbles: true }));
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector(
+      '[data-testid="dg-input"]',
+    ) as HTMLInputElement;
+    input.value = '77000';
+    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    mousedown(cellAt(fixture, top, 1));
+    fixture.detectChanges();
+    mousedown(cellAt(fixture, bottom, 1), { shiftKey: true });
+    fixture.detectChanges();
+    keydown(scroller(), 'd', { ctrlKey: true });
+    fixture.detectChanges();
+
+    expect(cellAt(fixture, top, 1).textContent?.trim()).toBe('77000');
+    expect(cellAt(fixture, top + 1, 1).textContent?.trim()).toBe('77000');
+    expect(cellAt(fixture, bottom, 1).textContent?.trim()).toBe('77000');
   });
 });

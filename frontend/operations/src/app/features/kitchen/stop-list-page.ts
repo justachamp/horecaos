@@ -28,6 +28,15 @@ import { describeApiError } from '../orders/order-errors';
 type StopTab = 'ALL' | 'AVAILABLE' | 'ON_STOP';
 
 /**
+ * `q-data-table`'s `[(filters)]` model, so Save View / Apply View
+ * (`X.18`) has a real effect on this screen: the active tab is the only
+ * thing this page's own filter bar controls, so it is the whole shape.
+ */
+interface StopListFilters {
+  readonly tab: StopTab;
+}
+
+/**
  * `StateActionRequest`/`advanceReasonCode`'s own pattern (`order-actions.ts`):
  * no dialog collects a reason for the single-row toggle, so this is the
  * fixed, honest value sent — a real, auditable statement that an operator
@@ -101,6 +110,12 @@ export class StopListPage implements OnInit {
 
   protected readonly rowIdFn = (row: VariantAvailabilityResponse): string => row.variantId;
 
+  /** `q-data-table`'s `scopeKey` — so a shared terminal's persisted filters and saved views never leak from one location into another. */
+  protected readonly scopeKey = computed<string | null>(() => {
+    const scope = this.location.scope();
+    return scope ? `${scope.tenantId}:${scope.brandId}:${scope.locationId}` : null;
+  });
+
   protected readonly firstLoadComplete = signal(false);
   protected readonly loadingMore = signal(false);
   protected readonly denied = signal(false);
@@ -110,7 +125,9 @@ export class StopListPage implements OnInit {
   protected readonly page = signal<CursorState>(firstPage(50));
   protected readonly hasMore = signal(false);
 
-  protected readonly activeTab = signal<StopTab>('ALL');
+  /** Two-way bound to `q-data-table`'s `[(filters)]` — persisted per-tab filters and saved views both round-trip through this signal. */
+  protected readonly filters = signal<StopListFilters | null>({ tab: 'ALL' });
+  protected readonly activeTab = computed<StopTab>(() => this.filters()?.tab ?? 'ALL');
   /** Two-way bound to `q-data-table`'s own selection model — read here to gate the reason field, written here to clear the selection once a bulk action lands. */
   protected readonly selectedIds = signal<ReadonlySet<string>>(new Set());
   protected readonly busyVariantIds = signal<ReadonlySet<string>>(new Set());
@@ -163,7 +180,7 @@ export class StopListPage implements OnInit {
   }
 
   protected selectTab(tab: StopTab): void {
-    this.activeTab.set(tab);
+    this.filters.set({ tab });
   }
 
   /**

@@ -15,6 +15,7 @@ import {
 } from '@angular/core';
 
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { ActionMenu, ActionMenuItem } from '../action-menu';
 import { SavedView, SavedViewsStore } from '../table/saved-views-store';
 import { TableFilterStore } from '../table/table-filter-store';
 import {
@@ -61,7 +62,7 @@ const INFINITE_SCROLL_THRESHOLD_PX = 48;
  */
 @Component({
   selector: 'q-data-table',
-  imports: [NgTemplateOutlet, TPipe],
+  imports: [NgTemplateOutlet, TPipe, ActionMenu],
   templateUrl: './data-table.html',
   styleUrl: './data-table.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -72,6 +73,18 @@ export class DataTable<T, F = Record<string, unknown>> {
 
   /** Stable per-screen key. Persisted filters, the column chooser, and saved views are all no-ops without it. */
   readonly viewId = input<string | null>(null);
+
+  /**
+   * The current tenant/brand/location, folded into every storage key
+   * alongside `viewId` — without it, a shared terminal's next operator (a
+   * shift change) or a support session under a different tenant (ADR 0081)
+   * would silently see whichever location's filters and saved views happened
+   * to save last, since `localStorage` is per-browser, not per-scope. A host
+   * page with no scope concept of its own may leave this unset; the storage
+   * key then falls back to the bare `viewId`, unchanged from before this
+   * existed.
+   */
+  readonly scopeKey = input<string | null>(null);
 
   readonly columns = input.required<readonly DataTableColumn[]>();
   readonly rows = input.required<readonly T[]>();
@@ -124,39 +137,64 @@ export class DataTable<T, F = Record<string, unknown>> {
 
   protected readonly selectedCount = computed(() => this.selectedIds().size);
 
-  protected readonly savedViews = computed<readonly SavedView<F>[]>(() => {
+  /**
+   * `SavedViewsStore.list()` reads `localStorage` directly rather than through
+   * a signal, so `savedViews` below would otherwise never recompute after
+   * `saveCurrentView()`/`removeView()` — bumped by both so the views menu
+   * shows what was just saved or removed without a full reload.
+   */
+  private readonly savedViewsVersion = signal(0);
+
+  /** `viewId`, folded together with `scopeKey` — see {@link scopeKey}. `null` until a screen key exists at all. */
+  protected readonly storageKey = computed<string | null>(() => {
     const id = this.viewId();
-    return id ? this.savedViewsStore.list<F>(id) : [];
+    if (!id) {
+      return null;
+    }
+    const scope = this.scopeKey();
+    return scope ? `${scope}::${id}` : id;
   });
 
-  /** Guards the restore-on-init effect below from re-running for the same view, and the persist effect from running before it. */
-  private restoredViewId: string | null = null;
+  protected readonly savedViews = computed<readonly SavedView<F>[]>(() => {
+    const key = this.storageKey();
+    this.savedViewsVersion();
+    return key ? this.savedViewsStore.list<F>(key) : [];
+  });
+
+  /**
+   * Guards the restore-on-init effect below from re-running for the same
+   * storage key, and the persist effect from running before it. Keyed on
+   * {@link storageKey}, not the bare `viewId` — a scope change (an operator
+   * switching location without leaving the screen) must re-run this exactly
+   * like a fresh mount would, so the newly-current scope's own filters load
+   * instead of leaving the previous scope's filters on screen.
+   */
+  private restoredKey: string | null = null;
 
   constructor() {
     effect(() => {
-      const id = this.viewId();
-      if (!id || id === this.restoredViewId) {
+      const key = this.storageKey();
+      if (!key || key === this.restoredKey) {
         return;
       }
-      this.restoredViewId = id;
-      const storedFilters = this.filterStore.load<F | null>(this.filtersKey(id), null);
-      if (storedFilters !== null) {
-        this.filters.set(storedFilters);
-      }
-      const storedColumns = this.filterStore.load<readonly string[] | null>(
-        this.columnsKey(id),
-        null,
+      this.restoredKey = key;
+      // Unconditional, not "only if something was found": on a live scope
+      // switch (the operator picks a different location without leaving the
+      // screen) the previous scope's filters are still sitting in `filters()`,
+      // and a scope with nothing saved yet must land on its own defaults —
+      // `null` here, which every host page already treats as "no filter" —
+      // not silently keep showing the last scope's choice.
+      this.filters.set(this.filterStore.load<F | null>(this.filtersKey(key), null));
+      this.hiddenColumnKeys.set(
+        new Set(this.filterStore.load<readonly string[]>(this.columnsKey(key), [])),
       );
-      if (storedColumns !== null) {
-        this.hiddenColumnKeys.set(new Set(storedColumns));
-      }
     });
 
     effect(() => {
-      const id = this.viewId();
+      const key = this.storageKey();
       const current = this.filters();
-      if (id && id === this.restoredViewId) {
-        this.filterStore.save(this.filtersKey(id), current);
+      if (key && key === this.restoredKey) {
+        this.filterStore.save(this.filtersKey(key), current);
       }
     });
   }
@@ -228,13 +266,15 @@ export class DataTable<T, F = Record<string, unknown>> {
 
   // ------------------------------------------------------------- row actions
 
-  protected toggleRowMenu(id: string, event: Event): void {
-    event.stopPropagation();
-    this.openRowMenuId.set(this.openRowMenuId() === id ? null : id);
-  }
-
-  protected closeRowMenu(): void {
-    if (this.openRowMenuId() !== null) {
+  /**
+   * `q-action-menu` (ADR 0101) owns opening/closing and outside-click
+   * dismissal itself; this component only tracks *which* row's menu is the
+   * open one, since only one may be open across the whole table.
+   */
+  protected onRowMenuOpenChange(id: string, open: boolean): void {
+    if (open) {
+      this.openRowMenuId.set(id);
+    } else if (this.openRowMenuId() === id) {
       this.openRowMenuId.set(null);
     }
   }
@@ -246,6 +286,15 @@ export class DataTable<T, F = Record<string, unknown>> {
 
   protected isRowActionDisabled(action: RowAction<T>, row: T): boolean {
     return action.disabled?.(row) ?? false;
+  }
+
+  protected rowMenuItems(row: T): readonly ActionMenuItem[] {
+    return this.rowActions().map((action) => ({
+      id: action.id,
+      label: action.label,
+      destructive: action.destructive,
+      disabled: this.isRowActionDisabled(action, row),
+    }));
   }
 
   // ----------------------------------------------------------- column chooser
@@ -268,9 +317,9 @@ export class DataTable<T, F = Record<string, unknown>> {
       }
       return next;
     });
-    const id = this.viewId();
-    if (id) {
-      this.filterStore.save(this.columnsKey(id), [...this.hiddenColumnKeys()]);
+    const storageKey = this.storageKey();
+    if (storageKey) {
+      this.filterStore.save(this.columnsKey(storageKey), [...this.hiddenColumnKeys()]);
     }
   }
 
@@ -285,12 +334,13 @@ export class DataTable<T, F = Record<string, unknown>> {
   }
 
   protected saveCurrentView(): void {
-    const id = this.viewId();
+    const key = this.storageKey();
     const name = this.newViewName().trim();
-    if (!id || !name) {
+    if (!key || !name) {
       return;
     }
-    this.savedViewsStore.save(id, name, this.filters());
+    this.savedViewsStore.save(key, name, this.filters());
+    this.savedViewsVersion.update((version) => version + 1);
     this.newViewName.set('');
   }
 
@@ -299,11 +349,12 @@ export class DataTable<T, F = Record<string, unknown>> {
     this.viewsMenuOpen.set(false);
   }
 
-  protected removeView(id: string, event: Event): void {
+  protected removeView(savedViewId: string, event: Event): void {
     event.stopPropagation();
-    const viewId = this.viewId();
-    if (viewId) {
-      this.savedViewsStore.remove(viewId, id);
+    const key = this.storageKey();
+    if (key) {
+      this.savedViewsStore.remove(key, savedViewId);
+      this.savedViewsVersion.update((version) => version + 1);
     }
   }
 
@@ -324,11 +375,11 @@ export class DataTable<T, F = Record<string, unknown>> {
     this.loadMore.emit();
   }
 
-  private filtersKey(viewId: string): string {
-    return `${viewId}.filters`;
+  private filtersKey(storageKey: string): string {
+    return `${storageKey}.filters`;
   }
 
-  private columnsKey(viewId: string): string {
-    return `${viewId}.hiddenColumns`;
+  private columnsKey(storageKey: string): string {
+    return `${storageKey}.hiddenColumns`;
   }
 }

@@ -3117,6 +3117,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'shared.dataGrid.save': 'Saqlash',
   'shared.dataGrid.saving': 'Saqlanmoqda…',
   'shared.dataGrid.discard': 'Bekor qilish',
+  'shared.dataGrid.saveError': 'Saqlab bo‘lmadi. O‘zgarishlar yo‘qolmadi — qayta urinib ko‘ring.',
 
   // shared/ui — q-matrix-grid (X.7)
   'shared.matrixGrid.toggleRow': 'Butun qatorni almashtirish',

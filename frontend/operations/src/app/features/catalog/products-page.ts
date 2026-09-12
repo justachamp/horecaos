@@ -25,6 +25,16 @@ import { describeApiError } from '../orders/order-errors';
 type StatusTab = 'ALL' | 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | 'NO_MXIK';
 
 /**
+ * `q-data-table`'s `[(filters)]` model, so Save View / Apply View
+ * (`X.18`) has a real effect on this screen — both the status tab and the
+ * free-text search are what this page's own filter bar controls.
+ */
+interface ProductFilters {
+  readonly tab: StatusTab;
+  readonly search: string;
+}
+
+/**
  * catalog.md §4.1 — the brand product library.
  *
  * **Scope, deliberately, against the backend as it exists today.** The spec's
@@ -69,6 +79,12 @@ export class ProductsPage implements OnInit {
 
   protected readonly rowIdFn = (product: ProductSummary): string => product.productId;
 
+  /** `q-data-table`'s `scopeKey` — so a shared terminal's persisted filters and saved views never leak from one brand into another. */
+  protected readonly scopeKey = computed<string | null>(() => {
+    const scope = this.brand.scope();
+    return scope ? `${scope.tenantId}:${scope.brandId}` : null;
+  });
+
   protected readonly firstLoadComplete = signal(false);
   protected readonly loadingMore = signal(false);
   protected readonly denied = signal(false);
@@ -80,8 +96,10 @@ export class ProductsPage implements OnInit {
   protected readonly page = signal<CursorState>(firstPage(50));
   protected readonly hasMore = signal(false);
 
-  protected readonly activeTab = signal<StatusTab>('ALL');
-  protected readonly search = signal('');
+  /** Two-way bound to `q-data-table`'s `[(filters)]` — persisted per-tab filters and saved views both round-trip through this signal. */
+  protected readonly filters = signal<ProductFilters | null>({ tab: 'ALL', search: '' });
+  protected readonly activeTab = computed<StatusTab>(() => this.filters()?.tab ?? 'ALL');
+  protected readonly search = computed<string>(() => this.filters()?.search ?? '');
 
   protected readonly createDialogOpen = signal(false);
   protected readonly creating = signal(false);
@@ -175,11 +193,11 @@ export class ProductsPage implements OnInit {
   }
 
   protected selectTab(tab: StatusTab): void {
-    this.activeTab.set(tab);
+    this.filters.update((current) => ({ tab, search: current?.search ?? '' }));
   }
 
   protected onSearchInput(value: string): void {
-    this.search.set(value);
+    this.filters.update((current) => ({ tab: current?.tab ?? 'ALL', search: value }));
   }
 
   protected visibleProducts(): readonly ProductSummary[] {

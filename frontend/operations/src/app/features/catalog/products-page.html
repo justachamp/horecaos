@@ -99,9 +99,11 @@
     } @else {
       <q-data-table
         viewId="catalog.products"
+        [scopeKey]="scopeKey()"
         [columns]="columns()"
         [rows]="visibleProducts()"
         [rowId]="rowIdFn"
+        [(filters)]="filters"
         [selectable]="false"
         [hasMore]="hasMore()"
         [loading]="loadingMore()"

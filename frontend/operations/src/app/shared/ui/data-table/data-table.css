@@ -164,51 +164,6 @@
 .q-data-table__actions-col {
   width: 40px;
   text-align: right;
-  position: relative;
-}
-
-.q-data-table__row-menu-toggle {
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: var(--q-ink-muted);
-  padding: 4px 8px;
-}
-
-.q-data-table__row-menu {
-  position: absolute;
-  right: 8px;
-  top: 100%;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  min-width: 160px;
-  background: var(--q-canvas);
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-}
-
-.q-data-table__row-menu button {
-  border: none;
-  background: none;
-  text-align: left;
-  padding: 8px 12px;
-  cursor: pointer;
-  color: var(--q-ink);
-}
-
-.q-data-table__row-menu button:hover:not(:disabled) {
-  background: var(--q-surface-1);
-}
-
-.q-data-table__row-menu button:disabled {
-  color: var(--q-ink-subtle);
-  cursor: not-allowed;
-}
-
-.q-data-table__row-action--destructive {
-  color: var(--q-error) !important;
 }
 
 .q-data-table__empty-row td {

@@ -1,4 +1,4 @@
-<div class="q-data-table" (click)="closeRowMenu()">
+<div class="q-data-table">
   <div class="q-data-table__toolbar">
     @if (viewId()) {
       <div class="q-data-table__views">
@@ -166,32 +166,14 @@
               </td>
             }
             @if (rowActions().length > 0) {
-              <td class="q-data-table__actions-col">
-                <button
-                  type="button"
-                  class="q-data-table__row-menu-toggle q-body-sm"
-                  [attr.aria-label]="'shared.dataTable.rowMenu.toggle' | t"
-                  (click)="toggleRowMenu(rowIdOf(row), $event)"
-                  data-testid="dt-row-menu-toggle"
-                >
-                  ⋮
-                </button>
-                @if (openRowMenuId() === rowIdOf(row)) {
-                  <div class="q-data-table__row-menu" data-testid="dt-row-menu">
-                    @for (action of rowActions(); track action.id) {
-                      <button
-                        type="button"
-                        [disabled]="isRowActionDisabled(action, row)"
-                        [class.q-data-table__row-action--destructive]="action.destructive"
-                        class="q-body-sm"
-                        (click)="runRowAction(action.id, row)"
-                        [attr.data-testid]="'dt-row-action-' + action.id"
-                      >
-                        {{ action.label }}
-                      </button>
-                    }
-                  </div>
-                }
+              <td class="q-data-table__actions-col" (click)="$event.stopPropagation()">
+                <q-action-menu
+                  [triggerLabel]="'shared.dataTable.rowMenu.toggle' | t"
+                  [items]="rowMenuItems(row)"
+                  [open]="openRowMenuId() === rowIdOf(row)"
+                  (openChange)="onRowMenuOpenChange(rowIdOf(row), $event)"
+                  (select)="runRowAction($event, row)"
+                />
               </td>
             }
           </tr>

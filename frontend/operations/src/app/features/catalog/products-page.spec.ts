@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { of, throwError } from 'rxjs';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
@@ -63,6 +63,13 @@ function configure(catalogApi: Partial<CatalogApi>): void {
 }
 
 describe('ProductsPage', () => {
+  // `q-data-table`'s saved views and persisted filters live in real
+  // `localStorage`, keyed by the static `viewId` — clear it so one test's
+  // saved view or persisted tab never leaks into the next.
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -217,5 +224,60 @@ describe('ProductsPage', () => {
     await flushMicrotasks();
 
     expect(createProduct).not.toHaveBeenCalled();
+  });
+
+  // --------------------------------------------------- q-data-table migration: saved views (X.18)
+
+  it('binds the tab and search to q-data-table’s filters, so saving and re-applying a view actually changes the visible rows', async () => {
+    configure({
+      listCatalogs: () => of(FAKE_CATALOGS),
+      listProducts: () =>
+        of({
+          items: [
+            product({ productId: 'p1', name: 'Плов', status: 'ACTIVE' }),
+            product({ productId: 'p2', name: 'Лагман', status: 'DRAFT' }),
+          ],
+          nextCursor: null,
+        }),
+    });
+
+    const harness = await RouterTestingHarness.create('/catalog/products');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    const tabs = () => [...host.querySelectorAll('.tab')] as HTMLButtonElement[];
+
+    // Switch to "Draft" and save that as a view.
+    tabs()[2].click();
+    harness.detectChanges();
+    expect(host.textContent).toContain('Лагман');
+    expect(host.textContent).not.toContain('Плов');
+
+    (host.querySelector('[data-testid="dt-views-toggle"]') as HTMLButtonElement).click();
+    harness.detectChanges();
+    const nameInput = host.querySelector('[data-testid="dt-view-name-input"]') as HTMLInputElement;
+    nameInput.value = 'Черновики';
+    nameInput.dispatchEvent(new Event('input'));
+    harness.detectChanges();
+    (host.querySelector('[data-testid="dt-view-save"]') as HTMLButtonElement).click();
+    harness.detectChanges();
+    // Close the views menu, the way an operator would before moving on.
+    (host.querySelector('[data-testid="dt-views-toggle"]') as HTMLButtonElement).click();
+    harness.detectChanges();
+
+    // Back to "All" — both products are visible again.
+    tabs()[0].click();
+    harness.detectChanges();
+    expect(host.textContent).toContain('Плов');
+    expect(host.textContent).toContain('Лагман');
+
+    // Re-open the views menu and apply the saved view: this must change the
+    // actual rendered rows, not just flip a signal nothing reads.
+    (host.querySelector('[data-testid="dt-views-toggle"]') as HTMLButtonElement).click();
+    harness.detectChanges();
+    (host.querySelector('.q-data-table__view-apply') as HTMLButtonElement).click();
+    harness.detectChanges();
+
+    expect(host.textContent).toContain('Лагман');
+    expect(host.textContent).not.toContain('Плов');
   });
 });

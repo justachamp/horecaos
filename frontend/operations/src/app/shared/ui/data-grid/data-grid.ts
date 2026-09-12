@@ -13,6 +13,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { InlineAlert } from '../inline-alert';
 import {
   DataGridBatchResult,
   DataGridColumn,
@@ -57,7 +58,7 @@ const KEY_PART_SEPARATOR = ':';
  */
 @Component({
   selector: 'q-data-grid',
-  imports: [NgTemplateOutlet, ScrollingModule, TPipe],
+  imports: [NgTemplateOutlet, ScrollingModule, TPipe, InlineAlert],
   templateUrl: './data-grid.html',
   styleUrl: './data-grid.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -83,6 +84,15 @@ export class DataGrid<T> {
   protected readonly editingCell = signal<Cell | null>(null);
   protected readonly editValue = signal('');
   protected readonly saving = signal(false);
+  /**
+   * Set when `saveFn`'s observable itself errors — the whole batch was
+   * rejected (a 403 once a capability was revoked, a 500, offline), as
+   * opposed to a per-row `FAILED` outcome inside a successful response.
+   * Pending edits are left untouched either way: an operator's typed
+   * numbers are not data to throw away because the network had a bad
+   * moment, but "nothing happened" and "it failed" must not look the same.
+   */
+  protected readonly saveError = signal(false);
 
   protected readonly virtualized = computed(() => this.rows().length > VIRTUALIZE_THRESHOLD);
   protected readonly dirtyCount = computed(() => this.pendingRowEdits().length);
@@ -303,6 +313,7 @@ export class DataGrid<T> {
       return;
     }
     this.saving.set(true);
+    this.saveError.set(false);
     fn(edits)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -328,15 +339,24 @@ export class DataGrid<T> {
           this.saving.set(false);
           this.saved.emit(result);
         },
+        // The request itself failed — no per-row outcomes exist at all, so
+        // every pending edit stays exactly as the operator left it and
+        // `saved` never fires (there is no `DataGridBatchResult` to emit).
         error: () => {
           this.saving.set(false);
+          this.saveError.set(true);
         },
       });
+  }
+
+  protected dismissSaveError(): void {
+    this.saveError.set(false);
   }
 
   protected discard(): void {
     this.pending.set(new Map());
     this.rowErrors.set(new Map());
+    this.saveError.set(false);
     this.editingCell.set(null);
   }
 

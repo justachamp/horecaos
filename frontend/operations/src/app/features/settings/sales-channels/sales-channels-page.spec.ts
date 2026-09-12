@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
+import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
 import { ChannelMatrices, ChannelView, SalesChannelsApi } from './sales-channels-api';
@@ -177,5 +178,56 @@ describe('SalesChannelsPage', () => {
 
     expect(api.archive).toHaveBeenCalledWith(SCOPE, 'chan-1', 3);
     expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Delete');
+  });
+
+  // ------------------------------------------------------------------------ denied
+
+  it('renders the denied state, not the registry, when the location grant is missing', async () => {
+    TestBed.resetTestingModule();
+    const noScopeLocation = new FakeCurrentLocation();
+    noScopeLocation.scope.set(null);
+    noScopeLocation.denied.set(true);
+    const list = vi.fn().mockResolvedValue([STOREFRONT]);
+    await TestBed.configureTestingModule({
+      imports: [SalesChannelsPage],
+      providers: [
+        { provide: SalesChannelsApi, useValue: { ...api, list } },
+        { provide: CurrentLocation, useValue: noScopeLocation },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(SalesChannelsPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="sales-channels-denied"]')).toBeTruthy();
+    expect(host.querySelector('.row')).toBeFalsy();
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it('renders the denied state on a 403 from the channel list, not the empty table', async () => {
+    TestBed.resetTestingModule();
+    const list = vi
+      .fn()
+      .mockRejectedValue(new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null));
+    await TestBed.configureTestingModule({
+      imports: [SalesChannelsPage],
+      providers: [
+        { provide: SalesChannelsApi, useValue: { ...api, list } },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(SalesChannelsPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(list).toHaveBeenCalledWith(SCOPE);
+    expect(host.querySelector('[data-testid="sales-channels-denied"]')).toBeTruthy();
+    expect(host.querySelector('.row')).toBeFalsy();
   });
 });
