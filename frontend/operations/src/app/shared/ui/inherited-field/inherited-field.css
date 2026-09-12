@@ -1,0 +1,104 @@
+.field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.field__label {
+  min-width: 200px;
+  color: var(--q-ink-muted);
+}
+
+.field__value {
+  color: var(--q-ink);
+}
+
+.field__value--muted {
+  color: var(--q-ink-subtle);
+}
+
+.field__chip {
+  padding: 2px 8px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-surface-2);
+  color: var(--q-ink-muted);
+  cursor: pointer;
+}
+
+.field__chip--disabled {
+  cursor: default;
+  background: var(--q-surface-1);
+}
+
+.field__action {
+  border: none;
+  background: none;
+  color: var(--q-primary);
+  cursor: pointer;
+  padding: 0;
+}
+
+.field__action:hover {
+  text-decoration: underline;
+}
+
+.field__popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  min-width: 320px;
+  padding: 12px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
+}
+
+.field__popoverHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--q-ink);
+}
+
+.field__popoverClose {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--q-ink-muted);
+}
+
+.field__ladder {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.field__ladderRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  color: var(--q-ink-subtle);
+}
+
+.field__ladderRow--winner {
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+  border-radius: var(--q-radius);
+  font-weight: 600;
+}
+
+.field__popoverDescribe {
+  margin: 0;
+  color: var(--q-ink-subtle);
+  word-break: break-word;
+}

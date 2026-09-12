@@ -16,25 +16,6 @@
   margin: 0 0 16px;
 }
 
-.settings__scope {
-  margin-bottom: 20px;
-  padding: 8px 10px;
-  background: var(--q-surface-1);
-  border-radius: var(--q-radius);
-  color: var(--q-ink-muted);
-  word-break: break-all;
-}
-
-.settings__scope-value {
-  display: block;
-  margin-top: 2px;
-}
-
-.settings__scope--denied {
-  color: var(--q-error-text);
-  background: var(--q-error-tint);
-}
-
 .settings__group {
   margin-bottom: 20px;
 }

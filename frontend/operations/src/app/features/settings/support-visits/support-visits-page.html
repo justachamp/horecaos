@@ -23,10 +23,20 @@
         @for (visit of visits(); track visit.id) {
           <li class="visit" [class.visit--open]="visit.open">
             <div class="visit__head q-body-sm">
-              <strong>{{ (visit.access === 'ASSIST' ? 'support.banner.assist' : 'support.banner.view') | t }}</strong>
+              <strong>{{
+                (visit.access === 'ASSIST' ? 'support.banner.assist' : 'support.banner.view') | t
+              }}</strong>
+              <span class="muted">{{
+                'settings.supportVisits.by' | t: { subject: visit.principalSubject }
+              }}</span>
               <span class="muted">{{ when(visit.startedAt) }}</span>
             </div>
             <p class="q-body-sm">{{ visit.reason }}</p>
+            @if (visit.ticketReference) {
+              <p class="q-caption muted">
+                {{ 'settings.supportVisits.ticket' | t: { reference: visit.ticketReference } }}
+              </p>
+            }
             <p class="q-caption muted">
               @if (visit.open) {
                 {{ 'settings.supportVisits.openUntil' | t: { time: when(visit.expiresAt) } }}

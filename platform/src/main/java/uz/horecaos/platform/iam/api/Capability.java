@@ -1362,6 +1362,42 @@ public enum Capability {
     VOICE_CALL_LOG_READ("voice.call-log.read", "voice-call-log", "read"),
 
     /**
+     * ADR 0030, wave P31: a tenant's own read of its scoped configuration
+     * values and their resolution trace — {@code
+     * uz.horecaos.platform.tenancy.web.OperationsConfigurationController},
+     * the settings.md §1.1/§1.2 scope bar and {@code q-inherited-field}'s
+     * trace popover.
+     *
+     * <p>{@code ConfigurationController}'s own Javadoc named this gap before
+     * it existed: every read and write on the control-plane surface is
+     * {@link #PLATFORM_ADMIN}, and tenant self-service "would need its own
+     * narrower capability". This is that capability, deliberately narrower
+     * than {@link #PLATFORM_ADMIN} in the one way that matters —
+     * {@code ConfigurationKey#tenantVisible()} filters both the key list and
+     * the resolution endpoint, so a platform-only default (audit retention,
+     * the commercial enforcement ceiling) is invisible here even though its
+     * holder could otherwise name any code string. Never folded into {@link
+     * #TENANT_READ}: reading the tenant's profile and reading its resolved
+     * settings registry are different surfaces, the same split {@link
+     * #ORDER_ACCEPTANCE_POLICY_MANAGE}'s own doc draws against {@link
+     * #TENANT_WRITE}.
+     */
+    TENANT_CONFIGURATION_READ("tenant.configuration.read", "tenant", "configuration.read"),
+
+    /**
+     * ADR 0030, wave P31: setting a tenant-visible configuration value at
+     * TENANT, BRAND or LOCATION scope, over {@code ConfigurationValueAuthor}.
+     *
+     * <p>Held wherever {@link #TENANT_CONFIGURATION_READ} is — an editor who
+     * may not first see what a value resolves to and why would be guessing —
+     * and refused at {@link uz.horecaos.platform.iam.api.ResourceScope.ScopeType#PLATFORM}
+     * by the controller itself: a tenant sets its own brand and location
+     * overrides, never a platform default, regardless of what this capability
+     * alone would allow.
+     */
+    TENANT_CONFIGURATION_WRITE("tenant.configuration.write", "tenant", "configuration.write"),
+
+    /**
      * Global control-plane administration. Issued by Keycloak as described in
      * ADR 0003 and never granted through tenant administration.
      */

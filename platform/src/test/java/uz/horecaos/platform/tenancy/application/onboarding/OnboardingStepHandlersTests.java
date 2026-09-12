@@ -132,6 +132,33 @@ class OnboardingStepHandlersTests {
         assertThat(result.errorCode()).isEqualTo("NO_LEGAL_ENTITY");
     }
 
+    /**
+     * Wave P31, gap map row 10.0: the settings readiness panel needs every
+     * offending location, not only the first one the loop happened to reach
+     * — {@code failedWithFindings} replaced a {@code return} inside the loop
+     * with an accumulator, and this is the case that {@code return} could
+     * never have answered correctly.
+     */
+    @Test
+    void paymentConfigurationNamesEveryOffendingLocationRatherThanOnlyTheFirst() {
+        UUID secondLocationId = insertSecondLocation("OTHER01");
+
+        StepResult result = paymentHandler().execute(context());
+
+        assertThat(result.outcome()).isEqualTo(StepResult.Outcome.FAILED);
+        @SuppressWarnings("unchecked")
+        List<StepResult.Finding> findings =
+                (List<StepResult.Finding>) result.result().get(StepResult.FINDINGS_KEY);
+        assertThat(findings)
+                .as("both locations are missing a legal entity, and both must be named")
+                .hasSize(2)
+                .extracting(StepResult.Finding::errorCode)
+                .containsOnly("NO_LEGAL_ENTITY");
+        assertThat(findings)
+                .extracting(StepResult.Finding::locationId)
+                .containsExactlyInAnyOrder(locationId, secondLocationId);
+    }
+
     @Test
     void paymentConfigurationPassesForACashOnlyTenantWithNoMerchantBinding() {
         insertLegalEntity("ACME", "ACTIVE");
@@ -390,6 +417,23 @@ class OnboardingStepHandlersTests {
                 .param("brandId", brandId)
                 .param("slug", "l-" + locationId.toString().substring(0, 8))
                 .update();
+    }
+
+    /** A second location under the fixture's own brand, for tests that need more than one. */
+    private UUID insertSecondLocation(String code) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.locations
+                    (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, :code, :slug, :code, 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("code", code)
+                .param("slug", "l-" + id.toString().substring(0, 8))
+                .update();
+        return id;
     }
 
     private UUID insertChannel(String code, String systemType) {

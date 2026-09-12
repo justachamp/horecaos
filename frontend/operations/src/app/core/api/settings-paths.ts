@@ -4,11 +4,13 @@ import { LocationScope } from './operations-paths';
  * Where the Settings section's endpoints live.
  *
  * `docs/operations-spec/settings.md` §1.1 wants one scope bar and one origin
- * story for every field, backed by ADR 0030's resolver — but ADR 0030's own
- * checklist still lists "control-plane read and write APIs, and the
- * resolution trace endpoint" as open, so nothing in this file resolves an
- * inherited value. What is here instead is the registries and policies the
- * platform genuinely exposes today, several of them cross-surface: a
+ * story for every field, backed by ADR 0030's resolver — wave P31 closed
+ * that gap with {@link configurationKeys}/{@link configurationResolution}/
+ * {@link configurationValues}, over the new `OperationsConfigurationController`
+ * and the two capabilities its own Javadoc anticipated
+ * (`TENANT_CONFIGURATION_READ`/`WRITE`). Everything else here predates that
+ * and is the registries and policies the platform genuinely exposes today,
+ * several of them cross-surface: a
  * meaningful share of the tenant's own configuration (brands and their
  * locations' provisioning fields, sales channels, the order acceptance
  * policy, legal entities, cancellation/completion reasons) was built for
@@ -301,6 +303,46 @@ export const settingsPaths = {
   /** One historical version, read-only, for the publish history's preview. */
   termsDocumentVersion(tenantId: string, brandId: string, version: number): string {
     return `${this.termsDocuments(tenantId, brandId)}/${version}`;
+  },
+
+  // ---------------------------------------------------------- 1.1/1.2 Scope bar + InheritedField
+
+  /**
+   * `OperationsConfigurationController.keys` — every ADR 0030 key this
+   * tenant may see, filtered to `tenantVisible()`. The `/` find-a-setting
+   * registry and `q-inherited-field`'s own list of settable scopes.
+   */
+  configurationKeys(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/configuration/keys`;
+  },
+
+  /** `OperationsConfigurationController.resolution` — one key, one scope, and why. */
+  configurationResolution(tenantId: string, code: string): string {
+    return `${this.configurationKeys(tenantId)}/${enc(code)}/resolution`;
+  },
+
+  /** `OperationsConfigurationController.setValue`. */
+  configurationValues(tenantId: string, code: string): string {
+    return `${this.configurationKeys(tenantId)}/${enc(code)}/values`;
+  },
+
+  // ---------------------------------------------------------- 10.0 Readiness
+
+  /**
+   * `OnboardingController.current` — cross-surface like the rest of the
+   * `{@link CONTROL_PLANE}`-prefixed paths above: `TENANT_READ` already
+   * covers it (`ConfigurationController`'s own surface split does not apply
+   * to onboarding, which has never had an operations-native mirror to
+   * prefer), and this app is where the settings.md §10.0 readiness panel
+   * lives.
+   */
+  onboardingCurrentRun(tenantId: string): string {
+    return `${CONTROL_PLANE}/tenants/${enc(tenantId)}/onboarding-runs/current`;
+  },
+
+  /** `OnboardingController.validate` — the dry run the readiness panel reshapes. */
+  onboardingValidate(tenantId: string, runId: string): string {
+    return `${CONTROL_PLANE}/tenants/${enc(tenantId)}/onboarding-runs/${enc(runId)}/validate`;
   },
 } as const;
 

@@ -293,6 +293,10 @@ class JdbcAuthorizationServiceTests {
                 Capability.VOICE_PRESENCE_READ,
                 Capability.VOICE_SCREEN_POP_READ,
                 Capability.VOICE_CALL_LOG_READ,
+                // ADR 0030, wave P31: a tenant's own filtered read of its resolved
+                // configuration. Filtered to ConfigurationKey#tenantVisible(), so
+                // it takes nothing a tenant should not already see out.
+                Capability.TENANT_CONFIGURATION_READ,
                 // ADR 0081: who from HorecaOS entered the account, and until when.
                 // A suspended tenant's owner may still read it; it takes nothing out.
                 Capability.SUPPORT_SESSION_READ,

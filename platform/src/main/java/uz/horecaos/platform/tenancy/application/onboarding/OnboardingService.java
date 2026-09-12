@@ -661,7 +661,11 @@ public class OnboardingService implements OnboardingHealthQuery {
             Optional<OnboardingStep> known = OnboardingStep.find(row.stepKey());
             if (known.isEmpty()) {
                 results.add(new ValidationResult(
-                        row.stepKey(), false, "CAPABILITY_ABSENT", "This binary does not know step " + row.stepKey()));
+                        row.stepKey(),
+                        false,
+                        "CAPABILITY_ABSENT",
+                        "This binary does not know step " + row.stepKey(),
+                        null));
                 continue;
             }
             OnboardingStep step = known.get();
@@ -678,13 +682,40 @@ public class OnboardingService implements OnboardingHealthQuery {
                             "TRANSIENT_INFRASTRUCTURE", failure.getClass().getSimpleName());
                 }
             }
-            results.add(new ValidationResult(
-                    step.name(),
-                    outcome.outcome() == OnboardingStepHandler.StepResult.Outcome.COMPLETED,
-                    outcome.errorCode(),
-                    outcome.detail()));
+            results.addAll(validationResultsFor(step, outcome));
         }
         return new ValidationOutcome(results.stream().allMatch(ValidationResult::passed), results);
+    }
+
+    /**
+     * One step's outcome, expanded into one countable, deep-linkable {@link
+     * ValidationResult} per {@link OnboardingStepHandler.StepResult.Finding}
+     * when the handler reported more than one offending item (wave P31, gap
+     * map row {@code 10.0}) — a step that looped over the tenant's locations
+     * and used to stop at the first bad one now names every one of them, each
+     * with its own {@code locationId} to deep-link into. Every other outcome
+     * — COMPLETED, RETRY, BLOCKED, or a plain FAILED with no findings list —
+     * is still exactly one row, unchanged from before this reshape.
+     */
+    @SuppressWarnings("unchecked")
+    static List<ValidationResult> validationResultsFor(OnboardingStep step, OnboardingStepHandler.StepResult outcome) {
+        Object rawFindings = outcome.result().get(OnboardingStepHandler.StepResult.FINDINGS_KEY);
+        if (outcome.outcome() == OnboardingStepHandler.StepResult.Outcome.FAILED
+                && rawFindings instanceof List<?> findings
+                && !findings.isEmpty()) {
+            List<OnboardingStepHandler.StepResult.Finding> typed =
+                    (List<OnboardingStepHandler.StepResult.Finding>) findings;
+            return typed.stream()
+                    .map(finding -> new ValidationResult(
+                            step.name(), false, finding.errorCode(), finding.detail(), finding.locationId()))
+                    .toList();
+        }
+        return List.of(new ValidationResult(
+                step.name(),
+                outcome.outcome() == OnboardingStepHandler.StepResult.Outcome.COMPLETED,
+                outcome.errorCode(),
+                outcome.detail(),
+                null));
     }
 
     /**
@@ -1097,12 +1128,21 @@ public class OnboardingService implements OnboardingHealthQuery {
             List<String> outstandingRequired,
             @Nullable UUID approvalRequestId) {}
 
-    /** One {@link #validate} finding, named rather than only pass/fail. */
+    /**
+     * One {@link #validate} finding, named rather than only pass/fail.
+     *
+     * @param locationId the offending location, when the step is
+     *                   location-scoped and named more than one finding
+     *                   (wave P31: {@link OnboardingStepHandler.StepResult#failedWithFindings});
+     *                   {@code null} for a step reported as a single row, the
+     *                   same as before that reshape
+     */
     public record ValidationResult(
             String stepKey,
             boolean passed,
             @Nullable String errorCode,
-            @Nullable String detail) {}
+            @Nullable String detail,
+            @Nullable UUID locationId) {}
 
     /** What {@link #validate} found. Nothing here was written to any table. */
     public record ValidationOutcome(boolean allPassed, List<ValidationResult> checks) {}

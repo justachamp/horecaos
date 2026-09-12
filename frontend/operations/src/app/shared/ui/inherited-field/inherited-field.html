@@ -1,0 +1,85 @@
+<div class="field">
+  <span class="field__label q-body-sm">{{ label() }}</span>
+
+  @switch (state()) {
+    @case ('LOADING') {
+      <span class="field__value field__value--muted q-body-sm">{{
+        'inheritedField.state.loading' | t
+      }}</span>
+    }
+    @case ('NOT_SETTABLE') {
+      <span class="field__value field__value--muted q-body-sm">{{ displayValue() }}</span>
+      <span class="field__chip field__chip--disabled q-caption">{{
+        notSettableLevelKey() | t
+      }}</span>
+    }
+    @case ('EXPLICIT_UNSET') {
+      <button type="button" class="field__chip q-caption" (click)="togglePopover()">
+        {{ stateChipKey() | t }}
+      </button>
+      <span class="field__value field__value--muted q-body-sm">{{ displayValue() }}</span>
+      <button type="button" class="field__action q-caption" (click)="setValueRequested.emit()">
+        {{ 'inheritedField.action.setValue' | t }}
+      </button>
+      <button type="button" class="field__action q-caption" (click)="revertToInherit.emit()">
+        {{ 'inheritedField.action.revertToInherit' | t }}
+      </button>
+    }
+    @case ('SET_HERE') {
+      <span class="field__value q-body-sm">{{ displayValue() }}</span>
+      <button type="button" class="field__chip q-caption" (click)="togglePopover()">
+        {{ stateChipKey() | t }}
+      </button>
+      <button type="button" class="field__action q-caption" (click)="setValueRequested.emit()">
+        {{ 'inheritedField.action.edit' | t }}
+      </button>
+      <button type="button" class="field__action q-caption" (click)="revertToInherit.emit()">
+        {{ 'inheritedField.action.revertToInherit' | t }}
+      </button>
+    }
+    @case ('INHERITED') {
+      <span class="field__value field__value--muted q-body-sm">{{ displayValue() }}</span>
+      <button type="button" class="field__chip q-caption" (click)="togglePopover()">
+        {{ inheritedFromKey() | t }}
+      </button>
+      <button type="button" class="field__action q-caption" (click)="override.emit()">
+        {{ 'inheritedField.action.override' | t }}
+      </button>
+    }
+  }
+
+  @if (popoverOpen()) {
+    <div
+      class="field__popover"
+      role="dialog"
+      [attr.aria-label]="'inheritedField.trace.title' | t"
+      (keydown.escape)="closePopover()"
+    >
+      <div class="field__popoverHeader q-body-sm">
+        <span>{{ 'inheritedField.trace.title' | t }}</span>
+        <button
+          type="button"
+          class="field__popoverClose"
+          (click)="closePopover()"
+          [attr.aria-label]="'inheritedField.trace.close' | t"
+        >
+          ×
+        </button>
+      </div>
+      <ol class="field__ladder">
+        @for (level of resolution()?.inspectedLevels ?? []; track level.scopeType) {
+          <li
+            class="field__ladderRow q-caption"
+            [class.field__ladderRow--winner]="level.scopeType === resolution()?.winningScope"
+          >
+            <span class="field__ladderScope">{{ scopeLabelKey(level.scopeType) | t }}</span>
+            <span class="field__ladderOutcome">{{ outcomeKey(level.outcome) | t }}</span>
+          </li>
+        }
+      </ol>
+      @if (resolution(); as resolution) {
+        <p class="field__popoverDescribe q-caption q-mono">{{ resolution.describe }}</p>
+      }
+    </div>
+  }
+</div>

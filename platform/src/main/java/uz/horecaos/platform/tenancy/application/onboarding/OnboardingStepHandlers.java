@@ -419,27 +419,40 @@ public final class OnboardingStepHandlers {
             TenantId tenantId = new TenantId(context.tenantId());
             LocalDate today = LocalDate.now(clock);
 
+            // Every offending location is collected rather than returning on
+            // the first (wave P31, gap map row 10.0): a chain with three
+            // branches missing a legal entity used to see only the first one
+            // named, fix it, run the dry run again, and be told about the
+            // second — the readiness panel needs the whole list in one pass.
+            List<StepResult.Finding> findings = new ArrayList<>();
             for (Location location : allLocations(tenants, tenantId)) {
                 Optional<FiscalSeller> seller = legalEntities.sellerFor(
                         context.tenantId(), location.id().value(), today);
                 if (seller.isEmpty() || !seller.get().active()) {
-                    return StepResult.failed(
+                    findings.add(new StepResult.Finding(
                             "NO_LEGAL_ENTITY",
-                            "Location %s has no active legal entity assigned".formatted(location.code()));
+                            "Location %s has no active legal entity assigned".formatted(location.code()),
+                            location.id().value()));
+                    // No seller to check a merchant binding against.
+                    continue;
                 }
 
                 for (String providerType :
                         nonCashProviderCodes(context.tenantId(), location.id().value())) {
                     if (!merchantBindingExists(context.tenantId(), seller.get().legalEntityId(), providerType, today)) {
-                        return StepResult.failed(
+                        findings.add(new StepResult.Finding(
                                 "NO_MERCHANT_BINDING",
                                 "Location %s offers %s but has no merchant binding for legal entity %s"
                                         .formatted(
                                                 location.code(),
                                                 providerType,
-                                                seller.get().code()));
+                                                seller.get().code()),
+                                location.id().value()));
                     }
                 }
+            }
+            if (!findings.isEmpty()) {
+                return StepResult.failedWithFindings(findings);
             }
             return StepResult.completed(Map.of(), null);
         }
