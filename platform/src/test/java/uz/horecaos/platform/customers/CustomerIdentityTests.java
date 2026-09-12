@@ -531,6 +531,32 @@ class CustomerIdentityTests {
     }
 
     @Test
+    @DisplayName("re-submitting the same number, merely spelled differently, is a no-op and leaves verification alone")
+    void updatingAContactPointToTheSameValueLeavesVerificationAlone() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-update-noop");
+        UUID accountId = account.account().accountId();
+        UUID contactId = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112200", true);
+        markVerified(accountId, contactId, "PHONE");
+        assertThat(summaryOf(accountId, contactId).verificationStatus()).isEqualTo("VERIFIED");
+
+        // Same number, spelled with spaces instead of the E.164 form already on
+        // file — PhoneNumber.normalize collapses both to the same digits, so an
+        // operator re-submitting it (an edit dialog pre-filled and saved without
+        // a real change, say) must not be treated as a correction.
+        profiles.updateContactPoint(TENANT, accountId, contactId, "+998 90 111 22 00");
+
+        assertThat(summaryOf(accountId, contactId).verificationStatus())
+                .as("nothing about the contact actually changed, so whatever proved it before still applies — "
+                        + "resetting it here would silently revoke SMS eligibility for a customer whose phone "
+                        + "number on file never moved")
+                .isEqualTo("VERIFIED");
+        assertThat(profiles.revealContactPoints(TENANT, accountId, "probe", STAFF_ACTOR))
+                .singleElement()
+                .extracting(CustomerProfileService.RevealedContact::value)
+                .isEqualTo("+998901112200");
+    }
+
+    @Test
     @DisplayName("updating another account's contact point, or one that does not exist, is refused")
     void updatingAContactPointRequiresOwnership() {
         var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-update-not-mine");
@@ -1349,6 +1375,90 @@ class CustomerIdentityTests {
         assertThat(catchThrowable(() -> profiles.addContactPoint(
                         OTHER_TENANT, account.account().accountId(), ContactType.PHONE, "+998901112233", true)))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("correcting another tenant's contact point is refused, not merely misdirected")
+    void updatingAContactPointCannotCrossTenants() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-cross-tenant-update");
+        UUID accountId = account.account().accountId();
+        UUID contactId = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112200", true);
+
+        assertThat(catchThrowable(
+                        () -> profiles.updateContactPoint(OTHER_TENANT, accountId, contactId, "+998901112233")))
+                .as("the tenant_id predicate in JdbcCustomerStore.updateContactPoint is the only guard here — "
+                        + "CustomerProfileService does no independent ownership check")
+                .isInstanceOf(CustomerProfileService.ContactPointNotFoundException.class);
+        // Refused, and the value is exactly what it was before the attempt.
+        assertThat(profiles.revealContactPoints(TENANT, accountId, "probe", STAFF_ACTOR))
+                .singleElement()
+                .extracting(CustomerProfileService.RevealedContact::value)
+                .isEqualTo("+998901112200");
+    }
+
+    @Test
+    @DisplayName("removing another tenant's contact point is refused, not merely misdirected")
+    void removingAContactPointCannotCrossTenants() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-cross-tenant-remove");
+        UUID accountId = account.account().accountId();
+        UUID contactId = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112200", true);
+
+        assertThat(catchThrowable(() -> profiles.removeContactPoint(OTHER_TENANT, accountId, contactId)))
+                .isInstanceOf(CustomerProfileService.ContactPointNotFoundException.class);
+        assertThat(profiles.contactPointSummaries(TENANT, accountId))
+                .as("a tenant B caller must not be able to tombstone tenant A's contact point")
+                .extracting(CustomerProfileService.ContactPointSummary::id)
+                .containsExactly(contactId);
+    }
+
+    @Test
+    @DisplayName("setting another tenant's contact point primary is refused, not merely misdirected")
+    void settingPrimaryCannotCrossTenants() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-cross-tenant-primary");
+        UUID accountId = account.account().accountId();
+        UUID primary = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112200", true);
+        UUID other = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112233", false);
+
+        assertThat(catchThrowable(() -> profiles.setPrimaryContactPoint(OTHER_TENANT, accountId, other)))
+                .isInstanceOf(CustomerProfileService.ContactPointNotFoundException.class);
+        assertThat(summaryOf(accountId, primary).isPrimary())
+                .as("a tenant B caller must not be able to reprime tenant A's contact points")
+                .isTrue();
+        assertThat(summaryOf(accountId, other).isPrimary()).isFalse();
+    }
+
+    @Test
+    @DisplayName("eligibility never answers for a customer read under the wrong tenant")
+    void eligibilityCannotCrossTenants() {
+        var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-cross-tenant-eligibility");
+        UUID accountId = account.account().accountId();
+        UUID contactId = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, "+998901112233", true);
+        markVerified(accountId, contactId, "PHONE");
+        consent.record(
+                TENANT,
+                accountId,
+                BRAND_A,
+                "MARKETING_PROMOTIONS",
+                "SMS",
+                ConsentService.Decision.GRANTED,
+                "2026-01",
+                ConsentService.Source.STOREFRONT,
+                null,
+                NOW);
+        assertThat(eligibility
+                        .answer(TENANT, accountId, BRAND_A, "MARKETING_PROMOTIONS", "SMS")
+                        .eligible())
+                .as("the fixture must actually be eligible under its own tenant, or this test proves nothing")
+                .isTrue();
+
+        CustomerEligibility.Answer fromOtherTenant =
+                eligibility.answer(OTHER_TENANT, accountId, BRAND_A, "MARKETING_PROMOTIONS", "SMS");
+
+        assertThat(fromOtherTenant.eligible())
+                .as("consent.hasConsent and contactPointSummaries are both tenant_id-scoped queries; an "
+                        + "eligible tenant-A customer must not read as eligible under tenant B")
+                .isFalse();
+        assertThat(fromOtherTenant.refusalReason()).isEqualTo(CustomerEligibility.Refusal.CONSENT_WITHHELD);
     }
 
     @Test

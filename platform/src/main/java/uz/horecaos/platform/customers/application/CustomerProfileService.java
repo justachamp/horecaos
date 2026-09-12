@@ -179,6 +179,15 @@ public class CustomerProfileService {
      * and verification resets — {@link JdbcCustomerStore#updateContactPoint}'s
      * own doc says why.
      *
+     * <p>Except when it does not change anything: re-submitting a value that
+     * normalises to the same {@code normalized_hash} already on the row — the
+     * same digits, or the same number spelled with different punctuation — is
+     * a no-op, and the method returns without touching the row at all.
+     * {@code JdbcCustomerStore#updateContactPoint}'s reset only makes sense
+     * because the value changed; applying it when it did not would revoke a
+     * verified endpoint's eligibility (see {@code CustomerEligibility}) for a
+     * value nobody actually edited.
+     *
      * @throws ContactPointNotFoundException when this id is not this
      *                                        account's own contact point
      */
@@ -187,6 +196,10 @@ public class CustomerProfileService {
         JdbcCustomerStore.ContactPointRow existing = requireContactPoint(tenantId, accountId, contactPointId);
         ContactType type = ContactType.valueOf(existing.type());
         String normalized = normalize(type, rawValue);
+        String newHash = protection.lookupHash(tenantId, type.lookupDomain(), normalized);
+        if (newHash.equals(existing.normalizedHash())) {
+            return;
+        }
         ProtectedValue encrypted = protection.protect(
                 tenantId,
                 DataClass.PERSONAL,
@@ -194,12 +207,7 @@ public class CustomerProfileService {
                 normalized);
 
         int written = store.updateContactPoint(
-                tenantId,
-                accountId,
-                contactPointId,
-                protection.lookupHash(tenantId, type.lookupDomain(), normalized),
-                encrypted.serialize(),
-                clock.instant());
+                tenantId, accountId, contactPointId, newHash, encrypted.serialize(), clock.instant());
         if (written == 0) {
             throw new ContactPointNotFoundException();
         }
