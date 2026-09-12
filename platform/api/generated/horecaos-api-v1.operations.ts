@@ -392,6 +392,21 @@ export interface BoardResponse {
   warnings?: Array<string>;
 }
 
+export interface BranchOrderCountsResponse {
+  counts?: OrderCountTotalsResponse;
+  locationId?: string;
+}
+
+export interface BrandOrderCountsResponse {
+  locations?: Array<BranchOrderCountsResponse>;
+  period?: string;
+  periodFrom?: string;
+  periodTo?: string;
+  sourceMix?: Array<OrderMixSliceResponse>;
+  totals?: OrderCountTotalsResponse;
+  typeMix?: Array<OrderMixSliceResponse>;
+}
+
 export interface BrandView {
   code?: string;
   displayName?: string;
@@ -1798,7 +1813,7 @@ export interface OrderActionResponse {
   targetStatus?: string;
 }
 
-export interface OrderCountsResponse {
+export interface OrderCountTotalsResponse {
   awaitingApproval?: number;
   cancelled?: number;
   completed?: number;
@@ -1808,6 +1823,23 @@ export interface OrderCountsResponse {
   ready?: number;
   total?: number;
   totalNonTerminal?: number;
+}
+
+export interface OrderCountsResponse {
+  awaitingApproval?: number;
+  cancelled?: number;
+  completed?: number;
+  fulfilling?: number;
+  inKitchen?: number;
+  newOrders?: number;
+  period?: string;
+  periodFrom?: string;
+  periodTo?: string;
+  ready?: number;
+  sourceMix?: Array<OrderMixSliceResponse>;
+  total?: number;
+  totalNonTerminal?: number;
+  typeMix?: Array<OrderMixSliceResponse>;
 }
 
 export interface OrderDetailResponse {
@@ -1843,6 +1875,11 @@ export interface OrderListResponse {
   maybeMore?: boolean;
   provenance?: ProvenanceResponse;
   rows?: Array<OrderRowResponse>;
+}
+
+export interface OrderMixSliceResponse {
+  key?: string;
+  orders?: number;
 }
 
 export interface OrderPaymentResponse {
@@ -3261,6 +3298,7 @@ export interface Operations {
   "draftRedemptionPolicy": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: DraftRedemptionPolicyRequest }; responses: { "200": RedemptionPolicyResponse } };
   "activateRedemptionPolicy": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies/{policyId}/activate"; request: { parameters: { path: { brandId: string; policyId: string; tenantId: string } } }; responses: { "200": unknown } };
   "retireRedemptionPolicy": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies/{policyId}/retire"; request: { parameters: { path: { brandId: string; policyId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "counts_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/orders/counts"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { period?: "ALL_TIME" | "BUSINESS_DAY" } } }; responses: { "200": BrandOrderCountsResponse } };
   "list_9": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<PromoCodeResponse> } };
   "draft": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: DraftPromoCodeRequest }; responses: { "200": PromoCodeResponse } };
   "activate_4": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes/{couponId}/activate"; request: { parameters: { path: { brandId: string; couponId: string; tenantId: string } } }; responses: { "200": unknown } };
@@ -3406,7 +3444,7 @@ export interface Operations {
   "place": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; locationId: string; tenantId: string } }; body: PlaceOrderRequest }; responses: { "200": PlaceOrderResponse } };
   "board": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/board"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channelCode?: string; courierId?: string; createdByActorId?: string; cursor?: string; from?: string; fulfillmentMode?: string; limit?: number; paymentMethodCode?: string; reference?: string; status?: Array<string>; to?: string } } }; responses: { "200": PageOperationsOrderControllerOrderSummaryResponse } };
   "bulkAction": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/bulk-actions"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BulkActionRequest }; responses: { "200": BulkActionResponse } };
-  "counts_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/counts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { from?: string; to?: string } } }; responses: { "200": OrderCountsResponse } };
+  "counts_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/counts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { from?: string; period?: "ALL_TIME" | "BUSINESS_DAY"; to?: string } } }; responses: { "200": OrderCountsResponse } };
   "customerLookup": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/customer-lookups"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: OperationsOrderControllerCustomerLookupRequest }; responses: { "200": CustomerLookupResponse } };
   "drafts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/drafts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channelId?: string; from?: string; limit?: number; to?: string } } }; responses: { "200": Array<DraftCartResponse> } };
   "rejectReasons": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/reject-reasons"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<RejectReasonResponse> } };

@@ -10,13 +10,21 @@ import { RouterLink } from '@angular/router';
 
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
-import { TimeZone, formatClock } from '../../core/format/datetime';
+import { TimeZone, formatClock, formatDateTime } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError, errorReference } from '../orders/order-errors';
 import { BranchLoad, LiveBoard, LiveBoardSnapshot, MixSlice } from './live-board';
 
-/** §1.6's polling fallback, same interval as the order board until ADR 0045's COUNTERS stream is wired into a client. */
+/**
+ * §1.6's polling fallback, at the order board's interval.
+ *
+ * ADR 0045's `COUNTERS` stream is built on the server and has no client — it is
+ * not missing, it is unwired, and wave `P08` wires it (IA 0.1f). Until then a
+ * number on this board can be up to ten seconds old and nothing distinguishes a
+ * quiet branch from a broken connection; the staleness indicator belongs to that
+ * wave, not this one.
+ */
 const POLL_INTERVAL_MS = 10_000;
 
 /** Same placeholder as `order-queue.ts` — no call in this chain returns a tenant timezone yet. */
@@ -36,12 +44,20 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  * here and nowhere else.
  *
  * **Where every number comes from**, because none of it is computed twice:
- * `LiveBoard` composes the same `GET .../orders/counts` the order board's
- * own tab badges already trust, the same order list endpoint the board
- * already polls (filtered to `order-status.ts`'s canonical
- * `IN_PROGRESS_ORDER_STATUSES`), and the brand's location roster Settings
- * 10.2 already reads. See `live-board.ts` for the full accounting and the
- * three-step degrade a partial grant produces.
+ * `LiveBoard` makes one request a tick — the brand's own counts endpoint, or
+ * the location's when the grant stops at one branch — and both answer the
+ * counters, the two mixes and the branch loads together. The mixes are exact
+ * server-side aggregates, not a count over a fetched page; the branch names
+ * come from the location roster Settings 10.2 already reads, held after the
+ * first read because a branch does not rename itself between ticks. See
+ * `live-board.ts` for the full accounting and the degrade a partial grant
+ * produces.
+ *
+ * **Which period the numbers cover is stated, not assumed.** «Отменено» and
+ * «Завершено» are this trading day's, cut at the tenant's own business-day
+ * boundary (ADR 0043) rather than at midnight, and the caption under the
+ * counters renders where that cut falls — a supervisor reading a counter has
+ * to be able to see what it counts.
  *
  * **IA 0.2 (My work) is an honest not-built page, linked from the toolbar
  * here.** Its whole "Owns" list depends on data this build does not have:
@@ -149,6 +165,24 @@ export class TodayPage implements OnInit {
 
   protected cancelledCount(): number {
     return this.snapshot()?.counts.cancelled ?? 0;
+  }
+
+  /**
+   * Where the trading day was cut, in words.
+   *
+   * Null until the first snapshot lands, and null for `ALL_TIME` — a lifetime
+   * figure has no window to state, and inventing one ("since the beginning")
+   * would be a sentence nobody asked a question of. The instant is rendered in
+   * the tenant's zone like every other time on this console.
+   */
+  protected periodLabel(): string | null {
+    const snapshot = this.snapshot();
+    if (!snapshot || snapshot.period !== 'BUSINESS_DAY' || !snapshot.periodFrom) {
+      return null;
+    }
+    return this.i18n.t('today.period.businessDay', {
+      from: formatDateTime(new Date(snapshot.periodFrom), PLACEHOLDER_TIME_ZONE),
+    });
   }
 
   protected sourceMix(): readonly MixSlice[] {

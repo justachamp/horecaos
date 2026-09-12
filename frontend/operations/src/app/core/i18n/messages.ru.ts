@@ -1140,6 +1140,7 @@ export const messagesRu: MessageCatalogue = {
   'today.updated': 'обновлено {time}',
   'today.counters.inProgress': 'В процессе',
   'today.counters.cancelled': 'Отменено',
+  'today.period.businessDay': 'Отменено и завершено — за текущий рабочий день, с {from}',
   'today.mix.source.title': 'По источнику',
   'today.mix.type.title': 'По типу',
   'today.mix.empty': 'Нет заказов в процессе',

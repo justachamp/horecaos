@@ -1242,6 +1242,55 @@
         },
         "type" : "object"
       },
+      "BranchOrderCountsResponse" : {
+        "properties" : {
+          "counts" : {
+            "$ref" : "#/components/schemas/OrderCountTotalsResponse"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "BrandOrderCountsResponse" : {
+        "properties" : {
+          "locations" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BranchOrderCountsResponse"
+            },
+            "type" : "array"
+          },
+          "period" : {
+            "type" : "string"
+          },
+          "periodFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "periodTo" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "sourceMix" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OrderMixSliceResponse"
+            },
+            "type" : "array"
+          },
+          "totals" : {
+            "$ref" : "#/components/schemas/OrderCountTotalsResponse"
+          },
+          "typeMix" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OrderMixSliceResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "BrandView" : {
         "properties" : {
           "code" : {
@@ -5707,7 +5756,7 @@
         },
         "type" : "object"
       },
-      "OrderCountsResponse" : {
+      "OrderCountTotalsResponse" : {
         "properties" : {
           "awaitingApproval" : {
             "format" : "int64",
@@ -5744,6 +5793,70 @@
           "totalNonTerminal" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderCountsResponse" : {
+        "properties" : {
+          "awaitingApproval" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cancelled" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "completed" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "fulfilling" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "inKitchen" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "newOrders" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "period" : {
+            "type" : "string"
+          },
+          "periodFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "periodTo" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "ready" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sourceMix" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OrderMixSliceResponse"
+            },
+            "type" : "array"
+          },
+          "total" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalNonTerminal" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "typeMix" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OrderMixSliceResponse"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -5866,6 +5979,18 @@
               "$ref" : "#/components/schemas/OrderRowResponse"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderMixSliceResponse" : {
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "orders" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -12787,6 +12912,52 @@
         "tags" : [ "Loyalty policy" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/orders/counts" : {
+      "get" : {
+        "description" : "IA 0.1's live board, served brand-wide so the console stops issuing one counts request per branch per tick. `period` cuts completed, cancelled and total to the tenant's own business day (ADR 0043) rather than to UTC midnight, and defaults to ALL_TIME. The six live counters are never cut: an order placed before the boundary and still in the kitchen is still in the kitchen. Locations carries a row only for a branch that has taken an order in scope — the caller holds the brand roster it needs the display names from anyway, and renders an absent branch as zero. ORDER_READ at BRAND scope: a location-scoped grant is refused.",
+        "operationId" : "counts_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "period",
+          "required" : false,
+          "schema" : {
+            "default" : "ALL_TIME",
+            "enum" : [ "ALL_TIME", "BUSINESS_DAY" ],
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BrandOrderCountsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The brand's counters, its branch leaderboard and its two mixes, in one read",
+        "tags" : [ "Operations brand order counters" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes" : {
       "get" : {
         "description" : "Every lifecycle state together (a freshly drafted code's coupon row is SUSPENDED until activated; a retired one is ARCHIVED), newest first — an authoring screen needs the lineage, not only what is live. Unlike a loyalty policy, more than one code may be live at once.",
@@ -19652,7 +19823,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/counts" : {
       "get" : {
-        "description" : "orders.md §2.3: each tab shows a live count computed before the tab's own filters apply, and until ADR 0045's COUNTERS signal exists this is what computes them. One aggregate over the location's orders, scoped identically to the list above. Внимание's live severity queue (late orders, stuck processes) is not among these — it is derived per render from the promise and the clock, never stored, so a count of it would be wrong five seconds after being cached. `from`/`to` are the board's own period and mean exactly what they mean on the list above, so a badge and the tab beneath it count the same orders.",
+        "description" : "orders.md §2.3: each tab shows a live count computed before the tab's own filters apply, and until ADR 0045's COUNTERS signal exists this is what computes them. One aggregate over the location's orders, scoped identically to the list above. Внимание's live severity queue (late orders, stuck processes) is not among these — it is derived per render from the promise and the clock, never stored, so a count of it would be wrong five seconds after being cached. Two independent ways to name a period, never both at once: `from`/`to` are the order board's own period (ADR 0102) and window every one of the nine counters on when the order arrived, so a badge and the tab beneath it count exactly the same orders; `period` (default ALL_TIME, which is what this endpoint answered before either parameter existed) instead cuts only completed, cancelled and total to the tenant's own business day (ADR 0043) — completed/cancelled on when the order closed, total on when it arrived — never to UTC midnight, and leaves the six live counters uncut: an order placed before the boundary and still in the kitchen is still in the kitchen. Supplying `from`/`to` together with a `period` other than ALL_TIME is refused with 400 INVALID_REQUEST rather than guessed at. The two mixes are exact server-side aggregates over the in-progress orders and sum to totalNonTerminal, regardless of which of the two periods was used.",
         "operationId" : "counts_1",
         "parameters" : [ {
           "in" : "path",
@@ -19694,6 +19865,15 @@
             "format" : "date-time",
             "type" : "string"
           }
+        }, {
+          "in" : "query",
+          "name" : "period",
+          "required" : false,
+          "schema" : {
+            "default" : "ALL_TIME",
+            "enum" : [ "ALL_TIME", "BUSINESS_DAY" ],
+            "type" : "string"
+          }
         } ],
         "responses" : {
           "200" : {
@@ -19707,7 +19887,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "The board's tab badges, one call",
+        "summary" : "The board's tab badges and the live board's mixes, one call",
         "tags" : [ "Operations orders" ]
       }
     },
@@ -24940,6 +25120,9 @@
   }, {
     "description" : "A brand's own referral reward shape, amounts, cap, and redemption window",
     "name" : "Referral program"
+  }, {
+    "description" : "The brand's live board counters (IA 0.1)",
+    "name" : "Operations brand order counters"
   }, {
     "description" : "ADR 0079: enrolling and revoking a branch's kitchen display devices",
     "name" : "Kitchen devices"

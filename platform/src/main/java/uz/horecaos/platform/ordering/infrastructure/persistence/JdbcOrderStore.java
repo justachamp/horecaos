@@ -580,55 +580,235 @@ public class JdbcOrderStore {
      *                   no single location to ask about (ADR 0058)
      */
     public OrderCountsRow counts(UUID tenantId, UUID brandId, @Nullable UUID locationId) {
-        return counts(tenantId, brandId, locationId, null, null);
+        return counts(tenantId, brandId, locationId, CountsWindow.NONE, CountsWindow.NONE);
     }
 
     /**
-     * The same aggregate over a period (ADR 0102).
+     * The order board's own overload (ADR 0102): every one of the nine columns
+     * windowed on {@code created_at}, half-open — {@code >= from}, {@code <
+     * to} — so two adjacent periods neither double-count an order nor drop
+     * one, which a closed upper bound does on the microsecond boundary that
+     * PostgreSQL actually stores. A tab badge and the tab's own list count
+     * exactly the same population.
      *
-     * <p>The period is the board's, so a tab badge and the tab's own list count
-     * the same population. Half-open — {@code >= from}, {@code < to} — so two
-     * adjacent periods neither double-count an order nor drop one, which a
-     * closed upper bound does on the microsecond boundary that PostgreSQL
-     * actually stores.
+     * <p>Equivalent to {@code counts(tenantId, brandId, locationId, new
+     * CountsWindow(from, to), CountsWindow.NONE)} — see the full overload for
+     * why the board's window and the live board's window are kept apart
+     * rather than folded into one {@code from}/{@code to} pair.
      */
     public OrderCountsRow counts(
             UUID tenantId, UUID brandId, @Nullable UUID locationId, @Nullable Instant from, @Nullable Instant to) {
+        return counts(tenantId, brandId, locationId, new CountsWindow(from, to), CountsWindow.NONE);
+    }
+
+    /**
+     * The same badges, scoped by up to two independent windows that must never
+     * be folded into one ambiguous {@code from}/{@code to} pair, because they
+     * cut different columns on different timestamps and answer different
+     * questions.
+     *
+     * <p><strong>{@code boardWindow} is the order board's own period (ADR
+     * 0102).</strong> When given, it restricts the whole row set on {@code
+     * created_at} before any column is counted, so every one of the nine
+     * columns is windowed identically — a tab badge and the tab's own list
+     * count exactly the same population.
+     *
+     * <p><strong>{@code liveWindow} is the live board's business day (ADR
+     * 0043), and only three of the nine columns take it.</strong> {@code
+     * completed}, {@code cancelled} and {@code total} are historical: with no
+     * window they grow forever, which is how «Отменено» on the live board
+     * became a lifetime total that a supervisor cannot read as a signal (IA
+     * 0.1a). The six live columns — new, awaiting approval, in kitchen, ready,
+     * fulfilling and {@code totalNonTerminal} — are not historical and are
+     * deliberately left uncut by it: an order placed at 23:50 and still in the
+     * kitchen at 00:30 is still in the kitchen, and filtering it out of
+     * "в работе" because it was placed before the boundary would make the
+     * board lie about the pass in front of the supervisor reading it. Which
+     * timestamp each of the three is cut on follows from what it counts:
+     * {@code completed} and {@code cancelled} are cut on {@code closed_at} —
+     * an order placed yesterday and cancelled this morning is a cancellation
+     * that happened today, which is the question being asked — and {@code
+     * total} is cut on {@code created_at}, because "how many orders today"
+     * means how many arrived. Every order reaching a terminal status has
+     * {@code closed_at} written in the same statement as the status (see
+     * {@link #transition}), so a terminal row with a null {@code closed_at}
+     * does not exist; if one ever did, the {@code >=} comparison against null
+     * is null and the row is excluded, which is the safe direction.
+     *
+     * <p>The two are independent: a caller may supply either, both or
+     * neither. {@code OperationsOrderController} accepts an order-board {@code
+     * from}/{@code to} and a live-board {@code period} on the same endpoint
+     * and refuses a request naming both with a 400 rather than guessing which
+     * one governs, so in practice no production caller ever supplies both
+     * here.
+     *
+     * @param boardWindow the order-board window described above; {@link
+     *                     CountsWindow#NONE} for no board-period restriction
+     * @param liveWindow  the live-board window described above; {@link
+     *                    CountsWindow#NONE} for no live-period restriction
+     */
+    public OrderCountsRow counts(
+            UUID tenantId, UUID brandId, @Nullable UUID locationId, CountsWindow boardWindow, CountsWindow liveWindow) {
+
+        return jdbc.sql("SELECT " + COUNT_COLUMNS + """
+                        FROM ordering.orders
+                        WHERE tenant_id = :tenantId AND brand_id = :brandId
+                          AND (:locationId::uuid IS NULL OR location_id = :locationId)
+                          AND (:boardFrom::timestamptz IS NULL OR created_at >= :boardFrom)
+                          AND (:boardTo::timestamptz IS NULL OR created_at < :boardTo)
+                        """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("boardFrom", utcOrNull(boardWindow.from()))
+                .param("boardTo", utcOrNull(boardWindow.to()))
+                .param("liveFrom", utcOrNull(liveWindow.from()))
+                .param("liveTo", utcOrNull(liveWindow.to()))
+                .query((row, number) -> mapCounts(row))
+                .single();
+    }
+
+    /**
+     * A half-open instant window, {@code from} inclusive and {@code to}
+     * exclusive, either or both null for no bound on that side.
+     *
+     * <p>{@link #counts} takes two of these rather than one {@code from}/{@code
+     * to} pair, because {@code boardWindow} and {@code liveWindow} mean
+     * genuinely different things — see that method's doc — and folding them
+     * into a single ambiguous pair is exactly the confusion a named type for
+     * each exists to rule out.
+     */
+    public record CountsWindow(
+            @Nullable Instant from, @Nullable Instant to) {
+
+        public static final CountsWindow NONE = new CountsWindow(null, null);
+    }
+
+    /**
+     * The same badges again, one row per location of the brand — IA 0.1c's
+     * branch leaderboard in a single read.
+     *
+     * <p>This exists because the console was issuing one {@link #counts} call per
+     * branch every ten seconds: a ten-branch tenant paid eleven round trips per
+     * tick to render one table. The aggregate is the same, grouped rather than
+     * filtered.
+     *
+     * <p>Only locations with at least one order in scope appear. A branch that
+     * has never taken an order is absent rather than present with zeros, because
+     * this store knows about orders and not about the brand's roster — the caller
+     * holds the roster (it needs the display names from it in any case) and
+     * renders an absent branch as zero.
+     *
+     * <p>{@code from}/{@code to} here are the live board's window (ADR 0043),
+     * exactly {@link #counts}'s {@code liveWindow} — this read has no board
+     * caller and so no reason to carry a second, unused window parameter.
+     */
+    public List<LocationCountsRow> countsByLocation(
+            UUID tenantId, UUID brandId, @Nullable Instant from, @Nullable Instant to) {
+
+        return jdbc.sql("SELECT location_id, " + COUNT_COLUMNS + """
+                        FROM ordering.orders
+                        WHERE tenant_id = :tenantId AND brand_id = :brandId
+                        GROUP BY location_id
+                        """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("liveFrom", from == null ? null : utc(from))
+                .param("liveTo", to == null ? null : utc(to))
+                .query((row, number) -> new LocationCountsRow(row.getObject("location_id", UUID.class), mapCounts(row)))
+                .list();
+    }
+
+    /**
+     * The live board's source mix and type mix, exactly (IA 0.1b).
+     *
+     * <p>The console used to compute both by fetching a 200-order page and
+     * counting it client-side, which silently under-counted above that ceiling
+     * and had no way to say so. This is the same two questions asked of the
+     * database, with no page and therefore no ceiling.
+     *
+     * <p>One statement rather than two, through {@code GROUPING SETS}: the row
+     * set is scanned once and emitted twice, grouped by channel and then by
+     * fulfilment mode. {@code GROUPING(...)} is how a row says which of the two
+     * sets produced it — in the channel rows {@code fulfillment_mode} is null and
+     * vice versa, so {@code coalesce} picks out whichever column that row was
+     * actually grouped on. Both columns are {@code NOT NULL} on the table, so a
+     * null here can only ever be the other grouping set's placeholder.
+     *
+     * <p>Scoped to the orders that are in progress, by exactly the predicate
+     * {@code total_non_terminal} uses above rather than by a list the caller
+     * passes in. That is what makes the two mixes sum to that counter: a board
+     * whose bars add up to a different number than the counter beside them is
+     * the drift this aggregate exists to remove. Never windowed by any period —
+     * "what is on the pass right now" is not a historical question.
+     */
+    public List<MixSliceRow> activeMix(UUID tenantId, UUID brandId, @Nullable UUID locationId) {
         return jdbc.sql("""
                 SELECT
-                    count(*) FILTER (WHERE status IN ('RECEIVED', 'PAYMENT_AUTHORIZING', 'AWAITING_APPROVAL'))
-                        AS new_orders,
-                    count(*) FILTER (WHERE status = 'AWAITING_APPROVAL') AS awaiting_approval,
-                    count(*) FILTER (WHERE status IN ('CONFIRMED', 'PREPARING')) AS in_kitchen,
-                    count(*) FILTER (WHERE status = 'READY') AS ready,
-                    count(*) FILTER (WHERE status = 'FULFILLING') AS fulfilling,
-                    count(*) FILTER (WHERE status = 'COMPLETED') AS completed,
-                    count(*) FILTER (WHERE status IN ('CANCELLED', 'REJECTED', 'EXPIRED')) AS cancelled,
-                    count(*) FILTER (WHERE status NOT IN
-                        ('PAYMENT_FAILED', 'REJECTED', 'EXPIRED', 'COMPLETED', 'CANCELLED')) AS total_non_terminal,
-                    count(*) AS total
+                    CASE WHEN GROUPING(channel_code_snapshot) = 0 THEN 'CHANNEL' ELSE 'FULFILLMENT_MODE' END
+                        AS dimension,
+                    coalesce(channel_code_snapshot, fulfillment_mode) AS slice_key,
+                    count(*) AS slice_count
                 FROM ordering.orders
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                   AND (:locationId::uuid IS NULL OR location_id = :locationId)
-                  AND (CAST(:from AS timestamptz) IS NULL OR created_at >= CAST(:from AS timestamptz))
-                  AND (CAST(:to AS timestamptz) IS NULL OR created_at < CAST(:to AS timestamptz))
+                  AND status NOT IN ('PAYMENT_FAILED', 'REJECTED', 'EXPIRED', 'COMPLETED', 'CANCELLED')
+                GROUP BY GROUPING SETS ((channel_code_snapshot), (fulfillment_mode))
+                ORDER BY slice_count DESC, slice_key
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("locationId", locationId)
-                .param("from", utcOrNull(from))
-                .param("to", utcOrNull(to))
-                .query((row, number) -> new OrderCountsRow(
-                        row.getLong("new_orders"),
-                        row.getLong("awaiting_approval"),
-                        row.getLong("in_kitchen"),
-                        row.getLong("ready"),
-                        row.getLong("fulfilling"),
-                        row.getLong("completed"),
-                        row.getLong("cancelled"),
-                        row.getLong("total_non_terminal"),
-                        row.getLong("total")))
-                .single();
+                .query((row, number) -> new MixSliceRow(
+                        row.getString("dimension"), row.getString("slice_key"), row.getLong("slice_count")))
+                .list();
+    }
+
+    /**
+     * The nine aggregate columns {@link #counts} and {@link #countsByLocation}
+     * share, so the two can never disagree about what a badge means.
+     *
+     * <p>Interpolated into the SQL rather than parameterised, because it is a
+     * compile-time constant of this class and carries no caller input; every
+     * value in the predicates is a named parameter. {@code liveFrom}/{@code
+     * liveTo} are {@link #counts}'s {@code liveWindow} (or {@link
+     * #countsByLocation}'s own {@code from}/{@code to}, the same window under
+     * a caller-facing name). The order board's {@code boardWindow} is a
+     * separate {@code boardFrom}/{@code boardTo} predicate that {@link
+     * #counts} adds to its own {@code WHERE} clause, outside this constant,
+     * because it restricts the whole row set rather than one column's
+     * {@code FILTER}.
+     */
+    private static final String COUNT_COLUMNS = """
+            count(*) FILTER (WHERE status IN ('RECEIVED', 'PAYMENT_AUTHORIZING', 'AWAITING_APPROVAL'))
+                AS new_orders,
+            count(*) FILTER (WHERE status = 'AWAITING_APPROVAL') AS awaiting_approval,
+            count(*) FILTER (WHERE status IN ('CONFIRMED', 'PREPARING')) AS in_kitchen,
+            count(*) FILTER (WHERE status = 'READY') AS ready,
+            count(*) FILTER (WHERE status = 'FULFILLING') AS fulfilling,
+            count(*) FILTER (WHERE status = 'COMPLETED'
+                AND (:liveFrom::timestamptz IS NULL OR closed_at >= :liveFrom)
+                AND (:liveTo::timestamptz IS NULL OR closed_at < :liveTo)) AS completed,
+            count(*) FILTER (WHERE status IN ('CANCELLED', 'REJECTED', 'EXPIRED')
+                AND (:liveFrom::timestamptz IS NULL OR closed_at >= :liveFrom)
+                AND (:liveTo::timestamptz IS NULL OR closed_at < :liveTo)) AS cancelled,
+            count(*) FILTER (WHERE status NOT IN
+                ('PAYMENT_FAILED', 'REJECTED', 'EXPIRED', 'COMPLETED', 'CANCELLED')) AS total_non_terminal,
+            count(*) FILTER (WHERE (:liveFrom::timestamptz IS NULL OR created_at >= :liveFrom)
+                AND (:liveTo::timestamptz IS NULL OR created_at < :liveTo)) AS total
+            """;
+
+    private static OrderCountsRow mapCounts(ResultSet row) throws SQLException {
+        return new OrderCountsRow(
+                row.getLong("new_orders"),
+                row.getLong("awaiting_approval"),
+                row.getLong("in_kitchen"),
+                row.getLong("ready"),
+                row.getLong("fulfilling"),
+                row.getLong("completed"),
+                row.getLong("cancelled"),
+                row.getLong("total_non_terminal"),
+                row.getLong("total"));
     }
 
     /**
@@ -1943,6 +2123,24 @@ public class JdbcOrderStore {
             long cancelled,
             long totalNonTerminal,
             long total) {}
+
+    /** One branch's badges, from {@link #countsByLocation}. */
+    public record LocationCountsRow(UUID locationId, OrderCountsRow counts) {}
+
+    /**
+     * One slice of a mix, from {@link #activeMix}.
+     *
+     * @param dimension {@code CHANNEL} or {@code FULFILLMENT_MODE} — which of
+     *                  the two questions this row answers
+     * @param key       the channel code as snapshotted onto the order, or the
+     *                  fulfilment mode. Tenant content in the channel case, so
+     *                  never a translation key
+     */
+    public record MixSliceRow(String dimension, String key, long orders) {
+
+        public static final String CHANNEL = "CHANNEL";
+        public static final String FULFILLMENT_MODE = "FULFILLMENT_MODE";
+    }
 
     /**
      * The twelve columns a customer's own order list needs, and no others.

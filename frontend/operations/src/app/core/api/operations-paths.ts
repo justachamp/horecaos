@@ -41,9 +41,29 @@ export const operationsPaths = {
     return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/orders`;
   },
 
-  /** The board's seven tab badges in one call (§2.3). Falls back to client derivation on error. */
+  /**
+   * The board's seven tab badges in one call (§2.3), and the live board's two
+   * mixes beside them. Falls back to client derivation on error.
+   *
+   * Query param `period`: `ALL_TIME` (the default, and what this endpoint
+   * answered before the parameter existed) or `BUSINESS_DAY`, which cuts
+   * completed, cancelled and total to the tenant's own trading day (ADR 0043).
+   */
   orderCounts(scope: LocationScope): string {
     return `${this.orders(scope)}/counts`;
+  },
+
+  /**
+   * The whole brand's counters, its branch leaderboard and its two mixes in
+   * one read — `OperationsBrandOrderController` (IA 0.1c).
+   *
+   * On the ADR 0031 prefix, unlike {@link orders} above: it is a new endpoint
+   * and had no reason to be born on the legacy one. `ORDER_READ` at `BRAND`
+   * scope, so a location-scoped principal is refused and reads
+   * {@link orderCounts} for their own branch instead. Same `period` parameter.
+   */
+  brandOrderCounts(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrand(scope)}/orders/counts`;
   },
 
   /** Carts started and never converted (IA 1.4, orders.md §6). Query params: `from`, `to`, `channelId`. */

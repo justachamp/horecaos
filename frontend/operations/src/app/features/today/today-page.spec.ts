@@ -23,6 +23,8 @@ function snapshot(overrides: Partial<LiveBoardSnapshot> = {}): LiveBoardSnapshot
       totalNonTerminal: 0,
       total: 0,
     },
+    period: 'BUSINESS_DAY',
+    periodFrom: '2026-09-11T19:00:00Z',
     sourceMix: [],
     typeMix: [],
     branches: [],
@@ -119,6 +121,35 @@ describe('TodayPage: the oversized counters', () => {
         .querySelector('[data-testid="today-counter-cancelled"]')
         ?.textContent.trim(),
     ).toBe('3');
+  });
+});
+
+describe('TodayPage: the period label', () => {
+  it('states which trading day the cancelled counter covers, in the tenant zone', async () => {
+    configure({
+      load: vi.fn().mockResolvedValue(
+        snapshot({
+          period: 'BUSINESS_DAY',
+          // 02:00 on 12 September in Tashkent (UTC+5) — a boundary past midnight.
+          periodFrom: '2026-09-11T21:00:00Z',
+          counts: { ...snapshot().counts, cancelled: 3 },
+        }),
+      ),
+    });
+    const fixture = await render();
+
+    const label = fixture.nativeElement.querySelector('[data-testid="today-period"]');
+    expect(label?.textContent).toContain('12.09 02:00');
+    expect(label?.textContent).toContain('this trading day');
+  });
+
+  it('says nothing at all when the counters are a lifetime figure, rather than inventing a window', async () => {
+    configure({
+      load: vi.fn().mockResolvedValue(snapshot({ period: 'ALL_TIME', periodFrom: null })),
+    });
+    const fixture = await render();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="today-period"]')).toBeNull();
   });
 });
 

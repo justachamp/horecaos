@@ -1168,6 +1168,7 @@ export const messagesEn = {
   'today.updated': 'updated {time}',
   'today.counters.inProgress': 'In progress',
   'today.counters.cancelled': 'Cancelled',
+  'today.period.businessDay': 'Cancelled and completed: this trading day, from {from}',
   'today.mix.source.title': 'By source',
   'today.mix.type.title': 'By type',
   'today.mix.empty': 'No orders in progress',

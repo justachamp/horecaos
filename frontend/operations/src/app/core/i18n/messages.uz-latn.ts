@@ -1147,6 +1147,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'today.updated': 'yangilandi {time}',
   'today.counters.inProgress': 'Jarayonda',
   'today.counters.cancelled': 'Bekor qilingan',
+  'today.period.businessDay': 'Bekor qilingan va yakunlangan — joriy ish kuni uchun, {from} dan',
   'today.mix.source.title': 'Manba boʻyicha',
   'today.mix.type.title': 'Turi boʻyicha',
   'today.mix.empty': 'Jarayondagi buyurtmalar yoʻq',

@@ -153,6 +153,32 @@ these predicates, and `ordering.orders` is already indexed on the location and
 | Keep the bare array and carry `nextCursor` in a response header | Halves the contract: a generated client gets the items typed and the cursor untyped, and every caller has to know to read a header. `Page` exists for this | Never |
 | Put the paged read under the ADR 0031 `/api/v1/operations/**` prefix instead of beside the operation it supersedes | A new prefix means a `SecurityConfiguration` entry, a surface-group question and a second place the order board lives, for a path that is the same resource. `/orders/board` sits in the same group, under the same capability, next to `/orders/counts` and `/orders/drafts` | The whole controller moves to the ADR 0031 prefix, which is its own piece of work |
 
+## Implementation notes
+
+**Reconciled against wave131-p15 at merge time (2026-09-12).** That wave built,
+in parallel from the same base, the Home live board's own cut of `GET
+.../orders/counts` — a `period` parameter (`ALL_TIME`/`BUSINESS_DAY`, ADR 0043)
+windowing only `completed`, `cancelled` and `total`, on `closed_at` for the
+first two and `created_at` for the third, and leaving the six live counters
+uncut. Both waves modified the same `JdbcOrderStore.counts` method and the same
+controller endpoint; the merge kept both contracts rather than picking one.
+
+`JdbcOrderStore.counts` now takes two independent `CountsWindow` parameters —
+`boardWindow` (this ADR's `from`/`to`, windowing every column on `created_at`
+by restricting the row set itself) and `liveWindow` (wave131-p15's `period`,
+windowing only the three historical columns via `FILTER`, each on its own
+timestamp) — rather than the one `from`/`to` pair this ADR originally
+specified for that method. `GET .../orders/counts` now accepts both `from`/`to`
+and `period` and refuses a request naming both (a `period` other than its
+`ALL_TIME` default alongside a non-null `from` or `to`) with a 400
+`INVALID_REQUEST`, rather than guessing which window governs. Everything this
+ADR decided about `from`/`to`'s own meaning — half-open, cut on `created_at`,
+applied uniformly to all nine columns, and identical between the badge and the
+list it sits above — is unchanged; only the store's parameter shape and the
+endpoint's parameter set grew a second, independently-scoped period beside it.
+See `LiveBoardQueryService` and `JdbcOrderStore.CountsWindow`'s own doc for the
+live board's half, which has no ADR of its own.
+
 ## Consequences
 
 ### Positive
