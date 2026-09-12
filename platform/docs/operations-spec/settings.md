@@ -1093,23 +1093,39 @@ third-party settlement quietly lose it.
 ### Производственный календарь
 
 Holidays including movable Islamic dates, the weekend definition, and the **business-day boundary
-that may cross midnight**. **Not built.** The matrix records the open question: Delever's forecast
-window defaults to 09:00→09:00. This is a reporting foundation (ADR 0043) and a settings screen
-cannot invent it; the card links to the open question rather than shipping a half-answer.
+that may cross midnight**. **Built (wave P37).** `BusinessCalendarController` reads and writes
+`tenant.business_calendars` (weekend, ISO weekday numbers) and `tenant.business_calendar_holidays`
+(this tenant's own closures, additional to the platform's `tenant.public_holidays`), and moves the
+`reporting.business_day_policies` boundary `BusinessDayService.setBoundary` had built with no
+production caller — gated by the ADR 0027 approval model. Moving the boundary marks a recut
+outstanding rather than performing one inline; the screen surfaces that state and the reports
+provenance banner now states `businessDayStart` read-only. Delever's forecast window default of
+09:00→09:00 remains the open product question the matrix records — this wave answers "can a
+tenant set its own boundary at all", not "what should the default be".
 
 Note the relationship to `tenant.service_schedule_exceptions`: a holiday in the calendar should
 *offer* to create schedule exceptions across selected schedules, and never silently create them.
 
 ### Границы SLA
 
-Tenant-configurable time buckets for the SLA distribution reports. **Not built, ADR 0043.**
-HorecaOS beats Delever here on purpose: Delever hard-codes six buckets, which cannot be changed later
-without invalidating historical comparison. Changing a boundary must therefore be versioned and
-the reports must state which boundary set they were computed under.
+**Correction (wave P37, ADR 0107):** this section used to promise tenant-configurable time
+buckets. It does not exist and will not: ADR 0043 decided the buckets are platform-fixed and
+versioned — `SlaBucketController`'s own Javadoc says so, and `reporting.SlaBucketSet` is
+deliberately not a tenant-editable table. **Built, read-only:** a version card
+(`ReportingController.slaBucketSet`, tenant-readable) names the active bucket set and its version
+so a report can be read against the definition it was computed under. HorecaOS still beats Delever
+here, but on the axis that was actually decided — the buckets are *versioned*, so a future release
+can cut a `v2` set without rewriting last quarter's chart — not on tenant configurability, which
+would rewrite the meaning of every chart already drawn and is exactly what ADR 0043 refuses. See
+ADR 0107 for the contradiction this correction resolves and why configurability is declined rather
+than deferred.
 
 ### Теги филиалов
 
-**Not built.** Delever's page exists and is empty. Wave 2.
+**Built (wave P37).** A tenant registers its own tags (`tenant.branch_tags`) and assigns any
+number to a branch (`tenant.location_branch_tags`), over `BranchTagController`. The settings
+screen renders the registry, an archive action, and a location × tag matrix — the
+filter-and-group affordance that makes a tag worth having, per this section's own opening line.
 
 ---
 
@@ -1322,7 +1338,7 @@ hand the customer a correct fiscal document.
 | Zones | One zone entity with a typed role | Delever has three overlapping geometry layers and its docs never say which wins |
 | Delivery fee | One written total order of resolution, each step recording what decided it | Delever has four possible fee sources and no stated precedence |
 | Dispatch config | One provider-agnostic rule engine | Delever duplicates near-identical config in five provider pages and therefore cannot express fallback |
-| SLA buckets | Tenant-configurable and versioned | Delever hard-codes six, unchangeable without invalidating history |
+| SLA buckets | Platform-fixed and versioned (corrected wave P37, ADR 0107 — this row previously said "tenant-configurable") | Delever hard-codes six with no version at all; a future HorecaOS release can cut a v2 set without rewriting last quarter's chart, which is the axis actually decided |
 | Template moderation | A blocking state on the template row | Delever does not model provider moderation at all |
 | Static pages | Block-based, sanitized | Delever accepts raw HTML from tenants, pointed at their own customers |
 | Findability | A search over the code-owned key registry | Only possible because ADR 0030 made keys enumerable. Nothing in Delever can do this |
@@ -1423,10 +1439,10 @@ Named precisely, with the owning decision. Everything not listed here is built a
 | A purpose/role column on `media.assets`, so "the logo" and "the aggregator banner" are distinguishable | ADR 0010 |
 | Brand contact fields and a brand description with translations | ADR 0002 |
 | Per-brand supported-language set (only `platform.default_locale` exists) | ADR 0030 key, content ADR 0002 |
-| Location sort order, tags, and venue attributes | ADR 0002 |
+| Location sort order and venue attributes (branch tags built wave P37 — `BranchTagController`, §10.10) | ADR 0002 |
 | Courier policy settings: billing mode, shift enforcement, ready-only visibility, address-before-accept, post-delivery payment check, acceptance SLA, max concurrent orders, GPS radii | ADR 0042, Proposed |
-| Business calendar, business-day boundary that may cross midnight, weekend definition | ADR 0043 + an open product question the matrix records |
-| Tenant-configurable SLA bucket boundaries, versioned | ADR 0043 |
+| ~~Business calendar, business-day boundary that may cross midnight, weekend definition~~ — built wave P37, `BusinessCalendarController`, §10.10. Delever's forecast-window default (09:00→09:00) is still an open product question the matrix records | ADR 0043 |
+| ~~Tenant-configurable SLA bucket boundaries, versioned~~ — declined, not deferred: ADR 0043 fixes the buckets platform-side. Corrected wave P37, ADR 0107; a read-only version card is built (§10.10) | ADR 0043 |
 | `ordering.orders.callback_requested`, `cash_tendered_expected_minor` | ADR 0039 |
 | Courier-first vs branch-first acceptance ordering — **design-forcing, not configuration**: it reorders the lifecycle and ADR 0019's state machine must carry it as a parameter or refuse it | ADR 0019 |
 | Retention schedules, consent state definitions, DSAR request handling | ADR 0029 |
