@@ -438,10 +438,10 @@ class ApprovalDecisionServiceTests {
         UUID approved = raise();
         approve(approved);
 
-        List<ApprovalDecisionService.DecidedApprovalHistoryEntry> history =
-                decisions.decided(TENANT, null, 50);
+        List<ApprovalDecisionService.DecidedApprovalHistoryEntry> history = decisions.decided(TENANT, null, 50);
 
-        assertThat(history).extracting(ApprovalDecisionService.DecidedApprovalHistoryEntry::id)
+        assertThat(history)
+                .extracting(ApprovalDecisionService.DecidedApprovalHistoryEntry::id)
                 .containsExactly(approved);
         assertThat(history.getFirst().status()).isEqualTo("APPROVED");
         assertThat(history.getFirst().decidedBy()).isEqualTo(CHECKER);

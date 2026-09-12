@@ -87,18 +87,19 @@ class AccessCheckServiceTests {
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
         Clock clock = Clock.fixed(CLOCK_INSTANT, ZoneOffset.UTC);
-        authorization = new JdbcAuthorizationService(
-                jdbc,
-                clock,
-                () -> new AuthenticatedActor("no-request-actor-in-fixture", Set.of(), Map.of()),
-                tenantId -> uz.horecaos.platform.iam.api.TenantAvailability.OPERATING) {
-            @Override
-            public void evictGrants(String subject, @Nullable UUID tenantId) {
-                // no cache in this fixture
-            }
-        };
-        GrantAuditListener auditListener =
-                new GrantAuditListener(new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()));
+        authorization =
+                new JdbcAuthorizationService(
+                        jdbc,
+                        clock,
+                        () -> new AuthenticatedActor("no-request-actor-in-fixture", Set.of(), Map.of()),
+                        tenantId -> uz.horecaos.platform.iam.api.TenantAvailability.OPERATING) {
+                    @Override
+                    public void evictGrants(String subject, @Nullable UUID tenantId) {
+                        // no cache in this fixture
+                    }
+                };
+        GrantAuditListener auditListener = new GrantAuditListener(
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()));
         grants = new GrantManagementService(
                 jdbc,
                 authorization,
@@ -122,11 +123,7 @@ class AccessCheckServiceTests {
         insertGrant("aziza", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION);
 
         AccessCheckAnswer answer = service.check(
-                "owner-1",
-                "aziza",
-                Capability.ORDER_APPROVE,
-                ResourceScope.location(TENANT, BRAND, LOCATION),
-                null);
+                "owner-1", "aziza", Capability.ORDER_APPROVE, ResourceScope.location(TENANT, BRAND, LOCATION), null);
 
         assertThat(answer.verdict()).isEqualTo(Verdict.ALLOWED);
         assertThat(authorization.has(
@@ -160,8 +157,8 @@ class AccessCheckServiceTests {
     void noGrantAtAllIsAnHonestNo() {
         insertGrant("owner-1", PlatformRole.TENANT_OWNER, "TENANT", TENANT);
 
-        AccessCheckAnswer answer = service.check(
-                "owner-1", "nobody", Capability.ORDER_APPROVE, ResourceScope.tenant(TENANT), null);
+        AccessCheckAnswer answer =
+                service.check("owner-1", "nobody", Capability.ORDER_APPROVE, ResourceScope.tenant(TENANT), null);
 
         assertThat(answer.verdict()).isEqualTo(Verdict.INSUFFICIENT_CAPABILITY);
         assertThat(answer.heldElsewhere()).isEmpty();
@@ -197,11 +194,7 @@ class AccessCheckServiceTests {
         insertGrant("aziza", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION);
 
         assertThatThrownBy(() -> service.check(
-                        "some-cashier",
-                        "aziza",
-                        Capability.ORDER_APPROVE,
-                        ResourceScope.tenant(TENANT),
-                        null))
+                        "some-cashier", "aziza", Capability.ORDER_APPROVE, ResourceScope.tenant(TENANT), null))
                 .isInstanceOf(AuthorizationService.AccessDeniedException.class);
     }
 
@@ -210,8 +203,8 @@ class AccessCheckServiceTests {
     void entitlementRequiredIsADistinctThirdAnswer() {
         insertGrant("owner-1", PlatformRole.TENANT_OWNER, "TENANT", TENANT);
         insertGrant("aziza", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION);
-        AccessCheckService gatedService = new AccessCheckService(
-                authorization, grants, List.of(new StubEntitlementGate(false)));
+        AccessCheckService gatedService =
+                new AccessCheckService(authorization, grants, List.of(new StubEntitlementGate(false)));
 
         AccessCheckAnswer allowedButNotEntitled = gatedService.check(
                 "owner-1",
@@ -228,7 +221,10 @@ class AccessCheckServiceTests {
         // matching a real request that would 403 before an entitlement is ever
         // consulted.
         AccessCheckAnswer neverHadCapability = gatedService.check(
-                "owner-1", "nobody", Capability.ORDER_APPROVE, ResourceScope.tenant(TENANT),
+                "owner-1",
+                "nobody",
+                Capability.ORDER_APPROVE,
+                ResourceScope.tenant(TENANT),
                 "delivery.partner_integrations.enabled");
         assertThat(neverHadCapability.verdict()).isEqualTo(Verdict.INSUFFICIENT_CAPABILITY);
     }

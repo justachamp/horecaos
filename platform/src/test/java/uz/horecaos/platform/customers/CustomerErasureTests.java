@@ -384,11 +384,9 @@ class CustomerErasureTests {
     @DisplayName("the tenant-wide worklist lists every account's requests, not just one account's own history")
     void worklistListsEveryAccountsRequests() {
         UUID first = newAccount(TENANT, "First");
-        ErasureRequestRow firstRequest =
-                erasure.request(TENANT, first, RequestedVia.OPERATIONS, STAFF_ACTOR);
+        ErasureRequestRow firstRequest = erasure.request(TENANT, first, RequestedVia.OPERATIONS, STAFF_ACTOR);
         UUID second = newAccount(TENANT, "Second");
-        ErasureRequestRow secondRequest =
-                erasure.request(TENANT, second, RequestedVia.STOREFRONT, SELF_SERVICE_ACTOR);
+        ErasureRequestRow secondRequest = erasure.request(TENANT, second, RequestedVia.STOREFRONT, SELF_SERVICE_ACTOR);
 
         List<ErasureRequestRow> worklist = erasure.worklist(TENANT, null, 200);
 
@@ -401,11 +399,9 @@ class CustomerErasureTests {
     @DisplayName("the worklist filters by status")
     void worklistFiltersByStatus() {
         UUID pendingAccount = newAccount(TENANT, "Still pending");
-        ErasureRequestRow pending =
-                erasure.request(TENANT, pendingAccount, RequestedVia.OPERATIONS, STAFF_ACTOR);
+        ErasureRequestRow pending = erasure.request(TENANT, pendingAccount, RequestedVia.OPERATIONS, STAFF_ACTOR);
         UUID completedAccount = newAccountWithContactAndAddress(TENANT, "Completed");
-        ErasureRequestRow completed =
-                erasure.request(TENANT, completedAccount, RequestedVia.OPERATIONS, STAFF_ACTOR);
+        ErasureRequestRow completed = erasure.request(TENANT, completedAccount, RequestedVia.OPERATIONS, STAFF_ACTOR);
         erasure.execute(TENANT, completedAccount, completed.id(), STAFF_ACTOR);
 
         assertThat(erasure.worklist(TENANT, "PENDING", 200))

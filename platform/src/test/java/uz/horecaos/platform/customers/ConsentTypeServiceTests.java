@@ -71,7 +71,8 @@ class ConsentTypeServiceTests {
     void firstReadSeedsTheDefaults() {
         List<ConsentTypeRow> types = consentTypes.list(TENANT, ACTOR);
 
-        assertThat(types).extracting(ConsentTypeRow::code)
+        assertThat(types)
+                .extracting(ConsentTypeRow::code)
                 .containsExactlyInAnyOrder("MARKETING_PROMOTIONS", "TERMS_OF_SERVICE");
         assertThat(types).allSatisfy(row -> assertThat(row.active()).isTrue());
     }
@@ -111,9 +112,6 @@ class ConsentTypeServiceTests {
                 INSERT INTO tenant.tenants (id, slug, legal_name, display_name, default_currency,
                     default_timezone, status, version)
                 VALUES (:id, :slug, 'Legal', 'Display', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
-                """)
-                .param("id", id)
-                .param("slug", slug)
-                .update();
+                """).param("id", id).param("slug", slug).update();
     }
 }
