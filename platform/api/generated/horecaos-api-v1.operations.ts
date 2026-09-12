@@ -2040,6 +2040,7 @@ export interface OrderPaymentResponse {
   orderId?: string;
   orderStatus?: string;
   orderTotal?: ApiMoney;
+  payment?: Array<TenderResponse>;
   publicOrderNumber?: string;
   returned?: ApiMoney;
 }
@@ -3278,6 +3279,17 @@ export interface TemplateResponse {
   status?: string;
   templateKey?: string;
   version?: number;
+}
+
+export interface TenderResponse {
+  amount?: ApiMoney;
+  methodCode?: string;
+  methodDisplayName?: string;
+  refunded?: ApiMoney;
+  sequence?: number;
+  settlesFromBalance?: boolean;
+  status?: string;
+  tenderId?: string;
 }
 
 export interface TermsVersionSummaryView {

@@ -19,6 +19,7 @@ import {
   RefundReasonCode,
   REMEDY_TYPE_KEYS,
   SETTLEMENT_BASIS_KEYS,
+  TENDER_STATUS_KEYS,
   VERIFICATION_STATE_KEYS,
 } from '../finance-labels';
 import {
@@ -34,6 +35,7 @@ import {
   RemedyView,
   RemedyTotalsView,
   SettlementBasis,
+  TenderStatus,
   VerificationState,
 } from './payments-api';
 
@@ -43,13 +45,13 @@ type ReissueKind = 'PAYMENT_LINK' | 'INVOICE_PUSH';
 /**
  * 8.1 Payments & settlements — `operations-spec/finance.md` §8.1.
  *
- * **What this screen is not.** IA 8.1 describes a `payment[]` array per
- * order, implying split tender — cash plus cashback plus deposit on one
- * settlement. `PaymentIntent.tenderId`'s own Javadoc says that has not
- * shipped (ADR 0046 is the open decision): every order today pays through
- * exactly one intent and one method. So this screen shows one intent, named
- * plainly, rather than an array that would always have exactly one entry —
- * see the banner below when an order has none.
+ * **`payment` is the IA's own `payment[]` array (W05).** An order pays
+ * through one {@link OrderPaymentView.intent} — a single provider request —
+ * but *settles* through an ordered set of tenders (ADR 0046), and a
+ * cash-plus-points order writes two of them at checkout today. `payment`
+ * names every tender in its settlement sequence with its own status and how
+ * much has been refunded so far; it is empty for an order with no settlement
+ * at all, which is not the same condition as a null `intent`.
  *
  * **Why an order lookup rather than a list.** No endpoint projects payment
  * status onto the order list yet (`OperationsOrderController`'s response has
@@ -534,6 +536,10 @@ export class PaymentsPage {
 
   protected attemptStatusLabel(status: PaymentAttemptStatus): string {
     return this.i18n.t(PAYMENT_ATTEMPT_STATUS_KEYS[status]);
+  }
+
+  protected tenderStatusLabel(status: TenderStatus): string {
+    return this.i18n.t(TENDER_STATUS_KEYS[status]);
   }
 
   /**

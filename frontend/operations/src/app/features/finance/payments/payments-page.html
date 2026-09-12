@@ -95,6 +95,36 @@
         <dd class="q-body-sm q-mono">{{ money(order.orderTotal) }}</dd>
       </dl>
 
+      <h2 class="q-subhead">{{ 'finance.payments.tenders.title' | t }}</h2>
+      @if (order.payment.length > 0) {
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'finance.payments.tenders.sequence' | t }}</th>
+              <th class="q-caption">{{ 'finance.payments.tenders.method' | t }}</th>
+              <th class="q-caption">{{ 'finance.payments.tenders.amount' | t }}</th>
+              <th class="q-caption">{{ 'finance.payments.tenders.status' | t }}</th>
+              <th class="q-caption">{{ 'finance.payments.tenders.refunded' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (tender of order.payment; track tender.tenderId) {
+              <tr>
+                <td class="q-body-sm q-mono">{{ tender.sequence }}</td>
+                <td class="q-body-sm">{{ tender.methodDisplayName }}</td>
+                <td class="q-body-sm q-mono">{{ money(tender.amount) }}</td>
+                <td class="q-body-sm">
+                  <span class="status-badge">{{ tenderStatusLabel(tender.status) }}</span>
+                </td>
+                <td class="q-body-sm q-mono">{{ money(tender.refunded) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      } @else {
+        <p class="q-body-sm note">{{ 'finance.payments.tenders.empty' | t }}</p>
+      }
+
       @if (order.intent; as intent) {
         <dl class="kv">
           <dt class="q-caption">{{ 'finance.payments.intent.tender' | t }}</dt>
@@ -114,7 +144,6 @@
           <dt class="q-caption">{{ 'finance.payments.returned' | t }}</dt>
           <dd class="q-body-sm q-mono">{{ money(order.returned) }}</dd>
         </dl>
-        <p class="q-body-sm note">{{ 'finance.payments.intent.splitTenderNote' | t }}</p>
 
         @if (order.attempts.length > 0) {
           <table class="table">

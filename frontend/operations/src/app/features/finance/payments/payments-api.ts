@@ -47,6 +47,28 @@ export interface PaymentAttemptView {
   readonly settledAt: string | null;
 }
 
+/** Mirrors `TenderStatus` (Java) -- one settlement tender's own lifecycle (ADR 0046). */
+export type TenderStatus = 'PLANNED' | 'RESERVED' | 'SETTLED' | 'RELEASED' | 'REVERSED' | 'FAILED';
+
+/**
+ * Mirrors `OperationsPaymentController.TenderResponse` -- one row of the IA's
+ * `payment[]` array: one tender of the order's settlement (ADR 0046), in the
+ * sequence it settles. `methodCode` is never a deposit method -- ADR 0046
+ * withdrew stored value outright, and the registry can only ever name `CASH`,
+ * `CLICK`, `PAYME`, `TELEGRAM`, `MARKETPLACE` or the balance leg
+ * `LOYALTY_POINTS`.
+ */
+export interface OrderPaymentTenderView {
+  readonly tenderId: string;
+  readonly sequence: number;
+  readonly methodCode: string;
+  readonly methodDisplayName: string;
+  readonly settlesFromBalance: boolean;
+  readonly amount: Money;
+  readonly status: TenderStatus;
+  readonly refunded: Money;
+}
+
 /** Mirrors `OperationsPaymentController.OrderPaymentResponse`. */
 export interface OrderPaymentView {
   readonly orderId: string;
@@ -54,6 +76,8 @@ export interface OrderPaymentView {
   readonly orderStatus: string;
   readonly orderTotal: Money;
   readonly intent: PaymentIntentView | null;
+  /** The IA's `payment[]` array -- every tender of the settlement, in sequence. */
+  readonly payment: readonly OrderPaymentTenderView[];
   readonly attempts: readonly PaymentAttemptView[];
   readonly captured: Money | null;
   readonly returned: Money | null;

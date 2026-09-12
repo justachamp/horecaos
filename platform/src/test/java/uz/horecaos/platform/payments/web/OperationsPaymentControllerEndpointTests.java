@@ -40,6 +40,9 @@ import uz.horecaos.platform.payments.domain.PaymentMethod;
 import uz.horecaos.platform.payments.domain.PaymentTender;
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentIntentStore;
+import uz.horecaos.platform.payments.settlement.JdbcSettlementStore;
+import uz.horecaos.platform.payments.settlement.SettlementStatus;
+import uz.horecaos.platform.payments.settlement.TenderStatus;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
@@ -99,6 +102,9 @@ class OperationsPaymentControllerEndpointTests {
 
     @Autowired
     private JdbcPaymentIntentStore intents;
+
+    @Autowired
+    private JdbcSettlementStore settlements;
 
     @BeforeEach
     void reset() {
@@ -161,6 +167,93 @@ class OperationsPaymentControllerEndpointTests {
                 // Nothing has ever settled or reversed against a cash intent.
                 .contains("\"captured\":{\"amountMinor\":0")
                 .contains("\"returned\":{\"amountMinor\":0");
+    }
+
+    /**
+     * W05: the IA's {@code payment[]} array. A settlement's tenders were
+     * already written to {@code payments.order_settlements} and
+     * {@code payments.tenders} at checkout by {@code CheckoutSettlementPlanner}
+     * -- what this proves is the read side, so the settlement is seeded
+     * directly at the row level here rather than through a full checkout,
+     * exactly as {@code insertCashIntent} seeds the intent above it.
+     */
+    @Test
+    void financeSeesTheSettlementsTendersInSequenceWithStatusAndRefundedAmount() throws Exception {
+        UUID orderId = order(100_000L);
+        Instant now = Instant.now();
+
+        UUID cashMethodId = settlements.registerMethod(TENANT, "CASH", "Cash", "OPERATOR", false, now);
+        UUID clickMethodId = settlements.registerMethod(TENANT, "CLICK", "Click", "PARTNER", false, now);
+
+        UUID settlementId = UUID.randomUUID();
+        settlements.insertSettlement(
+                new JdbcSettlementStore.SettlementRow(
+                        settlementId, TENANT, orderId, "UZS", 100_000L, 40_000L, SettlementStatus.PARTIALLY_SETTLED, 1),
+                now);
+
+        // Sequence 1: settled, and partially refunded already.
+        UUID cashTenderId = UUID.randomUUID();
+        settlements.insertTender(
+                new JdbcSettlementStore.TenderRow(
+                        cashTenderId,
+                        TENANT,
+                        settlementId,
+                        1,
+                        cashMethodId,
+                        false,
+                        40_000L,
+                        "UZS",
+                        TenderStatus.PLANNED,
+                        null,
+                        null,
+                        0L,
+                        1),
+                "order-payment-tender-cash-" + orderId,
+                now);
+        assertThat(settlements.transitionTender(TENANT, cashTenderId, TenderStatus.PLANNED, TenderStatus.SETTLED, now))
+                .isTrue();
+        assertThat(settlements.addRefunded(TENANT, cashTenderId, 15_000L, now)).isTrue();
+
+        // Sequence 2: still live, nothing refunded.
+        UUID clickTenderId = UUID.randomUUID();
+        settlements.insertTender(
+                new JdbcSettlementStore.TenderRow(
+                        clickTenderId,
+                        TENANT,
+                        settlementId,
+                        2,
+                        clickMethodId,
+                        false,
+                        60_000L,
+                        "UZS",
+                        TenderStatus.RESERVED,
+                        null,
+                        null,
+                        0L,
+                        1),
+                "order-payment-tender-click-" + orderId,
+                now);
+
+        MvcResult result =
+                mvc.perform(get(paymentPath(orderId)).with(tokenFor(FINANCE))).andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        String body = result.getResponse().getContentAsString();
+
+        int cashIndex = body.indexOf("\"methodCode\":\"CASH\"");
+        int clickIndex = body.indexOf("\"methodCode\":\"CLICK\"");
+        assertThat(cashIndex).as("the cash tender (sequence 1) is present").isGreaterThanOrEqualTo(0);
+        assertThat(clickIndex)
+                .as("and the array preserves settlement sequence: sequence 1 before sequence 2")
+                .isGreaterThan(cashIndex);
+
+        assertThat(body)
+                .contains("\"sequence\":1")
+                .contains("\"sequence\":2")
+                .contains("\"status\":\"SETTLED\"")
+                .contains("\"status\":\"RESERVED\"")
+                .contains("\"refunded\":{\"amountMinor\":15000")
+                .contains("\"refunded\":{\"amountMinor\":0");
     }
 
     @Test

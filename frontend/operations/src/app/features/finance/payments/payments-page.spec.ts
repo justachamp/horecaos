@@ -17,9 +17,43 @@ const CASH_ORDER: OrderPaymentView = {
   orderStatus: 'CONFIRMED',
   orderTotal: { amountMinor: 45_000, currency: 'UZS' },
   intent: null,
+  payment: [],
   attempts: [],
   captured: null,
   returned: null,
+};
+
+const SPLIT_TENDER_ORDER: OrderPaymentView = {
+  orderId: 'order-3',
+  publicOrderNumber: '484',
+  orderStatus: 'CONFIRMED',
+  orderTotal: { amountMinor: 100_000, currency: 'UZS' },
+  intent: null,
+  payment: [
+    {
+      tenderId: 'tender-1',
+      sequence: 1,
+      methodCode: 'LOYALTY_POINTS',
+      methodDisplayName: 'Balance',
+      settlesFromBalance: true,
+      amount: { amountMinor: 12_000, currency: 'UZS' },
+      status: 'SETTLED',
+      refunded: { amountMinor: 0, currency: 'UZS' },
+    },
+    {
+      tenderId: 'tender-2',
+      sequence: 2,
+      methodCode: 'CLICK',
+      methodDisplayName: 'CLICK',
+      settlesFromBalance: false,
+      amount: { amountMinor: 88_000, currency: 'UZS' },
+      status: 'SETTLED',
+      refunded: { amountMinor: 20_000, currency: 'UZS' },
+    },
+  ],
+  attempts: [],
+  captured: { amountMinor: 88_000, currency: 'UZS' },
+  returned: { amountMinor: 20_000, currency: 'UZS' },
 };
 
 const PROVIDER_ORDER: OrderPaymentView = {
@@ -37,6 +71,18 @@ const PROVIDER_ORDER: OrderPaymentView = {
     createdAt: '2026-08-30T09:00:00Z',
     settledAt: null,
   },
+  payment: [
+    {
+      tenderId: 'tender-3',
+      sequence: 1,
+      methodCode: 'CLICK',
+      methodDisplayName: 'CLICK',
+      settlesFromBalance: false,
+      amount: { amountMinor: 82_000, currency: 'UZS' },
+      status: 'RESERVED',
+      refunded: { amountMinor: 0, currency: 'UZS' },
+    },
+  ],
   attempts: [
     {
       attemptId: 'attempt-1',
@@ -168,6 +214,50 @@ describe('PaymentsPage', () => {
     expect(api.orderPayment).toHaveBeenCalledWith(TENANT_ID, 'order-1');
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('no live payment intent');
+  });
+
+  it('renders the payment[] array -- every tender in sequence, with its own status and refunded amount', async () => {
+    api.orderPayment.mockResolvedValue(SPLIT_TENDER_ORDER);
+
+    const input = fixture.nativeElement.querySelector('#order-id') as HTMLInputElement;
+    input.value = 'order-3';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'Look up',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    // The old "one tender only, split settlement has not shipped" note is gone.
+    expect(text).not.toContain('has not shipped');
+
+    const rows = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('table.table tbody tr'),
+    ).filter((row) => row.textContent?.includes('Balance') || row.textContent?.includes('CLICK'));
+    expect(rows).toHaveLength(2);
+
+    const firstCells = Array.from(rows[0].querySelectorAll('td')).map((cell) =>
+      cell.textContent?.trim(),
+    );
+    const secondCells = Array.from(rows[1].querySelectorAll('td')).map((cell) =>
+      cell.textContent?.trim(),
+    );
+
+    // Sequence 1, the balance tender: settled, and untouched while money remains.
+    expect(firstCells[0]).toBe('1');
+    expect(firstCells[1]).toBe('Balance');
+    expect(firstCells[3]).toContain('Settled');
+    expect(firstCells[4]).toMatch(/^0\b/);
+
+    // Sequence 2, the money tender: settled, partially refunded.
+    expect(secondCells[0]).toBe('2');
+    expect(secondCells[1]).toBe('CLICK');
+    expect(secondCells[3]).toContain('Settled');
+    expect(secondCells[4]).toMatch(/20\s000/);
   });
 
   it('offers re-issue only for a PROVIDER intent, and calls the API on submit', async () => {
