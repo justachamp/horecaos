@@ -361,7 +361,18 @@ public final class TestDatabase {
                             "-c",
                             "synchronous_commit=off",
                             "-c",
-                            "full_page_writes=off");
+                            "full_page_writes=off",
+                            // Every test class keeps a pool of up to eight
+                            // connections for as long as its Spring context
+                            // stays cached, and several gates share this
+                            // machine at once: the image's default of 100
+                            // slots ran out on 2026-09-12 with "remaining
+                            // connection slots are reserved" errors in
+                            // classes that had nothing to do with the change
+                            // under test. Slots are cheap in a throwaway
+                            // container; a false red gate is not.
+                            "-c",
+                            "max_connections=400");
             container.start();
             return container;
         }
@@ -411,25 +422,36 @@ public final class TestDatabase {
     }
 
     /**
-     * {@code CREATE DATABASE}, with one retry.
+     * {@code CREATE DATABASE}, with three retries behind growing pauses.
      *
      * <p>The template is sealed against connections, so the "source database is
-     * being accessed by other users" refusal should be unreachable. The retry is
-     * there because the cost of being wrong about that is a flaky suite and the
-     * cost of the retry is nothing.
+     * being accessed by other users" refusal should be unreachable. The retries
+     * are there because the cost of being wrong about that is a flaky suite and
+     * the cost of a retry is nothing — and because on a machine running several
+     * gates at once, copying a template is exactly the slow, I/O-bound statement
+     * that fails for a moment and succeeds a second later.
      */
     private static void create(String statement) {
-        try {
-            administer(statement);
-        } catch (RuntimeException first) {
+        long[] pausesMillis = {250, 1_000, 3_000};
+        RuntimeException last = null;
+        for (int attempt = 0; attempt <= pausesMillis.length; attempt++) {
             try {
-                Thread.sleep(250);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                throw first;
+                administer(statement);
+                return;
+            } catch (RuntimeException failure) {
+                last = failure;
+                if (attempt == pausesMillis.length) {
+                    break;
+                }
+                try {
+                    Thread.sleep(pausesMillis[attempt]);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw failure;
+                }
             }
-            administer(statement);
         }
+        throw last;
     }
 
     private static void administer(String statement) {
