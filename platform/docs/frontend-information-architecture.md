@@ -341,7 +341,7 @@ The current set (Button, Icon, DataTable, EmptyState, StatusPill, Input, Select,
 | **DateRangePicker + TimeInput + DayOfWeekToggle + ScheduleGrid** | 10.2 venue and delivery hours; prep-time intervals; 4.2/4.4 item schedules; every report filter. |
 | **MediaUploader with aspect-ratio crop** (1:1, 3:2, 3:1, 9:16, 640×360) + video support | Logos, banners (image *or* video), product images with per-aggregator variants, kiosk idle media, story slides, review-tag icons. Size caps down to 1 MB are specified per surface. |
 | **ImportWizard** — FileDropzone + row-level preview table + dry-run diff + JobProgress + ResultSummary | 4.5 Excel catalog import; 5.1 customer CSV; 3.6 bulk geozone upload. Row-level outcome reporting is a deliberate improvement over Delever's silent skip. |
-| **SecretInput** — masked, reveal-once, copy, rotate, last-used, never re-rendered | 10.8, control-plane 7.4. ADR 0028. |
+| **SecretInput** — masked, reveal-once at entry, copy, rotate, last-used, never re-rendered | 10.8, control-plane 7.4. ADR 0028. |
 | **StatusPill extensions** — a computed *overlay* (late) distinct from status, and a dual-state pill (order status + cooking status) | 1.1/1.2/2.1. Lateness must not be modelled as a state. |
 | **LockedState** (plan lock, with inline buy CTA) and **DeniedState** (capability), both distinct from **EmptyState** | 9.1, 8.6, and every module-gated route. The inventory is explicit that these need different UX — one is an upsell, one is a wall. |
 | **Toast + InlineAlert** | Every mutation in both apps. |

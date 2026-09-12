@@ -43,5 +43,23 @@ public enum ProviderCategory {
      */
     VOICE,
 
+    /**
+     * ADR 0106: a GTM container, a GA4 property, or a Search Console
+     * verification token — never a secret. Every field an {@code ANALYTICS}
+     * installation carries is a public identifier a browser's view-source
+     * already reveals, so it lives in {@code non_sensitive_config}, never
+     * behind the ADR 0028 secret door: hiding a public identifier would teach
+     * an operator that the mask means nothing.
+     *
+     * <p>Distinct from every outbound category in one respect: the platform's
+     * own backend never calls out to an analytics provider. The customer's
+     * browser does, injected by the storefront from the tenant's own
+     * non-secret configuration (see {@code StorefrontAnalyticsConfigController}).
+     * An {@code ANALYTICS} installation is still bound to a brand exactly like
+     * any other (ADR 0026) — that binding is what the storefront's read
+     * resolves to decide which tenant's identifiers to inject.
+     */
+    ANALYTICS,
+
     OTHER
 }

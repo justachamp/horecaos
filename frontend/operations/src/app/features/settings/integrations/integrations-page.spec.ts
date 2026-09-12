@@ -87,6 +87,8 @@ const INSTALLATION: InstallationView = {
   lastConnectionStatus: 'SUCCEEDED',
   adapterVersion: '1',
   lastSecretRotatedAt: null,
+  secretLastUsedAt: null,
+  nonSensitiveConfig: null,
 };
 
 const CLICK_INSTALLATION: InstallationView = {
@@ -120,15 +122,13 @@ const BINDING: MerchantBindingView = {
 class FakeIntegrationsApi {
   readonly listInstallations = vi.fn().mockResolvedValue([INSTALLATION, CLICK_INSTALLATION]);
   readonly listMerchantBindings = vi.fn().mockResolvedValue([BINDING]);
-  readonly listConnectFields = vi
-    .fn()
-    .mockResolvedValue([
-      {
-        providerType: 'TELEGRAM_BOT_API',
-        category: 'NOTIFICATION',
-        fields: [{ key: 'botToken', secret: true }],
-      },
-    ]);
+  readonly listConnectFields = vi.fn().mockResolvedValue([
+    {
+      providerType: 'TELEGRAM_BOT_API',
+      category: 'NOTIFICATION',
+      fields: [{ key: 'botToken', secret: true }],
+    },
+  ]);
   readonly writeSecret = vi
     .fn()
     .mockResolvedValue('horecaos:prod:provider_notification:tenant-1:fresh');
@@ -142,7 +142,30 @@ class FakeIntegrationsApi {
   });
   readonly rotateMerchantBindingSecret = vi.fn().mockResolvedValue({ ...BINDING, version: 2 });
   readonly archiveMerchantBinding = vi.fn().mockResolvedValue({ ...BINDING, status: 'RETIRED' });
-  readonly bindInstallation = vi.fn().mockResolvedValue({ bindingId: 'binding-new', status: 'SUSPENDED' });
+  readonly bindInstallation = vi
+    .fn()
+    .mockResolvedValue({ bindingId: 'binding-new', status: 'SUSPENDED' });
+
+  // ADR 0106: `LivenessPanel` and `FailureInboxPanel` are self-contained and
+  // load their own data on construction, unconditionally once the page's own
+  // load succeeds — so every test that reaches the loaded state exercises
+  // these too, whether or not the test itself is about them.
+  readonly listBindings = vi.fn().mockResolvedValue([]);
+  readonly activateBinding = vi.fn().mockResolvedValue({ changed: true, outcome: 'activated' });
+  readonly suspendBinding = vi.fn().mockResolvedValue({ changed: true, outcome: 'suspended' });
+  readonly reconcileCapabilities = vi
+    .fn()
+    .mockResolvedValue({ connectionStatus: 'SUCCEEDED', adapterVersion: '1', capabilities: {} });
+  readonly getInstallationSettings = vi.fn().mockResolvedValue({ requireClerkApproval: true });
+  readonly updateInstallationSettings = vi.fn().mockResolvedValue({ requireClerkApproval: false });
+  readonly marketplaceLiveness = vi.fn().mockResolvedValue([]);
+  readonly failureTaxonomy = vi.fn().mockResolvedValue([]);
+  readonly failureInbox = vi.fn().mockResolvedValue([]);
+  readonly replayInboxMessage = vi.fn().mockResolvedValue({ changed: true, outcome: 'replayed' });
+  readonly listPartnerApiClients = vi.fn().mockResolvedValue([]);
+  readonly issuePartnerApiClient = vi.fn();
+  readonly rotatePartnerApiClient = vi.fn();
+  readonly revokePartnerApiClient = vi.fn();
 }
 
 class FakeFiscalizationApi {
@@ -372,9 +395,7 @@ describe('IntegrationsPage', () => {
     fixture.detectChanges();
 
     const registerPanel = fixture.debugElement.query(By.directive(RegisterMerchantBindingPanel));
-    expect(
-      (registerPanel.componentInstance as RegisterMerchantBindingPanel).bindings(),
-    ).toEqual(
+    expect((registerPanel.componentInstance as RegisterMerchantBindingPanel).bindings()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'binding-new', installationId: 'inst-new' }),
       ]),

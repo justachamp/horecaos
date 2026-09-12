@@ -3416,4 +3416,84 @@ export const messagesUzLatn: MessageCatalogue = {
   'shared.matrixGrid.toggleRow': 'Butun qatorni almashtirish',
   'shared.matrixGrid.toggleColumn': 'Butun ustunni almashtirish',
   'shared.matrixGrid.unavailable': 'Bu kanalda mavjud emas',
+  // --- shared/ui q-secret-input (ADR 0106, gap-map row X.14) --------------
+  'secretInput.reveal': 'Koʻrsatish',
+  'secretInput.hide': 'Yashirish',
+  'secretInput.configured': 'Sozlangan',
+  'secretInput.notConfigured': 'Sozlanmagan',
+  'secretInput.copyReference': 'Havolani nusxalash',
+  'secretInput.copied': 'Nusxalandi',
+  'secretInput.rotate': 'Almashtirish',
+  'secretInput.lastRotated': 'Oxirgi almashtirish',
+  'secretInput.lastUsed': 'Oxirgi ishlatilishi',
+  'secretInput.neverUsed': 'Hech qachon',
+
+  // --- settings/integrations installation detail (ADR 0106, row 10.8a) ---
+  'settings.integrations.detail.manage': 'Boshqarish',
+  'settings.integrations.detail.title': 'Ulanish tafsilotlari',
+  'settings.integrations.detail.credential': 'Kirish maʼlumoti',
+  'settings.integrations.detail.reconcile.title': 'Ulanishni tekshirish',
+  'settings.integrations.detail.reconcile.action': 'Hozir tekshirish',
+  'settings.integrations.detail.reconcile.running': 'Tekshirilmoqda…',
+  'settings.integrations.detail.reconcile.status': 'Holat',
+  'settings.integrations.detail.reconcile.adapter': 'Adapter versiyasi',
+  'settings.integrations.detail.bindings.title': 'Bogʻlanishlar',
+  'settings.integrations.detail.bindings.loading': 'Yuklanmoqda…',
+  'settings.integrations.detail.bindings.column.scope': 'Qoʻllaniladi',
+  'settings.integrations.detail.bindings.column.status': 'Holat',
+  'settings.integrations.detail.bindings.column.actions': 'Amallar',
+  'settings.integrations.detail.bindings.activate': 'Faollashtirish',
+  'settings.integrations.detail.bindings.activate.reasonPrompt':
+    'Ushbu bogʻlanishni ishga tushirish sababi:',
+  'settings.integrations.detail.bindings.suspend': 'Toʻxtatib turish',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Ushbu bogʻlanishni toʻxtatib turish sababi:',
+  'settings.integrations.detail.bindings.empty': 'Hozircha bogʻlanishlar yoʻq.',
+  'settings.integrations.detail.bindings.wholeTenant': 'Butun kompaniya',
+  'settings.integrations.detail.cloposSettings.title': 'Buyurtmani qabul qilish',
+  'settings.integrations.detail.cloposSettings.requireClerkApproval':
+    'Kassir eksport qilingan buyurtmani hali ham tasdiqlashi kerak',
+  'settings.integrations.detail.cloposSettings.hint':
+    'Clopos buyurtmalari kassa tasdigʻisiz avtomatik qabul qilinishi mumkin boʻlganda oʻchiring.',
+  'settings.integrations.detail.partnerClients.title': 'Hamkor API mijozlari',
+  'settings.integrations.detail.partnerClients.issue': 'Mijoz chiqarish',
+  'settings.integrations.detail.partnerClients.issue.labelPrompt':
+    'Ushbu mijoz uchun nom (oʻzingiz uchun):',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Ushbu mijozni chiqarish sababi:',
+  'settings.integrations.detail.partnerClients.issuedOnce':
+    'Ushbu maxfiy kalitni hozir nusxalang — u qayta koʻrsatilmaydi:',
+  'settings.integrations.detail.partnerClients.issuedDismiss': 'Nusxaladim',
+  'settings.integrations.detail.partnerClients.column.clientId': 'Mijoz ID',
+  'settings.integrations.detail.partnerClients.revoke': 'Bekor qilish',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Ushbu mijozni bekor qilish sababi:',
+  'settings.integrations.detail.partnerClients.empty': 'Hali hamkor API mijozlari chiqarilmagan.',
+
+  // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------
+  'settings.integrations.liveness.title': 'Bozor ulanishlarining faolligi',
+  'settings.integrations.liveness.lead':
+    'Har bir kanal oxirgi marta qachon yetkazib bergani — oʻlik integratsiya xato bermaydi, shuning uchun jim qolgan kanal faqat shu yerda koʻrinadi.',
+  'settings.integrations.liveness.column.provider': 'Provayder',
+  'settings.integrations.liveness.column.direction': 'Yoʻnalish',
+  'settings.integrations.liveness.column.lastSuccess': 'Oxirgi muvaffaqiyat',
+  'settings.integrations.liveness.column.silence': 'Jimlik davri',
+  'settings.integrations.liveness.column.alert': 'Holat',
+  'settings.integrations.liveness.empty': 'Hozircha bozor bogʻlanishlari yoʻq.',
+  'settings.integrations.liveness.never': 'Hech qachon',
+  'settings.integrations.liveness.noneYet': '— (hali hech narsa kelmagan)',
+  'settings.integrations.liveness.silenceMinutes': '{minutes} daq',
+
+  // --- settings/integrations tenant failure surface (ADR 0106, row 10.8c) -
+  'settings.integrations.failures.title': 'Xatoliklar va qayta urinish',
+  'settings.integrations.failures.lead':
+    'Faqat oʻzingizning tiqilib qolgan kiruvchi xabarlaringiz — boshqa kompaniyaniki emas va xabar mazmunining oʻzi hech qachon emas.',
+  'settings.integrations.failures.deadLettered': 'Xatolar navbatida',
+  'settings.integrations.failures.waiting': 'Kutilmoqda',
+  'settings.integrations.failures.column.consumer': 'Ishlovchi',
+  'settings.integrations.failures.column.eventType': 'Hodisa turi',
+  'settings.integrations.failures.column.errorCode': 'Xato kodi',
+  'settings.integrations.failures.column.attempts': 'Urinishlar',
+  'settings.integrations.failures.column.actions': 'Amallar',
+  'settings.integrations.failures.replay': 'Qayta urinish',
+  'settings.integrations.failures.replay.reasonPrompt': 'Ushbu xabarni qayta yuborish sababi:',
+  'settings.integrations.failures.empty': 'Hozircha xato xabarlar yoʻq.',
 };

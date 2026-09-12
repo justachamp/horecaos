@@ -130,6 +130,31 @@ public class KeycloakConfiguration {
         return new KeycloakDeviceClientProvisioner(client, realm, baseUrl);
     }
 
+    /**
+     * ADR 0106's partner-provisioning credential.
+     *
+     * <p>{@code horecaos-partner-provisioning}, not {@code horecaos-provisioning}
+     * and not {@code horecaos-device-provisioning}: a third narrowly-scoped
+     * credential holding {@code manage-clients} alone, the same least-privilege
+     * decision {@code deviceClientProvisioner}'s own doc comment already
+     * records for its sibling. A tenant's partner credential is a different
+     * blast radius from a kitchen device's, so it gets its own realm client
+     * rather than reusing either existing one.
+     */
+    @Bean
+    uz.horecaos.platform.iam.api.partnerclients.PartnerClientProvisioner partnerClientProvisioner(
+            SecretResolver secrets,
+            Clock clock,
+            @Value("${horecaos.keycloak.base-url:http://localhost:8081}") String baseUrl,
+            @Value("${horecaos.keycloak.realm:horecaos}") String realm,
+            @Value("${horecaos.keycloak.partner-provisioning-client-id:horecaos-partner-provisioning}") String clientId,
+            @Value("${horecaos.environment:local}") String environment) {
+
+        RestClient client = authenticatedClient(
+                secrets, clock, baseUrl, realm, clientId, "partner-provisioning-secret", environment);
+        return new KeycloakPartnerClientProvisioner(client, realm);
+    }
+
     private static RestClient authenticatedClient(
             SecretResolver secrets,
             Clock clock,

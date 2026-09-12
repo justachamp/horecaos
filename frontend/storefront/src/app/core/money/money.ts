@@ -44,6 +44,18 @@ export function minorUnitDigits(currency: string): number {
 }
 
 /**
+ * Converts to major units for a boundary that does not understand minor
+ * units at all — GA4's Measurement Protocol ecommerce object (ADR 0106,
+ * gap-map row `10.8e`) is the only caller today. Every other reader of
+ * `Money` in this codebase wants {@link formatAmount}/{@link formatMoney},
+ * which render minor units directly; do not reach for this outside a
+ * third-party contract that defines its own major-unit convention.
+ */
+export function toMajorUnits(value: Money): number {
+  return value.amountMinor / 10 ** minorUnitDigits(value.currency);
+}
+
+/**
  * Renders the amount without a unit: `84 000`, `-1 250,50`.
  *
  * Grouping is done here rather than by `Intl.NumberFormat` so the output does

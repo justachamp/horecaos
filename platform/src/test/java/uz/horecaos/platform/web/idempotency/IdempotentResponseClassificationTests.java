@@ -128,7 +128,16 @@ class IdempotentResponseClassificationTests {
             // needs to see the same code) rather than as a gap: the code
             // expires and is spent on first use regardless of how many times
             // this response is replayed.
-            "TelegramLinkCodeController#issue");
+            "TelegramLinkCodeController#issue",
+            // ADR 0106, gap-map row 10.8c: whether a merchant's own stuck inbox
+            // message was replayed — same "changed"/"outcome" shape as
+            // GrantController#revoke above, never the message's own payload.
+            "OperationsIntegrationFailureController#replay",
+            // ADR 0106, gap-map row 10.8d: whether a partner API client was
+            // revoked. The client's secret never reaches this response —
+            // revoke only ever answers changed/outcome, matching issue's and
+            // rotate's own records for the secret-bearing calls beside it.
+            "PartnerApiClientController#revoke");
 
     @Test
     @DisplayName("every idempotent handler's response is either scannable or reviewed")

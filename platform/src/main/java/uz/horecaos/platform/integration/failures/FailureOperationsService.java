@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -152,6 +153,94 @@ public class FailureOperationsService {
             throw new IllegalStateException("SHA-256 is required", unreachable);
         }
     }
+
+    /**
+     * ADR 0106, gap-map row 10.8c: the operator-legible error taxonomy a
+     * merchant can read about their own tenant, mirroring {@code
+     * FailureTaxonomyController}'s platform-wide counts with one added
+     * predicate — {@code tenant_id = :tenantId} on both queries, never an
+     * optional filter a caller could omit.
+     */
+    public List<TenantCategoryCount> taxonomyForTenant(UUID tenantId) {
+        Map<String, long[]> counts = new java.util.HashMap<>();
+        jdbc.sql("""
+                        SELECT coalesce(error_code, 'UNKNOWN') AS code,
+                               count(*) FILTER (WHERE status = 'DEAD_LETTER') AS dead,
+                               count(*) FILTER (WHERE status IN ('PENDING', 'PUBLISHING')) AS waiting
+                          FROM integration.outbox_events
+                         WHERE tenant_id = :tenantId
+                           AND (error_code IS NOT NULL OR status = 'DEAD_LETTER')
+                         GROUP BY 1
+                        """)
+                .param("tenantId", tenantId)
+                .query(FailureOperationsService::codeCount)
+                .list()
+                .forEach(count -> {
+                    addCount(counts, count.code(), 0, count.dead());
+                    addCount(counts, count.code(), 1, count.waiting());
+                });
+        jdbc.sql("""
+                        SELECT coalesce(last_error_code, 'UNKNOWN') AS code,
+                               count(*) FILTER (WHERE status = 'DEAD_LETTER') AS dead,
+                               count(*) FILTER (WHERE status = 'RETRY_PENDING') AS waiting
+                          FROM integration.inbox_messages
+                         WHERE tenant_id = :tenantId
+                           AND (last_error_code IS NOT NULL OR status = 'DEAD_LETTER')
+                         GROUP BY 1
+                        """)
+                .param("tenantId", tenantId)
+                .query(FailureOperationsService::codeCount)
+                .list()
+                .forEach(count -> {
+                    addCount(counts, count.code(), 2, count.dead());
+                    addCount(counts, count.code(), 3, count.waiting());
+                });
+
+        return Arrays.stream(FailureCategory.values())
+                .map(category -> {
+                    long[] c = counts.getOrDefault(category.name(), new long[4]);
+                    return new TenantCategoryCount(
+                            category.name(),
+                            category.retryableByTimer(),
+                            category.requiresReconciliation(),
+                            category.isSecurityRelevant(),
+                            c[0],
+                            c[1],
+                            c[2],
+                            c[3]);
+                })
+                .toList();
+    }
+
+    private static CodeCount codeCount(java.sql.ResultSet row, int number) throws java.sql.SQLException {
+        return new CodeCount(row.getString("code"), row.getLong("dead"), row.getLong("waiting"));
+    }
+
+    private record CodeCount(String code, long dead, long waiting) {}
+
+    /** Files a count under its category, or UNKNOWN for a code the enum no longer declares. */
+    private static void addCount(Map<String, long[]> counts, String code, int slot, long value) {
+        String key =
+                Arrays.stream(FailureCategory.values()).anyMatch(c -> c.name().equals(code))
+                        ? code
+                        : FailureCategory.UNKNOWN.name();
+        counts.computeIfAbsent(key, ignored -> new long[4])[slot] += value;
+    }
+
+    /**
+     * @param retryableByTimer whether the platform retries it by itself
+     * @param requiresReconciliation whether the provider must be checked before any retry
+     * @param securityRelevant whether it raises a security alert rather than an ordinary one
+     */
+    public record TenantCategoryCount(
+            String code,
+            boolean retryableByTimer,
+            boolean requiresReconciliation,
+            boolean securityRelevant,
+            long outboxDeadLettered,
+            long outboxWaiting,
+            long inboxDeadLettered,
+            long inboxWaiting) {}
 
     public List<FailureSummary> listOutboxFailures(UUID tenantId, String status, int limit) {
         return jdbc.sql("""
@@ -404,6 +493,34 @@ public class FailureOperationsService {
         if (tenantId.isEmpty()) {
             return false;
         }
+        return doRetryInboxMessage(consumerName, eventId, tenantId.get(), actor, reason);
+    }
+
+    /**
+     * ADR 0106: the tenant-scoped "replay my own stuck inbound message"
+     * surface a merchant can call directly, refusing another tenant's message
+     * rather than trusting an optional filter the way the platform-wide list
+     * methods above do. {@code expectedTenantId} comes from the authenticated
+     * path, never from the caller's own claim about which tenant it owns.
+     *
+     * @return false both when nothing was DEAD_LETTER and when the message
+     *         belongs to a different tenant — the same ADR 0031
+     *         not-found-not-forbidden posture {@code FailureOperationsController}
+     *         already applies to its own detail reads, so a merchant probing
+     *         another tenant's event id learns nothing a bare 404 would not
+     */
+    @Transactional
+    public boolean retryInboxMessageForTenant(
+            String consumerName, UUID eventId, UUID expectedTenantId, ActorRef actor, String reason) {
+        Optional<UUID> tenantId = inboxTenant(consumerName, eventId);
+        if (tenantId.isEmpty() || !tenantId.get().equals(expectedTenantId)) {
+            return false;
+        }
+        return doRetryInboxMessage(consumerName, eventId, tenantId.get(), actor, reason);
+    }
+
+    private boolean doRetryInboxMessage(
+            String consumerName, UUID eventId, UUID tenantId, ActorRef actor, String reason) {
 
         int updated = jdbc.sql("""
                 UPDATE integration.inbox_messages
@@ -423,7 +540,7 @@ public class FailureOperationsService {
         if (updated == 1) {
             record(
                     "integration.inbox.retried",
-                    tenantId.get(),
+                    tenantId,
                     "InboxMessage",
                     eventId,
                     actor,

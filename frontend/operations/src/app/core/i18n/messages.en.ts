@@ -3423,6 +3423,86 @@ export const messagesEn = {
   'shared.matrixGrid.toggleRow': 'Toggle every cell in this row',
   'shared.matrixGrid.toggleColumn': 'Toggle every cell in this column',
   'shared.matrixGrid.unavailable': 'Not available on this channel',
+  // --- shared/ui q-secret-input (ADR 0106, gap-map row X.14) --------------
+  // Reveal-once **at entry** only — never a value the server returned, since
+  // no surface this platform exposes ever returns one (ADR 0028).
+  'secretInput.reveal': 'Show',
+  'secretInput.hide': 'Hide',
+  'secretInput.configured': 'Configured',
+  'secretInput.notConfigured': 'Not set',
+  'secretInput.copyReference': 'Copy reference',
+  'secretInput.copied': 'Copied',
+  'secretInput.rotate': 'Rotate',
+  'secretInput.lastRotated': 'Last rotated',
+  'secretInput.lastUsed': 'Last used',
+  'secretInput.neverUsed': 'Never',
+
+  // --- settings/integrations installation detail (ADR 0106, row 10.8a) ---
+  'settings.integrations.detail.manage': 'Manage',
+  'settings.integrations.detail.title': 'Installation details',
+  'settings.integrations.detail.credential': 'Credential',
+  'settings.integrations.detail.reconcile.title': 'Connection check',
+  'settings.integrations.detail.reconcile.action': 'Check now',
+  'settings.integrations.detail.reconcile.running': 'Checking…',
+  'settings.integrations.detail.reconcile.status': 'Status',
+  'settings.integrations.detail.reconcile.adapter': 'Adapter version',
+  'settings.integrations.detail.bindings.title': 'Bindings',
+  'settings.integrations.detail.bindings.loading': 'Loading…',
+  'settings.integrations.detail.bindings.column.scope': 'Applies to',
+  'settings.integrations.detail.bindings.column.status': 'Status',
+  'settings.integrations.detail.bindings.column.actions': 'Actions',
+  'settings.integrations.detail.bindings.activate': 'Activate',
+  'settings.integrations.detail.bindings.activate.reasonPrompt': 'Reason for bringing this binding live:',
+  'settings.integrations.detail.bindings.suspend': 'Suspend',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Reason for suspending this binding:',
+  'settings.integrations.detail.bindings.empty': 'No bindings yet.',
+  'settings.integrations.detail.bindings.wholeTenant': 'Entire company',
+  'settings.integrations.detail.cloposSettings.title': 'Order acceptance',
+  'settings.integrations.detail.cloposSettings.requireClerkApproval':
+    'A clerk must still accept an exported order',
+  'settings.integrations.detail.cloposSettings.hint':
+    'Turn this off once Clopos orders may be accepted automatically, with no till confirmation.',
+  'settings.integrations.detail.partnerClients.title': 'Partner API clients',
+  'settings.integrations.detail.partnerClients.issue': 'Issue a client',
+  'settings.integrations.detail.partnerClients.issue.labelPrompt':
+    'A name for this client (for your own reference):',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Reason for issuing this client:',
+  'settings.integrations.detail.partnerClients.issuedOnce':
+    'Copy this secret now — it will not be shown again:',
+  'settings.integrations.detail.partnerClients.issuedDismiss': 'I have copied it',
+  'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
+  'settings.integrations.detail.partnerClients.revoke': 'Revoke',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Reason for revoking this client:',
+  'settings.integrations.detail.partnerClients.empty': 'No partner API clients issued yet.',
+
+  // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------
+  'settings.integrations.liveness.title': 'Marketplace liveness',
+  'settings.integrations.liveness.lead':
+    'When each channel last delivered — a dead integration produces no errors, so this is the only place a quiet channel becomes visible.',
+  'settings.integrations.liveness.column.provider': 'Provider',
+  'settings.integrations.liveness.column.direction': 'Direction',
+  'settings.integrations.liveness.column.lastSuccess': 'Last success',
+  'settings.integrations.liveness.column.silence': 'Silent for',
+  'settings.integrations.liveness.column.alert': 'Status',
+  'settings.integrations.liveness.empty': 'No marketplace bindings yet.',
+  'settings.integrations.liveness.never': 'Never',
+  'settings.integrations.liveness.noneYet': '— (nothing has arrived yet)',
+  'settings.integrations.liveness.silenceMinutes': '{minutes} min',
+
+  // --- settings/integrations tenant failure surface (ADR 0106, row 10.8c) -
+  'settings.integrations.failures.title': 'Failures and replay',
+  'settings.integrations.failures.lead':
+    'Your own stuck inbound messages — never another tenant’s, and never the message payload itself.',
+  'settings.integrations.failures.deadLettered': 'Dead-lettered',
+  'settings.integrations.failures.waiting': 'Waiting',
+  'settings.integrations.failures.column.consumer': 'Consumer',
+  'settings.integrations.failures.column.eventType': 'Event type',
+  'settings.integrations.failures.column.errorCode': 'Error code',
+  'settings.integrations.failures.column.attempts': 'Attempts',
+  'settings.integrations.failures.column.actions': 'Actions',
+  'settings.integrations.failures.replay': 'Replay',
+  'settings.integrations.failures.replay.reasonPrompt': 'Reason for replaying this message:',
+  'settings.integrations.failures.empty': 'No failed messages right now.',
 } as const;
 
 /** Every key the application may ask for. Derived, never hand-maintained. */

@@ -694,6 +694,21 @@ public enum Capability {
     INTEGRATION_BINDING_ACTIVATE("integration.binding.activate", "integration", "binding.activate"),
 
     /**
+     * ADR 0106: issuing, listing, rotating or revoking a {@code
+     * partner.api_clients} row — the OAuth 2.0 {@code client_credentials}
+     * credential an aggregator authenticates inbound traffic with.
+     *
+     * <p>Deliberately not folded into {@link #INTEGRATION_INSTALLATION_MANAGE}:
+     * that capability configures how the platform calls *out* to a provider,
+     * while this one hands a third party the means to authenticate *in* as
+     * that tenant. A role built for "configure my POS" should not thereby be
+     * able to mint an aggregator credential — a different blast radius, the
+     * same reasoning that already keeps {@link #INTEGRATION_TELEGRAM_LINK_ISSUE}
+     * separate from it.
+     */
+    PARTNER_API_CLIENT_MANAGE("partner.api-client.manage", "partner", "api-client.manage"),
+
+    /**
      * ADR 0058: issuing a short-lived {@code /link <code>} for the Telegram
      * group-linking handshake.
      *

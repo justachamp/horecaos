@@ -294,6 +294,98 @@ export const settingsPaths = {
     return `${this.integrationInstallations(scope)}/${enc(installationId)}/bindings`;
   },
 
+  /**
+   * `OperationsProviderInstallationController.activateBinding` — ADR 0106,
+   * gap-map row 10.8a. The controller's own doc says a binding is created
+   * SUSPENDED (see {@link integrationInstallationBindings}'s POST); before
+   * this wave nothing in this app ever called the one endpoint that brings
+   * it live, so a tenant could connect and bind a provider and never
+   * activate what they had just created.
+   */
+  integrationInstallationBindingActivate(
+    scope: LocationScope,
+    installationId: string,
+    bindingId: string,
+  ): string {
+    return `${this.integrationInstallationBindings(scope, installationId)}/${enc(bindingId)}/activate`;
+  },
+
+  /** `OperationsProviderInstallationController.suspendBinding` — the rollback path beside it. */
+  integrationInstallationBindingSuspend(
+    scope: LocationScope,
+    installationId: string,
+    bindingId: string,
+  ): string {
+    return `${this.integrationInstallationBindings(scope, installationId)}/${enc(bindingId)}/suspend`;
+  },
+
+  /**
+   * `OperationsProviderInstallationController.reconcileCapabilities` — ADR
+   * 0106, gap-map row 10.8a and row X.14: records a fresh preflight (the
+   * secret resolves, the wired adapter declares each capability) and, since
+   * this wave, stamps `secretLastUsedAt` on success.
+   */
+  integrationInstallationCapabilityReconciliation(
+    scope: LocationScope,
+    installationId: string,
+  ): string {
+    return `${this.integrationInstallations(scope)}/${enc(installationId)}/capability-reconciliation`;
+  },
+
+  /**
+   * `OperationsProviderInstallationController.settings`/`updateSettings` —
+   * ADR 0106, gap-map row 10.8a. Today's one field is Clopos's own
+   * order-acceptance toggle (Q7); refused for any other provider type, so
+   * the console only renders this for a `clopos` installation.
+   */
+  integrationInstallationSettings(scope: LocationScope, installationId: string): string {
+    return `${this.integrationInstallations(scope)}/${enc(installationId)}/settings`;
+  },
+
+  /**
+   * `MarketplaceOperationsController.liveness` — ADR 0106, gap-map row
+   * 10.8c: the locations-by-bindings liveness matrix, built before this wave
+   * and never rendered anywhere in this app.
+   */
+  marketplaceLiveness(scope: LocationScope): string {
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/marketplace/liveness`;
+  },
+
+  /**
+   * `OperationsIntegrationFailureController` — ADR 0106, gap-map row 10.8c: a
+   * merchant's own error taxonomy and inbox replay, tenant-checked rather
+   * than trusting an optional filter the platform-wide surface accepts.
+   */
+  integrationFailureTaxonomy(scope: LocationScope): string {
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/integrations/failures/taxonomy`;
+  },
+
+  integrationFailureInbox(scope: LocationScope): string {
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/integrations/failures/inbox`;
+  },
+
+  integrationFailureReplay(scope: LocationScope, consumerName: string, eventId: string): string {
+    return `${this.integrationFailureInbox(scope)}/${enc(consumerName)}/${enc(eventId)}/replay`;
+  },
+
+  /**
+   * `PartnerApiClientController` — ADR 0106, gap-map row 10.8d: issue, list,
+   * rotate and revoke a `partner.api_clients` credential over a real
+   * Keycloak `client_credentials` client. Only meaningful for a `MARKETPLACE`
+   * installation (the controller itself refuses any other category).
+   */
+  partnerApiClients(scope: LocationScope, installationId: string): string {
+    return `${this.integrationInstallations(scope)}/${enc(installationId)}/partner-clients`;
+  },
+
+  partnerApiClientRotate(scope: LocationScope, installationId: string, clientId: string): string {
+    return `${this.partnerApiClients(scope, installationId)}/${enc(clientId)}/secret-rotations`;
+  },
+
+  partnerApiClientRevoke(scope: LocationScope, installationId: string, clientId: string): string {
+    return `${this.partnerApiClients(scope, installationId)}/${enc(clientId)}`;
+  },
+
   /** `MerchantBindingController` — already operations surface (ADR 0065's one resolved tension). */
   merchantBindings(scope: LocationScope): string {
     return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/merchant-bindings`;

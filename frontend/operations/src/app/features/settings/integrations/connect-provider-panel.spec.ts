@@ -16,8 +16,13 @@ const TELEGRAM: ProviderConnectDeclaration = {
 const CLICK: ProviderConnectDeclaration = {
   providerType: 'CLICK',
   category: 'PAYMENT',
+  // Mirrors ConnectFieldCatalog's own CLICK declaration exactly (merchantId,
+  // serviceId, secretKey) — the "leaves serviceId blank and still holds its
+  // position" test below depends on there being a second non-secret field to
+  // leave blank.
   fields: [
     { key: 'merchantId', secret: false },
+    { key: 'serviceId', secret: false },
     { key: 'secretKey', secret: true },
   ],
 };
@@ -207,12 +212,16 @@ describe('ConnectProviderPanel', () => {
 
     submitButton().click();
 
+    // serviceId is left blank and still holds its position (ADR 0106): the
+    // server splits this same string back apart by position against
+    // ConnectFieldCatalog's own field order, so a dropped blank field would
+    // shift every later field left.
     expect(connect).toHaveBeenCalledWith({
       providerType: 'CLICK',
       category: 'PAYMENT',
       displayName: 'Click prod',
       environmentCode: 'click-prod',
-      reference: 'merchant-42',
+      reference: 'merchant-42/',
       secretValue: 'super-secret',
     } satisfies ConnectSubmission);
   });
@@ -329,7 +338,10 @@ describe('ConnectProviderPanel', () => {
 
       bindSubmitButton().click();
 
-      expect(bind).toHaveBeenCalledWith({ brandId: 'brand-1', locationId: null } satisfies BindSubmission);
+      expect(bind).toHaveBeenCalledWith({
+        brandId: 'brand-1',
+        locationId: null,
+      } satisfies BindSubmission);
     });
 
     it('re-narrows the location list and clears the old selection when the brand changes', async () => {
