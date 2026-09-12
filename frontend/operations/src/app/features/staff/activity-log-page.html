@@ -31,7 +31,11 @@
       </button>
     </div>
 
-    <select class="range-select" [value]="rangeDays()" (change)="setRangeDays($any($event.target).valueAsNumber ?? 7)">
+    <select
+      class="range-select"
+      [value]="rangeDays()"
+      (change)="setRangeDays($any($event.target).valueAsNumber ?? 7)"
+    >
       <option [value]="1">{{ 'staff.activity.range.today' | t }}</option>
       <option [value]="7">{{ 'staff.activity.range.7d' | t }}</option>
       <option [value]="30">{{ 'staff.activity.range.30d' | t }}</option>
@@ -40,11 +44,17 @@
     <input
       type="text"
       class="text-filter"
+      list="activity-known-people"
       [value]="actorFilter()"
       (input)="onActorInput($any($event.target).value)"
       (change)="applyTextFilters()"
       [placeholder]="'staff.activity.filter.actor' | t"
     />
+    <datalist id="activity-known-people">
+      @for (person of knownPeople(); track person.subject) {
+        <option [value]="person.subject">{{ person.display }}</option>
+      }
+    </datalist>
     <input
       type="text"
       class="text-filter"
@@ -52,6 +62,46 @@
       (input)="onCorrelationInput($any($event.target).value)"
       (change)="applyTextFilters()"
       [placeholder]="'staff.activity.filter.correlation' | t"
+    />
+
+    <select
+      class="range-select"
+      [value]="outcomeFilter()"
+      (change)="setOutcomeFilter($any($event.target).value)"
+    >
+      <option value="ALL">{{ 'staff.activity.filter.outcomeAll' | t }}</option>
+      <option value="SUCCEEDED">{{ 'staff.activity.filter.outcomeSucceeded' | t }}</option>
+      <option value="REJECTED">{{ 'staff.activity.filter.outcomeRejected' | t }}</option>
+      <option value="FAILED">{{ 'staff.activity.filter.outcomeFailed' | t }}</option>
+    </select>
+
+    <select
+      class="range-select"
+      [value]="scopeTypeFilter()"
+      (change)="setScopeTypeFilter($any($event.target).value)"
+    >
+      <option value="ALL">{{ 'staff.activity.filter.scopeTypeAll' | t }}</option>
+      <option value="PLATFORM">{{ 'staff.activity.scope.platform' | t }}</option>
+      <option value="TENANT">{{ 'staff.approvals.scope.tenant' | t }}</option>
+      <option value="BRAND">{{ 'staff.scope.brand' | t }}</option>
+      <option value="LOCATION">{{ 'staff.scope.location' | t }}</option>
+    </select>
+
+    <input
+      type="text"
+      class="text-filter"
+      [value]="scopeIdFilter()"
+      (input)="onScopeIdInput($any($event.target).value)"
+      (change)="applyTextFilters()"
+      [placeholder]="'staff.activity.filter.scopeId' | t"
+    />
+    <input
+      type="text"
+      class="text-filter"
+      [value]="targetIdFilter()"
+      (input)="onTargetIdInput($any($event.target).value)"
+      (change)="applyTextFilters()"
+      [placeholder]="'staff.activity.filter.target' | t"
     />
   </div>
 
@@ -86,13 +136,19 @@
             <tr class="row" (click)="openEvent(event)">
               <td class="q-body-sm q-mono">{{ event.recordedAt }}</td>
               <td class="q-body-sm">
-                <span class="actor-icon" [class]="'actor-icon--' + event.actorType.toLowerCase()"></span>
+                <span
+                  class="actor-icon"
+                  [class]="'actor-icon--' + event.actorType.toLowerCase()"
+                ></span>
                 {{ actorLabel(event) }}
               </td>
-              <td class="q-body-sm q-mono">{{ event.actionCode }}</td>
+              <td class="q-body-sm" [title]="event.actionCode">{{ actionLabel(event) }}</td>
               <td class="q-body-sm">{{ scopeLabel(event) }}</td>
               <td class="q-body-sm">
-                <span class="outcome-badge" [class]="'outcome-badge--' + event.outcome.toLowerCase()">
+                <span
+                  class="outcome-badge"
+                  [class]="'outcome-badge--' + event.outcome.toLowerCase()"
+                >
                   {{ event.outcome }}
                 </span>
               </td>
@@ -109,17 +165,27 @@
                       <span class="q-caption">{{ 'staff.activity.detail.correlationId' | t }}</span>
                       <span class="q-body-sm q-mono">{{ detail.correlationId }}</span>
                       <span class="q-caption">{{ 'staff.activity.detail.target' | t }}</span>
-                      <span class="q-body-sm">{{ detail.targetType ?? '—' }} · {{ detail.targetId ?? '—' }}</span>
+                      <span class="q-body-sm"
+                        >{{ detail.targetType ?? '—' }} · {{ detail.targetId ?? '—' }}</span
+                      >
                       <span class="q-caption">{{ 'staff.activity.detail.capability' | t }}</span>
                       <span class="q-body-sm q-mono">{{ detail.capabilityUsed ?? '—' }}</span>
                     </div>
+                    @if (openEventIsPartOfBulk()) {
+                      <button type="button" class="bulk-chip" (click)="viewBulkBatch()">
+                        {{ 'staff.activity.detail.partOfBulk' | t }} —
+                        {{ 'staff.activity.detail.viewBulk' | t }}
+                      </button>
+                    }
                     @if (changeEntries(detail).length > 0) {
                       <div class="diff">
                         <span class="q-caption">{{ 'staff.activity.detail.changes' | t }}</span>
                         @for (entry of changeEntries(detail); track entry[0]) {
                           <div class="diff-row">
                             <span class="q-body-sm q-mono diff-row__field">{{ entry[0] }}</span>
-                            <span class="q-body-sm diff-row__value">{{ formatFieldChange(entry[1]) }}</span>
+                            <span class="q-body-sm diff-row__value">{{
+                              formatFieldChange(entry[1])
+                            }}</span>
                           </div>
                         }
                       </div>
@@ -140,6 +206,16 @@
           }
         </tbody>
       </table>
+      @if (nextCursor()) {
+        <button
+          type="button"
+          class="secondary load-more"
+          [disabled]="loadingMore()"
+          (click)="loadMore()"
+        >
+          {{ (loadingMore() ? 'staff.activity.loadingMore' : 'staff.activity.loadMore') | t }}
+        </button>
+      }
     }
   }
 </div>
