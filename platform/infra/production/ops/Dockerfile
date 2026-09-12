@@ -11,7 +11,7 @@
 # PostgreSQL client version as the server they are talking to, because both come
 # from the same upstream image.
 
-FROM minio/mc:RELEASE.2025-07-21T05-28-08Z AS mc
+FROM quay.io/minio/mc:RELEASE.2025-07-21T05-28-08Z AS mc
 
 FROM postgres:18-alpine
 
