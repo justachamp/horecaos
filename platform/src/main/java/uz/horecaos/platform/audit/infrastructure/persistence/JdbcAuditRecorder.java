@@ -9,7 +9,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
-import uz.horecaos.platform.audit.domain.ChangeDocuments;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 
 /**
  * Writes audit evidence in the caller's transaction (ADR 0027).

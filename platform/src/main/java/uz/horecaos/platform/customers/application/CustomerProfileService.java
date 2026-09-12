@@ -613,7 +613,7 @@ public class CustomerProfileService {
      * transaction as the decrypt it precedes.
      *
      * <p>{@code revealedCount} rather than {@code addressesRevealed} or
-     * {@code contactPointsRevealed}: {@link uz.horecaos.platform.audit.domain.ChangeDocuments}
+     * {@code contactPointsRevealed}: {@link uz.horecaos.platform.audit.api.ChangeDocuments}
      * redacts any change-document field whose name merely contains a protected
      * term such as "address", and a count sitting behind {@code [redacted]}
      * would defeat its own point. The action code already says what kind of

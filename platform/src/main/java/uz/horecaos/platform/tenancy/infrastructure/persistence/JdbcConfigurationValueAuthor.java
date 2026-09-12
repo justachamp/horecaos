@@ -167,7 +167,7 @@ public class JdbcConfigurationValueAuthor implements ConfigurationValueAuthor {
         // AuditFact.changeDocument() runs the map through Map.copyOf, which
         // rejects a null value at the top level — so "the field was previously
         // unset" (a legitimate, distinct fact from "the field was zero") has to
-        // live inside a non-null container, the same way audit.domain.ChangeDocuments
+        // live inside a non-null container, the same way audit.api.ChangeDocuments
         // nests before/after under one submap rather than two nullable top-level
         // entries. That class lives in audit's internal domain package, not its
         // api, so this builds the same shape by hand rather than importing it.

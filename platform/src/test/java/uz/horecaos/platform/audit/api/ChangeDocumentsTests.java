@@ -1,4 +1,4 @@
-package uz.horecaos.platform.audit.domain;
+package uz.horecaos.platform.audit.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

@@ -1,4 +1,4 @@
-package uz.horecaos.platform.audit.domain;
+package uz.horecaos.platform.audit.api;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
