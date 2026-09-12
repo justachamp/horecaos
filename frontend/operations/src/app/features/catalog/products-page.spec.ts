@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { of, throwError } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -83,8 +83,53 @@ describe('ProductsPage', () => {
     const harness = await RouterTestingHarness.create('/catalog/products');
     await flushMicrotasks();
 
-    const rows = harness.routeNativeElement!.querySelectorAll('[data-testid="product-row"]');
+    const rows = harness.routeNativeElement!.querySelectorAll('[data-testid="dt-row"]');
     expect(rows.length).toBe(2);
+  });
+
+  it('pages through the cursor via q-data-table’s load-more, appending to the loaded rows', async () => {
+    const listProducts = vi
+      .fn()
+      .mockReturnValueOnce(
+        of({ items: [product({ productId: 'p1', name: 'Плов' })], nextCursor: 'cursor-1' }),
+      )
+      .mockReturnValueOnce(
+        of({ items: [product({ productId: 'p2', name: 'Лагман' })], nextCursor: null }),
+      );
+    configure({ listCatalogs: () => of(FAKE_CATALOGS), listProducts });
+
+    const harness = await RouterTestingHarness.create('/catalog/products');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    expect(host.querySelectorAll('[data-testid="dt-row"]').length).toBe(1);
+    const loadMore = host.querySelector('[data-testid="dt-load-more"]') as HTMLButtonElement;
+    expect(loadMore).toBeTruthy();
+
+    loadMore.click();
+    await flushMicrotasks();
+
+    expect(listProducts).toHaveBeenCalledTimes(2);
+    expect(host.querySelectorAll('[data-testid="dt-row"]').length).toBe(2);
+    expect(host.textContent).toContain('Лагман');
+    expect(host.querySelector('[data-testid="dt-load-more"]')).toBeFalsy();
+  });
+
+  it('opens a product on a row click', async () => {
+    configure({
+      listCatalogs: () => of(FAKE_CATALOGS),
+      listProducts: () =>
+        of({ items: [product({ productId: 'p1', name: 'Плов' })], nextCursor: null }),
+    });
+
+    const harness = await RouterTestingHarness.create('/catalog/products');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="dt-row"]') as HTMLElement).click();
+    await flushMicrotasks();
+
+    expect(TestBed.inject(Router).url).toBe('/catalog/products/p1');
   });
 
   it('renders the empty state naming the missing catalog when the brand has none yet', async () => {

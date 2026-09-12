@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
@@ -8,6 +15,8 @@ import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { QCellDef, DataTable } from '../../shared/ui/data-table/data-table';
+import { DataTableColumn } from '../../shared/ui/data-table/data-table-types';
 import { CatalogApi } from './catalog-api';
 import { CatalogSummary, ProductSummary } from './catalog-domain';
 import { CreateProductDialog, CreateProductSubmission } from './create-product-dialog';
@@ -35,7 +44,7 @@ type StatusTab = 'ALL' | 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | 'NO_MXIK';
  */
 @Component({
   selector: 'q-products-page',
-  imports: [TPipe, CreateProductDialog],
+  imports: [TPipe, CreateProductDialog, DataTable, QCellDef],
   templateUrl: './products-page.html',
   styleUrl: './products-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -44,7 +53,21 @@ export class ProductsPage implements OnInit {
   private readonly api = inject(CatalogApi);
   private readonly brand = inject(CurrentBrand);
   private readonly router = inject(Router);
-  private readonly i18n = inject(I18n);
+  protected readonly i18n = inject(I18n);
+
+  protected readonly columns = computed<readonly DataTableColumn[]>(() => {
+    this.i18n.locale();
+    return [
+      { key: 'name', header: this.i18n.t('catalog.products.column.name') },
+      { key: 'code', header: this.i18n.t('catalog.products.column.code') },
+      { key: 'variants', header: this.i18n.t('catalog.products.column.variants'), numeric: true },
+      { key: 'categories', header: this.i18n.t('catalog.products.column.categories') },
+      { key: 'mxik', header: this.i18n.t('catalog.products.column.mxik') },
+      { key: 'status', header: this.i18n.t('catalog.products.column.status') },
+    ];
+  });
+
+  protected readonly rowIdFn = (product: ProductSummary): string => product.productId;
 
   protected readonly firstLoadComplete = signal(false);
   protected readonly loadingMore = signal(false);
@@ -204,6 +227,10 @@ export class ProductsPage implements OnInit {
 
   protected openProduct(productId: string): void {
     void this.router.navigate(['/catalog/products', productId]);
+  }
+
+  protected onRowClick(product: ProductSummary): void {
+    this.openProduct(product.productId);
   }
 
   protected severityCaption(product: ProductSummary): string | null {
