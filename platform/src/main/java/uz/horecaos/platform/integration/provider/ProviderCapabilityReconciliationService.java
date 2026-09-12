@@ -118,6 +118,7 @@ public class ProviderCapabilityReconciliationService {
                        last_connection_check_at = :checkedAt,
                        last_connection_status = :connectionStatus,
                        last_connection_evidence = :evidence,
+                       secret_last_used_at = CASE WHEN :succeeded THEN :checkedAt ELSE secret_last_used_at END,
                        version = version + 1,
                        updated_at = now()
                  WHERE tenant_id = :tenantId AND id = :installationId
@@ -127,6 +128,12 @@ public class ProviderCapabilityReconciliationService {
                 .param("checkedAt", checkedAt)
                 .param("connectionStatus", preflight.succeeded() ? "SUCCEEDED" : "FAILED")
                 .param("evidence", preflight.evidence())
+                // ADR 0106, gap-map row X.14: the one call site this wave stamps
+                // secret_last_used_at from — a resolved secret is the one fact this
+                // preflight can prove without an external effect. See the service's
+                // own class doc and ADR 0106's Consequences for what this narrower
+                // definition does not prove (a live provider call).
+                .param("succeeded", preflight.succeeded())
                 .param("tenantId", tenantId)
                 .param("installationId", installationId)
                 .update();

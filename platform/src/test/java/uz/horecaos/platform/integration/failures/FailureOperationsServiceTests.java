@@ -210,6 +210,81 @@ class FailureOperationsServiceTests {
                 .isEmpty();
     }
 
+    /**
+     * ADR 0106, gap-map row 10.8c: the merchant-scoped replay the platform-wide
+     * {@link FailureOperationsService#retryInboxMessage} does not itself
+     * provide — that method trusts whichever tenant the message resolves to
+     * and never checks it against a caller's claim. A test that only replayed
+     * the caller's own message would still pass if the tenant check were
+     * missing entirely; the refusal below is what makes the isolation real.
+     */
+    @Test
+    void replayForTenantRefusesAnotherTenantsMessageExactlyLikeItDoesNotExist() {
+        UUID theirs = deadLetteredInboxMessage(CONSUMER);
+        jdbc.sql("UPDATE integration.inbox_messages SET tenant_id = :tenantId WHERE event_id = :id")
+                .param("tenantId", OTHER_TENANT)
+                .param("id", theirs)
+                .update();
+
+        boolean replayed = operations.retryInboxMessageForTenant(CONSUMER, theirs, TENANT, OPERATOR, "not my tenant");
+
+        assertThat(replayed).isFalse();
+        assertThat(jdbc.sql("SELECT status FROM integration.inbox_messages WHERE event_id = :id")
+                        .param("id", theirs)
+                        .query(String.class)
+                        .single())
+                .as("the other tenant's row is untouched")
+                .isEqualTo("DEAD_LETTER");
+    }
+
+    @Test
+    void replayForTenantRetriesTheCallersOwnMessage() {
+        UUID mine = deadLetteredInboxMessage(CONSUMER);
+
+        boolean replayed =
+                operations.retryInboxMessageForTenant(CONSUMER, mine, TENANT, OPERATOR, "provider recovered");
+
+        assertThat(replayed).isTrue();
+        assertThat(jdbc.sql("SELECT status FROM integration.inbox_messages WHERE event_id = :id")
+                        .param("id", mine)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("RETRY_PENDING");
+    }
+
+    /**
+     * A test that only checked the total count moved would still pass if the
+     * tenant predicate were dropped from one of the two underlying queries —
+     * the cross-tenant assertion is what makes this one mean something.
+     */
+    @Test
+    void tenantTaxonomyCountsOnlyThisTenantsFailures() {
+        deadLetteredInboxMessage(CONSUMER);
+        UUID theirs = deadLetteredInboxMessage(OTHER_CONSUMER);
+        jdbc.sql("UPDATE integration.inbox_messages SET tenant_id = :tenantId WHERE event_id = :id")
+                .param("tenantId", OTHER_TENANT)
+                .param("id", theirs)
+                .update();
+
+        var taxonomy = operations.taxonomyForTenant(TENANT);
+
+        var transientInfra = taxonomy.stream()
+                .filter(row -> row.code().equals("TRANSIENT_INFRASTRUCTURE"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(transientInfra.inboxDeadLettered())
+                .as("this tenant's one dead-lettered message, not both tenants' two")
+                .isEqualTo(1L);
+
+        var otherTenantTaxonomy = operations.taxonomyForTenant(OTHER_TENANT);
+        assertThat(otherTenantTaxonomy.stream()
+                        .filter(row -> row.code().equals("TRANSIENT_INFRASTRUCTURE"))
+                        .findFirst()
+                        .orElseThrow()
+                        .inboxDeadLettered())
+                .isEqualTo(1L);
+    }
+
     @Test
     void neitherProjectionCarriesThePayload() {
         // Structural rather than serialisation-level, so it survives a change of
