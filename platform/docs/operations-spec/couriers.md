@@ -729,18 +729,27 @@ Short list plus a modal form. This is configuration, edited monthly.
 | Maximum distance | metres | `distance_band_to` |
 | Max concurrent assignments | integer | `courier_types.max_concurrent_assignments` |
 | Offer TTL | seconds | `courier_types.offer_ttl_seconds` |
+| Starting minute | minutes, 0-1440 | `courier_types.starting_minute_offset` (ADR 0108, V0259) |
+| Work mode | select: Shift, On demand | `courier_types.work_mode` (ADR 0108, V0259) |
 | Max load | text or enum | **not built, no ADR** — see §16, the *gabarit* gap |
 
 List columns: name, vehicle class, distance band, max concurrent, offer TTL, courier
 count (clickable, jumps to the courier list filtered to this type).
 
-Delever's Courier Type also carries `Начальная минута` and `Режим работы`, neither of
-which is defined anywhere in its documentation. **Do not reproduce them.** The plausible
-readings — offer timing and a work mode — are already covered by `offer_ttl_seconds` and
-by the shift model, and copying an undefined field imports the ambiguity.
+**Corrected 2026-09-12 (T16, ADR 0108).** This section used to say Delever's
+`Начальная минута` and `Режим работы` were undefined and should not be reproduced. The
+operations gap map (3.4a) asked for them anyway, so ADR 0108 gives each a narrow, closed
+definition instead of copying Delever's open one: *starting minute* is the number of
+minutes after a shift opens before a courier of that type begins earning its
+`PER_SHIFT_FIXED` component; *work mode* is `SHIFT` (the ordinary model this section
+already describes) or `ON_DEMAND` (dispatched without an open shift, for a vehicle class
+the tenant brings in ad hoc). Both are captured and rendered now; neither is read yet by
+the accrual calculator or `CourierDispatchGate` — ADR 0108 records wiring them as an open
+input rather than pretending a captured value is enforced.
 
 Actions: create, edit, deactivate (blocked while couriers reference it — the dialog names
-them and links to them).
+them and links to them). Edit and deactivate (as an archive, never a delete) both now
+exist — ADR 0108 closes the create-only gap the operations gap map found.
 
 ---
 
@@ -1099,8 +1108,6 @@ missing.
 
 ### Skip, with the reason
 - **Courier billing mode / prepaid float** — refused by ADR 0042, see §16.
-- **`Начальная минута` and `Режим работы` on Courier Type** — undefined in Delever's own
-  documentation; the plausible meanings are already covered.
 - **Courier mobile-app screens** (profile, earnings, daily report, order history,
   bonus-paid visibility) — a separate deployable. Operations configures and previews it;
   it does not contain it.
