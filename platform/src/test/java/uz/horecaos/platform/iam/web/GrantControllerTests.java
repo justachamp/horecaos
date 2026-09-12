@@ -18,6 +18,7 @@ import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.TenantOrganizationDirectory;
 import uz.horecaos.platform.iam.api.TenantRoleCatalog;
+import uz.horecaos.platform.iam.application.AccessCheckService;
 import uz.horecaos.platform.iam.application.GrantManagementService;
 
 /** The two reads added for staff-and-access.md's Люди and Должности screens, and the IA 7.3 debugger. */
@@ -26,7 +27,11 @@ class GrantControllerTests {
     private final GrantManagementService grants = mock(GrantManagementService.class);
     private final AuthorizationService authorization = mock(AuthorizationService.class);
     private final GrantController controller = new GrantController(
-            grants, authorization, mock(CurrentActor.class), mock(TenantOrganizationDirectory.class));
+            grants,
+            authorization,
+            mock(AccessCheckService.class),
+            mock(CurrentActor.class),
+            mock(TenantOrganizationDirectory.class));
 
     @Test
     void listDefaultsToActiveOnlyAndForwardsTheFlagOtherwise() {

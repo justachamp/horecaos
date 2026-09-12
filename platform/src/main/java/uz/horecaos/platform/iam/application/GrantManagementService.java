@@ -409,6 +409,41 @@ public class GrantManagementService {
                 .list();
     }
 
+    /**
+     * One subject's active grants that carry a named capability, anywhere in
+     * this tenant — the reason chain Staff 9.5's access check reads: not just
+     * whether the covering scope has it, but every scope this subject holds it
+     * at, so a negative answer can point at the grant that almost worked
+     * ("she has this job, but only at Chilonzor branch") instead of a bare no.
+     *
+     * <p>Unlike {@link #listForTenant}, this is one subject's rows only, and it
+     * joins through {@code iam.role_capabilities} rather than filtering a
+     * tenant's whole grant list client-side — the same join {@code
+     * JdbcAuthorizationService#SELECT_GRANTS} already uses to answer {@code
+     * has()}, so the two never disagree about which grants carry a capability.
+     */
+    public List<GrantView> grantsCarrying(UUID tenantId, String subject, Capability capability) {
+        return jdbc.sql("""
+                SELECT g.id, g.principal_subject, r.code AS role_code, g.scope_type, g.scope_id,
+                       g.status, g.granted_by, g.reason, g.valid_from, g.valid_until,
+                       g.revoked_at, g.revoked_by, g.revoked_reason
+                  FROM iam.grants g
+                  JOIN iam.roles r ON r.id = g.role_id
+                  JOIN iam.role_capabilities rc ON rc.role_id = r.id
+                 WHERE g.principal_subject = :subject
+                   AND rc.capability_code = :capabilityCode
+                   AND g.status = 'ACTIVE'
+                   AND r.status = 'ACTIVE'
+                   AND (g.scope_type = 'PLATFORM' OR g.tenant_id = :tenantId)
+                 ORDER BY g.created_at DESC
+                """)
+                .param("subject", subject)
+                .param("capabilityCode", capability.code())
+                .param("tenantId", tenantId)
+                .query(GrantManagementService::toGrantView)
+                .list();
+    }
+
     /** The active {@code PLATFORM}-scope grants (Gap A), for the console that authors them. */
     public List<GrantView> listPlatformGrants() {
         return jdbc.sql("""
