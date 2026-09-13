@@ -144,8 +144,7 @@ class OperationsOrderCompletionHttpTests {
         // actually delivered it, which is exactly the gap the order detail
         // pane (wave P09) closes by resolving a real reasonId first whenever
         // the registry has one to offer.
-        assertThat(jdbc.sql(
-                        "SELECT system_category, reason_id FROM ordering.order_outcomes WHERE order_id = :id")
+        assertThat(jdbc.sql("SELECT system_category, reason_id FROM ordering.order_outcomes WHERE order_id = :id")
                         .param("id", orderId)
                         .query((row, n) -> new Object[] {row.getString("system_category"), row.getObject("reason_id")})
                         .single())
