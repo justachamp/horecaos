@@ -1,0 +1,36 @@
+<q-board>
+  @for (col of columns(); track col.columnId) {
+    <q-board-column
+      [columnId]="col.columnId"
+      [titleText]="col.titleText"
+      [current]="col.current"
+      [capacity]="col.capacity"
+      (dropped)="onDropped($any($event))"
+    >
+      <!-- `$any`: none of q-board-column's other inputs reference TCard, so
+           Angular's template type checker infers this instance as
+           BoardColumn<unknown> rather than BoardColumn<TCard> and its
+           (dropped) event as BoardColumnDropEvent<unknown>; onDropped's own
+           signature is the source of truth for the real card type. -->
+
+      @for (card of cardsIn(col.columnId); track cardId()(card)) {
+        <q-board-card [dragData]="card" [dragDisabled]="!isDraggable(card)">
+          <ng-container
+            [ngTemplateOutlet]="cardTemplate()?.templateRef ?? null"
+            [ngTemplateOutletContext]="{ $implicit: card }"
+          />
+        </q-board-card>
+      }
+    </q-board-column>
+  }
+</q-board>
+
+@if (rejectionText(); as message) {
+  <q-inline-alert
+    severity="error"
+    [text]="message"
+    [dismissible]="true"
+    (dismiss)="dismissRejection()"
+    data-testid="drag-drop-assign-rejection"
+  />
+}
