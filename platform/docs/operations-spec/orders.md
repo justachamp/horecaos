@@ -67,12 +67,21 @@ tenants and code alike may not extend it, and `order_state_history` has
 
 The state machine is right and the IA is loose. A correction is not a
 transition backwards; it is a *compensating* transition the machine must
-declare, carrying its own trigger. Until `OrderStateMachine` declares
-`READY -> PREPARING` and `FULFILLING -> READY` as `OPERATIONS_ACTION`
-transitions gated on `ORDER_STATE_OVERRIDE`, the console offers **no** backward
-affordance — not a disabled one, none (Togora §2n: omit, do not disable). This
-is named as a gap in §11 and is the single most likely complaint from staff who
-used the legacy board.
+declare, carrying its own trigger. **Built (ADR 0110, wave P41):**
+`OrderStateMachine` now declares `READY -> PREPARING` and `FULFILLING ->
+READY` as compensating edges — a new forward step each, in a table disjoint
+from the forward graph, never a literal reversal of it — gated on
+`ORDER_STATE_OVERRIDE` at its own endpoint, `POST .../state-overrides`,
+distinct from `ORDER_ADVANCE`'s `state-actions`. A mandatory reason from the
+tenant's registry is required (§4.3), and the correction writes its own
+timeline row and its own audit fact. No other status gains a way back, and a
+terminal order is never reopened. **Still open:** no console affordance
+exists yet — `actions[]` correctly offers `OVERRIDE` to a principal holding
+the capability, but nothing in `frontend/operations` renders the button, the
+confirmation dialog or the reason picker, so the backend is reachable only by
+API today (Togora §2n's omit-not-disable rule already governs the button once
+it exists: hidden entirely for a principal lacking the capability, never
+shown disabled).
 
 **0.3 Cancellation write-off is not an operator choice.**
 IA 1.2 says "cancel with reason + write-off type", matching Delever's
@@ -939,6 +948,7 @@ visible and explained.
 | **Принять** | `POST .../approval-decisions` `{decisionId, action:APPROVE, reasonCode?}` | `ORDER_APPROVE` | status ≠ `AWAITING_APPROVAL` | no |
 | **Отклонить** | same, `action:REJECT` | `ORDER_APPROVE` | status ≠ `AWAITING_APPROVAL` | yes — reason required |
 | **Продвинуть** | `POST .../state-actions` `{targetStatus, reasonCode}` + `If-Match` | `ORDER_ADVANCE` | the transition is not in the machine; `READY→FULFILLING` on a pickup order | no |
+| **Откатить (override)** | `POST .../state-overrides` `{targetStatus, reasonId}` + `If-Match` (ADR 0110) | `ORDER_STATE_OVERRIDE` | the target is not a declared compensating edge — only `READY→PREPARING` and `FULFILLING→READY` exist; terminal always; `FULFILLING→READY` also refused if the branch is at its ADR 0036 concurrent-order ceiling | yes — registry reason required, no free text |
 | **Отменить** | `POST .../cancellations` `{reasonCode}` and, for the reasoned path, `{reasonId}` + `If-Match` | `ORDER_CANCEL` | `CONFIRMED` or later **without** a `reasonId` from the tenant's registry (§4.5 supplies one); terminal always | yes |
 | **Показать комментарий** | `GET .../lines/{lineId}/note?purpose=` | `CUSTOMER_PII_REVEAL` | no note | no |
 
@@ -1138,6 +1148,7 @@ available, blank omitted.
 | Принять / Отклонить | | | ● | | | | | | | |
 | На кухню | | | | | ● | | | | | |
 | Готов | | | | | | ● | | | | |
+| Откатить (override, ADR 0110) | | | | | | | ○ override | ○ override | | |
 | На доставку | | | | | | | ○ delivery | | | |
 | Выдан / Доставлен | | | | | | | ○ pickup | ● | | |
 | Отменить | ● | ● | ● | ● | ○ 0039 | ○ 0039 | ○ 0039 | ○ 0039 | | |
@@ -1407,7 +1418,7 @@ Read from `legacy-archive/qoida-dashboard/src`.
 | `order.cancel` | Cancellation — **built**, `Capability.ORDER_CANCEL` |
 | `order.amend` | Amendment (§4.4) — **built**, `Capability.ORDER_AMEND`, for the three non-financial commands |
 | `order.bulk-action` | Bulk actions (§2.10) — **built**, `Capability.ORDER_BULK_ACTION`, held only by `location-manager`; `ADVANCE` and `CANCEL` only |
-| `order.state.override` | Compensating transitions — **not yet declared by the state machine**, §0.2 |
+| `order.state.override` | Compensating transitions — **built**, `Capability.ORDER_STATE_OVERRIDE`, `POST .../state-overrides` (ADR 0110); no console affordance yet, §0.2 |
 | `customer.pii.reveal` | Phone, address and note reveal, with a stated purpose |
 | `customer.read` | The customer panel and the lookup |
 
@@ -1490,11 +1501,15 @@ rather than an unbuilt one:
    dashboard had three note channels and staff use all three. Adding two
    commands is a one-line ADR amendment; discovering the omission after cutover
    is a regression report. §3.6.
-3. **Compensating transitions.** §0.2. `OrderStateMachine` declares no backward
-   edge and `ORDER_STATE_OVERRIDE` exists as a capability with nothing to
-   authorise. Either the machine declares `READY -> PREPARING` and
-   `FULFILLING -> READY` as `OPERATIONS_ACTION` transitions, or the IA's promise
-   of gated backward transitions is withdrawn. It cannot stay as it is.
+3. **Compensating transitions — built, ADR 0110, wave P41.** §0.2. `OrderStateMachine`
+   now declares `READY -> PREPARING` and `FULFILLING -> READY` as compensating
+   edges, gated on `ORDER_STATE_OVERRIDE` at `POST .../state-overrides` with a
+   mandatory registry reason, its own timeline row and its own audit fact. What
+   remains is the console affordance only — no owning wave yet builds the
+   button, the confirmation dialog or the reason picker in
+   `frontend/operations`, so this is now frontend wiring over a finished,
+   audited, capability-gated endpoint, the same shape several other rows this
+   document already tracks (§0's own introduction).
 
 ---
 
