@@ -5,7 +5,9 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -333,6 +335,74 @@ public class JdbcPosMappingStore {
                 .param("entityType", type.storedAs())
                 .query((row, number) -> new NamedCandidate(row.getObject("id", UUID.class), row.getString("name")))
                 .list();
+    }
+
+    /**
+     * The HorecaOS-side display name for a batch of already-mapped ids, for the
+     * pane's linked-pairs table — {@link #list}'s own rows carry only ids, and
+     * a mapping an operator cannot read the name of is not reviewable.
+     *
+     * <p>The external side has no equivalent: the provider's own code is what
+     * a mapping stores, and resolving a display name for it would mean calling
+     * the adapter (or trusting a staged snapshot that may have rolled past
+     * this id) on every page render. The table shows the provider's code
+     * as-is instead, which is at minimum what an operator needs to cross-check
+     * against the till's own admin screen.
+     *
+     * @param brandId unused for every type but {@link MappingEntityType#PRODUCT}; null is fine for the rest
+     */
+    public Map<UUID, String> resolveHorecaosNames(
+            UUID tenantId, @Nullable UUID brandId, MappingEntityType type, Set<UUID> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return switch (type) {
+            case PRODUCT -> resolveProductNames(tenantId, brandId, ids);
+            case PAYMENT_TYPE -> resolveById(tenantId, "payments.payment_methods", "display_name", ids);
+            case DISCOUNT -> resolveById(tenantId, "pricing.promotions", "name", ids);
+            case COURIER -> resolveById(tenantId, "fulfillment.couriers", "display_reference", ids);
+            case CANCELLATION_REASON -> resolveById(tenantId, "ordering.order_outcome_reasons", "internal_name", ids);
+            case CHANNEL_POS_CODE -> resolveById(tenantId, "tenant.sales_channels", "display_name", ids);
+        };
+    }
+
+    private Map<UUID, String> resolveProductNames(UUID tenantId, @Nullable UUID brandId, Set<UUID> ids) {
+        if (brandId == null) {
+            return Map.of();
+        }
+        return jdbc
+                .sql("""
+                SELECT p.id, coalesce(t.name, p.code) AS name
+                  FROM catalog.products p
+             LEFT JOIN catalog.translations t
+                     ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id
+                    AND t.locale = 'uz-UZ' AND t.tenant_id = p.tenant_id
+                 WHERE p.tenant_id = :tenantId AND p.brand_id = :brandId AND p.id = ANY(:ids)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ids", ids.toArray(UUID[]::new))
+                .query((row, number) -> Map.entry(row.getObject("id", UUID.class), row.getString("name")))
+                .list()
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    /**
+     * @param table      a literal from this file's own call sites, never a caller's string
+     * @param nameColumn likewise
+     */
+    private Map<UUID, String> resolveById(UUID tenantId, String table, String nameColumn, Set<UUID> ids) {
+        String sql = "SELECT id, %s AS name FROM %s WHERE tenant_id = :tenantId AND id = ANY(:ids)"
+                .formatted(nameColumn, table);
+        return jdbc
+                .sql(sql)
+                .param("tenantId", tenantId)
+                .param("ids", ids.toArray(UUID[]::new))
+                .query((row, number) -> Map.entry(row.getObject("id", UUID.class), row.getString("name")))
+                .list()
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     /** {@code cursor} for the mapping right after {@code row} in {@link #list}'s own order. */

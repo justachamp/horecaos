@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -54,6 +55,28 @@ public class PosMappingService {
         this.configuration = configuration;
         this.adapters = adapters;
         this.clock = clock;
+    }
+
+    /**
+     * A page of mappings, with each row's HorecaOS-side display name resolved
+     * alongside it — {@link JdbcPosMappingStore#list} alone carries only ids,
+     * and a mapping an operator cannot read the name of is not reviewable.
+     */
+    public ListResult list(
+            UUID tenantId,
+            UUID bindingId,
+            MappingEntityType type,
+            @Nullable String status,
+            int limit,
+            @Nullable String cursor) {
+        List<MappingRow> rows = mappings.list(tenantId, bindingId, type, status, limit, cursor);
+        UUID brandId = configuration
+                .bindingRef(tenantId, bindingId)
+                .map(BindingRef::brandId)
+                .orElse(null);
+        Set<UUID> ids = rows.stream().map(MappingRow::horecaosEntityId).collect(java.util.stream.Collectors.toSet());
+        Map<UUID, String> names = mappings.resolveHorecaosNames(tenantId, brandId, type, ids);
+        return new ListResult(rows, names);
     }
 
     /**
@@ -302,6 +325,9 @@ public class PosMappingService {
     }
 
     /** @param sourced false when no provider or HorecaOS source exists for this type in this build */
+    /** A page of mappings alongside the HorecaOS-side names {@link #list} resolved for them. */
+    public record ListResult(List<MappingRow> rows, Map<UUID, String> horecaosNames) {}
+
     public record UnmappedResult(boolean sourced, @Nullable String detail, List<ExternalCandidate> entities) {}
 
     /** Both sides of the mapping pane's dual list for one binding and entity type. */

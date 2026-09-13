@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
@@ -195,6 +197,19 @@ class JdbcPosMappingStoreTests {
         List<NamedCandidate> unmapped = store.unmappedPaymentMethods(TENANT, BINDING);
 
         assertThat(unmapped).extracting(NamedCandidate::id).containsExactly(card);
+    }
+
+    @Test
+    @DisplayName(
+            "resolveHorecaosNames names an already-mapped row for the linked-pairs table, and skips an unknown id rather than guessing")
+    void resolveHorecaosNamesForLinkedPairs() {
+        UUID cash = insertPaymentMethod("CASH", "Cash");
+        UUID unknown = Ids.newId();
+
+        Map<UUID, String> names =
+                store.resolveHorecaosNames(TENANT, null, MappingEntityType.PAYMENT_TYPE, Set.of(cash, unknown));
+
+        assertThat(names).containsEntry(cash, "Cash").doesNotContainKey(unknown);
     }
 
     @Test

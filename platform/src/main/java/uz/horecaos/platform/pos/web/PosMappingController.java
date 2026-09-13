@@ -57,19 +57,13 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class PosMappingController {
 
     private final PosMappingService service;
-    private final JdbcPosMappingStore store;
     private final AuditRecorder audit;
     private final CurrentActor currentActor;
     private final Clock clock;
 
     public PosMappingController(
-            PosMappingService service,
-            JdbcPosMappingStore store,
-            AuditRecorder audit,
-            CurrentActor currentActor,
-            Clock clock) {
+            PosMappingService service, AuditRecorder audit, CurrentActor currentActor, Clock clock) {
         this.service = service;
-        this.store = store;
         this.audit = audit;
         this.currentActor = currentActor;
         this.clock = clock;
@@ -90,9 +84,11 @@ public class PosMappingController {
             @RequestParam(required = false) String cursor) {
 
         int size = Page.limitOrDefault(limit);
-        List<MappingRow> rows = store.list(tenantId, bindingId, entityType, status, size, cursor);
-        List<MappingView> views =
-                rows.stream().map(PosMappingController::toView).toList();
+        PosMappingService.ListResult result = service.list(tenantId, bindingId, entityType, status, size, cursor);
+        List<MappingRow> rows = result.rows();
+        List<MappingView> views = rows.stream()
+                .map(row -> toView(row, result.horecaosNames().get(row.horecaosEntityId())))
+                .toList();
         String nextCursor = rows.size() < size ? null : JdbcPosMappingStore.cursorFor(rows.getLast());
         return new Page<>(views, nextCursor);
     }
@@ -231,12 +227,13 @@ public class PosMappingController {
                         .toList());
     }
 
-    private static MappingView toView(MappingRow row) {
+    private static MappingView toView(MappingRow row, @Nullable String horecaosName) {
         return new MappingView(
                 row.id(),
                 row.bindingId(),
                 row.entityType(),
                 row.horecaosEntityId(),
+                horecaosName,
                 row.externalEntityId(),
                 row.externalParentId(),
                 row.status(),
@@ -280,6 +277,8 @@ public class PosMappingController {
             UUID bindingId,
             String entityType,
             UUID horecaosEntityId,
+            /** Resolved for display; null only when the linked HorecaOS row itself no longer exists. */
+            @Nullable String horecaosName,
             String externalEntityId,
             @Nullable String externalParentId,
             String status,
