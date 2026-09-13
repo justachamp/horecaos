@@ -30,6 +30,20 @@ import uz.horecaos.platform.tenancy.api.FulfillmentMode;
  * Capability.ORDER_STATE_OVERRIDE} rather than the {@code ORDER_ADVANCE} every
  * line cook holds. See {@link #compensatingTransitionsFrom} and {@link
  * #isCompensating}.
+ *
+ * <p><b>Wave P09 (gap map 1.2k).</b> {@code PREPARING}/{@code READY}/{@code
+ * FULFILLING} each gained a {@code CANCELLED} edge, alongside {@code
+ * CONFIRMED}'s existing one — the model-level question this file answers.
+ * Whether a <em>reasonless</em> cancellation is accepted at a given status is
+ * a separate, application-level question {@link
+ * uz.horecaos.platform.ordering.application.OrderActionsPolicy#canCancelWithoutReason}
+ * still answers narrowly (before {@code CONFIRMED} only); a reasoned one
+ * (a registry reason naming the stock disposition and the liable party) is
+ * what these three new edges exist to let through. These forward {@code
+ * CANCELLED} edges and P41's {@link #COMPENSATING} table stay two disjoint
+ * concerns: cancelling ends an order for good, compensating corrects a
+ * mis-click without ending it, and neither table's targets are offered under
+ * the other's capability.
  */
 public final class OrderStateMachine {
 
@@ -95,15 +109,28 @@ public final class OrderStateMachine {
         // belongs here.
         transitions.put(OrderStatus.CONFIRMED, EnumSet.of(OrderStatus.PREPARING, OrderStatus.CANCELLED));
 
-        transitions.put(OrderStatus.PREPARING, EnumSet.of(OrderStatus.READY));
+        // PREPARING/READY/FULFILLING -> CANCELLED (wave P09/gap map 1.2k): a
+        // cooking or out-for-delivery order can still fail — the kitchen burns
+        // it, the customer stops answering, the address turns out unreachable —
+        // and until this wave the canonical model had no edge for any of the
+        // three, so `OrderStateMachine.permits` threw before the application's
+        // own reasoned-cancellation guard (`OrderOutcomeService.cancel`) ever
+        // got a say. The application guard is unchanged: a reasonless
+        // cancellation still stops at CONFIRMED (`OrderActionsPolicy.
+        // canCancelWithoutReason`) because ADR 0017's stock disposition and
+        // liable party are real decisions past that point; a reasoned one
+        // (a registry `reasonId`, naming both) is what these three edges exist
+        // to let through.
+        transitions.put(OrderStatus.PREPARING, EnumSet.of(OrderStatus.READY, OrderStatus.CANCELLED));
 
         // Delivery goes through FULFILLING; pickup completes straight from READY.
         // Both edges exist here and the fulfilment mode picks between them, rather
         // than a pickup order being able to enter a courier state it has no
         // courier for.
-        transitions.put(OrderStatus.READY, EnumSet.of(OrderStatus.FULFILLING, OrderStatus.COMPLETED));
+        transitions.put(
+                OrderStatus.READY, EnumSet.of(OrderStatus.FULFILLING, OrderStatus.COMPLETED, OrderStatus.CANCELLED));
 
-        transitions.put(OrderStatus.FULFILLING, EnumSet.of(OrderStatus.COMPLETED));
+        transitions.put(OrderStatus.FULFILLING, EnumSet.of(OrderStatus.COMPLETED, OrderStatus.CANCELLED));
 
         for (OrderStatus status : OrderStatus.values()) {
             if (status.terminal()) {

@@ -6,9 +6,11 @@ import { ApiClient } from '../../core/api/api-client';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
+import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
 import { OrderActionsApi } from './order-actions-api';
 import { OrderDetailPane } from './order-detail-pane';
-import { OrderDetailResponse, OrderTimelineEntry } from './order-detail';
+import { OrderDetailResponse, OrderTimelineEntry, RevisionResponse } from './order-detail';
+import { OrderHandoverApi } from './order-handover-api';
 import { RejectReasonOption } from './order-reject-reason-dialog';
 import { RejectReasonsApi } from './order-reject-reasons-api';
 import { OrderRevealApi } from './order-reveal-api';
@@ -102,6 +104,8 @@ function configure(options: {
   actionsApi?: Partial<OrderActionsApi>;
   revealApi?: Partial<OrderRevealApi>;
   rejectReasonsApi?: Partial<RejectReasonsApi>;
+  referenceDataApi?: Partial<ReferenceDataApi>;
+  handoverApi?: Partial<OrderHandoverApi>;
   scope?: typeof FAKE_SCOPE | null;
 }): void {
   TestBed.configureTestingModule({
@@ -123,6 +127,18 @@ function configure(options: {
       {
         provide: RejectReasonsApi,
         useValue: options.rejectReasonsApi ?? { list: () => Promise.resolve(FAKE_REJECT_REASONS) },
+      },
+      {
+        provide: ReferenceDataApi,
+        useValue: options.referenceDataApi ?? { list: () => Promise.resolve([]) },
+      },
+      // `q-order-handover-panel` (row 1.2m) is always rendered once the order
+      // loads; every test in this file gets a harmless "no challenge" answer
+      // unless it says otherwise, so a test unrelated to handover never has
+      // to know the panel exists.
+      {
+        provide: OrderHandoverApi,
+        useValue: options.handoverApi ?? { challenge: () => of(null) },
       },
     ],
   });
@@ -668,5 +684,460 @@ describe('OrderDetailPane: lifecycle rail (row X.33)', () => {
         '[data-testid="order-detail-lifecycle"]',
       ),
     ).toBeNull();
+  });
+});
+
+function reason(overrides: Partial<ReasonResponse> = {}): ReasonResponse {
+  return {
+    id: 'reason-1',
+    kind: 'CANCELLATION',
+    systemCategory: 'ITEM_UNAVAILABLE',
+    internalName: 'Нет товара',
+    stockDisposition: 'WRITE_OFF',
+    liabilityParty: 'TENANT',
+    customerRefund: 'FULL',
+    allowedFulfillmentModes: null,
+    customerTexts: { ru: 'Извините, блюдо закончилось' },
+    status: 'ACTIVE',
+    version: 1,
+    updatedAt: '2026-08-30T09:00:00Z',
+    ...overrides,
+  };
+}
+
+const REVISIONS_PATH = `${ORDER_PATH}/revisions`;
+
+describe('OrderDetailPane: the whole OutcomeResponse, not the 13-of-19 slice (row 1.2)', () => {
+  it('renders the outcome band — kind, category, disposition, liable party, refund and when', async () => {
+    const cancelled = detail({
+      summary: { ...detail().summary, status: 'CANCELLED', actions: [] },
+      outcome: {
+        kind: 'CANCELLED',
+        systemCategory: 'ITEM_UNAVAILABLE',
+        reasonId: 'reason-1',
+        reasonVersion: 1,
+        stockDisposition: 'WRITE_OFF',
+        liabilityParty: 'TENANT',
+        customerRefund: 'FULL',
+        reservationCommitted: true,
+        occurredAt: '2026-08-30T10:00:00Z',
+      },
+    });
+    configure({ get: apiGet({ value: cancelled, version: 4 }) });
+    const fixture = await render();
+
+    const band = fixture.nativeElement.querySelector('[data-testid="order-detail-outcome"]');
+    expect(band?.textContent).toContain('Cancelled');
+    expect(band?.textContent).toContain('Item unavailable');
+    expect(band?.textContent).toContain('Written off');
+    expect(band?.textContent).toContain('At the branch’s cost');
+    expect(band?.textContent).toContain('Full refund');
+  });
+
+  it('renders no outcome band for an order that has not ended', async () => {
+    configure({ get: apiGet({ value: detail(), version: 3 }) });
+    const fixture = await render();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="order-detail-outcome"]')).toBeNull();
+  });
+
+  it('renders kitchenNote, callback state and the cash/change-due pair', async () => {
+    const withDetails = detail({
+      kitchenNote: 'Без лука',
+      callbackRequested: true,
+      callbackResolvedAt: null,
+      cashTenderedExpectedMinor: 200_000,
+      changeDueMinor: 54_000,
+    });
+    configure({ get: apiGet({ value: withDetails, version: 3 }) });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="order-detail-kitchen-note"]')?.textContent).toContain(
+      'Без лука',
+    );
+    expect(host.querySelector('[data-testid="order-detail-callback"]')?.textContent).toContain(
+      'not yet resolved',
+    );
+    // Money grouping uses U+00A0 (non-breaking space), never a comma — money.ts's own rule.
+    expect(host.querySelector('[data-testid="order-detail-cash-tendered"]')?.textContent).toContain(
+      '200 000',
+    );
+    expect(host.querySelector('[data-testid="order-detail-change-due"]')?.textContent).toContain(
+      '54 000',
+    );
+  });
+
+  it('renders every warning rather than dropping them', async () => {
+    const withWarnings = detail({ warnings: ['PRICE_CHANGED_SINCE_CHECKOUT', 'ITEM_SUBSTITUTED'] });
+    configure({ get: apiGet({ value: withWarnings, version: 3 }) });
+    const fixture = await render();
+
+    const warnings = fixture.nativeElement.querySelectorAll('[data-testid="order-detail-warning"]');
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0].textContent).toContain('PRICE_CHANGED_SINCE_CHECKOUT');
+  });
+
+  it('renders createdBy and acceptedBy with when the order has been accepted', async () => {
+    const attributed = detail({
+      createdByActorType: 'CUSTOMER',
+      createdByActorId: null,
+      acceptedByActorType: 'USER',
+      acceptedByActorId: 'operator-7',
+      acceptedAt: '2026-08-30T09:02:00Z',
+    });
+    configure({ get: apiGet({ value: attributed, version: 3 }) });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="order-detail-created-by"]')?.textContent).toContain(
+      'CUSTOMER',
+    );
+    expect(host.querySelector('[data-testid="order-detail-accepted-by"]')?.textContent).toContain(
+      'operator-7',
+    );
+  });
+
+  it('renders an honest "not yet accepted" rather than a blank cell', async () => {
+    const unaccepted = detail({
+      acceptedByActorType: null,
+      acceptedByActorId: null,
+      acceptedAt: null,
+    });
+    configure({ get: apiGet({ value: unaccepted, version: 3 }) });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-accepted-by"]')?.textContent,
+    ).toContain('Not yet accepted');
+  });
+});
+
+describe('OrderDetailPane: revisions, fetched on demand (§3.9, row 1.2p)', () => {
+  it('does not fetch GET .../revisions until the operator asks', async () => {
+    const get = apiGet({ value: detail(), version: 3 });
+    configure({ get });
+    await render();
+
+    expect(get.mock.calls.some((c: unknown[]) => c[0] === REVISIONS_PATH)).toBe(false);
+  });
+
+  it('fetches and renders the revision chain once toggled open', async () => {
+    const revisions: readonly RevisionResponse[] = [
+      {
+        revision: 1,
+        source: 'CHECKOUT',
+        currency: 'UZS',
+        subtotalMinor: 146_000,
+        taxMinor: 14_600,
+        discountMinor: 0,
+        feeMinor: 0,
+        totalMinor: 146_000,
+        deltaTotalMinor: 0,
+        createdByActorType: 'CUSTOMER',
+        createdAt: '2026-08-30T09:00:00Z',
+      },
+      {
+        revision: 2,
+        source: 'AMENDMENT',
+        amendmentId: 'amend-1',
+        currency: 'UZS',
+        subtotalMinor: 166_000,
+        taxMinor: 16_600,
+        discountMinor: 0,
+        feeMinor: 0,
+        totalMinor: 166_000,
+        deltaTotalMinor: 20_000,
+        createdByActorType: 'USER',
+        createdByActorId: 'operator-7',
+        createdAt: '2026-08-30T09:10:00Z',
+      },
+    ];
+    const get = vi.fn().mockImplementation((path: string) => {
+      if (path === REVISIONS_PATH) {
+        return of({ value: revisions, version: null });
+      }
+      if (path === TIMELINE_PATH) {
+        return of({ value: [], version: null });
+      }
+      if (path === ORDER_PATH) {
+        return of({ value: detail({ currentRevision: 2 }), version: 3 });
+      }
+      return throwError(() => new Error(`unexpected path ${path}`));
+    });
+    configure({ get });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-revisions-toggle"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const rows = host.querySelectorAll('[data-testid="order-detail-revision-row"]');
+    expect(rows).toHaveLength(2);
+    expect(rows[1].textContent).toContain('166 000');
+    expect(rows[1].textContent).toContain('20 000');
+  });
+
+  it('shows an error rather than a stale or empty table when the revisions call fails', async () => {
+    const get = apiGet({ value: detail(), version: 3 });
+    get.mockImplementation((path: string) => {
+      if (path === REVISIONS_PATH) {
+        return throwError(() => new ApiError(ApiErrorCode.INTERNAL_ERROR, 500, null, null));
+      }
+      if (path === TIMELINE_PATH) {
+        return of({ value: [], version: null });
+      }
+      if (path === ORDER_PATH) {
+        return of({ value: detail(), version: 3 });
+      }
+      return throwError(() => new Error(`unexpected path ${path}`));
+    });
+    configure({ get });
+    const fixture = await render();
+
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="order-detail-revisions-toggle"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-revisions-error"]'),
+    ).not.toBeNull();
+  });
+});
+
+describe('OrderDetailPane: the handover panel is on the page (row 1.2m)', () => {
+  it('mounts q-order-handover-panel once the order has loaded', async () => {
+    configure({ get: apiGet({ value: detail(), version: 3 }) });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-handover-panel"]'),
+    ).not.toBeNull();
+  });
+});
+
+describe('OrderDetailPane: cancel past CONFIRMED uses a registry reason, never free text (§4.5, row 1.2k)', () => {
+  function confirmedWithCancel(): OrderDetailResponse {
+    return detail({
+      summary: { ...detail().summary, status: 'CONFIRMED', actions: [{ action: 'CANCEL' }] },
+    });
+  }
+
+  it('fetches active CANCELLATION reasons before opening the picker, never the free-text dialog', async () => {
+    const list = vi.fn().mockResolvedValue([reason()]);
+    configure({
+      get: apiGet({ value: confirmedWithCancel(), version: 3 }),
+      referenceDataApi: { list },
+    });
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(list).toHaveBeenCalledWith(FAKE_SCOPE, 'CANCELLATION');
+    expect(fixture.nativeElement.querySelector('[data-testid="order-reason-dialog"]')).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-outcome-reason-dialog"]'),
+    ).not.toBeNull();
+  });
+
+  it('shows the reason’s consequences and submits reasonId/reasonCode, not free text', async () => {
+    const cancel = vi
+      .fn()
+      .mockReturnValue(
+        of({
+          orderId: 'order-1',
+          status: 'CANCELLED',
+          version: 4,
+          applied: true,
+          effectiveDecisionId: null,
+          effectiveAction: null,
+        }),
+      );
+    configure({
+      get: apiGet({ value: confirmedWithCancel(), version: 3 }),
+      actionsApi: { cancelWithReason: cancel },
+      referenceDataApi: { list: () => Promise.resolve([reason()]) },
+    });
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="order-outcome-reason-consequences"]')).toBeNull();
+    (
+      host.querySelector('[data-testid="order-outcome-reason-option-reason-1"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(
+      host.querySelector('[data-testid="order-outcome-reason-consequences"]')?.textContent,
+    ).toContain('Written off');
+
+    (
+      host.querySelector('[data-testid="order-outcome-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(cancel).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'order-1',
+      3,
+      'reason-1',
+      'ITEM_UNAVAILABLE',
+      undefined,
+    );
+  });
+});
+
+describe('OrderDetailPane: completion names the fulfilment mode’s own reason (§4.6, row 1.2j)', () => {
+  it('completes without a dialog when exactly one reason is valid for the mode', async () => {
+    const complete = vi
+      .fn()
+      .mockReturnValue(
+        of({
+          orderId: 'order-1',
+          status: 'COMPLETED',
+          version: 4,
+          applied: true,
+          effectiveDecisionId: null,
+          effectiveAction: null,
+        }),
+      );
+    const pickup = detail({
+      summary: {
+        ...detail().summary,
+        status: 'READY',
+        fulfillmentMode: 'PICKUP',
+        actions: [{ action: 'COMPLETE' }],
+      },
+    });
+    configure({
+      get: apiGet({ value: pickup, version: 3 }),
+      actionsApi: { complete },
+      referenceDataApi: {
+        list: (scope, kind) =>
+          Promise.resolve(
+            kind === 'COMPLETION'
+              ? [
+                  reason({
+                    id: 'pickup-reason',
+                    systemCategory: 'COLLECTED_BY_CUSTOMER',
+                    allowedFulfillmentModes: ['PICKUP'],
+                  }),
+                ]
+              : [],
+          ),
+      },
+    });
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+
+    expect(complete).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 3, 'pickup-reason');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-outcome-reason-dialog"]'),
+    ).toBeNull();
+  });
+
+  it('opens a picker naming DELIVERED_OWN_COURIER and DELIVERED_PARTNER_COURIER separately when both are valid', async () => {
+    const complete = vi
+      .fn()
+      .mockReturnValue(
+        of({
+          orderId: 'order-1',
+          status: 'COMPLETED',
+          version: 4,
+          applied: true,
+          effectiveDecisionId: null,
+          effectiveAction: null,
+        }),
+      );
+    const delivery = detail({
+      summary: {
+        ...detail().summary,
+        status: 'FULFILLING',
+        fulfillmentMode: 'DELIVERY',
+        actions: [{ action: 'COMPLETE' }],
+      },
+    });
+    configure({
+      get: apiGet({ value: delivery, version: 3 }),
+      actionsApi: { complete },
+      referenceDataApi: {
+        list: () =>
+          Promise.resolve([
+            reason({
+              id: 'own-courier',
+              systemCategory: 'DELIVERED_OWN_COURIER',
+              internalName: 'Доставлен своим курьером',
+              allowedFulfillmentModes: ['DELIVERY'],
+            }),
+            reason({
+              id: 'partner-courier',
+              systemCategory: 'DELIVERED_PARTNER_COURIER',
+              internalName: 'Доставлен сторонней службой',
+              allowedFulfillmentModes: ['DELIVERY'],
+            }),
+          ]),
+      },
+    });
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="order-outcome-reason-dialog"]')).not.toBeNull();
+    expect(complete).not.toHaveBeenCalled();
+
+    (
+      host.querySelector(
+        '[data-testid="order-outcome-reason-option-partner-courier"]',
+      ) as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="order-outcome-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(complete).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 3, 'partner-courier');
+  });
+
+  it('prefers COMPLETE over the redundant ADVANCE(COMPLETED) entry and hides the duplicate button', async () => {
+    const pickupWithBoth = detail({
+      summary: {
+        ...detail().summary,
+        status: 'READY',
+        fulfillmentMode: 'PICKUP',
+        actions: [{ action: 'ADVANCE', targetStatus: 'COMPLETED' }, { action: 'COMPLETE' }],
+      },
+    });
+    configure({
+      get: apiGet({ value: pickupWithBoth, version: 3 }),
+      referenceDataApi: { list: () => Promise.resolve([]) },
+    });
+    const fixture = await render();
+
+    // Exactly one primary action button, and no overflow — the duplicate ADVANCE entry is hidden.
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-overflow-trigger"]'),
+    ).toBeNull();
+    expect(
+      fixture.nativeElement
+        .querySelector('[data-testid="order-detail-primary-action"]')
+        ?.textContent?.trim(),
+    ).toBe('Handed over');
   });
 });

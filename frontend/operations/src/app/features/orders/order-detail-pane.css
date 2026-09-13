@@ -65,6 +65,20 @@
   cursor: pointer;
 }
 
+/* ---- warnings band (row 1.2) -------------------------------------------- */
+
+.pane__warnings-band {
+  padding: 8px 20px;
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.pane__warnings-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
 /* ---- header (§3.3) ------------------------------------------------------ */
 
 .pane__header {

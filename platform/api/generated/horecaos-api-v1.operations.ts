@@ -674,6 +674,15 @@ export interface CashHandoverResponse {
   varianceMinor?: number;
 }
 
+export interface ChallengeStateResponse {
+  attempts?: number;
+  attemptsRemaining?: number;
+  id?: string;
+  maxAttempts?: number;
+  status?: string;
+  type?: string;
+}
+
 export interface ChangeBoundaryRequest {
   businessDayStart: string;
   reason: string;
@@ -4260,6 +4269,7 @@ export interface Operations {
   "liveness": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/marketplace/liveness"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<LivenessResponse> } };
   "search": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/marketplace/order-references"; request: { parameters: { path: { tenantId: string }; query: { reference: string } } }; responses: { "200": Array<ReferenceMatchResponse> } };
   "bypass": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/marketplace/orders/{orderId}/handover-bypasses"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: BypassRequest }; responses: { "200": unknown } };
+  "handoverChallenge": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/marketplace/orders/{orderId}/handover-challenge"; request: { parameters: { path: { orderId: string; tenantId: string } } }; responses: { "200": ChallengeStateResponse } };
   "verify_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/marketplace/orders/{orderId}/handover-verifications"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: MarketplaceOperationsControllerVerificationRequest }; responses: { "200": MarketplaceOperationsControllerVerificationResponse } };
   "list_7": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<MerchantBindingView> } };
   "register": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings"; request: { parameters: { path: { tenantId: string } }; body: RegisterMerchantBindingRequest }; responses: { "200": MerchantBindingView } };

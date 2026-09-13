@@ -106,8 +106,12 @@ stateDiagram-v2
     FULFILLING --> COMPLETED
 
     RECEIVED --> CANCELLED
+    PAYMENT_AUTHORIZING --> CANCELLED
     AWAITING_APPROVAL --> CANCELLED
-    CONFIRMED --> CANCELLED: Cancellation policy allows
+    CONFIRMED --> CANCELLED: Reasonless before commitment; a registry reason after
+    PREPARING --> CANCELLED: Registry reason required
+    READY --> CANCELLED: Registry reason required
+    FULFILLING --> CANCELLED: Registry reason required
 ```
 
 POS export status is deliberately absent. POS transport failure is an
@@ -124,9 +128,21 @@ transitions exist.
 Two edges are conditional on the order rather than on the actor.
 `READY -> FULFILLING` is delivery only and `READY -> COMPLETED` is pickup and
 dine-in only, so a pickup order cannot enter a courier state nobody will advance.
-`CONFIRMED -> CANCELLED` exists in the model and is refused by the application in
-the first release: its payment, fiscal, POS and fulfilment consequences belong to
-ADR 0039, and performing half of them would be worse than refusing.
+
+Every edge into `CANCELLED` from `CONFIRMED` onward is modelled here but gated
+by the application, not by this table (ADR 0039, wave P09/gap map `1.2k`). A
+reasonless cancellation — `OrderStateService.cancel`'s two-argument overload,
+what a cart or a still-open order cancels through — is refused from
+`CONFIRMED` onward regardless of what this table permits:
+`OrderActionsPolicy.canCancelWithoutReason` is the guard, and it is narrower
+than the model on purpose. A *reasoned* cancellation (`OrderOutcomeService.
+cancel`, a registry reason naming the ADR 0017 stock disposition and the
+liable party) is accepted everywhere this table has an edge to `CANCELLED` —
+`CONFIRMED`, `PREPARING`, `READY` and `FULFILLING` alike — because the reason
+is precisely what ADR 0019 refused to guess at for a committed order. Before
+wave P09, `PREPARING`/`READY`/`FULFILLING` had no edge to `CANCELLED` at all,
+so even a reasoned cancellation of a cooking or out-for-delivery order was
+refused by this table before the application guard was ever consulted.
 
 ## Order process managers
 

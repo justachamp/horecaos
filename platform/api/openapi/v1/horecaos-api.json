@@ -3153,6 +3153,33 @@
         },
         "type" : "object"
       },
+      "ChallengeStateResponse" : {
+        "properties" : {
+          "attempts" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "attemptsRemaining" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "maxAttempts" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ChangeBoundaryRequest" : {
         "properties" : {
           "businessDayStart" : {
@@ -39506,6 +39533,43 @@
           }
         },
         "summary" : "Override handover verification",
+        "tags" : [ "Marketplace operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/marketplace/orders/{orderId}/handover-challenge" : {
+      "get" : {
+        "description" : "PENDING/VERIFIED/BYPASSED/FAILED/EXPIRED, for whichever challenge is most recent on this order. Never the expected value — verification stays server-side, the same rule {@link #verify} and {@link #bypass} both keep. 404 when no challenge was ever issued for this order (a branch that never configures a handover proof for this fulfilment path).",
+        "operationId" : "handoverChallenge",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChallengeStateResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The handover challenge's current state (orders.md §3.8, «Код выдачи»)",
         "tags" : [ "Marketplace operations" ]
       }
     },
