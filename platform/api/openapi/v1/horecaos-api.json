@@ -8492,6 +8492,48 @@
         },
         "type" : "object"
       },
+      "LatenessPolicyResponse" : {
+        "properties" : {
+          "delivery" : {
+            "$ref" : "#/components/schemas/LatenessThresholdsResponse"
+          },
+          "dineIn" : {
+            "$ref" : "#/components/schemas/LatenessThresholdsResponse"
+          },
+          "isPlatformDefault" : {
+            "type" : "boolean"
+          },
+          "pickup" : {
+            "$ref" : "#/components/schemas/LatenessThresholdsResponse"
+          },
+          "policyId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "policyVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "LatenessThresholdsResponse" : {
+        "properties" : {
+          "atRiskBeforeSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lateAfterSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "noPromiseFallbackSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "LatestStatementView" : {
         "properties" : {
           "issuedAt" : {
@@ -11228,6 +11270,14 @@
           "oldestLiveAgeSeconds" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderLatenessResponse" : {
+        "properties" : {
+          "level" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -32556,6 +32606,104 @@
         "tags" : [ "Dispatch board" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/lateness-policy" : {
+      "get" : {
+        "description" : "at_risk_before/late_after/no_promise_fallback per fulfilment mode (orders.md §2.7), resolved through the ADR 0030 chain: LOCATION, then BRAND, then TENANT, then the platform default.",
+        "operationId" : "policy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LatenessPolicyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The lateness policy in force for this location",
+        "tags" : [ "Order lateness" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/lateness" : {
+      "get" : {
+        "description" : "LATE, AT_RISK, or NORMAL — orders.md §2.7's Levels table, minus BLOCKED, which is a process-state fact this endpoint does not carry. Computed fresh on every call from the order's own promise and the resolved policy; nothing here is stored.",
+        "operationId" : "severity",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrderLatenessResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This order's resolved severity, right now",
+        "tags" : [ "Order lateness" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/preparation-bands" : {
       "put" : {
         "description" : "Whole set, so the coverage is always exactly what an operator last reviewed. The band is one of three inputs to the promised time; the longest of the band and any item override wins.",
@@ -53389,6 +53537,9 @@
   }, {
     "description" : "The ИКПУ/MXIK product classification reference",
     "name" : "Fiscal reference"
+  }, {
+    "description" : "The ordering.lateness policy (ADR 0030) and one order's resolved severity",
+    "name" : "Order lateness"
   }, {
     "description" : "Why orders are cancelled and how they are completed, per tenant",
     "name" : "Order outcome reasons"
