@@ -585,15 +585,15 @@ export const routes: Routes = [
             path: 'menus',
             loadComponent: () => import('./features/catalog/menus-page').then((m) => m.MenusPage),
           },
-          // catalog.md §4.11 (Excel/POS import): the backend has no import-job
-          // entity at all (ADR 0012, currently scoped to POS sources only) —
-          // a whole missing subsystem, not a small gap, so this stays the
-          // honest not-built page rather than a screen with nothing to call.
+          // catalog.md §4.11 (Import: Excel and POS), wave P24 (gap-map rows
+          // 4.5a/10.8b/X.24): the POS half only — run history, the start form
+          // with its import-language and price-re-import choices, per-item
+          // outcomes, and the product mapping tab. Excel import (4.5b) is a
+          // separate row and stays deferred.
           {
             path: 'import',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'operations-spec/catalog.md §4.11 (Import: Excel and POS)' },
+              import('./features/catalog/catalog-import-page').then((m) => m.CatalogImportPage),
           },
           {
             path: 'publication',
