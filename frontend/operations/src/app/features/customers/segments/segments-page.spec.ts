@@ -71,6 +71,7 @@ describe('SegmentsPage', () => {
     define: ReturnType<typeof vi.fn>;
     redefine: ReturnType<typeof vi.fn>;
     buildSnapshot: ReturnType<typeof vi.fn>;
+    exportSnapshot: ReturnType<typeof vi.fn>;
   };
   let brand: FakeCurrentBrand;
 
@@ -84,9 +85,20 @@ describe('SegmentsPage', () => {
       detail: vi.fn().mockResolvedValue(detail()),
       define: vi.fn().mockResolvedValue('audience-new'),
       redefine: vi.fn().mockResolvedValue(2),
-      buildSnapshot: vi
-        .fn()
-        .mockResolvedValue({ snapshotId: 's1', candidates: 200, members: 150, excluded: 50 }),
+      buildSnapshot: vi.fn().mockResolvedValue({
+        snapshotId: 's1',
+        candidates: 200,
+        members: 150,
+        excluded: 50,
+        refusalBreakdown: {
+          ACCOUNT_NOT_ACTIVE: 0,
+          CONSENT_WITHHELD: 40,
+          SUPPRESSED: 5,
+          FREQUENCY_CAP_REACHED: 3,
+          NO_VERIFIED_ENDPOINT: 2,
+        },
+      }),
+      exportSnapshot: vi.fn().mockResolvedValue(['acct-1', 'acct-2']),
     };
     await TestBed.configureTestingModule({
       imports: [SegmentsPage],
@@ -417,7 +429,7 @@ describe('SegmentsPage', () => {
   });
 
   describe('snapshot', () => {
-    it('builds a snapshot with the fixed, machine-facing purpose and shows the reach it computed', async () => {
+    it('builds a snapshot with the real, recorded consent purpose — never a string this page invented', async () => {
       await render([summary()]);
       (host().querySelector('.actions .secondary') as HTMLButtonElement).click();
       fixture.detectChanges();
@@ -428,11 +440,15 @@ describe('SegmentsPage', () => {
       await flushMicrotasks();
       fixture.detectChanges();
 
+      // MARKETING_PROMOTIONS is what ConsentService actually records decisions
+      // under (ConsentTypeService.DEFAULTS, the same default CampaignsPage
+      // sends) — not a descriptive sentence about what this screen is doing,
+      // which MarketingEligibility would never find a matching decision for.
       expect(api.buildSnapshot).toHaveBeenCalledWith(
         SCOPE,
         'audience-1',
         'SMS',
-        'Operations console: segment snapshot from Customers 5.3',
+        'MARKETING_PROMOTIONS',
       );
       // The panel stays open carrying the answer. It used to close in the same
       // tick the result arrived, which made the reach unreachable: computed,
@@ -440,6 +456,60 @@ describe('SegmentsPage', () => {
       const panel = host().querySelector('.snapshot-panel');
       expect(panel).not.toBeNull();
       expect(panel?.querySelector('.result-text')?.textContent ?? '').toContain('150');
+    });
+
+    it('renders candidates, members and excluded together, plus a refusal breakdown, rather than only the reach', async () => {
+      await render([summary()]);
+      (host().querySelector('.actions .secondary') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      (
+        host().querySelector('.snapshot-panel .panel__actions .primary') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      const counts = host().querySelector('.snapshot-result__counts')?.textContent ?? '';
+      expect(counts).toContain('200');
+      expect(counts).toContain('150');
+      expect(counts).toContain('50');
+
+      const breakdown = host().querySelector('[data-testid="refusal-breakdown"]');
+      expect(breakdown).not.toBeNull();
+      const breakdownText = breakdown?.textContent ?? '';
+      // Every non-zero reason renders; the zero one (ACCOUNT_NOT_ACTIVE) does
+      // not clutter the list a marketer reads to answer "why".
+      expect(breakdownText).toContain('40');
+      expect(breakdownText).toContain('5');
+      expect(breakdownText).toContain('3');
+      expect(breakdownText).toContain('2');
+    });
+
+    it('exports the snapshot members as a downloadable list of pseudonymous account ids', async () => {
+      await render([summary()]);
+      (host().querySelector('.actions .secondary') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      (
+        host().querySelector('.snapshot-panel .panel__actions .primary') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      const exportButton = host().querySelector(
+        '.snapshot-result button.secondary',
+      ) as HTMLButtonElement;
+      expect(exportButton).not.toBeNull();
+      exportButton.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(api.exportSnapshot).toHaveBeenCalledWith(
+        SCOPE,
+        's1',
+        'Operations console: segment snapshot export from Customers 5.3',
+      );
+      expect(host().querySelector('[data-testid="export-result"]')?.textContent ?? '').toContain(
+        '2',
+      );
     });
 
     it('dismisses the result panel, and a later snapshot never opens showing the old reach', async () => {

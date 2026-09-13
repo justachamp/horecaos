@@ -2871,6 +2871,28 @@ export const messagesEn = {
   'marketing.promoCodes.form.perCustomerLimit': 'Redemptions per customer',
   'marketing.promoCodes.form.perCustomerLimit.hint':
     'Not enforced for a guest checkout, which has no account to count against.',
+  'marketing.promoCodes.form.validFrom': 'Starts',
+  'marketing.promoCodes.form.validFrom.hint':
+    'Left blank, the code starts working the moment it is activated.',
+  'marketing.promoCodes.form.hasValidUntil': 'Give this code an expiry date',
+  'marketing.promoCodes.form.validUntil': 'Expires at the end of',
+  'marketing.promoCodes.form.channels': 'Restrict to channels',
+  'marketing.promoCodes.form.channels.hint': 'Leave every box unchecked to allow every channel.',
+  'marketing.promoCodes.form.locations': 'Restrict to branches',
+  'marketing.promoCodes.form.locations.hint': 'Leave every box unchecked to allow every branch.',
+  'marketing.promoCodes.column.expiry': 'Expiry',
+  'marketing.promoCodes.redemptions.title': 'Redemptions of ···{hint}',
+  'marketing.promoCodes.redemptions.loading': 'Loading redemptions…',
+  'marketing.promoCodes.redemptions.empty': 'Nobody has redeemed this code yet.',
+  'marketing.promoCodes.redemptions.close': 'Close',
+  'marketing.promoCodes.redemptions.column.customer': 'Customer account',
+  'marketing.promoCodes.redemptions.column.order': 'Order',
+  'marketing.promoCodes.redemptions.column.amount': 'Discount',
+  'marketing.promoCodes.redemptions.column.status': 'Status',
+  'marketing.promoCodes.redemptions.column.when': 'When',
+  'marketing.promoCodes.redemptions.status.RESERVED': 'Reserved',
+  'marketing.promoCodes.redemptions.status.REDEEMED': 'Redeemed',
+  'marketing.promoCodes.redemptions.status.RELEASED': 'Released',
 
   // ---------------------------------------------------------------- loyalty 6.3 (ADR 0046, wave 44)
   'marketing.loyalty.title': 'Loyalty',
@@ -3032,6 +3054,20 @@ export const messagesEn = {
   'customers.segments.snapshot.building': 'Building…',
   'customers.segments.snapshot.confirm': 'Build',
   'customers.segments.snapshot.done': 'Done',
+  'customers.segments.snapshot.count.candidates': 'Candidates',
+  'customers.segments.snapshot.count.members': 'Reachable',
+  'customers.segments.snapshot.count.excluded': 'Excluded',
+  'customers.segments.snapshot.refusal.heading': 'Why candidates were excluded',
+  'customers.segments.snapshot.refusal.ACCOUNT_NOT_ACTIVE': 'account not active',
+  'customers.segments.snapshot.refusal.CONSENT_WITHHELD': 'no marketing consent on record',
+  'customers.segments.snapshot.refusal.SUPPRESSED': 'suppressed (bounce or complaint)',
+  'customers.segments.snapshot.refusal.FREQUENCY_CAP_REACHED':
+    'already at the message frequency cap',
+  'customers.segments.snapshot.refusal.NO_VERIFIED_ENDPOINT':
+    'no verified contact for this channel',
+  'customers.segments.snapshot.export.action': 'Export members',
+  'customers.segments.snapshot.export.busy': 'Exporting…',
+  'customers.segments.snapshot.export.done': 'Exported {count} account IDs.',
   'customers.segments.cancel': 'Cancel',
   'customers.segments.builder.editTitle': 'Edit segment',
   'customers.segments.builder.createTitle': 'New segment',
@@ -3773,9 +3809,11 @@ export const messagesEn = {
   'settings.integrations.detail.bindings.column.status': 'Status',
   'settings.integrations.detail.bindings.column.actions': 'Actions',
   'settings.integrations.detail.bindings.activate': 'Activate',
-  'settings.integrations.detail.bindings.activate.reasonPrompt': 'Reason for bringing this binding live:',
+  'settings.integrations.detail.bindings.activate.reasonPrompt':
+    'Reason for bringing this binding live:',
   'settings.integrations.detail.bindings.suspend': 'Suspend',
-  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Reason for suspending this binding:',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Reason for suspending this binding:',
   'settings.integrations.detail.bindings.empty': 'No bindings yet.',
   'settings.integrations.detail.bindings.wholeTenant': 'Entire company',
   'settings.integrations.detail.cloposSettings.title': 'Order acceptance',
@@ -3787,13 +3825,15 @@ export const messagesEn = {
   'settings.integrations.detail.partnerClients.issue': 'Issue a client',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'A name for this client (for your own reference):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Reason for issuing this client:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Reason for issuing this client:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Copy this secret now — it will not be shown again:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'I have copied it',
   'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
   'settings.integrations.detail.partnerClients.revoke': 'Revoke',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Reason for revoking this client:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Reason for revoking this client:',
   'settings.integrations.detail.partnerClients.empty': 'No partner API clients issued yet.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

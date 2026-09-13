@@ -2862,6 +2862,30 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.promoCodes.form.perCustomerLimit': 'Mijozga nechta',
   'marketing.promoCodes.form.perCustomerLimit.hint':
     'Mehmon sifatida buyurtma berishda qoʻllanilmaydi — u yerda hisoblash uchun akkaunt yoʻq.',
+  'marketing.promoCodes.form.validFrom': 'Boshlanish sanasi',
+  'marketing.promoCodes.form.validFrom.hint':
+    'Boʻsh qoldirilsa, kod faollashtirilishi bilanoq ishlay boshlaydi.',
+  'marketing.promoCodes.form.hasValidUntil': 'Amal qilish muddatini belgilash',
+  'marketing.promoCodes.form.validUntil': 'Shu sana oxirigacha amal qiladi',
+  'marketing.promoCodes.form.channels': 'Kanallar bilan cheklash',
+  'marketing.promoCodes.form.channels.hint':
+    'Barcha katakchalarni boʻsh qoldiring — barcha kanallarga ruxsat.',
+  'marketing.promoCodes.form.locations': 'Filiallar bilan cheklash',
+  'marketing.promoCodes.form.locations.hint':
+    'Barcha katakchalarni boʻsh qoldiring — barcha filiallarga ruxsat.',
+  'marketing.promoCodes.column.expiry': 'Amal qilish muddati',
+  'marketing.promoCodes.redemptions.title': 'Kod ···{hint} ishlatilishlari',
+  'marketing.promoCodes.redemptions.loading': 'Ishlatilishlar yuklanmoqda…',
+  'marketing.promoCodes.redemptions.empty': 'Bu kodni hali hech kim ishlatmagan.',
+  'marketing.promoCodes.redemptions.close': 'Yopish',
+  'marketing.promoCodes.redemptions.column.customer': 'Mijoz hisobi',
+  'marketing.promoCodes.redemptions.column.order': 'Buyurtma',
+  'marketing.promoCodes.redemptions.column.amount': 'Chegirma',
+  'marketing.promoCodes.redemptions.column.status': 'Holati',
+  'marketing.promoCodes.redemptions.column.when': 'Qachon',
+  'marketing.promoCodes.redemptions.status.RESERVED': 'Band qilindi',
+  'marketing.promoCodes.redemptions.status.REDEEMED': 'Ishlatildi',
+  'marketing.promoCodes.redemptions.status.RELEASED': 'Boʻshatildi',
 
   // ---------------------------------------------------------------- loyalty 6.3 (ADR 0046, wave 44)
   'marketing.loyalty.title': 'Sodiqlik',
@@ -3027,6 +3051,19 @@ export const messagesUzLatn: MessageCatalogue = {
   'customers.segments.snapshot.building': 'Yaratilmoqda…',
   'customers.segments.snapshot.confirm': 'Yaratish',
   'customers.segments.snapshot.done': 'Tayyor',
+  'customers.segments.snapshot.count.candidates': 'Nomzodlar',
+  'customers.segments.snapshot.count.members': 'Yetib boriladi',
+  'customers.segments.snapshot.count.excluded': 'Chiqarib tashlandi',
+  'customers.segments.snapshot.refusal.heading': 'Nomzodlar nega chiqarib tashlandi',
+  'customers.segments.snapshot.refusal.ACCOUNT_NOT_ACTIVE': 'hisob faol emas',
+  'customers.segments.snapshot.refusal.CONSENT_WITHHELD': 'marketingga rozilik yoʻq',
+  'customers.segments.snapshot.refusal.SUPPRESSED': 'bloklangan (qaytish yoki shikoyat)',
+  'customers.segments.snapshot.refusal.FREQUENCY_CAP_REACHED': 'xabar chastotasi chegarasiga yetdi',
+  'customers.segments.snapshot.refusal.NO_VERIFIED_ENDPOINT':
+    'bu kanal uchun tasdiqlangan aloqa yoʻq',
+  'customers.segments.snapshot.export.action': 'Aʼzolarni eksport qilish',
+  'customers.segments.snapshot.export.busy': 'Eksport qilinmoqda…',
+  'customers.segments.snapshot.export.done': 'Hisob ID: {count} ta eksport qilindi.',
   'customers.segments.cancel': 'Bekor qilish',
   'customers.segments.builder.editTitle': 'Segmentni tahrirlash',
   'customers.segments.builder.createTitle': 'Yangi segment',
@@ -3778,13 +3815,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.detail.partnerClients.issue': 'Mijoz chiqarish',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'Ushbu mijoz uchun nom (oʻzingiz uchun):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Ushbu mijozni chiqarish sababi:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Ushbu mijozni chiqarish sababi:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Ushbu maxfiy kalitni hozir nusxalang — u qayta koʻrsatilmaydi:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'Nusxaladim',
   'settings.integrations.detail.partnerClients.column.clientId': 'Mijoz ID',
   'settings.integrations.detail.partnerClients.revoke': 'Bekor qilish',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Ushbu mijozni bekor qilish sababi:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Ushbu mijozni bekor qilish sababi:',
   'settings.integrations.detail.partnerClients.empty': 'Hali hamkor API mijozlari chiqarilmagan.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

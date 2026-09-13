@@ -38,6 +38,25 @@ export interface PromoCodeView {
   readonly validUntil: string | null;
 }
 
+/**
+ * One reservation, redemption or release recorded against a code. Mirrors
+ * `PromoCodeController.PromoCodeRedemptionResponse`.
+ *
+ * `customerAccountId` is a pseudonymous account id, never a phone number or
+ * a name — the same PII boundary `SegmentsApi`'s snapshot export holds.
+ */
+export interface PromoCodeRedemption {
+  readonly redemptionId: string;
+  readonly customerAccountId: string | null;
+  readonly orderId: string | null;
+  readonly status: string;
+  readonly amountMinor: number;
+  readonly currency: string;
+  readonly reservedAt: string;
+  readonly redeemedAt: string | null;
+  readonly releasedAt: string | null;
+}
+
 /** Mirrors `PromoCodeController.DraftPromoCodeRequest`. */
 export interface DraftPromoCodeRequest {
   readonly name: string;
@@ -70,21 +89,44 @@ export class PromoCodesApi {
   private readonly api = inject(ApiClient);
 
   async list(scope: BrandScope): Promise<readonly PromoCodeView[]> {
-    const result = await firstValueFrom(this.api.get<readonly PromoCodeView[]>(promoCodePaths.base(scope)));
+    const result = await firstValueFrom(
+      this.api.get<readonly PromoCodeView[]>(promoCodePaths.base(scope)),
+    );
     return result.value ?? [];
   }
 
   async draft(scope: BrandScope, request: DraftPromoCodeRequest): Promise<PromoCodeView> {
     return firstValueFrom(
-      this.api.post<DraftPromoCodeRequest, PromoCodeView>(promoCodePaths.base(scope), command(request)),
+      this.api.post<DraftPromoCodeRequest, PromoCodeView>(
+        promoCodePaths.base(scope),
+        command(request),
+      ),
     );
   }
 
   async activate(scope: BrandScope, couponId: string): Promise<void> {
-    await firstValueFrom(this.api.post<null, void>(promoCodePaths.activation(scope, couponId), command(null)));
+    await firstValueFrom(
+      this.api.post<null, void>(promoCodePaths.activation(scope, couponId), command(null)),
+    );
   }
 
   async retire(scope: BrandScope, couponId: string): Promise<void> {
-    await firstValueFrom(this.api.post<null, void>(promoCodePaths.retirement(scope, couponId), command(null)));
+    await firstValueFrom(
+      this.api.post<null, void>(promoCodePaths.retirement(scope, couponId), command(null)),
+    );
+  }
+
+  /**
+   * The redemption ledger `redeemedCount` alone cannot give: which customer
+   * redeemed this code, on which order, when.
+   */
+  async listRedemptions(
+    scope: BrandScope,
+    couponId: string,
+  ): Promise<readonly PromoCodeRedemption[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly PromoCodeRedemption[]>(promoCodePaths.redemptions(scope, couponId)),
+    );
+    return result.value ?? [];
   }
 }

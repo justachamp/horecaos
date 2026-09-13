@@ -2843,6 +2843,30 @@ export const messagesRu: MessageCatalogue = {
   'marketing.promoCodes.form.perCustomerLimit': 'Использований на клиента',
   'marketing.promoCodes.form.perCustomerLimit.hint':
     'Не действует для гостевого оформления заказа — там нет аккаунта для подсчёта.',
+  'marketing.promoCodes.form.validFrom': 'Начинает действовать',
+  'marketing.promoCodes.form.validFrom.hint':
+    'Если не указано, код начинает работать сразу после активации.',
+  'marketing.promoCodes.form.hasValidUntil': 'Указать срок действия',
+  'marketing.promoCodes.form.validUntil': 'Действует до конца',
+  'marketing.promoCodes.form.channels': 'Ограничить каналами',
+  'marketing.promoCodes.form.channels.hint':
+    'Оставьте все флажки пустыми, чтобы разрешить все каналы.',
+  'marketing.promoCodes.form.locations': 'Ограничить филиалами',
+  'marketing.promoCodes.form.locations.hint':
+    'Оставьте все флажки пустыми, чтобы разрешить все филиалы.',
+  'marketing.promoCodes.column.expiry': 'Срок действия',
+  'marketing.promoCodes.redemptions.title': 'Использования кода ···{hint}',
+  'marketing.promoCodes.redemptions.loading': 'Загрузка использований…',
+  'marketing.promoCodes.redemptions.empty': 'Этот код ещё никто не использовал.',
+  'marketing.promoCodes.redemptions.close': 'Закрыть',
+  'marketing.promoCodes.redemptions.column.customer': 'Аккаунт клиента',
+  'marketing.promoCodes.redemptions.column.order': 'Заказ',
+  'marketing.promoCodes.redemptions.column.amount': 'Скидка',
+  'marketing.promoCodes.redemptions.column.status': 'Статус',
+  'marketing.promoCodes.redemptions.column.when': 'Когда',
+  'marketing.promoCodes.redemptions.status.RESERVED': 'Зарезервировано',
+  'marketing.promoCodes.redemptions.status.REDEEMED': 'Использовано',
+  'marketing.promoCodes.redemptions.status.RELEASED': 'Освобождено',
 
   // ---------------------------------------------------------------- loyalty 6.3 (ADR 0046, wave 44)
   'marketing.loyalty.title': 'Лояльность',
@@ -3006,6 +3030,19 @@ export const messagesRu: MessageCatalogue = {
   'customers.segments.snapshot.building': 'Строится…',
   'customers.segments.snapshot.confirm': 'Построить',
   'customers.segments.snapshot.done': 'Готово',
+  'customers.segments.snapshot.count.candidates': 'Кандидатов',
+  'customers.segments.snapshot.count.members': 'Достижимо',
+  'customers.segments.snapshot.count.excluded': 'Исключено',
+  'customers.segments.snapshot.refusal.heading': 'Почему кандидаты были исключены',
+  'customers.segments.snapshot.refusal.ACCOUNT_NOT_ACTIVE': 'аккаунт неактивен',
+  'customers.segments.snapshot.refusal.CONSENT_WITHHELD': 'нет согласия на маркетинг',
+  'customers.segments.snapshot.refusal.SUPPRESSED': 'заблокирован (отказ или жалоба)',
+  'customers.segments.snapshot.refusal.FREQUENCY_CAP_REACHED': 'достигнут лимит частоты сообщений',
+  'customers.segments.snapshot.refusal.NO_VERIFIED_ENDPOINT':
+    'нет подтверждённого контакта для этого канала',
+  'customers.segments.snapshot.export.action': 'Экспортировать список',
+  'customers.segments.snapshot.export.busy': 'Экспортируется…',
+  'customers.segments.snapshot.export.done': 'Экспортировано ID аккаунтов: {count}.',
   'customers.segments.cancel': 'Отмена',
   'customers.segments.builder.editTitle': 'Изменить сегмент',
   'customers.segments.builder.createTitle': 'Новый сегмент',
@@ -3737,7 +3774,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.detail.bindings.activate': 'Активировать',
   'settings.integrations.detail.bindings.activate.reasonPrompt': 'Причина запуска этой привязки:',
   'settings.integrations.detail.bindings.suspend': 'Приостановить',
-  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Причина приостановки этой привязки:',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Причина приостановки этой привязки:',
   'settings.integrations.detail.bindings.empty': 'Привязок пока нет.',
   'settings.integrations.detail.bindings.wholeTenant': 'Вся компания',
   'settings.integrations.detail.cloposSettings.title': 'Приём заказов',
@@ -3749,13 +3787,15 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.detail.partnerClients.issue': 'Выпустить клиента',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'Название для этого клиента (для вашего удобства):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Причина выпуска этого клиента:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Причина выпуска этого клиента:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Скопируйте этот секрет сейчас — он больше не будет показан:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'Я скопировал(а)',
   'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
   'settings.integrations.detail.partnerClients.revoke': 'Отозвать',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Причина отзыва этого клиента:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Причина отзыва этого клиента:',
   'settings.integrations.detail.partnerClients.empty': 'Клиенты партнёрского API ещё не выпущены.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

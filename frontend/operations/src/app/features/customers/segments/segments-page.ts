@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentBrand } from '../../../core/auth/current-brand';
 import { I18n } from '../../../core/i18n/i18n';
+import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
 import { ConditionBuilder } from '../../../shared/ui/condition-builder';
@@ -23,7 +24,9 @@ import {
   MarketingChannel,
   PredicateOperator,
   PredicateType,
+  RefusalBreakdown,
   SegmentsApi,
+  SnapshotResult,
 } from './segments-api';
 
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
@@ -80,6 +83,21 @@ const CATALOGUE: readonly ConditionTypeDescriptor[] = [
     labelKey: 'customers.segments.predicate.type.PREFERRED_LOCALE',
     valueKind: 'TEXT_SET',
   },
+];
+
+/**
+ * Every `RefusalReason` a snapshot build can produce, in the fixed order
+ * `RefusalReason.java` declares them — mirrors the order the five
+ * subtractions actually run in, so the breakdown reads as the checks
+ * themselves rather than an arbitrary sort. `CAMPAIGN_HALTED` is left out: it
+ * can only ever be a send-time reason, never one a snapshot build reaches.
+ */
+const REFUSAL_REASONS: readonly string[] = [
+  'ACCOUNT_NOT_ACTIVE',
+  'CONSENT_WITHHELD',
+  'SUPPRESSED',
+  'FREQUENCY_CAP_REACHED',
+  'NO_VERIFIED_ENDPOINT',
 ];
 
 /** Wraps a flat row list in the one `AND` group `AudiencePredicate`'s combinator-free shape needs — `q-condition-builder`'s model always carries at least one group. */
@@ -153,10 +171,12 @@ export class SegmentsPage {
   protected readonly snapshotChannel = signal<MarketingChannel>('SMS');
   protected readonly snapshotBusy = signal(false);
   protected readonly snapshotError = signal<string | null>(null);
-  protected readonly snapshotResult = signal<{
-    readonly audienceId: string;
-    readonly members: number;
-  } | null>(null);
+  protected readonly snapshotResult = signal<SnapshotResult | null>(null);
+  protected readonly refusalReasons = REFUSAL_REASONS;
+
+  protected readonly exportBusy = signal(false);
+  protected readonly exportError = signal<string | null>(null);
+  protected readonly exportedCount = signal<number | null>(null);
 
   constructor() {
     void this.load();
@@ -273,11 +293,14 @@ export class SegmentsPage {
     this.snapshotChannel.set('SMS');
     this.snapshotError.set(null);
     this.snapshotResult.set(null);
+    this.exportError.set(null);
+    this.exportedCount.set(null);
   }
 
   protected cancelSnapshot(): void {
     this.snapshottingId.set(null);
     this.snapshotResult.set(null);
+    this.exportedCount.set(null);
   }
 
   protected async confirmSnapshot(): Promise<void> {
@@ -289,19 +312,28 @@ export class SegmentsPage {
     this.snapshotBusy.set(true);
     this.snapshotError.set(null);
     try {
+      // A real, recorded consent purpose — not a string this page invented.
+      // `MarketingEligibility` matches this exactly against what
+      // `ConsentService` recorded a decision under, and every consent
+      // decision on this platform (storefront checkbox, the SendPulse
+      // import, a campaign send) is recorded under this one purpose. Sending
+      // anything else — including a human-readable description of what this
+      // screen is doing — makes every candidate fail the match and read as
+      // CONSENT_WITHHELD, which is the bug this page used to ship with.
       const result = await this.api.buildSnapshot(
         scope,
         audienceId,
         this.snapshotChannel(),
-        SegmentsPage.SNAPSHOT_PURPOSE,
+        SegmentsPage.CONSENT_PURPOSE,
       );
-      // The panel stays open. Closing it here set `snapshotResult` and then
-      // immediately removed the only place the template renders it, so the
-      // reach an operator had just asked for was computed, stored and thrown
-      // away in the same tick. The refreshed row's last-reach column does
-      // carry the same figure, but a cell that changes quietly in a table of
-      // segments is not an answer to the question the operator just asked.
-      this.snapshotResult.set({ audienceId, members: result.members });
+      // The panel stays open. Closing it here used to discard `snapshotResult`
+      // the same tick it arrived, so the reach an operator had just asked for
+      // was computed, stored and thrown away before it was ever rendered. The
+      // refreshed row's last-reach column carries the member count too, but a
+      // cell that changes quietly in a table of segments answers nothing —
+      // and did not, on its own, distinguish a broken audience from a real
+      // zero either.
+      this.snapshotResult.set(result);
       await this.load();
     } catch (error) {
       this.snapshotError.set(this.describe(error));
@@ -310,9 +342,59 @@ export class SegmentsPage {
     }
   }
 
-  /** Fixed, machine-facing purpose — the same convention `CustomersPage.EXPORT_PURPOSE` uses, for the same reason. */
-  private static readonly SNAPSHOT_PURPOSE =
-    'Operations console: segment snapshot from Customers 5.3';
+  /**
+   * The tenant-wide marketing consent purpose (`ConsentTypeService.DEFAULTS`,
+   * `CampaignsPage`'s own default). Fixed and machine-facing, never a
+   * description of what this screen is doing — see {@link confirmSnapshot}'s
+   * own doc for why that distinction is the whole fix.
+   */
+  private static readonly CONSENT_PURPOSE = 'MARKETING_PROMOTIONS';
+
+  // -------------------------------------------------------- refusal breakdown
+
+  /** The reasons this snapshot actually excluded somebody under, in the fixed display order. */
+  protected refusalRows(
+    breakdown: RefusalBreakdown,
+  ): ReadonlyArray<{ reason: string; count: number }> {
+    return this.refusalReasons.map((reason) => ({ reason, count: breakdown[reason] ?? 0 }));
+  }
+
+  protected refusalReasonLabelKey(reason: string): MessageKey {
+    return `customers.segments.snapshot.refusal.${reason}` as MessageKey;
+  }
+
+  // ------------------------------------------------------------------ export
+
+  /**
+   * Fixed, English, machine-facing purpose — not translated, the same reason
+   * `CustomersPage.EXPORT_PURPOSE` is not: this is read by whoever reviews
+   * the audit log, not the operator.
+   */
+  private static readonly EXPORT_PURPOSE =
+    'Operations console: segment snapshot export from Customers 5.3';
+
+  protected async exportCurrentSnapshot(): Promise<void> {
+    const scope = this.brand.scope();
+    const result = this.snapshotResult();
+    if (!scope || !result || this.exportBusy()) {
+      return;
+    }
+    this.exportBusy.set(true);
+    this.exportError.set(null);
+    try {
+      const accountIds = await this.api.exportSnapshot(
+        scope,
+        result.snapshotId,
+        SegmentsPage.EXPORT_PURPOSE,
+      );
+      this.exportedCount.set(accountIds.length);
+      downloadAccountIdCsv(accountIds, `segment-${result.snapshotId}.csv`);
+    } catch (error) {
+      this.exportError.set(this.describe(error));
+    } finally {
+      this.exportBusy.set(false);
+    }
+  }
 
   // ------------------------------------------------------------------ format
 
@@ -325,6 +407,28 @@ export class SegmentsPage {
       return describeApiError(error, (key, values) => this.i18n.t(key, values));
     }
     return this.i18n.t('error.unknown.noReference');
+  }
+}
+
+/**
+ * Builds the snapshot export as a browser-local CSV download — the same
+ * "no server-side file" reasoning `customers-page.ts`'s own `downloadCsv`
+ * carries: the export endpoint already returns the account ids as JSON in
+ * one audited call, so there is nothing a second round trip would add.
+ * Pseudonymous account ids only, never a name, phone or email — the export
+ * endpoint carries none of those and cannot.
+ */
+function downloadAccountIdCsv(accountIds: readonly string[], filename: string): void {
+  const lines = ['customerAccountId', ...accountIds];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  try {
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+  } finally {
+    URL.revokeObjectURL(url);
   }
 }
 

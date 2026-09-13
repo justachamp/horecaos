@@ -27,4 +27,8 @@ export const promoCodePaths = {
   retirement(scope: BrandScope, couponId: string): string {
     return `${this.base(scope)}/${encodeURIComponent(couponId)}/retire`;
   },
+
+  redemptions(scope: BrandScope, couponId: string): string {
+    return `${this.base(scope)}/${encodeURIComponent(couponId)}/redemptions`;
+  },
 } as const;
