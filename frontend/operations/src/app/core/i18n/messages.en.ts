@@ -1739,15 +1739,10 @@ export const messagesEn = {
   'delivery.dispatch.denied': 'No access to this location’s dispatch board',
   'delivery.dispatch.empty': 'Nothing to dispatch right now',
   'delivery.dispatch.conflict': 'Could not apply: {reason}',
-  'delivery.dispatch.column.order': 'Order',
-  'delivery.dispatch.column.status': 'Status',
-  'delivery.dispatch.column.distance': 'Distance',
-  'delivery.dispatch.column.fee': 'Fee',
-  'delivery.dispatch.column.carriedBy': 'Carried by',
-  'delivery.dispatch.action.assign': 'Assign',
+  'delivery.dispatch.hint':
+    'Drag an order onto a courier to assign it. Drag it back to Unassigned to release it.',
+  'delivery.dispatch.column.unassigned': 'Unassigned',
   'delivery.dispatch.action.unassign': 'Unassign',
-  'delivery.dispatch.fleet.title': 'Fleet',
-  'delivery.dispatch.fleet.empty': 'No couriers registered yet',
   'delivery.dispatch.status.PLANNED': 'Planned',
   'delivery.dispatch.status.WAITING_TO_SOURCE': 'Waiting to source',
   'delivery.dispatch.status.SOURCING': 'Sourcing',
@@ -3744,6 +3739,10 @@ export const messagesEn = {
   'shared.matrixGrid.toggleRow': 'Toggle every cell in this row',
   'shared.matrixGrid.toggleColumn': 'Toggle every cell in this column',
   'shared.matrixGrid.unavailable': 'Not available on this channel',
+
+  // shared/ui — q-drag-drop-assign (X.22)
+  'shared.dragDropAssign.rejected': 'Could not move: {reason}',
+  'shared.dragDropAssign.rejectedUnknown': 'Could not move — try again.',
   // --- shared/ui q-secret-input (ADR 0106, gap-map row X.14) --------------
   // Reveal-once **at entry** only — never a value the server returned, since
   // no surface this platform exposes ever returns one (ADR 0028).

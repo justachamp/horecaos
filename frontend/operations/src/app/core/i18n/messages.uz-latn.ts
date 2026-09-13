@@ -1724,15 +1724,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.dispatch.denied': 'Bu filial dispetcherlik taxtasiga kirish huquqi yoʻq',
   'delivery.dispatch.empty': 'Hozircha dispetcherlik qilish kerak boʻlgan narsa yoʻq',
   'delivery.dispatch.conflict': 'Bajarilmadi: {reason}',
-  'delivery.dispatch.column.order': 'Buyurtma',
-  'delivery.dispatch.column.status': 'Holati',
-  'delivery.dispatch.column.distance': 'Masofa',
-  'delivery.dispatch.column.fee': 'Toʻlov',
-  'delivery.dispatch.column.carriedBy': 'Kuryer',
-  'delivery.dispatch.action.assign': 'Tayinlash',
+  'delivery.dispatch.hint':
+    'Buyurtmani kuryer ustiga tashlab tayinlang. Uni orqaga, "Tayinlanmagan"ga tashlab, tayinlashni bekor qiling.',
+  'delivery.dispatch.column.unassigned': 'Tayinlanmagan',
   'delivery.dispatch.action.unassign': 'Tayinlashni bekor qilish',
-  'delivery.dispatch.fleet.title': 'Liniyadagi kuryerlar',
-  'delivery.dispatch.fleet.empty': 'Hali kuryerlar roʻyxatga olinmagan',
   'delivery.dispatch.status.PLANNED': 'Rejalashtirilgan',
   'delivery.dispatch.status.WAITING_TO_SOURCE': 'Kuryer izlanmoqda',
   'delivery.dispatch.status.SOURCING': 'Kuryer tanlanmoqda',
@@ -3735,6 +3730,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'shared.matrixGrid.toggleRow': 'Butun qatorni almashtirish',
   'shared.matrixGrid.toggleColumn': 'Butun ustunni almashtirish',
   'shared.matrixGrid.unavailable': 'Bu kanalda mavjud emas',
+
+  // shared/ui — q-drag-drop-assign (X.22)
+  'shared.dragDropAssign.rejected': 'Koʻchirib boʻlmadi: {reason}',
+  'shared.dragDropAssign.rejectedUnknown': 'Koʻchirib boʻlmadi — qayta urinib koʻring.',
   // --- shared/ui q-secret-input (ADR 0106, gap-map row X.14) --------------
   'secretInput.reveal': 'Koʻrsatish',
   'secretInput.hide': 'Yashirish',
