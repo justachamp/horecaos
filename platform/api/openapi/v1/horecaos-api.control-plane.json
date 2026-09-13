@@ -11906,7 +11906,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/locations/{locationId}/variants" : {
       "get" : {
-        "description" : "catalog.md §4.6, the 86 screen's read side: the read counterpart of PUT .../inventory/variants/{variantId}/availability. Gated on inventory.read rather than catalog.read, matching the screen's own denial rule — an actor who can adjust stock but never touches draft authoring still needs this list.",
+        "description" : "catalog.md §4.6, the 86 screen's read side: the read counterpart of PUT .../inventory/variants/{variantId}/availability. Gated on inventory.read rather than catalog.read, matching the screen's own denial rule — an actor who can adjust stock but never touches draft authoring still needs this list. Also the New order screen's item search (orders.md §5.5, wave P13): `query` narrows by product name, case-insensitively, so the picker can search a catalog of thousands rather than paging through it; omitted, this is the unfiltered 86-screen page it always was.",
         "operationId" : "variantsAtLocation",
         "parameters" : [ {
           "in" : "path",
@@ -11938,6 +11938,13 @@
           "required" : false,
           "schema" : {
             "default" : "uz",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "query",
+          "required" : false,
+          "schema" : {
             "type" : "string"
           }
         }, {
