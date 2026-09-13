@@ -209,6 +209,32 @@ class OperatorReportingTests {
         assertThat(result.rows().getFirst().productName()).isEqualTo("Plov");
     }
 
+    /**
+     * T12 second-pass adversarial review: {@link #leaderboardNeverCrossesTenants}
+     * pins the leaderboard's own {@code l.tenant_id = :tenantId} filter with a
+     * test; {@code readOperatorProductSales} carries the identical filter
+     * (verified by reading {@code JdbcReportingStore}) but nothing pinned it —
+     * a row under a different tenant, same {@code operatorPrincipalId}
+     * ({@code STAFF_1}), must not leak into this tenant's product mix.
+     */
+    @Test
+    void operatorProductsNeverCrossTenants() {
+        insertOrderWithLine("MINE", STAFF_1, "DELIVERY", "Plov", 2, 60_000);
+        insertOrderWithLineForTenant(OTHER_TENANT, "THEIRS", STAFF_1, "DELIVERY", "Manti", 5, 999_000);
+
+        var result = queries.operatorProducts(TENANT, STAFF_1, DAY, DAY, List.of(), 100);
+
+        // Both rows share a null variant_id (this fixture sets none) and would
+        // GROUP BY together into one row regardless of tenant scoping, so
+        // asserting the row count and product name alone would pass even with
+        // the tenant filter dropped entirely -- total_quantity/total_net_som
+        // are what actually change if OTHER_TENANT's line leaked in and merged
+        // (2 -> 7 units, 60_000 -> 1_059_000 som), so those are what this pins.
+        assertThat(result.rows()).hasSize(1);
+        assertThat(result.rows().getFirst().totalQuantity()).isEqualTo(2);
+        assertThat(result.rows().getFirst().totalNetSom()).isEqualTo(60_000L);
+    }
+
     // ----------------------------------------------------------------- fixtures
 
     private static UUID orderId(String seed) {
@@ -352,10 +378,21 @@ class OperatorReportingTests {
             String productName,
             int quantity,
             long netSom) {
-        insertRow(seed, operatorPrincipalId, "ADMIN", fulfilmentType, "COMPLETED", netSom, null, quantity);
+        insertOrderWithLineForTenant(TENANT, seed, operatorPrincipalId, fulfilmentType, productName, quantity, netSom);
+    }
+
+    private void insertOrderWithLineForTenant(
+            UUID tenantId,
+            String seed,
+            String operatorPrincipalId,
+            String fulfilmentType,
+            String productName,
+            int quantity,
+            long netSom) {
+        insertOrderForTenant(tenantId, seed, operatorPrincipalId, "ADMIN", fulfilmentType, netSom, null, quantity);
 
         Map<String, Object> params = new HashMap<>();
-        params.put("tenantId", TENANT);
+        params.put("tenantId", tenantId);
         params.put("businessDate", DAY);
         params.put("orderId", orderId(seed));
         params.put("lineId", lineId(seed));
