@@ -62,6 +62,24 @@ public interface PosAdapter {
     AvailabilityRead readAvailability(PosContext context);
 
     /**
+     * Discovers the vendor's own payment types, for the tenant-facing mapping
+     * pane's right-hand side (gap-map row 10.8b).
+     *
+     * <p>{@code REJECTED} with {@code errorCode} {@code "NOT_SUPPORTED"} for a
+     * vendor with no such list — never a guessed or empty-but-successful
+     * answer, because the mapping pane tells the two apart: unsupported means
+     * "type the provider's code by hand", empty means "nothing left to map".
+     */
+    ReferenceListRead discoverPaymentTypes(PosContext context);
+
+    /**
+     * Discovers the vendor's own discounts, for the tenant-facing mapping
+     * pane's right-hand side (gap-map row 10.8b). See {@link
+     * #discoverPaymentTypes} for the {@code NOT_SUPPORTED} contract.
+     */
+    ReferenceListRead discoverDiscounts(PosContext context);
+
+    /**
      * Sends an order to the till.
      *
      * <p>The most consequential call in the module. Where the vendor offers no
@@ -152,6 +170,17 @@ public interface PosAdapter {
     record AvailabilityRead(ProviderOutcome outcome, List<CatalogSnapshot.Availability> entries) {
 
         public AvailabilityRead {
+            entries = List.copyOf(entries == null ? List.of() : entries);
+        }
+    }
+
+    /** One item the vendor names outside its catalog — a payment type or a discount (gap-map row 10.8b). */
+    record ExternalReference(String externalId, String name) {}
+
+    /** The outcome of {@link #discoverPaymentTypes} or {@link #discoverDiscounts}. */
+    record ReferenceListRead(ProviderOutcome outcome, List<ExternalReference> entries) {
+
+        public ReferenceListRead {
             entries = List.copyOf(entries == null ? List.of() : entries);
         }
     }

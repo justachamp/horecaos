@@ -65,6 +65,17 @@ public final class FakePosAdapter implements PosAdapter {
 
     private @Nullable ProviderOutcome nextAvailabilityOutcome;
 
+    /** What {@link #discoverPaymentTypes}/{@link #discoverDiscounts} answer by default: one fake entry each. */
+    private List<PosAdapter.ExternalReference> nextPaymentTypes =
+            List.of(new PosAdapter.ExternalReference("fake-cash", "Cash"));
+
+    private @Nullable ProviderOutcome nextPaymentTypesOutcome;
+
+    private List<PosAdapter.ExternalReference> nextDiscounts =
+            List.of(new PosAdapter.ExternalReference("fake-happy-hour", "Happy hour"));
+
+    private @Nullable ProviderOutcome nextDiscountsOutcome;
+
     /** How many orders the fake actually created, as opposed to was asked to. */
     public int sideEffectCount() {
         return sideEffects.get();
@@ -110,6 +121,30 @@ public final class FakePosAdapter implements PosAdapter {
     /** Makes the next {@link #readAvailability} call fail the way a real one does. */
     public FakePosAdapter failNextAvailabilityReadWith(ProviderOutcome outcome) {
         this.nextAvailabilityOutcome = outcome;
+        return this;
+    }
+
+    /** From the next {@link #discoverPaymentTypes} call onward, this is what it finds. */
+    public FakePosAdapter scriptPaymentTypes(List<ExternalReference> entries) {
+        this.nextPaymentTypes = List.copyOf(entries);
+        return this;
+    }
+
+    /** Makes {@link #discoverPaymentTypes} answer the way an unsupported vendor does. */
+    public FakePosAdapter failPaymentTypesWith(ProviderOutcome outcome) {
+        this.nextPaymentTypesOutcome = outcome;
+        return this;
+    }
+
+    /** From the next {@link #discoverDiscounts} call onward, this is what it finds. */
+    public FakePosAdapter scriptDiscounts(List<ExternalReference> entries) {
+        this.nextDiscounts = List.copyOf(entries);
+        return this;
+    }
+
+    /** Makes {@link #discoverDiscounts} answer the way an unsupported vendor does. */
+    public FakePosAdapter failDiscountsWith(ProviderOutcome outcome) {
+        this.nextDiscountsOutcome = outcome;
         return this;
     }
 
@@ -183,6 +218,26 @@ public final class FakePosAdapter implements PosAdapter {
             return new AvailabilityRead(scripted, List.of());
         }
         return new AvailabilityRead(ProviderOutcome.success(Map.of(), null), nextAvailabilityEntries);
+    }
+
+    @Override
+    public ReferenceListRead discoverPaymentTypes(PosContext context) {
+        if (nextPaymentTypesOutcome != null) {
+            ProviderOutcome scripted = nextPaymentTypesOutcome;
+            nextPaymentTypesOutcome = null;
+            return new ReferenceListRead(scripted, List.of());
+        }
+        return new ReferenceListRead(ProviderOutcome.success(Map.of(), null), nextPaymentTypes);
+    }
+
+    @Override
+    public ReferenceListRead discoverDiscounts(PosContext context) {
+        if (nextDiscountsOutcome != null) {
+            ProviderOutcome scripted = nextDiscountsOutcome;
+            nextDiscountsOutcome = null;
+            return new ReferenceListRead(scripted, List.of());
+        }
+        return new ReferenceListRead(ProviderOutcome.success(Map.of(), null), nextDiscounts);
     }
 
     @Override
