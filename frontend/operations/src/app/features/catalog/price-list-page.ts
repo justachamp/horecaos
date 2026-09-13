@@ -1,41 +1,51 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
-import { PriceBookSummary } from './catalog-domain';
+import { LocationView, LocationsApi } from '../settings/locations/locations-api';
+import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
+import { PriceBookAssignmentRequest, PriceBookSummary } from './catalog-domain';
 import { describeApiError } from '../orders/order-errors';
 import { PricingApi } from './pricing-api';
+
+type AssignmentScope = 'BRAND' | 'LOCATION' | 'CHANNEL';
 
 /**
  * IA 4.8 — Price list (Прейскурант), the price-book half (4.8a).
  *
- * **Built.** `PriceAuthoringController`'s list/create/assign-to-brand/
- * activate were all real (ADR 0018), reachable from no screen —
- * `pricing-api.ts` already had `listPriceBooks`/`resolvedVariantPrices`/
- * `setVariantPrice` for the product editor's own price cell, and this wave
- * adds the book-lifecycle calls beside them.
+ * **Built this wave.** Price books could only be applied brand-wide from the
+ * console: `assignToLocation` and `assignToChannel` existed on `PricingApi`
+ * as client methods with zero callers, even though the endpoints behind them
+ * (`PUT .../assignments/locations/{id}` and `.../channels/{id}`) were real —
+ * so the hall-versus-base plane and aggregator price propagation ADR 0018
+ * describes could not be expressed from this screen at all. The assign
+ * dialog now offers all three scopes and lets `priority`, `validFrom` and
+ * `validUntil` be authored, instead of always sending `{}`. The template
+ * also no longer hides assign behind `book.status === 'DRAFT'`:
+ * `PriceAuthoringService.assign` only refuses an `ARCHIVED` book (see its own
+ * Javadoc — an `ACTIVE` book is deliberately still assignable, because
+ * changing where a live book applies is an ordinary operation, not a
+ * lifecycle transition). Activate stays gated on `DRAFT`, because the
+ * backend itself refuses activating anything else.
  *
- * **Not built: 4.8b, the bulk change tool.** catalog.md §4.8b's
- * filter → preview → apply flow needs a filtered product/variant selection
- * (4.1's own list) joined against per-variant current prices, a percent/
- * absolute/fixed calculator with rounding rules, and a preview table before
- * committing N `setVariantPrice` calls — a `DataGrid`-shaped tool (IA Part
- * 4's own gap list) this wave's time did not reach. This screen is 4.8a in
- * full: the named price list itself, its brand-wide assignment, and
- * activation — real function, not a mock of the bulk tool.
+ * **Not built: 4.8b, the bulk change tool.** See `bulk-price-change-page.ts`
+ * — a separate screen, reachable from the same shell tab bar.
  */
 @Component({
   selector: 'q-price-list-page',
-  imports: [TPipe],
+  imports: [TPipe, RouterLink],
   templateUrl: './price-list-page.html',
   styleUrl: './price-list-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PriceListPage implements OnInit {
   private readonly api = inject(PricingApi);
+  private readonly locationsApi = inject(LocationsApi);
+  private readonly channelsApi = inject(SalesChannelsApi);
   private readonly brand = inject(CurrentBrand);
   protected readonly i18n = inject(I18n);
 
@@ -45,13 +55,24 @@ export class PriceListPage implements OnInit {
   protected readonly books = signal<readonly PriceBookSummary[]>([]);
   protected readonly actionError = signal<string | null>(null);
 
+  protected readonly locations = signal<readonly LocationView[]>([]);
+  protected readonly channels = signal<readonly ChannelView[]>([]);
+
   protected readonly showCreateForm = signal(false);
   protected readonly creating = signal(false);
   protected readonly newBookName = signal('');
   protected readonly newBookCurrency = signal('UZS');
 
-  protected readonly assigningBookId = signal<string | null>(null);
   protected readonly activatingBookId = signal<string | null>(null);
+
+  // -------------------------------------------------------------- assignment dialog
+  protected readonly assigningBook = signal<PriceBookSummary | null>(null);
+  protected readonly assignSubmitting = signal(false);
+  protected readonly assignScope = signal<AssignmentScope>('BRAND');
+  protected readonly assignTargetId = signal('');
+  protected readonly assignPriority = signal(0);
+  protected readonly assignValidFrom = signal('');
+  protected readonly assignValidUntil = signal('');
 
   async ngOnInit(): Promise<void> {
     await this.brand.ensureLoaded();
@@ -78,6 +99,33 @@ export class PriceListPage implements OnInit {
       }
     } finally {
       this.loading.set(false);
+    }
+
+    // The location and channel lists back the assign dialog's target picker.
+    // Neither failure is fatal to the page the way the price-book load is —
+    // an operator can still assign to the brand, and create/activate, with
+    // neither list loaded.
+    try {
+      this.locations.set(
+        await this.locationsApi.list({
+          tenantId: scope.tenantId,
+          brandId: scope.brandId,
+          locationId: '',
+        }),
+      );
+    } catch {
+      // See above.
+    }
+    try {
+      this.channels.set(
+        await this.channelsApi.list({
+          tenantId: scope.tenantId,
+          brandId: scope.brandId,
+          locationId: '',
+        }),
+      );
+    } catch {
+      // See above.
     }
   }
 
@@ -122,29 +170,80 @@ export class PriceListPage implements OnInit {
     }
   }
 
-  protected canAssignToBrand(book: PriceBookSummary): boolean {
-    return this.assigningBookId() === null;
-  }
-
-  protected async assignToBrand(book: PriceBookSummary): Promise<void> {
-    const scope = this.brand.scope();
-    if (!scope || !this.canAssignToBrand(book)) {
-      return;
-    }
-    this.assigningBookId.set(book.priceBookId);
-    this.actionError.set(null);
-    try {
-      await firstValueFrom(this.api.assignToBrand(scope, book.priceBookId, {}));
-      await this.load();
-    } catch (error) {
-      this.actionError.set(this.describe(error));
-    } finally {
-      this.assigningBookId.set(null);
-    }
+  /** `ARCHIVED` is the only status `PriceAuthoringService.assign` refuses (see its own Javadoc). */
+  protected canAssign(book: PriceBookSummary): boolean {
+    return book.status !== 'ARCHIVED' && this.assigningBook() === null;
   }
 
   protected canActivate(book: PriceBookSummary): boolean {
     return book.status === 'DRAFT' && this.activatingBookId() === null;
+  }
+
+  protected openAssignDialog(book: PriceBookSummary): void {
+    this.assigningBook.set(book);
+    this.assignScope.set('BRAND');
+    this.assignTargetId.set('');
+    this.assignPriority.set(book.priority);
+    this.assignValidFrom.set('');
+    this.assignValidUntil.set('');
+    this.actionError.set(null);
+  }
+
+  protected closeAssignDialog(): void {
+    if (this.assignSubmitting()) {
+      return;
+    }
+    this.assigningBook.set(null);
+  }
+
+  protected setAssignScope(scope: AssignmentScope): void {
+    this.assignScope.set(scope);
+    this.assignTargetId.set('');
+  }
+
+  protected canSubmitAssign(): boolean {
+    if (this.assignSubmitting()) {
+      return false;
+    }
+    return this.assignScope() === 'BRAND' || this.assignTargetId().trim().length > 0;
+  }
+
+  protected async submitAssign(): Promise<void> {
+    const scope = this.brand.scope();
+    const book = this.assigningBook();
+    if (!scope || !book || !this.canSubmitAssign()) {
+      return;
+    }
+    this.assignSubmitting.set(true);
+    this.actionError.set(null);
+    const request: PriceBookAssignmentRequest = {
+      priority: this.assignPriority(),
+      validFrom: this.assignValidFrom() ? `${this.assignValidFrom()}T00:00:00Z` : null,
+      validUntil: this.assignValidUntil() ? `${this.assignValidUntil()}T00:00:00Z` : null,
+    };
+    try {
+      switch (this.assignScope()) {
+        case 'BRAND':
+          await firstValueFrom(this.api.assignToBrand(scope, book.priceBookId, request));
+          break;
+        case 'LOCATION':
+          await firstValueFrom(
+            this.api.assignToLocation(scope, book.priceBookId, this.assignTargetId(), request),
+          );
+          break;
+        case 'CHANNEL':
+          await firstValueFrom(
+            this.api.assignToChannel(scope, book.priceBookId, this.assignTargetId(), request),
+          );
+          break;
+      }
+      this.assigningBook.set(null);
+      await this.load();
+    } catch (error) {
+      this.actionError.set(this.describe(error));
+    } finally {
+      this.assignSubmitting.set(false);
+    }
   }
 
   protected async activate(book: PriceBookSummary): Promise<void> {

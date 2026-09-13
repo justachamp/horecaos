@@ -309,14 +309,28 @@ export interface PublicationResult {
   readonly validation: ValidationReport;
 }
 
+/** `DraftPreviewResponse` — the content hash the draft would publish as right now, without writing anything. */
+export interface DraftPreview {
+  readonly contentHash: string;
+  readonly itemCount: number;
+}
+
 // ------------------------------------------------------------ pricing.web.PriceAuthoringController
 
-/** `PriceBookSummaryResponse`. */
+/**
+ * `PriceBookSummaryResponse`.
+ *
+ * `status` mirrors `PriceAuthoringService.Status` (`DRAFT`/`ACTIVE`/`ARCHIVED`)
+ * — not `PublicationStatus` above, whose own terminal value happens to be
+ * spelled `RETIRED`. This field previously carried that spelling by mistake,
+ * which a price book never actually sends; `PriceAuthoringService.assign`'s
+ * own Javadoc names `ARCHIVED` as the one status it refuses.
+ */
 export interface PriceBookSummary {
   readonly priceBookId: string;
   readonly name: string;
   readonly currency: string;
-  readonly status: 'DRAFT' | 'ACTIVE' | 'RETIRED';
+  readonly status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
   readonly priority: number;
   readonly validFrom: string;
   readonly validUntil?: string | null;
@@ -349,6 +363,56 @@ export interface PriceBookAssignmentRequest {
   readonly priority?: number;
   readonly validFrom?: string | null;
   readonly validUntil?: string | null;
+}
+
+/** `PriceAuthoringController.TaxProfileRequest` — basis points: 1200 is 12%. */
+export interface SetTaxProfileRequest {
+  readonly mode: 'INCLUSIVE' | 'EXCLUSIVE';
+  readonly rateBasisPoints: number;
+}
+
+/** `TaxProfileResponse`. */
+export interface TaxProfile {
+  readonly taxProfileId: string;
+  readonly jurisdictionCode: string;
+  readonly mode: 'INCLUSIVE' | 'EXCLUSIVE';
+  readonly rateBasisPoints: number;
+  readonly validFrom: string;
+  readonly version: number;
+}
+
+// ------------------------------------------------------------ pricing.web.PriceAuthoringController (bulk apply)
+
+/** `BulkPriceChangeItemRequest` — row 4.8b, one item of a bulk price change. */
+export interface BulkPriceChangeItem {
+  readonly priceableType: 'VARIANT' | 'MODIFIER_OPTION';
+  readonly priceableId: string;
+  readonly amountMinor: number;
+}
+
+/** `BulkPriceChangeRequest`. */
+export interface BulkPriceChangeRequest {
+  readonly dryRun: boolean;
+  readonly items: readonly BulkPriceChangeItem[];
+}
+
+/** `BulkPriceChangeItemResponse`. */
+export interface BulkPriceChangeItemOutcome {
+  readonly priceableType: 'VARIANT' | 'MODIFIER_OPTION';
+  readonly priceableId: string;
+  readonly applied: boolean;
+  readonly previousAmountMinor?: number | null;
+  readonly amountMinor: number;
+  readonly problemCode?: string | null;
+}
+
+/** `BulkPriceChangeResponse`. */
+export interface BulkPriceChangeReport {
+  readonly totalItems: number;
+  readonly appliedCount: number;
+  readonly failedCount: number;
+  readonly dryRun: boolean;
+  readonly items: readonly BulkPriceChangeItemOutcome[];
 }
 
 // ------------------------------------------------------------ CatalogPublicationController (history)

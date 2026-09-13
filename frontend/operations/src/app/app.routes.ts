@@ -605,6 +605,18 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/catalog/price-list-page').then((m) => m.PriceListPage),
           },
+          {
+            path: 'prices/bulk',
+            loadComponent: () =>
+              import('./features/catalog/bulk-price-change-page').then(
+                (m) => m.BulkPriceChangePage,
+              ),
+          },
+          {
+            path: 'prices/tax-profile',
+            loadComponent: () =>
+              import('./features/catalog/tax-profile-page').then((m) => m.TaxProfilePage),
+          },
           // catalog.md §4.13: every vocabulary on this screen is honestly
           // "not built — ADR 0016" except Бренды, which already belongs to
           // tenancy and is not duplicated here — the spec's own instruction

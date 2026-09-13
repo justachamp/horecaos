@@ -139,6 +139,11 @@ export const catalogPaths = {
   publicationHistory(scope: BrandScope): string {
     return `${this.base(scope)}/publications`;
   },
+
+  /** The content hash the draft would publish as right now, without writing anything. */
+  draftPreview(scope: BrandScope, catalogId: string): string {
+    return `${this.base(scope)}/catalogs/${encodeURIComponent(catalogId)}/draft-preview`;
+  },
 } as const;
 
 export const pricingPaths = {
@@ -184,5 +189,15 @@ export const pricingPaths = {
   /** Puts a draft book in front of customers. Mutation: `If-Match` with the book's version. */
   activation(scope: BrandScope, priceBookId: string): string {
     return `${this.priceBook(scope, priceBookId)}/activation`;
+  },
+
+  /** Changes many prices in one call against one book, with a `dryRun` preview (row 4.8b). */
+  bulkApply(scope: BrandScope, priceBookId: string): string {
+    return `${this.priceBook(scope, priceBookId)}/prices/bulk-apply`;
+  },
+
+  /** The brand's VAT rate for a jurisdiction. `PUT`-only — there is no read side yet. */
+  taxProfile(scope: BrandScope, jurisdictionCode: string): string {
+    return `${this.base(scope)}/tax-profiles/${encodeURIComponent(jurisdictionCode)}`;
   },
 } as const;

@@ -15,6 +15,7 @@ import {
   CreateCategoryRequest,
   CreateModifierGroupRequest,
   CreateProductRequest,
+  DraftPreview,
   FiscalClassification,
   IdResponse,
   ModifierGroupDetail,
@@ -287,6 +288,16 @@ export class CatalogApi {
     return unwrap(
       this.api.get<readonly PublicationHistoryEntry[]>(catalogPaths.publicationHistory(scope)),
     );
+  }
+
+  /**
+   * IA 4.6 — the content hash the draft would publish as right now, without
+   * publishing. A channel card compares this against its own last published
+   * hash (from {@link listPublicationHistory}) to render "Черновик
+   * отличается" versus "Актуально" before an operator commits to publishing.
+   */
+  draftPreview(scope: BrandScope, catalogId: string): Observable<DraftPreview> {
+    return unwrap(this.api.get<DraftPreview>(catalogPaths.draftPreview(scope, catalogId)));
   }
 }
 
