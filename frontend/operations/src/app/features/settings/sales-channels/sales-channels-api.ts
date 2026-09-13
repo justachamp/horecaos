@@ -18,6 +18,20 @@ export interface ChannelView {
   readonly guestOrdersAllowed: boolean;
   readonly providerInstallationId: string | null;
   readonly version: number;
+  /** settings.md 10.4a "Филиалы" — zero right after a single-channel mutation. */
+  readonly locationCount: number;
+  /** 10.4a "Способы оплаты". */
+  readonly enabledPaymentMethodCount: number;
+  /** 10.4a "Типы получения", enabled only. */
+  readonly enabledFulfillmentModes: readonly string[];
+}
+
+export interface UpdateChannelRequest {
+  readonly displayName: string;
+  readonly pricePlaneChannelId?: string | null;
+  readonly externallyPriced: boolean;
+  readonly guestOrdersAllowed: boolean;
+  readonly providerInstallationId?: string | null;
 }
 
 /** Mirrors uz.horecaos.platform.tenancy.application.SalesChannelService.ChannelMatrices. */
@@ -58,6 +72,69 @@ export class SalesChannelsApi {
       this.api.post<CreateChannelRequest, ChannelView>(
         settingsPaths.salesChannels(scope),
         command(request),
+      ),
+    );
+  }
+
+  async update(
+    scope: LocationScope,
+    channelId: string,
+    request: UpdateChannelRequest,
+    expectedVersion: number,
+  ): Promise<ChannelView> {
+    return firstValueFrom(
+      this.api.put<UpdateChannelRequest, ChannelView>(
+        settingsPaths.salesChannel(scope, channelId),
+        command(request),
+        { params: { expectedVersion } },
+      ),
+    );
+  }
+
+  async deactivate(
+    scope: LocationScope,
+    channelId: string,
+    expectedVersion: number,
+  ): Promise<ChannelView> {
+    return firstValueFrom(
+      this.api.post<null, ChannelView>(
+        settingsPaths.salesChannelDeactivate(scope, channelId),
+        command(null),
+        {
+          params: { expectedVersion },
+        },
+      ),
+    );
+  }
+
+  async reactivate(
+    scope: LocationScope,
+    channelId: string,
+    expectedVersion: number,
+  ): Promise<ChannelView> {
+    return firstValueFrom(
+      this.api.post<null, ChannelView>(
+        settingsPaths.salesChannelReactivate(scope, channelId),
+        command(null),
+        {
+          params: { expectedVersion },
+        },
+      ),
+    );
+  }
+
+  async replaceLocations(
+    scope: LocationScope,
+    channelId: string,
+    locationIds: readonly string[],
+    expectedVersion: number,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.send<{ locationIds: readonly string[] }, void>(
+        'PUT',
+        settingsPaths.salesChannelLocations(scope, channelId),
+        command({ locationIds }),
+        { params: { expectedVersion } },
       ),
     );
   }
