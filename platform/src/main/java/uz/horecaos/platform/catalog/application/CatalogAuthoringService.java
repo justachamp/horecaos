@@ -197,6 +197,49 @@ public class CatalogAuthoringService {
         store.addProductToCategory(tenantId, brandId, categoryId, productId, sortOrder);
     }
 
+    /** The undo {@link #placeProductInCategory} never had. */
+    @Transactional
+    public boolean removeProductFromCategory(UUID tenantId, UUID brandId, UUID categoryId, UUID productId) {
+        return store.removeProductFromCategory(tenantId, brandId, categoryId, productId);
+    }
+
+    /** The undo a catalog's own {@code addProductToCatalog} never had. */
+    @Transactional
+    public boolean removeProductFromCatalog(UUID tenantId, UUID brandId, UUID catalogId, UUID productId) {
+        return store.removeProductFromCatalog(tenantId, brandId, catalogId, productId);
+    }
+
+    /**
+     * Changes a product's own status. catalog.md §4.2 tab 1 rendered
+     * Черновик/Активен as read-only text because nothing here could change it.
+     *
+     * @return true when the product exists in this brand
+     */
+    @Transactional
+    public boolean setProductStatus(UUID tenantId, UUID brandId, UUID productId, Status status) {
+        return store.updateProductStatus(tenantId, brandId, productId, status);
+    }
+
+    /**
+     * Corrects a variant's SKU, unit and status — the variants tab was
+     * otherwise read-only apart from the price input. The name is set through
+     * {@link #translate} with {@link EntityType#VARIANT}, the same path every
+     * other entity's name already uses.
+     *
+     * @return true when the variant exists in this brand
+     */
+    @Transactional
+    public boolean updateVariant(
+            UUID tenantId, UUID brandId, UUID variantId, @Nullable String sku, String unitCode, Status status) {
+        return store.updateVariant(tenantId, brandId, variantId, sku, unitCode, status);
+    }
+
+    /** Makes one variant of a product the default, and no other. */
+    @Transactional
+    public boolean setDefaultVariant(UUID tenantId, UUID brandId, UUID productId, UUID variantId) {
+        return store.setDefaultVariant(tenantId, brandId, productId, variantId);
+    }
+
     @Transactional
     public UUID createModifierGroup(
             UUID tenantId,
@@ -316,6 +359,43 @@ public class CatalogAuthoringService {
             String role,
             int sortOrder) {
         store.attachMedia(tenantId, brandId, entityType, entityId, assetId.value(), role, sortOrder);
+    }
+
+    /**
+     * {@link #attachMedia(UUID, UUID, EntityType, UUID, MediaAssetId, String, int)},
+     * naming a channel to override for (IA 4.2f) rather than falling back to
+     * {@link JdbcCatalogStore#ALL_CHANNELS}.
+     */
+    @Transactional
+    public void attachMedia(
+            UUID tenantId,
+            UUID brandId,
+            EntityType entityType,
+            UUID entityId,
+            MediaAssetId assetId,
+            String role,
+            int sortOrder,
+            String channelCode) {
+        store.attachMedia(tenantId, brandId, entityType, entityId, assetId.value(), role, sortOrder, channelCode);
+    }
+
+    /**
+     * Detaches a media asset from a catalog entity — the undo {@link
+     * #attachMedia} never had, so a wrong upload could not be corrected short
+     * of leaving it attached.
+     *
+     * @return true when a relation actually existed and was removed
+     */
+    @Transactional
+    public boolean detachMedia(
+            UUID tenantId,
+            UUID brandId,
+            EntityType entityType,
+            UUID entityId,
+            MediaAssetId assetId,
+            String role,
+            String channelCode) {
+        return store.detachMedia(tenantId, brandId, entityType, entityId, assetId.value(), role, channelCode);
     }
 
     /**
