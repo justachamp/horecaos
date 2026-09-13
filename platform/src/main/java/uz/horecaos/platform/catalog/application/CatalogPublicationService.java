@@ -61,6 +61,29 @@ public class CatalogPublicationService {
     }
 
     /**
+     * The content hash the draft would publish as right now, without writing
+     * anything (operations gap map row {@code 4.6}).
+     *
+     * <p>Composes exactly the two pieces {@link #publish} already uses on its
+     * own draft — {@code snapshots.toPublicationItems} and {@link
+     * #contentHashOf} — and stops before the part that writes a row. A channel
+     * card compares this against the hash of its own last {@code PUBLISHED}
+     * history entry to answer "does the draft differ from what is live",
+     * which nothing before this method could answer without actually
+     * publishing to find out.
+     */
+    @Transactional(readOnly = true)
+    public DraftPreview previewDraft(UUID tenantId, UUID brandId, UUID catalogId) {
+        requireOwnership(tenantId, brandId, catalogId);
+        CatalogValidator.Snapshot snapshot = snapshots.load(tenantId, brandId, catalogId);
+        List<PublicationItem> items = snapshots.toPublicationItems(snapshot);
+        return new DraftPreview(contentHashOf(items), items.size());
+    }
+
+    /** What the draft would hash and how many items it carries, as of right now. */
+    public record DraftPreview(String contentHash, int itemCount) {}
+
+    /**
      * Snapshots, validates, and — if clean — makes the result the live menu.
      *
      * <p>A rejected publication is still recorded. An operator asking "why did

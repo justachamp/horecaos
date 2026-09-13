@@ -731,6 +731,34 @@ export interface BulkOrderRefRequest {
   orderId: string;
 }
 
+export interface BulkPriceChangeItemRequest {
+  amountMinor?: number;
+  priceableId: string;
+  priceableType: "VARIANT" | "MODIFIER_OPTION";
+}
+
+export interface BulkPriceChangeItemResponse {
+  amountMinor?: number;
+  applied?: boolean;
+  previousAmountMinor?: number;
+  priceableId?: string;
+  priceableType?: string;
+  problemCode?: string;
+}
+
+export interface BulkPriceChangeRequest {
+  dryRun?: boolean;
+  items: Array<BulkPriceChangeItemRequest>;
+}
+
+export interface BulkPriceChangeResponse {
+  appliedCount?: number;
+  dryRun?: boolean;
+  failedCount?: number;
+  items?: Array<BulkPriceChangeItemResponse>;
+  totalItems?: number;
+}
+
 export interface BusinessTypeRequest {
   businessType: string;
   reason: string;
@@ -2039,6 +2067,11 @@ export interface DraftModuleRequest {
   name: string;
   reason: string;
   unitPriceMinor?: number;
+}
+
+export interface DraftPreviewResponse {
+  contentHash?: string;
+  itemCount?: number;
 }
 
 export interface DraftProgramRequest {
@@ -6734,6 +6767,7 @@ export interface Operations {
   "createCatalog": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateCatalogRequest }; responses: { "200": CatalogAuthoringControllerIdResponse } };
   "categories": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/categories"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string } } }; responses: { "200": Array<CategorySummaryResponse> } };
   "createCategory": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/categories"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string } }; body: CreateCategoryRequest }; responses: { "200": CatalogAuthoringControllerIdResponse } };
+  "draftPreview": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/draft-preview"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string } } }; responses: { "200": DraftPreviewResponse } };
   "products": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/products"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageProductSummaryResponse } };
   "createProduct": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/products"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string } }; body: CreateProductRequest }; responses: { "200": ProductResponse } };
   "publish_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/publications"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string }; query: { channel?: string } } }; responses: { "200": PublicationResponse } };
@@ -6780,6 +6814,7 @@ export interface Operations {
   "assignToChannel": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/assignments/channels/{channelId}"; request: { parameters: { path: { brandId: string; channelId: string; priceBookId: string; tenantId: string } }; body: AssignmentRequest }; responses: { "200": PriceBookResponse } };
   "assignToLocation": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/assignments/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; priceBookId: string; tenantId: string } }; body: AssignmentRequest }; responses: { "200": PriceBookResponse } };
   "setModifierOptionPrice": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/modifier-option-prices/{modifierOptionId}"; request: { parameters: { path: { brandId: string; modifierOptionId: string; priceBookId: string; tenantId: string } }; body: PriceRequest }; responses: { "200": PriceBookResponse } };
+  "bulkApplyPrices": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/prices/bulk-apply"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string } }; body: BulkPriceChangeRequest }; responses: { "200": BulkPriceChangeResponse } };
   "setVariantPrice": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/variant-prices/{variantId}"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string; variantId: string } }; body: PriceRequest }; responses: { "200": PriceBookResponse } };
   "setTaxProfile": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/tax-profiles/{jurisdictionCode}"; request: { parameters: { path: { brandId: string; jurisdictionCode: string; tenantId: string } }; body: TaxProfileRequest }; responses: { "200": TaxProfileResponse } };
   "create_11": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateScheduleRequest }; responses: { "200": ScheduleView } };

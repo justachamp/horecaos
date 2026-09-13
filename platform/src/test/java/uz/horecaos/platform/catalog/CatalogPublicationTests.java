@@ -355,6 +355,83 @@ class CatalogPublicationTests {
     }
 
     @Test
+    @DisplayName("the draft preview hashes what publish would write, and changes when the draft changes")
+    void draftPreviewMatchesWhatPublishWouldWrite() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var burger = authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "BURGER",
+                "Qo'y burger",
+                null,
+                LOCALE,
+                "SKU-BURGER",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, burger.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+
+        var beforePublish = publication.previewDraft(TENANT, BRAND, catalogId);
+        assertThat(beforePublish.itemCount()).isPositive();
+
+        var published = publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+        // Nothing about the draft changed between the preview and the publish
+        // that followed it — the preview promised exactly the hash publishing
+        // actually wrote, which is the whole point of computing it the same way.
+        assertThat(beforePublish.contentHash()).isEqualTo(published.contentHash());
+
+        // An edit after the preview must be visible in the next preview, and
+        // previewDraft must not have written anything a second call could see
+        // as already accounted for.
+        authoring.translate(
+                TENANT,
+                BRAND,
+                uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType.PRODUCT,
+                burger.productId(),
+                LOCALE,
+                "Renamed in draft",
+                null);
+        var afterEdit = publication.previewDraft(TENANT, BRAND, catalogId);
+        assertThat(afterEdit.contentHash()).isNotEqualTo(beforePublish.contentHash());
+
+        // And the live menu — what a channel card's "last published" hash would
+        // compare against — is still the pre-edit hash: previewDraft answers
+        // "what would publish write right now", not "what did the last publish
+        // actually publish".
+        var stillLive =
+                storefront.menuFor(TENANT, BRAND, LOCATION, LOCALE, CHANNEL).orElseThrow();
+        assertThat(stillLive.products()).singleElement().satisfies(product -> {
+            assertThat(product.name()).isEqualTo("Qo'y burger");
+        });
+    }
+
+    @Test
+    @DisplayName("previewing a draft writes nothing a real publish would notice")
+    void draftPreviewWritesNothing() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var burger = authoring.createProduct(
+                TENANT, BRAND, catalogId, "BURGER", "Burger", null, LOCALE, "SKU-1", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, burger.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+
+        // Calling it repeatedly must be perfectly stable — a write that leaked
+        // out of previewDraft would make the second call's hash disagree with
+        // the first, or make openPriceCount-style counters drift.
+        var first = publication.previewDraft(TENANT, BRAND, catalogId);
+        var second = publication.previewDraft(TENANT, BRAND, catalogId);
+        assertThat(second.contentHash()).isEqualTo(first.contentHash());
+        assertThat(second.itemCount()).isEqualTo(first.itemCount());
+
+        long publicationRowsBeforePublish = jdbc.sql("SELECT COUNT(*) FROM catalog.publications WHERE tenant_id = ?")
+                .param(TENANT)
+                .query(Long.class)
+                .single();
+        assertThat(publicationRowsBeforePublish).isZero();
+    }
+
+    @Test
     @DisplayName("a product with no active variant blocks publication")
     void productWithoutVariantBlocksPublication() {
         UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);

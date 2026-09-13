@@ -968,6 +968,94 @@
         },
         "type" : "object"
       },
+      "BulkPriceChangeItemRequest" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "priceableId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "priceableType" : {
+            "enum" : [ "VARIANT", "MODIFIER_OPTION" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "priceableId", "priceableType" ],
+        "type" : "object"
+      },
+      "BulkPriceChangeItemResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "applied" : {
+            "type" : "boolean"
+          },
+          "previousAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "priceableId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "priceableType" : {
+            "type" : "string"
+          },
+          "problemCode" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "BulkPriceChangeRequest" : {
+        "properties" : {
+          "dryRun" : {
+            "type" : "boolean"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BulkPriceChangeItemRequest"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          }
+        },
+        "required" : [ "items" ],
+        "type" : "object"
+      },
+      "BulkPriceChangeResponse" : {
+        "properties" : {
+          "appliedCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "dryRun" : {
+            "type" : "boolean"
+          },
+          "failedCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BulkPriceChangeItemResponse"
+            },
+            "type" : "array"
+          },
+          "totalItems" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "BusinessTypeRequest" : {
         "properties" : {
           "businessType" : {
@@ -2711,6 +2799,18 @@
           }
         },
         "required" : [ "billingUnit", "code", "currency", "name", "reason" ],
+        "type" : "object"
+      },
+      "DraftPreviewResponse" : {
+        "properties" : {
+          "contentHash" : {
+            "type" : "string"
+          },
+          "itemCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
         "type" : "object"
       },
       "DueCredential" : {
@@ -11546,6 +11646,51 @@
         "tags" : [ "Catalog authoring" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/draft-preview" : {
+      "get" : {
+        "description" : "Nothing is written. A channel card compares this against the hash of its own last PUBLISHED history entry to render \"Черновик отличается от опубликованного\" versus \"Актуально\" before an operator commits to publishing.",
+        "operationId" : "draftPreview",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "catalogId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DraftPreviewResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The content hash the draft would publish as right now (IA 4.6)",
+        "tags" : [ "Catalog publication" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/products" : {
       "get" : {
         "description" : "Same Page and keyset-cursor shape variantsAtLocation uses: a short page is the end of the collection, a full one may or may not be.",
@@ -13896,6 +14041,61 @@
           }
         },
         "summary" : "Set what a modifier option costs",
+        "tags" : [ "Price authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/prices/bulk-apply" : {
+      "post" : {
+        "description" : "Composing this client-side as N optimistic-locked PUT .../variant-prices/{variantId} calls gives no atomicity and no partial-failure story. Each item is applied through the same setPrice a single edit would use, in its own transaction, so one bad item (an unknown variant, a negative amount) cannot fail the rest of the batch. dryRun runs every item's write and then rolls it back, so an operator sees exactly what a percent or absolute change across a filtered selection would cost before committing it. Capped at 200 items, matching GET .../resolved/prices.",
+        "operationId" : "bulkApplyPrices",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "priceBookId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BulkPriceChangeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BulkPriceChangeResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change many prices in one call, with a dry run (operations gap map row 4.8b)",
         "tags" : [ "Price authoring" ]
       }
     },
