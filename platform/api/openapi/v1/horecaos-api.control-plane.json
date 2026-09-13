@@ -968,6 +968,34 @@
         },
         "type" : "object"
       },
+      "BulkOfferingStatusRequest" : {
+        "properties" : {
+          "status" : {
+            "enum" : [ "AVAILABLE", "UNAVAILABLE", "HIDDEN" ],
+            "type" : "string"
+          },
+          "variantIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          }
+        },
+        "required" : [ "status", "variantIds" ],
+        "type" : "object"
+      },
+      "BulkOfferingStatusResponse" : {
+        "properties" : {
+          "updatedCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "BusinessTypeRequest" : {
         "properties" : {
           "businessType" : {
@@ -1108,6 +1136,9 @@
             "type" : "string"
           },
           "code" : {
+            "type" : "string"
+          },
+          "description" : {
             "type" : "string"
           },
           "name" : {
@@ -8198,6 +8229,25 @@
         "required" : [ "entityId", "entityType", "locale", "name" ],
         "type" : "object"
       },
+      "UpdateCategoryRequest" : {
+        "properties" : {
+          "code" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "parentCategoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "code" ],
+        "type" : "object"
+      },
       "UpdateCloposSettingsRequest" : {
         "properties" : {
           "requireClerkApproval" : {
@@ -8302,6 +8352,15 @@
             "type" : "boolean"
           },
           "category" : {
+            "type" : "string"
+          },
+          "fulfillmentModes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "offeringStatus" : {
             "type" : "string"
           },
           "productName" : {
@@ -11546,6 +11605,108 @@
         "tags" : [ "Catalog authoring" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/categories/{categoryId}" : {
+      "put" : {
+        "description" : "Categories were write-once before this endpoint: no PUT changed parentCategoryId, sortOrder, code or description. Name and description still go through PUT /translations; this is parentCategoryId, code and sortOrder only. A reparent that would make the category its own ancestor is refused (see the CATEGORY_TREE_HAS_CYCLE detail on the response).",
+        "operationId" : "updateCategory",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "catalogId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "categoryId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateCategoryRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reparent, rename the code of, and re-sort a category",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/categories/{categoryId}/archive" : {
+      "post" : {
+        "description" : "Never a hard delete: a product already placed in this category keeps its row, exactly as an archived product keeps its variants.",
+        "operationId" : "archiveCategory",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "catalogId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "categoryId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Archive a category",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/products" : {
       "get" : {
         "description" : "Same Page and keyset-cursor shape variantsAtLocation uses: a short page is the end of the collection, a full one may or may not be.",
@@ -11906,7 +12067,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/locations/{locationId}/variants" : {
       "get" : {
-        "description" : "catalog.md §4.6, the 86 screen's read side: the read counterpart of PUT .../inventory/variants/{variantId}/availability. Gated on inventory.read rather than catalog.read, matching the screen's own denial rule — an actor who can adjust stock but never touches draft authoring still needs this list.",
+        "description" : "catalog.md §4.6, the 86 screen's read side, and catalog.md §4.5's Layer A menu matrix. Gated on inventory.read rather than catalog.read, matching the screen's own denial rule — an actor who can adjust stock but never touches draft authoring still needs this list. search matches the product name (in locale) or the variant SKU; status is one of AVAILABLE/UNAVAILABLE/HIDDEN/NOT_ADDED — NOT_ADDED is how the matrix asks \"what is missing from this branch's menu\", which the offering-status-blind read this endpoint used to run could never answer.",
         "operationId" : "variantsAtLocation",
         "parameters" : [ {
           "in" : "path",
@@ -11956,6 +12117,20 @@
             "format" : "int32",
             "type" : "integer"
           }
+        }, {
+          "in" : "query",
+          "name" : "search",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
         } ],
         "responses" : {
           "200" : {
@@ -11970,6 +12145,61 @@
           }
         },
         "summary" : "One location's sellable variants, with current availability",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/locations/{locationId}/variants/bulk-offering-status" : {
+      "post" : {
+        "description" : "catalog.md §4.5's bulk stop/unstop — absent until this endpoint. Leaves fulfillmentModes untouched on a variant already offered here; a variant never offered here starts with the same default a fresh single setOffering call would give it.",
+        "operationId" : "bulkSetOfferingStatus",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BulkOfferingStatusRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BulkOfferingStatusResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sets the offering status of many variants at one location in one gesture",
         "tags" : [ "Catalog authoring" ]
       }
     },
