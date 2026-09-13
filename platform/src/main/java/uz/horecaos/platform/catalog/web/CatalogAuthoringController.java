@@ -350,18 +350,22 @@ public class CatalogAuthoringController {
                     + "PUT .../inventory/variants/{variantId}/availability. Gated on inventory.read "
                     + "rather than catalog.read, matching the screen's own denial rule — an actor "
                     + "who can adjust stock but never touches draft authoring still needs this "
-                    + "list.")
+                    + "list. Also the New order screen's item search (orders.md §5.5, wave P13): "
+                    + "`query` narrows by product name, case-insensitively, so the picker can "
+                    + "search a catalog of thousands rather than paging through it; omitted, this "
+                    + "is the unfiltered 86-screen page it always was.")
     public Page<VariantAvailabilityResponse> variantsAtLocation(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @RequestParam(defaultValue = "uz") String locale,
+            @RequestParam(required = false) @Nullable String query,
             @RequestParam(required = false) @Nullable UUID cursor,
             @RequestParam(required = false) @Nullable Integer limit) {
 
         int pageSize = Page.limitOrDefault(limit);
         List<JdbcCatalogStore.VariantAvailabilityRow> rows =
-                authoring.variantsAtLocation(tenantId, brandId, locationId, locale, cursor, pageSize);
+                authoring.variantsAtLocation(tenantId, brandId, locationId, locale, query, cursor, pageSize);
         List<VariantAvailabilityResponse> items =
                 rows.stream().map(VariantAvailabilityResponse::of).toList();
 

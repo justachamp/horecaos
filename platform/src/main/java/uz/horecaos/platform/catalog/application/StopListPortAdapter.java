@@ -37,7 +37,7 @@ public class StopListPortAdapter implements StopListPort {
     @Override
     public List<Item> listAtLocation(UUID tenantId, UUID brandId, UUID locationId) {
         List<VariantAvailabilityRow> rows =
-                authoring.variantsAtLocation(tenantId, brandId, locationId, DEFAULT_LOCALE, null, MAX_ITEMS);
+                authoring.variantsAtLocation(tenantId, brandId, locationId, DEFAULT_LOCALE, null, null, MAX_ITEMS);
         return rows.stream()
                 .map(row -> new Item(row.variantId(), row.productName(), row.available()))
                 .toList();

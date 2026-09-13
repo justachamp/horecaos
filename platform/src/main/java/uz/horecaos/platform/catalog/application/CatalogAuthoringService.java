@@ -403,7 +403,11 @@ public class CatalogAuthoringService {
 
     /**
      * The 86 screen's read (catalog.md §4.6): one location's sellable variants,
-     * joined with whether each can be sold right now.
+     * joined with whether each can be sold right now. Also the New order
+     * screen's item search (orders.md §5.5, wave P13): {@code query} narrows by
+     * product name so the picker can search a catalog of thousands rather than
+     * paging through it; {@code null} keeps every existing caller's
+     * unfiltered behaviour.
      *
      * <p>Read-only and, unlike every other method here, not scoped to a draft —
      * {@code location_offerings} and {@code inventory.positions} both take
@@ -412,8 +416,14 @@ public class CatalogAuthoringService {
      */
     @Transactional(readOnly = true)
     public List<JdbcCatalogStore.VariantAvailabilityRow> variantsAtLocation(
-            UUID tenantId, UUID brandId, UUID locationId, String locale, @Nullable UUID cursor, int limit) {
-        return store.variantsAtLocation(tenantId, brandId, locationId, locale, cursor, limit);
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String locale,
+            @Nullable String query,
+            @Nullable UUID cursor,
+            int limit) {
+        return store.variantsAtLocation(tenantId, brandId, locationId, locale, query, cursor, limit);
     }
 
     /**

@@ -956,7 +956,19 @@ public class JdbcCatalogStore {
     }
 
     public List<VariantAvailabilityRow> variantsAtLocation(
-            UUID tenantId, UUID brandId, UUID locationId, String locale, @Nullable UUID cursorVariantId, int limit) {
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String locale,
+            @Nullable String query,
+            @Nullable UUID cursorVariantId,
+            int limit) {
+        // The New order screen's item search (orders.md §5.5, ADR 0039): a
+        // case-insensitive substring match on the product's own translated
+        // name, in the same locale the row already renders. Null or blank
+        // stays the unfiltered 86-screen behaviour untouched — every existing
+        // caller of this method passes null and must keep seeing every row.
+        String likePattern = normalisedLikePattern(query);
         return jdbc.sql("""
                 SELECT v.id AS variant_id,
                        t.name AS product_name,
@@ -991,6 +1003,7 @@ public class JdbcCatalogStore {
                 WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId
                   AND v.status = 'ACTIVE' AND p.status = 'ACTIVE'
                   AND (CAST(:cursor AS uuid) IS NULL OR v.id > CAST(:cursor AS uuid))
+                  AND (CAST(:query AS text) IS NULL OR t.name ILIKE :query)
                 ORDER BY v.id
                 LIMIT :limit
                 """)
@@ -999,6 +1012,7 @@ public class JdbcCatalogStore {
                 .param("locationId", locationId)
                 .param("locale", locale)
                 .param("cursor", cursorVariantId)
+                .param("query", likePattern)
                 .param("limit", limit)
                 .query((row, number) -> {
                     String trackingMode = row.getString("tracking_mode");
@@ -1024,6 +1038,21 @@ public class JdbcCatalogStore {
                             trackingMode);
                 })
                 .list();
+    }
+
+    /**
+     * {@code "%" + trimmed + "%"} for an {@code ILIKE}, or {@code null} — never
+     * an empty-string pattern, which would match every row and turn a blank
+     * query into "show everything" rather than "nothing typed yet". Mirrors
+     * {@link #searchMxikReference}'s own pattern, unescaped: a literal
+     * {@code %} or {@code _} in a product name is rare enough here that the
+     * MXIK reference search accepted the same trade-off first.
+     */
+    private static @Nullable String normalisedLikePattern(@Nullable String query) {
+        if (query == null || query.isBlank()) {
+            return null;
+        }
+        return "%" + query.trim() + "%";
     }
 
     /**
