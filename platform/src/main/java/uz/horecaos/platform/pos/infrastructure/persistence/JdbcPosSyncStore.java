@@ -3,12 +3,14 @@ package uz.horecaos.platform.pos.infrastructure.persistence;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -21,6 +23,8 @@ import uz.horecaos.platform.pos.domain.DifferenceEngine.AbsenceHistory;
 import uz.horecaos.platform.pos.domain.SyncConflict;
 import uz.horecaos.platform.pos.domain.SyncDifference;
 import uz.horecaos.platform.pos.domain.SyncDifference.EntityType;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * The catalog synchronization run, its staged snapshot, and its findings
@@ -518,6 +522,169 @@ public class JdbcPosSyncStore {
                  WHERE tenant_id = :tenantId AND id = :id
                 """).params(counters).update();
     }
+
+    /**
+     * A binding's runs, newest first (ADR 0031 keyset cursor; gap-map row
+     * 4.5a — there was no listing read at all before this).
+     *
+     * @param cursor {@link #cursorFor}'s own output; null starts at the newest run
+     */
+    public List<RunSummaryRow> listRuns(UUID tenantId, UUID bindingId, int limit, @Nullable String cursor) {
+        CursorPosition position = cursor == null ? null : decodeCursor(cursor);
+
+        StringBuilder sql = new StringBuilder("""
+                SELECT id, binding_id, status, trigger_type, dry_run, started_at, completed_at,
+                       addition_count, change_count, removal_count, conflict_count, last_error_code
+                  FROM integration.pos_sync_runs
+                 WHERE tenant_id = :tenantId AND binding_id = :bindingId
+                """);
+        if (position != null) {
+            // Row-value comparison, matching AuditQueryService.search's own
+            // keyset idiom: started_at alone repeats or skips a run when two
+            // share a timestamp, and this table has no other natural order.
+            sql.append(" AND (started_at, id) < (:cursorStartedAt, :cursorId)\n");
+        }
+        sql.append(" ORDER BY started_at DESC, id DESC LIMIT :limit");
+
+        var statement = jdbc.sql(sql.toString())
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("limit", limit);
+        if (position != null) {
+            statement = statement
+                    .param("cursorStartedAt", OffsetDateTime.ofInstant(position.startedAt(), ZoneOffset.UTC))
+                    .param("cursorId", position.id());
+        }
+        return statement
+                .query((row, number) -> new RunSummaryRow(
+                        row.getObject("id", UUID.class),
+                        row.getObject("binding_id", UUID.class),
+                        row.getString("status"),
+                        row.getString("trigger_type"),
+                        row.getBoolean("dry_run"),
+                        row.getObject("started_at", OffsetDateTime.class).toInstant(),
+                        instantOrNull(row.getObject("completed_at", OffsetDateTime.class)),
+                        row.getInt("addition_count"),
+                        row.getInt("change_count"),
+                        row.getInt("removal_count"),
+                        row.getInt("conflict_count"),
+                        row.getString("last_error_code")))
+                .list();
+    }
+
+    /** The full detail of one run, or empty when it does not exist for this tenant. */
+    public Optional<RunDetailRow> findRunDetail(UUID tenantId, UUID runId) {
+        return jdbc.sql("""
+                SELECT id, binding_id, status, trigger_type, dry_run, adapter_version,
+                       field_policy_version, started_at, fetched_at, normalized_at, compared_at,
+                       applied_at, completed_at, received_count, valid_count, invalid_count,
+                       addition_count, change_count, removal_count, conflict_count,
+                       page_count, walk_kind, last_error_code, last_error, version
+                  FROM integration.pos_sync_runs
+                 WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("id", runId)
+                .query((row, number) -> new RunDetailRow(
+                        row.getObject("id", UUID.class),
+                        row.getObject("binding_id", UUID.class),
+                        row.getString("status"),
+                        row.getString("trigger_type"),
+                        row.getBoolean("dry_run"),
+                        row.getString("adapter_version"),
+                        row.getInt("field_policy_version"),
+                        row.getObject("started_at", OffsetDateTime.class).toInstant(),
+                        instantOrNull(row.getObject("fetched_at", OffsetDateTime.class)),
+                        instantOrNull(row.getObject("normalized_at", OffsetDateTime.class)),
+                        instantOrNull(row.getObject("compared_at", OffsetDateTime.class)),
+                        instantOrNull(row.getObject("applied_at", OffsetDateTime.class)),
+                        instantOrNull(row.getObject("completed_at", OffsetDateTime.class)),
+                        row.getInt("received_count"),
+                        row.getInt("valid_count"),
+                        row.getInt("invalid_count"),
+                        row.getInt("addition_count"),
+                        row.getInt("change_count"),
+                        row.getInt("removal_count"),
+                        row.getInt("conflict_count"),
+                        row.getInt("page_count"),
+                        row.getString("walk_kind"),
+                        row.getString("last_error_code"),
+                        row.getString("last_error"),
+                        row.getLong("version")))
+                .optional();
+    }
+
+    private static @Nullable Instant instantOrNull(@Nullable OffsetDateTime value) {
+        return value == null ? null : value.toInstant();
+    }
+
+    /** {@code cursor} for the run right after {@code row} in {@link #listRuns}'s own order. */
+    public static String cursorFor(RunSummaryRow row) {
+        return row.startedAt() + CURSOR_SEPARATOR + row.id();
+    }
+
+    private static CursorPosition decodeCursor(String raw) {
+        int separator = raw.lastIndexOf(CURSOR_SEPARATOR);
+        if (separator <= 0 || separator == raw.length() - 1) {
+            throw malformedCursor();
+        }
+        try {
+            Instant startedAt = Instant.parse(raw.substring(0, separator));
+            UUID id = UUID.fromString(raw.substring(separator + 1));
+            return new CursorPosition(startedAt, id);
+        } catch (DateTimeParseException | IllegalArgumentException malformed) {
+            throw malformedCursor();
+        }
+    }
+
+    private static ApiException malformedCursor() {
+        return new ApiException(ErrorCode.VALIDATION_FAILED, "Malformed cursor");
+    }
+
+    private static final String CURSOR_SEPARATOR = "|";
+
+    private record CursorPosition(Instant startedAt, UUID id) {}
+
+    public record RunSummaryRow(
+            UUID id,
+            UUID bindingId,
+            String status,
+            String triggerType,
+            boolean dryRun,
+            Instant startedAt,
+            @Nullable Instant completedAt,
+            int additionCount,
+            int changeCount,
+            int removalCount,
+            int conflictCount,
+            @Nullable String lastErrorCode) {}
+
+    public record RunDetailRow(
+            UUID id,
+            UUID bindingId,
+            String status,
+            String triggerType,
+            boolean dryRun,
+            String adapterVersion,
+            int fieldPolicyVersion,
+            Instant startedAt,
+            @Nullable Instant fetchedAt,
+            @Nullable Instant normalizedAt,
+            @Nullable Instant comparedAt,
+            @Nullable Instant appliedAt,
+            @Nullable Instant completedAt,
+            int receivedCount,
+            int validCount,
+            int invalidCount,
+            int additionCount,
+            int changeCount,
+            int removalCount,
+            int conflictCount,
+            int pageCount,
+            String walkKind,
+            @Nullable String lastErrorCode,
+            @Nullable String lastError,
+            long version) {}
 
     public List<SyncDifference> differences(UUID tenantId, UUID runId, int limit, int offset) {
         return jdbc.sql("""

@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,8 +30,11 @@ import uz.horecaos.platform.pos.application.PosCapabilityService;
 import uz.horecaos.platform.pos.application.PosCatalogSyncService;
 import uz.horecaos.platform.pos.domain.ReviewOutcome;
 import uz.horecaos.platform.pos.domain.SyncDifference;
+import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosApplyStore;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosApplyStore.ApplyItemRow;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosSyncStore;
+import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosSyncStore.RunDetailRow;
+import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosSyncStore.RunSummaryRow;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.api.Page;
@@ -58,6 +62,7 @@ public class PosSyncRunController {
     private final PosApplyService apply;
     private final PosCapabilityService capabilities;
     private final JdbcPosSyncStore runs;
+    private final JdbcPosApplyStore applyStore;
     private final AuditRecorder audit;
     private final CurrentActor currentActor;
     private final java.time.Clock clock;
@@ -67,6 +72,7 @@ public class PosSyncRunController {
             PosApplyService apply,
             PosCapabilityService capabilities,
             JdbcPosSyncStore runs,
+            JdbcPosApplyStore applyStore,
             AuditRecorder audit,
             CurrentActor currentActor,
             java.time.Clock clock) {
@@ -74,9 +80,68 @@ public class PosSyncRunController {
         this.apply = apply;
         this.capabilities = capabilities;
         this.runs = runs;
+        this.applyStore = applyStore;
         this.audit = audit;
         this.currentActor = currentActor;
         this.clock = clock;
+    }
+
+    @GetMapping
+    @RequiresCapability(Capability.POS_SYNC_READ)
+    @Operation(
+            summary = "A binding's import run history",
+            description = "Newest first. There was no listing read at all before gap-map row 4.5a: "
+                    + "a run could be started and reported on individually, but never enumerated.")
+    Page<RunSummaryView> listRuns(
+            @PathVariable UUID tenantId,
+            @RequestParam UUID bindingId,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) String cursor) {
+
+        int size = Page.limitOrDefault(limit);
+        List<RunSummaryRow> rows = runs.listRuns(tenantId, bindingId, size, cursor);
+        List<RunSummaryView> views =
+                rows.stream().map(PosSyncRunController::toSummaryView).toList();
+        String nextCursor = rows.size() < size ? null : JdbcPosSyncStore.cursorFor(rows.getLast());
+        return new Page<>(views, nextCursor);
+    }
+
+    @GetMapping("/{runId}")
+    @RequiresCapability(Capability.POS_SYNC_READ)
+    @Operation(
+            summary = "One run's full detail",
+            description = "Every stage timestamp, count and the last provider error, for the run "
+                    + "list's own detail view.")
+    RunDetailView runDetail(@PathVariable UUID tenantId, @PathVariable UUID runId) {
+        return runs.findRunDetail(tenantId, runId)
+                .map(PosSyncRunController::toDetailView)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such run"));
+    }
+
+    @GetMapping("/{runId}/apply-items")
+    @RequiresCapability(Capability.POS_SYNC_READ)
+    @Operation(
+            summary = "One run's per-item apply outcomes",
+            description = "What actually happened to each planned item after apply or resume — "
+                    + "APPLIED, FAILED and why, SKIPPED, RETURNED_TO_REVIEW, or still PLANNED. "
+                    + "Gap-map row 4.5a: there was no read over integration.pos_sync_apply_items "
+                    + "before this; applyRun's own response only ever carried counts.")
+    Page<ApplyItemView> applyItems(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID runId,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(defaultValue = "0") int offset) {
+
+        int size = Page.limitOrDefault(limit);
+        // Offset paging, for the same reason differences() below gives: apply
+        // items are written once, when apply or resume ran, and never again --
+        // there is no concurrent writer for this page to race.
+        List<ApplyItemView> views = applyStore.applyItems(tenantId, runId).stream()
+                .skip(offset)
+                .limit(size)
+                .map(PosSyncRunController::toApplyItemView)
+                .toList();
+        return views.size() < size ? Page.last(views) : new Page<>(views, Integer.toString(offset + size));
     }
 
     @PostMapping
@@ -90,16 +155,27 @@ public class PosSyncRunController {
             @RequestParam(defaultValue = "true") boolean dryRun,
             @Valid @RequestBody StartRequest request) {
 
-        PosCatalogSyncService.RunResult result = sync.run(tenantId, request.bindingId(), "MANUAL", dryRun);
+        PosCatalogSyncService.RunResult result = sync.run(
+                tenantId, request.bindingId(), "MANUAL", dryRun, request.importLanguage(), request.priceReImport());
         UUID runId = result.runId();
 
         if (runId != null) {
+            Map<String, Object> changed = new LinkedHashMap<>();
+            changed.put("bindingId", request.bindingId().toString());
+            changed.put("dryRun", Boolean.toString(dryRun));
+            changed.put("priceReImport", Boolean.toString(request.priceReImport()));
+            if (request.importLanguage() != null && !request.importLanguage().isBlank()) {
+                // A locale code ("uz-UZ"), never a person's own text -- ADR
+                // 0029 is unaffected, this is just kept out of the map when
+                // absent so it does not read as "" beside a real one.
+                changed.put("importLanguage", request.importLanguage());
+            }
             audit.record(AuditFact.of("pos.catalog_sync_started", AuditClass.BUSINESS)
                     .by(ActorRef.user(currentActor.get().subject(), null))
                     .at(ResourceScope.tenant(tenantId))
                     .target("PosSyncRun", runId)
                     .because("Manual catalog import")
-                    .changed(Map.of("bindingId", request.bindingId().toString(), "dryRun", Boolean.toString(dryRun)))
+                    .changed(changed)
                     .usingCapability(Capability.POS_SYNC_EXECUTE.code())
                     .correlatedBy(runId.toString())
                     .occurredAt(clock.instant())
@@ -307,6 +383,63 @@ public class PosSyncRunController {
                         "detail", "No POS adapter is registered for " + request.providerType())));
     }
 
+    private static RunSummaryView toSummaryView(RunSummaryRow row) {
+        return new RunSummaryView(
+                row.id(),
+                row.bindingId(),
+                row.status(),
+                row.triggerType(),
+                row.dryRun(),
+                row.startedAt(),
+                row.completedAt(),
+                row.additionCount(),
+                row.changeCount(),
+                row.removalCount(),
+                row.conflictCount(),
+                row.lastErrorCode());
+    }
+
+    private static RunDetailView toDetailView(RunDetailRow row) {
+        return new RunDetailView(
+                row.id(),
+                row.bindingId(),
+                row.status(),
+                row.triggerType(),
+                row.dryRun(),
+                row.adapterVersion(),
+                row.fieldPolicyVersion(),
+                row.startedAt(),
+                row.fetchedAt(),
+                row.normalizedAt(),
+                row.comparedAt(),
+                row.appliedAt(),
+                row.completedAt(),
+                row.receivedCount(),
+                row.validCount(),
+                row.invalidCount(),
+                row.additionCount(),
+                row.changeCount(),
+                row.removalCount(),
+                row.conflictCount(),
+                row.pageCount(),
+                row.walkKind(),
+                row.lastErrorCode(),
+                row.lastError());
+    }
+
+    private static ApplyItemView toApplyItemView(ApplyItemRow row) {
+        return new ApplyItemView(
+                row.id(),
+                row.differenceId(),
+                row.idempotencyKey(),
+                row.action(),
+                row.targetType(),
+                row.targetId(),
+                row.status(),
+                row.appliedAt(),
+                row.failureReason());
+    }
+
     private static DifferenceView toView(SyncDifference difference) {
         return new DifferenceView(
                 difference.entityType().name(),
@@ -321,7 +454,17 @@ public class PosSyncRunController {
                 difference.recommendedAction().name());
     }
 
-    public record StartRequest(@NotNull UUID bindingId) {}
+    /**
+     * @param importLanguage which {@code catalog.translations} locale this run
+     *                       compares against, overriding the binding's own
+     *                       {@code catalog.defaultLocale} for this run only.
+     *                       Null or blank keeps the binding's default
+     * @param priceReImport  gap-map row 4.5a: when true, a price difference on
+     *                       this run is reviewable instead of permanently
+     *                       ignored — see {@code FieldAuthorityPolicy.PRICE_REVIEWED_IMPORT}
+     */
+    public record StartRequest(
+            @NotNull UUID bindingId, @Nullable String importLanguage, boolean priceReImport) {}
 
     public record ReconcileRequest(
             @NotNull UUID installationId, @NotNull String providerType) {}
@@ -351,4 +494,62 @@ public class PosSyncRunController {
             String authority,
             String severity,
             String recommendedAction) {}
+
+    /** One row of the run-history list. */
+    public record RunSummaryView(
+            UUID runId,
+            UUID bindingId,
+            String status,
+            String triggerType,
+            boolean dryRun,
+            Instant startedAt,
+            @Nullable Instant completedAt,
+            int additionCount,
+            int changeCount,
+            int removalCount,
+            int conflictCount,
+            @Nullable String lastErrorCode) {}
+
+    /** A run's full detail. */
+    public record RunDetailView(
+            UUID runId,
+            UUID bindingId,
+            String status,
+            String triggerType,
+            boolean dryRun,
+            String adapterVersion,
+            int fieldPolicyVersion,
+            Instant startedAt,
+            @Nullable Instant fetchedAt,
+            @Nullable Instant normalizedAt,
+            @Nullable Instant comparedAt,
+            @Nullable Instant appliedAt,
+            @Nullable Instant completedAt,
+            int receivedCount,
+            int validCount,
+            int invalidCount,
+            int additionCount,
+            int changeCount,
+            int removalCount,
+            int conflictCount,
+            int pageCount,
+            String walkKind,
+            @Nullable String lastErrorCode,
+            @Nullable String lastError) {}
+
+    /**
+     * One planned apply item's actual outcome (gap-map row 4.5a's per-item
+     * outcome report — there was no read over {@code
+     * integration.pos_sync_apply_items} before this).
+     */
+    public record ApplyItemView(
+            UUID id,
+            @Nullable UUID differenceId,
+            String idempotencyKey,
+            String action,
+            String targetType,
+            @Nullable UUID targetId,
+            String status,
+            @Nullable Instant appliedAt,
+            @Nullable String failureReason) {}
 }
