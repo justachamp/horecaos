@@ -686,19 +686,17 @@ export const routes: Routes = [
                 'does not exist (ADR 0043)',
             },
           },
-          // 7.5 Staff reports: `reporting.fact_order` carries no operator
-          // attribution column at all (ADR 0039's own `created_by_actor_id`
-          // landed on `ordering.orders`, not copied into the reporting fact
-          // yet), so 7.5 cannot join to a staff dimension.
+          // 7.5/7.5a/7.5b Staff reports (T12): `operator_principal_id` now
+          // lands on `reporting.fact_order` and the close job copies
+          // created_by/accepted_by into it, typing a machine principal as a
+          // pseudo-operator. 7.5b's tab is not blocked on live telephony —
+          // `CallStatsController` already computes offered/answered/missed/
+          // transferred and talk seconds per operator at every day close and
+          // simply had no consumer before this route.
           {
             path: 'staff',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: {
-              spec:
-                'frontend-information-architecture.md §7.5 (Staff reports) — fact_order has no ' +
-                'operator attribution column',
-            },
+              import('./features/reports/staff-report-page').then((m) => m.StaffReportPage),
           },
           // 7.6 Customer analytics: none of its six published-formula tiles
           // (new customers, basket depth, LTV, …) is a registered metric —

@@ -348,6 +348,17 @@ export const operationsPaths = {
   voiceCallLog(scope: LocationScope): string {
     return `${OPERATIONS}${tenantBrandLocation(scope)}/voice/call-log`;
   },
+
+  /**
+   * T12 (7.5b): offered/answered/missed/transferred and talk seconds, by
+   * hour and operator, for one business date (`CallStatsController`).
+   * Written by the same day-close pipeline every other ADR 0043 fact uses —
+   * empty until the day closes, never live.
+   */
+  voiceCallStats(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/voice/call-stats`;
+  },
+
   /**
    * The CRM grid: `CustomerController`, tenant-scoped like `orders` — never
    * moved onto the ADR 0031 prefix, so this sits on {@link LEGACY_TENANT_PREFIX}
