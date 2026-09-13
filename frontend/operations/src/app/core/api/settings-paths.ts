@@ -547,9 +547,15 @@ export const settingsPaths = {
    * `CustomerController.tenantErasureRequests` — the tenant-wide DSAR
    * worklist. Reuses `CustomerErasureService`'s existing per-account
    * lifecycle (`V0178`); this is the only new read the worklist needed.
+   *
+   * `CustomerController`'s class-level `@RequestMapping` is `/customers`, so
+   * the real route is `/api/v1/tenants/{tenantId}/customers/erasure-requests`
+   * — every other customer-nested path in this frontend already includes
+   * that segment (see `operationsPaths.customers`); this one previously
+   * didn't, and 404'd on every load.
    */
   erasureRequests(tenantId: string): string {
-    return `${TENANT}/${enc(tenantId)}/erasure-requests`;
+    return `${TENANT}/${enc(tenantId)}/customers/erasure-requests`;
   },
 
   /** `ConsentTypeController.list` — the tenant's own consent-purpose registry. */
