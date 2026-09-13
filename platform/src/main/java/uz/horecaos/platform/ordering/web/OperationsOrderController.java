@@ -645,6 +645,8 @@ public class OperationsOrderController {
             @PathVariable UUID orderId,
             @Valid @RequestBody DecisionRequest body) {
 
+        requireOrderAtLocation(tenantId, orderId, locationId);
+
         if (body.action() == OrderStateService.DecisionAction.REJECT
                 && (body.reasonCode() == null || body.reasonCode().isBlank())) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "A rejection needs a reason code");
@@ -710,6 +712,7 @@ public class OperationsOrderController {
             @PathVariable UUID orderId,
             @Valid @RequestBody StateActionRequest body,
             HttpServletRequest request) {
+        requireOrderAtLocation(tenantId, orderId, locationId);
         try {
             long expected = AggregateVersion.requireIfMatch(request);
             var result = orderState.advance(
@@ -750,6 +753,7 @@ public class OperationsOrderController {
             @PathVariable UUID orderId,
             @Valid @RequestBody StateOverrideRequest body,
             HttpServletRequest request) {
+        requireOrderAtLocation(tenantId, orderId, locationId);
         try {
             long expected = AggregateVersion.requireIfMatch(request);
             var result = outcomes.override(
@@ -796,6 +800,7 @@ public class OperationsOrderController {
             @PathVariable UUID orderId,
             @Valid @RequestBody CancelRequest body,
             HttpServletRequest request) {
+        requireOrderAtLocation(tenantId, orderId, locationId);
         try {
             long expected = AggregateVersion.requireIfMatch(request);
             var result = body.reasonId() == null
@@ -845,6 +850,7 @@ public class OperationsOrderController {
             @PathVariable UUID locationId,
             @PathVariable UUID orderId,
             @Valid @RequestBody CallProvenanceRequest body) {
+        requireOrderAtLocation(tenantId, orderId, locationId);
         callProvenance.record(
                 tenantId,
                 orderId,
@@ -873,6 +879,7 @@ public class OperationsOrderController {
             @PathVariable UUID orderId,
             @Valid @RequestBody CompleteRequest body,
             HttpServletRequest request) {
+        requireOrderAtLocation(tenantId, orderId, locationId);
         try {
             long expected = AggregateVersion.requireIfMatch(request);
             var result = outcomes.complete(

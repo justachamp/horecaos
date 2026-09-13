@@ -152,6 +152,7 @@ class OrderAmendmentAndOutcomeTests {
     private java.util.function.Function<JdbcOrderStore, OrderStateService> orderStateWith;
 
     private InventoryService inventory;
+    private JdbcServiceabilityStore serviceabilityStore;
     private JdbcOrderStore orderStore;
     private JdbcOrderAmendmentStore amendmentStore;
     private JdbcCartStore cartStore;
@@ -219,7 +220,7 @@ class OrderAmendmentAndOutcomeTests {
         var pricingStore = new JdbcPricingStore(jdbc, objectMapper);
         var inventoryStore = new JdbcInventoryStore(jdbc);
         var channelStore = new JdbcSalesChannelStore(jdbc);
-        var serviceabilityStore = new JdbcServiceabilityStore(jdbc);
+        serviceabilityStore = new JdbcServiceabilityStore(jdbc);
 
         inventory = new InventoryService(inventoryStore, event -> {}, clock);
         var deliveryFees = new uz.horecaos.platform.fulfillment.application.DeliveryFeeResolver(
@@ -1761,6 +1762,153 @@ class OrderAmendmentAndOutcomeTests {
         assertThat(orderStore.find(TENANT, cancelledOrder).orElseThrow().status())
                 .as("the override never reopened the cancelled order")
                 .isEqualTo(OrderStatus.CANCELLED);
+    }
+
+    /**
+     * Wave P41 second-pass adversarial review. {@code OrderStateService.override}'s
+     * only branch beyond a plain conditional UPDATE is {@code reclaimsKitchenSlot
+     * = !order.status().occupiesCapacity() && target.occupiesCapacity()}, true
+     * only for the FULFILLING→READY compensating edge. Every override test
+     * above drives READY→PREPARING only, where both ends already occupy
+     * capacity, so that branch never runs there — a refactor that dropped
+     * either half of the condition would still pass every one of them. This
+     * proves the successful re-claim actually happens.
+     */
+    @Test
+    @DisplayName("overriding FULFILLING back to READY reclaims the branch's kitchen slot")
+    void overridingFulfillingToReadyReclaimsTheKitchenSlot() {
+        UUID reasonId = operatorErrorReason();
+        UUID orderId = seedFulfillingOrder("idem-cap-1");
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        var result = tx(() -> outcomes.override(
+                TENANT,
+                orderId,
+                OrderStatus.READY,
+                version,
+                new OrderOutcomeService.OverrideCommand(reasonId, "USER", "sharif", null)));
+
+        assertThat(result.applied()).isTrue();
+        assertThat(result.status()).isEqualTo(OrderStatus.READY);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status()).isEqualTo(OrderStatus.READY);
+        assertThat(openCapacityHoldExists(orderId))
+                .as("the ADR 0036 kitchen slot the FULFILLING→READY edge reclaims must actually be held")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("overriding FULFILLING back to READY is refused once the branch has since filled up, "
+            + "and leaves the order exactly as it was")
+    void overridingFulfillingToReadyRefusesWhenTheBranchIsAtCapacity() {
+        UUID reasonId = operatorErrorReason();
+        UUID orderId = seedFulfillingOrder("idem-cap-2");
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        serviceabilityStore.setCapacity(TENANT, BRAND, LOCATION, 1, clock.instant());
+        // Somebody else's order fills the branch's one and only slot before this
+        // override is attempted.
+        tx(() -> serviceabilityStore.claimCapacity(UUID.randomUUID(), TENANT, BRAND, LOCATION, clock.instant()));
+
+        assertThatThrownBy(() -> tx(() -> outcomes.override(
+                        TENANT,
+                        orderId,
+                        OrderStatus.READY,
+                        version,
+                        new OrderOutcomeService.OverrideCommand(reasonId, "USER", "sharif", null))))
+                .isInstanceOf(OrderStateService.KitchenAtCapacityException.class);
+
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow()).satisfies(row -> {
+            assertThat(row.status())
+                    .as("a refused override must leave the order exactly where it was")
+                    .isEqualTo(OrderStatus.FULFILLING);
+            assertThat(row.version()).isEqualTo(version);
+        });
+        assertThat(openCapacityHoldExists(orderId))
+                .as("the refused override must not have claimed a slot for this order")
+                .isFalse();
+    }
+
+    private boolean openCapacityHoldExists(UUID orderId) {
+        return jdbc.sql("""
+                SELECT count(*) FROM tenant.location_capacity_holds
+                WHERE id = :orderId AND released_at IS NULL
+                """).param("orderId", orderId).query(Long.class).single() > 0;
+    }
+
+    /**
+     * A DELIVERY order already sitting at FULFILLING, built directly rather
+     * than through checkout + advance: reaching FULFILLING through a real
+     * checkout needs a geocoded branch, a customer address and a live
+     * delivery-fee zone, none of which this file's fixtures otherwise carry,
+     * and none of which the capacity-reclaim behaviour under test here
+     * depends on.
+     */
+    private UUID seedFulfillingOrder(String idempotencyKey) {
+        UUID orderId = UUID.randomUUID();
+        UUID cartId = UUID.randomUUID();
+        UUID quoteId = UUID.randomUUID();
+        UUID publicationId =
+                jdbc.sql("""
+                SELECT id FROM catalog.publications WHERE catalog_id = :catalogId AND channel = 'STOREFRONT'
+                """).param("catalogId", catalogId).query(UUID.class).single();
+        Instant now = clock.instant();
+
+        jdbc.sql("""
+                INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
+                    fulfillment_mode, currency, status, guest_reference_hash, expires_at)
+                VALUES (:id, :t, :b, :loc, :ch, 'DELIVERY', 'UZS', 'ACTIVE', :guest,
+                    now() + interval '1 hour')
+                """)
+                .param("id", cartId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("ch", storefrontChannel)
+                .param("guest", "guest-" + orderId)
+                .update();
+
+        jdbc.sql("""
+                INSERT INTO pricing.quotes (id, tenant_id, brand_id, location_id, currency,
+                    catalog_publication_id, calculation_version, context_hash, subtotal_minor,
+                    tax_minor, total_minor, expires_at)
+                VALUES (:id, :t, :b, :loc, 'UZS', :pub, 1, :hash, 20000, 0, 20000,
+                    now() + interval '1 hour')
+                """)
+                .param("id", quoteId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("pub", publicationId)
+                .param("hash", "hash-" + orderId)
+                .update();
+
+        jdbc.sql("""
+                INSERT INTO ordering.orders (id, public_order_number, tenant_id, brand_id,
+                    location_id, channel_id, channel_code_snapshot, guest_reference_hash,
+                    fulfillment_mode, acceptance_mode_snapshot, approval_channel_snapshot, status,
+                    currency, subtotal_minor, tax_minor, fee_minor, total_minor, pricing_quote_id,
+                    pricing_context_hash, catalog_publication_id, cart_id, idempotency_key, version,
+                    created_at, confirmed_at)
+                VALUES (:id, :number, :t, :b, :loc, :ch, 'STOREFRONT', :guest, 'DELIVERY',
+                    'AUTO_CONFIRM', 'HORECAOS_OPERATIONS', 'FULFILLING', 'UZS', 20000, 0, 0, 20000,
+                    :quote, :hash, :pub, :cart, :key, 1, :at, :at)
+                """)
+                .param("id", orderId)
+                .param("number", idempotencyKey)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("ch", storefrontChannel)
+                .param("guest", "guest-" + orderId)
+                .param("quote", quoteId)
+                .param("hash", "hash-" + orderId)
+                .param("pub", publicationId)
+                .param("cart", cartId)
+                .param("key", idempotencyKey)
+                .param("at", now.atOffset(ZoneOffset.UTC))
+                .update();
+
+        return orderId;
     }
 
     // -------------------------------- reasoned cancellation reaches PREPARING/READY (wave P09, gap map 1.2k)
