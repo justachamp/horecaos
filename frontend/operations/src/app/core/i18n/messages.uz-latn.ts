@@ -264,6 +264,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.severity.blocked': 'aralashuv talab qilinadi',
   'orders.severity.approvalDeadline': '{mmss} ichida tasdiqlang',
   'orders.severity.noPromiseFallback': 'navbatda {duration}',
+  'orders.severity.late': '{duration} kechikmoqda',
+  'orders.severity.atRisk': 'kechikish xavfi bor',
 
   'orders.duration.hour': 'soat',
   'orders.duration.minute': 'daq',
@@ -3778,13 +3780,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.detail.partnerClients.issue': 'Mijoz chiqarish',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'Ushbu mijoz uchun nom (oʻzingiz uchun):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Ushbu mijozni chiqarish sababi:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Ushbu mijozni chiqarish sababi:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Ushbu maxfiy kalitni hozir nusxalang — u qayta koʻrsatilmaydi:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'Nusxaladim',
   'settings.integrations.detail.partnerClients.column.clientId': 'Mijoz ID',
   'settings.integrations.detail.partnerClients.revoke': 'Bekor qilish',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Ushbu mijozni bekor qilish sababi:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Ushbu mijozni bekor qilish sababi:',
   'settings.integrations.detail.partnerClients.empty': 'Hali hamkor API mijozlari chiqarilmagan.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

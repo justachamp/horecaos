@@ -116,6 +116,17 @@ export const operationsPaths = {
     return `${this.order(scope, orderId)}/state-actions`;
   },
 
+  /**
+   * The resolved `ordering.lateness` policy (ADR 0030, orders.md §2.7, wave
+   * P06) — the one source the order board and the kitchen ticket queue both
+   * read instead of each hard-coding its own thresholds. On the ADR 0031
+   * prefix, like {@link orderRejectReasons}'s sibling reads that were born
+   * after the split.
+   */
+  orderLatenessPolicy(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/orders/lateness-policy`;
+  },
+
   /** Cancel an order that has not been confirmed. Mutation: key and `If-Match`. */
   orderCancellations(scope: LocationScope, orderId: string): string {
     return `${this.order(scope, orderId)}/cancellations`;

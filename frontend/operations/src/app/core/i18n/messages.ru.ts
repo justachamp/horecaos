@@ -260,6 +260,8 @@ export const messagesRu: MessageCatalogue = {
   'orders.severity.blocked': 'требуется вмешательство',
   'orders.severity.approvalDeadline': 'подтвердить за {mmss}',
   'orders.severity.noPromiseFallback': 'в очереди {duration}',
+  'orders.severity.late': 'опаздывает на {duration}',
+  'orders.severity.atRisk': 'риск опоздания',
 
   'orders.duration.hour': 'ч',
   'orders.duration.minute': 'мин',
@@ -3737,7 +3739,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.detail.bindings.activate': 'Активировать',
   'settings.integrations.detail.bindings.activate.reasonPrompt': 'Причина запуска этой привязки:',
   'settings.integrations.detail.bindings.suspend': 'Приостановить',
-  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Причина приостановки этой привязки:',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Причина приостановки этой привязки:',
   'settings.integrations.detail.bindings.empty': 'Привязок пока нет.',
   'settings.integrations.detail.bindings.wholeTenant': 'Вся компания',
   'settings.integrations.detail.cloposSettings.title': 'Приём заказов',
@@ -3749,13 +3752,15 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.detail.partnerClients.issue': 'Выпустить клиента',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'Название для этого клиента (для вашего удобства):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Причина выпуска этого клиента:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Причина выпуска этого клиента:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Скопируйте этот секрет сейчас — он больше не будет показан:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'Я скопировал(а)',
   'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
   'settings.integrations.detail.partnerClients.revoke': 'Отозвать',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Причина отзыва этого клиента:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Причина отзыва этого клиента:',
   'settings.integrations.detail.partnerClients.empty': 'Клиенты партнёрского API ещё не выпущены.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------
