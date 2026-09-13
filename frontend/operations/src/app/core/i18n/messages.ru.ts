@@ -260,6 +260,8 @@ export const messagesRu: MessageCatalogue = {
   'orders.severity.blocked': 'требуется вмешательство',
   'orders.severity.approvalDeadline': 'подтвердить за {mmss}',
   'orders.severity.noPromiseFallback': 'в очереди {duration}',
+  'orders.severity.late': 'опаздывает на {duration}',
+  'orders.severity.atRisk': 'риск опоздания',
 
   'orders.duration.hour': 'ч',
   'orders.duration.minute': 'мин',

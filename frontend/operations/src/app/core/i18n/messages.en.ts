@@ -274,6 +274,8 @@ export const messagesEn = {
   'orders.severity.blocked': 'needs attention',
   'orders.severity.approvalDeadline': 'confirm within {mmss}',
   'orders.severity.noPromiseFallback': 'waiting {duration}',
+  'orders.severity.late': 'late by {duration}',
+  'orders.severity.atRisk': 'at risk of running late',
 
   'orders.duration.hour': 'h',
   'orders.duration.minute': 'min',

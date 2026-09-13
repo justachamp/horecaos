@@ -230,21 +230,23 @@
   outline-offset: -2px;
 }
 
-/* Transparent rail on normal rows keeps the number column aligned (§2.7). */
+/* Transparent rail on normal rows keeps the number column aligned (§2.7).
+   The SLA ramp (P06, tokens.css), not the generic warning/error tokens —
+   BLOCKED and LATE share the danger step, AT_RISK is the warning step. */
 .order-queue__rail--danger {
-  background: var(--q-error);
+  background: var(--q-sla-late);
 }
 
 .order-queue__rail--warning {
-  background: var(--q-warning);
+  background: var(--q-sla-at-risk);
 }
 
 .order-row--danger {
-  background: var(--q-error-tint);
+  background: var(--q-sla-late-tint);
 }
 
 .order-row--warning {
-  background: var(--q-warning-tint);
+  background: var(--q-sla-at-risk-tint);
 }
 
 .order-row__caption {
@@ -253,11 +255,11 @@
 }
 
 .order-row__caption--danger {
-  color: var(--q-error-text);
+  color: var(--q-sla-late-text);
 }
 
 .order-row__caption--warning {
-  color: var(--q-warning-text);
+  color: var(--q-sla-at-risk-text);
 }
 
 .status-badge {

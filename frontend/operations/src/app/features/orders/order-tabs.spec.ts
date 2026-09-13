@@ -25,7 +25,7 @@ describe('order tabs', () => {
     function member(
       status: string,
       severityLevel:
-        'BLOCKED' | 'AWAITING_APPROVAL_DEADLINE' | 'NO_PROMISE_FALLBACK' | 'NORMAL' = 'NORMAL',
+        'BLOCKED' | 'LATE' | 'AWAITING_APPROVAL_DEADLINE' | 'AT_RISK' | 'NORMAL' = 'NORMAL',
     ) {
       return { status, severityLevel };
     }
@@ -33,7 +33,8 @@ describe('order tabs', () => {
     it('groups attention by status membership or any severity flag, not by status alone', () => {
       expect(isOrderTabMember('attention', member('AWAITING_APPROVAL'))).toBe(true);
       expect(isOrderTabMember('attention', member('PAYMENT_FAILED'))).toBe(true);
-      expect(isOrderTabMember('attention', member('PREPARING', 'NO_PROMISE_FALLBACK'))).toBe(true);
+      expect(isOrderTabMember('attention', member('PREPARING', 'LATE'))).toBe(true);
+      expect(isOrderTabMember('attention', member('PREPARING', 'AT_RISK'))).toBe(true);
       expect(isOrderTabMember('attention', member('PREPARING'))).toBe(false);
     });
 

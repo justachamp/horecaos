@@ -264,6 +264,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.severity.blocked': 'aralashuv talab qilinadi',
   'orders.severity.approvalDeadline': '{mmss} ichida tasdiqlang',
   'orders.severity.noPromiseFallback': 'navbatda {duration}',
+  'orders.severity.late': '{duration} kechikmoqda',
+  'orders.severity.atRisk': 'kechikish xavfi bor',
 
   'orders.duration.hour': 'soat',
   'orders.duration.minute': 'daq',

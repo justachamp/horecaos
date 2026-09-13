@@ -13,6 +13,8 @@ import { operationsPaths } from '../../core/api/operations-paths';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { TimeZone, formatClock } from '../../core/format/datetime';
+import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
+import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import {
@@ -82,6 +84,7 @@ export class KitchenQueuePage implements OnInit {
   private readonly kitchen = inject(KitchenApi);
   private readonly location = inject(CurrentLocation);
   private readonly locationsApi = inject(LocationsApi);
+  private readonly latenessPolicyApi = inject(LatenessPolicyApi);
   private readonly i18n = inject(I18n);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -108,6 +111,9 @@ export class KitchenQueuePage implements OnInit {
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
 
+  /** The resolved `ordering.lateness` policy (wave P06) — fetched once in {@link start}. */
+  private latenessPolicy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
+
   ngOnInit(): void {
     this.pollHandle = setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -130,6 +136,7 @@ export class KitchenQueuePage implements OnInit {
       this.firstLoadComplete.set(true);
       return;
     }
+    this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
     try {
       const stations = await this.kitchen.stations(scope);
       this.stationsById.set(new Map(stations.map((station) => [station.stationId, station])));
@@ -185,11 +192,11 @@ export class KitchenQueuePage implements OnInit {
     return this.tickets()
       .filter((ticket) => isKitchenTabMember(tab, ticket.fulfilmentMode))
       .slice()
-      .sort(compareBySeverityThenTime);
+      .sort(compareBySeverityThenTime(this.latenessPolicy));
   }
 
   protected severityTone(ticket: TicketResponse): 'danger' | 'warning' | 'none' {
-    return computeTicketSeverity(toSeverityInput(ticket), new Date()).tone;
+    return computeTicketSeverity(toSeverityInput(ticket), new Date(), this.latenessPolicy).tone;
   }
 
   protected fulfilmentModeLabel(mode: string): string {
@@ -447,10 +454,15 @@ export class KitchenQueuePage implements OnInit {
   }
 }
 
-function toSeverityInput(ticket: TicketResponse): { targetReadyAt: Date | null; createdAt: Date } {
+function toSeverityInput(ticket: TicketResponse): {
+  targetReadyAt: Date | null;
+  createdAt: Date;
+  fulfilmentMode: string | null | undefined;
+} {
   return {
     targetReadyAt: ticket.targetReadyAt ? new Date(ticket.targetReadyAt) : null,
     createdAt: new Date(ticket.createdAt),
+    fulfilmentMode: ticket.fulfilmentMode,
   };
 }
 
@@ -460,13 +472,18 @@ const SEVERITY_RANK: Readonly<Record<'danger' | 'warning' | 'none', number>> = {
   none: 2,
 };
 
-function compareBySeverityThenTime(a: TicketResponse, b: TicketResponse): number {
-  const now = new Date();
-  const rankDiff =
-    SEVERITY_RANK[computeTicketSeverity(toSeverityInput(a), now).tone] -
-    SEVERITY_RANK[computeTicketSeverity(toSeverityInput(b), now).tone];
-  if (rankDiff !== 0) {
-    return rankDiff;
-  }
-  return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+/** A comparator closure over the one resolved policy this page's tickets all share (wave P06). */
+function compareBySeverityThenTime(
+  policy: LatenessPolicy,
+): (a: TicketResponse, b: TicketResponse) => number {
+  return (a, b) => {
+    const now = new Date();
+    const rankDiff =
+      SEVERITY_RANK[computeTicketSeverity(toSeverityInput(a), now, policy).tone] -
+      SEVERITY_RANK[computeTicketSeverity(toSeverityInput(b), now, policy).tone];
+    if (rankDiff !== 0) {
+      return rankDiff;
+    }
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  };
 }

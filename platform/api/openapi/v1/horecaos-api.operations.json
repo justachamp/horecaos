@@ -5130,6 +5130,48 @@
         },
         "type" : "object"
       },
+      "LatenessPolicyResponse" : {
+        "properties" : {
+          "delivery" : {
+            "$ref" : "#/components/schemas/LatenessThresholdsResponse"
+          },
+          "dineIn" : {
+            "$ref" : "#/components/schemas/LatenessThresholdsResponse"
+          },
+          "isPlatformDefault" : {
+            "type" : "boolean"
+          },
+          "pickup" : {
+            "$ref" : "#/components/schemas/LatenessThresholdsResponse"
+          },
+          "policyId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "policyVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "LatenessThresholdsResponse" : {
+        "properties" : {
+          "atRiskBeforeSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lateAfterSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "noPromiseFallbackSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "LedgerLine" : {
         "properties" : {
           "amountMinor" : {
@@ -7095,6 +7137,14 @@
               "type" : "string"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderLatenessResponse" : {
+        "properties" : {
+          "level" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -15041,6 +15091,104 @@
         },
         "summary" : "Every plan this branch has open",
         "tags" : [ "Dispatch board" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/lateness-policy" : {
+      "get" : {
+        "description" : "at_risk_before/late_after/no_promise_fallback per fulfilment mode (orders.md §2.7), resolved through the ADR 0030 chain: LOCATION, then BRAND, then TENANT, then the platform default.",
+        "operationId" : "policy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LatenessPolicyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The lateness policy in force for this location",
+        "tags" : [ "Order lateness" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/lateness" : {
+      "get" : {
+        "description" : "LATE, AT_RISK, or NORMAL — orders.md §2.7's Levels table, minus BLOCKED, which is a process-state fact this endpoint does not carry. Computed fresh on every call from the order's own promise and the resolved policy; nothing here is stored.",
+        "operationId" : "severity",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrderLatenessResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This order's resolved severity, right now",
+        "tags" : [ "Order lateness" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/preparation-bands" : {
@@ -30736,6 +30884,9 @@
   }, {
     "description" : "A tenant's own read of its brands (Settings 10.1)",
     "name" : "Operations brand profile"
+  }, {
+    "description" : "The ordering.lateness policy (ADR 0030) and one order's resolved severity",
+    "name" : "Order lateness"
   }, {
     "description" : "A brand's promo codes: shape, value, limits, and lifecycle",
     "name" : "Promo codes"

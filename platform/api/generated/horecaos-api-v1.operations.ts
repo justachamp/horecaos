@@ -1614,6 +1614,21 @@ export interface ItemView {
   version?: number;
 }
 
+export interface LatenessPolicyResponse {
+  delivery?: LatenessThresholdsResponse;
+  dineIn?: LatenessThresholdsResponse;
+  isPlatformDefault?: boolean;
+  pickup?: LatenessThresholdsResponse;
+  policyId?: string;
+  policyVersion?: number;
+}
+
+export interface LatenessThresholdsResponse {
+  atRiskBeforeSeconds?: number;
+  lateAfterSeconds?: number;
+  noPromiseFallbackSeconds?: number;
+}
+
 export interface LedgerLine {
   amountMinor?: number;
   currency?: string;
@@ -2230,6 +2245,10 @@ export interface OrderDetailResponse {
   summary?: OperationsOrderControllerOrderSummaryResponse;
   taxMinor?: number;
   warnings?: Array<string>;
+}
+
+export interface OrderLatenessResponse {
+  level?: string;
 }
 
 export interface OrderLineRequest {
@@ -4007,6 +4026,8 @@ export interface Operations {
   "exceptions": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/exceptions"; request: { parameters: { path: { brandId: string; locationId: string; planId: string; tenantId: string } } }; responses: { "200": Array<DispatchControllerExceptionResponse> } };
   "unassign": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/unassign"; request: { parameters: { path: { brandId: string; locationId: string; planId: string; tenantId: string } }; body: UnassignRequest }; responses: { "200": DispatchResponse } };
   "queue": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/queue"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<PlanQueueResponse> } };
+  "policy": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/lateness-policy"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LatenessPolicyResponse } };
+  "severity": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/lateness"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderLatenessResponse } };
   "replacePreparationBands": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/preparation-bands"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BandsRequest }; responses: { "200": unknown } };
   "bindSchedule": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/service-bindings"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BindingRequest }; responses: { "200": unknown } };
   "changeServiceState": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/service-state"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: ServiceStateRequest }; responses: { "200": unknown } };

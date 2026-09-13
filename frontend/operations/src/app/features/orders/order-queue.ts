@@ -13,6 +13,8 @@ import { ApiClient } from '../../core/api/api-client';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
+import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { TimeZone, formatClock, formatTime } from '../../core/format/datetime';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
@@ -124,6 +126,7 @@ export class OrderQueue implements OnInit {
   private readonly api = inject(ApiClient);
   private readonly location = inject(CurrentLocation);
   private readonly counts = inject(OrderCounts);
+  private readonly latenessPolicyApi = inject(LatenessPolicyApi);
   private readonly actionsApi = inject(OrderActionsApi);
   private readonly rejectReasonsApi = inject(RejectReasonsApi);
   private readonly serviceStatus = inject(ServiceStatus);
@@ -152,6 +155,16 @@ export class OrderQueue implements OnInit {
   /** Fetched before the reject dialog opens — see {@link onActionClick}'s REJECT case. */
   protected readonly rejectReasons = signal<readonly RejectReasonOption[]>([]);
   private readonly decisionIds = new DecisionIdRegistry();
+
+  /**
+   * The resolved `ordering.lateness` policy (wave P06) — fetched once per
+   * location in {@link start}, not re-fetched on every 10s poll: a tenant
+   * changing its own SLA thresholds mid-shift is rare enough that the next
+   * navigation picking it up is an acceptable bound, and every {@link
+   * decorate} call this session makes reads the same object, which is the
+   * whole point of "one policy" for row `X.39`.
+   */
+  private latenessPolicy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
   private readonly onVisibilityChange = (): void => {
@@ -187,6 +200,10 @@ export class OrderQueue implements OnInit {
 
   private async start(): Promise<void> {
     await this.location.ensureLoaded();
+    const scope = this.location.scope();
+    if (scope) {
+      this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
+    }
     await this.refresh();
   }
 
@@ -213,12 +230,14 @@ export class OrderQueue implements OnInit {
       const orders = result.value ?? [];
       const now = new Date();
 
-      this.rows.set(orders.map((order) => decorate(order, now)));
-      this.tabCounts.set(await this.counts.forOrders(scope, orders.map(toCountable), now));
+      this.rows.set(orders.map((order) => decorate(order, now, this.latenessPolicy)));
+      this.tabCounts.set(
+        await this.counts.forOrders(scope, orders.map(toCountable), now, this.latenessPolicy),
+      );
       this.lastUpdatedAt.set(now);
       this.lastError.set(null);
       this.denied.set(false);
-      this.serviceStatus.set(deriveServiceStatus(orders, now), now);
+      this.serviceStatus.set(deriveServiceStatus(orders, now, this.latenessPolicy), now);
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 403) {
@@ -330,8 +349,14 @@ export class OrderQueue implements OnInit {
         return this.i18n.t('orders.severity.pill.blocked');
       case 'AWAITING_APPROVAL_DEADLINE':
         return formatCountdown(severity.remainingMs ?? 0);
-      case 'NO_PROMISE_FALLBACK':
+      case 'LATE':
         return this.i18n.t('orders.severity.pill.late');
+      case 'AT_RISK':
+        // The caption under the order number already says so (§2.7); a
+        // second pill beside the status word would be the row shouting the
+        // same thing twice for the one tier that is a warning, not yet a
+        // breach.
+        return null;
       case 'NORMAL':
         return null;
     }
@@ -638,12 +663,12 @@ export class OrderQueue implements OnInit {
   }
 }
 
-function decorate(order: OrderSummaryResponse, now: Date): OrderRow {
+function decorate(order: OrderSummaryResponse, now: Date, policy: LatenessPolicy): OrderRow {
   const createdAt = new Date(order.createdAt);
   return {
     order,
     createdAt,
-    severity: computeOrderSeverity(toSeverityFields(order, createdAt), now),
+    severity: computeOrderSeverity(toSeverityFields(order, createdAt), now, policy),
   };
 }
 
@@ -656,8 +681,9 @@ function toSeverityFields(order: OrderSummaryResponse, createdAt: Date): Countab
     status: order.status,
     createdAt,
     approvalDeadlineAt: order.approvalDeadlineAt ? new Date(order.approvalDeadlineAt) : null,
-    // order_process_states is not on OrderSummaryResponse yet — see order-severity.ts.
-    hasBlockedProcess: false,
+    fulfillmentMode: order.fulfillmentMode,
+    promisedAt: order.promisedAt ? new Date(order.promisedAt) : null,
+    hasBlockedProcess: order.processAttention === 'MANUAL_ACTION_REQUIRED',
   };
 }
 
@@ -665,11 +691,13 @@ function toSeverityFields(order: OrderSummaryResponse, createdAt: Date): Countab
  * Wires `ServiceStatus` (§1.6, `shell/service-status.ts`) from the same
  * fetch: `open` per that service's own documented definition ("neither
  * completed nor cancelled"), `late` as anything {@link computeOrderSeverity}
- * flagged — the closest proxy available to §2.7's lateness without ADR 0014.
+ * flags — real LATE/AT_RISK/BLOCKED as of wave P06, resolved against the
+ * same policy every other computation on this page now shares.
  */
 function deriveServiceStatus(
   orders: readonly OrderSummaryResponse[],
   now: Date,
+  policy: LatenessPolicy,
 ): { open: number; late: number } {
   let open = 0;
   let late = 0;
@@ -677,7 +705,7 @@ function deriveServiceStatus(
     if (order.status !== 'COMPLETED' && order.status !== 'CANCELLED') {
       open += 1;
     }
-    if (computeOrderSeverity(toCountable(order), now).level !== 'NORMAL') {
+    if (computeOrderSeverity(toCountable(order), now, policy).level !== 'NORMAL') {
       late += 1;
     }
   }

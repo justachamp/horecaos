@@ -29,12 +29,13 @@
   border-color: var(--q-success);
 }
 
+/* The SLA ramp (P06, tokens.css), not the generic warning/error tokens. */
 .vdu__card--warning {
-  border-color: var(--q-warning);
+  border-color: var(--q-sla-at-risk);
 }
 
 .vdu__card--danger {
-  border-color: var(--q-error);
+  border-color: var(--q-sla-late);
 }
 
 .vdu__empty,

@@ -104,12 +104,14 @@
   overflow: hidden;
 }
 
+/* The SLA ramp (P06, tokens.css) — the same named steps order-queue.css
+   uses, not the generic warning/error tokens. */
 .ticket--warning {
-  border-color: var(--q-warning);
+  border-color: var(--q-sla-at-risk);
 }
 
 .ticket--danger {
-  border-color: var(--q-error);
+  border-color: var(--q-sla-late);
 }
 
 .ticket__header {
@@ -130,11 +132,11 @@
 }
 
 .ticket--warning .ticket__header {
-  border-left: 4px solid var(--q-warning);
+  border-left: 4px solid var(--q-sla-at-risk);
 }
 
 .ticket--danger .ticket__header {
-  border-left: 4px solid var(--q-error);
+  border-left: 4px solid var(--q-sla-late);
 }
 
 .ticket__number {

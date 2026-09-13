@@ -11,10 +11,12 @@ import { Observable, firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { Versioned } from '../../core/api/aggregate-version';
-import { operationsPaths } from '../../core/api/operations-paths';
+import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { TimeZone, formatDateTime } from '../../core/format/datetime';
+import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
+import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
@@ -98,6 +100,7 @@ export class OrderDetailPane {
   private readonly actionsApi = inject(OrderActionsApi);
   private readonly rejectReasonsApi = inject(RejectReasonsApi);
   private readonly revealApi = inject(OrderRevealApi);
+  private readonly latenessPolicyApi = inject(LatenessPolicyApi);
   private readonly i18n = inject(I18n);
 
   /** Bound from the route parameter by `withComponentInputBinding()`. */
@@ -174,6 +177,9 @@ export class OrderDetailPane {
   protected readonly revealedNotes = signal<ReadonlyMap<string, string | null>>(new Map());
   protected readonly revealingNoteFor = signal<string | null>(null);
 
+  /** The resolved `ordering.lateness` policy (wave P06) — fetched once per order load in {@link load}. */
+  private latenessPolicy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
+
   constructor() {
     // `orderId` is a signal input: navigating from one order to another under
     // the same `:orderId` route config reuses this component (Angular's
@@ -205,6 +211,7 @@ export class OrderDetailPane {
       return;
     }
     this.denied.set(false);
+    void this.loadLatenessPolicy(scope);
 
     try {
       const result = await firstValueFrom(
@@ -246,6 +253,16 @@ export class OrderDetailPane {
     }
   }
 
+  /**
+   * The resolved `ordering.lateness` policy (wave P06), fire-and-forget
+   * exactly like {@link loadTimeline}: {@link headerSeverity} already falls
+   * back to {@link PLATFORM_DEFAULT_LATENESS_POLICY} while this is in
+   * flight, so the header renders immediately and refines once this settles.
+   */
+  private async loadLatenessPolicy(scope: LocationScope): Promise<void> {
+    this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
+  }
+
   protected manualRetry(): void {
     void this.load(this.orderId());
   }
@@ -285,10 +302,17 @@ export class OrderDetailPane {
         approvalDeadlineAt: summary.approvalDeadlineAt
           ? new Date(summary.approvalDeadlineAt)
           : null,
-        // order_process_states is not on this response either — see order-severity.ts.
-        hasBlockedProcess: false,
+        fulfillmentMode: summary.fulfillmentMode,
+        promisedAt: summary.promisedAt ? new Date(summary.promisedAt) : null,
+        // Always null on this read today — the detail endpoint's own
+        // `OrderSummaryResponse.of(OrderRow, ...)` overload projects no
+        // process state (see that record's own doc). Read the real field
+        // rather than hardcoding false, so this picks up a real value for
+        // free the day that overload does project one.
+        hasBlockedProcess: summary.processAttention === 'MANUAL_ACTION_REQUIRED',
       },
       new Date(),
+      this.latenessPolicy,
     );
   }
 
