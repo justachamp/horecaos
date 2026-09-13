@@ -27,6 +27,31 @@
 } @else if (loadError(); as message) {
   <p class="q-body-sm error" role="alert">{{ message }}</p>
 } @else if (activeTab() === 'templates') {
+  <section class="card">
+    <h2 class="q-subhead">{{ 'settings.notifications.automation.title' | t }}</h2>
+    <label class="checkbox q-body-sm">
+      <input
+        type="checkbox"
+        [checked]="paymentLinkAutoSend()"
+        [disabled]="automationLoading() || automationSaving() !== null"
+        (change)="togglePaymentLinkAutoSend($any($event.target).checked)"
+      />
+      {{ 'settings.notifications.field.paymentLinkAutoSend' | t }}
+    </label>
+    <p class="q-caption hint">{{ 'settings.notifications.field.paymentLinkAutoSend.hint' | t }}</p>
+
+    <label class="checkbox q-body-sm">
+      <input
+        type="checkbox"
+        [checked]="aggregatorShiftNotifications()"
+        [disabled]="automationLoading() || automationSaving() !== null"
+        (change)="toggleAggregatorShiftNotifications($any($event.target).checked)"
+      />
+      {{ 'settings.notifications.field.aggregatorShiftNotifications' | t }}
+    </label>
+    <p class="q-caption hint">{{ 'settings.notifications.field.aggregatorShiftNotifications.hint' | t }}</p>
+  </section>
+
   <div class="toolbar">
     <button type="button" class="q-body primary" (click)="showCreateForm.set(!showCreateForm())">
       {{ 'settings.notifications.create.action' | t }}
@@ -74,51 +99,10 @@
         [disabled]="createSubmitting()"
       >
         @for (option of channels; track option) {
-          <option [value]="option">{{ option }}</option>
+          <option [value]="option">{{ option }}@if (!wiredChannels.has(option)) { ⚠ }</option>
         }
       </select>
-
-      <label class="q-caption" for="template-body-ru">{{
-        'settings.notifications.field.bodyRu' | t
-      }}</label>
-      <textarea
-        id="template-body-ru"
-        class="q-body field textarea"
-        [value]="newBodyRu()"
-        (input)="newBodyRu.set($any($event.target).value)"
-        [disabled]="createSubmitting()"
-      ></textarea>
-
-      <label class="q-caption" for="template-body-uz">{{
-        'settings.notifications.field.bodyUz' | t
-      }}</label>
-      <textarea
-        id="template-body-uz"
-        class="q-body field textarea"
-        [value]="newBodyUz()"
-        (input)="newBodyUz.set($any($event.target).value)"
-        [disabled]="createSubmitting()"
-      ></textarea>
-
-      <label class="q-caption" for="template-body-en">{{
-        'settings.notifications.field.bodyEn' | t
-      }}</label>
-      <textarea
-        id="template-body-en"
-        class="q-body field textarea"
-        [value]="newBodyEn()"
-        (input)="newBodyEn.set($any($event.target).value)"
-        [disabled]="createSubmitting()"
-      ></textarea>
-
-      <label class="checkbox q-body-sm">
-        <input
-          type="checkbox"
-          [checked]="activateImmediately()"
-          (change)="activateImmediately.set($any($event.target).checked)"
-        />
-        {{ 'settings.notifications.field.activateImmediately' | t }}
-      </label>
+      <p class="q-caption hint">{{ 'settings.notifications.field.channel.hint' | t }}</p>
 
       @if (createError(); as message) {
         <p class="q-body-sm error" role="alert">{{ message }}</p>
@@ -157,6 +141,7 @@
         <th class="q-caption">{{ 'settings.notifications.field.channel' | t }}</th>
         <th class="q-caption">{{ 'settings.notifications.field.status' | t }}</th>
         <th class="q-caption">{{ 'settings.notifications.field.activeVersion' | t }}</th>
+        <th class="q-caption"></th>
       </tr>
     </thead>
     <tbody>
@@ -164,21 +149,296 @@
         <tr>
           <td class="q-body-sm q-mono">{{ template.templateKey }}</td>
           <td class="q-body-sm">{{ template.notificationClass }}</td>
-          <td class="q-body-sm">{{ template.channel }}</td>
+          <td class="q-body-sm">
+            {{ template.channel }}@if (!wiredChannels.has(template.channel)) { ⚠ }
+          </td>
           <td class="q-body-sm">
             <span class="status-badge">{{ template.status }}</span>
           </td>
           <td class="q-body-sm q-tnum">{{ template.activeVersion ?? '—' }}</td>
+          <td class="row-menu">
+            <q-action-menu
+              [triggerLabel]="'settings.notifications.action.rowMenu' | t"
+              [items]="rowActions()"
+              [open]="openTemplateMenu() === template.id"
+              (openChange)="openTemplateMenu.set($event ? template.id : null)"
+              (select)="onRowAction($event, template)"
+            />
+          </td>
         </tr>
       } @empty {
         <tr>
-          <td class="q-body-sm empty" colspan="5">{{ 'settings.notifications.empty' | t }}</td>
+          <td class="q-body-sm empty" colspan="6">{{ 'settings.notifications.empty' | t }}</td>
         </tr>
       }
     </tbody>
   </table>
 } @else {
-  <p class="q-body-sm">
-    {{ 'notBuilt.body' | t: { spec: 'operations-spec/settings.md §10.9 Tab 2 (Маршрутизация)' } }}
-  </p>
+  <p class="q-body-sm lead">{{ 'settings.notifications.routing.lead' | t }}</p>
+
+  @if (routingLoading()) {
+    <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+  } @else if (routingError(); as message) {
+    <p class="q-body-sm error" role="alert">{{ message }}</p>
+  } @else {
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ 'settings.notifications.routing.column.chat' | t }}</th>
+          <th class="q-caption">{{ 'settings.notifications.routing.column.scope' | t }}</th>
+          <th class="q-caption">{{ 'settings.notifications.routing.column.topic' | t }}</th>
+          <th class="q-caption">{{ 'settings.notifications.routing.column.status' | t }}</th>
+          <th class="q-caption">{{ 'settings.notifications.routing.column.events' | t }}</th>
+          <th class="q-caption"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (binding of routingBindings(); track binding.bindingId) {
+          <tr>
+            <td class="q-body-sm q-mono">{{ binding.chatId }}</td>
+            <td class="q-body-sm">
+              {{
+                binding.locationId
+                  ? binding.locationId
+                  : ('settings.notifications.routing.scope.brand' | t)
+              }}
+            </td>
+            <td class="q-body-sm">
+              @if (topicEditBindingId() === binding.bindingId) {
+                <input
+                  class="q-body field field--inline"
+                  type="text"
+                  inputmode="numeric"
+                  [value]="topicDraft()"
+                  (input)="topicDraft.set($any($event.target).value)"
+                  [placeholder]="'settings.notifications.routing.topic.prompt' | t"
+                />
+                <button
+                  type="button"
+                  class="q-body-sm link"
+                  [disabled]="topicSaving()"
+                  (click)="saveTopic(binding)"
+                >
+                  {{ 'settings.notifications.routing.topic.save' | t }}
+                </button>
+                <button type="button" class="q-body-sm link" (click)="cancelEditTopic()">
+                  {{ 'settings.notifications.cancel' | t }}
+                </button>
+                @if (topicError(); as message) {
+                  <p class="q-body-sm error" role="alert">{{ message }}</p>
+                }
+              } @else {
+                <button type="button" class="q-body-sm link" (click)="startEditTopic(binding)">
+                  {{
+                    binding.topicId === null
+                      ? ('settings.notifications.routing.topic.flat' | t)
+                      : ('settings.notifications.routing.topic.numbered' | t: { topic: binding.topicId })
+                  }}
+                </button>
+              }
+            </td>
+            <td class="q-body-sm">
+              @if (binding.retiredAt) {
+                <q-status-pill
+                  [label]="'settings.notifications.routing.status.retired' | t: { reason: binding.retiredReason ?? '—' }"
+                  tone="none"
+                />
+              } @else {
+                <q-status-pill [label]="'settings.notifications.routing.status.ACTIVE' | t" tone="success" />
+              }
+            </td>
+            <td class="q-body-sm events-cell">
+              <q-combobox
+                [options]="filteredEventClassOptions()"
+                [selected]="selectedEventClasses(binding)"
+                [multiple]="true"
+                [query]="eventClassQuery()"
+                [ariaLabel]="'settings.notifications.routing.column.events' | t"
+                (queryChange)="eventClassQuery.set($event)"
+                (selectedChange)="onSubscriptionsChanged(binding, $event)"
+              />
+            </td>
+            <td class="row-menu">
+              @if (!binding.retiredAt) {
+                <button type="button" class="q-body-sm link" (click)="unbindTarget.set(binding)">
+                  {{ 'settings.notifications.routing.action.unbind' | t }}
+                </button>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td class="q-body-sm empty" colspan="6">{{ 'settings.notifications.routing.empty' | t }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+}
+
+@if (drawerMode() === 'versions' && selectedTemplate(); as template) {
+  <q-drawer [title]="'settings.notifications.drawer.versionsTitle' | t: { key: template.templateKey }" (dismiss)="closeDrawer()">
+    <div class="toolbar">
+      <button type="button" class="q-body primary" (click)="startNewVersion()">
+        {{ 'settings.notifications.action.newVersion' | t }}
+      </button>
+    </div>
+
+    @if (versionsLoading()) {
+      <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+    } @else if (versionsError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'settings.notifications.versions.column.version' | t }}</th>
+            <th class="q-caption">{{ 'settings.notifications.versions.column.status' | t }}</th>
+            <th class="q-caption">{{ 'settings.notifications.versions.column.locales' | t }}</th>
+            <th class="q-caption">{{ 'settings.notifications.versions.column.moderation' | t }}</th>
+            <th class="q-caption">{{ 'settings.notifications.versions.column.approvedBy' | t }}</th>
+            <th class="q-caption"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (group of versions(); track group.versionNumber) {
+            <tr>
+              <td class="q-body-sm q-tnum">{{ group.versionNumber }}</td>
+              <td class="q-body-sm"><q-status-pill [label]="group.status" [tone]="statusTone(group.status)" /></td>
+              <td class="q-body-sm">
+                @for (tag of localeTags; track tag) {
+                  <span
+                    class="locale-chip"
+                    [class.locale-chip--missing]="!localeStatus(group, tag)"
+                    >{{ tag }}</span
+                  >
+                }
+              </td>
+              <td class="q-body-sm">
+                <q-status-pill
+                  [label]="moderationLabel(worstModeration(group))"
+                  [tone]="moderationTone(worstModeration(group))"
+                />
+              </td>
+              <td class="q-body-sm">{{ group.approvedBy ?? '—' }}</td>
+              <td class="row-menu">
+                <q-action-menu
+                  [triggerLabel]="'settings.notifications.action.rowMenu' | t"
+                  [items]="versionRowMenu(group)"
+                  [open]="openVersionMenu() === group.versionNumber"
+                  (openChange)="openVersionMenu.set($event ? group.versionNumber : null)"
+                  (select)="onVersionRowAction($event, group)"
+                />
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="6">{{ 'settings.notifications.versions.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+
+    @if (testSendTarget(); as target) {
+      <div class="form test-send">
+        <h3 class="q-subhead">{{ 'settings.notifications.testSend.title' | t }}</h3>
+        <label class="q-caption" for="test-send-locale">{{ 'settings.notifications.testSend.locale' | t }}</label>
+        <select
+          id="test-send-locale"
+          class="q-body field"
+          [value]="testSendLocale()"
+          (change)="testSendLocale.set($any($event.target).value)"
+        >
+          @for (tag of localeTags; track tag) {
+            <option [value]="tag">{{ tag }}</option>
+          }
+        </select>
+
+        <label class="q-caption" for="test-send-destination">{{
+          'settings.notifications.testSend.destination' | t
+        }}</label>
+        <input
+          id="test-send-destination"
+          class="q-body field"
+          type="tel"
+          [value]="testSendDestination()"
+          (input)="testSendDestination.set($any($event.target).value)"
+        />
+
+        @if (testSendError(); as message) {
+          <p class="q-body-sm error" role="alert">{{ message }}</p>
+        }
+        @if (testSendResult(); as outcome) {
+          <p class="q-body-sm">{{ testSendResultKey(outcome.status) | t }}</p>
+        }
+
+        <div class="form__actions">
+          <button type="button" class="q-body secondary" (click)="closeTestSend()" [disabled]="testSendSubmitting()">
+            {{ 'settings.notifications.action.close' | t }}
+          </button>
+          <button
+            type="button"
+            class="q-body primary"
+            (click)="submitTestSend()"
+            [disabled]="!canSubmitTestSend()"
+          >
+            {{
+              testSendSubmitting()
+                ? ('settings.notifications.testSend.sending' | t)
+                : ('settings.notifications.testSend.submit' | t)
+            }}
+          </button>
+        </div>
+      </div>
+    }
+  </q-drawer>
+} @else if (drawerMode() === 'editor' && selectedTemplate(); as template) {
+  <q-drawer
+    [title]="'settings.notifications.drawer.editorTitleNew' | t: { key: template.templateKey }"
+    (dismiss)="closeDrawer()"
+  >
+    <q-notification-template-editor
+      [scope]="location.scope()!"
+      [templateId]="template.id"
+      [templateKey]="template.templateKey"
+      [notificationClass]="template.notificationClass"
+      [channel]="template.channel"
+      [prefill]="editingPrefill()"
+      (saved)="onVersionSaved()"
+      (cancelled)="backToVersions()"
+    />
+  </q-drawer>
+}
+
+@if (activateTarget(); as group) {
+  <q-confirm-dialog
+    [title]="'settings.notifications.activate.confirm.title' | t"
+    [body]="
+      activateWithheldState()
+        ? ('settings.notifications.activate.confirm.bodyWithheld' | t: { state: moderationLabel(worstModeration(group)) })
+        : ('settings.notifications.activate.confirm.body' | t)
+    "
+    [confirmLabel]="'settings.notifications.activate.confirm.confirm' | t"
+    [cancelLabel]="'settings.notifications.cancel' | t"
+    [busy]="activateBusy()"
+    (confirm)="confirmActivate()"
+    (cancel)="cancelActivate()"
+  />
+  @if (activateError(); as message) {
+    <p class="q-body-sm error" role="alert">{{ message }}</p>
+  }
+}
+
+@if (unbindTarget()) {
+  <q-confirm-dialog
+    [title]="'settings.notifications.routing.unbind.confirm.title' | t"
+    [body]="'settings.notifications.routing.unbind.confirm.body' | t"
+    [confirmLabel]="'settings.notifications.routing.unbind.confirm.confirm' | t"
+    [cancelLabel]="'settings.notifications.cancel' | t"
+    tone="destructive"
+    [busy]="unbindBusy()"
+    (confirm)="confirmUnbind()"
+    (cancel)="cancelUnbind()"
+  />
 }
