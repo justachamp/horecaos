@@ -97,10 +97,23 @@ public class CatalogQueryService {
      * shortcut, and {@code CatalogQueryController} already has it — the same
      * split {@code variantsAtLocation} uses between {@code
      * CatalogAuthoringService} and its controller.
+     *
+     * @param search matches a product's code or its name in any locale,
+     *               case-insensitively; blank and null both mean no filter
+     * @param status one of {@code ACTIVE}/{@code DRAFT}/{@code ARCHIVED}, or
+     *               the synthetic {@code NO_MXIK}; null means every status
      */
     public List<ProductSummary> products(
-            UUID tenantId, UUID brandId, UUID catalogId, @Nullable UUID cursor, int limit) {
-        List<ProductRow> page = store.productsInCatalogPage(tenantId, brandId, catalogId, cursor, limit);
+            UUID tenantId,
+            UUID brandId,
+            UUID catalogId,
+            @Nullable UUID cursor,
+            int limit,
+            @Nullable String search,
+            @Nullable String status) {
+        String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
+        List<ProductRow> page =
+                store.productsInCatalogPage(tenantId, brandId, catalogId, cursor, limit, normalizedSearch, status);
         if (page.isEmpty()) {
             return List.of();
         }

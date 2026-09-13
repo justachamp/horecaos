@@ -1,0 +1,52 @@
+<div class="dialog__backdrop" data-testid="add-to-category-dialog">
+  <div
+    class="dialog"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="'catalog.products.addToCategory.title' | t"
+  >
+    <h2 class="q-emphasis dialog__title">{{ 'catalog.products.addToCategory.title' | t }}</h2>
+
+    @if (categories().length === 0) {
+      <p class="q-body-sm">{{ 'catalog.products.addToCategory.empty' | t }}</p>
+    } @else {
+      <label class="dialog__field">
+        <span class="q-body-sm">{{ 'catalog.products.addToCategory.label' | t }}</span>
+        <select
+          class="dialog__input"
+          [value]="categoryId() ?? ''"
+          (change)="setCategoryId($any($event.target).value)"
+          [attr.aria-invalid]="missing() ? 'true' : null"
+          data-testid="add-to-category-dialog-select"
+        >
+          <option value="" disabled>{{ 'catalog.products.addToCategory.placeholder' | t }}</option>
+          @for (category of categories(); track category.categoryId) {
+            <option [value]="category.categoryId">{{ category.name }}</option>
+          }
+        </select>
+        @if (missing()) {
+          <span class="q-caption dialog__error">{{ 'catalog.products.create.required' | t }}</span>
+        }
+      </label>
+    }
+
+    @if (error(); as message) {
+      <div class="dialog__banner" role="alert">{{ message }}</div>
+    }
+
+    <div class="dialog__actions">
+      <button type="button" class="dialog__dismiss" (click)="close()" [disabled]="busy()">
+        {{ 'catalog.dialog.cancel' | t }}
+      </button>
+      <button
+        type="button"
+        class="dialog__confirm"
+        (click)="submit()"
+        [disabled]="busy() || categories().length === 0"
+        data-testid="add-to-category-dialog-confirm"
+      >
+        {{ 'catalog.products.addToCategory.confirm' | t }}
+      </button>
+    </div>
+  </div>
+</div>

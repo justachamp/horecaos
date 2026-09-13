@@ -94,7 +94,18 @@ export interface ProductSummary {
   readonly categoryNames: readonly string[];
   readonly hasMxik: boolean;
   readonly version: number;
+  /** Computed, not stored — `CatalogQueryController.shareSlugOf`. A public, URL-safe handle for the row's copy-share-link action. */
+  readonly shareSlug: string;
 }
+
+/**
+ * `CatalogQueryController.ProductListStatus` — the products list's server-side
+ * status tabs. `NO_MXIK` is product-level (none of the product's variants
+ * carry an ИКПУ/MXIK) and is not the node-level count the fiscal workbench's
+ * {@link FiscalCoverageSummary} answers — the two must never be shown as the
+ * same number.
+ */
+export type ProductListStatus = 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | 'NO_MXIK';
 
 /** `ProductDetailResponse` — 4.2 Product editor's whole load. */
 export interface ProductDetail {
@@ -310,6 +321,58 @@ export interface MxikReferenceRow {
 /** `IdResponse`. */
 export interface IdResponse {
   readonly id: string;
+}
+
+// ------------------------------------------------------------ P21 row actions and the fiscal workbench
+
+/** `PriceableType` — the three things a fiscal classification can target (ADR 0038). */
+export type PriceableType = 'VARIANT' | 'MODIFIER_OPTION' | 'FEE';
+
+/** `StopInAllBranchesResponse`. */
+export interface StopInAllBranchesResult {
+  readonly locationsChanged: number;
+}
+
+/** `BulkClassifyItemRequest`. */
+export interface BulkClassifyItem {
+  readonly nodeType: PriceableType;
+  readonly nodeId: string;
+  readonly fiscal?: FiscalClassification | null;
+}
+
+/** `BulkClassifyOutcomeResponse.status`. */
+export type BulkClassifyOutcomeStatus = 'CLASSIFIED' | 'SKIPPED_EMPTY' | 'NOT_FOUND';
+
+/** `BulkClassifyOutcomeResponse`. */
+export interface BulkClassifyOutcome {
+  readonly nodeType: PriceableType;
+  readonly nodeId: string;
+  readonly status: BulkClassifyOutcomeStatus;
+}
+
+/** `BulkClassifyResponse`. */
+export interface BulkClassifyResult {
+  readonly outcomes: readonly BulkClassifyOutcome[];
+}
+
+/**
+ * `CatalogQueryController.FiscalCoverageNodeResponse` — one still-unclassified
+ * priceable node in the fiscal workbench's worklist. Node-level, and
+ * deliberately not the products list's product-level `NO_MXIK` tab figure.
+ */
+export interface FiscalCoverageNode {
+  readonly nodeType: PriceableType;
+  readonly nodeId: string;
+  readonly name?: string | null;
+  readonly categoryName?: string | null;
+  readonly locationCount: number;
+}
+
+/** `CatalogQueryController.FiscalCoverageResponse` — "N of M priceable nodes unclassified". */
+export interface FiscalCoverageSummary {
+  readonly totalNodes: number;
+  readonly unclassifiedCount: number;
+  readonly nodes: readonly FiscalCoverageNode[];
 }
 
 // ------------------------------------------------------------ CatalogPublicationController

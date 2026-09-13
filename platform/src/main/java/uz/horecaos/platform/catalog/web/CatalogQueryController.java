@@ -3,6 +3,7 @@ package uz.horecaos.platform.catalog.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -72,18 +73,26 @@ public class CatalogQueryController {
     @GetMapping("/catalogs/{catalogId}/products")
     @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
     @Operation(
-            summary = "One catalog's products, cursor-paginated",
+            summary = "One catalog's products, cursor-paginated, with optional server-side search and status",
             description = "Same Page and keyset-cursor shape variantsAtLocation uses: a short "
-                    + "page is the end of the collection, a full one may or may not be.")
+                    + "page is the end of the collection, a full one may or may not be. `query` "
+                    + "matches a product's code or its name in any locale; both are applied in SQL "
+                    + "so a dish past the loaded pages of a 1000+ item catalogue is still found. "
+                    + "`status` narrows to one status tab — `NO_MXIK` is product-level (none of the "
+                    + "product's variants carry an ИКПУ/MXIK code) and is not the node-level count "
+                    + "`fiscalCoverage` answers.")
     public Page<ProductSummaryResponse> products(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID catalogId,
             @RequestParam(required = false) @Nullable UUID cursor,
-            @RequestParam(required = false) @Nullable Integer limit) {
+            @RequestParam(required = false) @Nullable Integer limit,
+            @RequestParam(value = "query", required = false) @Nullable String search,
+            @RequestParam(required = false) @Nullable ProductListStatus status) {
 
         int pageSize = Page.limitOrDefault(limit);
-        List<CatalogQueryService.ProductSummary> rows = query.products(tenantId, brandId, catalogId, cursor, pageSize);
+        List<CatalogQueryService.ProductSummary> rows = query.products(
+                tenantId, brandId, catalogId, cursor, pageSize, search, status == null ? null : status.name());
         List<ProductSummaryResponse> items =
                 rows.stream().map(ProductSummaryResponse::of).toList();
 
@@ -91,6 +100,19 @@ public class CatalogQueryController {
                 ? null
                 : rows.get(rows.size() - 1).productId().toString();
         return new Page<>(items, nextCursor);
+    }
+
+    /**
+     * The products list's status tabs (catalog.md §4.1). {@code NO_MXIK} is
+     * not a real {@code catalog.products.status} value — it asks {@link
+     * CatalogQueryService#products} to filter on product-level {@code hasMxik}
+     * instead.
+     */
+    public enum ProductListStatus {
+        ACTIVE,
+        DRAFT,
+        ARCHIVED,
+        NO_MXIK
     }
 
     @GetMapping("/products/{productId}")
@@ -216,6 +238,16 @@ public class CatalogQueryController {
         }
     }
 
+    /**
+     * @param shareSlug a public, URL-safe handle for the product (catalog.md
+     *                  §4.1's row action), computed from its code and id
+     *                  rather than stored — this wave adds no migration, and a
+     *                  slug recomputed from a stable code and a never-changing
+     *                  id needs no column to fall out of sync with either. Not
+     *                  guaranteed to survive a code rename to the same value;
+     *                  a storefront route to resolve it is a separate, later
+     *                  build
+     */
     public record ProductSummaryResponse(
             UUID productId,
             String code,
@@ -224,7 +256,8 @@ public class CatalogQueryController {
             int variantCount,
             List<String> categoryNames,
             boolean hasMxik,
-            int version) {
+            int version,
+            String shareSlug) {
 
         static ProductSummaryResponse of(CatalogQueryService.ProductSummary summary) {
             return new ProductSummaryResponse(
@@ -235,8 +268,16 @@ public class CatalogQueryController {
                     summary.variantCount(),
                     summary.categoryNames(),
                     summary.hasMxik(),
-                    summary.version());
+                    summary.version(),
+                    shareSlugOf(summary.code(), summary.productId()));
         }
+    }
+
+    private static String shareSlugOf(String code, UUID productId) {
+        String base =
+                code.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("^-+|-+$", "");
+        String shortId = productId.toString().replace("-", "").substring(0, 8);
+        return (base.isEmpty() ? "product" : base) + "-" + shortId;
     }
 
     public record LocalizedFields(String name, @Nullable String description) {

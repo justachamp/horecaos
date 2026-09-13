@@ -8,7 +8,9 @@
         (click)="selectTab('ALL')"
       >
         {{ 'catalog.products.tab.all' | t }}
-        <span class="tab__count q-tnum">{{ tabCount('ALL') }}</span>
+        @if (tabCount('ALL'); as count) {
+          <span class="tab__count q-tnum">{{ count }}</span>
+        }
       </button>
       <button
         type="button"
@@ -17,7 +19,9 @@
         (click)="selectTab('ACTIVE')"
       >
         {{ 'catalog.products.tab.active' | t }}
-        <span class="tab__count q-tnum">{{ tabCount('ACTIVE') }}</span>
+        @if (tabCount('ACTIVE'); as count) {
+          <span class="tab__count q-tnum">{{ count }}</span>
+        }
       </button>
       <button
         type="button"
@@ -26,7 +30,9 @@
         (click)="selectTab('DRAFT')"
       >
         {{ 'catalog.products.tab.draft' | t }}
-        <span class="tab__count q-tnum">{{ tabCount('DRAFT') }}</span>
+        @if (tabCount('DRAFT'); as count) {
+          <span class="tab__count q-tnum">{{ count }}</span>
+        }
       </button>
       <button
         type="button"
@@ -35,7 +41,9 @@
         (click)="selectTab('NO_MXIK')"
       >
         {{ 'catalog.products.tab.noMxik' | t }}
-        <span class="tab__count q-tnum">{{ tabCount('NO_MXIK') }}</span>
+        @if (tabCount('NO_MXIK'); as count) {
+          <span class="tab__count q-tnum">{{ count }}</span>
+        }
       </button>
       <button
         type="button"
@@ -44,7 +52,9 @@
         (click)="selectTab('ARCHIVED')"
       >
         {{ 'catalog.products.tab.archived' | t }}
-        <span class="tab__count q-tnum">{{ tabCount('ARCHIVED') }}</span>
+        @if (tabCount('ARCHIVED'); as count) {
+          <span class="tab__count q-tnum">{{ count }}</span>
+        }
       </button>
     </div>
 
@@ -52,7 +62,7 @@
       <input
         type="search"
         class="products__search"
-        [value]="search()"
+        [value]="searchInputValue()"
         (input)="onSearchInput($any($event.target).value)"
         [placeholder]="'catalog.products.search.placeholder' | t"
         data-testid="products-search"
@@ -70,6 +80,14 @@
       }
       <button
         type="button"
+        class="products__workbench"
+        (click)="openWorkbench()"
+        data-testid="products-workbench"
+      >
+        {{ 'catalog.products.workbench.open' | t }}
+      </button>
+      <button
+        type="button"
         class="products__create"
         (click)="openCreateDialog()"
         data-testid="products-create"
@@ -78,6 +96,15 @@
       </button>
     </div>
   </div>
+
+  @if (notice(); as message) {
+    <q-inline-alert
+      severity="info"
+      [text]="message"
+      [dismissible]="true"
+      (dismiss)="dismissNotice()"
+    />
+  }
 
   @if (lastError(); as error) {
     <div class="products__error-band" role="alert">
@@ -101,14 +128,20 @@
         viewId="catalog.products"
         [scopeKey]="scopeKey()"
         [columns]="columns()"
-        [rows]="visibleProducts()"
+        [rows]="sortedProducts()"
         [rowId]="rowIdFn"
-        [(filters)]="filters"
-        [selectable]="false"
+        [filters]="filters()"
+        (filtersChange)="onExternalFiltersChange($event)"
+        [selectable]="true"
+        [(selectedIds)]="selectedIds"
+        [rowActions]="rowActions()"
+        [bulkActions]="bulkActions()"
         [hasMore]="hasMore()"
         [loading]="loadingMore()"
         (loadMore)="loadMore()"
         (rowClick)="onRowClick($event)"
+        (rowAction)="onRowAction($event)"
+        (bulkAction)="onBulkAction($event)"
       >
         <ng-template qCell="name" let-product>
           <div [class.products__rail--warning]="severityCaption(product) !== null">
@@ -161,4 +194,20 @@
       (dismiss)="closeCreateDialog()"
     />
   }
+
+  @if (addToCategoryOpen()) {
+    <q-add-to-category-dialog
+      [categories]="categories()"
+      [busy]="addToCategoryBusy()"
+      [error]="addToCategoryError()"
+      (confirm)="submitAddToCategory($event)"
+      (dismiss)="closeAddToCategory()"
+    />
+  }
+
+  <q-fiscal-workbench-panel
+    [scope]="brandScope()"
+    [open]="workbenchOpen()"
+    (dismiss)="closeWorkbench()"
+  />
 </div>

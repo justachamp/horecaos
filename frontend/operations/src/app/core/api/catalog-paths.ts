@@ -179,6 +179,28 @@ export const catalogPaths = {
   storefrontMenu(scope: BrandScope, locationId: string): string {
     return `/api/v1/storefront${tenantBrand(scope)}/locations/${encodeURIComponent(locationId)}/menu`;
   },
+
+  // -------------------------------------------------- P21 row actions and the fiscal workbench
+
+  /** Duplicates a product — its variants, translations, catalog/category placement, modifier groups and media. */
+  duplicateProduct(scope: BrandScope, productId: string): string {
+    return `${this.product(scope, productId)}/duplicate`;
+  },
+
+  /** Stops a product in every branch that currently offers it. */
+  stopInAllBranches(scope: BrandScope, productId: string): string {
+    return `${this.product(scope, productId)}/stop-in-all-branches`;
+  },
+
+  /** The fiscal workbench's bulk fill — many nodes classified in one call. */
+  bulkFiscalClassification(scope: BrandScope): string {
+    return `${this.base(scope)}/fiscal-classifications/bulk`;
+  },
+
+  /** The fiscal workbench's "N of M priceable nodes unclassified" coverage read and worklist. */
+  fiscalCoverage(scope: BrandScope): string {
+    return `${this.base(scope)}/fiscal-coverage`;
+  },
 } as const;
 
 export const pricingPaths = {

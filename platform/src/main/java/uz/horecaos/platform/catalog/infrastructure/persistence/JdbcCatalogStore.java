@@ -917,15 +917,50 @@ public class JdbcCatalogStore {
      * products list). Same shortcut {@link #variantsAtLocation} uses: the cursor is
      * the last product id of the previous page, since no signed {@code CursorSigner}
      * bean exists yet (ADR 0031).
+     *
+     * <p>{@code search} and {@code status} are both applied here, in SQL, rather
+     * than by the caller after loading a page — P21's whole reason to exist is
+     * that the previous console filtered the page already in hand, so a dish
+     * sitting past the loaded rows on a 1000+ item catalogue was unreachable by
+     * search or by tab. {@code search} matches the product's code (any case) or
+     * its name in any locale; {@code status} is one of {@code ACTIVE}/{@code
+     * DRAFT}/{@code ARCHIVED}, or the synthetic value {@code NO_MXIK} — a
+     * product-level filter (none of its variants carry an ИКПУ/MXIK code),
+     * distinct from {@link #fiscalCoverageNodes}'s node-level count.
      */
     public List<ProductRow> productsInCatalogPage(
-            UUID tenantId, UUID brandId, UUID catalogId, @Nullable UUID cursor, int limit) {
+            UUID tenantId,
+            UUID brandId,
+            UUID catalogId,
+            @Nullable UUID cursor,
+            int limit,
+            @Nullable String search,
+            @Nullable String status) {
+        boolean noMxikOnly = "NO_MXIK".equals(status);
+        String statusFilter = noMxikOnly ? null : status;
         return jdbc.sql("""
                 SELECT p.id, p.code, p.status, p.version
                 FROM catalog.products p
                 JOIN catalog.catalog_products cp ON cp.product_id = p.id
                 WHERE p.tenant_id = :tenantId AND p.brand_id = :brandId AND cp.catalog_id = :catalogId
                   AND (CAST(:cursor AS uuid) IS NULL OR p.id > CAST(:cursor AS uuid))
+                  AND (CAST(:status AS varchar) IS NULL OR p.status = :status)
+                  AND (CAST(:search AS varchar) IS NULL
+                       OR p.code ILIKE '%' || :search || '%'
+                       OR EXISTS (
+                            SELECT 1 FROM catalog.translations t
+                            WHERE t.entity_type = 'PRODUCT' AND t.entity_id = p.id
+                              AND t.tenant_id = p.tenant_id AND t.brand_id = p.brand_id
+                              AND t.name ILIKE '%' || :search || '%'
+                       ))
+                  AND (:noMxikOnly = false OR NOT EXISTS (
+                            SELECT 1 FROM catalog.variants v
+                            JOIN catalog.fiscal_classifications fc
+                                ON fc.priceable_type = 'VARIANT' AND fc.priceable_id = v.id
+                                   AND fc.tenant_id = v.tenant_id
+                            WHERE v.product_id = p.id AND v.tenant_id = p.tenant_id AND v.brand_id = p.brand_id
+                              AND fc.mxik_code IS NOT NULL
+                       ))
                 ORDER BY p.id
                 LIMIT :limit
                 """)
@@ -933,6 +968,9 @@ public class JdbcCatalogStore {
                 .param("brandId", brandId)
                 .param("catalogId", catalogId)
                 .param("cursor", cursor)
+                .param("status", statusFilter)
+                .param("search", search)
+                .param("noMxikOnly", noMxikOnly)
                 .param("limit", limit)
                 .query((row, number) -> new ProductRow(
                         row.getObject("id", UUID.class),
@@ -940,6 +978,74 @@ public class JdbcCatalogStore {
                         row.getString("status"),
                         row.getInt("version")))
                 .list();
+    }
+
+    /** Changes a product's status (catalog.md §4.1's archive/restore row action). */
+    public void updateProductStatus(UUID tenantId, UUID brandId, UUID productId, Status status) {
+        jdbc.sql("""
+                UPDATE catalog.products
+                SET status = :status, version = version + 1, updated_at = now()
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :productId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("productId", productId)
+                .param("status", status.name())
+                .update();
+    }
+
+    /**
+     * Stops a product everywhere it is currently offered: every {@code
+     * AVAILABLE} {@link #upsertOffering} row across every variant of this
+     * product moves to {@code UNAVAILABLE}, in one statement rather than a loop
+     * over each of a chain's branches.
+     *
+     * <p>Rows already {@code UNAVAILABLE} or {@code HIDDEN} are left exactly as
+     * they are — this is a stop, not a re-assertion of availability nobody
+     * asked for, matching {@link #insertOfferingIfAbsent}'s own respect for a
+     * standing decision.
+     *
+     * @return how many location offerings changed
+     */
+    public int stopProductEverywhere(UUID tenantId, UUID brandId, UUID productId) {
+        return jdbc.sql("""
+                UPDATE catalog.location_offerings lo
+                SET status = 'UNAVAILABLE', version = lo.version + 1, updated_at = now()
+                FROM catalog.variants v
+                WHERE v.id = lo.variant_id AND v.tenant_id = lo.tenant_id AND v.brand_id = lo.brand_id
+                  AND v.product_id = :productId AND v.tenant_id = :tenantId AND v.brand_id = :brandId
+                  AND lo.status = 'AVAILABLE'
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("productId", productId)
+                .update();
+    }
+
+    /**
+     * Whether a priceable node (ADR 0038) exists in this tenant and brand.
+     *
+     * <p>{@link #entityExistsInBrand} answers the same question for the six
+     * translatable {@code EntityType}s and deliberately returns {@code false}
+     * for {@code FEE}, which carries no translation. The bulk classify endpoint
+     * needs exactly this question answered for all three {@code
+     * PriceableType}s a classification can target, {@code FEE} included, so it
+     * is answered here rather than by widening that method's contract.
+     */
+    public boolean priceableNodeExistsInBrand(UUID tenantId, UUID brandId, PriceableNode node) {
+        String sql =
+                switch (node.type()) {
+                    case VARIANT -> "SELECT 1 FROM catalog.variants";
+                    case MODIFIER_OPTION -> "SELECT 1 FROM catalog.modifier_options";
+                    case FEE -> "SELECT 1 FROM catalog.fees";
+                };
+        return jdbc.sql(sql + " WHERE id = :nodeId AND tenant_id = :tenantId AND brand_id = :brandId")
+                .param("nodeId", node.id())
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
     }
 
     /** One product, for the product editor. Empty when it is not this brand's. */

@@ -1,0 +1,29 @@
+@if (open()) {
+  <q-drawer [title]="'catalog.fiscalWorkbench.title' | t" (dismiss)="close()">
+    @if (denied()) {
+      <q-inline-alert severity="warning" messageKey="catalog.fiscalWorkbench.denied" />
+    } @else if (lastError(); as message) {
+      <q-inline-alert severity="error" [text]="message" />
+    } @else if (loading() && !coverage()) {
+      <p class="q-body-sm">{{ 'catalog.fiscalWorkbench.loading' | t }}</p>
+    } @else if (coverage(); as summary) {
+      <p class="q-body-sm workbench__summary" data-testid="fiscal-workbench-summary">
+        {{
+          'catalog.fiscalWorkbench.summary'
+            | t: { unclassified: summary.unclassifiedCount, total: summary.totalNodes }
+        }}
+      </p>
+      @if (summary.nodes.length === 0) {
+        <p class="q-body-sm">{{ 'catalog.fiscalWorkbench.empty' | t }}</p>
+      } @else {
+        <q-data-grid
+          [columns]="columns()"
+          [rows]="summary.nodes"
+          [rowId]="rowIdFn"
+          [saveFn]="saveFn"
+          (saved)="onSaved()"
+        />
+      }
+    }
+  </q-drawer>
+}
