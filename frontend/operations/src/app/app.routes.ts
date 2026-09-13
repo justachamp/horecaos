@@ -74,6 +74,20 @@ export const routes: Routes = [
         path: 'today',
         loadComponent: () => import('./features/today/today-page').then((m) => m.TodayPage),
       },
+      {
+        // Мой профиль (staff-and-access.md §10, operations IA §9/X.5):
+        // reached from the account chip at the bottom of the rail
+        // (`shell.html`), not from `/staff` — this is the signed-in person's
+        // own page, so it carries no rail entry and no `NAV_ITEMS` capability
+        // gate (`capabilityGuard`'s own doc: a URL with no matching
+        // `NAV_ITEMS` entry is let through unconditionally). Declared here,
+        // beside `today`, rather than nested under `staff` for exactly that
+        // reason — nesting it there would put it a capability check away
+        // from the person it exists for.
+        path: 'my-profile',
+        loadComponent: () =>
+          import('./features/staff/my-profile-page').then((m) => m.MyProfilePage),
+      },
       // IA 0.2 (My work): an honest not-built page, linked from 0.1's own
       // toolbar — see `today-page.ts`'s doc for why every field it would
       // show depends on data (order attribution, a staff person record)

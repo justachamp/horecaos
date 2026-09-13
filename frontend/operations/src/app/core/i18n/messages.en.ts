@@ -2436,6 +2436,10 @@ export const messagesEn = {
 
   'staff.telegram.linked': 'Telegram linked',
   'staff.telegram.notLinked': 'Telegram not linked',
+  'staff.telegram.linked.withId': 'Telegram linked (id {id})',
+  'staff.telegram.unlink': 'Unlink',
+  'staff.telegram.unlink.confirm':
+    'Unlink this Telegram account? They can link a new one with a fresh code — their access is unaffected.',
 
   'staff.scope.company': 'Whole company',
   'staff.scope.brand': 'Brand',
@@ -2502,6 +2506,19 @@ export const messagesEn = {
   'staff.detail.field.telegram': 'Telegram',
   'staff.detail.security.notBuilt':
     'Sign-in method, last sign-in and terminal PIN are not tracked yet',
+
+  'staff.myProfile.title': 'My profile',
+  'staff.myProfile.personalData.title': 'Personal details',
+  'staff.myProfile.personalData.notBuilt': 'Name, phone and email are not editable here yet',
+  'staff.myProfile.telegram.title': 'Telegram',
+  'staff.myProfile.telegram.body': 'Link your own Telegram account to receive alerts from the bot.',
+  'staff.myProfile.telegram.issue': 'Get a code',
+  'staff.myProfile.telegram.sendThis': 'Send this to the bot in a private chat:',
+  'staff.myProfile.security.title': 'Security',
+  'staff.myProfile.security.notBuilt':
+    'Changing your password, your terminal PIN, and ending other sessions are not built yet',
+  'staff.myProfile.myJobs.title': 'My jobs',
+  'staff.myProfile.myJobs.empty': 'You have no job assigned yet.',
 
   'staff.role.tenant-owner': 'Owner',
   'staff.role.tenant-owner.description': 'Full access to the whole company.',
@@ -3773,9 +3790,11 @@ export const messagesEn = {
   'settings.integrations.detail.bindings.column.status': 'Status',
   'settings.integrations.detail.bindings.column.actions': 'Actions',
   'settings.integrations.detail.bindings.activate': 'Activate',
-  'settings.integrations.detail.bindings.activate.reasonPrompt': 'Reason for bringing this binding live:',
+  'settings.integrations.detail.bindings.activate.reasonPrompt':
+    'Reason for bringing this binding live:',
   'settings.integrations.detail.bindings.suspend': 'Suspend',
-  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Reason for suspending this binding:',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Reason for suspending this binding:',
   'settings.integrations.detail.bindings.empty': 'No bindings yet.',
   'settings.integrations.detail.bindings.wholeTenant': 'Entire company',
   'settings.integrations.detail.cloposSettings.title': 'Order acceptance',
@@ -3787,13 +3806,15 @@ export const messagesEn = {
   'settings.integrations.detail.partnerClients.issue': 'Issue a client',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'A name for this client (for your own reference):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Reason for issuing this client:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Reason for issuing this client:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Copy this secret now — it will not be shown again:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'I have copied it',
   'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
   'settings.integrations.detail.partnerClients.revoke': 'Revoke',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Reason for revoking this client:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Reason for revoking this client:',
   'settings.integrations.detail.partnerClients.empty': 'No partner API clients issued yet.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

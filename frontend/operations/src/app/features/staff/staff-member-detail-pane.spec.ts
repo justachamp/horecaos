@@ -57,6 +57,8 @@ function makeApi(grants: readonly GrantView[]) {
     telegramLinks: vi.fn().mockResolvedValue([]),
     grant: vi.fn().mockResolvedValue({ grantId: 'new-grant' }),
     revoke: vi.fn().mockResolvedValue({ changed: true, outcome: 'revoked' }),
+    issueTelegramLinkCode: vi.fn().mockResolvedValue({ code: 'ABC123', command: '/link ABC123' }),
+    revokeTelegramLink: vi.fn().mockResolvedValue({ changed: true, outcome: 'revoked' }),
   };
 }
 
@@ -140,10 +142,15 @@ describe('StaffMemberDetailPane', () => {
     expect(api.listGrants).toHaveBeenCalledTimes(2);
   });
 
-  it('shows the Telegram link state on the Безопасность tab, real data even without a name', async () => {
+  it('shows the Telegram link state and the telegramUserId on the Безопасность tab', async () => {
     const api = makeApi([grant({})]);
     api.telegramLinks.mockResolvedValue([
-      { principalSubject: 'staff-1', telegramUserId: 555, linkedAt: '2026-09-01T00:00:00Z' },
+      {
+        id: 'link-1',
+        principalSubject: 'staff-1',
+        telegramUserId: 555,
+        linkedAt: '2026-09-01T00:00:00Z',
+      },
     ]);
     await TestBed.configureTestingModule({
       imports: [StaffMemberDetailPane],
@@ -165,6 +172,65 @@ describe('StaffMemberDetailPane', () => {
     tabs[1].click(); // «Безопасность»
     fixture.detectChanges();
 
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Telegram привязан');
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Telegram привязан');
+    // The console already receives telegramUserId (operations-gap-map.md
+    // 9/X.1's own complaint was that nothing rendered it) — the raw number
+    // is the only identifying value this table carries (V0105: no display
+    // name or username is stored).
+    expect(text).toContain('555');
+  });
+
+  it('unlinks a staff member’s Telegram account with a reason, and reloads the links', async () => {
+    const api = makeApi([grant({})]);
+    api.telegramLinks.mockResolvedValueOnce([
+      {
+        id: 'link-1',
+        principalSubject: 'staff-1',
+        telegramUserId: 555,
+        linkedAt: '2026-09-01T00:00:00Z',
+      },
+    ]);
+    api.telegramLinks.mockResolvedValueOnce([]);
+    await TestBed.configureTestingModule({
+      imports: [StaffMemberDetailPane],
+      providers: [
+        provideRouter([]),
+        { provide: StaffApi, useValue: api },
+        { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
+        { provide: Auth, useValue: { subject: signal('someone-else') } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('ru');
+    const fixture = TestBed.createComponent(StaffMemberDetailPane);
+    fixture.componentRef.setInput('subjectId', 'staff-1');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const tabs = [...fixture.nativeElement.querySelectorAll('.tab')] as HTMLButtonElement[];
+    tabs[1].click(); // «Безопасность»
+    fixture.detectChanges();
+
+    (
+      fixture.nativeElement.querySelector('[data-testid="telegram-unlink"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    const reason = fixture.nativeElement.querySelector(
+      '[data-testid="telegram-unlink-reason"]',
+    ) as HTMLInputElement;
+    reason.value = 'Device was lost';
+    reason.dispatchEvent(new Event('input'));
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="telegram-unlink-confirm"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.revokeTelegramLink).toHaveBeenCalledWith('t1', 'link-1', 'Device was lost');
+    expect(api.telegramLinks).toHaveBeenCalledTimes(2);
   });
 });

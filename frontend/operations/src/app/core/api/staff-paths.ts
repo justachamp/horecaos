@@ -33,6 +33,21 @@ export const staffPaths = {
     return `${OPERATIONS}/tenants/${enc(tenantId)}/staff/telegram/links`;
   },
 
+  /** `TelegramStaffLinkCodeController.unlink` — wave T20, an administrator's «Отвязать». */
+  telegramStaffLink(tenantId: string, linkId: string): string {
+    return `${this.telegramStaffLinks(tenantId)}/${enc(linkId)}`;
+  },
+
+  /**
+   * `TelegramStaffLinkCodeController.issue` — wave T20's self-service card: a
+   * staff member mints her own `/link <code>` command. Self-service by
+   * construction (the server mints it for the caller, never for a subject
+   * the caller names), so this needs no id in the path.
+   */
+  telegramStaffLinkCodes(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/staff/telegram/link-codes`;
+  },
+
   /** `OperationsBrandController.list` — reused from `settings-paths.ts`'s own tree; see this file's doc. */
   brands(tenantId: string): string {
     return `${OPERATIONS}/operations/tenants/${enc(tenantId)}/brands`;

@@ -2422,6 +2422,10 @@ export const messagesUzLatn: MessageCatalogue = {
 
   'staff.telegram.linked': 'Telegram bogʻlangan',
   'staff.telegram.notLinked': 'Telegram bogʻlanmagan',
+  'staff.telegram.linked.withId': 'Telegram bogʻlangan (id {id})',
+  'staff.telegram.unlink': 'Bogʻlanishni uzish',
+  'staff.telegram.unlink.confirm':
+    'Bu Telegram hisobini uzasizmi? Xodim yangi kod bilan qayta bogʻlashi mumkin — huquqlari oʻzgarmaydi.',
 
   'staff.scope.company': 'Butun kompaniya',
   'staff.scope.brand': 'Brend',
@@ -2489,6 +2493,19 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.detail.field.telegram': 'Telegram',
   'staff.detail.security.notBuilt':
     'Kirish usuli, oxirgi kirish va terminal PIN-kodi hali kuzatilmaydi',
+
+  'staff.myProfile.title': 'Mening profilim',
+  'staff.myProfile.personalData.title': 'Shaxsiy maʼlumotlar',
+  'staff.myProfile.personalData.notBuilt': 'Ism, telefon va email hali bu yerda tahrirlanmaydi',
+  'staff.myProfile.telegram.title': 'Telegram',
+  'staff.myProfile.telegram.body': 'Botdan xabar olish uchun oʻz Telegram hisobingizni bogʻlang.',
+  'staff.myProfile.telegram.issue': 'Kod olish',
+  'staff.myProfile.telegram.sendThis': 'Buni botga shaxsiy chatda yuboring:',
+  'staff.myProfile.security.title': 'Xavfsizlik',
+  'staff.myProfile.security.notBuilt':
+    'Parolni almashtirish, terminal PIN-kodi va boshqa seanslarni yakunlash hali qurilmagan',
+  'staff.myProfile.myJobs.title': 'Mening lavozimlarim',
+  'staff.myProfile.myJobs.empty': 'Hali birorta lavozim tayinlanmagan.',
 
   'staff.role.tenant-owner': 'Egasi',
   'staff.role.tenant-owner.description': 'Butun kompaniyaga toʻliq kirish huquqi.',
@@ -3778,13 +3795,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.detail.partnerClients.issue': 'Mijoz chiqarish',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'Ushbu mijoz uchun nom (oʻzingiz uchun):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Ushbu mijozni chiqarish sababi:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Ushbu mijozni chiqarish sababi:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Ushbu maxfiy kalitni hozir nusxalang — u qayta koʻrsatilmaydi:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'Nusxaladim',
   'settings.integrations.detail.partnerClients.column.clientId': 'Mijoz ID',
   'settings.integrations.detail.partnerClients.revoke': 'Bekor qilish',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Ushbu mijozni bekor qilish sababi:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Ushbu mijozni bekor qilish sababi:',
   'settings.integrations.detail.partnerClients.empty': 'Hali hamkor API mijozlari chiqarilmagan.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------
