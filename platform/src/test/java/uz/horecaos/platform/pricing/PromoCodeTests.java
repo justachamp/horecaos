@@ -373,6 +373,41 @@ class PromoCodeTests {
     }
 
     @Test
+    @DisplayName("the redemption ledger answers which customer redeemed a code, on which order, and when")
+    void theRedemptionLedgerShowsWhoRedeemedAndWhen() {
+        // The gap this closes: pricing.coupon_redemptions was written-only —
+        // redeemedCount was a bare counter with no drill-down to who redeemed it.
+        var code = activate(percentageDraft("LEDGERTEST", 1_000, null));
+        Quote quote = quotes.quote(cartWithCode(Map.of(burgerVariant, 1), "LEDGERTEST", "k-ledger"));
+        UUID orderId = UUID.randomUUID();
+
+        var reservation = redemptions.reserveForQuote(TENANT, BRAND, quote.quoteId(), orderId, CUSTOMER, NOW);
+        assertThat(reservation.result()).isEqualTo(PromoCodeRedemptionPort.RedemptionResult.Result.REDEEMED);
+
+        var ledger = authoring.redemptions(TENANT, BRAND, code.couponId());
+
+        assertThat(ledger).singleElement().satisfies(row -> {
+            assertThat(row.customerAccountId()).isEqualTo(CUSTOMER);
+            assertThat(row.orderId()).isEqualTo(orderId);
+            assertThat(row.status()).isEqualTo("REDEEMED");
+            assertThat(row.amountMinor()).isPositive();
+            assertThat(row.currency()).isEqualTo("UZS");
+            assertThat(row.reservedAt()).isEqualTo(NOW);
+            assertThat(row.redeemedAt()).isEqualTo(NOW);
+            assertThat(row.releasedAt()).isNull();
+        });
+    }
+
+    @Test
+    @DisplayName("the redemption ledger refuses a coupon that belongs to a different brand")
+    void theRedemptionLedgerRefusesASiblingBrand() {
+        var code = activate(percentageDraft("LEDGERSCOPE", 1_000, null));
+
+        assertThatThrownBy(() -> authoring.redemptions(TENANT, UUID.randomUUID(), code.couponId()))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
     @DisplayName("a quote with no applied coupon has nothing to reserve")
     void aQuoteWithNoCouponHasNothingToReserve() {
         Quote quote = quotes.quote(cart(Map.of(burgerVariant, 1)));

@@ -694,6 +694,48 @@ public class JdbcPromoCodeStore {
                 .optional();
     }
 
+    /**
+     * Caps {@link #redemptionsForCoupon} rather than paginating it: a coupon's
+     * own {@code maximum_redemptions} already bounds how many rows a healthy
+     * code can have, and an uncapped one that has produced more than this many
+     * reservations has a bigger problem than this screen not paginating.
+     */
+    private static final int REDEMPTION_PAGE = 500;
+
+    /**
+     * Every reservation, redemption and release recorded against this coupon,
+     * newest first — the drill-down a bare {@code redeemedCount} cannot answer:
+     * which customer redeemed it, on which order, when.
+     */
+    public List<CouponRedemptionRow> redemptionsForCoupon(UUID tenantId, UUID couponCodeId) {
+        return jdbc.sql("""
+                SELECT id, customer_account_id, order_id, status, amount_minor, currency,
+                       reserved_at, redeemed_at, released_at
+                FROM pricing.coupon_redemptions
+                WHERE tenant_id = :tenantId AND coupon_id = :couponId
+                ORDER BY reserved_at DESC
+                LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("couponId", couponCodeId)
+                .param("limit", REDEMPTION_PAGE)
+                .query((row, n) -> new CouponRedemptionRow(
+                        row.getObject("id", UUID.class),
+                        row.getObject("customer_account_id", UUID.class),
+                        row.getObject("order_id", UUID.class),
+                        row.getString("status"),
+                        row.getLong("amount_minor"),
+                        row.getString("currency"),
+                        row.getObject("reserved_at", OffsetDateTime.class).toInstant(),
+                        instant(row.getObject("redeemed_at", OffsetDateTime.class)),
+                        instant(row.getObject("released_at", OffsetDateTime.class))))
+                .list();
+    }
+
+    private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
+        return value == null ? null : value.toInstant();
+    }
+
     private static @Nullable OffsetDateTime utc(@Nullable Instant instant) {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
@@ -745,6 +787,24 @@ public class JdbcPromoCodeStore {
     }
 
     public record AppliedCoupon(UUID couponId, UUID promotionId, String currency, long discountMinor) {}
+
+    /**
+     * One row of {@link #redemptionsForCoupon}.
+     *
+     * @param customerAccountId null for a coupon spent by a caller with no account
+     * @param orderId           null until the reservation redeems; a released
+     *                          reservation never gets one at all
+     */
+    public record CouponRedemptionRow(
+            UUID redemptionId,
+            @Nullable UUID customerAccountId,
+            @Nullable UUID orderId,
+            String status,
+            long amountMinor,
+            String currency,
+            Instant reservedAt,
+            @Nullable Instant redeemedAt,
+            @Nullable Instant releasedAt) {}
 
     public record ReleasedRedemption(
             UUID couponId, @Nullable UUID customerAccountId) {}

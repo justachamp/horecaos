@@ -25,6 +25,7 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.pricing.application.PromoCodeAuthoringService;
 import uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.DiscountShape;
 import uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.PromoCodeDraft;
+import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore.PromoCodeAuthoringRow;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
@@ -112,6 +113,21 @@ public class PromoCodeController {
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID couponId) {
         promoCodes.activate(tenantId, brandId, couponId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{couponId}/redemptions")
+    @RequiresCapability(value = Capability.PRICING_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Every redemption recorded against one promo code",
+            description = "Reservation, redemption and release rows, newest first — the "
+                    + "drill-down a bare redeemedCount cannot answer: which customer "
+                    + "redeemed it, on which order, when. Account and order ids only; no "
+                    + "contact value crosses this endpoint and none can.")
+    public ResponseEntity<List<PromoCodeRedemptionResponse>> redemptions(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID couponId) {
+        return ResponseEntity.ok(promoCodes.redemptions(tenantId, brandId, couponId).stream()
+                .map(PromoCodeRedemptionResponse::of)
+                .toList());
     }
 
     @PostMapping("/{couponId}/retire")
@@ -208,6 +224,36 @@ public class PromoCodeController {
                     row.version(),
                     row.validFrom(),
                     row.validUntil());
+        }
+    }
+
+    /**
+     * @param customerAccountId null for a coupon spent by a caller with no account
+     * @param orderId           null until the reservation redeems; a released
+     *                          reservation never gets one at all
+     */
+    public record PromoCodeRedemptionResponse(
+            UUID redemptionId,
+            @Nullable UUID customerAccountId,
+            @Nullable UUID orderId,
+            String status,
+            long amountMinor,
+            String currency,
+            Instant reservedAt,
+            @Nullable Instant redeemedAt,
+            @Nullable Instant releasedAt) {
+
+        static PromoCodeRedemptionResponse of(JdbcPromoCodeStore.CouponRedemptionRow row) {
+            return new PromoCodeRedemptionResponse(
+                    row.redemptionId(),
+                    row.customerAccountId(),
+                    row.orderId(),
+                    row.status(),
+                    row.amountMinor(),
+                    row.currency(),
+                    row.reservedAt(),
+                    row.redeemedAt(),
+                    row.releasedAt());
         }
     }
 }
