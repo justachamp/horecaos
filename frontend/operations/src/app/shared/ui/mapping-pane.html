@@ -130,8 +130,10 @@
           [query]="rightQuery()"
           [options]="rightOptions()"
           [ariaLabel]="'ui.mappingPane.externalColumn' | t"
+          [allowCreate]="!externalSourced()"
           (queryChange)="onRightQueryInput($event)"
           (optionSelected)="chooseRight($event)"
+          (create)="chooseRightFreeText($event)"
         />
         <p class="q-caption q-ink-muted">
           {{ 'ui.mappingPane.unmappedCount' | t: { count: externalCandidates().length } }}

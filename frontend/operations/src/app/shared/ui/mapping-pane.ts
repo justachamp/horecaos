@@ -136,6 +136,22 @@ export class MappingPane {
     this.rightQuery.set(option.label);
   }
 
+  /**
+   * `externalSourced=false`'s own way forward — `PosMappingController`'s own
+   * doc says so explicitly: "creating a mapping by typing the provider's own
+   * code still works" even when this build cannot discover that provider's
+   * list. The typed text becomes both the external id and its own label;
+   * there is nothing else to show for it.
+   */
+  protected chooseRightFreeText(text: string): void {
+    const trimmed = text.trim();
+    if (trimmed === '') {
+      return;
+    }
+    this.selectedRight.set({ id: trimmed, label: trimmed });
+    this.rightQuery.set(trimmed);
+  }
+
   protected confirmLink(): void {
     const left = this.selectedLeft();
     const right = this.selectedRight();

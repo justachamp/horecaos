@@ -208,4 +208,58 @@ describe('MappingPane', () => {
     (el(fixture, 'q-mapping-pane-conflict-dismiss') as HTMLButtonElement).click();
     expect(dismissed).toEqual(narrowed);
   });
+
+  it("lets an operator type the provider's own code when this build cannot source that side at all", () => {
+    const fixture = render();
+    fixture.componentRef.setInput('horecaosCandidates', HORECAOS_CANDIDATES);
+    fixture.componentRef.setInput('externalSourced', false);
+    fixture.detectChanges();
+
+    const leftInput = el(fixture, 'q-mapping-pane-left')!.querySelector<HTMLInputElement>(
+      '[data-testid="q-combobox-input"]',
+    )!;
+    leftInput.value = 'Cash';
+    leftInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    el(fixture, 'q-mapping-pane-left')!
+      .querySelector<HTMLElement>('[data-testid="q-combobox-option"]')!
+      .click();
+    fixture.detectChanges();
+
+    const rightInput = el(fixture, 'q-mapping-pane-right')!.querySelector<HTMLInputElement>(
+      '[data-testid="q-combobox-input"]',
+    )!;
+    rightInput.value = 'POS-777';
+    rightInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const createRow = el(fixture, 'q-mapping-pane-right')!.querySelector<HTMLElement>(
+      '[data-testid="q-combobox-create-row"]',
+    );
+    expect(createRow).toBeTruthy();
+    createRow!.click();
+    fixture.detectChanges();
+
+    let emitted: MappingPaneLinkIntent | undefined;
+    fixture.componentInstance.link.subscribe((intent) => (emitted = intent));
+    (el(fixture, 'q-mapping-pane-link') as HTMLButtonElement).click();
+
+    expect(emitted).toEqual({ horecaosId: 'h1', externalId: 'POS-777' });
+  });
+
+  it('offers no create-on-miss row on the provider side once this build can source it', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('externalSourced', true);
+    fixture.detectChanges();
+
+    const rightInput = el(fixture, 'q-mapping-pane-right')!.querySelector<HTMLInputElement>(
+      '[data-testid="q-combobox-input"]',
+    )!;
+    rightInput.value = 'anything';
+    rightInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(
+      el(fixture, 'q-mapping-pane-right')!.querySelector('[data-testid="q-combobox-create-row"]'),
+    ).toBeNull();
+  });
 });
