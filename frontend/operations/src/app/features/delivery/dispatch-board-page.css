@@ -1,13 +1,7 @@
 .dispatch {
   display: flex;
-  height: 100%;
-}
-
-.dispatch__main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
   flex-direction: column;
+  height: 100%;
 }
 
 .dispatch__toolbar {
@@ -53,70 +47,16 @@
   color: inherit;
 }
 
-.dispatch__table-wrap {
-  flex: 1;
-  overflow: auto;
-}
-
-.dispatch__table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.dispatch__table th {
-  text-align: left;
-  padding: 8px 12px;
-  font-size: var(--q-type-caption);
+.dispatch__hint {
+  padding: 8px 16px 0;
   color: var(--q-ink-subtle);
-  border-bottom: 1px solid var(--q-hairline);
-  position: sticky;
-  top: 0;
-  background: var(--q-canvas);
 }
 
-.dispatch__table td {
-  padding: 8px 12px;
-  font-size: var(--q-type-body-sm);
-  border-bottom: 1px solid var(--q-hairline);
-  vertical-align: middle;
-}
-
-.dispatch__num-col {
-  text-align: right;
-}
-
-.dispatch__action-col {
-  text-align: right;
-}
-
-.dispatch__action-col button {
-  padding: 4px 12px;
-  border: 1px solid var(--q-primary);
-  background: var(--q-canvas);
-  color: var(--q-primary);
-  border-radius: var(--q-radius);
-  cursor: pointer;
-  font-size: var(--q-type-body-xs);
-}
-
-.dispatch__action-col button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.chip {
-  display: inline-block;
-  padding: 2px 6px;
-  background: var(--q-surface-1);
-  border-radius: var(--q-radius);
-  font-size: var(--q-type-caption);
-}
-
-.status-badge {
-  padding: 2px 8px;
-  background: var(--q-surface-1);
-  border-radius: var(--q-radius);
-  font-size: var(--q-type-caption);
+.dispatch__board-wrap {
+  flex: 1;
+  min-height: 0;
+  padding: 12px 16px;
+  overflow: hidden;
 }
 
 .dispatch__denied,
@@ -135,20 +75,34 @@
   background: var(--q-surface-1);
 }
 
-.dispatch__fleet {
-  width: 260px;
-  flex: none;
-  border-left: 1px solid var(--q-hairline);
-  padding: 12px;
-  overflow: auto;
-}
-
-.fleet-card {
+.dispatch-card {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px;
-  margin-bottom: 8px;
-  background: var(--q-surface-1);
+  gap: 6px;
+}
+
+.dispatch-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dispatch-card__exception {
+  color: var(--q-error-text);
+}
+
+.dispatch-card__unassign {
+  align-self: flex-start;
+  padding: 3px 10px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
   border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-body-xs);
+}
+
+.dispatch-card__unassign:disabled {
+  opacity: 0.5;
+  cursor: default;
 }

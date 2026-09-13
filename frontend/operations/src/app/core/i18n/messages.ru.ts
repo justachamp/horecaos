@@ -1710,15 +1710,10 @@ export const messagesRu: MessageCatalogue = {
   'delivery.dispatch.denied': 'Нет доступа к диспетчерской этого филиала',
   'delivery.dispatch.empty': 'Сейчас нечего диспетчеризировать',
   'delivery.dispatch.conflict': 'Не удалось выполнить: {reason}',
-  'delivery.dispatch.column.order': 'Заказ',
-  'delivery.dispatch.column.status': 'Статус',
-  'delivery.dispatch.column.distance': 'Расстояние',
-  'delivery.dispatch.column.fee': 'Стоимость',
-  'delivery.dispatch.column.carriedBy': 'Курьер',
-  'delivery.dispatch.action.assign': 'Назначить',
+  'delivery.dispatch.hint':
+    'Перетащите заказ на курьера, чтобы назначить его. Перетащите обратно в «Не назначено», чтобы снять назначение.',
+  'delivery.dispatch.column.unassigned': 'Не назначено',
   'delivery.dispatch.action.unassign': 'Снять назначение',
-  'delivery.dispatch.fleet.title': 'Курьеры на линии',
-  'delivery.dispatch.fleet.empty': 'Курьеры пока не зарегистрированы',
   'delivery.dispatch.status.PLANNED': 'Запланирован',
   'delivery.dispatch.status.WAITING_TO_SOURCE': 'Ожидает подбора',
   'delivery.dispatch.status.SOURCING': 'Подбор курьера',
@@ -3708,6 +3703,10 @@ export const messagesRu: MessageCatalogue = {
   'shared.matrixGrid.toggleRow': 'Переключить всю строку',
   'shared.matrixGrid.toggleColumn': 'Переключить весь столбец',
   'shared.matrixGrid.unavailable': 'Недоступно для этого канала',
+
+  // shared/ui — q-drag-drop-assign (X.22)
+  'shared.dragDropAssign.rejected': 'Не удалось перенести: {reason}',
+  'shared.dragDropAssign.rejectedUnknown': 'Не удалось перенести — попробуйте ещё раз.',
   // --- shared/ui q-secret-input (ADR 0106, gap-map row X.14) --------------
   'secretInput.reveal': 'Показать',
   'secretInput.hide': 'Скрыть',

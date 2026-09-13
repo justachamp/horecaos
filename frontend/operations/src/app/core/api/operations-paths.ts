@@ -297,6 +297,11 @@ export const operationsPaths = {
     return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/plans/${encodeURIComponent(planId)}/unassign`;
   },
 
+  /** Why a `MANUAL_ACTION_REQUIRED` plan needs a human (§3.1). Read, same capability as {@link operationsPaths.dispatchQueue}. */
+  dispatchExceptions(scope: LocationScope, planId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/plans/${encodeURIComponent(planId)}/exceptions`;
+  },
+
   /**
    * The dispatcher's live map (ADR 0045, `OperationsCourierPositionController`,
    * IA 3.2) — on the ADR 0031 prefix, but under its own `operations/couriers`
