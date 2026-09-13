@@ -87,9 +87,53 @@ public class SalesChannelController {
     @Operation(
             summary = "List a tenant's sales channels, archived ones included",
             description = "Archived channels are listed because a historical order still renders "
-                    + "through one; the status says whether a new cart may use it.")
+                    + "through one; the status says whether a new cart may use it. Each row also "
+                    + "carries its branch count, enabled payment-method count and enabled "
+                    + "fulfilment modes -- settings.md 10.4a's three previously absent columns.")
     public List<ChannelView> list(@PathVariable UUID tenantId) {
-        return channels.list(tenantId).stream().map(ChannelView::of).toList();
+        return channels.listSummaries(tenantId).stream().map(ChannelView::of).toList();
+    }
+
+    @PutMapping("/{channelId}")
+    @RequiresCapability(value = Capability.CHANNEL_MANAGE, mutating = true)
+    @Operation(
+            summary = "Correct a channel's own fields",
+            description = "Everything but the code and the system type, which ADR 0036 fixes at "
+                    + "creation because behaviour keys on the type.")
+    public ChannelView update(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID channelId,
+            @Valid @RequestBody UpdateChannelRequest body,
+            @RequestParam int expectedVersion) {
+        return ChannelView.of(channels.update(
+                tenantId,
+                channelId,
+                new SalesChannelService.UpdateChannelCommand(
+                        body.displayName(),
+                        body.pricePlaneChannelId(),
+                        body.externallyPriced(),
+                        body.guestOrdersAllowed(),
+                        body.providerInstallationId()),
+                expectedVersion));
+    }
+
+    @PostMapping("/{channelId}/deactivate")
+    @RequiresCapability(value = Capability.CHANNEL_MANAGE, mutating = true)
+    @Operation(
+            summary = "Suspend sales on an active channel",
+            description = "Reversible with reactivate, unlike archive. Row 10.4a's ACTIVE→INACTIVE "
+                    + "transition, declared since ADR 0036 and unreachable until now.")
+    public ChannelView deactivate(
+            @PathVariable UUID tenantId, @PathVariable UUID channelId, @RequestParam int expectedVersion) {
+        return ChannelView.of(channels.deactivate(tenantId, channelId, expectedVersion));
+    }
+
+    @PostMapping("/{channelId}/reactivate")
+    @RequiresCapability(value = Capability.CHANNEL_MANAGE, mutating = true)
+    @Operation(summary = "Resume sales on a suspended channel")
+    public ChannelView reactivate(
+            @PathVariable UUID tenantId, @PathVariable UUID channelId, @RequestParam int expectedVersion) {
+        return ChannelView.of(channels.reactivate(tenantId, channelId, expectedVersion));
     }
 
     @GetMapping("/{channelId}/matrices")
@@ -168,7 +212,23 @@ public class SalesChannelController {
 
     record LocationSetRequest(@NotNull List<UUID> locationIds) {}
 
-    /** What a control-plane screen shows. */
+    record UpdateChannelRequest(
+            @NotBlank @Size(max = 200) String displayName,
+            UUID pricePlaneChannelId,
+            boolean externallyPriced,
+            boolean guestOrdersAllowed,
+            UUID providerInstallationId) {}
+
+    /**
+     * What a control-plane screen shows.
+     *
+     * @param locationCount              settings.md 10.4a "Филиалы" -- zero for a
+     *                                   freshly created, updated or status-changed
+     *                                   channel, since those mutations never touch
+     *                                   the location matrix
+     * @param enabledPaymentMethodCount  10.4a "Способы оплаты"
+     * @param enabledFulfillmentModes    10.4a "Типы получения", enabled only
+     */
     public record ChannelView(
             UUID id,
             String code,
@@ -179,7 +239,10 @@ public class SalesChannelController {
             boolean externallyPriced,
             boolean guestOrdersAllowed,
             @Nullable UUID providerInstallationId,
-            int version) {
+            int version,
+            int locationCount,
+            int enabledPaymentMethodCount,
+            List<String> enabledFulfillmentModes) {
 
         static ChannelView of(SalesChannel channel) {
             return new ChannelView(
@@ -192,7 +255,28 @@ public class SalesChannelController {
                     channel.externallyPriced(),
                     channel.guestOrdersAllowed(),
                     channel.providerInstallationId(),
-                    channel.version());
+                    channel.version(),
+                    0,
+                    0,
+                    List.of());
+        }
+
+        static ChannelView of(SalesChannelService.ChannelRegistrySummary summary) {
+            SalesChannel channel = summary.channel();
+            return new ChannelView(
+                    channel.id(),
+                    channel.code(),
+                    channel.systemType().name(),
+                    channel.displayName(),
+                    channel.status().name(),
+                    channel.pricePlaneChannelId(),
+                    channel.externallyPriced(),
+                    channel.guestOrdersAllowed(),
+                    channel.providerInstallationId(),
+                    channel.version(),
+                    summary.locationCount(),
+                    summary.enabledPaymentMethodCount(),
+                    summary.enabledFulfillmentModes().stream().map(Enum::name).toList());
         }
     }
 }

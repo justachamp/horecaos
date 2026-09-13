@@ -527,7 +527,7 @@ export class ProductEditorPage implements OnInit {
     }
     this.savingField.set('status');
     try {
-      await firstValueFrom(this.api.setProductStatus(scope, product.productId, { status }));
+      await firstValueFrom(this.api.setProductStatus(scope, product.productId, status));
       this.product.set({ ...product, status });
       this.saveNotice.set(this.i18n.t('catalog.editor.saved'));
     } catch (error) {

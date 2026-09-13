@@ -67,6 +67,9 @@ const CHANNEL: ChannelView = {
   guestOrdersAllowed: true,
   providerInstallationId: null,
   version: 1,
+  locationCount: 0,
+  enabledPaymentMethodCount: 0,
+  enabledFulfillmentModes: [],
 };
 
 describe('PromoCodesPage', () => {

@@ -209,6 +209,132 @@ class SalesChannelAndServiceabilityTests {
     }
 
     @Test
+    @DisplayName("update corrects a channel's own fields but never its code or system type")
+    void updateCorrectsFieldsButNotIdentity() {
+        var channel = channels.create(TENANT, createCommand("UZUM_TEZKOR", "AGGREGATOR"));
+
+        var updated = channels.update(
+                TENANT,
+                channel.id(),
+                new SalesChannelService.UpdateChannelCommand("Uzum Tezkor (renamed)", null, true, false, null),
+                channel.version());
+
+        assertThat(updated.displayName()).isEqualTo("Uzum Tezkor (renamed)");
+        assertThat(updated.externallyPriced()).isTrue();
+        assertThat(updated.guestOrdersAllowed()).isFalse();
+        assertThat(updated.code()).isEqualTo("UZUM_TEZKOR");
+        assertThat(updated.systemType()).isEqualTo(SalesChannelSystemType.AGGREGATOR);
+        assertThat(updated.version()).isEqualTo(channel.version() + 1);
+    }
+
+    @Test
+    @DisplayName("update refuses a channel taking its prices from itself")
+    void updateRefusesSelfAsPricePlane() {
+        var channel = channels.create(TENANT, createCommand("HALL", "POS"));
+
+        assertThat(catchThrowable(() -> channels.update(
+                        TENANT,
+                        channel.id(),
+                        new SalesChannelService.UpdateChannelCommand("Hall", channel.id(), false, true, null),
+                        channel.version())))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName(
+            "deactivate suspends an active channel and reactivate resumes it -- row 10.4a's own unreachable transition")
+    void deactivateAndReactivateRoundTrip() {
+        var channel = channels.create(TENANT, createCommand("SEASONAL", "KIOSK"));
+
+        var suspended = channels.deactivate(TENANT, channel.id(), channel.version());
+        assertThat(suspended.status()).isEqualTo(SalesChannel.Status.INACTIVE);
+        assertThat(suspended.sellable()).isFalse();
+
+        var resumed = channels.reactivate(TENANT, channel.id(), suspended.version());
+        assertThat(resumed.status()).isEqualTo(SalesChannel.Status.ACTIVE);
+        assertThat(resumed.sellable()).isTrue();
+    }
+
+    @Test
+    @DisplayName("deactivate refuses a channel that is not currently ACTIVE")
+    void deactivateRefusesFromTheWrongStatus() {
+        var channel = channels.create(TENANT, createCommand("ALREADY_OFF", "KIOSK"));
+        var suspended = channels.deactivate(TENANT, channel.id(), channel.version());
+
+        assertThat(catchThrowable(() -> channels.deactivate(TENANT, channel.id(), suspended.version())))
+                .isInstanceOf(TenantResourceConflictException.class);
+    }
+
+    @Test
+    @DisplayName("listSummaries carries the three counts row 10.4a's table needed and never had")
+    void listSummariesCarriesTheThreeCounts() {
+        var channel = channels.create(TENANT, createCommand("BRANCH_COUNTED", "POS"));
+        jdbc.sql("""
+                INSERT INTO payments.payment_methods (id, tenant_id, code, display_name, responsibility, status)
+                VALUES (:id, :tenantId, 'CASH', 'Cash', 'OPERATOR', 'ACTIVE')
+                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).update();
+        channels.replacePaymentMethods(TENANT, channel.id(), Map.of("CASH", true), channel.version());
+        channels.replaceFulfillmentModes(
+                TENANT, channel.id(), Map.of(FulfillmentMode.PICKUP, true), channel.version() + 1);
+        channels.replaceLocations(TENANT, channel.id(), List.of(LOCATION), channel.version() + 2);
+
+        var summary = channels.listSummaries(TENANT).stream()
+                .filter(row -> row.channel().id().equals(channel.id()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(summary.locationCount()).isEqualTo(1);
+        assertThat(summary.enabledPaymentMethodCount()).isEqualTo(1);
+        assertThat(summary.enabledFulfillmentModes()).containsExactly(FulfillmentMode.PICKUP);
+
+        // A channel nobody has touched yet reads as zero everywhere, not an
+        // absent row -- the exact "sells nothing until configured" model
+        // settings.md's own empty state describes.
+        var untouched = channels.create(TENANT, createCommand("BRAND_NEW", "WEB"));
+        var untouchedSummary = channels.listSummaries(TENANT).stream()
+                .filter(row -> row.channel().id().equals(untouched.id()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(untouchedSummary.locationCount()).isZero();
+        assertThat(untouchedSummary.enabledPaymentMethodCount()).isZero();
+        assertThat(untouchedSummary.enabledFulfillmentModes()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("toggling a payment method the tenant never registered is refused with an operator-legible "
+            + "message, not the raw DataIntegrityViolationException V0175's foreign key used to let through")
+    void replacePaymentMethodsRefusesAnUnregisteredCodeLegibly() {
+        // This is the live 500 the operations gap map's rows 10.4a/10.4b name by
+        // name: since V0175, tenant.channel_payment_methods.payment_method_code is
+        // a foreign key onto payments.payment_methods, and the frontend used to
+        // send a hard-coded ['CASH', 'CLICK', 'PAYME'] regardless of what a tenant
+        // had actually registered. ChannelPaymentMethodRegistryConstraintTests
+        // proves the database-level constraint exists; this proves the service
+        // layer callers actually reach -- SalesChannelController's own -- catches
+        // it and never lets the raw exception escape.
+        var channel = channels.create(TENANT, createCommand("UNREGISTERED_METHOD", "WEB"));
+
+        assertThat(catchThrowable(() ->
+                        channels.replacePaymentMethods(TENANT, channel.id(), Map.of("CLICK", true), channel.version())))
+                .as("CLICK was never registered in payments.payment_methods for this tenant")
+                .isInstanceOf(IllegalArgumentException.class)
+                .isNotInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("register it in");
+
+        // The refused write must not have landed a row for the unregistered
+        // code. (The version-bump-then-insert statements this store method
+        // issues are only atomic with the surrounding rollback @Transactional
+        // gives the real, Spring-managed service; a plain `new
+        // SalesChannelService(...)` in this test has no transaction to roll
+        // back, so the version itself is not asserted here.)
+        assertThat(jdbc.sql("SELECT count(*) FROM tenant.channel_payment_methods WHERE channel_id = :c")
+                        .param("c", channel.id())
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    @Test
     @DisplayName("a price plane is one hop and never a chain")
     void aPricePlaneIsOneHop() {
         var hall = channels.create(TENANT, createCommand("HALL", "POS"));

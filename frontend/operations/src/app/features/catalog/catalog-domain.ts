@@ -339,11 +339,6 @@ export interface UpdateVariantRequest {
   readonly status: CatalogStatus;
 }
 
-/** `SetProductStatusRequest`. */
-export interface SetProductStatusRequest {
-  readonly status: CatalogStatus;
-}
-
 /** `JdbcCatalogStore.MxikReferenceRow` — one ИКПУ/MXIK reference row (IA 4.2e). */
 export interface MxikReferenceRow {
   readonly code: string;

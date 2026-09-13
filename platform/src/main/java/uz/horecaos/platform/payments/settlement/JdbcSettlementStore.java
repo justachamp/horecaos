@@ -6,13 +6,18 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * Settlements, their tenders, and the tenant payment-method registry
@@ -40,6 +45,18 @@ public class JdbcSettlementStore {
      *                           reservation ordering, the money-tender invariant,
      *                           accrual net of the redeemed portion, and the
      *                           courier's cash figure without a code change
+     * @param icon                     row 10.6: a code-owned icon identifier the
+     *                                 console renders; {@code null} falls back to
+     *                                 a generic icon
+     * @param sortOrder                row 10.6: display position among this
+     *                                 tenant's own methods
+     * @param providerInstallationId   row 10.6: the ADR 0026 installation this
+     *                                 method settles through by default
+     * @param contractReference        row 10.6: the acquirer's own contract or
+     *                                 merchant-agreement number, for reconciliation
+     * @param version                  optimistic-locking version, incremented by
+     *                                 every {@link #updateMethod} and
+     *                                 {@link #updateMethodStatus}
      */
     public record MethodRow(
             UUID id,
@@ -47,7 +64,12 @@ public class JdbcSettlementStore {
             String displayName,
             String responsibility,
             boolean settlesFromBalance,
-            String status) {}
+            String status,
+            @Nullable String icon,
+            int sortOrder,
+            @Nullable UUID providerInstallationId,
+            @Nullable String contractReference,
+            int version) {}
 
     public UUID registerMethod(
             UUID tenantId,
@@ -97,6 +119,207 @@ public class JdbcSettlementStore {
                 .param("id", methodId)
                 .query(JdbcSettlementStore::toMethod)
                 .optional();
+    }
+
+    /** Every method this tenant has registered, including {@code DISABLED} ones -- 10.6's own list. */
+    public List<MethodRow> listMethodsForTenant(UUID tenantId) {
+        return jdbc.sql("""
+                SELECT * FROM payments.payment_methods
+                 WHERE tenant_id = :tenantId
+                 ORDER BY sort_order, code
+                """)
+                .param("tenantId", tenantId)
+                .query(JdbcSettlementStore::toMethod)
+                .list();
+    }
+
+    /**
+     * Registers a new method under an operator's own choices, in {@code ACTIVE}.
+     *
+     * <p>Deliberately not {@link #registerMethod}: that method's {@code ON
+     * CONFLICT ... DO NOTHING} is right for a checkout lazily seeding a code it
+     * has never seen, and wrong for an explicit "create" a tenant asked for --
+     * silently returning the existing row would tell an operator their new
+     * method was created when it was refused. A duplicate code here is left to
+     * raise {@link org.springframework.dao.DataIntegrityViolationException} for
+     * {@link #explain} to translate.
+     */
+    public MethodRow insertMethod(
+            UUID tenantId,
+            String code,
+            String displayName,
+            String responsibility,
+            @Nullable String icon,
+            int sortOrder,
+            @Nullable UUID providerInstallationId,
+            @Nullable String contractReference,
+            Instant now) {
+        UUID id = Ids.newId();
+        jdbc.sql("""
+                INSERT INTO payments.payment_methods (
+                    id, tenant_id, code, display_name, responsibility, settles_from_balance,
+                    icon, sort_order, provider_installation_id, contract_reference,
+                    status, version, created_at, updated_at)
+                VALUES (
+                    :id, :tenantId, :code, :displayName, :responsibility, false,
+                    :icon, :sortOrder, :installationId, :contractReference,
+                    'ACTIVE', 1, :now, :now)
+                """)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .param("displayName", displayName)
+                .param("responsibility", responsibility)
+                .param("icon", icon)
+                .param("sortOrder", sortOrder)
+                .param("installationId", providerInstallationId)
+                .param("contractReference", contractReference)
+                .param("now", utc(now))
+                .update();
+        return new MethodRow(
+                id,
+                code,
+                displayName,
+                responsibility,
+                false,
+                "ACTIVE",
+                icon,
+                sortOrder,
+                providerInstallationId,
+                contractReference,
+                1);
+    }
+
+    /** Renames, re-icons, re-orders or re-binds a method. The code and responsibility never change. */
+    public boolean updateMethod(
+            UUID tenantId,
+            UUID methodId,
+            String displayName,
+            @Nullable String icon,
+            int sortOrder,
+            @Nullable UUID providerInstallationId,
+            @Nullable String contractReference,
+            int expectedVersion,
+            Instant now) {
+        return jdbc.sql("""
+                UPDATE payments.payment_methods
+                   SET display_name = :displayName, icon = :icon, sort_order = :sortOrder,
+                       provider_installation_id = :installationId, contract_reference = :contractReference,
+                       version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", methodId)
+                        .param("displayName", displayName)
+                        .param("icon", icon)
+                        .param("sortOrder", sortOrder)
+                        .param("installationId", providerInstallationId)
+                        .param("contractReference", contractReference)
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    /** Activates or disables a method. {@code ck_payment_method_status} bounds {@code status} to the two. */
+    public boolean updateMethodStatus(UUID tenantId, UUID methodId, String status, int expectedVersion, Instant now) {
+        return jdbc.sql("""
+                UPDATE payments.payment_methods
+                   SET status = :status, version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", methodId)
+                        .param("status", status)
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    /** Every locale this tenant has translated this method's name into. */
+    public Map<String, String> methodTranslations(UUID tenantId, UUID methodId) {
+        Map<String, String> byLocale = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT locale, display_name FROM payments.payment_method_translations
+                 WHERE tenant_id = :tenantId AND payment_method_id = :methodId
+                 ORDER BY locale
+                """)
+                .param("tenantId", tenantId)
+                .param("methodId", methodId)
+                .query((row, number) -> Map.entry(row.getString("locale"), row.getString("display_name")))
+                .list()
+                .forEach(entry -> byLocale.put(entry.getKey(), entry.getValue()));
+        return byLocale;
+    }
+
+    /** Every method's translations in one tenant, for the list endpoint -- one query, never one per row. */
+    public Map<UUID, Map<String, String>> methodTranslationsForTenant(UUID tenantId) {
+        Map<UUID, Map<String, String>> byMethod = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT payment_method_id, locale, display_name FROM payments.payment_method_translations
+                 WHERE tenant_id = :tenantId
+                 ORDER BY payment_method_id, locale
+                """)
+                .param("tenantId", tenantId)
+                .query((row, number) -> Map.entry(
+                        row.getObject("payment_method_id", UUID.class),
+                        Map.entry(row.getString("locale"), row.getString("display_name"))))
+                .list()
+                .forEach(entry -> byMethod.computeIfAbsent(entry.getKey(), key -> new LinkedHashMap<>())
+                        .put(entry.getValue().getKey(), entry.getValue().getValue()));
+        return byMethod;
+    }
+
+    /**
+     * Replaces a method's whole set of localized names, the same whole-write
+     * discipline {@code replacePaymentMethods} on the channel matrix follows: a
+     * caller editing three locales in one form submits all three, never a
+     * per-locale PATCH that could interleave with another editor's tab.
+     */
+    public void replaceMethodTranslations(UUID tenantId, UUID methodId, Map<String, String> byLocale, Instant now) {
+        jdbc.sql("""
+                DELETE FROM payments.payment_method_translations
+                 WHERE tenant_id = :tenantId AND payment_method_id = :methodId
+                """).param("tenantId", tenantId).param("methodId", methodId).update();
+        byLocale.forEach((locale, displayName) -> jdbc.sql("""
+                INSERT INTO payments.payment_method_translations (
+                    tenant_id, payment_method_id, locale, display_name, created_at, updated_at)
+                VALUES (:tenantId, :methodId, :locale, :displayName, :now, :now)
+                """)
+                .param("tenantId", tenantId)
+                .param("methodId", methodId)
+                .param("locale", locale)
+                .param("displayName", displayName)
+                .param("now", utc(now))
+                .update());
+    }
+
+    /** Translates the registry's constraints into the sentence each one is protecting. */
+    public static ApiException explain(DataIntegrityViolationException violation) {
+        String message = String.valueOf(violation.getMostSpecificCause().getMessage());
+        if (message.contains("uq_payment_method_code")) {
+            return new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, "A payment method with this code already exists for the tenant");
+        }
+        if (message.contains("fk_payment_method_provider_installation")) {
+            return new ApiException(ErrorCode.VALIDATION_FAILED, "That installation does not belong to this tenant");
+        }
+        if (message.contains("ck_payment_method_translation_locale")) {
+            return new ApiException(ErrorCode.VALIDATION_FAILED, "That locale is not one of ru, uz-Latn or en");
+        }
+        if (message.contains("ck_payment_method_translation_present")) {
+            return new ApiException(ErrorCode.VALIDATION_FAILED, "A localized name cannot be blank");
+        }
+        if (message.contains("ck_payment_method_code")) {
+            return new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "A payment method code is upper-case letters, digits and underscores");
+        }
+        if (message.contains("ck_payment_method_responsibility")) {
+            return new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "Base type must be one of PARTNER, TERMINAL, MARKETPLACE or OPERATOR");
+        }
+        return new ApiException(ErrorCode.VALIDATION_FAILED, message);
     }
 
     public record SettlementRow(
@@ -404,7 +627,12 @@ public class JdbcSettlementStore {
                 row.getString("display_name"),
                 row.getString("responsibility"),
                 row.getBoolean("settles_from_balance"),
-                row.getString("status"));
+                row.getString("status"),
+                row.getString("icon"),
+                row.getInt("sort_order"),
+                row.getObject("provider_installation_id", UUID.class),
+                row.getString("contract_reference"),
+                row.getInt("version"));
     }
 
     private static SettlementRow toSettlement(ResultSet row, int number) throws SQLException {

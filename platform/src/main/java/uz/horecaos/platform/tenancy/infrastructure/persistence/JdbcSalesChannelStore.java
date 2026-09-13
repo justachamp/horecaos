@@ -3,11 +3,13 @@ package uz.horecaos.platform.tenancy.infrastructure.persistence;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -97,6 +99,94 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 .param("version", channel.version())
                 .param("now", timestamp(now))
                 .update();
+    }
+
+    /**
+     * Corrects a channel's own editable fields.
+     *
+     * <p>{@code code} and {@code system_type} are absent by design: the code is
+     * an identifier publications and order snapshots already reference, and the
+     * type is what behaviour keys on, so ADR 0036 lets neither change after
+     * registration. Everything else — name, price plane, external pricing,
+     * guest ordering, the default installation — is a correction an operator
+     * makes without archiving and re-creating the row.
+     */
+    public boolean update(
+            UUID tenantId,
+            UUID channelId,
+            String displayName,
+            @Nullable UUID pricePlaneChannelId,
+            boolean externallyPriced,
+            boolean guestOrdersAllowed,
+            @Nullable UUID providerInstallationId,
+            int expectedVersion,
+            Instant now) {
+        return jdbc.sql("""
+                UPDATE tenant.sales_channels
+                SET display_name = :displayName, price_plane_channel_id = :pricePlane,
+                    externally_priced = :externallyPriced, guest_orders_allowed = :guestOrdersAllowed,
+                    provider_installation_id = :installationId, version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :channelId AND version = :expectedVersion
+                """)
+                        .param("tenantId", tenantId)
+                        .param("channelId", channelId)
+                        .param("displayName", displayName)
+                        .param("pricePlane", pricePlaneChannelId)
+                        .param("externallyPriced", externallyPriced)
+                        .param("guestOrdersAllowed", guestOrdersAllowed)
+                        .param("installationId", providerInstallationId)
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", timestamp(now))
+                        .update()
+                == 1;
+    }
+
+    /** Every channel's active branch count, for the registry list's "Филиалы" column. */
+    public Map<UUID, Integer> locationCounts(UUID tenantId) {
+        Map<UUID, Integer> counts = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT channel_id, count(*) AS n FROM tenant.sales_channel_locations
+                WHERE tenant_id = :tenantId AND status = 'ACTIVE'
+                GROUP BY channel_id
+                """)
+                .param("tenantId", tenantId)
+                .query((row, number) -> Map.entry(row.getObject("channel_id", UUID.class), row.getInt("n")))
+                .list()
+                .forEach(entry -> counts.put(entry.getKey(), entry.getValue()));
+        return counts;
+    }
+
+    /** Every channel's enabled payment-method count, for the registry list's "Способы оплаты" column. */
+    public Map<UUID, Integer> enabledPaymentMethodCounts(UUID tenantId) {
+        Map<UUID, Integer> counts = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT channel_id, count(*) AS n FROM tenant.channel_payment_methods
+                WHERE tenant_id = :tenantId AND enabled
+                GROUP BY channel_id
+                """)
+                .param("tenantId", tenantId)
+                .query((row, number) -> Map.entry(row.getObject("channel_id", UUID.class), row.getInt("n")))
+                .list()
+                .forEach(entry -> counts.put(entry.getKey(), entry.getValue()));
+        return counts;
+    }
+
+    /** Every channel's enabled fulfilment modes, for the registry list's "Типы получения" chips. */
+    public Map<UUID, List<FulfillmentMode>> enabledFulfillmentModesByChannel(UUID tenantId) {
+        Map<UUID, List<FulfillmentMode>> modes = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT channel_id, fulfillment_mode FROM tenant.channel_fulfillment_modes
+                WHERE tenant_id = :tenantId AND enabled
+                ORDER BY channel_id, fulfillment_mode
+                """)
+                .param("tenantId", tenantId)
+                .query((row, number) -> Map.entry(
+                        row.getObject("channel_id", UUID.class),
+                        FulfillmentMode.valueOf(row.getString("fulfillment_mode"))))
+                .list()
+                .forEach(entry -> modes.computeIfAbsent(entry.getKey(), key -> new ArrayList<>())
+                        .add(entry.getValue()));
+        return modes;
     }
 
     /**
@@ -302,6 +392,16 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
         }
         if (message.contains("fk_sales_channel_price_plane")) {
             return new IllegalArgumentException("That price plane channel does not belong to this tenant");
+        }
+        // V0175: payment_method_code is a foreign key onto this tenant's own
+        // payments.payment_methods registry (ADR 0038). Before this branch existed
+        // the violation reached the caller raw, which is the live 500 the
+        // operations gap map's row 10.4a/10.4b names — an operator toggling a
+        // method the tenant has not registered saw an untranslated stack trace
+        // instead of a sentence telling them to register it first.
+        if (message.contains("fk_channel_payment_method_code")) {
+            return new IllegalArgumentException("That payment method is not registered for this tenant; register it in "
+                    + "Settings → Payment methods first");
         }
         return violation;
     }

@@ -463,7 +463,7 @@ describe('ProductEditorPage', () => {
     (host.querySelector('[data-testid="editor-save-status"]') as HTMLButtonElement).click();
     await flushMicrotasks();
 
-    expect(setProductStatus).toHaveBeenCalledWith(BRAND_SCOPE, 'product-1', { status: 'ARCHIVED' });
+    expect(setProductStatus).toHaveBeenCalledWith(BRAND_SCOPE, 'product-1', 'ARCHIVED');
   });
 
   it('removes a product from a category — the undo placeInCategory never had', async () => {

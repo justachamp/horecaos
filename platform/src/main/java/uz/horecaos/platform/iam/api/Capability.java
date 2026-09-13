@@ -292,6 +292,30 @@ public enum Capability {
     PAYMENT_MERCHANT_BINDING_MANAGE("payment.merchant-binding.manage", "payment", "merchant-binding.manage"),
 
     /**
+     * ADR 0038: reading the tenant-scoped {@code payments.payment_methods}
+     * registry — every method a tenant has registered, its localized names,
+     * icon, order, status and acquirer binding.
+     *
+     * <p>Held wherever {@link #CHANNEL_READ} is: the registry is what the
+     * {@code 10.4b} capability matrix's columns come from, so a principal who
+     * can read the matrix must be able to read what the columns mean.
+     */
+    PAYMENT_METHOD_READ("payment-method.read", "payment-method", "read"),
+
+    /**
+     * ADR 0038: registering, renaming, localizing, re-ordering, iconing,
+     * activating or disabling a payment method, and binding one to an acquirer
+     * installation.
+     *
+     * <p>Not folded into {@link #CHANNEL_MANAGE}: a channel decides which
+     * already-registered methods it offers, while this decides which methods
+     * exist for the tenant at all and whose fiscal responsibility backs each
+     * one — the same registry/usage split {@link #INTEGRATION_INSTALLATION_MANAGE}
+     * and {@link #PAYMENT_MERCHANT_BINDING_MANAGE} draw from each other.
+     */
+    PAYMENT_METHOD_MANAGE("payment-method.manage", "payment-method", "manage"),
+
+    /**
      * ADR 0013 and ADR 0038: reading an order's fiscal documents and the evidence
      * on them, including the recorded fact that a cash order has none.
      *

@@ -34,7 +34,6 @@ import {
   PublicationHistoryEntry,
   PublicationResult,
   SetOfferingRequest,
-  SetProductStatusRequest,
   SortOrderRequest,
   StopInAllBranchesResult,
   TranslateRequest,
@@ -218,18 +217,6 @@ export class CatalogApi {
   ): Observable<void> {
     return this.api.put<UpdateVariantRequest, void>(
       catalogPaths.variant(scope, productId, variantId),
-      command(request),
-    );
-  }
-
-  /** Черновик/Активен/Архив — read-only text until this wave. */
-  setProductStatus(
-    scope: BrandScope,
-    productId: string,
-    request: SetProductStatusRequest,
-  ): Observable<void> {
-    return this.api.put<SetProductStatusRequest, void>(
-      catalogPaths.productStatus(scope, productId),
       command(request),
     );
   }
