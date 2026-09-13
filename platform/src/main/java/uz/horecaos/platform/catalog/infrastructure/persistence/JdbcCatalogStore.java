@@ -243,7 +243,8 @@ public class JdbcCatalogStore {
 
     /**
      * Changes a product's own status (Черновик/Активен/Архив) — catalog.md
-     * §4.2's tab 1 had no write for this at all; the field was read-only text.
+     * §4.1's archive/restore row action and §4.2's tab 1, which had no write
+     * for this at all before; the field was read-only text.
      *
      * @return true when the product existed in this brand
      */
@@ -978,20 +979,6 @@ public class JdbcCatalogStore {
                         row.getString("status"),
                         row.getInt("version")))
                 .list();
-    }
-
-    /** Changes a product's status (catalog.md §4.1's archive/restore row action). */
-    public void updateProductStatus(UUID tenantId, UUID brandId, UUID productId, Status status) {
-        jdbc.sql("""
-                UPDATE catalog.products
-                SET status = :status, version = version + 1, updated_at = now()
-                WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :productId
-                """)
-                .param("tenantId", tenantId)
-                .param("brandId", brandId)
-                .param("productId", productId)
-                .param("status", status.name())
-                .update();
     }
 
     /**
