@@ -3,6 +3,7 @@
   role="listitem"
   data-testid="board-column"
   [attr.data-column-id]="columnId()"
+  [class.q-board-column--ineligible]="dropDisabled()"
 >
   <header class="q-board-column__header">
     <span class="q-board-column__title q-emphasis">{{ titleText() }}</span>
@@ -16,6 +17,9 @@
       >
     }
   </header>
+  @if (dropDisabled() && dropDisabledReason(); as reason) {
+    <p class="q-board-column__ineligible" data-testid="board-column-ineligible">{{ reason }}</p>
+  }
   <div
     class="q-board-column__body"
     cdkDropList

@@ -2138,6 +2138,7 @@ export const messagesEn = {
   'couriers.engagement.status.SUSPENDED_COMPLIANCE': 'Suspended (compliance)',
   'couriers.engagement.status.SUSPENDED_OPERATIONAL': 'Suspended',
   'couriers.engagement.status.ENDED': 'Ended',
+  'couriers.warningState.LAPSED': 'Compliance document lapsed',
 
   // Delivery (3.1 Dispatch board, 3.6 Delivery zones, 3.7 Delivery tariffs) — wave 30
   'delivery.nav.label': 'Delivery sections',
@@ -2161,6 +2162,7 @@ export const messagesEn = {
   'delivery.dispatch.hint':
     'Drag an order onto a courier to assign it. Drag it back to Unassigned to release it.',
   'delivery.dispatch.column.unassigned': 'Unassigned',
+  'delivery.dispatch.column.ineligible': 'Cannot receive drops — {reason}',
   'delivery.dispatch.action.unassign': 'Unassign',
   'delivery.dispatch.status.PLANNED': 'Planned',
   'delivery.dispatch.status.WAITING_TO_SOURCE': 'Waiting to source',

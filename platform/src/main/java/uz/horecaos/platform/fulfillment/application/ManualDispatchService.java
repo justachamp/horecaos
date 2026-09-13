@@ -21,6 +21,7 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmen
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmentStore.NewAttempt;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmentStore.Shipment;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmentStore.WinningAttempt;
+import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcCourierEligibilityStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore;
 import uz.horecaos.platform.iam.api.ResourceScope;
 
@@ -52,13 +53,19 @@ public class ManualDispatchService {
 
     private final JdbcDeliveryPlanStore plans;
     private final JdbcAssignmentStore assignments;
+    private final JdbcCourierEligibilityStore courierEligibility;
     private final AuditRecorder audit;
     private final Clock clock;
 
     public ManualDispatchService(
-            JdbcDeliveryPlanStore plans, JdbcAssignmentStore assignments, AuditRecorder audit, Clock clock) {
+            JdbcDeliveryPlanStore plans,
+            JdbcAssignmentStore assignments,
+            JdbcCourierEligibilityStore courierEligibility,
+            AuditRecorder audit,
+            Clock clock) {
         this.plans = plans;
         this.assignments = assignments;
+        this.courierEligibility = courierEligibility;
         this.audit = audit;
         this.clock = clock;
     }
@@ -78,6 +85,18 @@ public class ManualDispatchService {
         DeliveryPlan plan = requirePlan(tenantId, planId);
         if (plan.version() != expectedPlanVersion) {
             return DispatchOutcome.conflict(plan.status(), plan.version(), "STALE_VERSION");
+        }
+
+        // ADR 0042's compliance lever, checked here too and not only by the
+        // console's own drag-drop guard: that guard is client-side and this
+        // call is reachable directly, so a suspended or compliance-lapsed
+        // courier must be refused at the one place neither can be bypassed.
+        boolean eligible = courierEligibility
+                .findLiveEngagement(tenantId, courierId)
+                .map(JdbcCourierEligibilityStore.Eligibility::dispatchable)
+                .orElse(false);
+        if (!eligible) {
+            return DispatchOutcome.conflict(plan.status(), plan.version(), "COURIER_NOT_ELIGIBLE");
         }
 
         Instant now = clock.instant();

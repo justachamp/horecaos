@@ -64,3 +64,19 @@
   outline: 2px dashed var(--q-primary);
   outline-offset: -2px;
 }
+
+.q-board-column--ineligible {
+  opacity: 0.6;
+}
+
+.q-board-column--ineligible .q-board-column__header {
+  background: var(--q-error-tint);
+}
+
+.q-board-column__ineligible {
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 0.85em;
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+}

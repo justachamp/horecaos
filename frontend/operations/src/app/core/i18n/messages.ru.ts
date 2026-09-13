@@ -2109,6 +2109,7 @@ export const messagesRu: MessageCatalogue = {
   'couriers.engagement.status.SUSPENDED_COMPLIANCE': 'Приостановлен (комплаенс)',
   'couriers.engagement.status.SUSPENDED_OPERATIONAL': 'Приостановлен',
   'couriers.engagement.status.ENDED': 'Завершён',
+  'couriers.warningState.LAPSED': 'Истёк срок действия документа',
 
   // Доставка (3.1 Диспетчерская, 3.6 Зоны доставки, 3.7 Тарифы доставки) — волна 30
   'delivery.nav.label': 'Разделы доставки',
@@ -2132,6 +2133,7 @@ export const messagesRu: MessageCatalogue = {
   'delivery.dispatch.hint':
     'Перетащите заказ на курьера, чтобы назначить его. Перетащите обратно в «Не назначено», чтобы снять назначение.',
   'delivery.dispatch.column.unassigned': 'Не назначено',
+  'delivery.dispatch.column.ineligible': 'Нельзя назначить сюда — {reason}',
   'delivery.dispatch.action.unassign': 'Снять назначение',
   'delivery.dispatch.status.PLANNED': 'Запланирован',
   'delivery.dispatch.status.WAITING_TO_SOURCE': 'Ожидает подбора',

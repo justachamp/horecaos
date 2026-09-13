@@ -5,6 +5,8 @@
       [titleText]="col.titleText"
       [current]="col.current"
       [capacity]="col.capacity"
+      [dropDisabled]="col.dropDisabled ?? false"
+      [dropDisabledReason]="col.dropDisabledReason ?? null"
       (dropped)="onDropped($any($event))"
     >
       <!-- `$any`: none of q-board-column's other inputs reference TCard, so

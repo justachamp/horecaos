@@ -16,4 +16,12 @@ export interface BoardColumnDef<TData = unknown> {
   readonly current?: number;
   readonly capacity?: number | null;
   readonly data?: TData;
+  /**
+   * A column a dispatcher should not drop onto right now — suspended,
+   * expired document, etc. (`q-board-column`'s own `dropDisabled` input,
+   * see its doc). `false`/`undefined` accept drops as before.
+   */
+  readonly dropDisabled?: boolean;
+  /** Shown next to the column when {@link dropDisabled} is true, so the operator sees why before dragging. */
+  readonly dropDisabledReason?: string;
 }

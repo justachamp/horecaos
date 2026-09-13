@@ -181,6 +181,45 @@ describe('DragDropAssign', () => {
     expect(alert?.textContent).toContain('STALE_VERSION');
   });
 
+  it('reverts and surfaces a rejection when assignFn itself throws (network error), rather than leaving the card stuck', async () => {
+    await render();
+    fixture.componentInstance.assignFn.mockRejectedValue(new Error('network error'));
+
+    emitDrop(fixture, 'courier-1', {
+      card: PLAN,
+      fromColumnId: UNASSIGNED,
+      toColumnId: 'courier-1',
+    });
+    fixture.detectChanges();
+    // Optimistic move happened first, exactly as the success/refusal paths do.
+    expect(cardIdsIn(fixture, 'courier-1')).toContain('plan-1');
+
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // Reverted: back under Unassigned, not left in courier-1 or in limbo.
+    expect(cardIdsIn(fixture, 'courier-1')).not.toContain('plan-1');
+    expect(cardIdsIn(fixture, UNASSIGNED)).toContain('plan-1');
+
+    // The catch branch synthesizes {applied: false, reason: null} -- distinct
+    // from the STALE_VERSION case, and rendered through rejectedUnknown
+    // rather than the reason-carrying message.
+    expect(fixture.componentInstance.lastRejected()?.reason).toBeNull();
+    const alert = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="drag-drop-assign-rejection"]',
+    );
+    expect(alert).not.toBeNull();
+    expect(alert?.textContent).not.toContain('null');
+
+    // pendingCardIds was cleared in the finally block, so the card is
+    // draggable again -- nothing left it stuck mid-drag.
+    const card = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('[data-testid="board-card"]'),
+    ).find((el) => el.textContent?.includes('plan-1'));
+    expect(card).not.toBeUndefined();
+    expect(card?.classList.contains('q-board-card--disabled')).toBe(false);
+  });
+
   it('calls unassignFn, never assignFn, when a carried card is dropped back onto the pool', async () => {
     await render();
     fixture.componentInstance.cards.set([CARRIED_PLAN]);

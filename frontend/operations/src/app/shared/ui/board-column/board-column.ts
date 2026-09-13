@@ -41,6 +41,9 @@ export class BoardColumn<TCard = unknown> {
   /** A courier a dispatcher should not drop onto right now — suspended, expired document, etc. */
   readonly dropDisabled = input(false);
 
+  /** Shown next to the header when {@link dropDisabled} is true, so the operator sees why before dragging. */
+  readonly dropDisabledReason = input<string | null>(null);
+
   readonly dropped = output<BoardColumnDropEvent<TCard>>();
 
   protected readonly loadState = computed<BoardColumnLoadState>(() => {

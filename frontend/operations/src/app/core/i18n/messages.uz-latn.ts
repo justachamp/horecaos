@@ -2124,6 +2124,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'couriers.engagement.status.SUSPENDED_COMPLIANCE': 'Toʻxtatilgan (muvofiqlik)',
   'couriers.engagement.status.SUSPENDED_OPERATIONAL': 'Toʻxtatilgan',
   'couriers.engagement.status.ENDED': 'Tugatilgan',
+  'couriers.warningState.LAPSED': 'Muvofiqlik hujjati muddati tugagan',
 
   // Yetkazib berish (3.1 Dispetcherlik, 3.6 Zonalar, 3.7 Tariflar) — 30-toʻlqin
   'delivery.nav.label': 'Yetkazib berish boʻlimlari',
@@ -2147,6 +2148,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.dispatch.hint':
     'Buyurtmani kuryer ustiga tashlab tayinlang. Uni orqaga, "Tayinlanmagan"ga tashlab, tayinlashni bekor qiling.',
   'delivery.dispatch.column.unassigned': 'Tayinlanmagan',
+  'delivery.dispatch.column.ineligible': 'Bu yerga tashlab bo\'lmaydi — {reason}',
   'delivery.dispatch.action.unassign': 'Tayinlashni bekor qilish',
   'delivery.dispatch.status.PLANNED': 'Rejalashtirilgan',
   'delivery.dispatch.status.WAITING_TO_SOURCE': 'Kuryer izlanmoqda',

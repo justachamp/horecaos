@@ -110,15 +110,51 @@ export class DispatchBoardPage implements OnInit {
         capacity: null,
         current: this.plans().filter((plan) => !plan.shipment).length,
       },
-      ...this.fleet().map((courier) => ({
-        columnId: courier.courierId,
-        titleText: courier.displayReference,
-        current: courier.activeAssignments,
-        capacity: courier.concurrencyCeiling,
-        data: courier,
-      })),
+      ...this.fleet().map((courier) => {
+        const ineligibleReason = this.courierIneligibleReason(courier);
+        return {
+          columnId: courier.courierId,
+          titleText: courier.displayReference,
+          current: courier.activeAssignments,
+          capacity: courier.concurrencyCeiling,
+          data: courier,
+          dropDisabled: ineligibleReason !== null,
+          dropDisabledReason: ineligibleReason ?? undefined,
+        };
+      }),
     ],
   );
+
+  /**
+   * `null` when a plan may be dropped onto this courier; otherwise the
+   * reason shown on the column so a dispatcher sees why before dragging
+   * (P18 second-pass adversarial review). Server-side, `DispatchApi.assign`
+   * is refused independently with `COURIER_NOT_ELIGIBLE` — this is defense
+   * in depth for the drag gesture itself, never the only gate.
+   */
+  private courierIneligibleReason(courier: RosterEntryResponse): string | null {
+    if (courier.engagementStatus === 'SUSPENDED_COMPLIANCE') {
+      return this.i18n.t('delivery.dispatch.column.ineligible', {
+        reason: this.i18n.t('couriers.engagement.status.SUSPENDED_COMPLIANCE'),
+      });
+    }
+    if (courier.engagementStatus === 'SUSPENDED_OPERATIONAL') {
+      return this.i18n.t('delivery.dispatch.column.ineligible', {
+        reason: this.i18n.t('couriers.engagement.status.SUSPENDED_OPERATIONAL'),
+      });
+    }
+    if (courier.engagementStatus === 'ENDED') {
+      return this.i18n.t('delivery.dispatch.column.ineligible', {
+        reason: this.i18n.t('couriers.engagement.status.ENDED'),
+      });
+    }
+    if (courier.warningState === 'LAPSED') {
+      return this.i18n.t('delivery.dispatch.column.ineligible', {
+        reason: this.i18n.t('couriers.warningState.LAPSED'),
+      });
+    }
+    return null;
+  }
 
   /** Soonest source-at first — same order the old table used, now the order cards fall into a column in. */
   protected readonly sortedPlans = computed<readonly PlanQueueResponse[]>(() =>

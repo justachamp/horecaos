@@ -82,6 +82,21 @@ const COURIER: RosterEntryResponse = {
   warningState: 'VALID',
 };
 
+const SUSPENDED_COURIER: RosterEntryResponse = {
+  ...COURIER,
+  courierId: 'courier-2',
+  displayReference: 'K-020',
+  engagementStatus: 'SUSPENDED_COMPLIANCE',
+};
+
+const LAPSED_COURIER: RosterEntryResponse = {
+  ...COURIER,
+  courierId: 'courier-3',
+  displayReference: 'K-030',
+  engagementStatus: 'ACTIVE',
+  warningState: 'LAPSED',
+};
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -210,6 +225,43 @@ describe('DispatchBoardPage', () => {
 
     const host = fixture.nativeElement as HTMLElement;
     expect(host.textContent).toContain('STALE_VERSION');
+  });
+
+  it('calls DispatchApi.assign with the exact scope, plan and courier when a drop is accepted', async () => {
+    await render();
+    dispatchApi.assign.mockResolvedValue({ applied: true, reason: null });
+
+    const outcome = await fixture.componentInstance['assignFn'](UNASSIGNED_PLAN, 'courier-1');
+
+    expect(dispatchApi.assign).toHaveBeenCalledWith(
+      SCOPE,
+      'plan-1',
+      'courier-1',
+      1,
+      'OPERATIONS_MANUAL_ASSIGN',
+    );
+    expect(outcome.applied).toBe(true);
+  });
+
+  it("marks a suspended or compliance-lapsed courier's column as not accepting drops, with the reason shown", async () => {
+    await render([UNASSIGNED_PLAN], [COURIER, SUSPENDED_COURIER, LAPSED_COURIER]);
+    const host = fixture.nativeElement as HTMLElement;
+
+    const activeColumn = host.querySelector('[data-column-id="courier-1"]');
+    expect(activeColumn?.classList.contains('q-board-column--ineligible')).toBe(false);
+    expect(activeColumn?.querySelector('[data-testid="board-column-ineligible"]')).toBeNull();
+
+    const suspendedColumn = host.querySelector('[data-column-id="courier-2"]');
+    expect(suspendedColumn?.classList.contains('q-board-column--ineligible')).toBe(true);
+    expect(suspendedColumn?.querySelector('[data-testid="board-column-ineligible"]')?.textContent).toContain(
+      'Suspended (compliance)',
+    );
+
+    const lapsedColumn = host.querySelector('[data-column-id="courier-3"]');
+    expect(lapsedColumn?.classList.contains('q-board-column--ineligible')).toBe(true);
+    expect(lapsedColumn?.querySelector('[data-testid="board-column-ineligible"]')?.textContent).toContain(
+      'Compliance document lapsed',
+    );
   });
 
   it('manually unassigns a carried plan and shows the refusal reason when the compare-and-set loses', async () => {
