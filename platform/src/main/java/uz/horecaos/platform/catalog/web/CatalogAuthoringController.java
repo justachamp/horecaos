@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,6 +26,7 @@ import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableNode;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.iam.api.Capability;
@@ -118,6 +120,77 @@ public class CatalogAuthoringController {
                 request.classification(),
                 actorId());
         return ResponseEntity.ok(new IdResponse(variantId));
+    }
+
+    @PutMapping("/products/{productId}/variants/{variantId}")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Correct a variant's SKU, unit and status, and optionally make it the default",
+            description = "The variants tab was otherwise read-only apart from the price input. The "
+                    + "name is not here — it goes through PUT .../translations with entityType "
+                    + "VARIANT, the same path every other entity's name already uses.")
+    public ResponseEntity<Void> updateVariant(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID productId,
+            @PathVariable UUID variantId,
+            @Valid @RequestBody UpdateVariantRequest request) {
+        boolean updated = authoring.updateVariant(
+                tenantId, brandId, variantId, request.sku(), request.unitCode(), request.status());
+        if (!updated) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such variant in this brand");
+        }
+        if (request.isDefault()) {
+            authoring.setDefaultVariant(tenantId, brandId, productId, variantId);
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/products/{productId}/status")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Change a product's own status",
+            description =
+                    "Черновик/Активен/Архив was read-only text; nothing here could change it " + "until this endpoint.")
+    public ResponseEntity<Void> setProductStatus(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID productId,
+            @Valid @RequestBody SetProductStatusRequest request) {
+        if (!authoring.setProductStatus(tenantId, brandId, productId, request.status())) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such product in this brand");
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/catalogs/{catalogId}/products/{productId}")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Remove a product from a catalog",
+            description = "Removes the membership only — the product, its variants and its fiscal "
+                    + "classifications are untouched. Idempotent: removing a membership that is "
+                    + "already gone still answers 204.")
+    public ResponseEntity<Void> removeProductFromCatalog(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID catalogId,
+            @PathVariable UUID productId) {
+        authoring.removeProductFromCatalog(tenantId, brandId, catalogId, productId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/categories/{categoryId}/products/{productId}")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Remove a product from a category",
+            description = "Same idempotent shape as removing a catalog membership.")
+    public ResponseEntity<Void> removeProductFromCategory(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID categoryId,
+            @PathVariable UUID productId) {
+        authoring.removeProductFromCategory(tenantId, brandId, categoryId, productId);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/catalogs/{catalogId}/categories")
@@ -302,7 +375,35 @@ public class CatalogAuthoringController {
                 entityId,
                 new MediaAssetId(assetId),
                 request.role(),
-                request.sortOrder());
+                request.sortOrder(),
+                request.channelOrAll());
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/media/{entityType}/{entityId}/{assetId}")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Detach a media asset from a catalog entity",
+            description = "The undo attachMedia never had, at any layer — a wrong upload could not "
+                    + "be corrected short of leaving it attached. CATALOG_AUTHOR, not a media-specific "
+                    + "capability: the asset is catalog content once attached. Idempotent: detaching a "
+                    + "relation that is already gone still answers 204.")
+    public ResponseEntity<Void> detachMedia(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable EntityType entityType,
+            @PathVariable UUID entityId,
+            @PathVariable UUID assetId,
+            @RequestParam String role,
+            @RequestParam(required = false) @Nullable String channel) {
+        authoring.detachMedia(
+                tenantId,
+                brandId,
+                entityType,
+                entityId,
+                new MediaAssetId(assetId),
+                role,
+                channel == null || channel.isBlank() ? JdbcCatalogStore.ALL_CHANNELS : channel);
         return ResponseEntity.noContent().build();
     }
 
@@ -552,8 +653,39 @@ public class CatalogAuthoringController {
 
     public record SortOrderRequest(@PositiveOrZero int sortOrder) {}
 
+    /**
+     * Corrects a variant's editable fields (catalog.md §4.2 tab 2). Name is
+     * excluded on purpose — see {@link #updateVariant}'s own doc.
+     *
+     * @param isDefault when true, this variant becomes the product's default
+     *                  and every sibling stops being one (V0016's {@code
+     *                  ux_variant_single_default}); when false, nothing about
+     *                  the default changes — this is never how a variant is
+     *                  demoted, only how another one is promoted
+     */
+    public record UpdateVariantRequest(
+            @Nullable String sku,
+            @NotBlank String unitCode,
+            boolean isDefault,
+            @NotNull Status status) {}
+
+    /** A status transition on an entity that carries no field but the status itself. */
+    public record SetProductStatusRequest(@NotNull Status status) {}
+
+    /**
+     * @param channel {@code null} attaches the universal image every channel
+     *                falls back to; a {@code tenant.sales_channels.code}
+     *                overrides it for that channel alone (V0223, IA 4.2f)
+     */
     public record AttachMediaRequest(
-            @NotBlank String role, @PositiveOrZero int sortOrder) {}
+            @NotBlank String role,
+            @PositiveOrZero int sortOrder,
+            @Size(max = 32) @Nullable String channel) {
+
+        String channelOrAll() {
+            return channel == null || channel.isBlank() ? JdbcCatalogStore.ALL_CHANNELS : channel;
+        }
+    }
 
     public record SetOfferingRequest(
             @NotNull OfferingStatus status, @NotNull List<String> fulfillmentModes) {}

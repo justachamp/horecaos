@@ -19,14 +19,17 @@ import {
   IdResponse,
   ModifierGroupDetail,
   ModifierGroupSummary,
+  MxikReferenceRow,
   ProductCreated,
   ProductDetail,
   ProductSummary,
   PublicationHistoryEntry,
   PublicationResult,
   SetOfferingRequest,
+  SetProductStatusRequest,
   SortOrderRequest,
   TranslateRequest,
+  UpdateVariantRequest,
   ValidationReport,
   VariantAvailabilityRow,
 } from './catalog-domain';
@@ -84,6 +87,23 @@ export class CatalogApi {
   }
 
   /**
+   * The ИКПУ/MXIK reference typeahead (IA 4.2e) — empty when the official
+   * list has never been imported, not an error; `q-combobox`'s `search`
+   * output is the caller.
+   */
+  searchMxikReference(
+    scope: BrandScope,
+    query: string,
+    limit = 20,
+  ): Observable<readonly MxikReferenceRow[]> {
+    return unwrap(
+      this.api.get<{ items: readonly MxikReferenceRow[] }>(catalogPaths.mxikReference(scope), {
+        params: { query, limit },
+      }),
+    ).pipe(map((page) => page.items));
+  }
+
+  /**
    * catalog.md §4.6's read side / §4.2 tab 6: one location's sellable
    * variants with current availability.
    *
@@ -136,6 +156,61 @@ export class CatalogApi {
       catalogPaths.variants(scope, productId),
       command(request),
     );
+  }
+
+  /** Corrects an existing variant's SKU, unit, status, and optionally makes it the default. */
+  updateVariant(
+    scope: BrandScope,
+    productId: string,
+    variantId: string,
+    request: UpdateVariantRequest,
+  ): Observable<void> {
+    return this.api.put<UpdateVariantRequest, void>(
+      catalogPaths.variant(scope, productId, variantId),
+      command(request),
+    );
+  }
+
+  /** Черновик/Активен/Архив — read-only text until this wave. */
+  setProductStatus(
+    scope: BrandScope,
+    productId: string,
+    request: SetProductStatusRequest,
+  ): Observable<void> {
+    return this.api.put<SetProductStatusRequest, void>(
+      catalogPaths.productStatus(scope, productId),
+      command(request),
+    );
+  }
+
+  /** The undo {@link placeInCategory} never had. Idempotent. */
+  removeProductFromCategory(
+    scope: BrandScope,
+    categoryId: string,
+    productId: string,
+  ): Observable<void> {
+    return this.api
+      .send<null, void>(
+        'DELETE',
+        catalogPaths.categoryProduct(scope, categoryId, productId),
+        command(null),
+      )
+      .pipe(map(() => undefined));
+  }
+
+  /** Removes a product from a catalog. Idempotent — the product itself is untouched. */
+  removeProductFromCatalog(
+    scope: BrandScope,
+    catalogId: string,
+    productId: string,
+  ): Observable<void> {
+    return this.api
+      .send<null, void>(
+        'DELETE',
+        catalogPaths.catalogProduct(scope, catalogId, productId),
+        command(null),
+      )
+      .pipe(map(() => undefined));
   }
 
   createCategory(
@@ -231,6 +306,31 @@ export class CatalogApi {
       catalogPaths.media(scope, entityType, entityId, assetId),
       command(request),
     );
+  }
+
+  /**
+   * Detaches a media asset — the undo {@link attachMedia} never had, at any
+   * layer. Idempotent: detaching a relation that is already gone still
+   * resolves.
+   */
+  detachMedia(
+    scope: BrandScope,
+    entityType: CatalogEntityType,
+    entityId: string,
+    assetId: string,
+    role: string,
+    channel?: string | null,
+  ): Observable<void> {
+    return this.api
+      .send<null, void>(
+        'DELETE',
+        catalogPaths.media(scope, entityType, entityId, assetId),
+        command(null),
+        {
+          params: { role, channel: channel ?? undefined },
+        },
+      )
+      .pipe(map(() => undefined));
   }
 
   /**

@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.catalog.application.CatalogQueryService;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.web.api.ApiException;
@@ -130,6 +131,27 @@ public class CatalogQueryController {
         } catch (CatalogQueryService.UnknownModifierGroupException unknown) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
         }
+    }
+
+    @GetMapping("/fiscal-reference/mxik")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Search the ИКПУ/MXIK reference — tenant alias (IA 4.2e)",
+            description = "FiscalReferenceController's own search is PLATFORM-scoped, so no tenant "
+                    + "operator could call it — this is the same read behind CATALOG_READ at BRAND "
+                    + "scope instead, for the classification field's typeahead. Empty when the "
+                    + "official list has never been imported, same as the platform read; loading "
+                    + "that dataset is an unanswered finance/owner input this wave does not resolve.")
+    public Page<JdbcCatalogStore.MxikReferenceRow> mxikReference(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @RequestParam @Nullable String query,
+            @RequestParam(required = false) @Nullable Integer limit) {
+        if (query == null || query.trim().length() < 2) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "query must be at least 2 characters");
+        }
+        int pageSize = limit == null ? 20 : Math.clamp(limit, 1, 100);
+        return Page.last(this.query.searchMxikReference(query, pageSize));
     }
 
     @GetMapping("/fiscal-coverage")
@@ -320,10 +342,11 @@ public class CatalogQueryController {
         }
     }
 
-    public record MediaRelationView(UUID mediaAssetId, String role, int sortOrder) {
+    /** @param channelCode {@code 'ALL'} or a {@code tenant.sales_channels.code} override (V0223, IA 4.2f) */
+    public record MediaRelationView(UUID mediaAssetId, String role, int sortOrder, String channelCode) {
 
         static MediaRelationView of(CatalogQueryService.MediaRelation media) {
-            return new MediaRelationView(media.mediaAssetId(), media.role(), media.sortOrder());
+            return new MediaRelationView(media.mediaAssetId(), media.role(), media.sortOrder(), media.channelCode());
         }
     }
 

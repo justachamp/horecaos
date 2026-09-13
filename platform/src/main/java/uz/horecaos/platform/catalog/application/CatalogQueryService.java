@@ -24,6 +24,7 @@ import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.AttachedGroup;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.MediaRelationRow;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.MxikReferenceRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.ProductRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.TranslationRow;
 
@@ -177,7 +178,7 @@ public class CatalogQueryService {
                 .toList();
 
         List<MediaRelation> mediaViews = media.stream()
-                .map(row -> new MediaRelation(row.mediaAssetId(), row.role(), row.sortOrder()))
+                .map(row -> new MediaRelation(row.mediaAssetId(), row.role(), row.sortOrder(), row.channelCode()))
                 .toList();
 
         return new ProductDetail(
@@ -191,6 +192,16 @@ public class CatalogQueryService {
                 variantDetails,
                 groupViews,
                 mediaViews);
+    }
+
+    /**
+     * The ИКПУ/MXIK reference, for a tenant operator (IA 4.2e) — {@code
+     * JdbcCatalogStore.searchMxikReference} unchanged, reached through a
+     * BRAND-scoped path rather than {@code FiscalReferenceController}'s
+     * PLATFORM-scoped one, which no tenant principal can call.
+     */
+    public List<MxikReferenceRow> searchMxikReference(String query, int limit) {
+        return store.searchMxikReference(query, limit);
     }
 
     /** A brand's whole modifier group library, shared across its catalogs. */
@@ -451,7 +462,8 @@ public class CatalogQueryService {
 
     public record AttachedModifierGroup(UUID groupId, int sortOrder) {}
 
-    public record MediaRelation(UUID mediaAssetId, String role, int sortOrder) {}
+    /** @param channelCode {@code 'ALL'} or a {@code tenant.sales_channels.code} override (V0223, IA 4.2f) */
+    public record MediaRelation(UUID mediaAssetId, String role, int sortOrder, String channelCode) {}
 
     public record ModifierGroupSummary(
             UUID groupId,

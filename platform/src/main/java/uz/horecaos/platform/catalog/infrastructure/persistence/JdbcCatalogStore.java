@@ -205,6 +205,122 @@ public class JdbcCatalogStore {
                 .update();
     }
 
+    /**
+     * Removes a product from a catalog — the undo {@link #addProductToCatalog}
+     * never had. The product itself, its variants and its fiscal
+     * classifications are untouched; only the membership row goes.
+     *
+     * @return true when a membership actually existed and was removed
+     */
+    public boolean removeProductFromCatalog(UUID tenantId, UUID brandId, UUID catalogId, UUID productId) {
+        int removed = jdbc.sql("""
+                DELETE FROM catalog.catalog_products
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND catalog_id = :catalogId AND product_id = :productId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("catalogId", catalogId)
+                .param("productId", productId)
+                .update();
+        return removed > 0;
+    }
+
+    /** {@link #removeProductFromCatalog}'s sibling for a category membership. */
+    public boolean removeProductFromCategory(UUID tenantId, UUID brandId, UUID categoryId, UUID productId) {
+        int removed = jdbc.sql("""
+                DELETE FROM catalog.category_products
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND category_id = :categoryId AND product_id = :productId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("categoryId", categoryId)
+                .param("productId", productId)
+                .update();
+        return removed > 0;
+    }
+
+    /**
+     * Changes a product's own status (Черновик/Активен/Архив) — catalog.md
+     * §4.2's tab 1 had no write for this at all; the field was read-only text.
+     *
+     * @return true when the product existed in this brand
+     */
+    public boolean updateProductStatus(UUID tenantId, UUID brandId, UUID productId, Status status) {
+        int updated = jdbc.sql("""
+                UPDATE catalog.products
+                   SET status = :status, version = version + 1, updated_at = now()
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :productId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("productId", productId)
+                .param("status", status.name())
+                .update();
+        return updated > 0;
+    }
+
+    /**
+     * Corrects a variant's own editable fields — name lives in
+     * {@code catalog.translations} and is set through {@link #upsertTranslation}
+     * separately, the way every other entity's name already is.
+     *
+     * @return true when the variant existed in this brand
+     */
+    public boolean updateVariant(
+            UUID tenantId, UUID brandId, UUID variantId, @Nullable String sku, String unitCode, Status status) {
+        int updated = jdbc.sql("""
+                UPDATE catalog.variants
+                   SET sku = :sku, unit_code = :unitCode, status = :status,
+                       version = version + 1, updated_at = now()
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :variantId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("variantId", variantId)
+                .param("sku", sku)
+                .param("unitCode", unitCode)
+                .param("status", status.name())
+                .update();
+        return updated > 0;
+    }
+
+    /**
+     * Makes this variant the product's default, and no other. Two statements
+     * rather than a single conditional update because {@code
+     * ux_variant_single_default} (V0016) allows at most one {@code is_default}
+     * per product — clearing every sibling first is what lets the second
+     * statement satisfy that index rather than race it.
+     *
+     * @return true when the variant existed in this brand
+     */
+    public boolean setDefaultVariant(UUID tenantId, UUID brandId, UUID productId, UUID variantId) {
+        jdbc.sql("""
+                UPDATE catalog.variants
+                   SET is_default = false, updated_at = now()
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId
+                   AND product_id = :productId AND id <> :variantId AND is_default
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("productId", productId)
+                .param("variantId", variantId)
+                .update();
+        int updated = jdbc.sql("""
+                UPDATE catalog.variants
+                   SET is_default = true, version = version + 1, updated_at = now()
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId
+                   AND product_id = :productId AND id = :variantId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("productId", productId)
+                .param("variantId", variantId)
+                .update();
+        return updated > 0;
+    }
+
     public void attachModifierGroupToProduct(
             UUID tenantId, UUID brandId, UUID productId, UUID modifierGroupId, int sortOrder) {
         jdbc.sql("""
@@ -304,6 +420,10 @@ public class JdbcCatalogStore {
                 .update();
     }
 
+    /** The universal channel: no per-aggregator override, every channel without one of its own falls back to this. */
+    public static final String ALL_CHANNELS = "ALL";
+
+    /** {@link #attachMedia(UUID, UUID, EntityType, UUID, UUID, String, int, String)} against {@link #ALL_CHANNELS}. */
     public void attachMedia(
             UUID tenantId,
             UUID brandId,
@@ -312,11 +432,33 @@ public class JdbcCatalogStore {
             UUID mediaAssetId,
             String role,
             int sortOrder) {
+        attachMedia(tenantId, brandId, entityType, entityId, mediaAssetId, role, sortOrder, ALL_CHANNELS);
+    }
+
+    /**
+     * Attaches a media asset to a catalog entity, or re-sorts an existing
+     * attachment — the same upsert either reorders a photo (a new
+     * {@code sortOrder} against an unchanged key) or records a per-aggregator
+     * override (a new {@code channelCode} against the same asset and role).
+     *
+     * @param channelCode {@code 'ALL'} for the universal image every channel
+     *                    falls back to, or a {@code tenant.sales_channels.code}
+     *                    overriding it for that channel alone (V0223, IA 4.2f)
+     */
+    public void attachMedia(
+            UUID tenantId,
+            UUID brandId,
+            EntityType entityType,
+            UUID entityId,
+            UUID mediaAssetId,
+            String role,
+            int sortOrder,
+            String channelCode) {
         jdbc.sql("""
                 INSERT INTO catalog.media_relations (
-                    tenant_id, brand_id, entity_type, entity_id, media_asset_id, role, sort_order)
-                VALUES (:tenantId, :brandId, :entityType, :entityId, :assetId, :role, :sortOrder)
-                ON CONFLICT (entity_type, entity_id, media_asset_id, role)
+                    tenant_id, brand_id, entity_type, entity_id, media_asset_id, role, sort_order, channel_code)
+                VALUES (:tenantId, :brandId, :entityType, :entityId, :assetId, :role, :sortOrder, :channelCode)
+                ON CONFLICT (entity_type, entity_id, media_asset_id, role, channel_code)
                 DO UPDATE SET sort_order = EXCLUDED.sort_order
                 """)
                 .param("tenantId", tenantId)
@@ -326,7 +468,40 @@ public class JdbcCatalogStore {
                 .param("assetId", mediaAssetId)
                 .param("role", role)
                 .param("sortOrder", sortOrder)
+                .param("channelCode", channelCode)
                 .update();
+    }
+
+    /**
+     * Detaches one media relation — the undo {@code attachMedia} never had.
+     * Idempotent: removing a relation that is already gone still returns
+     * normally, it simply reports that nothing was removed.
+     *
+     * @return true when a row was actually deleted
+     */
+    public boolean detachMedia(
+            UUID tenantId,
+            UUID brandId,
+            EntityType entityType,
+            UUID entityId,
+            UUID mediaAssetId,
+            String role,
+            String channelCode) {
+        int updated = jdbc.sql("""
+                DELETE FROM catalog.media_relations
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND entity_type = :entityType AND entity_id = :entityId
+                  AND media_asset_id = :assetId AND role = :role AND channel_code = :channelCode
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("entityType", entityType.name())
+                .param("entityId", entityId)
+                .param("assetId", mediaAssetId)
+                .param("role", role)
+                .param("channelCode", channelCode)
+                .update();
+        return updated > 0;
     }
 
     /**
@@ -1229,7 +1404,7 @@ public class JdbcCatalogStore {
 
     public List<MediaRelationRow> mediaRelations(UUID tenantId, UUID brandId) {
         return jdbc.sql("""
-                SELECT entity_type, entity_id, media_asset_id, role, sort_order
+                SELECT entity_type, entity_id, media_asset_id, role, sort_order, channel_code
                 FROM catalog.media_relations
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                 ORDER BY sort_order
@@ -1241,7 +1416,8 @@ public class JdbcCatalogStore {
                         row.getObject("entity_id", UUID.class),
                         row.getObject("media_asset_id", UUID.class),
                         row.getString("role"),
-                        row.getInt("sort_order")))
+                        row.getInt("sort_order"),
+                        row.getString("channel_code")))
                 .list();
     }
 
@@ -1255,7 +1431,7 @@ public class JdbcCatalogStore {
             return List.of();
         }
         return jdbc.sql("""
-                SELECT entity_type, entity_id, media_asset_id, role, sort_order
+                SELECT entity_type, entity_id, media_asset_id, role, sort_order, channel_code
                 FROM catalog.media_relations
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND entity_id = ANY(:entityIds)
                 ORDER BY sort_order
@@ -1268,7 +1444,8 @@ public class JdbcCatalogStore {
                         row.getObject("entity_id", UUID.class),
                         row.getObject("media_asset_id", UUID.class),
                         row.getString("role"),
-                        row.getInt("sort_order")))
+                        row.getInt("sort_order"),
+                        row.getString("channel_code")))
                 .list();
     }
 
@@ -1666,8 +1843,9 @@ public class JdbcCatalogStore {
             String name,
             @Nullable String description) {}
 
+    /** @param channelCode {@code 'ALL'} or a {@code tenant.sales_channels.code} override (V0223, IA 4.2f) */
     public record MediaRelationRow(
-            EntityType entityType, UUID entityId, UUID mediaAssetId, String role, int sortOrder) {}
+            EntityType entityType, UUID entityId, UUID mediaAssetId, String role, int sortOrder, String channelCode) {}
 
     /** One row of {@link #catalogsForBrand}. */
     public record CatalogRow(UUID id, String code, String status) {}

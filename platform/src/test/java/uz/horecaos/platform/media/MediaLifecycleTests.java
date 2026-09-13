@@ -255,6 +255,9 @@ class MediaLifecycleTests {
         // meters before either worker: both MediaVerificationWorker and
         // MediaDerivativeWorker take the registry in their constructor.
         meters = new SimpleMeterRegistry();
+        // Ahead of mediaServiceOver now — MediaAssetService.downloadUrl's
+        // rendition path reads this store directly, not only MediaDerivativeWorker.
+        derivativeRows = new JdbcMediaDerivativeStore(jdbc);
         media = mediaServiceOver(Optional.empty());
         verificationWorker = verificationWorkerOver(media);
 
@@ -262,7 +265,6 @@ class MediaLifecycleTests {
         // written to and read back from MinIO, and — since V0058 landed the table
         // — real rows in media.derivatives rather than the in-memory stand-in
         // this suite used while that table was still only proposed.
-        derivativeRows = new JdbcMediaDerivativeStore(jdbc);
         derivatives = new MediaDerivativeService(
                 new JdbcMediaAssetStore(jdbc), derivativeRows, storage, new ImageIoDerivativeRenderer(), clock);
         worker = workerOver(derivatives);
@@ -279,6 +281,7 @@ class MediaLifecycleTests {
                 new JdbcMediaAssetStore(jdbc),
                 jobs,
                 verificationJobs,
+                derivativeRows,
                 storage,
                 transactions,
                 events,
@@ -666,6 +669,33 @@ class MediaLifecycleTests {
                 .isEqualTo(new ProbedImage("image/jpeg", 400, 300, 3));
         assertThat(storedDerivative(assetId, DerivativeVariant.DETAIL))
                 .isEqualTo(new ProbedImage("image/jpeg", 640, 480, 3));
+    }
+
+    @Test
+    @DisplayName(
+            "downloadUrl serves a rendition once it has rendered — the trap: it used to be stored and never served")
+    void downloadUrlServesARenditionOnceRendered() throws Exception {
+        MediaAssetId assetId = anAvailableAsset("image/jpeg", JPEG);
+        derivatives.renderMissing(TENANT_A, assetId);
+
+        URI thumbnail = media.downloadUrl(TENANT_A, assetId, DerivativeVariant.THUMBNAIL)
+                .orElseThrow();
+        URI original = media.downloadUrl(TENANT_A, assetId, null).orElseThrow();
+
+        // Different objects, not the same URL with a different signature — the
+        // rendition's own key, distinct from the original's.
+        assertThat(thumbnail.getPath()).isNotEqualTo(original.getPath());
+        assertThat(thumbnail.getPath()).contains("-thumb.jpg");
+    }
+
+    @Test
+    @DisplayName("downloadUrl for a variant that has not rendered yet is empty, not the original")
+    void downloadUrlOfAnUnrenderedVariantIsEmpty() throws Exception {
+        MediaAssetId assetId = anAvailableAsset("image/jpeg", JPEG);
+        // Deliberately no derivatives.renderMissing call: the asset is
+        // AVAILABLE and has an original, but nothing has rendered a CARD yet.
+
+        assertThat(media.downloadUrl(TENANT_A, assetId, DerivativeVariant.CARD)).isEmpty();
     }
 
     @Test

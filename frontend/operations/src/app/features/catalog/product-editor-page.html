@@ -104,14 +104,75 @@
                     <span class="q-caption">— {{ 'catalog.editor.basic.codeNote' | t }}</span>
                   </dd>
                   <dt class="q-caption">{{ 'catalog.editor.basic.status' | t }}</dt>
-                  <dd>
-                    {{ statusLabel(product.status) }}
-                    <span class="q-caption">— {{ 'catalog.editor.basic.statusNote' | t }}</span>
+                  <dd class="editor__status-row">
+                    <select
+                      #statusSelect
+                      [value]="product.status"
+                      data-testid="editor-status-select"
+                    >
+                      @for (status of statuses; track status) {
+                        <option [value]="status">{{ statusLabel(status) }}</option>
+                      }
+                    </select>
+                    <button
+                      type="button"
+                      [disabled]="savingField() === 'status'"
+                      (click)="changeProductStatus($any(statusSelect.value))"
+                      data-testid="editor-save-status"
+                    >
+                      {{
+                        savingField() === 'status'
+                          ? ('catalog.editor.saving' | t)
+                          : ('catalog.editor.save' | t)
+                      }}
+                    </button>
                   </dd>
                   <dt class="q-caption">{{ 'catalog.editor.basic.catalogs' | t }}</dt>
-                  <dd>{{ product.catalogIds.length }}</dd>
+                  <dd>
+                    @if (product.catalogIds.length === 0) {
+                      —
+                    } @else {
+                      <ul class="editor__membership-list">
+                        @for (catalogId of product.catalogIds; track catalogId) {
+                          <li>
+                            <span class="q-mono">{{ catalogId }}</span>
+                            <button
+                              type="button"
+                              [disabled]="savingField() === 'remove-catalog:' + catalogId"
+                              (click)="removeFromCatalog(catalogId)"
+                              [attr.aria-label]="'catalog.editor.basic.remove' | t"
+                              data-testid="editor-remove-catalog"
+                            >
+                              {{ 'catalog.editor.basic.remove' | t }}
+                            </button>
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </dd>
                   <dt class="q-caption">{{ 'catalog.editor.basic.categories' | t }}</dt>
-                  <dd>{{ product.categoryIds.length || '—' }}</dd>
+                  <dd>
+                    @if (product.categoryIds.length === 0) {
+                      —
+                    } @else {
+                      <ul class="editor__membership-list">
+                        @for (categoryId of product.categoryIds; track categoryId) {
+                          <li>
+                            <span class="q-mono">{{ categoryId }}</span>
+                            <button
+                              type="button"
+                              [disabled]="savingField() === 'remove-category:' + categoryId"
+                              (click)="removeFromCategory(categoryId)"
+                              [attr.aria-label]="'catalog.editor.basic.remove' | t"
+                              data-testid="editor-remove-category"
+                            >
+                              {{ 'catalog.editor.basic.remove' | t }}
+                            </button>
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </dd>
                   <dt class="q-caption">{{ 'catalog.editor.basic.kitchenDept' | t }}</dt>
                   <dd class="q-caption">{{ 'catalog.editor.basic.kitchenDeptNote' | t }}</dd>
                 </dl>
@@ -128,15 +189,45 @@
                       <th>{{ 'catalog.editor.variants.column.default' | t }}</th>
                       <th>{{ 'catalog.editor.variants.column.price' | t }}</th>
                       <th>{{ 'catalog.editor.variants.column.status' | t }}</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     @for (variant of product.variants; track variant.variantId) {
                       <tr>
-                        <td>{{ variant.translations[editingLocale()]?.name || '—' }}</td>
-                        <td class="q-mono">{{ variant.sku || '—' }}</td>
-                        <td>{{ variant.unitCode }}</td>
-                        <td>{{ variant.isDefault ? '✓' : '' }}</td>
+                        <td>
+                          <input
+                            #vNameInput
+                            type="text"
+                            [value]="variant.translations[editingLocale()]?.name || ''"
+                            data-testid="editor-variant-name"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            #vSkuInput
+                            type="text"
+                            class="q-mono"
+                            [value]="variant.sku || ''"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            #vUnitInput
+                            type="text"
+                            class="q-mono"
+                            [value]="variant.unitCode"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            #vDefaultInput
+                            type="radio"
+                            name="defaultVariant"
+                            [checked]="variant.isDefault"
+                            [attr.aria-label]="'catalog.editor.variants.column.default' | t"
+                          />
+                        </td>
                         <td class="q-mono q-tnum">
                           <span
                             [class.editor__price--missing]="
@@ -161,19 +252,73 @@
                             </div>
                           }
                         </td>
-                        <td>{{ statusLabel(variant.status) }}</td>
+                        <td>
+                          <select #vStatusSelect [value]="variant.status">
+                            @for (status of statuses; track status) {
+                              <option [value]="status">{{ statusLabel(status) }}</option>
+                            }
+                          </select>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            [disabled]="savingField() === 'variant:' + variant.variantId"
+                            (click)="
+                              saveVariant(
+                                variant,
+                                vNameInput.value,
+                                vSkuInput.value,
+                                vUnitInput.value,
+                                vDefaultInput.checked,
+                                $any(vStatusSelect.value)
+                              )
+                            "
+                            data-testid="editor-save-variant"
+                          >
+                            {{
+                              savingField() === 'variant:' + variant.variantId
+                                ? ('catalog.editor.saving' | t)
+                                : ('catalog.editor.save' | t)
+                            }}
+                          </button>
+                        </td>
                       </tr>
                     }
                   </tbody>
                 </table>
-                <button
-                  type="button"
-                  (click)="addVariant()"
-                  [disabled]="savingField() === 'add-variant'"
-                  data-testid="editor-add-variant"
-                >
-                  {{ 'catalog.editor.variants.add' | t }}
-                </button>
+                <div class="editor__add-variant">
+                  <input
+                    #newVariantName
+                    type="text"
+                    [placeholder]="'catalog.editor.variants.column.name' | t"
+                    data-testid="editor-new-variant-name"
+                  />
+                  <input
+                    #newVariantSku
+                    type="text"
+                    class="q-mono"
+                    [placeholder]="'catalog.editor.variants.column.sku' | t"
+                    data-testid="editor-new-variant-sku"
+                  />
+                  <input
+                    #newVariantUnit
+                    type="text"
+                    class="q-mono"
+                    value="PIECE"
+                    [placeholder]="'catalog.editor.variants.column.unit' | t"
+                    data-testid="editor-new-variant-unit"
+                  />
+                  <button
+                    type="button"
+                    (click)="
+                      addVariant(newVariantName.value, newVariantSku.value, newVariantUnit.value)
+                    "
+                    [disabled]="savingField() === 'add-variant'"
+                    data-testid="editor-add-variant"
+                  >
+                    {{ 'catalog.editor.variants.add' | t }}
+                  </button>
+                </div>
               </div>
             }
             @case ('MODIFIERS') {
@@ -269,91 +414,210 @@
                   <p class="q-caption">{{ 'catalog.editor.photos.empty' | t }}</p>
                 } @else {
                   <div class="editor__photo-grid">
-                    @for (item of product.media; track item.mediaAssetId) {
-                      <div class="editor__photo-tile">
-                        <span class="q-caption">{{ photoRoleLabel(item.role) }}</span>
+                    @for (
+                      item of product.media;
+                      track item.mediaAssetId + item.role + item.channelCode;
+                      let i = $index, count = $count
+                    ) {
+                      <div class="editor__photo-tile" data-testid="editor-photo-tile">
+                        @if (photoUrls()[item.mediaAssetId]; as url) {
+                          <img [src]="url" alt="" class="editor__photo-image" />
+                        } @else {
+                          <div class="editor__photo-placeholder q-caption">
+                            {{ photoRoleLabel(item.role) }}
+                          </div>
+                        }
+                        <div class="editor__photo-meta">
+                          <span class="q-caption">{{ photoRoleLabel(item.role) }}</span>
+                          @if (item.channelCode !== 'ALL') {
+                            <span class="q-caption q-mono">{{ item.channelCode }}</span>
+                          }
+                        </div>
+                        <div class="editor__photo-actions">
+                          <button
+                            type="button"
+                            [disabled]="
+                              i === 0 || savingField() === 'photo-reorder:' + item.mediaAssetId
+                            "
+                            (click)="reorderPhoto(item, -1)"
+                            [attr.aria-label]="'catalog.editor.photos.moveUp' | t"
+                            data-testid="editor-photo-move-up"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            [disabled]="
+                              i === count - 1 ||
+                              savingField() === 'photo-reorder:' + item.mediaAssetId
+                            "
+                            (click)="reorderPhoto(item, 1)"
+                            [attr.aria-label]="'catalog.editor.photos.moveDown' | t"
+                            data-testid="editor-photo-move-down"
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            [disabled]="savingField() === 'photo-detach:' + item.mediaAssetId"
+                            (click)="detachPhoto(item)"
+                            data-testid="editor-photo-detach"
+                          >
+                            {{ 'catalog.editor.photos.detach' | t }}
+                          </button>
+                        </div>
                       </div>
                     }
                   </div>
                 }
-                <input
-                  #fileInput
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  (change)="
-                    $any($event.target).files[0] && uploadPhoto($any($event.target).files[0])
-                  "
+                <q-media-uploader
+                  [uploading]="uploadingPhoto()"
+                  (cropped)="uploadPhoto($event)"
+                  (selected)="uploadPhoto($event)"
+                  (rejected)="onPhotoRejected($event)"
+                  data-testid="editor-photo-uploader"
                 />
-                <button
-                  type="button"
-                  [disabled]="uploadingPhoto()"
-                  (click)="fileInput.click()"
-                  data-testid="editor-upload-photo"
-                >
-                  {{
-                    uploadingPhoto()
-                      ? ('catalog.editor.photos.uploading' | t)
-                      : ('catalog.editor.photos.upload' | t)
-                  }}
-                </button>
               </div>
             }
             @case ('FISCAL') {
-              <div class="editor__section">
-                <table class="editor__table">
-                  <thead>
-                    <tr>
-                      <th>{{ 'catalog.editor.variants.column.name' | t }}</th>
-                      <th>{{ 'catalog.editor.fiscal.mxik' | t }}</th>
-                      <th>{{ 'catalog.editor.fiscal.packageCode' | t }}</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (variant of product.variants; track variant.variantId) {
-                      <tr>
-                        <td>
-                          {{ variant.translations[editingLocale()]?.name || variant.sku || '—' }}
-                        </td>
-                        <td>
-                          <input
-                            #mxikInput
-                            type="text"
-                            class="q-mono"
-                            [value]="variant.fiscal?.mxikCode || ''"
-                          />
-                        </td>
-                        <td>
-                          <input
-                            #pkgInput
-                            type="text"
-                            class="q-mono"
-                            [value]="variant.fiscal?.packageCode || ''"
-                          />
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            [disabled]="savingField() === 'fiscal:' + variant.variantId"
-                            (click)="
-                              saveFiscal(variant, {
-                                mxikCode: mxikInput.value || null,
-                                packageCode: pkgInput.value || null,
-                                markingRequired: variant.fiscal?.markingRequired ?? false,
-                                excisable: variant.fiscal?.excisable ?? false,
-                              })
-                            "
-                            data-testid="editor-save-fiscal"
-                          >
-                            {{ 'catalog.editor.fiscal.save' | t }}
-                          </button>
-                        </td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
+              <div class="editor__section editor__fiscal">
+                @for (variant of product.variants; track variant.variantId) {
+                  <fieldset class="editor__fiscal-card" data-testid="editor-fiscal-card">
+                    <legend>
+                      {{ variant.translations[editingLocale()]?.name || variant.sku || '—' }}
+                    </legend>
+
+                    <label class="editor__field">
+                      <span class="q-caption">{{ 'catalog.editor.fiscal.mxik' | t }}</span>
+                      <q-combobox
+                        [query]="mxikQueryFor(variant.variantId)"
+                        [options]="mxikOptionsFor(variant.variantId)"
+                        [loading]="mxikSearchingFor(variant.variantId)"
+                        [placeholder]="'catalog.editor.fiscal.mxik' | t"
+                        (queryChange)="onMxikQueryChange(variant.variantId, $event)"
+                        (search)="searchMxik(variant.variantId, $event)"
+                        (optionSelected)="onMxikOptionSelected(variant.variantId, $event)"
+                        data-testid="editor-fiscal-mxik"
+                      />
+                    </label>
+
+                    <label class="editor__field">
+                      <span class="q-caption">{{ 'catalog.editor.fiscal.packageCode' | t }}</span>
+                      <input
+                        #pkgInput
+                        type="text"
+                        class="q-mono"
+                        [value]="variant.fiscal?.packageCode || ''"
+                      />
+                    </label>
+
+                    <label class="editor__field">
+                      <span class="q-caption">{{ 'catalog.editor.fiscal.fiscalUnit' | t }}</span>
+                      <input
+                        #fiscalUnitInput
+                        type="number"
+                        min="1"
+                        class="q-mono"
+                        [value]="variant.fiscal?.fiscalUnitCode ?? ''"
+                      />
+                    </label>
+
+                    <label class="editor__field">
+                      <span class="q-caption">{{ 'catalog.editor.fiscal.fiscalName' | t }}</span>
+                      <input
+                        #fiscalNameInput
+                        type="text"
+                        maxlength="63"
+                        [value]="variant.fiscal?.fiscalName || ''"
+                      />
+                    </label>
+
+                    <label class="editor__field">
+                      <span class="q-caption">{{ 'catalog.editor.fiscal.barcode' | t }}</span>
+                      <input
+                        #barcodeInput
+                        type="text"
+                        class="q-mono"
+                        [value]="variant.fiscal?.barcode || ''"
+                      />
+                    </label>
+
+                    <label class="editor__checkbox">
+                      <input
+                        #markingInput
+                        type="checkbox"
+                        [checked]="variant.fiscal?.markingRequired ?? false"
+                      />
+                      <span class="q-body-sm">{{
+                        'catalog.editor.fiscal.markingRequired' | t
+                      }}</span>
+                    </label>
+
+                    <label class="editor__checkbox">
+                      <input
+                        #excisableInput
+                        type="checkbox"
+                        [checked]="variant.fiscal?.excisable ?? false"
+                      />
+                      <span class="q-body-sm">{{ 'catalog.editor.fiscal.excisable' | t }}</span>
+                    </label>
+
+                    <label class="editor__field">
+                      <span class="q-caption">{{ 'catalog.editor.fiscal.alcohol' | t }}</span>
+                      <input
+                        #alcoholInput
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        class="q-mono"
+                        [value]="alcoholPercentFor(variant)"
+                      />
+                    </label>
+
+                    <label class="editor__field">
+                      <span class="q-caption">{{ 'catalog.editor.fiscal.age' | t }}</span>
+                      <input
+                        #ageInput
+                        type="number"
+                        min="1"
+                        max="120"
+                        class="q-mono"
+                        [value]="variant.fiscal?.ageRestrictionYears ?? ''"
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      [disabled]="savingField() === 'fiscal:' + variant.variantId"
+                      (click)="
+                        saveFiscal(
+                          variant,
+                          buildFiscalRequest(
+                            mxikQueryFor(variant.variantId),
+                            pkgInput.value,
+                            fiscalUnitInput.value,
+                            fiscalNameInput.value,
+                            barcodeInput.value,
+                            markingInput.checked,
+                            excisableInput.checked,
+                            alcoholInput.value,
+                            ageInput.value
+                          )
+                        )
+                      "
+                      data-testid="editor-save-fiscal"
+                    >
+                      {{
+                        savingField() === 'fiscal:' + variant.variantId
+                          ? ('catalog.editor.saving' | t)
+                          : ('catalog.editor.fiscal.save' | t)
+                      }}
+                    </button>
+                  </fieldset>
+                }
                 <p class="q-caption">{{ 'catalog.editor.fiscal.notBuilt' | t }}</p>
+                <p class="q-caption">{{ 'catalog.editor.fiscal.mxikReferenceNote' | t }}</p>
               </div>
             }
             @case ('AVAILABILITY') {
