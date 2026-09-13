@@ -7,8 +7,10 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Currency;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,6 +29,7 @@ import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.application.OperatingUnitNotDeletableException;
 import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
 import uz.horecaos.platform.tenancy.domain.Brand;
+import uz.horecaos.platform.tenancy.domain.BrandProfile;
 import uz.horecaos.platform.tenancy.domain.CoordinateSource;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityPolicy;
@@ -242,6 +245,165 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                 .param("tenantId", tenantId.value())
                 .query(JdbcTenantControlPlaneStore::mapBrand)
                 .list();
+    }
+
+    @Override
+    public BrandProfile findBrandProfile(TenantId tenantId, BrandId brandId) {
+        BrandContact contact = jdbc.sql("""
+                        SELECT contact_phone, telegram_handle FROM tenant.brands
+                        WHERE tenant_id = :tenantId AND id = :brandId
+                        """)
+                .param("tenantId", tenantId.value())
+                .param("brandId", brandId.value())
+                .query((row, number) ->
+                        new BrandContact(row.getString("contact_phone"), row.getString("telegram_handle")))
+                .single();
+
+        List<BrandProfile.BrandLocale> locales = jdbc.sql("""
+                        SELECT locale, description, is_default FROM tenant.brand_locales
+                        WHERE tenant_id = :tenantId AND brand_id = :brandId
+                        ORDER BY locale
+                        """)
+                .param("tenantId", tenantId.value())
+                .param("brandId", brandId.value())
+                .query(JdbcTenantControlPlaneStore::mapBrandLocale)
+                .list();
+
+        Map<String, UUID> media =
+                mediaByRole(jdbc.sql("""
+                        SELECT role, media_asset_id FROM tenant.brand_media
+                        WHERE tenant_id = :tenantId AND brand_id = :brandId
+                        """).param("tenantId", tenantId.value()).param("brandId", brandId.value()));
+
+        return new BrandProfile(
+                contact.contactPhone(), contact.telegramHandle(), media.get("LOGO"), media.get("BANNER"), locales);
+    }
+
+    @Override
+    public Map<BrandId, BrandProfile> findBrandProfiles(TenantId tenantId) {
+        Map<BrandId, BrandContact> contacts = new LinkedHashMap<>();
+        jdbc.sql("SELECT id, contact_phone, telegram_handle FROM tenant.brands WHERE tenant_id = :tenantId")
+                .param("tenantId", tenantId.value())
+                .query((row, number) -> Map.entry(
+                        new BrandId(row.getObject("id", UUID.class)),
+                        new BrandContact(row.getString("contact_phone"), row.getString("telegram_handle"))))
+                .list()
+                .forEach(entry -> contacts.put(entry.getKey(), entry.getValue()));
+
+        Map<BrandId, List<BrandProfile.BrandLocale>> locales = new LinkedHashMap<>();
+        jdbc.sql("""
+                        SELECT brand_id, locale, description, is_default FROM tenant.brand_locales
+                        WHERE tenant_id = :tenantId ORDER BY brand_id, locale
+                        """)
+                .param("tenantId", tenantId.value())
+                .query((row, number) ->
+                        Map.entry(new BrandId(row.getObject("brand_id", UUID.class)), mapBrandLocale(row, number)))
+                .list()
+                .forEach(entry -> locales.computeIfAbsent(entry.getKey(), ignored -> new ArrayList<>())
+                        .add(entry.getValue()));
+
+        Map<BrandId, Map<String, UUID>> media = new LinkedHashMap<>();
+        jdbc.sql("SELECT brand_id, role, media_asset_id FROM tenant.brand_media WHERE tenant_id = :tenantId")
+                .param("tenantId", tenantId.value())
+                .query((row, number) -> Map.entry(
+                        new BrandId(row.getObject("brand_id", UUID.class)),
+                        Map.entry(row.getString("role"), row.getObject("media_asset_id", UUID.class))))
+                .list()
+                .forEach(entry -> media.computeIfAbsent(entry.getKey(), ignored -> new HashMap<>())
+                        .put(entry.getValue().getKey(), entry.getValue().getValue()));
+
+        Map<BrandId, BrandProfile> profiles = new LinkedHashMap<>();
+        for (Map.Entry<BrandId, BrandContact> entry : contacts.entrySet()) {
+            BrandId brandId = entry.getKey();
+            BrandContact contact = entry.getValue();
+            Map<String, UUID> mediaForBrand = media.getOrDefault(brandId, Map.of());
+            profiles.put(
+                    brandId,
+                    new BrandProfile(
+                            contact.contactPhone(),
+                            contact.telegramHandle(),
+                            mediaForBrand.get("LOGO"),
+                            mediaForBrand.get("BANNER"),
+                            locales.getOrDefault(brandId, List.of())));
+        }
+        return profiles;
+    }
+
+    private record BrandContact(
+            @Nullable String contactPhone, @Nullable String telegramHandle) {}
+
+    /**
+     * Replaces a brand's whole profile in one transaction: contact columns,
+     * the locale set, and the media relation, together — the same
+     * "whole-set write" {@link #updateLocationPlace} already establishes for a
+     * location's own non-identity facts.
+     */
+    @Override
+    public void updateBrandProfile(TenantId tenantId, BrandId brandId, BrandProfile profile) {
+        jdbc.sql("""
+                        UPDATE tenant.brands SET
+                            contact_phone = :contactPhone,
+                            telegram_handle = :telegramHandle,
+                            updated_at = now()
+                        WHERE tenant_id = :tenantId AND id = :brandId
+                        """)
+                .param("tenantId", tenantId.value())
+                .param("brandId", brandId.value())
+                .param("contactPhone", profile.contactPhone())
+                .param("telegramHandle", profile.telegramHandle())
+                .update();
+
+        jdbc.sql("DELETE FROM tenant.brand_locales WHERE tenant_id = :tenantId AND brand_id = :brandId")
+                .param("tenantId", tenantId.value())
+                .param("brandId", brandId.value())
+                .update();
+        for (BrandProfile.BrandLocale locale : profile.locales()) {
+            jdbc.sql("""
+                            INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, description, is_default)
+                            VALUES (:tenantId, :brandId, :locale, :description, :isDefault)
+                            """)
+                    .param("tenantId", tenantId.value())
+                    .param("brandId", brandId.value())
+                    .param("locale", locale.locale())
+                    .param("description", locale.description())
+                    .param("isDefault", locale.isDefault())
+                    .update();
+        }
+
+        jdbc.sql("DELETE FROM tenant.brand_media WHERE tenant_id = :tenantId AND brand_id = :brandId")
+                .param("tenantId", tenantId.value())
+                .param("brandId", brandId.value())
+                .update();
+        upsertBrandMedia(tenantId, brandId, "LOGO", profile.logoAssetId());
+        upsertBrandMedia(tenantId, brandId, "BANNER", profile.bannerAssetId());
+    }
+
+    private void upsertBrandMedia(TenantId tenantId, BrandId brandId, String role, @Nullable UUID assetId) {
+        if (assetId == null) {
+            return;
+        }
+        jdbc.sql("""
+                        INSERT INTO tenant.brand_media (tenant_id, brand_id, role, media_asset_id)
+                        VALUES (:tenantId, :brandId, :role, :assetId)
+                        """)
+                .param("tenantId", tenantId.value())
+                .param("brandId", brandId.value())
+                .param("role", role)
+                .param("assetId", assetId)
+                .update();
+    }
+
+    private static Map<String, UUID> mediaByRole(JdbcClient.StatementSpec spec) {
+        Map<String, UUID> byRole = new HashMap<>();
+        spec.query((row, number) -> Map.entry(row.getString("role"), row.getObject("media_asset_id", UUID.class)))
+                .list()
+                .forEach(entry -> byRole.put(entry.getKey(), entry.getValue()));
+        return byRole;
+    }
+
+    private static BrandProfile.BrandLocale mapBrandLocale(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new BrandProfile.BrandLocale(
+                resultSet.getString("locale"), resultSet.getString("description"), resultSet.getBoolean("is_default"));
     }
 
     @Override
