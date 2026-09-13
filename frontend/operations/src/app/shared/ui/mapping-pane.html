@@ -1,0 +1,188 @@
+<div class="q-mapping-pane" data-testid="q-mapping-pane">
+  @if (errorMessage(); as message) {
+    <q-inline-alert severity="error" [text]="message" data-testid="q-mapping-pane-error" />
+  }
+
+  <div class="q-mapping-pane__toolbar">
+    <label class="q-mapping-pane__toggle">
+      <input
+        type="checkbox"
+        [checked]="!showLinked()"
+        (change)="toggleLinked()"
+        data-testid="q-mapping-pane-unmapped-only"
+      />
+      {{ 'ui.mappingPane.unmappedOnly' | t }}
+    </label>
+    <button
+      type="button"
+      class="q-body-sm"
+      [disabled]="busy() || loading()"
+      (click)="requestBulkAutoMatch()"
+      data-testid="q-mapping-pane-bulk-auto-match"
+    >
+      {{ 'ui.mappingPane.bulkAutoMatch' | t }}
+    </button>
+  </div>
+
+  @if (loading()) {
+    <p class="q-body-sm q-mapping-pane__loading" data-testid="q-mapping-pane-loading">
+      {{ 'ui.mappingPane.loading' | t }}
+    </p>
+  } @else {
+    @if (conflicts().length > 0) {
+      <section class="q-mapping-pane__conflicts" data-testid="q-mapping-pane-conflicts">
+        <h3 class="q-body-sm strong">{{ 'ui.mappingPane.conflicts.title' | t }}</h3>
+        @for (conflict of conflicts(); track conflict.name) {
+          <div class="q-mapping-pane__conflict-card" data-testid="q-mapping-pane-conflict-card">
+            <p class="q-body-sm">
+              {{ 'ui.mappingPane.conflicts.sharedName' | t: { name: conflict.name } }}
+            </p>
+            <div class="q-mapping-pane__conflict-sides">
+              <div class="q-mapping-pane__conflict-side">
+                <span class="q-caption q-mapping-pane__conflict-label">
+                  {{ 'ui.mappingPane.conflicts.horecaosSide' | t }}
+                </span>
+                <ul>
+                  @for (id of conflict.horecaosEntityIds; track id) {
+                    <li class="q-body-xs" data-testid="q-mapping-pane-conflict-horecaos-id">
+                      {{ id }}
+                    </li>
+                  }
+                </ul>
+              </div>
+              <div class="q-mapping-pane__conflict-side">
+                <span class="q-caption q-mapping-pane__conflict-label">
+                  {{ 'ui.mappingPane.conflicts.externalSide' | t }}
+                </span>
+                <ul>
+                  @for (id of conflict.externalIds; track id) {
+                    <li class="q-body-xs" data-testid="q-mapping-pane-conflict-external-id">
+                      {{ id }}
+                    </li>
+                  }
+                </ul>
+              </div>
+            </div>
+            @if (conflict.horecaosEntityIds.length === 1 && conflict.externalIds.length === 1) {
+              <button
+                type="button"
+                class="q-body-sm"
+                [disabled]="busy()"
+                (click)="
+                  linkFromConflict(conflict, conflict.horecaosEntityIds[0], conflict.externalIds[0])
+                "
+                data-testid="q-mapping-pane-conflict-link"
+              >
+                {{ 'ui.mappingPane.conflicts.linkThisPair' | t }}
+              </button>
+            }
+            <button
+              type="button"
+              class="q-body-sm secondary"
+              (click)="dismissConflict.emit(conflict)"
+              data-testid="q-mapping-pane-conflict-dismiss"
+            >
+              {{ 'ui.mappingPane.conflicts.dismiss' | t }}
+            </button>
+          </div>
+        }
+      </section>
+    }
+
+    @if (!externalSourced()) {
+      <q-inline-alert
+        severity="info"
+        [text]="externalSourcedDetail()"
+        data-testid="q-mapping-pane-unsourced"
+      />
+    }
+
+    <div class="q-mapping-pane__dual-list">
+      <div class="q-mapping-pane__column" data-testid="q-mapping-pane-left">
+        <h3 class="q-body-sm strong">{{ 'ui.mappingPane.horecaosColumn' | t }}</h3>
+        <q-combobox
+          [query]="leftQuery()"
+          [options]="leftOptions()"
+          [ariaLabel]="'ui.mappingPane.horecaosColumn' | t"
+          (queryChange)="onLeftQueryInput($event)"
+          (optionSelected)="chooseLeft($event)"
+        />
+        <p class="q-caption q-ink-muted">
+          {{ 'ui.mappingPane.unmappedCount' | t: { count: horecaosCandidates().length } }}
+        </p>
+      </div>
+
+      <div class="q-mapping-pane__link-action">
+        <button
+          type="button"
+          class="q-body-sm primary"
+          [disabled]="!canLink()"
+          (click)="confirmLink()"
+          data-testid="q-mapping-pane-link"
+        >
+          {{ 'ui.mappingPane.link' | t }}
+        </button>
+      </div>
+
+      <div class="q-mapping-pane__column" data-testid="q-mapping-pane-right">
+        <h3 class="q-body-sm strong">{{ 'ui.mappingPane.externalColumn' | t }}</h3>
+        <q-combobox
+          [query]="rightQuery()"
+          [options]="rightOptions()"
+          [ariaLabel]="'ui.mappingPane.externalColumn' | t"
+          [allowCreate]="!externalSourced()"
+          (queryChange)="onRightQueryInput($event)"
+          (optionSelected)="chooseRight($event)"
+          (create)="chooseRightFreeText($event)"
+        />
+        <p class="q-caption q-ink-muted">
+          {{ 'ui.mappingPane.unmappedCount' | t: { count: externalCandidates().length } }}
+        </p>
+      </div>
+    </div>
+
+    @if (showLinked()) {
+      <section class="q-mapping-pane__linked" data-testid="q-mapping-pane-linked">
+        <h3 class="q-body-sm strong">{{ 'ui.mappingPane.linkedTitle' | t }}</h3>
+        @if (rows().length === 0) {
+          <p class="q-body-sm q-ink-muted">{{ 'ui.mappingPane.linkedEmpty' | t }}</p>
+        } @else {
+          <table class="q-mapping-pane__table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'ui.mappingPane.column.horecaos' | t }}</th>
+                <th class="q-caption">{{ 'ui.mappingPane.column.external' | t }}</th>
+                <th class="q-caption">{{ 'ui.mappingPane.column.status' | t }}</th>
+                <th class="q-caption"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of rows(); track row.mappingId) {
+                <tr data-testid="q-mapping-pane-row">
+                  <td class="q-body-sm">{{ row.horecaosName ?? row.horecaosEntityId }}</td>
+                  <td class="q-body-sm q-font-mono">{{ row.externalEntityId }}</td>
+                  <td>
+                    <q-status-pill [label]="row.status" [tone]="statusTone(row.status)" />
+                  </td>
+                  <td>
+                    @if (row.status !== 'RETIRED') {
+                      <button
+                        type="button"
+                        class="q-body-sm secondary"
+                        [disabled]="busy()"
+                        (click)="requestUnlink(row)"
+                        data-testid="q-mapping-pane-unlink"
+                      >
+                        {{ 'ui.mappingPane.unlink' | t }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+    }
+  }
+</div>

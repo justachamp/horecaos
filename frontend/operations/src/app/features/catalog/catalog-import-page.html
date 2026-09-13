@@ -1,0 +1,210 @@
+<div class="q-catalog-import-page">
+  @if (loading()) {
+    <p class="q-body-sm q-ink-muted">{{ 'catalog.import.loading' | t }}</p>
+  } @else if (denied()) {
+    <q-denied-state capability="pos.sync.read" />
+  } @else {
+    @if (loadError(); as message) {
+      <q-inline-alert severity="error" [text]="message" />
+    }
+
+    @if (bindingOptions().length === 0) {
+      <q-empty-state
+        titleKey="catalog.import.noBindings.title"
+        bodyKey="catalog.import.noBindings.body"
+      />
+    } @else {
+      <div class="q-catalog-import-page__binding-bar">
+        <label class="q-body-sm" for="q-catalog-import-binding">{{
+          'catalog.import.binding' | t
+        }}</label>
+        <select
+          id="q-catalog-import-binding"
+          [value]="selectedBindingId()"
+          (change)="selectBinding($any($event.target).value)"
+        >
+          @for (option of bindingOptions(); track option.bindingId) {
+            <option [value]="option.bindingId">{{ option.label }}</option>
+          }
+        </select>
+      </div>
+
+      <nav class="q-catalog-import-page__tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          [attr.aria-selected]="activeTab() === 'runs'"
+          [class.active]="activeTab() === 'runs'"
+          (click)="selectTab('runs')"
+        >
+          {{ 'catalog.import.tab.runs' | t }}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          [attr.aria-selected]="activeTab() === 'mapping'"
+          [class.active]="activeTab() === 'mapping'"
+          (click)="selectTab('mapping')"
+        >
+          {{ 'catalog.import.tab.mapping' | t }}
+        </button>
+      </nav>
+
+      @if (activeTab() === 'runs') {
+        <section class="q-catalog-import-page__start">
+          <h2 class="q-subhead">{{ 'catalog.import.start.title' | t }}</h2>
+          @if (startError(); as message) {
+            <q-inline-alert severity="error" [text]="message" />
+          }
+          <div class="q-catalog-import-page__start-form">
+            <label class="q-body-sm">
+              <input
+                type="checkbox"
+                [checked]="dryRun()"
+                (change)="dryRun.set($any($event.target).checked)"
+              />
+              {{ 'catalog.import.start.dryRun' | t }}
+            </label>
+            <label class="q-body-sm">
+              {{ 'catalog.import.start.importLanguage' | t }}
+              <input
+                type="text"
+                class="q-catalog-import-page__language-input"
+                [value]="importLanguage()"
+                (input)="importLanguage.set($any($event.target).value)"
+                placeholder="uz-UZ"
+              />
+            </label>
+            <label class="q-body-sm">
+              <input
+                type="checkbox"
+                [checked]="priceReImport()"
+                (change)="priceReImport.set($any($event.target).checked)"
+              />
+              {{ 'catalog.import.start.priceReImport' | t }}
+            </label>
+            <button type="button" class="primary" [disabled]="starting()" (click)="startImport()">
+              {{
+                starting()
+                  ? ('catalog.import.start.running' | t)
+                  : ('catalog.import.start.action' | t)
+              }}
+            </button>
+          </div>
+        </section>
+
+        <section class="q-catalog-import-page__runs">
+          <h2 class="q-subhead">{{ 'catalog.import.runs.title' | t }}</h2>
+          @if (runsLoading()) {
+            <p class="q-body-sm q-ink-muted">{{ 'catalog.import.loading' | t }}</p>
+          } @else if (runs().length === 0) {
+            <q-empty-state titleKey="catalog.import.runs.empty" />
+          } @else {
+            <table class="q-catalog-import-page__table">
+              <thead>
+                <tr>
+                  <th class="q-caption">{{ 'catalog.import.runs.column.started' | t }}</th>
+                  <th class="q-caption">{{ 'catalog.import.runs.column.status' | t }}</th>
+                  <th class="q-caption">{{ 'catalog.import.runs.column.trigger' | t }}</th>
+                  <th class="q-caption">{{ 'catalog.import.runs.column.additions' | t }}</th>
+                  <th class="q-caption">{{ 'catalog.import.runs.column.changes' | t }}</th>
+                  <th class="q-caption">{{ 'catalog.import.runs.column.removals' | t }}</th>
+                  <th class="q-caption">{{ 'catalog.import.runs.column.conflicts' | t }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (run of runs(); track run.runId) {
+                  <tr
+                    (click)="selectRun(run.runId)"
+                    [class.selected]="selectedRunId() === run.runId"
+                    data-testid="q-catalog-import-run-row"
+                  >
+                    <td class="q-body-sm">{{ timeLabel(run.startedAt) }}</td>
+                    <td><q-status-pill [label]="run.status" tone="none" /></td>
+                    <td class="q-body-sm">{{ run.triggerType }}</td>
+                    <td class="q-body-sm">{{ run.additionCount }}</td>
+                    <td class="q-body-sm">{{ run.changeCount }}</td>
+                    <td class="q-body-sm">{{ run.removalCount }}</td>
+                    <td class="q-body-sm">{{ run.conflictCount }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </section>
+
+        @if (selectedRunId(); as runId) {
+          <section class="q-catalog-import-page__detail" data-testid="q-catalog-import-run-detail">
+            <h2 class="q-subhead">{{ 'catalog.import.detail.title' | t }}</h2>
+            @if (detailLoading()) {
+              <p class="q-body-sm q-ink-muted">{{ 'catalog.import.loading' | t }}</p>
+            } @else if (runDetail(); as detail) {
+              <dl class="q-catalog-import-page__detail-grid">
+                <dt class="q-caption">{{ 'catalog.import.detail.status' | t }}</dt>
+                <dd class="q-body-sm"><q-status-pill [label]="detail.status" tone="none" /></dd>
+                <dt class="q-caption">{{ 'catalog.import.detail.adapter' | t }}</dt>
+                <dd class="q-body-sm">{{ detail.adapterVersion }}</dd>
+                <dt class="q-caption">{{ 'catalog.import.detail.received' | t }}</dt>
+                <dd class="q-body-sm">{{ detail.receivedCount }}</dd>
+                <dt class="q-caption">{{ 'catalog.import.detail.lastError' | t }}</dt>
+                <dd class="q-body-sm">{{ detail.lastError ?? '—' }}</dd>
+              </dl>
+
+              <h3 class="q-body-sm strong">{{ 'catalog.import.detail.applyItems.title' | t }}</h3>
+              @if (applyItems().length === 0) {
+                <p class="q-body-sm q-ink-muted">
+                  {{ 'catalog.import.detail.applyItems.empty' | t }}
+                </p>
+              } @else {
+                <table class="q-catalog-import-page__table">
+                  <thead>
+                    <tr>
+                      <th class="q-caption">
+                        {{ 'catalog.import.detail.applyItems.column.action' | t }}
+                      </th>
+                      <th class="q-caption">
+                        {{ 'catalog.import.detail.applyItems.column.status' | t }}
+                      </th>
+                      <th class="q-caption">
+                        {{ 'catalog.import.detail.applyItems.column.reason' | t }}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (item of applyItems(); track item.id) {
+                      <tr data-testid="q-catalog-import-apply-item">
+                        <td class="q-body-sm">{{ item.action }}</td>
+                        <td><q-status-pill [label]="item.status" tone="none" /></td>
+                        <td class="q-body-sm">{{ item.failureReason ?? '—' }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+            }
+          </section>
+        }
+      } @else {
+        <section class="q-catalog-import-page__mapping">
+          @if (mappingError(); as message) {
+            <q-inline-alert severity="error" [text]="message" />
+          }
+          <q-mapping-pane
+            [rows]="mappingRows()"
+            [horecaosCandidates]="mappingUnmapped()?.horecaosCandidates ?? []"
+            [externalCandidates]="mappingUnmapped()?.entities ?? []"
+            [externalSourced]="mappingUnmapped()?.sourced ?? true"
+            [externalSourcedDetail]="mappingUnmapped()?.detail ?? null"
+            [conflicts]="mappingConflicts()"
+            [loading]="mappingLoading()"
+            [busy]="mappingBusy()"
+            (link)="onMappingLink($event)"
+            (unlink)="onMappingUnlink($event)"
+            (bulkAutoMatch)="onMappingBulkAutoMatch()"
+            (dismissConflict)="onMappingDismissConflict($event)"
+          />
+        </section>
+      }
+    }
+  }
+</div>

@@ -419,6 +419,27 @@ public class CloposAdapter implements PosAdapter {
         return new AvailabilityRead(outcome, snapshot.availability());
     }
 
+    /**
+     * Clopos's published OpenAPI reference (the same one {@link
+     * #discoverCapabilities} is checked against) has no payment-type endpoint.
+     * Honestly {@code NOT_SUPPORTED} rather than an invented list: the mapping
+     * pane still lets an operator type Clopos's own code by hand for an
+     * {@code OPERATOR}-sourced mapping.
+     */
+    @Override
+    public ReferenceListRead discoverPaymentTypes(PosContext context) {
+        return new ReferenceListRead(
+                ProviderOutcome.rejected("NOT_SUPPORTED", "Clopos exposes no payment-type discovery endpoint"),
+                List.of());
+    }
+
+    /** See {@link #discoverPaymentTypes}: Clopos exposes no discount-discovery endpoint either. */
+    @Override
+    public ReferenceListRead discoverDiscounts(PosContext context) {
+        return new ReferenceListRead(
+                ProviderOutcome.rejected("NOT_SUPPORTED", "Clopos exposes no discount discovery endpoint"), List.of());
+    }
+
     // ------------------------------------------------------------------
     // Order export
     // ------------------------------------------------------------------

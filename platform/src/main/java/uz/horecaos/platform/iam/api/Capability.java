@@ -786,6 +786,22 @@ public enum Capability {
     POS_SYNC_APPLY("pos.sync.apply", "pos", "sync.apply"),
 
     /**
+     * ADR 0012/0026, gap-map row 10.8b: authoring the tenant-facing mapping
+     * pane over {@code integration.provider_entity_mappings} — creating an
+     * operator-typed mapping, retiring one, and bulk auto-match.
+     *
+     * <p>Deliberately not folded into {@link #POS_SYNC_APPLY}: that capability
+     * accepts what a run's own difference report found, under the review
+     * discipline ADR 0012 requires for a menu that might go live wrong during a
+     * lunch rush. This one lets a merchant pair a payment type, a discount, a
+     * courier, a cancellation reason or a channel's POS code by hand, entirely
+     * outside a sync run — a different, lower-stakes act with no run to review
+     * against, and the row's own point is that a merchant can do it without the
+     * platform.
+     */
+    POS_SYNC_MANAGE("pos.sync.manage", "pos", "sync.manage"),
+
+    /**
      * ADR 0011: reading an order's POS export, its attempts, and the candidate
      * orders a recovery read found at the provider.
      *
