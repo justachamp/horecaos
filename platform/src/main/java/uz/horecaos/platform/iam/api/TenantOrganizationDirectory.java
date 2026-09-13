@@ -24,6 +24,17 @@ import java.util.UUID;
  */
 public interface TenantOrganizationDirectory {
 
-    /** The ACTIVE tenant linked to this Keycloak organization id, if any. */
+    /**
+     * The operating tenant linked to this Keycloak organization id, if any.
+     *
+     * <p>Operating means {@code PROVISIONING} or {@code ACTIVE}. Onboarding
+     * links the owner and sends their invitation before the tenant is
+     * activated (ADR 0097), so an owner who accepts that invitation signs in
+     * while the tenant is still provisioning; resolving nothing for them
+     * rendered the platform view — zero capabilities, an access-denied page —
+     * against a full {@code TENANT_OWNER} grant. Suspended and archived
+     * tenants still resolve nothing here: a suspended tenant's staff must not
+     * have their view silently resolved against it.
+     */
     Optional<UUID> tenantIdForKeycloakOrganization(String keycloakOrganizationId);
 }

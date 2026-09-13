@@ -14,8 +14,10 @@ import uz.horecaos.platform.support.TestDatabase;
 
 /**
  * The organization-to-tenant lookup the session-context fallback navigates by.
- * The ACTIVE filter is the assertion that matters: a suspended tenant's staff
- * must not have their capability view silently resolved against it.
+ * The status filter is the assertion that matters: a suspended tenant's staff
+ * must not have their capability view silently resolved against it, while a
+ * provisioning tenant's owner — invited by onboarding before activation
+ * (ADR 0097) — must resolve, or they sign in to an access-denied page.
  */
 class JdbcTenantOrganizationDirectoryTests {
 
@@ -54,6 +56,20 @@ class JdbcTenantOrganizationDirectoryTests {
         insertTenant(TENANT, ORGANIZATION, "ACTIVE");
 
         assertThat(directory.tenantIdForKeycloakOrganization(ORGANIZATION)).contains(TENANT);
+    }
+
+    @Test
+    void resolvesAProvisioningTenantSoItsInvitedOwnerCanSignIn() {
+        insertTenant(TENANT, ORGANIZATION, "PROVISIONING");
+
+        assertThat(directory.tenantIdForKeycloakOrganization(ORGANIZATION)).contains(TENANT);
+    }
+
+    @Test
+    void anArchivedTenantDoesNotResolve() {
+        insertTenant(TENANT, ORGANIZATION, "ARCHIVED");
+
+        assertThat(directory.tenantIdForKeycloakOrganization(ORGANIZATION)).isEmpty();
     }
 
     @Test

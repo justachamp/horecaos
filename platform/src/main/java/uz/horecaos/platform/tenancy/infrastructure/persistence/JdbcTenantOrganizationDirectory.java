@@ -26,7 +26,7 @@ public class JdbcTenantOrganizationDirectory implements TenantOrganizationDirect
                 SELECT id
                   FROM tenant.tenants
                  WHERE keycloak_organization_id = :organizationId
-                   AND status = 'ACTIVE'
+                   AND status IN ('PROVISIONING', 'ACTIVE')
                 """)
                 .param("organizationId", keycloakOrganizationId)
                 .query(UUID.class)
