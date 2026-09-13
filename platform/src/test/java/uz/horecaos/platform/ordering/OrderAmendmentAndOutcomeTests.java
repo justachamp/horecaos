@@ -1568,6 +1568,61 @@ class OrderAmendmentAndOutcomeTests {
                 .isEqualTo(movementsBefore);
     }
 
+    /**
+     * Wave P09 (gap map {@code 1.2k}): before this wave {@code
+     * OrderStateMachine} had no edge from {@code PREPARING} or {@code READY}
+     * to {@code CANCELLED} at all, so even a reasoned cancellation of a
+     * cooking or ready-for-pickup order was refused by the state machine
+     * before {@code OrderOutcomeService.cancel}'s own guard ever ran. Both
+     * statuses now accept the same reasoned path {@code
+     * cancellationAfterCommitmentRecordsTheDisposition} proves for {@code
+     * CONFIRMED}.
+     */
+    @Test
+    @DisplayName("a reasoned cancellation now reaches a cooking or a ready-for-pickup order")
+    void cancellingAPreparingOrAReadyOrderWithAReasonNowSucceeds() {
+        UUID writeOff = writeOffReason();
+
+        UUID preparingOrder = orderIdOf(placeOrder("idem-preparing-cancel"));
+        advance(preparingOrder, OrderStatus.PREPARING);
+        int preparingVersion =
+                orderStore.find(TENANT, preparingOrder).orElseThrow().version();
+        tx(() -> outcomes.cancel(
+                TENANT,
+                preparingOrder,
+                preparingVersion,
+                new OrderOutcomeService.CancelCommand(writeOff, "кухня сожгла заказ", "USER", "sharif", null)));
+        assertThat(orderStore.find(TENANT, preparingOrder).orElseThrow().status())
+                .isEqualTo(OrderStatus.CANCELLED);
+        assertThat(orderQuery.outcome(TENANT, preparingOrder).orElseThrow().stockDisposition())
+                .isEqualTo(StockDisposition.WRITE_OFF.name());
+
+        UUID readyOrder = orderIdOf(placeOrder("idem-ready-cancel"));
+        advance(readyOrder, OrderStatus.PREPARING);
+        advance(readyOrder, OrderStatus.READY);
+        int readyVersion = orderStore.find(TENANT, readyOrder).orElseThrow().version();
+        tx(() -> outcomes.cancel(
+                TENANT,
+                readyOrder,
+                readyVersion,
+                new OrderOutcomeService.CancelCommand(writeOff, "клиент не отвечает", "USER", "sharif", null)));
+        assertThat(orderStore.find(TENANT, readyOrder).orElseThrow().status()).isEqualTo(OrderStatus.CANCELLED);
+    }
+
+    /** The reasonless overload is unaffected by the wider state machine: it still stops at {@code CONFIRMED}. */
+    @Test
+    @DisplayName("a reasonless cancellation of a preparing order is still refused")
+    void reasonlessCancellationOfAPreparingOrderIsStillRefused() {
+        UUID orderId = orderIdOf(placeOrder("idem-preparing-reasonless"));
+        advance(orderId, OrderStatus.PREPARING);
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        assertThatThrownBy(
+                        () -> tx(() -> orderState.cancel(TENANT, orderId, version, "BECAUSE", "USER", "sharif", null)))
+                .isInstanceOf(OrderStateService.CancellationNotPermittedException.class);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status()).isEqualTo(OrderStatus.PREPARING);
+    }
+
     @Test
     @DisplayName("cancelling a confirmed order needs a reason; without one it is still refused")
     void confirmedCancellationWithoutAReasonIsRefused() {

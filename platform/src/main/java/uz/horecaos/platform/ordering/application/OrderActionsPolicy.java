@@ -112,6 +112,24 @@ public final class OrderActionsPolicy {
             }
         }
 
+        // POST .../completion, naming how the order was completed (orders.md
+        // §4.6, wave P09/gap map 1.2j). Declares the same ORDER_ADVANCE the
+        // generic advance above does, and is offered alongside the ADVANCE
+        // entry above where the target is COMPLETED — never instead of it:
+        // a client built before this wave (order-queue.ts's row action) still
+        // works against the generic ADVANCE entry, unaware a better one now
+        // sits beside it, while the order detail pane (wave P09) prefers this
+        // one so a delivery order can be closed as "our own courier" or
+        // "handed to a partner service" instead of always recording the
+        // former. Both entries share one gate — exactly what
+        // OrderStateMachine.permits(status, COMPLETED, mode) already computed
+        // for the ADVANCE loop above — so neither can be offered without the
+        // other.
+        if (grantedCapabilities.contains(Capability.ORDER_ADVANCE)
+                && OrderStateMachine.permits(status, OrderStatus.COMPLETED, mode)) {
+            actions.add(new OrderAction(OrderActionCode.COMPLETE, null));
+        }
+
         if (grantedCapabilities.contains(Capability.ORDER_CANCEL) && canCancel(status)) {
             actions.add(new OrderAction(OrderActionCode.CANCEL, null));
         }
@@ -138,12 +156,24 @@ public final class OrderActionsPolicy {
     }
 
     /**
-     * Whether {@code POST .../cancellations} without a registry reason would be
-     * accepted right now — exactly {@link OrderStateService#cancel}'s combined
-     * guard, called from both places.
+     * Whether {@code POST .../cancellations} would be accepted right now with
+     * <em>some</em> outcome — reasonless before {@code CONFIRMED} (see {@link
+     * #canCancelWithoutReason}), a registry {@code reasonId} from {@code
+     * CONFIRMED} onward (see {@link OrderOutcomeService#cancel}, which checks
+     * nothing narrower than this).
+     *
+     * <p><b>Wave P09 (gap map 1.2k).</b> Before this wave the gate additionally
+     * required {@link #canCancelWithoutReason}, so {@code CANCEL} vanished from
+     * {@code actions[]} the moment an order was confirmed even though a
+     * reasoned cancellation was legal there — because the console's cancel
+     * dialog had nowhere to pick a reason from. Now that it does (the reason
+     * registry, orders.md §4.5), the read model offers {@code CANCEL} wherever
+     * {@link OrderStateMachine} has an edge to {@code CANCELLED} at all, and
+     * the dialog itself decides — by checking {@link #canCancelWithoutReason}
+     * — whether it needs to collect a reason before it submits.
      */
     static boolean canCancel(OrderStatus status) {
-        return canCancelWithoutReason(status) && OrderStateMachine.permits(status, OrderStatus.CANCELLED);
+        return OrderStateMachine.permits(status, OrderStatus.CANCELLED);
     }
 
     /**

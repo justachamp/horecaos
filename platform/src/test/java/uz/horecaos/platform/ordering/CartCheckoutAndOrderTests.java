@@ -3069,16 +3069,28 @@ class CartCheckoutAndOrderTests {
 
     /**
      * The trickiest single case {@code OrderActionsPolicy} has to get right:
-     * cancellation is legal in {@link uz.horecaos.platform.ordering.domain.OrderStateMachine}
-     * from {@code CONFIRMED} but refused by {@code OrderStateService.cancel}'s
-     * application-level guard. This proves the real mutating call and the read
-     * model agree by construction — {@code OrderStateService.cancel} calls
-     * {@code OrderActionsPolicy.canCancelWithoutReason} directly, so there is
-     * one implementation behind both assertions below, not two that happen to
-     * match today.
+     * a <em>reasonless</em> cancellation is refused from {@code CONFIRMED} by
+     * {@code OrderStateService.cancel}'s application-level guard, even though
+     * {@link uz.horecaos.platform.ordering.domain.OrderStateMachine} has an
+     * edge there. {@code OrderStateService.cancel} calls {@code
+     * OrderActionsPolicy.canCancelWithoutReason} directly for that refusal, so
+     * this and the production guard cannot silently drift apart.
+     *
+     * <p><b>Wave P09 (gap map 1.2k).</b> Before this wave the read model
+     * omitted {@code CANCEL} here too, on the premise that any offered
+     * {@code CANCEL} implied the reasonless mutating call would succeed. That
+     * premise no longer holds by design: the console's cancel dialog now
+     * always supplies a registry {@code reasonId} (orders.md §4.5), and {@code
+     * OrderOutcomeService.cancel} accepts exactly that call for a {@code
+     * CONFIRMED} order — {@code OrderAmendmentAndOutcomeTests} proves the
+     * reasoned path itself. So the assertion below now checks the opposite of
+     * what it used to: the read model *does* offer {@code CANCEL} here, one
+     * true call (the reasoned one) would accept it, and the *reasonless* call
+     * above is refused precisely because it declined to name that reason.
      */
     @Test
-    @DisplayName("a confirmed order's refused cancellation matches actions[] omitting CANCEL")
+    @DisplayName(
+            "a confirmed order's refused reasonless cancellation still leaves actions[] offering the reasoned CANCEL")
     void confirmedCancellationRefusalMatchesTheActionsList() {
         var result = placeOrder("actions-confirmed-cancel");
         int version = orderStore.find(TENANT, orderIdOf(result)).orElseThrow().version();
@@ -3095,8 +3107,8 @@ class CartCheckoutAndOrderTests {
         // covers the per-role gate).
         assertThat(OrderActionsPolicy.availableFor(
                         order.status(), order.fulfillmentMode(), EnumSet.allOf(Capability.class)))
-                .as("the read model must not offer what the mutating endpoint just refused")
-                .noneMatch(action -> action.code() == OrderActionCode.CANCEL);
+                .as("the read model must still offer the reasoned path the mutating endpoint's other overload accepts")
+                .anyMatch(action -> action.code() == OrderActionCode.CANCEL);
     }
 
     /**
