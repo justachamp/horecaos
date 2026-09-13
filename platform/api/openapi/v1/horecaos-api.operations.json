@@ -29825,7 +29825,7 @@
     },
     "/api/v1/tenants/{tenantId}/media/assets/{assetId}/download-url" : {
       "get" : {
-        "description" : "Only an AVAILABLE asset yields a URL; an unverified object is never served.",
+        "description" : "Only an AVAILABLE asset yields a URL; an unverified object is never served. Pass `variant` (THUMBNAIL/CARD/DETAIL) for a rendition rather than the original — a grid rendering dozens of images has no business fetching full-size originals for every one of them, and until this parameter existed there was no way to ask for anything else: every derivative ADR 0010's pipeline renders was stored and never served.",
         "operationId" : "downloadUrl",
         "parameters" : [ {
           "in" : "path",
@@ -29841,6 +29841,14 @@
           "required" : true,
           "schema" : {
             "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "variant",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "THUMBNAIL", "CARD", "DETAIL" ],
             "type" : "string"
           }
         } ],
