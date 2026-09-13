@@ -130,6 +130,28 @@ export interface OrderTimelineEntry {
 }
 
 /**
+ * `RevisionResponse` — one row of `GET .../revisions` (§3.9, ADR 0039, wave
+ * P09/gap map `1.2p`). Revision 1 is the ADR 0019 checkout snapshot, byte
+ * identical for ever; each applied amendment appends one carrying its own
+ * complete recomputed total plus the delta against its predecessor.
+ */
+export interface RevisionResponse {
+  readonly revision: number;
+  readonly source: string;
+  readonly amendmentId?: string | null;
+  readonly currency: string;
+  readonly subtotalMinor: number;
+  readonly taxMinor: number;
+  readonly discountMinor: number;
+  readonly feeMinor: number;
+  readonly totalMinor: number;
+  readonly deltaTotalMinor: number;
+  readonly createdByActorType: string;
+  readonly createdByActorId?: string | null;
+  readonly createdAt: string;
+}
+
+/**
  * `OrderCountsResponse` — `GET .../orders/counts` (§2.3). See `order-counts.ts`
  * for how this maps onto the board's seven tabs; note that `Внимание`'s live
  * severity queue is deliberately absent from this aggregate (the endpoint's

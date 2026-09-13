@@ -1,0 +1,106 @@
+<div class="handover-panel" data-testid="order-handover-panel">
+  @if (notice(); as text) {
+    <p class="q-body-sm handover-panel__notice" role="status" data-testid="order-handover-notice">
+      {{ text }}
+    </p>
+  }
+
+  @if (loading()) {
+    <p class="q-body-sm pane__state-inline">{{ 'orders.detail.loading' | t }}</p>
+  } @else if (loadError()) {
+    <p class="q-body-sm pane__state-inline" data-testid="order-handover-error">
+      {{ 'orders.detail.handover.error' | t }}
+    </p>
+  } @else if (challenge(); as state) {
+    <dl class="handover-panel__fields">
+      <div class="handover-panel__row">
+        <dt class="q-caption">{{ 'orders.detail.handover.type' | t }}</dt>
+        <dd class="q-body-sm" data-testid="order-handover-type">{{ typeLabel() }}</dd>
+      </div>
+      <div class="handover-panel__row">
+        <dt class="q-caption">{{ 'orders.detail.handover.statusLabel' | t }}</dt>
+        <dd class="q-body-sm" data-testid="order-handover-status">{{ statusLabel() }}</dd>
+      </div>
+      @if (state.status === 'PENDING' || state.status === 'FAILED') {
+        <div class="handover-panel__row">
+          <dt class="q-caption">{{ 'orders.detail.handover.attemptsRemaining' | t }}</dt>
+          <dd class="q-body-sm q-tnum" data-testid="order-handover-attempts">
+            {{ state.attemptsRemaining }}
+          </dd>
+        </div>
+      }
+    </dl>
+
+    @if (canVerify()) {
+      <div class="handover-panel__verify">
+        <label class="handover-panel__field">
+          <span class="q-body-sm">{{ 'orders.detail.handover.codeLabel' | t }}</span>
+          <input
+            type="text"
+            class="handover-panel__input"
+            [value]="code()"
+            (input)="setCode($any($event.target).value)"
+            data-testid="order-handover-code-input"
+          />
+        </label>
+        <button
+          type="button"
+          class="handover-panel__button"
+          [disabled]="busy()"
+          (click)="submitVerification()"
+          data-testid="order-handover-verify"
+        >
+          {{ 'orders.detail.handover.verify' | t }}
+        </button>
+      </div>
+    }
+
+    @if (canBypass()) {
+      <button
+        type="button"
+        class="handover-panel__link"
+        (click)="toggleBypass()"
+        data-testid="order-handover-bypass-toggle"
+      >
+        {{ 'orders.detail.handover.bypassOpen' | t }}
+      </button>
+      @if (bypassOpen()) {
+        <div class="handover-panel__bypass" data-testid="order-handover-bypass-form">
+          <label class="handover-panel__field">
+            <span class="q-body-sm">{{ 'orders.detail.handover.bypassReason' | t }}</span>
+            <input
+              type="text"
+              class="handover-panel__input"
+              [value]="bypassReasonCode()"
+              (input)="setBypassReasonCode($any($event.target).value)"
+              data-testid="order-handover-bypass-reason"
+            />
+          </label>
+          <label class="handover-panel__field">
+            <span class="q-body-sm">{{ 'orders.detail.handover.bypassSupervisor' | t }}</span>
+            <input
+              type="text"
+              class="handover-panel__input"
+              [value]="supervisorName()"
+              (input)="setSupervisorName($any($event.target).value)"
+              data-testid="order-handover-bypass-supervisor"
+            />
+          </label>
+          <button
+            type="button"
+            class="handover-panel__button"
+            [disabled]="busy()"
+            (click)="submitBypass()"
+            data-testid="order-handover-bypass-confirm"
+          >
+            {{ 'orders.detail.handover.bypassConfirm' | t }}
+          </button>
+        </div>
+      }
+    }
+  } @else {
+    <p class="q-body-sm pane__state-inline" data-testid="order-handover-none">
+      {{ 'orders.detail.handover.none' | t }}
+    </p>
+  }
+</div>

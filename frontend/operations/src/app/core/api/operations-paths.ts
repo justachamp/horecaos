@@ -98,6 +98,24 @@ export const operationsPaths = {
     return `${this.order(scope, orderId)}/timeline`;
   },
 
+  /**
+   * Every revision of this order (ADR 0039, wave P09/gap map `1.2p`) — the
+   * append-only chain `orderQuery.revisions` already serves and no screen has
+   * read before now.
+   */
+  orderRevisions(scope: LocationScope, orderId: string): string {
+    return `${this.order(scope, orderId)}/revisions`;
+  },
+
+  /**
+   * Complete an order, naming how (orders.md §4.6, wave P09/gap map `1.2j`).
+   * Mutation: `If-Match` required, `reasonId` optional in the body — omitting
+   * it records the reason the fulfilment mode implies.
+   */
+  orderCompletion(scope: LocationScope, orderId: string): string {
+    return `${this.order(scope, orderId)}/completion`;
+  },
+
   /** Approve or reject an order awaiting a decision. Mutation: key required. */
   orderApprovalDecisions(scope: LocationScope, orderId: string): string {
     return `${this.order(scope, orderId)}/approval-decisions`;
@@ -678,6 +696,31 @@ export const mediaPaths = {
   /** A short-lived signed URL, only for an `AVAILABLE` asset. */
   downloadUrl(tenantId: string, assetId: string): string {
     return `${this.asset(tenantId, assetId)}/download-url`;
+  },
+} as const;
+
+/**
+ * Handover verification (ADR 0040, `MarketplaceOperationsController`) — one
+ * of the surfaces already on the ADR 0031 prefix, tenant-scoped only (the
+ * challenge table has no location column of its own; the order it belongs to
+ * does). Kept apart from {@link operationsPaths} for the same reason {@link
+ * mediaPaths} is: every call here takes a bare `tenantId`, not a full {@link
+ * LocationScope} order-scoped call — wave P09/gap map `1.2m`.
+ */
+export const marketplacePaths = {
+  /** The handover challenge's current state — never the expected value. */
+  handoverChallenge(scope: LocationScope, orderId: string): string {
+    return `${OPERATIONS}${tenant(scope)}/marketplace/orders/${encodeURIComponent(orderId)}/handover-challenge`;
+  },
+
+  /** Consumes one verification attempt, whether or not the code matches. */
+  handoverVerifications(scope: LocationScope, orderId: string): string {
+    return `${OPERATIONS}${tenant(scope)}/marketplace/orders/${encodeURIComponent(orderId)}/handover-verifications`;
+  },
+
+  /** The audited supervisor override, past exhaustion as well as before it. */
+  handoverBypasses(scope: LocationScope, orderId: string): string {
+    return `${OPERATIONS}${tenant(scope)}/marketplace/orders/${encodeURIComponent(orderId)}/handover-bypasses`;
   },
 } as const;
 

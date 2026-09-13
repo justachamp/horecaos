@@ -96,9 +96,10 @@ export class OrderActionsApi {
   }
 
   /**
-   * `Отменить` (§4.3). `reasonCode` is the free-text code field this wave —
-   * `CancelRequest.reasonId`, the curated registry §4.5 describes, is a later
-   * product decision and is never sent from here.
+   * `Отменить`, reasonless (§4.3). Refused by `OrderActionsPolicy.
+   * canCancelWithoutReason` from `CONFIRMED` onward — {@link cancelWithReason}
+   * is what the order detail pane's dialog uses there (wave P09, gap map
+   * `1.2k`).
    */
   cancel(
     scope: LocationScope,
@@ -110,6 +111,52 @@ export class OrderActionsApi {
     return this.api.post<{ reasonCode: string; note?: string }, DecisionResponse>(
       operationsPaths.orderCancellations(scope, orderId),
       command({ reasonCode, note: note ? note : undefined }),
+      { expectedVersion },
+    );
+  }
+
+  /**
+   * `Отменить`, with a reason from `ordering.order_outcome_reasons`
+   * (orders.md §4.5, wave P09 gap map `1.2k`) — the path `OrderActionsPolicy`
+   * now offers `CANCEL` for at any non-terminal status, `CONFIRMED` onward
+   * included. `CancelRequest.reasonCode` stays `@NotBlank` on the wire even
+   * on this path (the server ignores it once `reasonId` is present); the
+   * reason's own `systemCategory` — a closed, non-PII code — is what the
+   * dialog sends there rather than inventing free text of its own.
+   */
+  cancelWithReason(
+    scope: LocationScope,
+    orderId: string,
+    expectedVersion: number,
+    reasonId: string,
+    reasonCode: string,
+    note?: string,
+  ): Observable<DecisionResponse> {
+    return this.api.post<{ reasonCode: string; reasonId: string; note?: string }, DecisionResponse>(
+      operationsPaths.orderCancellations(scope, orderId),
+      command({ reasonCode, reasonId, note: note ? note : undefined }),
+      { expectedVersion },
+    );
+  }
+
+  /**
+   * `Завершить` (orders.md §4.6, wave P09 gap map `1.2j`) —
+   * `POST .../completion`, naming how the order finished instead of the
+   * generic advance every console completion booked as `DELIVERED_OWN_COURIER`
+   * before this wave. `reasonId` omitted records the completion category the
+   * fulfilment mode implies, with no `OutcomeResponse` recorded — the order
+   * detail pane only omits it when the tenant's registry has no active
+   * reason for this order's mode at all.
+   */
+  complete(
+    scope: LocationScope,
+    orderId: string,
+    expectedVersion: number,
+    reasonId?: string,
+  ): Observable<DecisionResponse> {
+    return this.api.post<{ reasonId?: string }, DecisionResponse>(
+      operationsPaths.orderCompletion(scope, orderId),
+      command({ reasonId: reasonId ? reasonId : undefined }),
       { expectedVersion },
     );
   }
