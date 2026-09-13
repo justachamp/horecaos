@@ -5703,6 +5703,7 @@ export interface SseEmitter {
 }
 
 export interface StaffLinkView {
+  id?: string;
   linkedAt?: string;
   principalSubject?: string;
   telegramUserId?: number;
@@ -6111,6 +6112,10 @@ export interface TaxProfileResponse {
   version?: number;
 }
 
+export interface TelegramStaffLinkCodeControllerReasonRequest {
+  reason: string;
+}
+
 export interface TemplateResponse {
   activeVersion?: number;
   brandId?: string;
@@ -6398,6 +6403,11 @@ export interface UnassignRequest {
 export interface Unavailable {
   reason?: string;
   variantId?: string;
+}
+
+export interface UnlinkResponse {
+  changed?: boolean;
+  outcome?: string;
 }
 
 export interface UpdateCloposSettingsRequest {
@@ -7373,6 +7383,7 @@ export interface Operations {
   "variantSales": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/variant-sales"; request: { parameters: { path: { tenantId: string }; query: { from: string; limit?: number; locationId?: Array<string>; to: string } } }; responses: { "200": VariantSalesListResponse } };
   "issue": { method: "POST"; path: "/api/v1/tenants/{tenantId}/staff/telegram/link-codes"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": LinkCodeResponse } };
   "listLinks": { method: "GET"; path: "/api/v1/tenants/{tenantId}/staff/telegram/links"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<StaffLinkView> } };
+  "unlink_1": { method: "DELETE"; path: "/api/v1/tenants/{tenantId}/staff/telegram/links/{linkId}"; request: { parameters: { path: { linkId: string; tenantId: string } }; body: TelegramStaffLinkCodeControllerReasonRequest }; responses: { "200": UnlinkResponse } };
   "handle_3": { method: "DELETE"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };
   "handle": { method: "GET"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };
   "handle_5": { method: "HEAD"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };

@@ -2,13 +2,18 @@ package uz.horecaos.platform.integration.web.telegram;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -105,4 +110,46 @@ public class TelegramStaffLinkCodeController {
     public List<TelegramStaffLinkService.StaffLinkView> listLinks(@PathVariable UUID tenantId) {
         return links.listForTenant(tenantId);
     }
+
+    /**
+     * «Unlink Aziza» — an administrator severs a staff member's Telegram
+     * identity link. Gated the same as {@link #listLinks} rather than the
+     * broadly-held issue capability above: unlinking someone else's account is
+     * exactly the administrative action {@link #issue}'s self-service design
+     * deliberately has no operation for.
+     *
+     * <p>Deletes the identity fact outright ({@link TelegramStaffLinkService
+     * #revoke}'s own doc explains why) — this never touches {@code
+     * iam.grants}, and a staff member who still holds a grant keeps every bit
+     * of it; only the Telegram binding is gone, and she may link a new (or the
+     * same) account again with a fresh code.
+     */
+    @DeleteMapping("/links/{linkId}")
+    @RequiresCapability(value = Capability.IAM_GRANT_MANAGE, scope = ScopeType.TENANT, mutating = true)
+    @Operation(
+            summary = "Unlink a staff Telegram identity link",
+            description = "Removes the binding between a Telegram account and the principal it acts "
+                    + "as in this tenant. Does not touch iam.grants — a staff member's authority is "
+                    + "unaffected; she may link again with a fresh code.")
+    public ResponseEntity<UnlinkResponse> unlink(
+            @PathVariable UUID tenantId, @PathVariable UUID linkId, @Valid @RequestBody ReasonRequest request) {
+        boolean changed = links.revoke(tenantId, linkId);
+
+        audit.record(AuditFact.of("integration.telegram_staff_link_revoked", AuditClass.SECURITY)
+                .by(ActorRef.user(currentActor.get().subject(), null))
+                .at(ResourceScope.tenant(tenantId))
+                .because(request.reason())
+                .usingCapability(Capability.IAM_GRANT_MANAGE.code())
+                .correlatedBy(linkId.toString())
+                .occurredAt(clock.instant())
+                .build());
+
+        return ResponseEntity.ok(new UnlinkResponse(changed, changed ? "revoked" : "no_change"));
+    }
+
+    /** Mirrors the {@code {reason}} shape every other revoke-style endpoint in this codebase takes. */
+    public record ReasonRequest(@NotBlank @Size(max = 1000) String reason) {}
+
+    /** Neither field is personal data — a link id and a fixed outcome string. */
+    public record UnlinkResponse(boolean changed, String outcome) {}
 }
