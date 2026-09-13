@@ -125,8 +125,8 @@ class CatalogEditorExtensionsTests {
         var product = authoring.createProduct(
                 TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
 
-        boolean updated =
-                authoring.updateVariant(TENANT, BRAND, product.defaultVariantId(), "SKU-PLOV-2", "KG", Status.ARCHIVED);
+        boolean updated = authoring.updateVariant(
+                TENANT, BRAND, product.productId(), product.defaultVariantId(), "SKU-PLOV-2", "KG", Status.ARCHIVED);
 
         assertThat(updated).isTrue();
         Variant variant = store.variantsForProduct(TENANT, BRAND, product.productId()).stream()
@@ -136,6 +136,37 @@ class CatalogEditorExtensionsTests {
         assertThat(variant.sku()).isEqualTo("SKU-PLOV-2");
         assertThat(variant.unitCode()).isEqualTo("KG");
         assertThat(variant.status()).isEqualTo(Status.ARCHIVED);
+    }
+
+    /**
+     * P22 second-pass adversarial review: {@code updateVariant} now takes
+     * {@code productId} and filters on it, mirroring {@code
+     * setDefaultVariant}'s own {@code product_id} predicate. A variant that
+     * genuinely exists, but under a *different* product in the same brand,
+     * must be refused rather than silently updated under the caller's
+     * mismatched {@code productId}.
+     */
+    @Test
+    @DisplayName("updating a variant through the wrong product's id is refused, not silently applied")
+    void updateVariantRefusesAMismatchedProduct() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy", LOCALE);
+        var productA = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        var productB = authoring.createProduct(
+                TENANT, BRAND, catalogId, "LAGMAN", "Lagmon", null, LOCALE, "SKU-LAGMAN", "PIECE", UNCLASSIFIED, ACTOR);
+
+        boolean updated = authoring.updateVariant(
+                TENANT, BRAND, productA.productId(), productB.defaultVariantId(), "SKU-HACKED", "KG", Status.ARCHIVED);
+
+        assertThat(updated)
+                .as("productB's variant does not belong to productA, so this must not apply")
+                .isFalse();
+        Variant untouched = store.variantsForProduct(TENANT, BRAND, productB.productId()).stream()
+                .filter(v -> v.id().equals(productB.defaultVariantId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(untouched.sku()).isEqualTo("SKU-LAGMAN");
+        assertThat(untouched.status()).isEqualTo(Status.ACTIVE);
     }
 
     @Test

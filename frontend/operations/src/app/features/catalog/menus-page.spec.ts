@@ -255,4 +255,40 @@ describe('MenusPage', () => {
       status: 'UNAVAILABLE',
     });
   });
+
+  /**
+   * P23 second-pass adversarial review: `BulkOfferingStatusRequest` refuses
+   * the whole request outright past 200 ids (`@Size(max = 200)`), and this
+   * matrix can load up to 4000 sellable variants — so "select all" on a
+   * large location used to build a selection the endpoint would always
+   * reject whole, applying nothing.
+   */
+  it('caps "select all" at 200 rows, matching the endpoint\'s own limit, rather than selecting every row', async () => {
+    const manyRows = Array.from({ length: 250 }, (_, i) => row({ variantId: `v${i}` }));
+    const bulkSetOfferingStatus = vi.fn().mockReturnValue(of({ updatedCount: 200 }));
+    configure({
+      variantsAtLocation: () => of({ items: manyRows, nextCursor: null }),
+      bulkSetOfferingStatus,
+    });
+
+    const harness = await RouterTestingHarness.create('/catalog/menus');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="menus-select-all"]') as HTMLInputElement).dispatchEvent(
+      new Event('change'),
+    );
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="menus-bulk-bar"]')?.textContent).toContain('200');
+    expect(host.querySelector('[data-testid="menus-selection-capped"]')).not.toBeNull();
+
+    (host.querySelector('[data-testid="menus-bulk-unavailable"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const call = bulkSetOfferingStatus.mock.calls.at(-1)!;
+    expect((call[2] as { variantIds: readonly string[] }).variantIds).toHaveLength(200);
+  });
 });

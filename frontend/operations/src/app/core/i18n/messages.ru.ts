@@ -1744,6 +1744,7 @@ export const messagesRu: MessageCatalogue = {
   'catalog.menus.filter.all': 'Все',
   'catalog.menus.search.placeholder': 'Поиск по названию или SKU',
   'catalog.menus.selectAll': 'Выбрать все строки',
+  'catalog.menus.selectionCapped': 'Ограничено первыми {cap} — примените, затем выберите остальные',
   'catalog.menus.column.offering': 'Статус в меню',
   'catalog.menus.column.fulfillment': 'Типы заказов',
   'catalog.menus.fulfillment.DELIVERY': 'Дост',

@@ -1771,6 +1771,7 @@ export const messagesEn = {
   'catalog.menus.filter.all': 'All',
   'catalog.menus.search.placeholder': 'Search by name or SKU',
   'catalog.menus.selectAll': 'Select every row',
+  'catalog.menus.selectionCapped': 'Limited to the first {cap} — apply, then select more',
   'catalog.menus.column.offering': 'Menu status',
   'catalog.menus.column.fulfillment': 'Order types',
   'catalog.menus.fulfillment.DELIVERY': 'Del',

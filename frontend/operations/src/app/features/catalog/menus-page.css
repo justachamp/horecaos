@@ -126,6 +126,10 @@
   font-size: var(--q-type-body-xs);
 }
 
+.menus__selection-capped {
+  color: var(--q-warning-text);
+}
+
 .menus__reloading {
   padding: 4px 0;
   color: var(--q-ink-subtle);

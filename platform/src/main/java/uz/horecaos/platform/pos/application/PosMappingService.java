@@ -123,6 +123,15 @@ public class PosMappingService {
         if (binding.isEmpty()) {
             return CreateOutcome.notFound("No such binding");
         }
+        // horecaos_entity_id is deliberately FK-less (V0013): it is polymorphic
+        // across six schemas, one per MappingEntityType. Without this check a
+        // garbage or cross-tenant id would insert an ACTIVE, OPERATOR-sourced
+        // mapping with a 200 response, and because uq_mapping_horecaos is
+        // table-wide rather than ACTIVE-only, retiring it later permanently
+        // burns that id for this binding and type.
+        if (!mappings.horecaosEntityExists(tenantId, binding.get().brandId(), type, horecaosEntityId)) {
+            return CreateOutcome.notFound("No such %s entity".formatted(type.name().toLowerCase(Locale.ROOT)));
+        }
         if (mappings.findActiveConflict(tenantId, bindingId, type, horecaosEntityId, externalEntityId)
                 .isPresent()) {
             return CreateOutcome.conflict();

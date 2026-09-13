@@ -366,6 +366,19 @@ public class JdbcPosMappingStore {
         };
     }
 
+    /**
+     * Whether {@code horecaosEntityId} names a real row of this {@code type}
+     * in this tenant (and, for {@link MappingEntityType#PRODUCT}, this brand)
+     * — the same per-type resolution {@link #resolveHorecaosNames} already
+     * knows, run for one id rather than a batch so {@code create} can refuse
+     * a nonexistent or cross-tenant id before it ever reaches the INSERT.
+     */
+    public boolean horecaosEntityExists(
+            UUID tenantId, @Nullable UUID brandId, MappingEntityType type, UUID horecaosEntityId) {
+        return !resolveHorecaosNames(tenantId, brandId, type, Set.of(horecaosEntityId))
+                .isEmpty();
+    }
+
     private Map<UUID, String> resolveProductNames(UUID tenantId, @Nullable UUID brandId, Set<UUID> ids) {
         if (brandId == null) {
             return Map.of();

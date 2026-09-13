@@ -182,6 +182,13 @@ public class CatalogAuthoringService {
         return variantId;
     }
 
+    /**
+     * @throws UnknownCatalogEntityException {@code parentCategoryId} does not
+     *         name a category of this same {@code catalogId} — a category
+     *         belonging to a sibling catalog in the same brand would
+     *         otherwise pass silently (the fk only checks tenant+brand) and
+     *         produce a parent link that spans two catalogs
+     */
     @Transactional
     public UUID createCategory(
             UUID tenantId,
@@ -192,6 +199,9 @@ public class CatalogAuthoringService {
             String name,
             String locale,
             int sortOrder) {
+        if (parentCategoryId != null) {
+            requireParentInCatalog(tenantId, brandId, catalogId, parentCategoryId);
+        }
         UUID categoryId = UUID.randomUUID();
         store.insertCategory(
                 categoryId, tenantId, brandId, catalogId, parentCategoryId, code, sortOrder, Status.ACTIVE);
@@ -233,12 +243,23 @@ public class CatalogAuthoringService {
      * {@link #translate} with {@link EntityType#VARIANT}, the same path every
      * other entity's name already uses.
      *
-     * @return true when the variant exists in this brand
+     * @return true when the variant exists in this brand and belongs to
+     *         {@code productId} — a variantId that names a real variant of a
+     *         *different* product in the same brand is refused exactly like
+     *         one that does not exist at all, rather than silently updating
+     *         the wrong product's variant under the caller's own {@code
+     *         productId}
      */
     @Transactional
     public boolean updateVariant(
-            UUID tenantId, UUID brandId, UUID variantId, @Nullable String sku, String unitCode, Status status) {
-        return store.updateVariant(tenantId, brandId, variantId, sku, unitCode, status);
+            UUID tenantId,
+            UUID brandId,
+            UUID productId,
+            UUID variantId,
+            @Nullable String sku,
+            String unitCode,
+            Status status) {
+        return store.updateVariant(tenantId, brandId, productId, variantId, sku, unitCode, status);
     }
 
     /** Makes one variant of a product the default, and no other. */
@@ -264,7 +285,9 @@ public class CatalogAuthoringService {
      * ancestor.
      *
      * @throws CategoryTreeCycleException the reparent would create a cycle
-     * @throws UnknownCatalogEntityException no such category in this brand and catalog
+     * @throws UnknownCatalogEntityException no such category in this brand and catalog, or
+     *         {@code parentCategoryId} names a category belonging to a *different* catalog
+     *         in the same brand
      */
     @Transactional
     public void updateCategory(
@@ -312,9 +335,15 @@ public class CatalogAuthoringService {
      * revisits a node rather than looping forever.
      */
     private void assertNoCycle(UUID tenantId, UUID brandId, UUID catalogId, UUID categoryId, UUID proposedParentId) {
-        Map<UUID, UUID> parentById = new java.util.HashMap<>();
-        for (var category : store.categoriesInCatalog(tenantId, brandId, catalogId)) {
-            parentById.put(category.id(), category.parentCategoryId());
+        Map<UUID, UUID> parentById = categoryParentsInCatalog(tenantId, brandId, catalogId);
+        // A proposedParentId absent from this catalog's own categories is
+        // either unknown outright or belongs to a sibling catalog in the same
+        // brand — the walk below would otherwise terminate immediately
+        // (current = null on the first lookup) and read as "no cycle", when
+        // what actually happened is a parent link that spans two catalogs,
+        // which CatalogValidator only catches later, at publication.
+        if (!parentById.containsKey(proposedParentId)) {
+            throw new UnknownCatalogEntityException(EntityType.CATEGORY, proposedParentId);
         }
 
         java.util.Set<UUID> walked = new java.util.LinkedHashSet<>();
@@ -329,6 +358,25 @@ public class CatalogAuthoringService {
                 return;
             }
             current = parentById.get(current);
+        }
+    }
+
+    private Map<UUID, UUID> categoryParentsInCatalog(UUID tenantId, UUID brandId, UUID catalogId) {
+        Map<UUID, UUID> parentById = new java.util.HashMap<>();
+        for (var category : store.categoriesInCatalog(tenantId, brandId, catalogId)) {
+            parentById.put(category.id(), category.parentCategoryId());
+        }
+        return parentById;
+    }
+
+    /**
+     * @throws UnknownCatalogEntityException {@code parentCategoryId} is not a
+     *         category of this {@code catalogId} — unknown outright, or a
+     *         real category belonging to a sibling catalog in the same brand
+     */
+    private void requireParentInCatalog(UUID tenantId, UUID brandId, UUID catalogId, UUID parentCategoryId) {
+        if (!categoryParentsInCatalog(tenantId, brandId, catalogId).containsKey(parentCategoryId)) {
+            throw new UnknownCatalogEntityException(EntityType.CATEGORY, parentCategoryId);
         }
     }
 

@@ -341,15 +341,23 @@ public class JdbcCatalogStore {
      * @return true when the variant existed in this brand
      */
     public boolean updateVariant(
-            UUID tenantId, UUID brandId, UUID variantId, @Nullable String sku, String unitCode, Status status) {
+            UUID tenantId,
+            UUID brandId,
+            UUID productId,
+            UUID variantId,
+            @Nullable String sku,
+            String unitCode,
+            Status status) {
         int updated = jdbc.sql("""
                 UPDATE catalog.variants
                    SET sku = :sku, unit_code = :unitCode, status = :status,
                        version = version + 1, updated_at = now()
-                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :variantId
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND product_id = :productId
+                   AND id = :variantId
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
+                .param("productId", productId)
                 .param("variantId", variantId)
                 .param("sku", sku)
                 .param("unitCode", unitCode)

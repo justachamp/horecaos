@@ -139,12 +139,15 @@ public class CatalogAuthoringController {
             @PathVariable UUID variantId,
             @Valid @RequestBody UpdateVariantRequest request) {
         boolean updated = authoring.updateVariant(
-                tenantId, brandId, variantId, request.sku(), request.unitCode(), request.status());
+                tenantId, brandId, productId, variantId, request.sku(), request.unitCode(), request.status());
         if (!updated) {
-            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such variant in this brand");
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such variant of this product in this brand");
         }
         if (request.isDefault()) {
-            authoring.setDefaultVariant(tenantId, brandId, productId, variantId);
+            boolean promoted = authoring.setDefaultVariant(tenantId, brandId, productId, variantId);
+            if (!promoted) {
+                throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such variant of this product in this brand");
+            }
         }
         return ResponseEntity.noContent().build();
     }
@@ -187,16 +190,20 @@ public class CatalogAuthoringController {
             @PathVariable UUID brandId,
             @PathVariable UUID catalogId,
             @Valid @RequestBody CreateCategoryRequest request) {
-        UUID categoryId = authoring.createCategory(
-                tenantId,
-                brandId,
-                catalogId,
-                request.parentCategoryId(),
-                request.code(),
-                request.name(),
-                request.locale(),
-                request.sortOrder());
-        return ResponseEntity.ok(new IdResponse(categoryId));
+        try {
+            UUID categoryId = authoring.createCategory(
+                    tenantId,
+                    brandId,
+                    catalogId,
+                    request.parentCategoryId(),
+                    request.code(),
+                    request.name(),
+                    request.locale(),
+                    request.sortOrder());
+            return ResponseEntity.ok(new IdResponse(categoryId));
+        } catch (CatalogAuthoringService.UnknownCatalogEntityException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
     }
 
     @PutMapping("/catalogs/{catalogId}/categories/{categoryId}")

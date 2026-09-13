@@ -181,4 +181,91 @@ class CategoryAuthoringTests {
         assertThatThrownBy(() -> authoring.archiveCategory(TENANT, BRAND, catalogId, UUID.randomUUID()))
                 .isInstanceOf(CatalogAuthoringService.UnknownCatalogEntityException.class);
     }
+
+    // ------------------------------------------------- P23 second-pass adversarial review
+
+    /**
+     * {@code assertNoCycle} used to build its walk map exclusively from
+     * {@code categoriesInCatalog(catalogId)}, so a {@code parentCategoryId}
+     * from a *different* catalog was simply absent from that map and the
+     * walk terminated immediately as though no cycle existed — silently
+     * writing a category tree that spans two catalogs.
+     */
+    @Test
+    @DisplayName("update refuses a parentCategoryId that belongs to a different catalog in the same brand")
+    void updateRefusesACrossCatalogParent() {
+        UUID catalogA = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        UUID catalogB = authoring.createCatalog(TENANT, BRAND, "DELIVERY", "Delivery menu", LOCALE);
+        UUID categoryInA = authoring.createCategory(TENANT, BRAND, catalogA, null, "A", "A", LOCALE, 0);
+        UUID categoryInB = authoring.createCategory(TENANT, BRAND, catalogB, null, "B", "B", LOCALE, 0);
+
+        assertThatThrownBy(() -> authoring.updateCategory(TENANT, BRAND, catalogA, categoryInA, categoryInB, "A", 0))
+                .as("categoryInB belongs to catalogB, not the target catalogA")
+                .isInstanceOf(CatalogAuthoringService.UnknownCatalogEntityException.class);
+
+        var unchanged = store.categoriesInCatalog(TENANT, BRAND, catalogA).stream()
+                .filter(category -> category.id().equals(categoryInA))
+                .findFirst()
+                .orElseThrow();
+        assertThat(unchanged.parentCategoryId())
+                .as("the refused reparent must not have linked across catalogs")
+                .isNull();
+    }
+
+    /** {@code createCategory} had the identical gap: no catalog-membership check on {@code parentCategoryId} at all. */
+    @Test
+    @DisplayName("create refuses a parentCategoryId that belongs to a different catalog in the same brand")
+    void createRefusesACrossCatalogParent() {
+        UUID catalogA = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        UUID catalogB = authoring.createCatalog(TENANT, BRAND, "DELIVERY", "Delivery menu", LOCALE);
+        UUID categoryInB = authoring.createCategory(TENANT, BRAND, catalogB, null, "B", "B", LOCALE, 0);
+
+        assertThatThrownBy(
+                        () -> authoring.createCategory(TENANT, BRAND, catalogA, categoryInB, "A", "A", LOCALE, 0))
+                .isInstanceOf(CatalogAuthoringService.UnknownCatalogEntityException.class);
+        assertThat(store.categoriesInCatalog(TENANT, BRAND, catalogA)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("update refuses a categoryId that belongs to a different brand")
+    void updateRefusesACategoryFromAnotherBrand() {
+        UUID otherBrand = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'OTHER', 'other-brand', 'Other brand', 'ACTIVE', 0)
+                """).param("id", otherBrand).param("tenantId", TENANT).update();
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        UUID otherCatalogId = authoring.createCatalog(TENANT, otherBrand, "MAIN", "Main menu", LOCALE);
+        UUID otherBrandCategory =
+                authoring.createCategory(TENANT, otherBrand, otherCatalogId, null, "A", "A", LOCALE, 0);
+
+        assertThatThrownBy(() -> authoring.updateCategory(
+                        TENANT, BRAND, catalogId, otherBrandCategory, null, "STOLEN", 0))
+                .isInstanceOf(CatalogAuthoringService.UnknownCatalogEntityException.class);
+    }
+
+    @Test
+    @DisplayName("update refuses a categoryId that belongs to a different tenant")
+    void updateRefusesACategoryFromAnotherTenant() {
+        UUID otherTenant = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.tenants (
+                    id, slug, legal_name, display_name, default_currency, default_timezone, status, version)
+                VALUES (:id, 'category-authoring-other-tenant', 'Legal', 'Display', 'UZS', 'Asia/Tashkent',
+                        'ACTIVE', 0)
+                """).param("id", otherTenant).update();
+        UUID otherBrand = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'MAIN', 'main-brand', 'Brand', 'ACTIVE', 0)
+                """).param("id", otherBrand).param("tenantId", otherTenant).update();
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        UUID otherCatalogId = authoring.createCatalog(otherTenant, otherBrand, "MAIN", "Main menu", LOCALE);
+        UUID otherTenantCategory =
+                authoring.createCategory(otherTenant, otherBrand, otherCatalogId, null, "A", "A", LOCALE, 0);
+
+        assertThatThrownBy(() -> authoring.updateCategory(
+                        TENANT, BRAND, catalogId, otherTenantCategory, null, "STOLEN", 0))
+                .isInstanceOf(CatalogAuthoringService.UnknownCatalogEntityException.class);
+    }
 }

@@ -25,6 +25,17 @@ export type MenuStatusFilter = 'ALL' | 'AVAILABLE' | 'UNAVAILABLE' | 'HIDDEN' | 
 const FULFILLMENT_MODES = ['DELIVERY', 'PICKUP', 'DINE_IN'] as const;
 
 /**
+ * Mirrors `BulkOfferingStatusRequest`'s own `@Size(max = 200)` on the
+ * server (`CatalogAuthoringController`), and `bulk-price-change-page.ts`'s
+ * identical `SELECTION_CAP`. `rows()` can hold up to 4000 variants
+ * (`fetchAllVariantsAtLocation`'s own paging ceiling) — well past what a
+ * single bulk stop/unstop request can carry — so the selection itself, not
+ * just the fetch, has to stay under this ceiling or the endpoint refuses
+ * the whole request with nothing applied.
+ */
+const SELECTION_CAP = 200;
+
+/**
  * catalog.md §4.5 — "Layer A" of the offering matrix, widened by this wave to
  * fix the row's own named problem: **the matrix used to show only two
  * states for one location, so a variant hidden at the offering level was
@@ -104,6 +115,19 @@ export class MenusPage implements OnInit {
       this.rows().length > 0 && this.rows().every((row) => this.selectedIds().has(row.variantId)),
   );
   protected readonly selectedCount = computed(() => this.selectedIds().size);
+  /** Whether {@link SELECTION_CAP} actually bit — the visible reason the selection stopped short of "all". */
+  protected readonly selectionCapped = computed(() => this.rows().length > SELECTION_CAP);
+  /**
+   * The header checkbox's own checked state: every row when there are
+   * {@link SELECTION_CAP} or fewer, or the capped selection itself once
+   * there are more — {@link allSelected} alone can never be true past the
+   * cap (not every row is selected), which would otherwise leave the
+   * checkbox permanently unchecked and {@link toggleSelectAll} with no way
+   * to clear a capped selection except one row at a time.
+   */
+  protected readonly selectAllChecked = computed(
+    () => this.allSelected() || (this.selectionCapped() && this.selectedCount() >= SELECTION_CAP),
+  );
 
   private searchDebounce: ReturnType<typeof setTimeout> | null = null;
 
@@ -322,16 +346,22 @@ export class MenusPage implements OnInit {
       const next = new Set(current);
       if (next.has(variantId)) {
         next.delete(variantId);
-      } else {
+      } else if (next.size < SELECTION_CAP) {
         next.add(variantId);
       }
+      // At the cap already: the click is a no-op rather than a silent
+      // overflow past what POST .../bulk-offering-status can carry in one
+      // request (see SELECTION_CAP's own doc).
       return next;
     });
   }
 
+  /** Selects up to {@link SELECTION_CAP} rows — see its own doc for why "all" cannot mean literally every row. */
   protected toggleSelectAll(): void {
     this.selectedIds.set(
-      this.allSelected() ? new Set() : new Set(this.rows().map((row) => row.variantId)),
+      this.selectAllChecked()
+        ? new Set()
+        : new Set(this.rows().slice(0, SELECTION_CAP).map((row) => row.variantId)),
     );
   }
 
