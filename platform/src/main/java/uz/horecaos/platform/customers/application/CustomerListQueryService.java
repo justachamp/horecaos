@@ -2,8 +2,6 @@ package uz.horecaos.platform.customers.application;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -14,6 +12,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.customers.api.BusinessDayWindows;
 import uz.horecaos.platform.customers.api.CustomerOrderActivityPort;
 import uz.horecaos.platform.customers.domain.PhoneNumber;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
@@ -56,18 +55,21 @@ public class CustomerListQueryService {
     private final AuditRecorder audit;
     private final Clock clock;
     private final CustomerOrderActivityPort orderActivity;
+    private final BusinessDayWindows businessDays;
 
     public CustomerListQueryService(
             JdbcCustomerStore store,
             FieldProtection protection,
             AuditRecorder audit,
             Clock clock,
-            CustomerOrderActivityPort orderActivity) {
+            CustomerOrderActivityPort orderActivity,
+            BusinessDayWindows businessDays) {
         this.store = store;
         this.protection = protection;
         this.audit = audit;
         this.clock = clock;
         this.orderActivity = orderActivity;
+        this.businessDays = businessDays;
     }
 
     /**
@@ -114,14 +116,28 @@ public class CustomerListQueryService {
     }
 
     /**
-     * The grid header's three counters, all computed for "today" in UTC.
+     * The grid header's three counters, "today" scoped to the tenant's own
+     * ADR 0043 business-day boundary (row {@code 5.1a}) — the same one the
+     * live board and Reports use, via {@link BusinessDayWindows}, rather
+     * than a second, unregistered notion of a day computed against UTC
+     * midnight.
      *
-     * <p>A known simplification, named rather than hidden: a tenant's brands and
-     * locations can each carry their own IANA timezone, and there is no single
-     * "the" timezone at the tenant-wide scope this grid reads at. A
-     * location-timezone-aware boundary is future work; UTC midnight is what
-     * this build has, and every count below uses the same boundary as every
-     * other, so the three numbers at least agree with each other.
+     * <p>Before this method depended on {@link BusinessDayWindows}, it
+     * computed "today" as {@code LocalDate.ofInstant(now, ZoneOffset.UTC)}.
+     * Uzbekistan is UTC+5 with no daylight saving, so for the five hours
+     * between UTC midnight and midnight in Tashkent, a customer who
+     * registered at, say, 02:00 local time stopped counting as "registered
+     * today" the moment the wall clock passed 05:00 local: the UTC-dated
+     * window had already rolled over to the next UTC day, a range that never
+     * contained that row's {@code created_at}. See {@link BusinessDayWindows}'s
+     * own doc for why the fix is a shared port rather than a second copy of
+     * {@code BusinessDayBoundary}'s arithmetic in this module.
+     *
+     * <p>{@code total} counts every non-{@code MERGED} account — ACTIVE,
+     * SUSPENDED, CLOSED and ANONYMIZED all included ({@link
+     * JdbcCustomerStore#countActive}'s own name is a slight misnomer kept for
+     * compatibility) — the agreed meaning {@code customers.total.v1} now
+     * documents in {@link uz.horecaos.platform.reporting.domain.MetricRegistry}.
      *
      * <p>{@code orderedToday} is the one counter this service cannot compute
      * alone — it asks {@link CustomerOrderActivityPort}, this module's own
@@ -132,15 +148,12 @@ public class CustomerListQueryService {
      */
     @Transactional(readOnly = true)
     public HeaderCounts counts(UUID tenantId) {
-        Instant now = clock.instant();
-        LocalDate today = LocalDate.ofInstant(now, ZoneOffset.UTC);
-        Instant dayStart = today.atStartOfDay(ZoneOffset.UTC).toInstant();
-        Instant dayEnd = today.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        BusinessDayWindows.Window today = businessDays.businessDayContaining(tenantId, clock.instant());
 
         return new HeaderCounts(
                 store.countActive(tenantId),
-                store.countCreatedBetween(tenantId, dayStart, dayEnd),
-                orderActivity.customersOrderedBetween(tenantId, dayStart, dayEnd));
+                store.countCreatedBetween(tenantId, today.from(), today.to()),
+                orderActivity.customersOrderedBetween(tenantId, today.from(), today.to()));
     }
 
     /**
@@ -160,10 +173,17 @@ public class CustomerListQueryService {
      * @param purpose recorded as the audit fact's reason (ADR 0027)
      */
     @Transactional
-    public List<ExportRow> exportFiltered(
+    public ExportResult exportFiltered(
             UUID tenantId, @Nullable String status, @Nullable String query, String purpose, ActorRef actor) {
 
-        List<AccountSummaryRow> matched = list(tenantId, status, query, null, EXPORT_LIMIT);
+        // One row past the limit, never decrypted or returned, exists only to
+        // answer "was this cut short" honestly — the trap this row's own brief
+        // names: the export used to cap silently at EXPORT_LIMIT with no way
+        // for an operator to tell a complete 2000-row result from a filter
+        // that actually matched 2001 rows and lost the last one.
+        List<AccountSummaryRow> matched = list(tenantId, status, query, null, EXPORT_LIMIT + 1);
+        boolean truncated = matched.size() > EXPORT_LIMIT;
+        List<AccountSummaryRow> bounded = truncated ? matched.subList(0, EXPORT_LIMIT) : matched;
 
         audit.record(AuditFact.of("customer.list.exported", AuditClass.SECURITY)
                 .by(actor)
@@ -171,18 +191,21 @@ public class CustomerListQueryService {
                 .because(purpose)
                 .changed(Map.of(
                         "revealedCount",
-                        matched.size(),
+                        bounded.size(),
                         "statusFilter",
                         status == null ? "ALL" : status,
                         "hadSearchQuery",
-                        query != null && !query.isBlank()))
+                        query != null && !query.isBlank(),
+                        "truncated",
+                        truncated))
                 .correlatedBy(tenantId.toString())
                 .occurredAt(clock.instant())
                 .build());
 
-        return matched.stream()
+        List<ExportRow> rows = bounded.stream()
                 .map(row -> new ExportRow(row.id(), row.status(), row.displayName(), primaryPhone(tenantId, row.id())))
                 .toList();
+        return new ExportResult(rows, truncated);
     }
 
     /** The primary phone, decrypted — or null when the account holds none. Never audited per row; see {@link #exportFiltered}. */
@@ -212,4 +235,7 @@ public class CustomerListQueryService {
             String status,
             @Nullable String displayName,
             @Nullable String phone) {}
+
+    /** @param truncated true when the filtered set held more than {@link #EXPORT_LIMIT} rows and was cut */
+    public record ExportResult(List<ExportRow> rows, boolean truncated) {}
 }

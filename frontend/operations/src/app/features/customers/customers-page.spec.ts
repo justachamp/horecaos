@@ -47,6 +47,11 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
+/** Past `Combobox.DEBOUNCE_MS` (250ms) — the `search` output the grid now listens on, not the immediate `queryChange`. */
+async function waitForSearchDebounce(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 300));
+}
+
 describe('CustomersPage', () => {
   let fixture: ComponentFixture<CustomersPage>;
   let api: {
@@ -62,7 +67,7 @@ describe('CustomersPage', () => {
         .fn()
         .mockResolvedValue({ items: [CUSTOMER], nextCursor: null } satisfies Page<CustomerSummary>),
       counts: vi.fn().mockResolvedValue(COUNTS),
-      exportFiltered: vi.fn().mockResolvedValue([]),
+      exportFiltered: vi.fn().mockResolvedValue({ rows: [], truncated: false }),
       create: vi.fn().mockResolvedValue('new-customer-id'),
     };
 
@@ -96,7 +101,7 @@ describe('CustomersPage', () => {
       .querySelector('[data-testid="q-combobox-input"]') as HTMLInputElement;
     search.value = 'Karimova';
     search.dispatchEvent(new Event('input'));
-    await flushMicrotasks();
+    await waitForSearchDebounce();
 
     expect(api.list).toHaveBeenLastCalledWith(
       SCOPE,
@@ -214,7 +219,7 @@ describe('CustomersPage', () => {
 
     // An export row, not a `CustomerSummary`: the CSV writer reads `phone`,
     // which a summary deliberately does not carry.
-    api.exportFiltered.mockResolvedValueOnce([EXPORT_ROW]);
+    api.exportFiltered.mockResolvedValueOnce({ rows: [EXPORT_ROW], truncated: false });
     exportButton.click();
     await flushMicrotasks();
     fixture.detectChanges();
@@ -226,6 +231,22 @@ describe('CustomersPage', () => {
     expect(result.querySelector('[data-testid="q-inline-alert-dismiss"]')).not.toBeNull();
   });
 
+  it('warns when the export was cut at the server’s row cap, rather than reading as a complete result', async () => {
+    const host: HTMLElement = fixture.nativeElement;
+    const exportButton = [...host.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Export'),
+    ) as HTMLButtonElement;
+
+    api.exportFiltered.mockResolvedValueOnce({ rows: [EXPORT_ROW], truncated: true });
+    exportButton.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const result = host.querySelector('[data-testid="q-inline-alert"]')!;
+    expect(result.getAttribute('role')).toBe('status');
+    expect(result.textContent).toContain('the filter matched more than that and was cut');
+  });
+
   it('says nothing about permission when a filter simply matches nothing', async () => {
     api.list.mockResolvedValue({ items: [], nextCursor: null } satisfies Page<CustomerSummary>);
     const search = (fixture.nativeElement as HTMLElement)
@@ -233,7 +254,7 @@ describe('CustomersPage', () => {
       .querySelector('[data-testid="q-combobox-input"]') as HTMLInputElement;
     search.value = 'nobody';
     search.dispatchEvent(new Event('input'));
-    await flushMicrotasks();
+    await waitForSearchDebounce();
     fixture.detectChanges();
 
     const empty = (fixture.nativeElement as HTMLElement).querySelector(

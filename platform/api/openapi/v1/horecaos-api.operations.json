@@ -3517,6 +3517,100 @@
         },
         "type" : "object"
       },
+      "CustomerImportRowResponse" : {
+        "properties" : {
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "outcome" : {
+            "type" : "string"
+          },
+          "rejectReason" : {
+            "type" : "string"
+          },
+          "rowNumber" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CustomerImportStatusResponse" : {
+        "properties" : {
+          "dryRun" : {
+            "type" : "boolean"
+          },
+          "failureReason" : {
+            "type" : "string"
+          },
+          "rowsCreatedCustomer" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rowsMatchedCustomer" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rowsProcessed" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rowsRejected" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rowsTotal" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "runId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sourceFileName" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CustomerImportSubmitRequest" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "content" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "fileName" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "brandId", "content", "fileName" ],
+        "type" : "object"
+      },
+      "CustomerImportSubmitResponse" : {
+        "properties" : {
+          "rowsTotal" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "runId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "CustomerLookupCandidateResponse" : {
         "properties" : {
           "accountId" : {
@@ -27367,7 +27461,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/submissions" : {
       "post" : {
         "description" : "Refused until a snapshot and an estimate exist: nothing has been approved until somebody has seen a number.",
-        "operationId" : "submit",
+        "operationId" : "submit_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -28404,7 +28498,7 @@
     },
     "/api/v1/tenants/{tenantId}/customers/counts" : {
       "get" : {
-        "description" : "Total, registered today, and ordered today — computed for UTC midnight (CustomerListQueryService#counts explains why). 'Ordered today' asks the ordering module's own OrderDirectory rather than this module's own tables.",
+        "description" : "Total, registered today, and ordered today — 'today' scoped to the tenant's own ADR 0043 business-day boundary, the same one Reports and the live board use (CustomerListQueryService#counts explains why this no longer means UTC midnight). 'Ordered today' asks the ordering module's own OrderDirectory rather than this module's own tables.",
         "operationId" : "counts",
         "parameters" : [ {
           "in" : "path",
@@ -28480,7 +28574,7 @@
     },
     "/api/v1/tenants/{tenantId}/customers/export" : {
       "get" : {
-        "description" : "One audited PII egress event for the whole filtered set (frontend information architecture §5.1), never one reveal per row. Requires a stated purpose, exactly like every other reveal on this controller. Bounded at 2000 rows.",
+        "description" : "One audited PII egress event for the whole filtered set (frontend information architecture §5.1), never one reveal per row. Requires a stated purpose, exactly like every other reveal on this controller. Bounded at 2000 rows; the `X-Export-Truncated` response header is `true` when the filter actually matched more than that, so a marketer can tell a complete export from a silently cut one.",
         "operationId" : "export_1",
         "parameters" : [ {
           "in" : "path",
@@ -28530,6 +28624,148 @@
         },
         "summary" : "A filtered export, decrypted",
         "tags" : [ "Customers" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/imports" : {
+      "post" : {
+        "description" : "Parses the file to learn its row count and queues the run; returns immediately with a runId to poll. dryRun defaults true -- a caller must deliberately pass dryRun=false to write anything, the same default SendPulseContactImportController and PosSyncRunController use for the same reason.",
+        "operationId" : "submit",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "dryRun",
+          "required" : false,
+          "schema" : {
+            "default" : true,
+            "type" : "boolean"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CustomerImportSubmitRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerImportSubmitResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Queue a customer CSV import",
+        "tags" : [ "Customer CSV import" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/imports/{runId}" : {
+      "get" : {
+        "description" : "What q-import-wizard's JobProgress polls: status, rowsTotal, rowsProcessed and the running per-outcome counts.",
+        "operationId" : "status",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "runId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerImportStatusResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One import run's status and progress",
+        "tags" : [ "Customer CSV import" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/imports/{runId}/rows" : {
+      "get" : {
+        "description" : "The dry-run diff and the real result summary, in the identical shape either way -- what q-import-wizard's ResultSummary renders. No phone number and no display name here (ADR 0029): a row names the account it created or matched, never the source data that produced it.",
+        "operationId" : "rows",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "runId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 500,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "offset",
+          "required" : false,
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/CustomerImportRowResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One import run's per-row report",
+        "tags" : [ "Customer CSV import" ]
       }
     },
     "/api/v1/tenants/{tenantId}/customers/resolve" : {
@@ -30893,6 +31129,9 @@
   }, {
     "description" : "Why orders are cancelled and how they are completed, per tenant",
     "name" : "Order outcome reasons"
+  }, {
+    "description" : "Row X.13/5.1b: a generic, asynchronous customer CSV import",
+    "name" : "Customer CSV import"
   }, {
     "description" : "ADR 0058 stage 1: operations groups",
     "name" : "Telegram operations linking"

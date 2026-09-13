@@ -394,6 +394,21 @@ export const operationsPaths = {
     return `${this.customers(scope)}/export`;
   },
 
+  /** Row X.13/5.1b: queue a customer CSV import (`CustomerImportController`). */
+  customerImports(scope: LocationScope): string {
+    return `${this.customers(scope)}/imports`;
+  },
+
+  /** One import run's status and progress. */
+  customerImport(scope: LocationScope, runId: string): string {
+    return `${this.customerImports(scope)}/${encodeURIComponent(runId)}`;
+  },
+
+  /** One import run's per-row report. */
+  customerImportRows(scope: LocationScope, runId: string): string {
+    return `${this.customerImport(scope, runId)}/rows`;
+  },
+
   /** One customer's profile. */
   customer(scope: LocationScope, accountId: string): string {
     return `${this.customers(scope)}/${encodeURIComponent(accountId)}`;
