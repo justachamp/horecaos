@@ -1,0 +1,107 @@
+<div class="q-tree-view" [class.q-tree-view--busy]="busy()">
+  @if (allowReparentToRoot() && nodes().length > 0) {
+    <div
+      class="q-tree-view__root-zone"
+      [class.q-tree-view__root-zone--over]="dragOverRoot()"
+      (dragover)="onRootDragOver($event)"
+      (dragleave)="onRootDragLeave()"
+      (drop)="onRootDrop($event)"
+      data-testid="tree-view-root-zone"
+    >
+      {{ rootLabel() }}
+    </div>
+  }
+
+  <ul
+    class="q-tree-view__list"
+    role="tree"
+    [attr.aria-label]="ariaLabel()"
+    (keydown)="onKeydown($event)"
+  >
+    @for (row of visibleRows(); track row.node.id) {
+      <li role="none">
+        <div
+          #row
+          [attr.data-node-id]="row.node.id"
+          class="q-tree-view__row"
+          role="treeitem"
+          [attr.aria-level]="row.depth + 1"
+          [attr.aria-expanded]="row.hasChildren ? row.expanded : null"
+          [attr.aria-selected]="selectedId() === row.node.id ? 'true' : 'false'"
+          [tabindex]="isFocused(row.node.id) ? 0 : -1"
+          [style.paddingLeft.px]="8 + row.depth * 20"
+          [class.q-tree-view__row--selected]="selectedId() === row.node.id"
+          [class.q-tree-view__row--drop-target]="isDropTarget(row.node.id)"
+          [class.q-tree-view__row--disabled]="row.node.disabled"
+          [attr.draggable]="!busy() && !row.node.disabled"
+          (dragstart)="onDragStart(row.node.id, $event)"
+          (dragover)="onDragOver(row.node.id, $event)"
+          (dragleave)="onDragLeave(row.node.id)"
+          (drop)="onDrop(row.node.id, $event)"
+          (dragend)="onDragEnd()"
+          (focus)="onRowFocus(row.node.id)"
+          (click)="onRowClick(row.node)"
+          data-testid="tree-node"
+        >
+          @if (row.hasChildren) {
+            <button
+              type="button"
+              class="q-tree-view__caret"
+              [attr.aria-label]="row.expanded ? 'Collapse' : 'Expand'"
+              (click)="toggleCollapsed(row.node.id, $event)"
+              data-testid="tree-node-caret"
+            >
+              {{ row.expanded ? '▾' : '▸' }}
+            </button>
+          } @else {
+            <span class="q-tree-view__caret q-tree-view__caret--spacer" aria-hidden="true"></span>
+          }
+
+          @if (row.node.tone) {
+            <span
+              class="q-tree-view__dot"
+              [class]="'q-tree-view__dot--' + row.node.tone"
+              aria-hidden="true"
+              data-testid="tree-node-dot"
+            ></span>
+          }
+
+          @if (renamingId() === row.node.id) {
+            <input
+              #renameField
+              class="q-tree-view__rename-input"
+              type="text"
+              [value]="renameDraft()"
+              (input)="onRenameInput($any($event.target).value)"
+              (keydown)="$event.stopPropagation()"
+              (keydown.enter)="confirmRename()"
+              (keydown.escape)="cancelRename()"
+              (blur)="confirmRename()"
+              (click)="$event.stopPropagation()"
+              data-testid="tree-node-rename-input"
+            />
+          } @else {
+            <span class="q-tree-view__label">{{ row.node.label }}</span>
+          }
+
+          @if (row.node.count !== null && row.node.count !== undefined) {
+            <span class="q-tree-view__count" data-testid="tree-node-count">{{
+              row.node.count
+            }}</span>
+          }
+        </div>
+      </li>
+    }
+  </ul>
+
+  @if (cyclicNodes().length > 0) {
+    <div class="q-tree-view__cycle" role="alert" data-testid="tree-view-cycle">
+      <p class="q-tree-view__cycle-title">{{ cycleWarningLabel() }}</p>
+      <ul class="q-tree-view__cycle-list">
+        @for (node of cyclicNodes(); track node.id) {
+          <li class="q-tree-view__cycle-item">{{ node.label }}</li>
+        }
+      </ul>
+    </div>
+  }
+</div>

@@ -1,0 +1,156 @@
+:host {
+  display: block;
+}
+
+.q-tree-view {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.q-tree-view--busy {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.q-tree-view__root-zone {
+  padding: 6px 10px;
+  border: 1px dashed var(--q-hairline);
+  border-radius: var(--q-radius);
+  color: var(--q-ink-subtle);
+  font-size: var(--q-type-caption-sm);
+}
+
+.q-tree-view__root-zone--over {
+  border-color: var(--q-primary);
+  color: var(--q-primary);
+  background: var(--q-info-tint);
+}
+
+.q-tree-view__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.q-tree-view__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  color: var(--q-ink);
+}
+
+.q-tree-view__row:hover {
+  background: var(--q-surface-1);
+}
+
+.q-tree-view__row:focus {
+  outline: 2px solid var(--q-primary);
+  outline-offset: -2px;
+}
+
+.q-tree-view__row--selected {
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.q-tree-view__row--drop-target {
+  border-color: var(--q-primary);
+  background: var(--q-info-tint);
+}
+
+.q-tree-view__row--disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.q-tree-view__caret {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--q-ink-muted);
+  cursor: pointer;
+  font-size: var(--q-type-caption-sm);
+}
+
+.q-tree-view__caret--spacer {
+  cursor: default;
+}
+
+.q-tree-view__dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--q-ink-subtle);
+}
+
+.q-tree-view__dot--info {
+  background: var(--q-info-text);
+}
+
+.q-tree-view__dot--success {
+  background: var(--q-success);
+}
+
+.q-tree-view__dot--warning {
+  background: var(--q-warning);
+}
+
+.q-tree-view__dot--danger {
+  background: var(--q-error);
+}
+
+.q-tree-view__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.q-tree-view__rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--q-primary);
+  border-radius: var(--q-radius);
+  padding: 2px 6px;
+  font: inherit;
+  color: var(--q-ink);
+  background: var(--q-canvas);
+}
+
+.q-tree-view__count {
+  flex: 0 0 auto;
+  color: var(--q-ink-subtle);
+  font-size: var(--q-type-caption-sm);
+}
+
+.q-tree-view__cycle {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--q-error);
+  border-radius: var(--q-radius);
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.q-tree-view__cycle-title {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.q-tree-view__cycle-list {
+  margin: 0;
+  padding-left: 18px;
+}
