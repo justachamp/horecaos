@@ -32,7 +32,10 @@ public @interface RequiresCapability {
     /**
      * The scope level the capability is required at. The identifiers are taken
      * from the {@code tenantId}, {@code brandId}, and {@code locationId} path
-     * variables of the request.
+     * variables of the request, falling back to request parameters of the same
+     * name for an endpoint that takes {@code brandId}/{@code locationId} as
+     * ordinary query parameters instead of path segments (see {@code
+     * CapabilityEnforcementInterceptor}).
      */
     ScopeType scope() default ScopeType.TENANT;
 

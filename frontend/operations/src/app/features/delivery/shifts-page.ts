@@ -384,9 +384,7 @@ export class ShiftsPage implements OnInit {
     }
     this.planBusy.set(true);
     try {
-      await this.api.draftRosterEntry(scope.tenantId, {
-        brandId: scope.brandId,
-        locationId: scope.locationId,
+      await this.api.draftRosterEntry(scope.tenantId, scope.brandId, scope.locationId, {
         courierId: submission.courierId,
         plannedStart: submission.plannedStart,
         plannedEnd: submission.plannedEnd,
@@ -411,6 +409,8 @@ export class ShiftsPage implements OnInit {
     try {
       await this.api.publishRosterEntry(
         scope.tenantId,
+        scope.brandId,
+        scope.locationId,
         entry.entryId,
         this.i18n.t('delivery.shifts.roster.publishReason'),
       );
@@ -435,6 +435,8 @@ export class ShiftsPage implements OnInit {
     try {
       await this.api.cancelRosterEntry(
         scope.tenantId,
+        scope.brandId,
+        scope.locationId,
         entry.entryId,
         this.i18n.t('delivery.shifts.roster.cancelReason'),
       );

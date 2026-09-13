@@ -1341,9 +1341,7 @@ export interface DraftRedemptionPolicyRequest {
 }
 
 export interface DraftRosterEntryRequest {
-  brandId: string;
   courierId: string;
-  locationId: string;
   plannedEnd: string;
   plannedStart: string;
   reason: string;
@@ -4063,10 +4061,10 @@ export interface Operations {
   "archiveCourierGroup": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-groups/{groupId}/archival"; request: { parameters: { path: { groupId: string; tenantId: string } }; body: CourierRosterReasonRequest }; responses: { "200": unknown } };
   "courierPolicy": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-policy"; request: { parameters: { path: { tenantId: string }; query: { brandId?: string; locationId?: string } } }; responses: { "200": CourierPolicyResponse } };
   "rosterEntries": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-roster-entries"; request: { parameters: { path: { tenantId: string }; query: { brandId: string; from?: string; limit?: number; locationId: string; to?: string } } }; responses: { "200": Array<PlannedShiftResponse> } };
-  "draftRosterEntry": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-roster-entries"; request: { parameters: { path: { tenantId: string } }; body: DraftRosterEntryRequest }; responses: { "200": PlannedShiftResponse } };
+  "draftRosterEntry": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-roster-entries"; request: { parameters: { path: { tenantId: string }; query: { brandId: string; locationId: string } }; body: DraftRosterEntryRequest }; responses: { "200": PlannedShiftResponse } };
   "rosterComparison": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-roster-entries/comparison"; request: { parameters: { path: { tenantId: string }; query: { brandId: string; from: string; limit?: number; locationId: string; to: string } } }; responses: { "200": Array<PlannedShiftResponse> } };
-  "cancelRosterEntry": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-roster-entries/{entryId}/cancel"; request: { parameters: { path: { entryId: string; tenantId: string } }; body: RosterEntryReasonRequest }; responses: { "200": unknown } };
-  "publishRosterEntry": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-roster-entries/{entryId}/publish"; request: { parameters: { path: { entryId: string; tenantId: string } }; body: RosterEntryReasonRequest }; responses: { "200": unknown } };
+  "cancelRosterEntry": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-roster-entries/{entryId}/cancel"; request: { parameters: { path: { entryId: string; tenantId: string }; query: { brandId: string; locationId: string } }; body: RosterEntryReasonRequest }; responses: { "200": unknown } };
+  "publishRosterEntry": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-roster-entries/{entryId}/publish"; request: { parameters: { path: { entryId: string; tenantId: string }; query: { brandId: string; locationId: string } }; body: RosterEntryReasonRequest }; responses: { "200": unknown } };
   "settlementPeriods": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-settlement-periods"; request: { parameters: { path: { tenantId: string }; query: { limit?: number; status?: string } } }; responses: { "200": Array<SettlementPeriodResponse> } };
   "closePeriod": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-settlement-periods/{periodId}/close"; request: { parameters: { path: { periodId: string; tenantId: string } }; body: CloseperiodRequest }; responses: { "200": StatementResponse } };
   "authorisePayout": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-settlement-periods/{periodId}/payouts"; request: { parameters: { path: { periodId: string; tenantId: string } }; body: PayoutRequest }; responses: { "200": PayoutResponse } };

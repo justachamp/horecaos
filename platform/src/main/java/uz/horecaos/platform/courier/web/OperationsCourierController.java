@@ -43,6 +43,7 @@ import uz.horecaos.platform.courier.application.CourierRosterQueryService.Roster
 import uz.horecaos.platform.courier.application.CourierRosterService;
 import uz.horecaos.platform.courier.application.CourierSettlementService;
 import uz.horecaos.platform.courier.application.CourierShiftService;
+import uz.horecaos.platform.courier.application.CourierTypeService;
 import uz.horecaos.platform.courier.application.DeliveryCostQueryService;
 import uz.horecaos.platform.courier.application.PartnerInvoiceService;
 import uz.horecaos.platform.courier.application.PlannedShiftService;
@@ -107,6 +108,7 @@ public class OperationsCourierController {
     private final CourierRosterQueryService rosterQuery;
     private final CourierRosterService roster;
     private final JdbcCourierStore courierStore;
+    private final CourierTypeService courierTypes;
     private final CourierRateCardService rateCards;
     private final JdbcCourierRateCardStore rateCardStore;
     private final JdbcCourierShiftStore shiftStore;
@@ -127,6 +129,7 @@ public class OperationsCourierController {
             CourierRosterQueryService rosterQuery,
             CourierRosterService roster,
             JdbcCourierStore courierStore,
+            CourierTypeService courierTypes,
             CourierRateCardService rateCards,
             JdbcCourierRateCardStore rateCardStore,
             JdbcCourierShiftStore shiftStore,
@@ -145,6 +148,7 @@ public class OperationsCourierController {
         this.rosterQuery = rosterQuery;
         this.roster = roster;
         this.courierStore = courierStore;
+        this.courierTypes = courierTypes;
         this.rateCards = rateCards;
         this.rateCardStore = rateCardStore;
         this.shiftStore = shiftStore;
@@ -396,12 +400,7 @@ public class OperationsCourierController {
     public ResponseEntity<CourierTypeResponse> updateType(
             @PathVariable UUID tenantId, @PathVariable UUID typeId, @Valid @RequestBody UpdateCourierTypeRequest body) {
 
-        CourierTypeRow current = courierStore
-                .findType(tenantId, typeId)
-                .filter(row -> "ACTIVE".equals(row.status()))
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such courier type: " + typeId));
-
-        boolean updated = courierStore.updateType(
+        CourierTypeRow updated = courierTypes.updateType(
                 tenantId,
                 typeId,
                 new JdbcCourierStore.CourierTypeUpdate(
@@ -415,13 +414,10 @@ public class OperationsCourierController {
                         body.startingMinuteOffset(),
                         body.workMode()),
                 body.expectedVersion(),
-                Instant.now());
-        if (!updated) {
-            throw ApiException.staleVersion(body.expectedVersion(), current.version());
-        }
+                actor(),
+                body.reason());
 
-        return ResponseEntity.ok(
-                CourierTypeResponse.of(courierStore.findType(tenantId, typeId).orElseThrow()));
+        return ResponseEntity.ok(CourierTypeResponse.of(updated));
     }
 
     @PostMapping("/courier-types/{typeId}/archival")
@@ -436,10 +432,7 @@ public class OperationsCourierController {
             @PathVariable UUID typeId,
             @Valid @RequestBody ArchiveCourierTypeRequest body) {
 
-        if (!courierStore.archiveType(tenantId, typeId, Instant.now())) {
-            throw new ApiException(
-                    ErrorCode.RESOURCE_NOT_FOUND, "No active courier type %s to archive".formatted(typeId));
-        }
+        courierTypes.archiveType(tenantId, typeId, actor(), body.reason());
         return ResponseEntity.accepted().build();
     }
 
@@ -541,7 +534,7 @@ public class OperationsCourierController {
     // ------------------------------------------------------------ roster entries
 
     @GetMapping("/courier-roster-entries")
-    @RequiresCapability(Capability.COURIER_SHIFT_READ)
+    @RequiresCapability(value = Capability.COURIER_SHIFT_READ, scope = ResourceScope.ScopeType.LOCATION)
     @Operation(
             summary = "The branch's planned shifts (IA 3.5's roster, over P02's ScheduleGrid)",
             description = "The plan a manager authored, as distinct from what a courier actually "
@@ -565,7 +558,7 @@ public class OperationsCourierController {
     }
 
     @GetMapping("/courier-roster-entries/comparison")
-    @RequiresCapability(Capability.COURIER_SHIFT_READ)
+    @RequiresCapability(value = Capability.COURIER_SHIFT_READ, scope = ResourceScope.ScopeType.LOCATION)
     @Operation(
             summary = "Planned versus actual, for one period (IA 3.5)",
             description = "Every planned entry in the window, each carrying whichever actual shift "
@@ -591,18 +584,26 @@ public class OperationsCourierController {
     }
 
     @PostMapping("/courier-roster-entries")
-    @RequiresCapability(value = Capability.COURIER_SHIFT_APPROVE, mutating = true)
+    @RequiresCapability(
+            value = Capability.COURIER_SHIFT_APPROVE,
+            scope = ResourceScope.ScopeType.LOCATION,
+            mutating = true)
     @Operation(
             summary = "Plan a courier's shift ahead of time",
             description = "Lands as DRAFT. Refused when the courier has no live engagement, the "
-                    + "same precondition a courier's own shift-open checks.")
+                    + "same precondition a courier's own shift-open checks. brandId/locationId "
+                    + "are query parameters, the same as the GET siblings of this route, and carry "
+                    + "the scope this write is checked at.")
     public ResponseEntity<PlannedShiftResponse> draftRosterEntry(
-            @PathVariable UUID tenantId, @Valid @RequestBody DraftRosterEntryRequest body) {
+            @PathVariable UUID tenantId,
+            @RequestParam UUID brandId,
+            @RequestParam UUID locationId,
+            @Valid @RequestBody DraftRosterEntryRequest body) {
 
         PlannedShiftRow entry = plannedShifts.draft(new NewPlannedShift(
                 tenantId,
-                body.brandId(),
-                body.locationId(),
+                brandId,
+                locationId,
                 body.courierId(),
                 body.plannedStart(),
                 body.plannedEnd(),
@@ -614,26 +615,44 @@ public class OperationsCourierController {
     }
 
     @PostMapping("/courier-roster-entries/{entryId}/publish")
-    @RequiresCapability(value = Capability.COURIER_SHIFT_APPROVE, mutating = true)
-    @Operation(summary = "Publish a planned shift, making it a visible offer")
+    @RequiresCapability(
+            value = Capability.COURIER_SHIFT_APPROVE,
+            scope = ResourceScope.ScopeType.LOCATION,
+            mutating = true)
+    @Operation(
+            summary = "Publish a planned shift, making it a visible offer",
+            description = "brandId/locationId are query parameters carrying the scope this write "
+                    + "is checked at; the entry itself is refused as not-found (never merely "
+                    + "forbidden, per ADR 0031) when it does not actually belong to that branch.")
     public ResponseEntity<Void> publishRosterEntry(
             @PathVariable UUID tenantId,
             @PathVariable UUID entryId,
+            @RequestParam UUID brandId,
+            @RequestParam UUID locationId,
             @Valid @RequestBody RosterEntryReasonRequest body) {
 
-        plannedShifts.publish(tenantId, entryId, actor(), actorUuid(), body.reason());
+        plannedShifts.publish(tenantId, brandId, locationId, entryId, actor(), actorUuid(), body.reason());
         return ResponseEntity.accepted().build();
     }
 
     @PostMapping("/courier-roster-entries/{entryId}/cancel")
-    @RequiresCapability(value = Capability.COURIER_SHIFT_APPROVE, mutating = true)
-    @Operation(summary = "Cancel a planned shift that is still DRAFT or PUBLISHED")
+    @RequiresCapability(
+            value = Capability.COURIER_SHIFT_APPROVE,
+            scope = ResourceScope.ScopeType.LOCATION,
+            mutating = true)
+    @Operation(
+            summary = "Cancel a planned shift that is still DRAFT or PUBLISHED",
+            description = "brandId/locationId are query parameters carrying the scope this write "
+                    + "is checked at; the entry itself is refused as not-found (never merely "
+                    + "forbidden, per ADR 0031) when it does not actually belong to that branch.")
     public ResponseEntity<Void> cancelRosterEntry(
             @PathVariable UUID tenantId,
             @PathVariable UUID entryId,
+            @RequestParam UUID brandId,
+            @RequestParam UUID locationId,
             @Valid @RequestBody RosterEntryReasonRequest body) {
 
-        plannedShifts.cancel(tenantId, entryId, actor(), body.reason());
+        plannedShifts.cancel(tenantId, brandId, locationId, entryId, actor(), body.reason());
         return ResponseEntity.accepted().build();
     }
 
@@ -877,10 +896,7 @@ public class OperationsCourierController {
             @PathVariable UUID reasonId,
             @Valid @RequestBody ArchiveCourierTypeRequest body) {
 
-        if (!courierStore.archiveAdjustmentReason(tenantId, reasonId)) {
-            throw new ApiException(
-                    ErrorCode.RESOURCE_NOT_FOUND, "No active adjustment reason %s to archive".formatted(reasonId));
-        }
+        courierTypes.archiveAdjustmentReason(tenantId, reasonId, actor(), body.reason());
         return ResponseEntity.accepted().build();
     }
 
@@ -1763,8 +1779,6 @@ public class OperationsCourierController {
     }
 
     record DraftRosterEntryRequest(
-            @NotNull UUID brandId,
-            @NotNull UUID locationId,
             @NotNull UUID courierId,
             @NotNull Instant plannedStart,
             @NotNull Instant plannedEnd,

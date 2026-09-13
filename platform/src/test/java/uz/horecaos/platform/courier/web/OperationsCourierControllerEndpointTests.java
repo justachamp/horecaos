@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -84,6 +85,13 @@ class OperationsCourierControllerEndpointTests {
     private static final String REVEALER = "018f9c20-4000-7000-8000-0000000000f5";
     private static final String ADJUSTER = "018f9c20-4000-7000-8000-0000000000f6";
 
+    // T17: the real PlatformRole bundles the roster surface is granted to
+    // (LOCATION_MANAGER at LOCATION, COURIER_DISPATCHER at BRAND) — distinct
+    // from ADJUSTER above, which stands in for a capability no bundle grants
+    // below TENANT and so needs a hand-authored custom role instead.
+    private static final String LOCATION_MANAGER_SUBJECT = "018f9c20-4000-7000-8000-0000000000f7";
+    private static final String BRAND_DISPATCHER = "018f9c20-4000-7000-8000-0000000000f8";
+
     // ADR 0042: courier.pii.reveal is granted per person, not through any
     // PlatformRole bundle (see COURIER_PII_REVEAL's own doc) — so REVEALER's
     // standing comes from a hand-authored tenant-scoped custom role rather
@@ -137,6 +145,10 @@ class OperationsCourierControllerEndpointTests {
 
     private static String groupsPath(UUID tenantId) {
         return "/api/v1/operations/tenants/" + tenantId + "/courier-groups";
+    }
+
+    private static String rosterPath(UUID tenantId) {
+        return "/api/v1/operations/tenants/" + tenantId + "/courier-roster-entries";
     }
 
     @BeforeEach
@@ -337,6 +349,111 @@ class OperationsCourierControllerEndpointTests {
         assertThat(refused.getResponse().getContentAsString())
                 .contains("INSUFFICIENT_CAPABILITY")
                 .contains(Capability.COURIER_ADJUSTMENT_CREATE.code());
+    }
+
+    // ------------------------------------------------- courier types & reasons (T16 audit)
+
+    /**
+     * The T16 adversarial-review finding: {@code updateType} took {@code
+     * body.reason()} on its {@code @NotBlank} request but never read it, and
+     * wrote no audit fact at all — a dispatch-ceiling change left no record of
+     * who changed it or why. This proves both are now true: the correction
+     * lands, and an {@code audit.audit_events} row names the actor, the
+     * reason, and the changed fields.
+     */
+    @Test
+    void correctingACourierTypeIsAudited() throws Exception {
+        MvcResult corrected = mvc.perform(put("/api/v1/operations/tenants/" + TENANT + "/courier-types/" + COURIER_TYPE)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "type-correct-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"SCOOTER","displayName":"Scooter (corrected)","vehicleClass":"SCOOTER",
+                                 "minDistanceMeters":0,"maxDistanceMeters":8000,"maxConcurrentAssignments":2,
+                                 "offerTtlSeconds":90,"startingMinuteOffset":0,"workMode":"SHIFT",
+                                 "expectedVersion":1,"reason":"widening the offer window after driver feedback"}
+                                """))
+                .andReturn();
+        assertThat(corrected.getResponse().getStatus()).isEqualTo(200);
+        assertThat(corrected.getResponse().getContentAsString()).contains("Scooter (corrected)");
+
+        Map<String, String> event = jdbc.sql("""
+                        SELECT action_code, reason, target_id, change_document::text AS change_document
+                          FROM audit.audit_events
+                         WHERE tenant_id = :tenantId AND action_code = 'courier-type.updated'
+                        """)
+                .param("tenantId", TENANT)
+                .query((row, n) -> Map.of(
+                        "actionCode", row.getString("action_code"),
+                        "reason", row.getString("reason"),
+                        "targetId", row.getString("target_id"),
+                        "changeDocument", row.getString("change_document")))
+                .single();
+        assertThat(event.get("reason")).isEqualTo("widening the offer window after driver feedback");
+        assertThat(event.get("targetId")).isEqualTo(COURIER_TYPE.toString());
+        // Postgres's own jsonb-to-text cast, not Jackson's compact form -- it
+        // inserts a space after the colon (see OwnerInvitationControllerEndpointTests'
+        // "\"revealedCount\": 2" for the same convention read from this column
+        // elsewhere in the suite).
+        assertThat(event.get("changeDocument")).contains("\"maxConcurrentAssignments\": 2");
+    }
+
+    @Test
+    void archivingACourierTypeIsAudited() throws Exception {
+        MvcResult archived = mvc.perform(
+                        post("/api/v1/operations/tenants/" + TENANT + "/courier-types/" + COURIER_TYPE + "/archival")
+                                .with(tokenFor(OWNER))
+                                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "type-archive-1")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {"reason":"this vehicle class is being retired fleet-wide"}
+                                        """))
+                .andReturn();
+        assertThat(archived.getResponse().getStatus()).isEqualTo(202);
+
+        String reason = jdbc.sql("""
+                        SELECT reason FROM audit.audit_events
+                         WHERE tenant_id = :tenantId AND action_code = 'courier-type.archived' AND target_id = :typeId
+                        """)
+                .param("tenantId", TENANT)
+                .param("typeId", COURIER_TYPE)
+                .query(String.class)
+                .single();
+        assertThat(reason).isEqualTo("this vehicle class is being retired fleet-wide");
+    }
+
+    @Test
+    void archivingAnAdjustmentReasonIsAudited() throws Exception {
+        UUID reasonId = jdbc.sql(
+                        "SELECT id FROM fulfillment.courier_adjustment_reasons WHERE tenant_id = :tenantId AND code = 'GOODWILL_BONUS'")
+                .param("tenantId", TENANT)
+                .query(UUID.class)
+                .single();
+
+        MvcResult archived = mvc.perform(
+                        post("/api/v1/operations/tenants/" + TENANT + "/adjustment-reasons/" + reasonId + "/archival")
+                                .with(tokenFor(OWNER))
+                                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "reason-archive-1")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                {"reason":"superseded by a tighter goodwill policy"}
+                                """))
+                .andReturn();
+        assertThat(archived.getResponse().getStatus()).isEqualTo(202);
+
+        Map<String, String> event = jdbc.sql("""
+                        SELECT reason, change_document::text AS change_document FROM audit.audit_events
+                         WHERE tenant_id = :tenantId AND action_code = 'adjustment-reason.archived' AND target_id = :reasonId
+                        """)
+                .param("tenantId", TENANT)
+                .param("reasonId", reasonId)
+                .query((row, n) ->
+                        Map.of("reason", row.getString("reason"), "changeDocument", row.getString("change_document")))
+                .single();
+        assertThat(event.get("reason")).isEqualTo("superseded by a tighter goodwill policy");
+        assertThat(event.get("changeDocument"))
+                .as("archival silently stops rule evaluation for a rule-wired reason; the audit trail says so")
+                .contains("rule");
     }
 
     // --------------------------------------------------------------------- groups
@@ -608,6 +725,213 @@ class OperationsCourierControllerEndpointTests {
                 .isZero();
     }
 
+    // --------------------------------------------------------- roster entries (T17)
+
+    /**
+     * The adversarial review's critical finding: the five roster endpoints
+     * declared no {@code scope}, so {@code RequiresCapability}'s TENANT default
+     * applied — but {@code COURIER_SHIFT_READ}/{@code COURIER_SHIFT_APPROVE}
+     * are granted only to {@link PlatformRole#LOCATION_MANAGER} (LOCATION) and
+     * {@link PlatformRole#COURIER_DISPATCHER} (BRAND) in {@code
+     * PlatformRole.java}; no TENANT-scoped bundle holds either capability. A
+     * real location manager's grant, at LOCATION, can never satisfy a TENANT
+     * requirement ({@code ResourceScope.covers} only lets a broader scope
+     * satisfy a narrower one), so every real caller of this grid was refused
+     * with 403 in production. This test uses the actual {@code
+     * LOCATION_MANAGER} bundle at a real LOCATION-scoped grant — not the
+     * TENANT-scoped custom-role workaround {@link #ADJUSTER_ROLE} needed for a
+     * different endpoint — and would fail red against the pre-fix TENANT
+     * default.
+     */
+    @Test
+    void aLocationManagerCanReadPlanPublishAndCancelTheRoster() throws Exception {
+        grantAtLocation(LOCATION_MANAGER_SUBJECT, PlatformRole.LOCATION_MANAGER, TENANT, LOCATION);
+
+        MvcResult listedBefore = mvc.perform(get(rosterPath(TENANT))
+                        .with(tokenFor(LOCATION_MANAGER_SUBJECT))
+                        .param("brandId", BRAND.toString())
+                        .param("locationId", LOCATION.toString()))
+                .andReturn();
+        assertThat(listedBefore.getResponse().getStatus()).isEqualTo(200);
+        assertThat(listedBefore.getResponse().getContentAsString()).isEqualTo("[]");
+
+        Instant start = Instant.now().plus(Duration.ofDays(1));
+        Instant end = start.plus(Duration.ofHours(8));
+        MvcResult drafted = mvc.perform(post(rosterPath(TENANT))
+                        .with(tokenFor(LOCATION_MANAGER_SUBJECT))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "roster-draft-1")
+                        .param("brandId", BRAND.toString())
+                        .param("locationId", LOCATION.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courierId":"%s","plannedStart":"%s","plannedEnd":"%s","reason":"next week's cover"}
+                                """.formatted(COURIER, start, end)))
+                .andReturn();
+        assertThat(drafted.getResponse().getStatus())
+                .as("a real LOCATION_MANAGER grant, not a 403, is the whole point of this test")
+                .isEqualTo(200);
+
+        UUID entryId = jdbc.sql("""
+                        SELECT id FROM fulfillment.courier_roster_entries
+                         WHERE tenant_id = :tenantId AND courier_id = :courierId AND status = 'DRAFT'
+                        """)
+                .param("tenantId", TENANT)
+                .param("courierId", COURIER)
+                .query(UUID.class)
+                .single();
+
+        MvcResult published = mvc.perform(post(rosterPath(TENANT) + "/" + entryId + "/publish")
+                        .with(tokenFor(LOCATION_MANAGER_SUBJECT))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "roster-publish-1")
+                        .param("brandId", BRAND.toString())
+                        .param("locationId", LOCATION.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"publishing next week's cover"}
+                                """))
+                .andReturn();
+        assertThat(published.getResponse().getStatus()).isEqualTo(202);
+
+        MvcResult compared = mvc.perform(get(rosterPath(TENANT) + "/comparison")
+                        .with(tokenFor(LOCATION_MANAGER_SUBJECT))
+                        .param("brandId", BRAND.toString())
+                        .param("locationId", LOCATION.toString())
+                        .param("from", start.minus(Duration.ofDays(1)).toString())
+                        .param("to", end.plus(Duration.ofDays(1)).toString()))
+                .andReturn();
+        assertThat(compared.getResponse().getStatus()).isEqualTo(200);
+        assertThat(compared.getResponse().getContentAsString()).contains(entryId.toString());
+
+        MvcResult cancelled = mvc.perform(post(rosterPath(TENANT) + "/" + entryId + "/cancel")
+                        .with(tokenFor(LOCATION_MANAGER_SUBJECT))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "roster-cancel-1")
+                        .param("brandId", BRAND.toString())
+                        .param("locationId", LOCATION.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"cover no longer needed"}
+                                """))
+                .andReturn();
+        assertThat(cancelled.getResponse().getStatus()).isEqualTo(202);
+
+        assertThat(jdbc.sql("SELECT status FROM fulfillment.courier_roster_entries WHERE id = :id")
+                        .param("id", entryId)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("CANCELLED");
+    }
+
+    /** {@link PlatformRole#COURIER_DISPATCHER} holds the same two capabilities at BRAND, one level broader. */
+    @Test
+    void aBrandScopedDispatcherCanAlsoReadAndPlanTheRoster() throws Exception {
+        grantAtBrand(BRAND_DISPATCHER, PlatformRole.COURIER_DISPATCHER, TENANT, BRAND);
+
+        MvcResult listed = mvc.perform(get(rosterPath(TENANT))
+                        .with(tokenFor(BRAND_DISPATCHER))
+                        .param("brandId", BRAND.toString())
+                        .param("locationId", LOCATION.toString()))
+                .andReturn();
+        assertThat(listed.getResponse().getStatus()).isEqualTo(200);
+
+        MvcResult drafted = mvc.perform(post(rosterPath(TENANT))
+                        .with(tokenFor(BRAND_DISPATCHER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "roster-draft-2")
+                        .param("brandId", BRAND.toString())
+                        .param("locationId", LOCATION.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courierId":"%s","plannedStart":"%s","plannedEnd":"%s","reason":"dispatcher-planned cover"}
+                                """.formatted(
+                                        COURIER,
+                                        Instant.now().plus(Duration.ofDays(2)),
+                                        Instant.now().plus(Duration.ofDays(2)).plus(Duration.ofHours(6)))))
+                .andReturn();
+        assertThat(drafted.getResponse().getStatus()).isEqualTo(200);
+    }
+
+    /**
+     * The mirror image of the two tests above: a LOCATION_MANAGER grant at
+     * {@link #SECOND_LOCATION} must not reach {@link #LOCATION}'s roster —
+     * proving the fix narrowed the check to LOCATION rather than accidentally
+     * widening it back to "anyone with this capability anywhere".
+     */
+    @Test
+    void aManagerOfADifferentLocationCannotReadThisLocationsRoster() throws Exception {
+        grantAtLocation(LOCATION_MANAGER_SUBJECT, PlatformRole.LOCATION_MANAGER, TENANT, SECOND_LOCATION);
+
+        MvcResult refused = mvc.perform(get(rosterPath(TENANT))
+                        .with(tokenFor(LOCATION_MANAGER_SUBJECT))
+                        .param("brandId", BRAND.toString())
+                        .param("locationId", LOCATION.toString()))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.COURIER_SHIFT_READ.code());
+    }
+
+    /**
+     * The defence-in-depth half of the fix: a LOCATION_MANAGER's capability
+     * grant is checked against the branch named in the request, not against
+     * the entry named in the path — so {@code PlannedShiftService} re-asserts
+     * the entry it found actually belongs to that branch. Without that
+     * re-check, a manager at {@link #LOCATION} naming their own branch could
+     * publish or cancel an entry that in fact lives at {@link
+     * #SECOND_LOCATION} merely by knowing its id.
+     */
+    @Test
+    void aLocationManagerCannotPublishAnotherLocationsRosterEntry() throws Exception {
+        grantAtLocation(LOCATION_MANAGER_SUBJECT, PlatformRole.LOCATION_MANAGER, TENANT, LOCATION);
+        grantAtLocation(ADMIN, PlatformRole.LOCATION_MANAGER, TENANT, SECOND_LOCATION);
+
+        // Drafted by a manager who actually holds SECOND_LOCATION.
+        MvcResult drafted = mvc.perform(post(rosterPath(TENANT))
+                        .with(tokenFor(ADMIN))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "roster-draft-3")
+                        .param("brandId", BRAND.toString())
+                        .param("locationId", SECOND_LOCATION.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courierId":"%s","plannedStart":"%s","plannedEnd":"%s","reason":"north branch cover"}
+                                """.formatted(
+                                        COURIER,
+                                        Instant.now().plus(Duration.ofDays(3)),
+                                        Instant.now().plus(Duration.ofDays(3)).plus(Duration.ofHours(5)))))
+                .andReturn();
+        assertThat(drafted.getResponse().getStatus()).isEqualTo(200);
+
+        UUID entryId = jdbc.sql("""
+                        SELECT id FROM fulfillment.courier_roster_entries
+                         WHERE tenant_id = :tenantId AND location_id = :locationId AND status = 'DRAFT'
+                        """)
+                .param("tenantId", TENANT)
+                .param("locationId", SECOND_LOCATION)
+                .query(UUID.class)
+                .single();
+
+        MvcResult refused = mvc.perform(post(rosterPath(TENANT) + "/" + entryId + "/publish")
+                        .with(tokenFor(LOCATION_MANAGER_SUBJECT))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "roster-publish-cross")
+                        .param("brandId", BRAND.toString())
+                        .param("locationId", LOCATION.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"trying to publish someone else's branch"}
+                                """))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus())
+                .as("the entry belongs to SECOND_LOCATION, not the LOCATION named in the request")
+                .isEqualTo(404);
+        assertThat(jdbc.sql("SELECT status FROM fulfillment.courier_roster_entries WHERE id = :id")
+                        .param("id", entryId)
+                        .query(String.class)
+                        .single())
+                .as("the cross-location attempt must not have taken effect")
+                .isEqualTo("DRAFT");
+    }
+
     // ------------------------------------------------------------- cross-tenant
 
     @Test
@@ -829,6 +1153,44 @@ class OperationsCourierControllerEndpointTests {
                 .param("tenantId", tenantId)
                 .param("subject", subject)
                 .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
+                .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    /** A real LOCATION-scoped grant of a platform-defined role — LOCATION_MANAGER's own shape (T17). */
+    private void grantAtLocation(String subject, PlatformRole role, UUID tenantId, UUID locationId) {
+        jdbc.sql("""
+                INSERT INTO iam.grants
+                    (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
+                     status, granted_by, reason, valid_from)
+                VALUES (:id, :tenantId, :subject, :roleId, true, 'LOCATION', :locationId,
+                        'ACTIVE', 'test-fixture', 'courier roster endpoint test', :validFrom)
+                ON CONFLICT DO NOTHING
+                """)
+                .param("id", UUID.nameUUIDFromBytes((subject + role.code() + locationId).getBytes(UTF_8)))
+                .param("tenantId", tenantId)
+                .param("subject", subject)
+                .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
+                .param("locationId", locationId)
+                .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    /** A real BRAND-scoped grant of a platform-defined role — COURIER_DISPATCHER's own shape (T17). */
+    private void grantAtBrand(String subject, PlatformRole role, UUID tenantId, UUID brandId) {
+        jdbc.sql("""
+                INSERT INTO iam.grants
+                    (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
+                     status, granted_by, reason, valid_from)
+                VALUES (:id, :tenantId, :subject, :roleId, true, 'BRAND', :brandId,
+                        'ACTIVE', 'test-fixture', 'courier roster endpoint test', :validFrom)
+                ON CONFLICT DO NOTHING
+                """)
+                .param("id", UUID.nameUUIDFromBytes((subject + role.code() + brandId).getBytes(UTF_8)))
+                .param("tenantId", tenantId)
+                .param("subject", subject)
+                .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
+                .param("brandId", brandId)
                 .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
                 .update();
     }

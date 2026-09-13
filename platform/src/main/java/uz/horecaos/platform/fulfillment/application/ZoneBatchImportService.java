@@ -1,8 +1,10 @@
 package uz.horecaos.platform.fulfillment.application;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataAccessException;
@@ -37,6 +39,18 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZo
  * 1 through 11 that already committed, and a batch with one bad row is a
  * batch with one bad row on the report — not a batch that silently imported
  * nothing.
+ *
+ * <p>An intra-batch duplicate {@code code} is checked in memory, before any
+ * row's transaction opens, rather than left to the database's own unique
+ * constraint. Under a real (non-dry) run the constraint alone would still
+ * catch it — the first row's insert commits, the second's collides — but
+ * under {@code dryRun} every row's transaction is individually rolled back
+ * before the next one starts, so two rows sharing a code would each insert
+ * against a database that has never seen the other and both come back
+ * accepted, misreporting what a real import would actually do. Checking the
+ * whole batch up front closes that gap for both run kinds and, as a side
+ * effect, spares a real run the wasted round trip of executing a row already
+ * known to collide with one still queued.
  */
 @Service
 public class ZoneBatchImportService {
@@ -56,7 +70,15 @@ public class ZoneBatchImportService {
 
     public BatchImportReport importBatch(UUID tenantId, UUID brandId, List<ImportRow> rows, boolean dryRun) {
         List<RowOutcome> outcomes = new ArrayList<>(rows.size());
+        Set<String> codesSeenInThisBatch = new HashSet<>();
         for (ImportRow row : rows) {
+            if (!codesSeenInThisBatch.add(row.code())) {
+                outcomes.add(RowOutcome.rejected(
+                        row.externalRef(),
+                        "DUPLICATE_CODE_IN_BATCH: code '" + row.code()
+                                + "' is already used by an earlier row in this batch"));
+                continue;
+            }
             RowOutcome outcome = Objects.requireNonNull(perRow.execute(status -> {
                 try {
                     RowOutcome ok = importOneRow(tenantId, brandId, row);

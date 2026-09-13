@@ -4273,15 +4273,7 @@
       },
       "DraftRosterEntryRequest" : {
         "properties" : {
-          "brandId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
           "courierId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "locationId" : {
             "format" : "uuid",
             "type" : "string"
           },
@@ -4298,7 +4290,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "brandId", "courierId", "locationId", "plannedEnd", "plannedStart", "reason" ],
+        "required" : [ "courierId", "plannedEnd", "plannedStart", "reason" ],
         "type" : "object"
       },
       "DutySessionResponse" : {
@@ -17716,11 +17708,27 @@
         "tags" : [ "Courier operations" ]
       },
       "post" : {
-        "description" : "Lands as DRAFT. Refused when the courier has no live engagement, the same precondition a courier's own shift-open checks.",
+        "description" : "Lands as DRAFT. Refused when the courier has no live engagement, the same precondition a courier's own shift-open checks. brandId/locationId are query parameters, the same as the GET siblings of this route, and carry the scope this write is checked at.",
         "operationId" : "draftRosterEntry",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
           "required" : true,
           "schema" : {
             "format" : "uuid",
@@ -17828,6 +17836,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/courier-roster-entries/{entryId}/cancel" : {
       "post" : {
+        "description" : "brandId/locationId are query parameters carrying the scope this write is checked at; the entry itself is refused as not-found (never merely forbidden, per ADR 0031) when it does not actually belong to that branch.",
         "operationId" : "cancelRosterEntry",
         "parameters" : [ {
           "in" : "path",
@@ -17840,6 +17849,22 @@
         }, {
           "in" : "path",
           "name" : "entryId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
           "required" : true,
           "schema" : {
             "format" : "uuid",
@@ -17867,6 +17892,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/courier-roster-entries/{entryId}/publish" : {
       "post" : {
+        "description" : "brandId/locationId are query parameters carrying the scope this write is checked at; the entry itself is refused as not-found (never merely forbidden, per ADR 0031) when it does not actually belong to that branch.",
         "operationId" : "publishRosterEntry",
         "parameters" : [ {
           "in" : "path",
@@ -17879,6 +17905,22 @@
         }, {
           "in" : "path",
           "name" : "entryId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
           "required" : true,
           "schema" : {
             "format" : "uuid",

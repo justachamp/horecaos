@@ -260,15 +260,15 @@ class PlannedShiftServiceTests {
         PlannedShiftRow entry = plannedShifts.draft(newShift(NOON, NOON.plus(Duration.ofHours(8))));
         UUID publisher = UUID.randomUUID();
 
-        plannedShifts.publish(TENANT, entry.id(), manager(), publisher, "publishing this week's roster");
+        plannedShifts.publish(TENANT, BRAND, branch, entry.id(), manager(), publisher, "publishing this week's roster");
 
         PlannedShiftRow published = rosterStore.find(TENANT, entry.id()).orElseThrow();
         assertThat(published.status()).isEqualTo(PlannedShiftStatus.PUBLISHED);
         assertThat(published.publishedAt()).isNotNull();
         assertThat(published.publishedBy()).isEqualTo(publisher);
 
-        assertThat(catchThrowable(
-                        () -> plannedShifts.publish(TENANT, entry.id(), manager(), publisher, "publishing again")))
+        assertThat(catchThrowable(() -> plannedShifts.publish(
+                        TENANT, BRAND, branch, entry.id(), manager(), publisher, "publishing again")))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -276,18 +276,45 @@ class PlannedShiftServiceTests {
     @DisplayName("a DRAFT or PUBLISHED entry can be cancelled; a cancelled entry cannot be cancelled again")
     void cancellingIsIdempotentInRefusalNotInEffect() {
         PlannedShiftRow drafted = plannedShifts.draft(newShift(NOON, NOON.plus(Duration.ofHours(8))));
-        plannedShifts.cancel(TENANT, drafted.id(), manager(), "branch closed that day");
+        plannedShifts.cancel(TENANT, BRAND, branch, drafted.id(), manager(), "branch closed that day");
         assertThat(rosterStore.find(TENANT, drafted.id()).orElseThrow().status())
                 .isEqualTo(PlannedShiftStatus.CANCELLED);
 
-        assertThat(catchThrowable(() -> plannedShifts.cancel(TENANT, drafted.id(), manager(), "again")))
+        assertThat(catchThrowable(() -> plannedShifts.cancel(TENANT, BRAND, branch, drafted.id(), manager(), "again")))
                 .isInstanceOf(ApiException.class);
 
         PlannedShiftRow published = plannedShifts.draft(newShift(NOON, NOON.plus(Duration.ofHours(8))));
-        plannedShifts.publish(TENANT, published.id(), manager(), UUID.randomUUID(), "publishing");
-        plannedShifts.cancel(TENANT, published.id(), manager(), "courier called in sick, roster withdrawn");
+        plannedShifts.publish(TENANT, BRAND, branch, published.id(), manager(), UUID.randomUUID(), "publishing");
+        plannedShifts.cancel(
+                TENANT, BRAND, branch, published.id(), manager(), "courier called in sick, roster withdrawn");
         assertThat(rosterStore.find(TENANT, published.id()).orElseThrow().status())
                 .isEqualTo(PlannedShiftStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName(
+            "publish/cancel refuse as not-found when the caller's own branch does not match the entry's actual branch")
+    void publishAndCancelRefuseABranchMismatch() {
+        // OperationsCourierController's @RequiresCapability is LOCATION-scoped
+        // and reads brandId/locationId from the request, so its capability check
+        // alone only proves the caller manages the branch they named -- never
+        // that the entry they named lives there. This is the re-check that
+        // closes that gap: a caller naming their own branch and someone else's
+        // entry id must be refused, and refused as not-found (ADR 0031) rather
+        // than merely forbidden, exactly like an entry that never existed.
+        PlannedShiftRow entry = plannedShifts.draft(newShift(NOON, NOON.plus(Duration.ofHours(8))));
+        UUID foreignLocation = UUID.randomUUID();
+        UUID foreignBrand = UUID.randomUUID();
+
+        assertThat(catchThrowable(() -> plannedShifts.publish(
+                        TENANT, BRAND, foreignLocation, entry.id(), manager(), UUID.randomUUID(), "wrong branch")))
+                .isInstanceOf(ApiException.class);
+        assertThat(catchThrowable(
+                        () -> plannedShifts.cancel(TENANT, foreignBrand, branch, entry.id(), manager(), "wrong brand")))
+                .isInstanceOf(ApiException.class);
+
+        // Neither mismatched call took effect -- the entry is still DRAFT.
+        assertThat(rosterStore.find(TENANT, entry.id()).orElseThrow().status()).isEqualTo(PlannedShiftStatus.DRAFT);
     }
 
     // -------------------------------------------------------------- period filter
@@ -386,8 +413,8 @@ class PlannedShiftServiceTests {
                 .isEmpty();
         // publish/cancel under the wrong tenant find nothing to act on either --
         // the same "not found" a stranger id gets, never a cross-tenant mutation.
-        assertThat(catchThrowable(
-                        () -> plannedShifts.publish(OTHER_TENANT, entry.id(), manager(), UUID.randomUUID(), "x")))
+        assertThat(catchThrowable(() -> plannedShifts.publish(
+                        OTHER_TENANT, BRAND, branch, entry.id(), manager(), UUID.randomUUID(), "x")))
                 .isInstanceOf(ApiException.class);
     }
 

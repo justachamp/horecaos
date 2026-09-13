@@ -369,10 +369,15 @@ export interface RosterComparisonView {
   readonly matchedDutyState?: string | null;
 }
 
-/** The fields a manager fills in to plan a courier's shift. */
+/**
+ * The fields a manager fills in to plan a courier's shift.
+ *
+ * `brandId`/`locationId` are not here — the backend reads them as request
+ * parameters (see `CouriersApi.draftRosterEntry`), the same way it already
+ * reads them on this route's `GET` siblings, because that is what the
+ * LOCATION-scoped capability check is evaluated against (T17).
+ */
 export interface DraftRosterEntryRequest {
-  readonly brandId: string;
-  readonly locationId: string;
   readonly courierId: string;
   readonly plannedStart: string;
   readonly plannedEnd: string;
@@ -760,30 +765,47 @@ export class CouriersApi {
 
   async draftRosterEntry(
     tenantId: string,
+    brandId: string,
+    locationId: string,
     request: DraftRosterEntryRequest,
   ): Promise<PlannedShiftView> {
     return firstValueFrom(
       this.api.post<DraftRosterEntryRequest, PlannedShiftView>(
         courierPaths.courierRosterEntries(tenantId),
         command(request),
+        { params: { brandId, locationId } },
       ),
     );
   }
 
-  async publishRosterEntry(tenantId: string, entryId: string, reason: string): Promise<void> {
+  async publishRosterEntry(
+    tenantId: string,
+    brandId: string,
+    locationId: string,
+    entryId: string,
+    reason: string,
+  ): Promise<void> {
     await firstValueFrom(
       this.api.post<{ reason: string }, void>(
         courierPaths.courierRosterEntryPublish(tenantId, entryId),
         command({ reason }),
+        { params: { brandId, locationId } },
       ),
     );
   }
 
-  async cancelRosterEntry(tenantId: string, entryId: string, reason: string): Promise<void> {
+  async cancelRosterEntry(
+    tenantId: string,
+    brandId: string,
+    locationId: string,
+    entryId: string,
+    reason: string,
+  ): Promise<void> {
     await firstValueFrom(
       this.api.post<{ reason: string }, void>(
         courierPaths.courierRosterEntryCancel(tenantId, entryId),
         command({ reason }),
+        { params: { brandId, locationId } },
       ),
     );
   }

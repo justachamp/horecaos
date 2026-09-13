@@ -114,10 +114,24 @@ public class PlannedShiftService {
         return entry;
     }
 
-    /** Publishes a draft, making it visible as an offer. Nothing consumes that visibility yet — see the class doc. */
+    /**
+     * Publishes a draft, making it visible as an offer. Nothing consumes that
+     * visibility yet — see the class doc.
+     *
+     * <p>{@code brandId}/{@code locationId} name the branch the caller's own
+     * capability grant was checked at (the endpoint's {@code @RequiresCapability}
+     * is {@code LOCATION}-scoped and reads them from the request). Re-asserting
+     * them here, against the entry actually found, is what stops a manager whose
+     * grant covers their own branch from publishing an entry that in fact
+     * belongs to a different one merely by naming their own branch in the
+     * request and someone else's entry id — the entry is treated as not found
+     * rather than as forbidden, per ADR 0031.
+     */
     @Transactional
-    public void publish(UUID tenantId, UUID id, ActorRef actor, UUID publishedBy, String reason) {
+    public void publish(
+            UUID tenantId, UUID brandId, UUID locationId, UUID id, ActorRef actor, UUID publishedBy, String reason) {
         PlannedShiftRow entry = roster.find(tenantId, id)
+                .filter(row -> row.brandId().equals(brandId) && row.locationId().equals(locationId))
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such planned shift: " + id));
         if (!roster.publish(tenantId, id, publishedBy, clock.instant())) {
             throw new ApiException(
@@ -135,10 +149,18 @@ public class PlannedShiftService {
                 Map.of("courierId", entry.courierId().toString())));
     }
 
-    /** Cancels a DRAFT or PUBLISHED entry outright. Refused once a courier has answered or the window has passed. */
+    /**
+     * Cancels a DRAFT or PUBLISHED entry outright. Refused once a courier has
+     * answered or the window has passed.
+     *
+     * <p>See {@link #publish}'s doc for why {@code brandId}/{@code locationId}
+     * are re-checked against the entry actually found rather than trusted from
+     * the request alone.
+     */
     @Transactional
-    public void cancel(UUID tenantId, UUID id, ActorRef actor, String reason) {
+    public void cancel(UUID tenantId, UUID brandId, UUID locationId, UUID id, ActorRef actor, String reason) {
         PlannedShiftRow entry = roster.find(tenantId, id)
+                .filter(row -> row.brandId().equals(brandId) && row.locationId().equals(locationId))
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such planned shift: " + id));
         if (!roster.cancel(tenantId, id, clock.instant())) {
             throw new ApiException(

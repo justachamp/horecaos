@@ -213,6 +213,62 @@ class ZoneBatchImportServiceTests {
                 .hasSize(2);
     }
 
+    @Test
+    @DisplayName(
+            "dryRun catches two rows sharing a code the same way a real import would, not the false-accepted pair a per-row rollback hides")
+    void dryRunCatchesAnIntraBatchDuplicateCode() {
+        // T17 adversarial-review finding: each row's own PROPAGATION_REQUIRES_NEW
+        // transaction is rolled back under dryRun before the next row runs, so
+        // without an in-memory check, two rows sharing a code would each insert
+        // against a database that has never seen the other and both come back
+        // accepted -- misreporting what committing for real would actually do
+        // (the second insert would trip uq_service_zone_code, exactly like
+        // oneBadRowDoesNotSinkTheBatch's pre-seeded collision above).
+        BatchImportReport dryRun = batchImport.importBatch(
+                TENANT,
+                BRAND,
+                List.of(
+                        row("legacy-first", "DUP-1", TASHKENT_TRIANGLE),
+                        row("legacy-second", "DUP-1", TASHKENT_TRIANGLE)),
+                true);
+
+        assertThat(dryRun.totalRows()).isEqualTo(2);
+        assertThat(dryRun.accepted())
+                .as("only the first occurrence of a duplicated code may be accepted")
+                .isEqualTo(1);
+        assertThat(dryRun.rejected()).isEqualTo(1);
+
+        var first = dryRun.rows().get(0);
+        assertThat(first.externalRef()).isEqualTo("legacy-first");
+        assertThat(first.accepted()).isTrue();
+
+        var second = dryRun.rows().get(1);
+        assertThat(second.externalRef()).isEqualTo("legacy-second");
+        assertThat(second.accepted()).isFalse();
+        assertThat(second.error()).isNotNull();
+        assertThat(second.error()).contains("DUPLICATE_CODE_IN_BATCH");
+
+        // dryRun's own promise: nothing committed either way.
+        assertThat(zones.listZones(TENANT, BRAND)).isEmpty();
+
+        // The same batch, for real, must fail the very same way: the second row
+        // is caught before ever reaching the database, not merely discovered by
+        // the unique constraint after wasting the round trip.
+        BatchImportReport real = batchImport.importBatch(
+                TENANT,
+                BRAND,
+                List.of(
+                        row("legacy-first", "DUP-2", TASHKENT_TRIANGLE),
+                        row("legacy-second", "DUP-2", TASHKENT_TRIANGLE)),
+                false);
+        assertThat(real.accepted()).isEqualTo(1);
+        assertThat(real.rejected()).isEqualTo(1);
+        assertThat(real.rows().get(1).error()).contains("DUPLICATE_CODE_IN_BATCH");
+        assertThat(zones.listZones(TENANT, BRAND))
+                .as("only the one non-duplicate row from this call committed")
+                .hasSize(1);
+    }
+
     // ------------------------------------------------------------------- fixtures
 
     private ImportRow row(String externalRef, String code, String geoJson) {
