@@ -44,13 +44,33 @@
         }
       </h2>
       <ul class="publication__findings">
-        @for (finding of findingsByCode(); track finding.code) {
+        @for (finding of findings(); track $index) {
           <li
             class="publication__finding"
             [class.publication__finding--blocker]="finding.severity === 'BLOCKER'"
+            data-testid="publication-finding"
           >
-            <span class="publication__finding-code">{{ finding.code }}</span>
-            <span class="publication__finding-count q-tnum">×{{ finding.count }}</span>
+            <div class="publication__finding-main">
+              <span class="publication__finding-code">{{ finding.code }}</span>
+              @if (findingEntityLabel(finding); as label) {
+                <span
+                  class="publication__finding-entity"
+                  data-testid="publication-finding-entity"
+                  >{{ label }}</span
+                >
+              }
+              @if (finding.detail) {
+                <span class="publication__finding-detail">{{ finding.detail }}</span>
+              }
+            </div>
+            @if (findingLink(finding); as link) {
+              <a
+                class="publication__finding-link"
+                [routerLink]="link"
+                data-testid="publication-finding-link"
+                >{{ 'catalog.publication.finding.open' | t }}</a
+              >
+            }
           </li>
         } @empty {
           <li class="publication__finding-empty">{{ 'catalog.publication.readiness.none' | t }}</li>
@@ -62,17 +82,43 @@
     <section class="publication__section">
       <h2 class="q-subhead">{{ 'catalog.publication.channels.title' | t }}</h2>
       <div class="publication__channels">
-        @for (channel of channels(); track channel.id) {
+        @for (state of channelStates(); track state.channel.id) {
           <div class="publication__channel" data-testid="publication-channel">
             <div class="publication__channel-header">
-              <span class="q-emphasis">{{ channel.displayName }}</span>
-              <span class="chip chip--muted">{{ channel.systemType }}</span>
+              <span class="q-emphasis">{{ state.channel.displayName }}</span>
+              <span class="chip chip--muted">{{ state.channel.systemType }}</span>
             </div>
+            <dl class="publication__channel-facts">
+              <div class="publication__channel-fact">
+                <dt>{{ 'catalog.publication.channel.lastPublished' | t }}</dt>
+                <dd class="q-tnum">{{ timeLabel(state.lastPublished?.activatedAt) }}</dd>
+              </div>
+              <div class="publication__channel-fact">
+                <dt>{{ 'catalog.publication.channel.hash' | t }}</dt>
+                <dd class="q-tnum" data-testid="publication-channel-hash">
+                  {{ state.lastPublished ? state.lastPublished.contentHash.slice(0, 8) : '—' }}
+                </dd>
+              </div>
+            </dl>
+            @if (state.draftStatus !== 'UNKNOWN') {
+              <span
+                class="publication__draft-status"
+                [class.publication__draft-status--differs]="state.draftStatus === 'DIFFERS'"
+                data-testid="publication-draft-status"
+              >
+                {{
+                  (state.draftStatus === 'DIFFERS'
+                    ? 'catalog.publication.channel.draftDiffers'
+                    : 'catalog.publication.channel.draftMatches'
+                  ) | t
+                }}
+              </span>
+            }
             <button
               type="button"
               class="publication__publish"
               [disabled]="publishingChannel() !== null"
-              (click)="publish(channel)"
+              (click)="publish(state.channel)"
               data-testid="publication-publish"
             >
               {{ 'catalog.publication.channels.publish' | t }}
