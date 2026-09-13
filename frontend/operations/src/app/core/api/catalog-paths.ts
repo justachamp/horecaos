@@ -65,6 +65,16 @@ export const catalogPaths = {
     return `${this.base(scope)}/catalogs/${encodeURIComponent(catalogId)}/categories`;
   },
 
+  /** Reparent, rename the code of, or re-sort an existing category. Same path also carries `/archive`. */
+  category(scope: BrandScope, catalogId: string, categoryId: string): string {
+    return `${this.createCategory(scope, catalogId)}/${encodeURIComponent(categoryId)}`;
+  },
+
+  /** Archive a category. Never a hard delete. */
+  archiveCategory(scope: BrandScope, catalogId: string, categoryId: string): string {
+    return `${this.category(scope, catalogId, categoryId)}/archive`;
+  },
+
   /** Place (or move) a product within a category, with its sort order. */
   categoryProduct(scope: BrandScope, categoryId: string, productId: string): string {
     return `${this.base(scope)}/categories/${encodeURIComponent(categoryId)}/products/${encodeURIComponent(productId)}`;
@@ -115,9 +125,14 @@ export const catalogPaths = {
     return `${this.base(scope)}/variants/${encodeURIComponent(variantId)}/location-offerings/${encodeURIComponent(locationId)}`;
   },
 
-  /** catalog.md §4.6's read side: one location's sellable variants with current availability. */
+  /** catalog.md §4.6's read side / §4.5's Layer A matrix: one location's variants with current availability. */
   variantsAtLocation(scope: BrandScope, locationId: string): string {
     return `${this.base(scope)}/locations/${encodeURIComponent(locationId)}/variants`;
+  },
+
+  /** catalog.md §4.5's bulk stop/unstop. */
+  bulkOfferingStatus(scope: BrandScope, locationId: string): string {
+    return `${this.variantsAtLocation(scope, locationId)}/bulk-offering-status`;
   },
 
   /** The catalog's live validation report — blockers and warnings, never a side effect. */

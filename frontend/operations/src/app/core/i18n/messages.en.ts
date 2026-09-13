@@ -1397,6 +1397,14 @@ export const messagesEn = {
   'catalog.categories.loading': 'Loading categories',
   'catalog.categories.selectPrompt': 'Select a category to edit it',
   'catalog.categories.noCatalog': 'This brand has no catalog yet',
+  'catalog.categories.form.description': 'Description',
+  'catalog.categories.form.image': 'Image',
+  'catalog.categories.photo.upload': 'Upload image',
+  'catalog.categories.photo.uploading': 'Uploading…',
+  'catalog.categories.archive': 'Archive',
+  'catalog.categories.archiveConfirm.title': 'Archive this category?',
+  'catalog.categories.archiveConfirm.body':
+    '“{name}” will no longer show in the category tree. Products already placed in it stay exactly where they are.',
 
   'catalog.menus.title': 'Menus',
   'catalog.menus.location.label': 'Location',
@@ -1414,6 +1422,19 @@ export const messagesEn = {
   'catalog.menus.denied': 'No access to this location’s menu',
   'catalog.menus.loading': 'Loading the menu',
   'catalog.menus.noLocation': 'No location resolved for this account yet',
+  'catalog.menus.filter.all': 'All',
+  'catalog.menus.search.placeholder': 'Search by name or SKU',
+  'catalog.menus.selectAll': 'Select every row',
+  'catalog.menus.column.offering': 'Menu status',
+  'catalog.menus.column.fulfillment': 'Order types',
+  'catalog.menus.fulfillment.DELIVERY': 'Del',
+  'catalog.menus.fulfillment.PICKUP': 'Pickup',
+  'catalog.menus.fulfillment.DINE_IN': 'Hall',
+  'catalog.menus.bulk.setAvailable': 'Add to menu',
+  'catalog.menus.bulk.setStopped': 'Bulk: stop',
+  'catalog.menus.bulk.confirmTitle': 'Change the status of the selected items?',
+  'catalog.menus.bulk.confirmBody':
+    'This changes the menu status of {count} items at this location.',
   'catalog.menus.channelsNote':
     'Per-channel enablement is not built (ADR 0036) — this matrix shows locations only',
 
@@ -3773,9 +3794,11 @@ export const messagesEn = {
   'settings.integrations.detail.bindings.column.status': 'Status',
   'settings.integrations.detail.bindings.column.actions': 'Actions',
   'settings.integrations.detail.bindings.activate': 'Activate',
-  'settings.integrations.detail.bindings.activate.reasonPrompt': 'Reason for bringing this binding live:',
+  'settings.integrations.detail.bindings.activate.reasonPrompt':
+    'Reason for bringing this binding live:',
   'settings.integrations.detail.bindings.suspend': 'Suspend',
-  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Reason for suspending this binding:',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Reason for suspending this binding:',
   'settings.integrations.detail.bindings.empty': 'No bindings yet.',
   'settings.integrations.detail.bindings.wholeTenant': 'Entire company',
   'settings.integrations.detail.cloposSettings.title': 'Order acceptance',
@@ -3787,13 +3810,15 @@ export const messagesEn = {
   'settings.integrations.detail.partnerClients.issue': 'Issue a client',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'A name for this client (for your own reference):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Reason for issuing this client:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Reason for issuing this client:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Copy this secret now — it will not be shown again:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'I have copied it',
   'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
   'settings.integrations.detail.partnerClients.revoke': 'Revoke',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Reason for revoking this client:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Reason for revoking this client:',
   'settings.integrations.detail.partnerClients.empty': 'No partner API clients issued yet.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

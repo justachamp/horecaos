@@ -79,6 +79,7 @@ export interface CategorySummary {
   readonly parentCategoryId?: string | null;
   readonly code: string;
   readonly name: string;
+  readonly description?: string | null;
   readonly sortOrder: number;
   readonly status: CatalogStatus;
   readonly productCount: number;
@@ -173,13 +174,32 @@ export interface ModifierOption {
   readonly fiscal?: FiscalClassification | null;
 }
 
-/** `VariantAvailabilityResponse` — catalog.md §4.2 tab 6 / §4.6's read side. */
+/**
+ * `offeringStatus` on {@link VariantAvailabilityRow}, plus the one value
+ * `catalog.location_offerings.status` itself never carries: `null` on the
+ * wire ("no offering row at all here") arrives as `undefined` through this
+ * console's own JSON handling, so screens compare against `undefined`
+ * directly rather than importing a fourth string for it.
+ */
+export type LocationOfferingStatus = 'AVAILABLE' | 'UNAVAILABLE' | 'HIDDEN';
+
+/** `VariantAvailabilityResponse` — catalog.md §4.2 tab 6 / §4.5's Layer A matrix / §4.6's read side. */
 export interface VariantAvailabilityRow {
   readonly variantId: string;
   readonly productName: string;
   readonly category?: string | null;
+  /** The inventory 86 flag — whether this variant can be sold right now. Independent of {@link offeringStatus}. */
   readonly available: boolean;
   readonly trackingMode?: 'BINARY' | 'UNTRACKED' | 'QUANTITY' | null;
+  /**
+   * `catalog.location_offerings.status` at this location, or `undefined` when
+   * no offering row exists here at all — "never added", distinct from every
+   * real status including `HIDDEN`. See `menus-page.ts`'s own doc for why this
+   * distinction is the row `4.4` this matrix exists to fix.
+   */
+  readonly offeringStatus?: LocationOfferingStatus | null;
+  /** Empty when {@link offeringStatus} is absent. */
+  readonly fulfillmentModes?: readonly string[];
 }
 
 // ------------------------------------------------------------ CatalogAuthoringController (writes)
@@ -267,6 +287,24 @@ export interface SortOrderRequest {
 export interface SetOfferingRequest {
   readonly status: OfferingStatus;
   readonly fulfillmentModes: readonly string[];
+}
+
+/** `BulkOfferingStatusRequest` — catalog.md §4.5's bulk stop/unstop. */
+export interface BulkOfferingStatusRequest {
+  readonly variantIds: readonly string[];
+  readonly status: OfferingStatus;
+}
+
+/** `BulkOfferingStatusResponse`. */
+export interface BulkOfferingStatusResult {
+  readonly updatedCount: number;
+}
+
+/** `UpdateCategoryRequest` — parentCategoryId, code and sortOrder only; name/description stay `TranslateRequest`'s. */
+export interface UpdateCategoryRequest {
+  readonly parentCategoryId?: string | null;
+  readonly code: string;
+  readonly sortOrder: number;
 }
 
 /** `AttachMediaRequest`. */

@@ -1383,6 +1383,14 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.categories.loading': 'Kategoriyalar yuklanmoqda',
   'catalog.categories.selectPrompt': 'Tahrirlash uchun kategoriya tanlang',
   'catalog.categories.noCatalog': 'Bu brendda hali katalog yoʻq',
+  'catalog.categories.form.description': 'Tavsif',
+  'catalog.categories.form.image': 'Rasm',
+  'catalog.categories.photo.upload': 'Rasm yuklash',
+  'catalog.categories.photo.uploading': 'Yuklanmoqda…',
+  'catalog.categories.archive': 'Arxivlash',
+  'catalog.categories.archiveConfirm.title': 'Kategoriyani arxivlaysizmi?',
+  'catalog.categories.archiveConfirm.body':
+    '«{name}» endi kategoriyalar daraxtida koʻrsatilmaydi. Unga joylashtirilgan mahsulotlar oʻz oʻrnida qoladi.',
 
   'catalog.menus.title': 'Menyular',
   'catalog.menus.location.label': 'Filial',
@@ -1400,6 +1408,19 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.menus.denied': 'Bu filial menyusiga kirish huquqi yoʻq',
   'catalog.menus.loading': 'Menyu yuklanmoqda',
   'catalog.menus.noLocation': 'Bu hisobga hali filial biriktirilmagan',
+  'catalog.menus.filter.all': 'Barchasi',
+  'catalog.menus.search.placeholder': 'Nomi yoki SKU boʻyicha qidirish',
+  'catalog.menus.selectAll': 'Barcha qatorlarni tanlash',
+  'catalog.menus.column.offering': 'Menyudagi holati',
+  'catalog.menus.column.fulfillment': 'Buyurtma turlari',
+  'catalog.menus.fulfillment.DELIVERY': 'Yetk',
+  'catalog.menus.fulfillment.PICKUP': 'Olib ket',
+  'catalog.menus.fulfillment.DINE_IN': 'Zal',
+  'catalog.menus.bulk.setAvailable': 'Menyuga qoʻshish',
+  'catalog.menus.bulk.setStopped': 'Ommaviy: toʻxtatish',
+  'catalog.menus.bulk.confirmTitle': 'Tanlangan pozitsiyalar holati oʻzgartirilsinmi?',
+  'catalog.menus.bulk.confirmBody':
+    'Bu ushbu filialdagi {count} ta pozitsiyaning menyudagi holatini oʻzgartiradi.',
   'catalog.menus.channelsNote':
     'Kanal boʻyicha yoqish qurilmagan (ADR 0036) — bu jadval faqat filiallarni koʻrsatadi',
 
@@ -3778,13 +3799,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.detail.partnerClients.issue': 'Mijoz chiqarish',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'Ushbu mijoz uchun nom (oʻzingiz uchun):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Ushbu mijozni chiqarish sababi:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Ushbu mijozni chiqarish sababi:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Ushbu maxfiy kalitni hozir nusxalang — u qayta koʻrsatilmaydi:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'Nusxaladim',
   'settings.integrations.detail.partnerClients.column.clientId': 'Mijoz ID',
   'settings.integrations.detail.partnerClients.revoke': 'Bekor qilish',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Ushbu mijozni bekor qilish sababi:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Ushbu mijozni bekor qilish sababi:',
   'settings.integrations.detail.partnerClients.empty': 'Hali hamkor API mijozlari chiqarilmagan.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------
