@@ -40,6 +40,18 @@ export interface CustomerExportRow {
   readonly phone: string | null;
 }
 
+/**
+ * `CustomersApi.exportFiltered`'s own result: `CustomerExportRow[]` (the
+ * body, unchanged in shape) plus `truncated` (the `X-Export-Truncated`
+ * response header — never folded into the body; see `exportFiltered`'s own
+ * doc for why).
+ */
+export interface CustomerExportResult {
+  readonly rows: readonly CustomerExportRow[];
+  /** True when the filter matched more than the server's row cap and the export was cut. */
+  readonly truncated: boolean;
+}
+
 export interface CreateCustomerRequest {
   readonly brandId: string;
   readonly phone: string;
@@ -228,6 +240,40 @@ export interface LoyaltyEntry {
   readonly occurredAt: string;
 }
 
+// ------------------------------------------------------------ row X.13/5.1b: import
+
+/** `CustomerImportController.CustomerImportSubmitResponse`/`CustomerImportStatusResponse`'s shared status vocabulary. */
+export type CustomerImportJobStatus =
+  'QUEUED' | 'RUNNING' | 'DRY_RUN_COMPLETE' | 'COMPLETE' | 'FAILED';
+
+export interface CustomerImportSubmitRequest {
+  readonly brandId: string;
+  readonly fileName: string;
+  readonly content: string;
+}
+
+/** `CustomerImportController.CustomerImportStatusResponse`. */
+export interface CustomerImportStatus {
+  readonly runId: string;
+  readonly status: CustomerImportJobStatus;
+  readonly dryRun: boolean;
+  readonly sourceFileName: string;
+  readonly rowsTotal: number;
+  readonly rowsProcessed: number;
+  readonly rowsCreatedCustomer: number;
+  readonly rowsMatchedCustomer: number;
+  readonly rowsRejected: number;
+  readonly failureReason: string | null;
+}
+
+/** `CustomerImportController.CustomerImportRowResponse` — no phone number and no display name (ADR 0029). */
+export interface CustomerImportRow {
+  readonly rowNumber: number;
+  readonly outcome: 'CREATED_CUSTOMER' | 'MATCHED_CUSTOMER' | 'REJECTED';
+  readonly customerAccountId: string | null;
+  readonly rejectReason: string | null;
+}
+
 /**
  * §5.1-5.2 of the Customers section: the CRM grid, one customer's detail, and
  * everything the detail pane's tabs read and write.
@@ -261,7 +307,7 @@ export class CustomersApi {
     scope: LocationScope,
     filters: { status?: string; query?: string },
     purpose: string,
-  ): Promise<readonly CustomerExportRow[]> {
+  ): Promise<CustomerExportResult> {
     const params: Record<string, string> = { purpose };
     if (filters.status) {
       params['status'] = filters.status;
@@ -269,12 +315,18 @@ export class CustomersApi {
     if (filters.query) {
       params['query'] = filters.query;
     }
+    // The body stays a plain array (CustomerController.export's own doc
+    // explains why: OpenApiContractTests refuses an already-released
+    // endpoint's response type narrowing or changing) — truncation travels
+    // on the X-Export-Truncated header instead.
     const result = await firstValueFrom(
-      this.api.get<readonly CustomerExportRow[]>(operationsPaths.customersExport(scope), {
-        params,
-      }),
+      this.api.getWithFlag<readonly CustomerExportRow[]>(
+        operationsPaths.customersExport(scope),
+        'X-Export-Truncated',
+        { params },
+      ),
     );
-    return result.value ?? [];
+    return { rows: result.value ?? [], truncated: result.flag };
   }
 
   async create(scope: LocationScope, request: CreateCustomerRequest): Promise<string> {
@@ -626,6 +678,39 @@ export class CustomersApi {
       this.api.get<readonly LoyaltyEntry[]>(
         operationsPaths.customerLoyaltyEntries(scope, accountId, loyaltyAccountId),
       ),
+    );
+    return result.value ?? [];
+  }
+
+  // ---------------------------------------------------------- row X.13/5.1b: import
+
+  /** Queues a run; `dryRun` defaults true server-side (`CustomerImportController.submit`) but is always passed here explicitly. */
+  async submitImport(
+    scope: LocationScope,
+    request: CustomerImportSubmitRequest,
+    dryRun: boolean,
+  ): Promise<string> {
+    const response = await firstValueFrom(
+      this.api.post<CustomerImportSubmitRequest, { runId: string }>(
+        operationsPaths.customerImports(scope),
+        command(request),
+        { params: { dryRun } },
+      ),
+    );
+    return response.runId;
+  }
+
+  async importStatus(scope: LocationScope, runId: string): Promise<CustomerImportStatus> {
+    return (
+      await firstValueFrom(
+        this.api.get<CustomerImportStatus>(operationsPaths.customerImport(scope, runId)),
+      )
+    ).value;
+  }
+
+  async importRows(scope: LocationScope, runId: string): Promise<readonly CustomerImportRow[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly CustomerImportRow[]>(operationsPaths.customerImportRows(scope, runId)),
     );
     return result.value ?? [];
   }

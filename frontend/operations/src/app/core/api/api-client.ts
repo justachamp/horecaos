@@ -84,6 +84,34 @@ export class ApiClient {
       .pipe(catchError(toApiError));
   }
 
+  /**
+   * A GET whose body is read normally, plus one boolean read off a response
+   * header rather than the body.
+   *
+   * For a signal that must not change an already-released endpoint's body
+   * shape — `OpenApiContractTests` refuses a response type narrowing or
+   * changing, so wrapping an array response in `{rows, flag}` is a breaking
+   * change the contract test exists to catch. `CustomerController.export`'s
+   * `X-Export-Truncated` header is the platform-side answer; this is the
+   * one place a caller reads it, the same way `Idempotency-Replayed` is read
+   * off a header rather than folded into a mutation's own body.
+   */
+  getWithFlag<T>(
+    path: string,
+    headerName: string,
+    options: GetOptions = {},
+  ): Observable<{ value: T; flag: boolean }> {
+    return this.http
+      .get<T>(this.url(path), { params: toHttpParams(options.params), observe: 'response' })
+      .pipe(
+        map((response) => ({
+          value: response.body as T,
+          flag: response.headers.get(headerName) === 'true',
+        })),
+        catchError(toApiError),
+      );
+  }
+
   /** A cursor page. Pass the state through {@link pageParams}, never a raw offset. */
   page<T>(path: string, state: CursorState, filters: QueryParams = {}): Observable<Page<T>> {
     return this.http
