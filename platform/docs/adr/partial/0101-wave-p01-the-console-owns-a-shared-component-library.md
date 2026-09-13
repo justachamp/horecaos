@@ -304,7 +304,7 @@ toast that a screen reader announces after the dialog has closed.
 
 ## References
 
-- [ADR 0035](0035-angular-frontend-platform-and-design-system-adoption.md) — frontend platform and the component gap this record closes the console's half of
-- [ADR 0052](0052-one-repository-for-the-whole-platform.md) — why the four applications are directories in this repository
+- [ADR 0035](../partial/0035-angular-frontend-platform-and-design-system-adoption.md) — frontend platform and the component gap this record closes the console's half of
+- [ADR 0052](../partial/0052-one-repository-for-the-whole-platform.md) — why the four applications are directories in this repository
 - [The operations gap map](../../operations-gap-map.md) — wave `P01` and rows `X.8`, `X.15`, `X.16`, `X.17`, `X.30`
 - [The frontend information architecture](../../frontend-information-architecture.md) — PART 4's component inventory

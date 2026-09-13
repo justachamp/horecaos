@@ -130,7 +130,7 @@
   collides with a second `startRun` with `DataIntegrityViolationException`,
   and cancelling an already-`ACTIVE` or already-`FAILED` run throws the
   identical `CancellationNotPermittedException` message either way.
-  As of 2026-09-11, [ADR 0099](0099-a-new-tenant-can-be-onboarded-with-a-sample-menu.md)
+  As of 2026-09-11, [ADR 0099](../built/0099-a-new-tenant-can-be-onboarded-with-a-sample-menu.md)
   adds `SAMPLE_MENU_PUBLISH` at sequence 4, so the catalogue is thirteen steps
   and twelve of them have handlers. It is the first step that is not
   `requiredInV1` and the first a run chooses: `startRun` materialises it

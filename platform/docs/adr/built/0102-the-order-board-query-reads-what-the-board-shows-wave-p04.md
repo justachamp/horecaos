@@ -407,7 +407,7 @@ until then the description on it names its replacement.
 ## References
 
 - [ADR 0019](../partial/0019-cart-checkout-and-order-orchestration.md) — the ordering module and its read path
-- [ADR 0031](0031-http-api-conventions.md) — cursor pagination, Problem Details, the `Page` envelope
+- [ADR 0031](../built/0031-http-api-conventions.md) — cursor pagination, Problem Details, the `Page` envelope
 - [ADR 0036](../partial/0036-sales-channels-and-location-serviceability.md) — `promised_at` and its basis
 - [ADR 0039](../partial/0039-operator-assisted-ordering-and-order-amendment.md) — the attribution and callback columns
 - [ADR 0040](../partial/0040-marketplace-channel-and-partner-api.md) — `order_external_references` and its normalisation
