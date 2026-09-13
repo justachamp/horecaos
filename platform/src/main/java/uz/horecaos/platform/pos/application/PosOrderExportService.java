@@ -90,6 +90,15 @@ public class PosOrderExportService {
     private static final String MODIFIER_ENTITY = "MODIFIER";
 
     /**
+     * The ADR 0026 mapping entity type a HorecaOS staff principal resolves
+     * through, for {@link OrderExport#operatorExternalId} (operations-gap-map.md
+     * {@code 9.2c}). Shares the one generic {@code
+     * integration.provider_entity_mappings} table with {@link #VARIANT_ENTITY}
+     * and {@link #MODIFIER_ENTITY} — a new entity type value, not a new table.
+     */
+    private static final String OPERATOR_ENTITY = "OPERATOR";
+
+    /**
      * How far either side of the export request a candidate order may have been
      * created and still be a candidate.
      *
@@ -676,7 +685,8 @@ public class PosOrderExportService {
                 // waiting for a clerk to accept an order the restaurant accepted
                 // a moment ago, on the other screen.
                 "RESTAURANT_APPROVAL".equals(order.acceptanceMode()) && !"CONFIRMED".equals(order.status()),
-                order.placedAt());
+                order.placedAt(),
+                resolveOperatorExternalId(binding.bindingId(), order.acceptedByActorType(), order.acceptedByActorId()));
 
         PosContext context = new PosContext(
                 tenantId,
@@ -687,6 +697,48 @@ public class PosOrderExportService {
                 export.id().toString());
 
         return new Prepared(adapter, context, command, List.copyOf(fingerprintLines));
+    }
+
+    /**
+     * {@link OrderExport#operatorExternalId}'s whole resolution (operations-gap-map.md
+     * {@code 9.2c}): a HorecaOS operator only ever reaches the till through the
+     * one generic ADR 0026 mapping every other entity here already uses — there
+     * is no separate "operator mapping" table, and none is missing for this to
+     * work.
+     *
+     * <p>Package-private, not private, so {@code
+     * PosOrderExportOperatorAttributionTests} can exercise it directly: the
+     * point of this method is that it has no order-export machinery of its own
+     * to stand up, just a lookup keyed off two fields the order read already
+     * carries.
+     *
+     * @param acceptedByActorType {@code ordering.orders.accepted_by_actor_type}
+     *                            — only {@code "USER"} names a staff principal;
+     *                            every other value (including null, an order
+     *                            nobody has accepted yet) resolves to no operator
+     * @param acceptedByActorId   the matching actor id. Parsed as a {@link UUID}
+     *                            only because a {@code USER} actor id always is
+     *                            one (every {@code currentActor.get().subject()}
+     *                            call site in this codebase does the same
+     *                            parse) — an actor id that fails to parse is
+     *                            treated as "no operator" rather than thrown,
+     *                            since a malformed value here is a fact about
+     *                            data, not a reason to fail the whole export
+     */
+    @Nullable
+    String resolveOperatorExternalId(
+            UUID bindingId, @Nullable String acceptedByActorType, @Nullable String acceptedByActorId) {
+        if (!"USER".equals(acceptedByActorType) || acceptedByActorId == null) {
+            return null;
+        }
+        UUID operatorPrincipal;
+        try {
+            operatorPrincipal = UUID.fromString(acceptedByActorId);
+        } catch (IllegalArgumentException notAPrincipalUuid) {
+            return null;
+        }
+        return mappings.externalIdFor(bindingId, OPERATOR_ENTITY, operatorPrincipal)
+                .orElse(null);
     }
 
     private List<LineFingerprint.Line> fingerprintLines(BindingRef binding, PosOrderSource.ExportableOrder order) {

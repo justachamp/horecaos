@@ -475,6 +475,14 @@ public class CloposAdapter implements PosAdapter {
         boolean requireClerk = order.requireProviderApproval()
                 && Boolean.parseBoolean(context.config(CloposConfig.REQUIRE_CLERK_APPROVAL, "true"));
 
+        // order.operatorExternalId() (operations-gap-map.md 9.2c) is deliberately
+        // never read here: docs/providers/clopos-api.md §6.5's CreateOrderRequest
+        // names exactly sale_type_id, venue_id, customer and products as fields
+        // Clopos accepts, with no waiter/user/operator field documented anywhere
+        // on order creation. Sending an undocumented field on a vendor this
+        // unforgiving about schema (product_hash's own history is the warning)
+        // is a guess this adapter does not make; the value stays available on
+        // the contract for a provider that does document one.
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("venue_id", numeric(context.externalVenueReference()));
         body.put("sale_type_id", numeric(context.config(CloposConfig.SALE_TYPE_ID, null)));

@@ -661,6 +661,8 @@ class PosOrderExportCrossInstanceDispatchTests {
                     "Test customer",
                     "+998901234567",
                     null,
+                    null,
+                    null,
                     List.of(new ExportableOrder.Line(
                             UUID.randomUUID(), VARIANT, "Fake dish", null, 1, 50_000L, List.of()))));
         }

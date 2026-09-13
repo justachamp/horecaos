@@ -53,6 +53,7 @@ public class JdbcPosOrderSource implements PosOrderSource {
                 SELECT o.id, o.tenant_id, o.brand_id, o.location_id, o.public_order_number,
                        o.status, o.acceptance_mode_snapshot, o.fulfillment_mode,
                        o.currency, o.total_minor, o.created_at, o.customer_account_id,
+                       o.accepted_by_actor_type, o.accepted_by_actor_id,
                        s.display_name_encrypted, s.contact_encrypted, s.address_encrypted,
                        s.anonymized_at
                   FROM ordering.orders o
@@ -78,6 +79,8 @@ public class JdbcPosOrderSource implements PosOrderSource {
                         row.getLong("total_minor"),
                         instant(row.getObject("created_at", OffsetDateTime.class)),
                         row.getObject("customer_account_id", UUID.class),
+                        row.getString("accepted_by_actor_type"),
+                        row.getString("accepted_by_actor_id"),
                         row.getString("display_name_encrypted"),
                         row.getString("contact_encrypted"),
                         row.getString("address_encrypted"),
@@ -107,6 +110,8 @@ public class JdbcPosOrderSource implements PosOrderSource {
                 reveal(tenantId, orderId, "display_name_encrypted", found.displayNameEncrypted(), revealPurpose),
                 reveal(tenantId, orderId, "contact_encrypted", found.contactEncrypted(), revealPurpose),
                 reveal(tenantId, orderId, "address_encrypted", found.addressEncrypted(), revealPurpose),
+                found.acceptedByActorType(),
+                found.acceptedByActorId(),
                 lines));
     }
 
@@ -187,6 +192,8 @@ public class JdbcPosOrderSource implements PosOrderSource {
             long totalMinor,
             @Nullable Instant placedAt,
             @Nullable UUID customerAccountId,
+            @Nullable String acceptedByActorType,
+            @Nullable String acceptedByActorId,
             @Nullable String displayNameEncrypted,
             @Nullable String contactEncrypted,
             @Nullable String addressEncrypted,
