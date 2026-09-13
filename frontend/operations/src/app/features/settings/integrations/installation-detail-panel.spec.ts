@@ -1,10 +1,21 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Observable, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
+import {
+  BulkAutoMatchResponse,
+  MappingEntityType,
+  MappingStatus,
+  MappingView,
+  PosMappingApi,
+  UnmappedExternalResponse,
+} from '../../catalog/pos-mapping-api';
+import { CursorState, Page } from '../../../core/api/page';
+import { TenantScope } from '../../../core/api/pos-paths';
 import { InstallationDetailPanel } from './installation-detail-panel';
 import { BindingView, InstallationView, IntegrationsApi } from './integrations-api';
 
@@ -17,6 +28,7 @@ import { BindingView, InstallationView, IntegrationsApi } from './integrations-a
  * "the panel renders" implies every button actually calls through.
  */
 const SCOPE: LocationScope = { tenantId: 'tenant-1', brandId: 'brand-1', locationId: 'location-1' };
+const TENANT_SCOPE = { tenantId: 'tenant-1' };
 
 const TELEGRAM_INSTALLATION: InstallationView = {
   id: 'inst-1',
@@ -69,13 +81,11 @@ class FakeIntegrationsApi {
   readonly listBindings = vi.fn().mockResolvedValue([]);
   readonly activateBinding = vi.fn().mockResolvedValue({ changed: true, outcome: 'activated' });
   readonly suspendBinding = vi.fn().mockResolvedValue({ changed: true, outcome: 'suspended' });
-  readonly reconcileCapabilities = vi
-    .fn()
-    .mockResolvedValue({
-      connectionStatus: 'SUCCEEDED',
-      adapterVersion: '3',
-      capabilities: { ORDER_PUSH: 'OK' },
-    });
+  readonly reconcileCapabilities = vi.fn().mockResolvedValue({
+    connectionStatus: 'SUCCEEDED',
+    adapterVersion: '3',
+    capabilities: { ORDER_PUSH: 'OK' },
+  });
   readonly getInstallationSettings = vi.fn().mockResolvedValue({ requireClerkApproval: true });
   readonly updateInstallationSettings = vi.fn().mockResolvedValue({ requireClerkApproval: false });
   readonly listPartnerApiClients = vi.fn().mockResolvedValue([]);
@@ -97,6 +107,47 @@ class FakeIntegrationsApi {
     .mockResolvedValue({ changed: true, outcome: 'revoked' });
 }
 
+const EMPTY_UNMAPPED: UnmappedExternalResponse = {
+  sourced: true,
+  detail: null,
+  entities: [],
+  horecaosCandidates: [],
+};
+
+/**
+ * `10.8b`/`X.24`: the installation-detail «Соответствия» tab's own mapping
+ * calls — a thin fake over the same shape `catalog-import-page.spec.ts`
+ * already uses for the `PRODUCT` tab, here exercised for the five
+ * non-`PRODUCT` types instead.
+ */
+class FakePosMappingApi {
+  readonly list = vi
+    .fn()
+    .mockImplementation(
+      (
+        _scope: TenantScope,
+        _bindingId: string,
+        _entityType: MappingEntityType,
+        _status: MappingStatus | null,
+        _page: CursorState,
+      ): Observable<Page<MappingView>> => of({ items: [], nextCursor: null }),
+    );
+  readonly unmapped = vi
+    .fn()
+    .mockImplementation((): Observable<UnmappedExternalResponse> => of(EMPTY_UNMAPPED));
+  readonly create = vi
+    .fn()
+    .mockImplementation(() => of({ mappingId: 'mapping-1', status: 'ACTIVE' }));
+  readonly retire = vi
+    .fn()
+    .mockImplementation(() => of({ mappingId: 'mapping-1', status: 'RETIRED' }));
+  readonly bulkAutoMatch = vi
+    .fn()
+    .mockImplementation((): Observable<BulkAutoMatchResponse> =>
+      of({ sourced: true, detail: null, matchedCount: 0, conflicts: [] }),
+    );
+}
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -105,13 +156,16 @@ async function flushMicrotasks(): Promise<void> {
 describe('InstallationDetailPanel', () => {
   let fixture: ComponentFixture<InstallationDetailPanel>;
   let api: FakeIntegrationsApi;
+  let mappingApi: FakePosMappingApi;
 
   async function create(installation: InstallationView): Promise<void> {
     api = new FakeIntegrationsApi();
+    mappingApi = new FakePosMappingApi();
     await TestBed.configureTestingModule({
       imports: [InstallationDetailPanel],
       providers: [
         { provide: IntegrationsApi, useValue: api },
+        { provide: PosMappingApi, useValue: mappingApi },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
       ],
     }).compileComponents();
@@ -155,11 +209,13 @@ describe('InstallationDetailPanel', () => {
 
   it('activates a suspended binding after a reason is given, then reloads the list', async () => {
     api = new FakeIntegrationsApi();
+    mappingApi = new FakePosMappingApi();
     api.listBindings.mockResolvedValue([SUSPENDED_BINDING]);
     await TestBed.configureTestingModule({
       imports: [InstallationDetailPanel],
       providers: [
         { provide: IntegrationsApi, useValue: api },
+        { provide: PosMappingApi, useValue: mappingApi },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
       ],
     }).compileComponents();
@@ -188,11 +244,13 @@ describe('InstallationDetailPanel', () => {
 
   it('does not activate when the reason prompt is dismissed', async () => {
     api = new FakeIntegrationsApi();
+    mappingApi = new FakePosMappingApi();
     api.listBindings.mockResolvedValue([SUSPENDED_BINDING]);
     await TestBed.configureTestingModule({
       imports: [InstallationDetailPanel],
       providers: [
         { provide: IntegrationsApi, useValue: api },
+        { provide: PosMappingApi, useValue: mappingApi },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
       ],
     }).compileComponents();
@@ -212,11 +270,13 @@ describe('InstallationDetailPanel', () => {
 
   it('suspends an active binding after a reason is given, then reloads the list', async () => {
     api = new FakeIntegrationsApi();
+    mappingApi = new FakePosMappingApi();
     api.listBindings.mockResolvedValue([ACTIVE_BINDING]);
     await TestBed.configureTestingModule({
       imports: [InstallationDetailPanel],
       providers: [
         { provide: IntegrationsApi, useValue: api },
+        { provide: PosMappingApi, useValue: mappingApi },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
       ],
     }).compileComponents();
@@ -325,6 +385,7 @@ describe('InstallationDetailPanel', () => {
 
   it('rotates a partner API client with its current version, then reloads the list', async () => {
     api = new FakeIntegrationsApi();
+    mappingApi = new FakePosMappingApi();
     api.listPartnerApiClients.mockResolvedValue([
       {
         id: 'client-1',
@@ -341,6 +402,7 @@ describe('InstallationDetailPanel', () => {
       imports: [InstallationDetailPanel],
       providers: [
         { provide: IntegrationsApi, useValue: api },
+        { provide: PosMappingApi, useValue: mappingApi },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
       ],
     }).compileComponents();
@@ -371,6 +433,7 @@ describe('InstallationDetailPanel', () => {
 
   it('revokes a partner API client with its current version after a reason is given', async () => {
     api = new FakeIntegrationsApi();
+    mappingApi = new FakePosMappingApi();
     api.listPartnerApiClients.mockResolvedValue([
       {
         id: 'client-1',
@@ -387,6 +450,7 @@ describe('InstallationDetailPanel', () => {
       imports: [InstallationDetailPanel],
       providers: [
         { provide: IntegrationsApi, useValue: api },
+        { provide: PosMappingApi, useValue: mappingApi },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
       ],
     }).compileComponents();
@@ -408,5 +472,254 @@ describe('InstallationDetailPanel', () => {
       1,
       'Aggregator contract ended',
     );
+  });
+
+  // ---------------------------------------------------------------- mapping («Соответствия», 10.8b/X.24)
+
+  function tabWithText(text: string): HTMLButtonElement {
+    const found = Array.from(host().querySelectorAll('button[role="tab"]')).find((candidate) =>
+      candidate.textContent?.includes(text),
+    );
+    if (!found) {
+      throw new Error(`No tab found containing "${text}"`);
+    }
+    return found as HTMLButtonElement;
+  }
+
+  it('shows no «Соответствия» tab for a non-POS installation — that mapping API has no pos_binding to call with', async () => {
+    await create(TELEGRAM_INSTALLATION);
+
+    expect(host().querySelectorAll('button[role="tab"]').length).toBe(0);
+    expect(host().textContent).not.toContain('Соответствия');
+  });
+
+  it('shows the «Соответствия» tab for a POS installation, alongside the tab it opens on', async () => {
+    api = new FakeIntegrationsApi();
+    mappingApi = new FakePosMappingApi();
+    api.listBindings.mockResolvedValue([ACTIVE_BINDING]);
+    await TestBed.configureTestingModule({
+      imports: [InstallationDetailPanel],
+      providers: [
+        { provide: IntegrationsApi, useValue: api },
+        { provide: PosMappingApi, useValue: mappingApi },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(InstallationDetailPanel);
+    fixture.componentRef.setInput('installation', CLOPOS_INSTALLATION);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(tabWithText('Соответствия')).toBeTruthy();
+    // The details tab, not the mapping panel, is what shows before it is picked.
+    expect(host().querySelector('[data-testid="q-installation-mapping-tab"]')).toBeNull();
+    expect(mappingApi.list).not.toHaveBeenCalled();
+  });
+
+  it('opening the mapping tab loads the first entity type for the first ACTIVE binding by default', async () => {
+    api = new FakeIntegrationsApi();
+    mappingApi = new FakePosMappingApi();
+    api.listBindings.mockResolvedValue([SUSPENDED_BINDING, ACTIVE_BINDING]);
+    await TestBed.configureTestingModule({
+      imports: [InstallationDetailPanel],
+      providers: [
+        { provide: IntegrationsApi, useValue: api },
+        { provide: PosMappingApi, useValue: mappingApi },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(InstallationDetailPanel);
+    fixture.componentRef.setInput('installation', CLOPOS_INSTALLATION);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    tabWithText('Соответствия').click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // ACTIVE_BINDING ('binding-2'), not the first row in the list, and
+    // PAYMENT_TYPE, MAPPING_ENTITY_TYPES' own first entry.
+    expect(mappingApi.list).toHaveBeenCalledWith(
+      TENANT_SCOPE,
+      'binding-2',
+      'PAYMENT_TYPE',
+      'ACTIVE',
+      { cursor: null, limit: 50 },
+    );
+    expect(mappingApi.unmapped).toHaveBeenCalledWith(TENANT_SCOPE, 'binding-2', 'PAYMENT_TYPE');
+    expect(host().querySelector('q-mapping-pane')).toBeTruthy();
+  });
+
+  it('shows the no-bindings message instead of the pane when this installation has none', async () => {
+    await create(CLOPOS_INSTALLATION);
+
+    tabWithText('Соответствия').click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host().textContent).toContain('nothing to map');
+    expect(mappingApi.list).not.toHaveBeenCalled();
+  });
+
+  it('switching entity type reloads the mapping list and unmapped candidates for that type', async () => {
+    api = new FakeIntegrationsApi();
+    mappingApi = new FakePosMappingApi();
+    api.listBindings.mockResolvedValue([ACTIVE_BINDING]);
+    await TestBed.configureTestingModule({
+      imports: [InstallationDetailPanel],
+      providers: [
+        { provide: IntegrationsApi, useValue: api },
+        { provide: PosMappingApi, useValue: mappingApi },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(InstallationDetailPanel);
+    fixture.componentRef.setInput('installation', CLOPOS_INSTALLATION);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    tabWithText('Соответствия').click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    mappingApi.list.mockClear();
+    mappingApi.unmapped.mockClear();
+
+    (
+      Array.from(host().querySelectorAll('.mapping-entity-types button')).find((b) =>
+        b.textContent?.includes('Couriers'),
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(mappingApi.list).toHaveBeenCalledWith(TENANT_SCOPE, 'binding-2', 'COURIER', 'ACTIVE', {
+      cursor: null,
+      limit: 50,
+    });
+    expect(mappingApi.unmapped).toHaveBeenCalledWith(TENANT_SCOPE, 'binding-2', 'COURIER');
+  });
+
+  it('links a pair through the pane, then reloads the mapping for the active entity type', async () => {
+    api = new FakeIntegrationsApi();
+    mappingApi = new FakePosMappingApi();
+    api.listBindings.mockResolvedValue([ACTIVE_BINDING]);
+    mappingApi.unmapped.mockReturnValue(
+      of({
+        sourced: true,
+        detail: null,
+        entities: [{ externalId: 'ext-cash', name: 'Cash', externalParentId: null }],
+        horecaosCandidates: [{ id: 'horeca-cash', name: 'Cash' }],
+      }),
+    );
+    await TestBed.configureTestingModule({
+      imports: [InstallationDetailPanel],
+      providers: [
+        { provide: IntegrationsApi, useValue: api },
+        { provide: PosMappingApi, useValue: mappingApi },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(InstallationDetailPanel);
+    fixture.componentRef.setInput('installation', CLOPOS_INSTALLATION);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    tabWithText('Соответствия').click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const pane = host().querySelector('q-mapping-pane');
+    expect(pane).toBeTruthy();
+    const leftInput = pane!.querySelector<HTMLInputElement>(
+      '[data-testid="q-mapping-pane-left"] [data-testid="q-combobox-input"]',
+    )!;
+    leftInput.value = 'Cash';
+    leftInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    pane!
+      .querySelector<HTMLElement>(
+        '[data-testid="q-mapping-pane-left"] [data-testid="q-combobox-option"]',
+      )!
+      .click();
+    fixture.detectChanges();
+
+    const rightInput = pane!.querySelector<HTMLInputElement>(
+      '[data-testid="q-mapping-pane-right"] [data-testid="q-combobox-input"]',
+    )!;
+    rightInput.value = 'Cash';
+    rightInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    pane!
+      .querySelector<HTMLElement>(
+        '[data-testid="q-mapping-pane-right"] [data-testid="q-combobox-option"]',
+      )!
+      .click();
+    fixture.detectChanges();
+
+    (pane!.querySelector('[data-testid="q-mapping-pane-link"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(mappingApi.create).toHaveBeenCalledWith(
+      TENANT_SCOPE,
+      'binding-2',
+      'PAYMENT_TYPE',
+      'horeca-cash',
+      'ext-cash',
+      null,
+    );
+  });
+
+  it('bulk auto-matches the active entity type and surfaces conflicts in the pane', async () => {
+    api = new FakeIntegrationsApi();
+    mappingApi = new FakePosMappingApi();
+    api.listBindings.mockResolvedValue([ACTIVE_BINDING]);
+    mappingApi.bulkAutoMatch.mockReturnValue(
+      of({
+        sourced: true,
+        detail: null,
+        matchedCount: 2,
+        conflicts: [{ name: 'Cash', externalIds: ['e1', 'e2'], horecaosEntityIds: ['h1'] }],
+      }),
+    );
+    await TestBed.configureTestingModule({
+      imports: [InstallationDetailPanel],
+      providers: [
+        { provide: IntegrationsApi, useValue: api },
+        { provide: PosMappingApi, useValue: mappingApi },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(InstallationDetailPanel);
+    fixture.componentRef.setInput('installation', CLOPOS_INSTALLATION);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    tabWithText('Соответствия').click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const pane = host().querySelector('q-mapping-pane')!;
+    (
+      pane.querySelector('[data-testid="q-mapping-pane-bulk-auto-match"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(mappingApi.bulkAutoMatch).toHaveBeenCalledWith(
+      TENANT_SCOPE,
+      'binding-2',
+      'PAYMENT_TYPE',
+    );
+    expect(host().querySelector('[data-testid="q-mapping-pane-conflict-card"]')).toBeTruthy();
   });
 });

@@ -14,6 +14,40 @@
     <button type="button" class="q-body primary" (click)="showCreateForm.set(!showCreateForm())">
       {{ 'settings.salesChannels.create.action' | t }}
     </button>
+
+    <select
+      class="q-body-sm filter"
+      [value]="typeFilter()"
+      (change)="typeFilter.set($any($event.target).value)"
+      data-testid="filter-type"
+    >
+      <option value="">{{ 'settings.salesChannels.filter.allTypes' | t }}</option>
+      @for (type of systemTypes; track type) {
+        <option [value]="type">{{ type }}</option>
+      }
+    </select>
+
+    <select
+      class="q-body-sm filter"
+      [value]="statusFilter()"
+      (change)="statusFilter.set($any($event.target).value)"
+      data-testid="filter-status"
+    >
+      <option value="">{{ 'settings.salesChannels.filter.allStatuses' | t }}</option>
+      <option value="ACTIVE">ACTIVE</option>
+      <option value="INACTIVE">INACTIVE</option>
+      <option value="ARCHIVED">ARCHIVED</option>
+    </select>
+
+    <label class="q-body-sm filter-toggle">
+      <input
+        type="checkbox"
+        [checked]="onlyProblems()"
+        (change)="onlyProblems.set($any($event.target).checked)"
+        data-testid="filter-only-problems"
+      />
+      {{ 'settings.salesChannels.filter.onlyProblems' | t }}
+    </label>
   </div>
 
   @if (showCreateForm()) {
@@ -86,86 +120,251 @@
     </div>
   }
 
-  <table class="table">
-    <thead>
-      <tr>
-        <th class="q-caption">{{ 'settings.salesChannels.field.displayName' | t }}</th>
-        <th class="q-caption">{{ 'settings.salesChannels.field.code' | t }}</th>
-        <th class="q-caption">{{ 'settings.salesChannels.field.systemType' | t }}</th>
-        <th class="q-caption">{{ 'settings.salesChannels.field.status' | t }}</th>
-        <th class="q-caption">{{ 'settings.salesChannels.field.actions' | t }}</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (channel of channels(); track channel.id) {
-        <tr
-          class="row"
-          [class.row--selected]="selectedChannelId() === channel.id"
-          (click)="selectChannel(channel)"
-        >
-          <td class="q-body-sm">{{ channel.displayName }}</td>
-          <td class="q-body-sm q-mono">{{ channel.code }}</td>
-          <td class="q-body-sm">{{ channel.systemType }}</td>
-          <td class="q-body-sm">
-            <span class="status-badge">{{ channel.status }}</span>
-          </td>
-          <td class="q-body-sm">
-            @if (channel.status !== 'ARCHIVED') {
+  <div class="table-scroll">
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ 'settings.salesChannels.field.displayName' | t }}</th>
+          <th class="q-caption">{{ 'settings.salesChannels.field.code' | t }}</th>
+          <th class="q-caption">{{ 'settings.salesChannels.field.systemType' | t }}</th>
+          <th class="q-caption">{{ 'settings.salesChannels.field.status' | t }}</th>
+          <th class="q-caption">{{ 'settings.salesChannels.field.locationCount' | t }}</th>
+          <th class="q-caption">{{ 'settings.salesChannels.field.paymentMethodCount' | t }}</th>
+          <th class="q-caption">{{ 'settings.salesChannels.field.fulfillmentModes' | t }}</th>
+          <th class="q-caption">{{ 'settings.salesChannels.field.pricePlane' | t }}</th>
+          <th class="q-caption">{{ 'settings.salesChannels.field.externallyPriced' | t }}</th>
+          <th class="q-caption">{{ 'settings.salesChannels.field.guestOrdersAllowed' | t }}</th>
+          <th class="q-caption">{{ 'settings.salesChannels.field.installation' | t }}</th>
+          <th class="q-caption">{{ 'settings.salesChannels.field.actions' | t }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (channel of filteredChannels(); track channel.id) {
+          <tr
+            class="row"
+            [class.row--selected]="selectedChannelId() === channel.id"
+            [class.row--problem]="hasProblem(channel)"
+            (click)="selectChannel(channel)"
+          >
+            <td class="q-body-sm">{{ channel.displayName }}</td>
+            <td class="q-body-sm q-mono">{{ channel.code }}</td>
+            <td class="q-body-sm">{{ channel.systemType }}</td>
+            <td class="q-body-sm">
+              <span class="status-badge">{{ channel.status }}</span>
+            </td>
+            <td class="q-body-sm">{{ channel.locationCount }}</td>
+            <td class="q-body-sm">{{ channel.enabledPaymentMethodCount }}</td>
+            <td class="q-body-sm">
+              @for (mode of channel.enabledFulfillmentModes; track mode) {
+                <span class="chip">{{ mode }}</span>
+              } @empty {
+                <span class="ink-subtle">—</span>
+              }
+            </td>
+            <td class="q-body-sm">
+              {{
+                channel.pricePlaneChannelId
+                  ? channelName()(channel.pricePlaneChannelId)
+                  : ('settings.salesChannels.field.pricePlane.own' | t)
+              }}
+            </td>
+            <td class="q-body-sm">{{ channel.externallyPriced ? '✓' : '—' }}</td>
+            <td class="q-body-sm">{{ channel.guestOrdersAllowed ? '✓' : '—' }}</td>
+            <td class="q-body-sm">
+              {{
+                installationName()(channel.providerInstallationId) ??
+                  ('settings.salesChannels.field.installation.none' | t)
+              }}
+            </td>
+            <td class="q-body-sm actions">
               <button
                 type="button"
                 class="q-body-sm link"
-                (click)="$event.stopPropagation(); archiveChannel(channel)"
+                (click)="$event.stopPropagation(); selectChannel(channel)"
               >
-                {{ 'settings.salesChannels.archive.action' | t }}
+                {{ 'settings.salesChannels.edit.action' | t }}
               </button>
-            }
-          </td>
-        </tr>
-        @if (selectedChannelId() === channel.id) {
-          <tr class="matrix-row">
-            <td colspan="5">
-              @if (matrixLoading()) {
-                <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
-              } @else if (matrixError(); as message) {
-                <p class="q-body-sm error" role="alert">{{ message }}</p>
-              } @else {
-                <div class="matrix" [class.matrix--saving]="matrixSaving()">
-                  <div class="matrix__group">
-                    <h3 class="q-caption matrix__label">
-                      {{ 'settings.salesChannels.matrix.paymentMethods' | t }}
-                    </h3>
-                    <q-matrix-grid
-                      data-testid="payment-matrix"
-                      [rowHeaders]="paymentMatrixRows()"
-                      [columnHeaders]="paymentMatrixColumns()"
-                      [cells]="paymentMatrixCells()"
-                      [disabled]="matrixSaving()"
-                      (toggle)="onPaymentMatrixToggle($event)"
-                    />
-                  </div>
-                  <div class="matrix__group">
-                    <h3 class="q-caption matrix__label">
-                      {{ 'settings.salesChannels.matrix.fulfillmentModes' | t }}
-                    </h3>
-                    <q-matrix-grid
-                      data-testid="fulfillment-matrix"
-                      [rowHeaders]="fulfillmentMatrixRows()"
-                      [columnHeaders]="fulfillmentMatrixColumns()"
-                      [cells]="fulfillmentMatrixCells()"
-                      [disabled]="matrixSaving()"
-                      (toggle)="onFulfillmentMatrixToggle($event)"
-                    />
-                  </div>
-                </div>
+              @if (channel.status === 'ACTIVE') {
+                <button
+                  type="button"
+                  class="q-body-sm link"
+                  (click)="$event.stopPropagation(); deactivate(channel)"
+                  data-testid="deactivate"
+                >
+                  {{ 'settings.salesChannels.deactivate.action' | t }}
+                </button>
+              } @else if (channel.status === 'INACTIVE') {
+                <button
+                  type="button"
+                  class="q-body-sm link"
+                  (click)="$event.stopPropagation(); reactivate(channel)"
+                  data-testid="reactivate"
+                >
+                  {{ 'settings.salesChannels.reactivate.action' | t }}
+                </button>
+              }
+              @if (channel.status !== 'ARCHIVED') {
+                <button
+                  type="button"
+                  class="q-body-sm link"
+                  (click)="$event.stopPropagation(); archiveChannel(channel)"
+                >
+                  {{ 'settings.salesChannels.archive.action' | t }}
+                </button>
               }
             </td>
           </tr>
+          @if (selectedChannelId() === channel.id) {
+            <tr class="edit-row">
+              <td colspan="12">
+                <div class="edit" [class.edit--saving]="rowSaving()">
+                  <div class="edit__fields">
+                    <label class="q-caption" [attr.for]="'edit-name-' + channel.id">{{
+                      'settings.salesChannels.field.displayName' | t
+                    }}</label>
+                    <input
+                      [id]="'edit-name-' + channel.id"
+                      class="q-body field"
+                      type="text"
+                      [value]="editDisplayName()"
+                      (input)="editDisplayName.set($any($event.target).value)"
+                    />
+
+                    <label class="q-caption" [attr.for]="'edit-price-plane-' + channel.id">{{
+                      'settings.salesChannels.field.pricePlane' | t
+                    }}</label>
+                    <select
+                      [id]="'edit-price-plane-' + channel.id"
+                      class="q-body field"
+                      [value]="editPricePlaneChannelId()"
+                      (change)="editPricePlaneChannelId.set($any($event.target).value)"
+                    >
+                      <option value="">
+                        {{ 'settings.salesChannels.field.pricePlane.own' | t }}
+                      </option>
+                      @for (other of channels(); track other.id) {
+                        @if (other.id !== channel.id) {
+                          <option [value]="other.id">{{ other.displayName }}</option>
+                        }
+                      }
+                    </select>
+
+                    <label class="q-body-sm checkbox-label">
+                      <input
+                        type="checkbox"
+                        [checked]="editExternallyPriced()"
+                        (change)="editExternallyPriced.set($any($event.target).checked)"
+                      />
+                      {{ 'settings.salesChannels.field.externallyPriced' | t }}
+                    </label>
+
+                    <label class="q-body-sm checkbox-label">
+                      <input
+                        type="checkbox"
+                        [checked]="editGuestOrdersAllowed()"
+                        (change)="editGuestOrdersAllowed.set($any($event.target).checked)"
+                      />
+                      {{ 'settings.salesChannels.field.guestOrdersAllowed' | t }}
+                    </label>
+
+                    <label class="q-caption" [attr.for]="'edit-installation-' + channel.id">{{
+                      'settings.salesChannels.field.installation' | t
+                    }}</label>
+                    <select
+                      [id]="'edit-installation-' + channel.id"
+                      class="q-body field"
+                      [value]="editInstallationId()"
+                      (change)="editInstallationId.set($any($event.target).value)"
+                    >
+                      <option value="">
+                        {{ 'settings.salesChannels.field.installation.none' | t }}
+                      </option>
+                      @for (installation of installations(); track installation.id) {
+                        <option [value]="installation.id">{{ installation.displayName }}</option>
+                      }
+                    </select>
+                  </div>
+
+                  <div class="edit__locations">
+                    <h3 class="q-caption matrix__label">
+                      {{ 'settings.salesChannels.edit.locations' | t }}
+                    </h3>
+                    @for (loc of locations(); track loc.id) {
+                      <label class="q-body-sm checkbox-label" data-testid="location-checkbox">
+                        <input
+                          type="checkbox"
+                          [checked]="editLocationIds().has(loc.id)"
+                          (change)="toggleLocation(loc.id)"
+                        />
+                        {{ loc.displayName }}
+                      </label>
+                    }
+                  </div>
+
+                  @if (rowError(); as message) {
+                    <p class="q-body-sm error" role="alert">{{ message }}</p>
+                  }
+
+                  <div class="create-form__actions">
+                    <button
+                      type="button"
+                      class="q-body secondary"
+                      (click)="selectedChannelId.set(null)"
+                      [disabled]="rowSaving()"
+                    >
+                      {{ 'settings.salesChannels.create.cancel' | t }}
+                    </button>
+                    <button
+                      type="button"
+                      class="q-body primary"
+                      (click)="saveEdit(channel)"
+                      [disabled]="rowSaving()"
+                      data-testid="save-channel"
+                    >
+                      {{ 'settings.salesChannels.edit.save' | t }}
+                    </button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          }
+        } @empty {
+          <tr>
+            <td class="q-body-sm empty" colspan="12">{{ 'settings.salesChannels.empty' | t }}</td>
+          </tr>
         }
-      } @empty {
-        <tr>
-          <td class="q-body-sm empty" colspan="5">{{ 'settings.salesChannels.empty' | t }}</td>
-        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  @if (channels().length > 0) {
+    <section class="matrix-section" [class.matrix-section--saving]="matricesSaving()">
+      @if (matrixError(); as message) {
+        <p class="q-body-sm error" role="alert">{{ message }}</p>
       }
-    </tbody>
-  </table>
+
+      <h2 class="q-body matrix__label">{{ 'settings.salesChannels.matrix.paymentMethods' | t }}</h2>
+      <q-matrix-grid
+        data-testid="payment-matrix"
+        [rowHeaders]="matrixRowHeaders()"
+        [columnHeaders]="paymentMatrixColumns()"
+        [cells]="paymentMatrixCells()"
+        [disabled]="matricesSaving()"
+        (toggle)="onPaymentMatrixToggle($event)"
+      />
+      <p class="q-caption ink-subtle">{{ 'settings.salesChannels.matrix.unavailableHint' | t }}</p>
+
+      <h2 class="q-body matrix__label">
+        {{ 'settings.salesChannels.matrix.fulfillmentModes' | t }}
+      </h2>
+      <q-matrix-grid
+        data-testid="fulfillment-matrix"
+        [rowHeaders]="matrixRowHeaders()"
+        [columnHeaders]="fulfillmentMatrixColumns()"
+        [cells]="fulfillmentMatrixCells()"
+        [disabled]="matricesSaving()"
+        (toggle)="onFulfillmentMatrixToggle($event)"
+      />
+    </section>
+  }
 }

@@ -419,6 +419,27 @@ public class CloposAdapter implements PosAdapter {
         return new AvailabilityRead(outcome, snapshot.availability());
     }
 
+    /**
+     * Clopos's published OpenAPI reference (the same one {@link
+     * #discoverCapabilities} is checked against) has no payment-type endpoint.
+     * Honestly {@code NOT_SUPPORTED} rather than an invented list: the mapping
+     * pane still lets an operator type Clopos's own code by hand for an
+     * {@code OPERATOR}-sourced mapping.
+     */
+    @Override
+    public ReferenceListRead discoverPaymentTypes(PosContext context) {
+        return new ReferenceListRead(
+                ProviderOutcome.rejected("NOT_SUPPORTED", "Clopos exposes no payment-type discovery endpoint"),
+                List.of());
+    }
+
+    /** See {@link #discoverPaymentTypes}: Clopos exposes no discount-discovery endpoint either. */
+    @Override
+    public ReferenceListRead discoverDiscounts(PosContext context) {
+        return new ReferenceListRead(
+                ProviderOutcome.rejected("NOT_SUPPORTED", "Clopos exposes no discount discovery endpoint"), List.of());
+    }
+
     // ------------------------------------------------------------------
     // Order export
     // ------------------------------------------------------------------
@@ -475,6 +496,14 @@ public class CloposAdapter implements PosAdapter {
         boolean requireClerk = order.requireProviderApproval()
                 && Boolean.parseBoolean(context.config(CloposConfig.REQUIRE_CLERK_APPROVAL, "true"));
 
+        // order.operatorExternalId() (operations-gap-map.md 9.2c) is deliberately
+        // never read here: docs/providers/clopos-api.md §6.5's CreateOrderRequest
+        // names exactly sale_type_id, venue_id, customer and products as fields
+        // Clopos accepts, with no waiter/user/operator field documented anywhere
+        // on order creation. Sending an undocumented field on a vendor this
+        // unforgiving about schema (product_hash's own history is the warning)
+        // is a guess this adapter does not make; the value stays available on
+        // the contract for a provider that does document one.
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("venue_id", numeric(context.externalVenueReference()));
         body.put("sale_type_id", numeric(context.config(CloposConfig.SALE_TYPE_ID, null)));

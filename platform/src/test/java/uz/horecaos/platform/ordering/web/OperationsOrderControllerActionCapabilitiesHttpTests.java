@@ -4,6 +4,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -21,6 +22,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -91,6 +93,22 @@ class OperationsOrderControllerActionCapabilitiesHttpTests {
      */
     private static final String CROSS_BRANCH = "action-caps-http-cross-branch";
 
+    /** Holds {@code ORDER_CANCEL}/{@code ORDER_BULK_ACTION} (plus approve/advance) at {@code LOCATION_A} only. */
+    private static final String MANAGER = "action-caps-http-manager";
+
+    /**
+     * Holds {@code ORDER_STATE_OVERRIDE} at {@code LOCATION_A} only. No {@link
+     * PlatformRole} grants this capability at {@code LOCATION} scope in
+     * production (only {@code TENANT_OWNER}/{@code TENANT_ADMIN} do, at {@code
+     * TENANT} scope) — the grant row below stores {@code LOCATION_A} as this
+     * subject's {@code scope_id} directly, which {@code JdbcAuthorizationService}
+     * reads with no reference back to the role's own declared scope type, the
+     * same way {@code CROSS_BRANCH} above already narrows a role's grant to one
+     * scope row. This is the narrowest principal that can exercise the
+     * state-overrides cross-branch guard at all.
+     */
+    private static final String OVERRIDER = "action-caps-http-overrider";
+
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
@@ -140,6 +158,8 @@ class OperationsOrderControllerActionCapabilitiesHttpTests {
         grant(READ_ONLY, PlatformRole.TENANT_FINANCE, "LOCATION", LOCATION_A);
         grant(CROSS_BRANCH, PlatformRole.COURIER_DISPATCHER, "BRAND", BRAND);
         grant(CROSS_BRANCH, PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION_A);
+        grant(MANAGER, PlatformRole.LOCATION_MANAGER, "LOCATION", LOCATION_A);
+        grant(OVERRIDER, PlatformRole.TENANT_OWNER, "LOCATION", LOCATION_A);
     }
 
     @Test
@@ -206,7 +226,223 @@ class OperationsOrderControllerActionCapabilitiesHttpTests {
         }
     }
 
+    /**
+     * ADR 0019 amendment (ADR 0110), wave P41. {@code APPROVER} holds {@code
+     * ORDER_ADVANCE} at {@code LOCATION_A} — every line cook's capability — and
+     * not {@code ORDER_STATE_OVERRIDE}, which almost nobody should hold. This
+     * proves the brief's own named trap: the refusal happens {@code at the
+     * endpoint}, not merely by the array omitting {@code OVERRIDE} — the same
+     * {@code RequiresCapability} interceptor every other mutating endpoint here
+     * goes through, exercised with a real request body naming a real
+     * compensating edge, so a reviewer cannot mistake this for a request that
+     * was refused for some other reason first.
+     */
+    @Test
+    @DisplayName("ORDER_ADVANCE without ORDER_STATE_OVERRIDE is refused at POST .../state-overrides, "
+            + "not merely omitted from actions[]")
+    void orderAdvanceAloneIsRefusedAtTheOverrideEndpoint() throws Exception {
+        UUID orderId = seedReadyOrder(LOCATION_A, "3001");
+
+        MvcResult overrideAttempt = mvc.perform(post(ordersPath(LOCATION_A) + "/" + orderId + "/state-overrides")
+                        .with(tokenFor(APPROVER))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("If-Match", "\"1\"")
+                        .content("{\"targetStatus\":\"PREPARING\",\"reasonId\":\"" + UUID.randomUUID() + "\"}"))
+                .andReturn();
+
+        assertThat(overrideAttempt.getResponse().getStatus())
+                .as("APPROVER holds ORDER_ADVANCE, never ORDER_STATE_OVERRIDE")
+                .isEqualTo(403);
+
+        // And confirmed the other way round: actions[] never offered OVERRIDE to
+        // this principal either, so the 403 above is a second, independent gate
+        // — not the only place the capability is checked.
+        for (String body : readAllThreeAt(LOCATION_A, orderId, APPROVER)) {
+            assertThat(body).doesNotContain("\"action\":\"OVERRIDE\"");
+        }
+    }
+
+    /**
+     * Wave P41, second-pass adversarial review (finding P41/critical). {@code
+     * stateOverride} used to call {@code outcomes.override(tenantId, orderId,
+     * ...)} straight through with no check that {@code orderId} actually
+     * belongs to the path's {@code locationId} — only that {@code OVERRIDER}
+     * holds {@code ORDER_STATE_OVERRIDE} at the path's own {@code LOCATION_A}.
+     * A same-tenant order that actually lives at {@code LOCATION_B} must now
+     * be refused not-found (ADR 0031) rather than have its compensating
+     * transition, and the kitchen-capacity reclaim it triggers, applied
+     * against a branch {@code OVERRIDER} was never granted at all.
+     */
+    @Test
+    @DisplayName("POST .../state-overrides refuses an order belonging to a different branch")
+    void stateOverrideRefusesAnOrderBelongingToAnotherBranch() throws Exception {
+        UUID orderId = seedReadyOrder(LOCATION_B, "4001");
+        // A real, ACTIVE CANCELLATION-kind reason -- state-overrides validates
+        // reasonId's kind before it ever reaches the location check, so a
+        // random UUID here would 404 on ReasonNotFoundException regardless of
+        // whether the location guard runs, making the test pass for the wrong
+        // reason and prove nothing about the cross-branch gap it targets.
+        UUID reasonId = insertOverrideReason();
+
+        MvcResult attempt = mvc.perform(post(ordersPath(LOCATION_A) + "/" + orderId + "/state-overrides")
+                        .with(tokenFor(OVERRIDER))
+                        .header("Idempotency-Key", "override-cross-branch-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("If-Match", "\"1\"")
+                        .content("{\"targetStatus\":\"PREPARING\",\"reasonId\":\"" + reasonId + "\"}"))
+                .andReturn();
+
+        assertThat(attempt.getResponse().getStatus())
+                .as("OVERRIDER holds ORDER_STATE_OVERRIDE only at LOCATION_A; the order lives at LOCATION_B")
+                .isEqualTo(404);
+        assertThat(orderStatus(orderId))
+                .as("a refused override must leave LOCATION_B's order exactly as it was")
+                .isEqualTo("READY");
+    }
+
+    @Test
+    @DisplayName("POST .../approval-decisions refuses an order belonging to a different branch")
+    void decideRefusesAnOrderBelongingToAnotherBranch() throws Exception {
+        UUID orderId = seedAwaitingApprovalOrder(LOCATION_B, "4002");
+
+        MvcResult attempt = mvc.perform(post(ordersPath(LOCATION_A) + "/" + orderId + "/approval-decisions")
+                        .with(tokenFor(APPROVER))
+                        .header("Idempotency-Key", "decide-cross-branch-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decisionId\":\"d-4002\",\"action\":\"APPROVE\"}"))
+                .andReturn();
+
+        assertThat(attempt.getResponse().getStatus())
+                .as("APPROVER holds ORDER_APPROVE only at LOCATION_A; the order lives at LOCATION_B")
+                .isEqualTo(404);
+        assertThat(orderStatus(orderId)).isEqualTo("AWAITING_APPROVAL");
+    }
+
+    @Test
+    @DisplayName("POST .../state-actions refuses an order belonging to a different branch")
+    void stateActionRefusesAnOrderBelongingToAnotherBranch() throws Exception {
+        UUID orderId = seedReadyOrder(LOCATION_B, "4003");
+
+        MvcResult attempt = mvc.perform(post(ordersPath(LOCATION_A) + "/" + orderId + "/state-actions")
+                        .with(tokenFor(APPROVER))
+                        .header("Idempotency-Key", "state-action-cross-branch-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("If-Match", "\"1\"")
+                        .content("{\"targetStatus\":\"FULFILLING\",\"reasonCode\":\"ok\"}"))
+                .andReturn();
+
+        assertThat(attempt.getResponse().getStatus())
+                .as("APPROVER holds ORDER_ADVANCE only at LOCATION_A; the order lives at LOCATION_B")
+                .isEqualTo(404);
+        assertThat(orderStatus(orderId)).isEqualTo("READY");
+    }
+
+    @Test
+    @DisplayName("POST .../cancellations refuses an order belonging to a different branch")
+    void cancelRefusesAnOrderBelongingToAnotherBranch() throws Exception {
+        UUID orderId = seedReadyOrder(LOCATION_B, "4004");
+
+        MvcResult attempt = mvc.perform(post(ordersPath(LOCATION_A) + "/" + orderId + "/cancellations")
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "cancel-cross-branch-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("If-Match", "\"1\"")
+                        .content("{\"reasonCode\":\"ok\"}"))
+                .andReturn();
+
+        assertThat(attempt.getResponse().getStatus())
+                .as("MANAGER holds ORDER_CANCEL only at LOCATION_A; the order lives at LOCATION_B")
+                .isEqualTo(404);
+        assertThat(orderStatus(orderId)).isEqualTo("READY");
+    }
+
+    @Test
+    @DisplayName("POST .../call-provenance refuses an order belonging to a different branch")
+    void callProvenanceRefusesAnOrderBelongingToAnotherBranch() throws Exception {
+        UUID orderId = seedReadyOrder(LOCATION_B, "4005");
+
+        MvcResult attempt = mvc.perform(post(ordersPath(LOCATION_A) + "/" + orderId + "/call-provenance")
+                        .with(tokenFor(APPROVER))
+                        .header("Idempotency-Key", "call-provenance-cross-branch-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"callId\":\"" + UUID.randomUUID() + "\"}"))
+                .andReturn();
+
+        assertThat(attempt.getResponse().getStatus())
+                .as("APPROVER holds ORDER_PROVENANCE_RECORD only at LOCATION_A; the order lives at LOCATION_B")
+                .isEqualTo(404);
+    }
+
+    @Test
+    @DisplayName("POST .../completion refuses an order belonging to a different branch")
+    void completeRefusesAnOrderBelongingToAnotherBranch() throws Exception {
+        UUID orderId = seedReadyOrder(LOCATION_B, "4006");
+
+        MvcResult attempt = mvc.perform(post(ordersPath(LOCATION_A) + "/" + orderId + "/completion")
+                        .with(tokenFor(APPROVER))
+                        .header("Idempotency-Key", "complete-cross-branch-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("If-Match", "\"1\"")
+                        .content("{}"))
+                .andReturn();
+
+        assertThat(attempt.getResponse().getStatus())
+                .as("APPROVER holds ORDER_ADVANCE only at LOCATION_A; the order lives at LOCATION_B")
+                .isEqualTo(404);
+        assertThat(orderStatus(orderId)).isEqualTo("READY");
+    }
+
+    /**
+     * {@code bulkAction} already resolved each item's own location before this
+     * review ({@code OrderBulkActionService.applyItem}, which fails an item
+     * with {@code ORDER_NOT_FOUND_AT_LOCATION} rather than the controller-level
+     * {@code requireOrderAtLocation} guard the other endpoints use) — this test
+     * pins that behaviour rather than changing it, since the reviewer's fix
+     * asked for a regression test on every listed endpoint including this one.
+     */
+    @Test
+    @DisplayName("POST .../bulk-actions fails, rather than applies, an item belonging to a different branch")
+    void bulkActionFailsAnItemBelongingToAnotherBranch() throws Exception {
+        UUID orderId = seedReadyOrder(LOCATION_B, "4007");
+
+        MvcResult attempt = mvc.perform(post(ordersPath(LOCATION_A) + "/bulk-actions")
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "bulk-cross-branch-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"actionType\":\"CANCEL\",\"orders\":[{\"orderId\":\"" + orderId
+                                + "\",\"expectedVersion\":1}],\"cancelReasonId\":\"" + UUID.randomUUID() + "\"}"))
+                .andReturn();
+
+        assertThat(attempt.getResponse().getStatus())
+                .as("the request itself is accepted -- 202 with a per-item outcome, per ADR 0039")
+                .isEqualTo(202);
+        assertThat(attempt.getResponse().getContentAsString())
+                .contains("\"itemStatus\":\"FAILED\"")
+                .contains("\"itemProblemCode\":\"ORDER_NOT_FOUND_AT_LOCATION\"");
+        assertThat(orderStatus(orderId))
+                .as("MANAGER holds ORDER_BULK_ACTION only at LOCATION_A; the order lives at LOCATION_B")
+                .isEqualTo("READY");
+    }
+
     // ------------------------------------------------------------------ fixtures
+
+    private UUID insertOverrideReason() {
+        UUID reasonId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO ordering.order_outcome_reasons (id, tenant_id, kind, system_category,
+                    internal_name, stock_disposition, liability_party, customer_refund, status, version)
+                VALUES (:id, :tenantId, 'CANCELLATION', 'OTHER', 'Operator correction',
+                    'NO_EFFECT', 'TENANT', 'NONE', 'ACTIVE', 1)
+                """).param("id", reasonId).param("tenantId", TENANT).update();
+        return reasonId;
+    }
+
+    private String orderStatus(UUID orderId) {
+        return jdbc.sql("SELECT status FROM ordering.orders WHERE id = :id")
+                .param("id", orderId)
+                .query(String.class)
+                .single();
+    }
 
     /** The list, board and detail response bodies for one order, all read as one subject. All three must be 200. */
     private List<String> readAllThreeAt(UUID locationId, UUID orderId, String subject) throws Exception {
@@ -290,6 +526,78 @@ class OperationsOrderControllerActionCapabilitiesHttpTests {
                 .param("ch", channelId)
                 .param("guest", "guest-" + orderId)
                 .param("deadline", now.plus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
+                .param("quote", quoteId)
+                .param("hash", "hash-" + orderId)
+                .param("pub", publicationId)
+                .param("cart", cartId)
+                .param("key", "idem-" + orderId)
+                .param("at", now.atOffset(ZoneOffset.UTC))
+                .update();
+
+        return orderId;
+    }
+
+    /**
+     * A {@code READY} order (ADR 0019 amendment, ADR 0110, wave P41) —
+     * {@code OrderStateMachine.compensatingTransitionsFrom(READY)} names
+     * {@code PREPARING}, the edge {@link
+     * #orderAdvanceAloneIsRefusedAtTheOverrideEndpoint} targets. {@code
+     * fulfillment_mode} is {@code PICKUP} so the seed needs no delivery
+     * destination; the compensating edge under test does not depend on mode.
+     */
+    private UUID seedReadyOrder(UUID locationId, String number) {
+        UUID orderId = UUID.randomUUID();
+        UUID cartId = UUID.randomUUID();
+        UUID quoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+
+        jdbc.sql("""
+                INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
+                    fulfillment_mode, currency, status, guest_reference_hash, expires_at)
+                VALUES (:id, :t, :b, :loc, :ch, 'PICKUP', 'UZS', 'ACTIVE', :guest,
+                    now() + interval '1 hour')
+                """)
+                .param("id", cartId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", locationId)
+                .param("ch", channelId)
+                .param("guest", "guest-" + orderId)
+                .update();
+
+        jdbc.sql("""
+                INSERT INTO pricing.quotes (id, tenant_id, brand_id, location_id, currency,
+                    catalog_publication_id, calculation_version, context_hash, subtotal_minor,
+                    tax_minor, total_minor, expires_at)
+                VALUES (:id, :t, :b, :loc, 'UZS', :pub, 1, :hash, 20000, 0, 20000,
+                    now() + interval '1 hour')
+                """)
+                .param("id", quoteId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", locationId)
+                .param("pub", publicationId)
+                .param("hash", "hash-" + orderId)
+                .update();
+
+        jdbc.sql("""
+                INSERT INTO ordering.orders (id, public_order_number, tenant_id, brand_id,
+                    location_id, channel_id, channel_code_snapshot, guest_reference_hash,
+                    fulfillment_mode, acceptance_mode_snapshot, approval_channel_snapshot, status,
+                    currency, subtotal_minor, tax_minor, fee_minor, total_minor, pricing_quote_id,
+                    pricing_context_hash, catalog_publication_id, cart_id, idempotency_key, version,
+                    created_at, confirmed_at)
+                VALUES (:id, :number, :t, :b, :loc, :ch, 'WEB', :guest, 'PICKUP', 'AUTO_CONFIRM',
+                    'HORECAOS_OPERATIONS', 'READY', 'UZS', 20000, 0, 0, 20000, :quote, :hash, :pub,
+                    :cart, :key, 1, :at, :at)
+                """)
+                .param("id", orderId)
+                .param("number", number)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", locationId)
+                .param("ch", channelId)
+                .param("guest", "guest-" + orderId)
                 .param("quote", quoteId)
                 .param("hash", "hash-" + orderId)
                 .param("pub", publicationId)

@@ -115,6 +115,19 @@ public class PromoCodeAuthoringService {
         return store.listPromoCodes(tenantId, brandId);
     }
 
+    /**
+     * Every reservation, redemption and release recorded against one code — the
+     * drill-down {@code redeemedCount} alone cannot give: which customer, on
+     * which order, when. Ownership-checked the same way {@link #activate} and
+     * {@link #retire} are, so a brand cannot read a sibling brand's ledger by
+     * guessing a coupon id.
+     */
+    @Transactional(readOnly = true)
+    public List<JdbcPromoCodeStore.CouponRedemptionRow> redemptions(UUID tenantId, UUID brandId, UUID couponId) {
+        require(tenantId, brandId, couponId);
+        return store.redemptionsForCoupon(tenantId, couponId);
+    }
+
     @Transactional
     public PromoCodeAuthoringRow draft(UUID tenantId, UUID brandId, PromoCodeDraft draft) {
         validate(draft);

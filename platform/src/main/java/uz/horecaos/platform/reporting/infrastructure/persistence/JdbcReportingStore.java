@@ -225,6 +225,8 @@ public class JdbcReportingStore {
                        o.status, o.created_at, o.confirmed_at, o.closed_at, o.customer_account_id,
                        o.subtotal_minor, o.tax_minor, o.discount_minor, o.fee_minor, o.total_minor,
                        o.promised_at, o.promise_travel_minutes, o.version,
+                       o.created_by_actor_type, o.created_by_actor_id,
+                       o.accepted_by_actor_type, o.accepted_by_actor_id,
                        (SELECT i.legal_entity_id
                           FROM payments.payment_intents i
                          WHERE i.tenant_id = o.tenant_id AND i.order_id = o.id
@@ -411,7 +413,11 @@ public class JdbcReportingStore {
             @Nullable Instant promisedAt,
             @Nullable Integer promiseTravelMinutes,
             @Nullable String cancellationReasonCode,
-            int version) {}
+            int version,
+            @Nullable String createdByActorType,
+            @Nullable String createdByActorId,
+            @Nullable String acceptedByActorType,
+            @Nullable String acceptedByActorId) {}
 
     public record SourceLine(
             UUID lineId,
@@ -559,6 +565,7 @@ public class JdbcReportingStore {
         params.put("fulfilmentType", fact.fulfilmentType());
         params.put("terminalStatus", fact.terminalStatus());
         params.put("cancellationReasonCode", fact.cancellationReasonCode());
+        params.put("operatorPrincipalId", fact.operatorPrincipalId());
         params.put("customerSubjectHash", fact.customerSubjectHash());
         params.put("isFirstOrder", fact.isFirstOrder());
         params.put("gross", fact.grossRevenueSom());
@@ -581,7 +588,8 @@ public class JdbcReportingStore {
                 INSERT INTO reporting.fact_order (
                     tenant_id, order_id, business_date, boundary_version, occurred_at, closed_at,
                     brand_id, location_id, legal_entity_id, channel_code, fulfilment_type,
-                    terminal_status, cancellation_reason_code, customer_subject_hash,
+                    terminal_status, cancellation_reason_code, operator_principal_id,
+                    customer_subject_hash,
                     is_first_order, gross_revenue_som, discount_som, delivery_fee_som, tax_som,
                     net_revenue_som, line_count, item_count, seconds_to_confirm, seconds_to_ready,
                     seconds_total, promised_at, promise_travel_minutes, seconds_late,
@@ -589,7 +597,8 @@ public class JdbcReportingStore {
                 VALUES (
                     :tenantId, :orderId, :businessDate, :boundaryVersion, :occurredAt, :closedAt,
                     :brandId, :locationId, :legalEntityId, :channelCode, :fulfilmentType,
-                    :terminalStatus, :cancellationReasonCode, :customerSubjectHash,
+                    :terminalStatus, :cancellationReasonCode, :operatorPrincipalId,
+                    :customerSubjectHash,
                     :isFirstOrder, :gross, :discount, :deliveryFee, :tax,
                     :net, :lineCount, :itemCount, :secondsToConfirm, :secondsToReady,
                     :secondsTotal, :promisedAt, :promiseTravelMinutes, :secondsLate,
@@ -1000,6 +1009,148 @@ public class JdbcReportingStore {
             @Nullable Long deliveryNetSom,
             @Nullable Integer pickupQuantity,
             @Nullable Long pickupNetSom) {}
+
+    // -------------------------------------------------------- T12: 7.5 operator leaderboard
+
+    /**
+     * One (operator, channel) group's totals in range — 7.5's leaderboard and
+     * 7.5a's receipt depth in one read, folded into per-operator rows by
+     * {@code ReportQueryService.operatorLeaderboard}.
+     *
+     * <p>Grouped by channel as well as operator rather than summed once per
+     * operator, because the per-channel column the leaderboard names (7.5) is
+     * cheaper to fold in Java from this shape than to answer with a second
+     * query. Cardinality is small by construction — staff count times channel
+     * count — so this is unbounded on the same footing as {@link
+     * #readOrderOutcomes}, not a capped read like {@link #readOrders}.
+     *
+     * <p>{@code COMPLETED} only, matching every money metric's own inclusion
+     * rule in {@code MetricRegistry}: a cancelled order was never handled to
+     * completion and crediting it to an operator's revenue would count work
+     * that was not done.
+     */
+    public List<OperatorChannelRow> readOperatorChannelBreakdown(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT operator_principal_id, channel_code,
+                       count(*)::integer AS order_count,
+                       sum(gross_revenue_som) AS gross_som,
+                       sum(net_revenue_som) AS net_som,
+                       sum(item_count)::integer AS item_count_sum,
+                       sum(seconds_to_confirm) AS handling_seconds_sum,
+                       count(seconds_to_confirm)::integer AS handling_seconds_count,
+                       count(*) FILTER (WHERE fulfilment_type = 'DELIVERY')::integer AS delivery_count,
+                       count(*) FILTER (WHERE fulfilment_type = 'PICKUP')::integer AS pickup_count,
+                       count(*) FILTER (WHERE fulfilment_type = 'DINE_IN')::integer AS dine_in_count
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND terminal_status = 'COMPLETED' AND operator_principal_id IS NOT NULL
+                """ + locationFilter + """
+                 GROUP BY operator_principal_id, channel_code
+                 ORDER BY operator_principal_id, channel_code
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new OperatorChannelRow(
+                        row.getString("operator_principal_id"),
+                        row.getString("channel_code"),
+                        row.getInt("order_count"),
+                        row.getLong("gross_som"),
+                        row.getLong("net_som"),
+                        row.getInt("item_count_sum"),
+                        row.getObject("handling_seconds_sum", Long.class),
+                        row.getInt("handling_seconds_count"),
+                        row.getInt("delivery_count"),
+                        row.getInt("pickup_count"),
+                        row.getInt("dine_in_count")))
+                .list();
+    }
+
+    /** One (operator, channel) group — see {@link #readOperatorChannelBreakdown}. */
+    public record OperatorChannelRow(
+            String operatorPrincipalId,
+            String channelCode,
+            int orderCount,
+            long grossRevenueSom,
+            long netRevenueSom,
+            int itemCountSum,
+            @Nullable Long handlingSecondsSum,
+            int handlingSecondsCount,
+            int deliveryCount,
+            int pickupCount,
+            int dineInCount) {}
+
+    /**
+     * 7.5a: one operator's product mix — the upsell/coaching view, straight off
+     * {@code fact_order_line} joined back to {@code fact_order} for the actor
+     * who took it, on the same footing {@link #readVariantSales} already
+     * establishes for the delivery/pickup split.
+     */
+    public List<VariantSalesRow> readOperatorProductSales(
+            UUID tenantId,
+            String operatorPrincipalId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            int limit) {
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("operatorPrincipalId", operatorPrincipalId);
+        params.put("from", from);
+        params.put("to", to);
+        params.put("limit", limit);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND l.location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT l.variant_id, l.category_id, max(l.product_name_snapshot) AS product_name,
+                       sum(l.quantity)::integer AS total_quantity,
+                       sum(l.gross_som) AS total_gross_som,
+                       sum(l.net_som) AS total_net_som,
+                       sum(l.quantity) FILTER (WHERE o.fulfilment_type = 'DELIVERY')::integer AS delivery_quantity,
+                       sum(l.net_som) FILTER (WHERE o.fulfilment_type = 'DELIVERY')::bigint AS delivery_net_som,
+                       sum(l.quantity) FILTER (WHERE o.fulfilment_type = 'PICKUP')::integer AS pickup_quantity,
+                       sum(l.net_som) FILTER (WHERE o.fulfilment_type = 'PICKUP')::bigint AS pickup_net_som
+                  FROM reporting.fact_order_line l
+                  JOIN reporting.fact_order o
+                    ON o.tenant_id = l.tenant_id AND o.business_date = l.business_date AND o.order_id = l.order_id
+                 WHERE l.tenant_id = :tenantId AND l.business_date BETWEEN :from AND :to
+                   AND o.operator_principal_id = :operatorPrincipalId AND o.terminal_status = 'COMPLETED'
+                """ + locationFilter + """
+                 GROUP BY l.variant_id, l.category_id
+                 ORDER BY total_net_som DESC, l.variant_id
+                 LIMIT :limit
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new VariantSalesRow(
+                        row.getObject("variant_id", UUID.class),
+                        row.getObject("category_id", UUID.class),
+                        row.getString("product_name"),
+                        row.getInt("total_quantity"),
+                        row.getLong("total_gross_som"),
+                        row.getLong("total_net_som"),
+                        row.getObject("delivery_quantity", Integer.class),
+                        row.getObject("delivery_net_som", Long.class),
+                        row.getObject("pickup_quantity", Integer.class),
+                        row.getObject("pickup_net_som", Long.class)))
+                .list();
+    }
 
     /** Which end of an order-grain read to serve — see {@link #readOrders}. */
     public enum OrderSort {
@@ -1424,7 +1575,11 @@ public class JdbcReportingStore {
                 // travel would read as a promise with zero travel.
                 row.getObject("promise_travel_minutes", Integer.class),
                 row.getString("cancellation_reason_code"),
-                row.getInt("version"));
+                row.getInt("version"),
+                row.getString("created_by_actor_type"),
+                row.getString("created_by_actor_id"),
+                row.getString("accepted_by_actor_type"),
+                row.getString("accepted_by_actor_id"));
     }
 
     private static BranchDayAggregate aggregate(ResultSet row, int number) throws SQLException {

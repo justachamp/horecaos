@@ -1,0 +1,14 @@
+<div class="pane">
+  @if (denied()) {
+    <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+  } @else {
+    <button type="button" class="link back" (click)="close()">
+      {{ 'customers.import.close' | t }}
+    </button>
+    <q-import-wizard
+      [title]="'customers.import.pageTitle' | t"
+      [adapter]="adapter"
+      (completed)="onCompleted()"
+    />
+  }
+</div>

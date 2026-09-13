@@ -74,6 +74,20 @@ export const routes: Routes = [
         path: 'today',
         loadComponent: () => import('./features/today/today-page').then((m) => m.TodayPage),
       },
+      {
+        // Мой профиль (staff-and-access.md §10, operations IA §9/X.5):
+        // reached from the account chip at the bottom of the rail
+        // (`shell.html`), not from `/staff` — this is the signed-in person's
+        // own page, so it carries no rail entry and no `NAV_ITEMS` capability
+        // gate (`capabilityGuard`'s own doc: a URL with no matching
+        // `NAV_ITEMS` entry is let through unconditionally). Declared here,
+        // beside `today`, rather than nested under `staff` for exactly that
+        // reason — nesting it there would put it a capability check away
+        // from the person it exists for.
+        path: 'my-profile',
+        loadComponent: () =>
+          import('./features/staff/my-profile-page').then((m) => m.MyProfilePage),
+      },
       // IA 0.2 (My work): an honest not-built page, linked from 0.1's own
       // toolbar — see `today-page.ts`'s doc for why every field it would
       // show depends on data (order attribution, a staff person record)
@@ -95,10 +109,16 @@ export const routes: Routes = [
           // late. Declared before `:orderId` so that "new" is a destination and
           // not an order whose id happens to be the word new.
           {
+            // orders.md §5 (wave P13): the three-pane composer, item search
+            // over the published menu, modifier selection, a running total,
+            // and Создать → `POST .../orders` with an `Idempotency-Key`,
+            // routing to the created order. The address pane (§5.4) and
+            // payment/promo/repeat/aggregator entry (§5.6-§5.8's remaining
+            // rows) are `P14`'s — see `new-order-page.ts`'s own doc for the
+            // exact line.
             path: 'new',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'operations-spec/orders.md §5 (New order)' },
+              import('./features/orders/new-order/new-order-page').then((m) => m.NewOrderPage),
           },
           // IA 1.4: carts started and never converted. Declared before
           // `:orderId` for the same reason `new` is — "drafts" must be a
@@ -194,18 +214,17 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/customers/customers-page').then((m) => m.CustomersPage),
             children: [
-              // Bulk CSV import with retained provenance (§5.1) is honestly
-              // not built: the backend has no generic import pipeline, only
-              // the SendPulse-specific one (ADR 0059 stage 3), which is a
-              // different source and a different shape entirely. Declared
-              // before `:accountId` for the same reason `orders/new` is
-              // declared before `:orderId` — "import" must be a
-              // destination, not an account id.
+              // Bulk CSV import with retained provenance (row 5.1b, wave
+              // P26): CustomerImportController over the async job surface
+              // q-import-wizard polls. Declared before `:accountId` for the
+              // same reason `orders/new` is declared before `:orderId` —
+              // "import" must be a destination, not an account id.
               {
                 path: 'import',
                 loadComponent: () =>
-                  import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-                data: { spec: 'frontend-information-architecture.md §5.1 (bulk CSV import)' },
+                  import('./features/customers/customer-import-page').then(
+                    (m) => m.CustomerImportPage,
+                  ),
               },
               {
                 path: ':accountId',
@@ -234,11 +253,12 @@ export const routes: Routes = [
       {
         // The Settings section (wave 26, ADR 0065): its own shell nests a
         // second rail (§Navigation groups) beside whichever P-tier screen is
-        // routed under here. Two of its own rail entries — channel-setup and
-        // payment-methods — still resolve to the shared NotBuiltPage below,
-        // the same "omit, do not disable" rule the top-level rail already
-        // follows: a screen with a real backend gap gets an honest page that
-        // names the spec section, not a greyed-out link.
+        // routed under here. One of its own rail entries — channel-setup —
+        // still resolves to the shared NotBuiltPage below, the same "omit,
+        // do not disable" rule the top-level rail already follows: a screen
+        // with a real backend gap gets an honest page that names the spec
+        // section, not a greyed-out link. payment-methods (wave P33) is real
+        // now.
         path: 'settings',
         loadComponent: () =>
           import('./features/settings/settings-shell').then((m) => m.SettingsShell),
@@ -306,8 +326,9 @@ export const routes: Routes = [
           {
             path: 'payment-methods',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'operations-spec/settings.md §10.6 (Payment methods)' },
+              import('./features/settings/payment-methods/payment-methods-page').then(
+                (m) => m.PaymentMethodsPage,
+              ),
           },
           {
             path: 'fiscalization',
@@ -585,15 +606,15 @@ export const routes: Routes = [
             path: 'menus',
             loadComponent: () => import('./features/catalog/menus-page').then((m) => m.MenusPage),
           },
-          // catalog.md §4.11 (Excel/POS import): the backend has no import-job
-          // entity at all (ADR 0012, currently scoped to POS sources only) —
-          // a whole missing subsystem, not a small gap, so this stays the
-          // honest not-built page rather than a screen with nothing to call.
+          // catalog.md §4.11 (Import: Excel and POS), wave P24 (gap-map rows
+          // 4.5a/10.8b/X.24): the POS half only — run history, the start form
+          // with its import-language and price-re-import choices, per-item
+          // outcomes, and the product mapping tab. Excel import (4.5b) is a
+          // separate row and stays deferred.
           {
             path: 'import',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'operations-spec/catalog.md §4.11 (Import: Excel and POS)' },
+              import('./features/catalog/catalog-import-page').then((m) => m.CatalogImportPage),
           },
           {
             path: 'publication',
@@ -604,6 +625,18 @@ export const routes: Routes = [
             path: 'prices',
             loadComponent: () =>
               import('./features/catalog/price-list-page').then((m) => m.PriceListPage),
+          },
+          {
+            path: 'prices/bulk',
+            loadComponent: () =>
+              import('./features/catalog/bulk-price-change-page').then(
+                (m) => m.BulkPriceChangePage,
+              ),
+          },
+          {
+            path: 'prices/tax-profile',
+            loadComponent: () =>
+              import('./features/catalog/tax-profile-page').then((m) => m.TaxProfilePage),
           },
           // catalog.md §4.13: every vocabulary on this screen is honestly
           // "not built — ADR 0016" except Бренды, which already belongs to
@@ -686,19 +719,17 @@ export const routes: Routes = [
                 'does not exist (ADR 0043)',
             },
           },
-          // 7.5 Staff reports: `reporting.fact_order` carries no operator
-          // attribution column at all (ADR 0039's own `created_by_actor_id`
-          // landed on `ordering.orders`, not copied into the reporting fact
-          // yet), so 7.5 cannot join to a staff dimension.
+          // 7.5/7.5a/7.5b Staff reports (T12): `operator_principal_id` now
+          // lands on `reporting.fact_order` and the close job copies
+          // created_by/accepted_by into it, typing a machine principal as a
+          // pseudo-operator. 7.5b's tab is not blocked on live telephony —
+          // `CallStatsController` already computes offered/answered/missed/
+          // transferred and talk seconds per operator at every day close and
+          // simply had no consumer before this route.
           {
             path: 'staff',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: {
-              spec:
-                'frontend-information-architecture.md §7.5 (Staff reports) — fact_order has no ' +
-                'operator attribution column',
-            },
+              import('./features/reports/staff-report-page').then((m) => m.StaffReportPage),
           },
           // 7.6 Customer analytics: none of its six published-formula tiles
           // (new customers, basket depth, LTV, …) is a registered metric —

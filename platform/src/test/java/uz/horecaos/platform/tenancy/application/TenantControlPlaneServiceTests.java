@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -677,6 +678,253 @@ class TenantControlPlaneServiceTests {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    // ------------------------------------------------ P32: the place write no longer erases the pin
+
+    /**
+     * The bug this wave exists for. Before this fix, {@code
+     * DescribeLocationCommand.toPlace()} nulled the point whenever a caller's
+     * write was silent about latitude, and defaulted {@code coordinateSource}
+     * to {@code NOT_GEOCODED} — so the console's own address/phone editor,
+     * which never populated latitude, longitude or landmark, erased a
+     * surveyed branch's map pin and landmark on every unrelated correction.
+     */
+    @Test
+    @DisplayName("a phone-only place write preserves the existing point, coordinate source and landmark")
+    void aPhoneOnlyPlaceWritePreservesTheExistingPinAndLandmark() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("PINNED", "pinned");
+        LocationId locationId = h.location(brandId, "MALL");
+
+        h.service.describeLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                new TenantControlPlaneService.DescribeLocationCommand(
+                        "Amir Temur 1",
+                        "Yunusabad",
+                        "Tashkent",
+                        "Next to the blue mosque",
+                        "+998712000000",
+                        41.311081,
+                        69.240562,
+                        uz.horecaos.platform.tenancy.domain.CoordinateSource.MERCHANT_PIN,
+                        false));
+
+        // Only the phone changes; address, landmark and the point are silent
+        // in this write, the exact shape `location-detail-pane.ts`'s
+        // `savePlace()` sends today.
+        var after = h.service.describeLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                new TenantControlPlaneService.DescribeLocationCommand(
+                        "Amir Temur 1", "Yunusabad", "Tashkent", null, "+998712009999", null, null, null, false));
+
+        assertThat(after.contactPhone()).isEqualTo("+998712009999");
+        assertThat(after.latitude())
+                .as("the surveyed point must survive a phone-only correction")
+                .isEqualTo(41.311081);
+        assertThat(after.longitude()).isEqualTo(69.240562);
+        assertThat(after.coordinateSource())
+                .isEqualTo(uz.horecaos.platform.tenancy.domain.CoordinateSource.MERCHANT_PIN);
+        assertThat(after.landmark())
+                .as("the landmark must survive a write that never mentions it")
+                .isEqualTo("Next to the blue mosque");
+    }
+
+    /** The other direction: an explicit {@code NOT_GEOCODED} still clears the pin deliberately. */
+    @Test
+    @DisplayName("an explicit NOT_GEOCODED still clears a placed pin")
+    void anExplicitNotGeocodedClearsThePin() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("CLEARABLE", "clearable");
+        LocationId locationId = h.location(brandId, "MALL");
+
+        h.service.describeLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                new TenantControlPlaneService.DescribeLocationCommand(
+                        "Address",
+                        null,
+                        null,
+                        null,
+                        null,
+                        41.0,
+                        69.0,
+                        uz.horecaos.platform.tenancy.domain.CoordinateSource.MERCHANT_PIN,
+                        false));
+
+        var cleared = h.service.describeLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                new TenantControlPlaneService.DescribeLocationCommand(
+                        "Address",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        uz.horecaos.platform.tenancy.domain.CoordinateSource.NOT_GEOCODED,
+                        false));
+
+        assertThat(cleared.latitude()).isNull();
+        assertThat(cleared.longitude()).isNull();
+        assertThat(cleared.coordinateSource())
+                .isEqualTo(uz.horecaos.platform.tenancy.domain.CoordinateSource.NOT_GEOCODED);
+    }
+
+    /**
+     * The paired bug the same wave's own review found: {@code landmark}'s
+     * silent-carry-through has no clear signal of its own, unlike the point's
+     * {@code NOT_GEOCODED}. An emptied form field collapses to an absent JSON
+     * key on the wire, indistinguishable from "this write never touched the
+     * landmark" — so before this fix, an operator who cleared the field and
+     * saved saw the console report success while the stale landmark stayed.
+     */
+    @Test
+    @DisplayName("an explicit clearLandmark actually clears a previously-set landmark")
+    void anExplicitClearLandmarkClearsTheLandmark() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("LANDMARKED", "landmarked");
+        LocationId locationId = h.location(brandId, "MALL");
+
+        h.service.describeLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                new TenantControlPlaneService.DescribeLocationCommand(
+                        "Address", null, null, "Next to the blue mosque", null, null, null, null, false));
+
+        // A write that is silent about landmark (clearLandmark left at its
+        // default false) still carries the existing one through — the
+        // untouched-field case aPhoneOnlyPlaceWritePreservesTheExistingPinAndLandmark
+        // already pins, exercised again here as the control for the next call.
+        var untouched = h.service.describeLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                new TenantControlPlaneService.DescribeLocationCommand(
+                        "Address", null, null, null, "+998712009999", null, null, null, false));
+        assertThat(untouched.landmark()).isEqualTo("Next to the blue mosque");
+
+        var cleared = h.service.describeLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                new TenantControlPlaneService.DescribeLocationCommand(
+                        "Address", null, null, null, null, null, null, null, true));
+
+        assertThat(cleared.landmark())
+                .as("clearLandmark=true must actually remove the stale landmark")
+                .isNull();
+    }
+
+    // ------------------------------------------------ P32: the brand profile (10.1, 10.12)
+
+    @Test
+    @DisplayName("a brand's profile can be corrected: contact, media and its supported-locale set")
+    void aBrandProfileIsCorrectedAndAudited() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("OSHXONA", "oshxona");
+        UUID logoAssetId = UUID.randomUUID();
+
+        var updated = h.service.updateBrandProfile(
+                h.tenantId,
+                brandId,
+                new TenantControlPlaneService.UpdateBrandProfileCommand(
+                        "+998712000000",
+                        "oshxona_bot",
+                        logoAssetId,
+                        null,
+                        List.of(
+                                new TenantControlPlaneService.BrandLocaleInput("ru", "Ошхона", true),
+                                new TenantControlPlaneService.BrandLocaleInput("uz-Latn", "Oshxona", false))));
+
+        assertThat(updated.contactPhone()).isEqualTo("+998712000000");
+        assertThat(updated.telegramHandle()).isEqualTo("oshxona_bot");
+        assertThat(updated.logoAssetId()).isEqualTo(logoAssetId);
+        assertThat(updated.bannerAssetId()).isNull();
+        assertThat(updated.locales()).hasSize(2);
+        assertThat(updated.locales())
+                .filteredOn(TenantControlPlaneService.BrandLocaleView::isDefault)
+                .extracting(TenantControlPlaneService.BrandLocaleView::locale)
+                .containsExactly("ru");
+
+        // Persisted, not just returned: a fresh read sees the same profile.
+        var reread = h.service.getBrand(h.tenantId, brandId);
+        assertThat(reread.telegramHandle()).isEqualTo("oshxona_bot");
+        assertThat(reread.locales()).hasSize(2);
+
+        assertThat(h.actions()).contains("brand.profile_revised");
+        var fact = h.audited.stream()
+                .filter(f -> f.actionCode().equals("brand.profile_revised"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(fact.changeDocument().toString())
+                .as("ADR 0029: the phone and the handle are never audited as values")
+                .doesNotContain("+998712000000")
+                .doesNotContain("oshxona_bot");
+    }
+
+    @Test
+    @DisplayName("a brand cannot claim two default locales, or a locale the console does not support")
+    void aBrandProfileRejectsAnInvalidLocaleSet() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("INVALID", "invalid");
+
+        assertThatThrownBy(() -> h.service.updateBrandProfile(
+                        h.tenantId,
+                        brandId,
+                        new TenantControlPlaneService.UpdateBrandProfileCommand(
+                                null,
+                                null,
+                                null,
+                                null,
+                                List.of(
+                                        new TenantControlPlaneService.BrandLocaleInput("ru", null, true),
+                                        new TenantControlPlaneService.BrandLocaleInput("en", null, true)))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("default");
+
+        assertThatThrownBy(() -> h.service.updateBrandProfile(
+                        h.tenantId,
+                        brandId,
+                        new TenantControlPlaneService.UpdateBrandProfileCommand(
+                                null,
+                                null,
+                                null,
+                                null,
+                                List.of(new TenantControlPlaneService.BrandLocaleInput("fr", null, true)))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("fr");
+    }
+
+    @Test
+    @DisplayName("getBrands answers every brand's profile in one batched read, not one query per brand")
+    void getBrandsBatchesEveryProfile() {
+        Harness h = new Harness();
+        BrandId first = h.brand("FIRST", "first");
+        BrandId second = h.brand("SECOND", "second");
+        h.service.updateBrandProfile(
+                h.tenantId,
+                first,
+                new TenantControlPlaneService.UpdateBrandProfileCommand("+998712000001", null, null, null, List.of()));
+
+        var brands = h.service.getBrands(h.tenantId);
+
+        assertThat(brands)
+                .filteredOn(brand -> brand.id().equals(first.value()))
+                .singleElement()
+                .satisfies(brand -> assertThat(brand.contactPhone()).isEqualTo("+998712000001"));
+        assertThat(brands)
+                .filteredOn(brand -> brand.id().equals(second.value()))
+                .singleElement()
+                .satisfies(brand -> assertThat(brand.contactPhone()).isNull());
+    }
+
     /**
      * Moves a freshly created tenant from {@code PROVISIONING} to
      * {@code ACTIVE}, which is what makes it suspendable.
@@ -698,6 +946,8 @@ class TenantControlPlaneServiceTests {
         private final Map<TenantId, Tenant> tenants = new LinkedHashMap<>();
         private final Map<TenantId, CustomerIdentityMode> identityModes = new LinkedHashMap<>();
         private final Map<BrandId, Brand> brands = new LinkedHashMap<>();
+        private final Map<BrandId, uz.horecaos.platform.tenancy.domain.BrandProfile> brandProfiles =
+                new LinkedHashMap<>();
         private final List<Location> locations = new ArrayList<>();
 
         @Override
@@ -803,6 +1053,28 @@ class TenantControlPlaneServiceTests {
          */
         @Override
         public void updateBrandStatus(Brand brand) {}
+
+        @Override
+        public uz.horecaos.platform.tenancy.domain.BrandProfile findBrandProfile(TenantId tenantId, BrandId brandId) {
+            return brandProfiles.getOrDefault(brandId, uz.horecaos.platform.tenancy.domain.BrandProfile.empty());
+        }
+
+        @Override
+        public Map<BrandId, uz.horecaos.platform.tenancy.domain.BrandProfile> findBrandProfiles(TenantId tenantId) {
+            Map<BrandId, uz.horecaos.platform.tenancy.domain.BrandProfile> forTenant = new LinkedHashMap<>();
+            for (Brand brand : brands.values()) {
+                if (brand.tenantId().equals(tenantId)) {
+                    forTenant.put(brand.id(), findBrandProfile(tenantId, brand.id()));
+                }
+            }
+            return forTenant;
+        }
+
+        @Override
+        public void updateBrandProfile(
+                TenantId tenantId, BrandId brandId, uz.horecaos.platform.tenancy.domain.BrandProfile profile) {
+            brandProfiles.put(brandId, profile);
+        }
 
         @Override
         public boolean brandCodeOrSlugTakenByAnother(Brand brand) {

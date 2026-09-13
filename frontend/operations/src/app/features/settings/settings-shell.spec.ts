@@ -11,7 +11,20 @@ import { SettingsScope } from './settings-scope';
 import { SettingsShell } from './settings-shell';
 
 const BRANDS: readonly BrandView[] = [
-  { id: 'brand-1', tenantId: 't1', code: 'A', slug: 'a', displayName: 'Rayhon', status: 'ACTIVE' },
+  {
+    id: 'brand-1',
+    tenantId: 't1',
+    code: 'A',
+    slug: 'a',
+    displayName: 'Rayhon',
+    status: 'ACTIVE',
+    contactPhone: null,
+    telegramHandle: null,
+    logoAssetId: null,
+    bannerAssetId: null,
+    locales: [],
+    version: 0,
+  },
   {
     id: 'brand-2',
     tenantId: 't1',
@@ -19,6 +32,12 @@ const BRANDS: readonly BrandView[] = [
     slug: 'b',
     displayName: 'Rayhon Yunusabad',
     status: 'ACTIVE',
+    contactPhone: null,
+    telegramHandle: null,
+    logoAssetId: null,
+    bannerAssetId: null,
+    locales: [],
+    version: 0,
   },
 ];
 

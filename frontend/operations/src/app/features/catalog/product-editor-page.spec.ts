@@ -58,6 +58,7 @@ async function flushMicrotasks(): Promise<void> {
 function configure(
   catalogApi: Partial<CatalogApi>,
   activityLogApi: Partial<ActivityLogApi> = {},
+  mediaApi: Partial<MediaApi> = {},
 ): void {
   TestBed.configureTestingModule({
     providers: [
@@ -92,7 +93,7 @@ function configure(
           resolvedVariantPrices: () => of({ priceBookId: null, currency: null, amountsMinor: {} }),
         },
       },
-      { provide: MediaApi, useValue: {} },
+      { provide: MediaApi, useValue: mediaApi },
       { provide: InventoryApi, useValue: {} },
       {
         provide: ActivityLogApi,
@@ -231,7 +232,9 @@ describe('ProductEditorPage', () => {
     (host.querySelector('[data-testid="editor-tab-VARIANTS"]') as HTMLButtonElement).click();
     await flushMicrotasks();
 
-    expect(host.querySelector('.editor__table')?.textContent).toContain('PLOV-1');
+    expect(host.querySelector<HTMLInputElement>('[data-testid="editor-variant-name"]')?.value).toBe(
+      'Плов, порция',
+    );
   });
 
   it('renders the never-blur-authoring-and-availability publish result inline, not as a thrown error', async () => {
@@ -394,5 +397,244 @@ describe('ProductEditorPage', () => {
     expect(text).toContain('Плов, порция');
     expect(text).toContain('Set variant availability to UNAVAILABLE');
     expect(text).not.toContain('variant-of-another-product');
+  });
+
+  it('sends sku, unitCode and name when adding a variant — AddVariantRequest always accepted them', async () => {
+    const addVariant = vi.fn().mockReturnValue(of({ id: 'variant-2' }));
+    const secondLoad = productDetail({
+      variants: [
+        ...productDetail().variants,
+        {
+          variantId: 'variant-2',
+          sku: 'PLOV-2',
+          unitCode: 'KG',
+          isDefault: false,
+          sortOrder: 1,
+          status: 'ACTIVE',
+          version: 1,
+          translations: { ru: { name: 'Плов, кг' } },
+          fiscal: null,
+        },
+      ],
+    });
+    configure({
+      productDetail: vi
+        .fn()
+        .mockReturnValueOnce(of(productDetail()))
+        .mockReturnValueOnce(of(secondLoad)),
+      addVariant,
+    });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-VARIANTS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const set = (testId: string, value: string): void => {
+      const input = host.querySelector(`[data-testid="${testId}"]`) as HTMLInputElement;
+      input.value = value;
+      input.dispatchEvent(new Event('input'));
+    };
+    set('editor-new-variant-name', 'Плов, кг');
+    set('editor-new-variant-sku', 'PLOV-2');
+    set('editor-new-variant-unit', 'KG');
+    (host.querySelector('[data-testid="editor-add-variant"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(addVariant).toHaveBeenCalledWith(
+      BRAND_SCOPE,
+      'product-1',
+      expect.objectContaining({ sku: 'PLOV-2', unitCode: 'KG', name: 'Плов, кг' }),
+    );
+  });
+
+  it('changes a product’s own status — read-only text until this wave', async () => {
+    const setProductStatus = vi.fn().mockReturnValue(of(undefined));
+    configure({ productDetail: () => of(productDetail()), setProductStatus });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    const select = host.querySelector('[data-testid="editor-status-select"]') as HTMLSelectElement;
+    select.value = 'ARCHIVED';
+    select.dispatchEvent(new Event('change'));
+    (host.querySelector('[data-testid="editor-save-status"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(setProductStatus).toHaveBeenCalledWith(BRAND_SCOPE, 'product-1', 'ARCHIVED');
+  });
+
+  it('removes a product from a category — the undo placeInCategory never had', async () => {
+    const removeProductFromCategory = vi.fn().mockReturnValue(of(undefined));
+    configure({
+      productDetail: () => of(productDetail({ categoryIds: ['cat-1'] })),
+      removeProductFromCategory,
+    });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="editor-remove-category"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(removeProductFromCategory).toHaveBeenCalledWith(BRAND_SCOPE, 'cat-1', 'product-1');
+    expect(host.querySelector('[data-testid="editor-remove-category"]')).toBeNull();
+  });
+
+  it('removes a product from a catalog', async () => {
+    const removeProductFromCatalog = vi.fn().mockReturnValue(of(undefined));
+    configure({ productDetail: () => of(productDetail()), removeProductFromCatalog });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="editor-remove-catalog"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(removeProductFromCatalog).toHaveBeenCalledWith(BRAND_SCOPE, 'catalog-1', 'product-1');
+  });
+
+  it('renders a real thumbnail on the photo grid — the trap: it used to show a role label and no <img> at all', async () => {
+    const downloadUrl = vi.fn().mockReturnValue(of('https://cdn.example/thumb.jpg'));
+    configure(
+      {
+        productDetail: () =>
+          of(
+            productDetail({
+              media: [
+                { mediaAssetId: 'asset-1', role: 'PRIMARY', sortOrder: 0, channelCode: 'ALL' },
+              ],
+            }),
+          ),
+      },
+      {},
+      { downloadUrl },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-PHOTOS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(downloadUrl).toHaveBeenCalledWith('t1', 'asset-1', 'THUMBNAIL');
+    const img = host.querySelector<HTMLImageElement>('.editor__photo-image');
+    expect(img?.src).toBe('https://cdn.example/thumb.jpg');
+  });
+
+  it('detaches a photo — the undo attachMedia never had, at any layer', async () => {
+    const detachMedia = vi.fn().mockReturnValue(of(undefined));
+    configure(
+      {
+        productDetail: () =>
+          of(
+            productDetail({
+              media: [
+                { mediaAssetId: 'asset-1', role: 'PRIMARY', sortOrder: 0, channelCode: 'ALL' },
+              ],
+            }),
+          ),
+        detachMedia,
+      },
+      {},
+      { downloadUrl: () => of('https://cdn.example/thumb.jpg') },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-PHOTOS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    (host.querySelector('[data-testid="editor-photo-detach"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(detachMedia).toHaveBeenCalledWith(
+      BRAND_SCOPE,
+      'PRODUCT',
+      'product-1',
+      'asset-1',
+      'PRIMARY',
+      'ALL',
+    );
+    expect(host.querySelector('[data-testid="editor-photo-tile"]')).toBeNull();
+  });
+
+  it('saves marking, excise, alcohol % and age gate — fields the domain always carried with no control anywhere', async () => {
+    const classifyVariant = vi.fn().mockReturnValue(of(undefined));
+    configure({ productDetail: () => of(productDetail()), classifyVariant });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-FISCAL"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const setValue = (selector: string, value: string): void => {
+      const input = host.querySelector(selector) as HTMLInputElement;
+      input.value = value;
+      input.dispatchEvent(new Event('input'));
+    };
+    setValue('[data-testid="editor-fiscal-card"] input[type="number"][min="0"]', '42.5');
+    const ageInput = host.querySelectorAll<HTMLInputElement>(
+      '[data-testid="editor-fiscal-card"] input[type="number"]',
+    )[2];
+    ageInput.value = '18';
+    ageInput.dispatchEvent(new Event('input'));
+    const excisableBox = host.querySelectorAll<HTMLInputElement>(
+      '[data-testid="editor-fiscal-card"] input[type="checkbox"]',
+    )[1];
+    excisableBox.checked = true;
+    excisableBox.dispatchEvent(new Event('change'));
+
+    (host.querySelector('[data-testid="editor-save-fiscal"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(classifyVariant).toHaveBeenCalledWith(
+      BRAND_SCOPE,
+      'variant-1',
+      expect.objectContaining({
+        excisable: true,
+        alcoholByVolumeBp: 4250,
+        ageRestrictionYears: 18,
+      }),
+    );
+  });
+
+  it('searches the ИКПУ/MXIK reference from the fiscal tab’s combobox', async () => {
+    const searchMxikReference = vi
+      .fn()
+      .mockReturnValue(
+        of([
+          {
+            code: '01234',
+            labelRu: 'Плов',
+            labelUz: 'Osh',
+            defaultPackageCodes: [],
+            validFrom: '2020-01-01',
+          },
+        ]),
+      );
+    configure({ productDetail: () => of(productDetail()), searchMxikReference });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-FISCAL"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const combobox = host.querySelector(
+      '[data-testid="editor-fiscal-mxik"] input',
+    ) as HTMLInputElement;
+    combobox.value = '01234';
+    combobox.dispatchEvent(new Event('input'));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await flushMicrotasks();
+
+    expect(searchMxikReference).toHaveBeenCalledWith(BRAND_SCOPE, '01234');
   });
 });

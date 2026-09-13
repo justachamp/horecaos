@@ -10,20 +10,20 @@ export interface OrderReasonSubmission {
 }
 
 /**
- * The one dialog shape `Отклонить` and `Отменить` both need this wave: a
- * free-text reason code plus, for cancellation, an optional note
- * (`DecisionRequest.reasonCode`, `CancelRequest.reasonCode`/`note` —
- * `OperationsOrderController`). Shared rather than duplicated in the queue and
- * the detail pane, since both need to open the same dialog for the same two
- * actions.
+ * The free-text reason dialog: a reason code plus, for cancellation, an
+ * optional note (`DecisionRequest.reasonCode`, `CancelRequest.reasonCode`/
+ * `note` — `OperationsOrderController`).
  *
- * **Free text, not a picker, and that is a scope line, not an oversight.**
- * `docs/operations-spec/orders.md` §4.5 wants a searchable registry
- * (`ordering.order_outcome_reasons`) with internal/customer-facing text pairs;
- * that table and its endpoint do not exist yet (§11: ADR 0039). Building a
- * picker against data that is not there would mean fabricating a reason list
- * this client invented, which is worse than a plain text field that is
- * visibly a placeholder for the real registry.
+ * **The registry this comment used to say "does not exist yet" now does**
+ * (`ordering.order_outcome_reasons`, ADR 0039, `ReferenceDataApi` — wave
+ * P31/P37). `OrderRejectReasonDialog` moved onto it for `Отклонить` back in
+ * wave 24, and `q-order-outcome-reason-dialog` (wave P09, orders.md §4.5)
+ * is the picker `Отменить` uses from the order detail pane now, past
+ * `CONFIRMED` included. This dialog survives only as `order-queue.ts`'s
+ * quick reasonless cancel for a still-open order — `CancelRequest.reasonCode`
+ * with no `reasonId` — where ADR 0019 never asked for a registry reason in
+ * the first place; it is not a placeholder for the registry, it is the path
+ * that genuinely has none to pick from.
  */
 @Component({
   selector: 'q-order-reason-dialog',

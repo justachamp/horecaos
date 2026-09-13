@@ -170,7 +170,8 @@ class PosAdapterContractTests {
                 "UZS",
                 "DELIVERY",
                 false,
-                NOW);
+                NOW,
+                null);
 
         fake.exportOrder(context(), order);
         fake.exportOrder(context(), order);

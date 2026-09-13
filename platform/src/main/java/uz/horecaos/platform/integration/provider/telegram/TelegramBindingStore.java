@@ -6,6 +6,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -317,6 +318,22 @@ public class TelegramBindingStore {
      * reading this table explains.
      */
     public void retire(UUID tenantId, UUID bindingId, String reason) {
+        // The platform's own rule, not a person: Telegram reported the
+        // failure and no operator asked for this. See the actor overload
+        // below for the one case that is not true.
+        retire(tenantId, bindingId, reason, ActorRef.systemJob("telegram-bot-api"), null);
+    }
+
+    /**
+     * The same retirement, attributed to whoever actually caused it — a
+     * routing screen's own {@code MANUAL} unbind (gap map row {@code
+     * 10.9b}), unlike every other reason this taxonomy admits, is an
+     * operator's choice rather than something Telegram reported.
+     *
+     * @param reasonNote required when {@code actor} is a user (ADR 0027);
+     *                    null for the platform's own system-job attribution
+     */
+    public void retire(UUID tenantId, UUID bindingId, String reason, ActorRef actor, @Nullable String reasonNote) {
         Instant now = clock.instant();
         int retired = jdbc.sql("""
                 UPDATE integration.telegram_bindings
@@ -340,18 +357,18 @@ public class TelegramBindingStore {
 
         if (retired == 1) {
             // ADR 0026: "binding activation and suspension... are ADR 0027
-            // audit facts." The actor is the platform itself — Telegram
-            // reported the failure, no operator asked for this — so a system
-            // job, not a user, which is also why no .because(...) reason
-            // string is required: AuditFact only demands one from a USER actor.
-            audit.record(AuditFact.of("integration.telegram_binding_retired", AuditClass.SECURITY)
-                    .by(ActorRef.systemJob("telegram-bot-api"))
+            // audit facts."
+            AuditFact.Builder fact = AuditFact.of("integration.telegram_binding_retired", AuditClass.SECURITY)
+                    .by(actor)
                     .at(ResourceScope.tenant(tenantId))
                     .target("IntegrationBinding", bindingId)
                     .changed(Map.of("reason", reason))
                     .correlatedBy(bindingId.toString())
-                    .occurredAt(now)
-                    .build());
+                    .occurredAt(now);
+            if (reasonNote != null) {
+                fact = fact.because(reasonNote);
+            }
+            audit.record(fact.build());
         }
     }
 
@@ -381,6 +398,121 @@ public class TelegramBindingStore {
                 == 1;
     }
 
+    // -------------------------------------------------------- admin routing (10.9b)
+
+    /**
+     * Every OPERATIONS-audience binding this brand has, active or retired —
+     * the list a routing screen renders (gap map row {@code 10.9b}). One row
+     * per binding; its subscribed event classes are read separately by
+     * {@link #eventSubscriptionsOf} so a binding with none still lists.
+     * Includes a location-scoped binding under this brand, matching
+     * {@link #subscribedBindings}'s own "brand covers its own locations" rule.
+     */
+    public List<AdminBindingRow> listOperationsBindings(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT b.id AS binding_id, b.brand_id, b.location_id, b.status,
+                       tb.chat_id, tb.topic_id, tb.linked_by_telegram_user_id,
+                       tb.retired_at, tb.retired_reason, tb.created_at
+                  FROM integration.bindings b
+                  JOIN integration.telegram_bindings tb
+                    ON tb.tenant_id = b.tenant_id AND tb.binding_id = b.id
+                 WHERE b.tenant_id = :tenantId AND b.brand_id = :brandId AND tb.audience = 'OPERATIONS'
+                 ORDER BY tb.retired_at NULLS FIRST, tb.created_at DESC
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> {
+                    OffsetDateTime retiredAt = row.getObject("retired_at", OffsetDateTime.class);
+                    OffsetDateTime createdAt = row.getObject("created_at", OffsetDateTime.class);
+                    return new AdminBindingRow(
+                            row.getObject("binding_id", UUID.class),
+                            row.getObject("brand_id", UUID.class),
+                            row.getObject("location_id", UUID.class),
+                            row.getString("status"),
+                            row.getLong("chat_id"),
+                            (Integer) row.getObject("topic_id"),
+                            (Long) row.getObject("linked_by_telegram_user_id"),
+                            retiredAt == null ? null : retiredAt.toInstant(),
+                            row.getString("retired_reason"),
+                            Objects.requireNonNull(createdAt, "created_at is NOT NULL")
+                                    .toInstant());
+                })
+                .list();
+    }
+
+    /**
+     * The brand a binding was created under, so an admin action scoped to one
+     * brand (ADR 0025's {@code BRAND} capability grant) cannot be pointed at
+     * another brand's chat by passing a different binding id — the caller
+     * refuses when this does not equal the brand its own grant covers.
+     */
+    public Optional<UUID> brandOf(UUID tenantId, UUID bindingId) {
+        return jdbc.sql("""
+                SELECT brand_id FROM integration.bindings WHERE tenant_id = :tenantId AND id = :bindingId
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .query(UUID.class)
+                .optional();
+    }
+
+    /** Every event class this binding is subscribed to, enabled or not. */
+    public List<EventSubscriptionRow> eventSubscriptionsOf(UUID tenantId, UUID bindingId) {
+        return jdbc.sql("""
+                SELECT event_class, enabled FROM integration.telegram_binding_events
+                WHERE tenant_id = :tenantId AND binding_id = :bindingId
+                ORDER BY event_class
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .query((row, number) ->
+                        new EventSubscriptionRow(row.getString("event_class"), row.getBoolean("enabled")))
+                .list();
+    }
+
+    /**
+     * Turns one event class on or off for a binding — the write {@code
+     * subscribe} above never offered per-class, only the handshake's own
+     * default set. {@code true} matches {@code subscribe}'s upsert; {@code
+     * false} disables rather than deletes, so re-enabling later needs no
+     * fresh insert and a routing history is not silently lost.
+     */
+    public void setSubscription(UUID tenantId, UUID bindingId, String eventClass, boolean enabled) {
+        jdbc.sql("""
+                INSERT INTO integration.telegram_binding_events (binding_id, tenant_id, event_class, enabled)
+                VALUES (:bindingId, :tenantId, :eventClass, :enabled)
+                ON CONFLICT (binding_id, event_class) DO UPDATE SET enabled = :enabled
+                """)
+                .param("bindingId", bindingId)
+                .param("tenantId", tenantId)
+                .param("eventClass", eventClass)
+                .param("enabled", enabled)
+                .update();
+    }
+
+    /**
+     * Moves a binding to a different forum topic within the same chat, or to
+     * the flat (no-topic) case when {@code newTopicId} is null.
+     *
+     * @return false when nothing matched — the binding is retired, belongs to
+     *         another tenant, or already points at that topic
+     */
+    public boolean changeTopic(UUID tenantId, UUID bindingId, @Nullable Integer newTopicId) {
+        Instant now = clock.instant();
+        return jdbc.sql("""
+                UPDATE integration.telegram_bindings
+                SET topic_id = :newTopicId, version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND binding_id = :bindingId AND retired_at IS NULL
+                  AND COALESCE(topic_id, -1) <> COALESCE(:newTopicId, -1)
+                """)
+                        .param("tenantId", tenantId)
+                        .param("bindingId", bindingId)
+                        .param("newTopicId", newTopicId)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
     private static OffsetDateTime utc(Instant instant) {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
@@ -390,4 +522,19 @@ public class TelegramBindingStore {
 
     public record BindingScope(
             UUID bindingId, UUID brandId, @Nullable UUID locationId) {}
+
+    /** One OPERATIONS binding, as an operator's routing screen needs to see it. */
+    public record AdminBindingRow(
+            UUID bindingId,
+            UUID brandId,
+            @Nullable UUID locationId,
+            String status,
+            long chatId,
+            @Nullable Integer topicId,
+            @Nullable Long linkedByTelegramUserId,
+            @Nullable Instant retiredAt,
+            @Nullable String retiredReason,
+            Instant createdAt) {}
+
+    public record EventSubscriptionRow(String eventClass, boolean enabled) {}
 }

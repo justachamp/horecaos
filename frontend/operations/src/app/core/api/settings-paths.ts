@@ -31,6 +31,14 @@ import { LocationScope } from './operations-paths';
  * {@link locationServiceSummary} and the four write endpoints it summarises,
  * plus the pre-existing {@link notificationTemplates} tree.
  *
+ * Wave P32 fixed the place write's data-loss bug (see `locationPlace`'s own
+ * doc) and added the brand's writable profile ({@link brandRevise}, {@link
+ * brandProfileWrite}, both cross-surface for the reason `locationPlace` above
+ * already is) and the branch list's batched state read ({@link
+ * locationsServiceStates}, operations-native, closing the N+1 `locations`
+ * alone used to leave the list without a state column, a state filter, or a
+ * close/open row action).
+ *
  * Wave 53 added a second, different kind of move for {@link
  * integrationInstallations}, {@link integrationSecrets}, {@link
  * integrationConnectFields} and {@link integrationInstallationRotate}: unlike
@@ -55,9 +63,31 @@ export const settingsPaths = {
     return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/brands`;
   },
 
-  /** `OperationsBrandController.get` — read-only until a profile-write endpoint exists. */
+  /** `OperationsBrandController.get`. */
   brand(scope: LocationScope): string {
     return `${this.brands(scope)}/${enc(scope.brandId)}`;
+  },
+
+  /**
+   * `TenantControlPlaneController.reviseBrand` (control-plane surface),
+   * cross-surface — already built and shipped for the control-plane console
+   * before wave P32, which gave this app the operations route and form to
+   * reach it. Requires `If-Match`.
+   */
+  brandRevise(scope: LocationScope): string {
+    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}`;
+  },
+
+  /**
+   * `TenantControlPlaneController.updateBrandProfile` (control-plane
+   * surface), wave P32 — contact phone, Telegram handle, logo, banner and
+   * the 10.12 supported-locale set. Cross-surface for the same reason {@link
+   * locationPlace} is: the write belongs beside the brand's other
+   * provisioning-era fields, and this app calls it the same way {@link
+   * brandRevise} calls its neighbour.
+   */
+  brandProfileWrite(scope: LocationScope): string {
+    return `${this.brandRevise(scope)}/profile`;
   },
 
   // ---------------------------------------------------------- 10.2 Locations
@@ -65,6 +95,18 @@ export const settingsPaths = {
   /** `OperationsBrandController.locations` — the branch list and the scope bar's location picker. */
   locations(scope: LocationScope): string {
     return `${this.brand(scope)}/locations`;
+  },
+
+  /**
+   * `OperationsBrandController.locationServiceStates`, wave P32 — every
+   * location's own manual-override state, batched. Before this wave the
+   * branch list had no state column, no state filter and no close/open row
+   * action, because answering any of them one location at a time was the N+1
+   * this app's own comment on `locations-page.ts` named as the reason it
+   * shipped without them.
+   */
+  locationsServiceStates(scope: LocationScope): string {
+    return `${this.locations(scope)}/service-states`;
   },
 
   /** `LocationServiceOperationsController.profile` — one branch's own fields. */
@@ -156,6 +198,37 @@ export const settingsPaths = {
 
   salesChannelArchive(scope: LocationScope, channelId: string): string {
     return `${this.salesChannel(scope, channelId)}/archive`;
+  },
+
+  salesChannelDeactivate(scope: LocationScope, channelId: string): string {
+    return `${this.salesChannel(scope, channelId)}/deactivate`;
+  },
+
+  salesChannelReactivate(scope: LocationScope, channelId: string): string {
+    return `${this.salesChannel(scope, channelId)}/reactivate`;
+  },
+
+  // ---------------------------------------------------------------- 10.6 Payment methods
+
+  /** `PaymentMethodController` (operations surface, wave P33) -- the tenant-scoped registry. */
+  paymentMethods(scope: LocationScope): string {
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/payment-methods`;
+  },
+
+  paymentMethod(scope: LocationScope, methodId: string): string {
+    return `${this.paymentMethods(scope)}/${enc(methodId)}`;
+  },
+
+  paymentMethodTranslations(scope: LocationScope, methodId: string): string {
+    return `${this.paymentMethod(scope, methodId)}/translations`;
+  },
+
+  paymentMethodActivate(scope: LocationScope, methodId: string): string {
+    return `${this.paymentMethod(scope, methodId)}/activate`;
+  },
+
+  paymentMethodDisable(scope: LocationScope, methodId: string): string {
+    return `${this.paymentMethod(scope, methodId)}/disable`;
   },
 
   // ---------------------------------------------------------- 10.7 Fiscalization
@@ -433,6 +506,57 @@ export const settingsPaths = {
     versionNumber: number,
   ): string {
     return `${this.notificationTemplateVersion(scope, templateId, versionNumber)}/activate`;
+  },
+
+  /** `NotificationTemplateController.testSend` — wave P36, SMS only today. */
+  notificationTemplateTestSend(
+    scope: LocationScope,
+    templateId: string,
+    versionNumber: number,
+  ): string {
+    return `${this.notificationTemplateVersion(scope, templateId, versionNumber)}/test-send`;
+  },
+
+  /**
+   * `NotificationTemplateController.variableCatalogue` — wave P36, gap map
+   * `X.27`: fixes the `variablesSchema: {}` defect that made the editor
+   * unable to author a variable-bearing template at all.
+   */
+  notificationVariableCatalogue(scope: LocationScope): string {
+    return `${this.notificationTemplates(scope)}/variable-catalogue`;
+  },
+
+  // ------------------------------------------- 10.9 Notifications, Tab 2 routing
+
+  /**
+   * `TelegramRoutingController` — wave P36, gap map `10.9b`, over ADR 0058's
+   * bindings. Same `/api/v1/tenants/**` surface as {@link notificationTemplates},
+   * not the `OPERATIONS`-prefixed one — this is a brand-new controller with
+   * no cross-surface caller to preserve, so it lands directly where its
+   * sibling notification-template endpoints already live.
+   */
+  notificationRouting(scope: LocationScope): string {
+    return `${TENANT}/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/notification-routing`;
+  },
+
+  notificationRoutingEventClasses(scope: LocationScope): string {
+    return `${this.notificationRouting(scope)}/event-classes`;
+  },
+
+  notificationRoutingBindings(scope: LocationScope): string {
+    return `${this.notificationRouting(scope)}/bindings`;
+  },
+
+  notificationRoutingSubscription(scope: LocationScope, bindingId: string): string {
+    return `${this.notificationRoutingBindings(scope)}/${enc(bindingId)}/subscriptions`;
+  },
+
+  notificationRoutingTopic(scope: LocationScope, bindingId: string): string {
+    return `${this.notificationRoutingBindings(scope)}/${enc(bindingId)}/topic`;
+  },
+
+  notificationRoutingUnbind(scope: LocationScope, bindingId: string): string {
+    return `${this.notificationRoutingBindings(scope)}/${enc(bindingId)}/unbind`;
   },
 
   // ---------------------------------------------------------- 10.10 Reference data

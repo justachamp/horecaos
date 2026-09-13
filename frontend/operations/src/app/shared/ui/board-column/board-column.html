@@ -1,0 +1,34 @@
+<div
+  class="q-board-column"
+  role="listitem"
+  data-testid="board-column"
+  [attr.data-column-id]="columnId()"
+  [class.q-board-column--ineligible]="dropDisabled()"
+>
+  <header class="q-board-column__header">
+    <span class="q-board-column__title q-emphasis">{{ titleText() }}</span>
+    @if (loadLabel(); as label) {
+      <span
+        class="q-board-column__load q-tnum"
+        [class.q-board-column__load--full]="loadState() === 'full'"
+        [class.q-board-column__load--over]="loadState() === 'over'"
+        data-testid="board-column-load"
+        >{{ label }}</span
+      >
+    }
+  </header>
+  @if (dropDisabled() && dropDisabledReason(); as reason) {
+    <p class="q-board-column__ineligible" data-testid="board-column-ineligible">{{ reason }}</p>
+  }
+  <div
+    class="q-board-column__body"
+    cdkDropList
+    [cdkDropListData]="columnId()"
+    [cdkDropListDisabled]="dropDisabled()"
+    [cdkDropListSortingDisabled]="true"
+    (cdkDropListDropped)="onDropped($event)"
+    data-testid="board-column-body"
+  >
+    <ng-content />
+  </div>
+</div>

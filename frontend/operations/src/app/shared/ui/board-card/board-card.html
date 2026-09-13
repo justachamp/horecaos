@@ -1,0 +1,10 @@
+<div
+  class="q-board-card"
+  cdkDrag
+  [cdkDragData]="dragData()"
+  [cdkDragDisabled]="dragDisabled()"
+  [class.q-board-card--disabled]="dragDisabled()"
+  data-testid="board-card"
+>
+  <ng-content />
+</div>

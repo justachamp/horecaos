@@ -4,17 +4,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClient } from '../../core/api/api-client';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
+import { PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { OrderCountsResponse } from './order-detail';
 import { CountableOrder, OrderCounts, zeroTabCounts } from './order-counts';
 
 const NOW = new Date('2026-08-30T12:00:00Z');
 const SCOPE = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
+const POLICY = PLATFORM_DEFAULT_LATENESS_POLICY;
 
 function order(overrides: Partial<CountableOrder>): CountableOrder {
   return {
     status: 'RECEIVED',
     createdAt: NOW,
     approvalDeadlineAt: null,
+    fulfillmentMode: 'DELIVERY',
+    promisedAt: null,
     hasBlockedProcess: false,
     ...overrides,
   };
@@ -46,7 +50,7 @@ describe('OrderCounts: the client-derived fallback (no counts endpoint reachable
 
   it('counts nothing for an empty page', async () => {
     const counts = configure(erroring());
-    expect(await counts.forOrders(SCOPE, [], NOW)).toEqual(zeroTabCounts());
+    expect(await counts.forOrders(SCOPE, [], NOW, POLICY)).toEqual(zeroTabCounts());
   });
 
   it('counts each order into every tab it belongs to, since attention is not a partition', async () => {
@@ -60,7 +64,7 @@ describe('OrderCounts: the client-derived fallback (no counts endpoint reachable
       order({ status: 'CANCELLED' }), // cancelled only
     ];
 
-    const result = await counts.forOrders(SCOPE, orders, NOW);
+    const result = await counts.forOrders(SCOPE, orders, NOW, POLICY);
 
     expect(result.attention).toBe(1);
     expect(result.new).toBe(2);
@@ -78,7 +82,7 @@ describe('OrderCounts: the client-derived fallback (no counts endpoint reachable
       createdAt: new Date(NOW.getTime() - 50 * 60 * 1000),
     });
 
-    expect((await counts.forOrders(SCOPE, [stalled], NOW)).attention).toBe(1);
+    expect((await counts.forOrders(SCOPE, [stalled], NOW, POLICY)).attention).toBe(1);
   });
 
   it('never counts a terminal order into attention, however old', async () => {
@@ -88,7 +92,7 @@ describe('OrderCounts: the client-derived fallback (no counts endpoint reachable
       createdAt: new Date(NOW.getTime() - 500 * 60 * 1000),
     });
 
-    expect((await counts.forOrders(SCOPE, [oldButDone], NOW)).attention).toBe(0);
+    expect((await counts.forOrders(SCOPE, [oldButDone], NOW, POLICY)).attention).toBe(0);
   });
 
   it('falls back to full client derivation on a denied capability, not just a network error', async () => {
@@ -100,7 +104,7 @@ describe('OrderCounts: the client-derived fallback (no counts endpoint reachable
     const counts = configure(denied);
     const orders = [order({ status: 'FULFILLING' })];
 
-    expect((await counts.forOrders(SCOPE, orders, NOW)).delivering).toBe(1);
+    expect((await counts.forOrders(SCOPE, orders, NOW, POLICY)).delivering).toBe(1);
   });
 });
 
@@ -122,7 +126,7 @@ describe('OrderCounts: consuming GET .../orders/counts', () => {
     );
     const counts = configure(get);
 
-    const result = await counts.forOrders(SCOPE, [], NOW);
+    const result = await counts.forOrders(SCOPE, [], NOW, POLICY);
 
     expect(result.new).toBe(4);
     // preparing = inKitchen + ready — CONFIRMED ∪ PREPARING ∪ READY combined.
@@ -138,7 +142,7 @@ describe('OrderCounts: consuming GET .../orders/counts', () => {
     const counts = configure(get);
     const orders = [order({ status: 'AWAITING_APPROVAL' }), order({ status: 'PAYMENT_FAILED' })];
 
-    const result = await counts.forOrders(SCOPE, orders, NOW);
+    const result = await counts.forOrders(SCOPE, orders, NOW, POLICY);
 
     expect(result.attention).toBe(2);
     // The endpoint's own zeroed fields are trusted for everything else.
@@ -149,7 +153,7 @@ describe('OrderCounts: consuming GET .../orders/counts', () => {
     const get = vi.fn().mockReturnValue(of({ value: countsResponse(), version: null }));
     const counts = configure(get);
 
-    await counts.forOrders(SCOPE, [], NOW);
+    await counts.forOrders(SCOPE, [], NOW, POLICY);
 
     expect(get).toHaveBeenCalledWith('/api/v1/tenants/t1/brands/b1/locations/l1/orders/counts');
   });

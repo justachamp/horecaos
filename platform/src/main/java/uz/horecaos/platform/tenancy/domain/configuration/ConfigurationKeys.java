@@ -448,6 +448,35 @@ public final class ConfigurationKeys {
                     + "still needs one set by hand through Sales channels.")
             .build();
 
+    /**
+     * Gap map row {@code 10.9d} (wave P36): declared here so a stored row for
+     * it passes the startup validator, and declared identically in {@code
+     * notifications.api.NotificationConfigurationKeys} for the reason
+     * recorded on {@link #COURIER_APPLICANT_RETENTION_MONTHS}. Not yet
+     * enforced — see that class's own doc.
+     */
+    public static final ConfigurationKey<Boolean> NOTIFICATIONS_PAYMENT_LINK_AUTO_SEND = ConfigurationKey.of(
+                    "notifications.payment_link_auto_send", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("notifications")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Send a payment link to the customer automatically, rather than only "
+                    + "on request. Not yet enforced: no trigger reads this key yet.")
+            .build();
+
+    /** Gap map row {@code 10.9d} (wave P36). Not yet enforced — see {@link #NOTIFICATIONS_PAYMENT_LINK_AUTO_SEND}. */
+    public static final ConfigurationKey<Boolean> NOTIFICATIONS_AGGREGATOR_SHIFT_NOTIFICATIONS_ENABLED =
+            ConfigurationKey.of("notifications.aggregator_shift_notifications_enabled", Boolean.class)
+                    .defaultValue(false)
+                    .ownedBy("notifications")
+                    .tenantVisible()
+                    .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+                    .describedAs("Deliver an aggregator shift's own open/close notifications, in the "
+                            + "tenant's own business timezone. Not yet enforced: no aggregator-shift "
+                            + "domain fact exists yet to trigger it.")
+                    .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
@@ -474,7 +503,9 @@ public final class ConfigurationKeys {
             ORDERING_AUTO_ACCEPT_ELIGIBLE_CHANNELS,
             ORDERING_AUTO_ACCEPT_MIN_PRIOR_ORDERS,
             CATALOG_USE_STOCK_LOGIC,
-            CATALOG_QR_KIOSK_PRICE_PLANE));
+            CATALOG_QR_KIOSK_PRICE_PLANE,
+            NOTIFICATIONS_PAYMENT_LINK_AUTO_SEND,
+            NOTIFICATIONS_AGGREGATOR_SHIFT_NOTIFICATIONS_ENABLED));
 
     private ConfigurationKeys() {}
 

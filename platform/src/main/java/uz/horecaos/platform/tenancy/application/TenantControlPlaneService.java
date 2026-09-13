@@ -42,6 +42,7 @@ import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
 import uz.horecaos.platform.tenancy.application.port.TenantStatusCache;
 import uz.horecaos.platform.tenancy.domain.Brand;
+import uz.horecaos.platform.tenancy.domain.BrandProfile;
 import uz.horecaos.platform.tenancy.domain.CoordinateSource;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityPolicy;
@@ -456,7 +457,7 @@ public class TenantControlPlaneService {
                         brand.slug().value(),
                         "status",
                         brand.status().name()));
-        return toView(brand);
+        return toView(brand, BrandProfile.empty());
     }
 
     /**
@@ -480,7 +481,7 @@ public class TenantControlPlaneService {
         accessPolicy.requireTenantManagement(tenant, Capability.BRAND_WRITE, ResourceScope.tenant(tenantId.value()));
         Brand brand = requireBrand(tenantId, brandId);
         if (brand.status() == OperatingUnitStatus.ACTIVE) {
-            return toView(brand);
+            return toView(brand, store.findBrandProfile(tenantId, brandId));
         }
         brand.activate();
         store.updateBrandStatus(brand);
@@ -493,7 +494,7 @@ public class TenantControlPlaneService {
                 Map.of("status", brand.status().name()));
         // Re-read: the status write moved the stored version on, and a view
         // carrying the old one would make the next correction fail as stale.
-        return toView(requireBrand(tenantId, brandId));
+        return toView(requireBrand(tenantId, brandId), store.findBrandProfile(tenantId, brandId));
     }
 
     /**
@@ -539,7 +540,67 @@ public class TenantControlPlaneService {
                 // Staff 9.3a: a per-field diff, not a root-level {before, after}
                 // pair of whole snapshots — see ChangeDocuments.diff's own doc.
                 ChangeDocuments.diff(before, identityOf(brand.code(), brand.slug(), brand.displayName(), null)));
-        return toView(requireBrand(tenantId, brandId));
+        return toView(requireBrand(tenantId, brandId), store.findBrandProfile(tenantId, brandId));
+    }
+
+    /**
+     * Corrects a brand's customer-facing profile: contact phone, Telegram
+     * handle, logo, banner, and which languages its storefront supports
+     * (10.1, 10.12).
+     *
+     * <p>Brand scope, like {@link #reviseBrand}, which this deliberately stays
+     * separate from: renaming is a correction to the brand's identity, made
+     * rarely and under an {@code If-Match}; this is storefront content, edited
+     * as often as a menu description and carrying no optimistic-lock version
+     * of its own — the same split {@link #describeLocation} already draws
+     * between a location's identity and its place.
+     */
+    @Transactional
+    public BrandView updateBrandProfile(TenantId tenantId, BrandId brandId, UpdateBrandProfileCommand command) {
+        Objects.requireNonNull(command, "Update brand profile command is required");
+        Tenant tenant = requireTenant(tenantId);
+        accessPolicy.requireTenantManagement(
+                tenant, Capability.BRAND_WRITE, ResourceScope.brand(tenantId.value(), brandId.value()));
+        Brand brand = requireBrand(tenantId, brandId);
+
+        BrandProfile before = store.findBrandProfile(tenantId, brandId);
+        BrandProfile profile = command.toProfile();
+        store.updateBrandProfile(tenantId, brandId, profile);
+        recordAudit(
+                "brand.profile_revised",
+                ResourceScope.brand(tenantId.value(), brandId.value()),
+                "Brand",
+                brandId.value(),
+                "Control-plane brand profile correction",
+                // Never contactPhone/telegramHandle here -- the same PII
+                // exclusion describeLocation's own audit map keeps for
+                // contactPhone, ADR 0029. Locale codes, a default marker and
+                // whether media is set are not personal data.
+                ChangeDocuments.diff(profileAudit(before), profileAudit(profile)));
+        return toView(brand, profile);
+    }
+
+    private static Map<String, Object> profileAudit(BrandProfile profile) {
+        Map<String, Object> audited = new LinkedHashMap<>();
+        audited.put("logoSet", profile.logoAssetId() != null);
+        audited.put("bannerSet", profile.bannerAssetId() != null);
+        audited.put(
+                "locales",
+                profile.locales().stream()
+                        .map(BrandProfile.BrandLocale::locale)
+                        .sorted()
+                        .toList());
+        // Map.copyOf (AuditFact's own compact constructor) refuses a null value
+        // outright, and an unconfigured or just-cleared profile genuinely has no
+        // default locale -- so the key is omitted rather than recorded as null,
+        // the same fix describeLocation's own audit map needed for the same
+        // reason.
+        profile.locales().stream()
+                .filter(BrandProfile.BrandLocale::isDefault)
+                .map(BrandProfile.BrandLocale::locale)
+                .findFirst()
+                .ifPresent(locale -> audited.put("defaultLocale", locale));
+        return audited;
     }
 
     /**
@@ -591,8 +652,14 @@ public class TenantControlPlaneService {
     public List<BrandView> getBrands(TenantId tenantId) {
         Tenant tenant = requireTenant(tenantId);
         accessPolicy.requireTenantRead(tenant);
-        return store.findBrands(tenantId).stream()
-                .map(TenantControlPlaneService::toView)
+        List<Brand> brands = store.findBrands(tenantId);
+        // One batched read of every brand's profile rather than one query per
+        // row -- the same N+1 the branch list's own service-state read is
+        // this wave's other half of fixing, for a directory that is small
+        // today but should not need a query per brand to stay that way.
+        Map<BrandId, BrandProfile> profiles = store.findBrandProfiles(tenantId);
+        return brands.stream()
+                .map(brand -> toView(brand, profiles.getOrDefault(brand.id(), BrandProfile.empty())))
                 .toList();
     }
 
@@ -606,7 +673,8 @@ public class TenantControlPlaneService {
     public BrandView getBrand(TenantId tenantId, BrandId brandId) {
         Tenant tenant = requireTenant(tenantId);
         accessPolicy.requireTenantRead(tenant);
-        return toView(requireBrand(tenantId, brandId));
+        Brand brand = requireBrand(tenantId, brandId);
+        return toView(brand, store.findBrandProfile(tenantId, brandId));
     }
 
     @Transactional
@@ -682,7 +750,7 @@ public class TenantControlPlaneService {
                 .findFirst()
                 .orElseThrow(() -> new TenantResourceNotFoundException("Location was not found in this brand"));
 
-        LocationPlace place = command.toPlace();
+        LocationPlace place = command.toPlace(location.place());
         location.describePlace(place);
         store.updateLocationPlace(location);
 
@@ -691,12 +759,26 @@ public class TenantControlPlaneService {
         // — when a zone stops matching, or when a courier was sent to the wrong
         // building — and an audit entry that only says a field was edited cannot
         // answer either question.
+        //
+        // Absent fields are omitted rather than recorded as an explicit null:
+        // AuditFact's own compact constructor runs every changeDocument through
+        // Map.copyOf, which refuses a null value outright, and a location's
+        // point, city and district are all genuinely optional (LocationPlace's
+        // own doc). Before this wave nothing had ever exercised this path with
+        // one of them absent, so describeLocation on the branch every location
+        // starts as -- unpinned -- threw out of a call that otherwise succeeded.
         Map<String, Object> audited = new LinkedHashMap<>();
         audited.put("coordinateSource", place.coordinateSource().name());
-        audited.put("latitude", place.point().map(GeoPoint::latitude).orElse(null));
-        audited.put("longitude", place.point().map(GeoPoint::longitude).orElse(null));
-        audited.put("city", place.city());
-        audited.put("district", place.district());
+        place.point().ifPresent(point -> {
+            audited.put("latitude", point.latitude());
+            audited.put("longitude", point.longitude());
+        });
+        if (place.city() != null) {
+            audited.put("city", place.city());
+        }
+        if (place.district() != null) {
+            audited.put("district", place.district());
+        }
         recordAudit(
                 "location.described",
                 ResourceScope.brand(tenantId.value(), brandId.value()),
@@ -963,7 +1045,7 @@ public class TenantControlPlaneService {
                 identityMode);
     }
 
-    private static BrandView toView(Brand brand) {
+    private static BrandView toView(Brand brand, BrandProfile profile) {
         return new BrandView(
                 brand.id().value(),
                 brand.tenantId().value(),
@@ -971,6 +1053,13 @@ public class TenantControlPlaneService {
                 brand.slug().value(),
                 brand.displayName(),
                 brand.status(),
+                profile.contactPhone(),
+                profile.telegramHandle(),
+                profile.logoAssetId(),
+                profile.bannerAssetId(),
+                profile.locales().stream()
+                        .map(locale -> new BrandLocaleView(locale.locale(), locale.description(), locale.isDefault()))
+                        .toList(),
                 brand.version());
     }
 
@@ -1013,6 +1102,39 @@ public class TenantControlPlaneService {
     /** The whole editable identity, as a form holds it; see {@link Brand#revise} for what may change when. */
     public record ReviseBrandCommand(String code, String slug, String displayName) {}
 
+    /**
+     * The whole editable profile, as a form holds it (10.1, 10.12) — a
+     * whole-set write for {@code locales}, the same reason {@link
+     * uz.horecaos.platform.tenancy.web.LocationServiceOperationsController
+     * #replacePreparationBands} replaces its whole set rather than diffing:
+     * the screen's own checkbox grid already knows the full set it wants.
+     */
+    public record UpdateBrandProfileCommand(
+            @Nullable String contactPhone,
+            @Nullable String telegramHandle,
+            @Nullable UUID logoAssetId,
+            @Nullable UUID bannerAssetId,
+            List<BrandLocaleInput> locales) {
+
+        public UpdateBrandProfileCommand {
+            Objects.requireNonNull(locales, "Locales is required (empty, not null, to clear the set)");
+        }
+
+        public BrandProfile toProfile() {
+            return new BrandProfile(
+                    contactPhone,
+                    telegramHandle,
+                    logoAssetId,
+                    bannerAssetId,
+                    locales.stream()
+                            .map(input -> new BrandProfile.BrandLocale(
+                                    input.locale(), input.description(), input.isDefault()))
+                            .toList());
+        }
+    }
+
+    public record BrandLocaleInput(String locale, @Nullable String description, boolean isDefault) {}
+
     public record CreateLocationCommand(String code, String slug, String displayName, String timezone) {}
 
     /** The whole editable identity, as a form holds it; see {@link Location#revise} for what may change when. */
@@ -1048,7 +1170,15 @@ public class TenantControlPlaneService {
             String countryCode,
             String businessType) {}
 
-    /** @param version what a correction or deletion sends back as {@code If-Match} (ADR 0031) */
+    /**
+     * @param version  what a correction or deletion sends back as {@code
+     *                 If-Match} (ADR 0031) — for the brand's identity;
+     *                 {@link #updateBrandProfile} carries no version of its
+     *                 own, see that method's doc for why
+     * @param locales  which languages this brand's storefront supports (10.12)
+     *                 and each one's description (10.1); empty means
+     *                 unconfigured, not "supports nothing"
+     */
     public record BrandView(
             UUID id,
             UUID tenantId,
@@ -1056,10 +1186,32 @@ public class TenantControlPlaneService {
             String slug,
             String displayName,
             OperatingUnitStatus status,
+            @Nullable String contactPhone,
+            @Nullable String telegramHandle,
+            @Nullable UUID logoAssetId,
+            @Nullable UUID bannerAssetId,
+            List<BrandLocaleView> locales,
             long version) {}
+
+    /** One entry of {@link BrandView#locales}. */
+    public record BrandLocaleView(String locale, @Nullable String description, boolean isDefault) {}
 
     /**
      * Where a branch is, as a caller states it.
+     *
+     * <p>A whole-place write by design — see {@link
+     * uz.horecaos.platform.tenancy.web.TenantControlPlaneController#describeLocation
+     * the controller's own doc} for why a {@code PATCH} of individual fields is
+     * refused. But "whole place" describes the fields this caller actually
+     * edits (address, district, city, phone), not every field {@link
+     * LocationPlace} carries: until wave P32, {@link #toPlace} took a caller
+     * silent about the point as a caller who wanted it gone, and every
+     * console edit reached this endpoint through {@code savePlace()} sending
+     * only those four fields — silently moving a placed, surveyed branch back
+     * onto the geocoding backlog, and erasing its landmark with it, on every
+     * address or phone correction. {@link #toPlace(LocationPlace)} takes the
+     * location's current place and carries the point, its source, and the
+     * landmark through whenever this write is silent about them.
      *
      * @param coordinateSource who placed the pin. Supplied rather than inferred
      *                         because the platform genuinely cannot tell a surveyed
@@ -1068,27 +1220,62 @@ public class TenantControlPlaneService {
      *                         work list, and a pinned one comes off it
      */
     public record DescribeLocationCommand(
-            String addressLine,
-            String district,
-            String city,
-            String landmark,
-            String contactPhone,
-            Double latitude,
-            Double longitude,
-            CoordinateSource coordinateSource) {
+            @Nullable String addressLine,
+            @Nullable String district,
+            @Nullable String city,
+            @Nullable String landmark,
+            @Nullable String contactPhone,
+            @Nullable Double latitude,
+            @Nullable Double longitude,
+            @Nullable CoordinateSource coordinateSource,
+            boolean clearLandmark) {
 
-        public LocationPlace toPlace() {
+        /**
+         * @param existing the location's place before this write, carried through
+         *                 wherever this command is silent about the point or the
+         *                 landmark
+         */
+        public LocationPlace toPlace(LocationPlace existing) {
+            Objects.requireNonNull(existing, "Existing location place is required");
             // Half a coordinate is refused outright rather than nulled through.
             // A latitude alone points at the equator, and V0021 had to go back and
             // discard rows that reached customer.addresses exactly this way.
             if ((latitude == null) != (longitude == null)) {
                 throw new IllegalArgumentException("A location needs both a latitude and a longitude, or neither");
             }
-            GeoPoint point = latitude == null ? null : new GeoPoint(latitude, longitude);
-            CoordinateSource source = coordinateSource != null
-                    ? coordinateSource
-                    : (point == null ? CoordinateSource.NOT_GEOCODED : CoordinateSource.MERCHANT_PIN);
-            return new LocationPlace(addressLine, district, city, landmark, contactPhone, point, source);
+
+            GeoPoint point;
+            CoordinateSource source;
+            if (latitude != null) {
+                // A point was supplied: an ordinary pin placement or correction.
+                point = new GeoPoint(latitude, longitude);
+                source = coordinateSource != null ? coordinateSource : CoordinateSource.MERCHANT_PIN;
+            } else if (coordinateSource != null) {
+                // No point, but the caller did state a source -- honoured
+                // literally. NOT_GEOCODED here is how a pin is deliberately
+                // cleared; LocationPlace's own invariant catches any other
+                // source claimed without a point.
+                point = null;
+                source = coordinateSource;
+            } else {
+                // Neither a point nor a source: this write is not about the pin
+                // at all (an address or phone correction). Carry the existing
+                // one through rather than defaulting to NOT_GEOCODED, which is
+                // the data-loss bug this branch exists to close.
+                point = existing.coordinates();
+                source = existing.coordinateSource();
+            }
+
+            // clearLandmark is the same escape hatch coordinateSource==NOT_GEOCODED
+            // gives the point: an emptied form field collapses to a JSON body
+            // with no "landmark" key at all (undefined drops from a request
+            // body), which is indistinguishable on the wire from a caller that
+            // never touched this field at all. Without an explicit signal,
+            // "clear the landmark" and "I did not touch the landmark" both
+            // read as landmark == null here, and the silent-carry-through
+            // branch below would keep the stale value forever.
+            String resolvedLandmark = clearLandmark ? null : (landmark != null ? landmark : existing.landmark());
+            return new LocationPlace(addressLine, district, city, resolvedLandmark, contactPhone, point, source);
         }
     }
 

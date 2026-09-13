@@ -32,6 +32,10 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.pricing.application.PriceAuthoringService;
 import uz.horecaos.platform.pricing.application.PriceAuthoringService.AssignmentScope;
+import uz.horecaos.platform.pricing.application.PriceBulkApplyService;
+import uz.horecaos.platform.pricing.application.PriceBulkApplyService.BulkPriceChangeReport;
+import uz.horecaos.platform.pricing.application.PriceBulkApplyService.BulkPriceItem;
+import uz.horecaos.platform.pricing.application.PriceBulkApplyService.BulkPriceOutcome;
 import uz.horecaos.platform.pricing.application.PriceQueryService;
 import uz.horecaos.platform.pricing.application.PriceableType;
 import uz.horecaos.platform.pricing.application.PricingEngine;
@@ -67,10 +71,13 @@ public class PriceAuthoringController {
 
     private final PriceAuthoringService authoring;
     private final PriceQueryService query;
+    private final PriceBulkApplyService bulkApply;
 
-    public PriceAuthoringController(PriceAuthoringService authoring, PriceQueryService query) {
+    public PriceAuthoringController(
+            PriceAuthoringService authoring, PriceQueryService query, PriceBulkApplyService bulkApply) {
         this.authoring = authoring;
         this.query = query;
+        this.bulkApply = bulkApply;
     }
 
     @GetMapping("/price-books")
@@ -223,6 +230,40 @@ public class PriceAuthoringController {
                 request.amountMinor())));
     }
 
+    @PostMapping("/price-books/{priceBookId}/prices/bulk-apply")
+    @RequiresCapability(value = Capability.PRICING_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Change many prices in one call, with a dry run (operations gap map row 4.8b)",
+            description = "Composing this client-side as N optimistic-locked PUT "
+                    + ".../variant-prices/{variantId} calls gives no atomicity and no "
+                    + "partial-failure story. Each item is applied through the same setPrice a "
+                    + "single edit would use, in its own transaction, so one bad item (an unknown "
+                    + "variant, a negative amount) cannot fail the rest of the batch. dryRun runs "
+                    + "every item's write and then rolls it back, so an operator sees exactly what "
+                    + "a percent or absolute change across a filtered selection would cost before "
+                    + "committing it. Capped at 200 items, matching GET .../resolved/prices.")
+    public ResponseEntity<BulkPriceChangeResponse> bulkApplyPrices(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID priceBookId,
+            @Valid @RequestBody BulkPriceChangeRequest body) {
+
+        try {
+            BulkPriceChangeReport report = bulkApply.bulkApply(
+                    tenantId,
+                    brandId,
+                    priceBookId,
+                    body.items().stream()
+                            .map(item ->
+                                    new BulkPriceItem(item.priceableType(), item.priceableId(), item.amountMinor()))
+                            .toList(),
+                    body.dryRun());
+            return ResponseEntity.ok(BulkPriceChangeResponse.of(report));
+        } catch (PriceAuthoringService.UnknownPriceBookException missing) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
+        }
+    }
+
     @PostMapping("/price-books/{priceBookId}/activation")
     @RequiresCapability(value = Capability.PRICING_ACTIVATE, scope = ScopeType.BRAND, mutating = true)
     @Operation(
@@ -320,6 +361,56 @@ public class PriceAuthoringController {
      * @param amountMinor whole som for UZS, VAT included
      */
     public record PriceRequest(@PositiveOrZero long amountMinor) {}
+
+    /** One item of a bulk price change: the same {@code (type, id, amount)} a single {@link #setVariantPrice} call takes. */
+    public record BulkPriceChangeItemRequest(
+            @NotNull PriceableType priceableType,
+            @NotNull UUID priceableId,
+            @PositiveOrZero long amountMinor) {}
+
+    /**
+     * @param dryRun runs every item's write and rolls the whole batch back, so an
+     *               operator sees what the change would cost before committing it
+     * @param items  capped at 200, matching {@code GET .../resolved/prices}
+     */
+    public record BulkPriceChangeRequest(
+            boolean dryRun, @NotEmpty @Size(max = 200) List<@Valid BulkPriceChangeItemRequest> items) {}
+
+    public record BulkPriceChangeItemResponse(
+            String priceableType,
+            UUID priceableId,
+            boolean applied,
+            @Nullable Long previousAmountMinor,
+            long amountMinor,
+            @Nullable String problemCode) {
+
+        static BulkPriceChangeItemResponse of(BulkPriceOutcome outcome) {
+            return new BulkPriceChangeItemResponse(
+                    outcome.type().name(),
+                    outcome.priceableId(),
+                    outcome.applied(),
+                    outcome.previousAmountMinor(),
+                    outcome.amountMinor(),
+                    outcome.problemCode());
+        }
+    }
+
+    public record BulkPriceChangeResponse(
+            int totalItems,
+            int appliedCount,
+            int failedCount,
+            boolean dryRun,
+            List<BulkPriceChangeItemResponse> items) {
+
+        static BulkPriceChangeResponse of(BulkPriceChangeReport report) {
+            return new BulkPriceChangeResponse(
+                    report.totalItems(),
+                    report.appliedCount(),
+                    report.failedCount(),
+                    report.dryRun(),
+                    report.items().stream().map(BulkPriceChangeItemResponse::of).toList());
+        }
+    }
 
     /**
      * The brand's VAT rate for a jurisdiction.

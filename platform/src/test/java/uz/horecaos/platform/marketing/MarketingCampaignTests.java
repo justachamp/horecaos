@@ -59,6 +59,7 @@ import uz.horecaos.platform.marketing.domain.MarketingChannel;
 import uz.horecaos.platform.marketing.domain.MetricDefinitions;
 import uz.horecaos.platform.marketing.domain.PredicateOperator;
 import uz.horecaos.platform.marketing.domain.PredicateType;
+import uz.horecaos.platform.marketing.domain.RefusalReason;
 import uz.horecaos.platform.marketing.domain.SuppressionReason;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAudienceStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignStore;
@@ -262,6 +263,85 @@ class MarketingCampaignTests {
     }
 
     @Test
+    @DisplayName("a snapshot matches the recorded consent purpose — the caller's own descriptive "
+            + "string is not the purpose ConsentDirectory records under")
+    void aSnapshotMustUseTheRecordedConsentPurpose() {
+        // The regression Customers 5.3's segment builder shipped: segments-page.ts
+        // used to pass its own human-readable string as the consent purpose
+        // instead of the purpose consent is actually recorded under. Every
+        // candidate then failed MarketingEligibility's exact-match consent check
+        // and the reach read as zero even though this customer said yes.
+        UUID account = customer("+998904444444", "ru", true);
+        grantConsent(account);
+        projection.backfill(TENANT, BRAND);
+        UUID audience = everybodyRegistered();
+
+        var wrongPurpose = audiences.buildSnapshot(
+                TENANT,
+                BRAND,
+                audience,
+                MarketingChannel.SMS,
+                "Operations console: segment snapshot from Customers 5.3",
+                author,
+                "corr-wrong-purpose");
+        assertThat(wrongPurpose.memberCount())
+                .as("a purpose ConsentDirectory never recorded a decision under reads as no decision at all")
+                .isZero();
+        assertThat(exclusionReason(wrongPurpose.snapshotId(), account)).isEqualTo("CONSENT_WITHHELD");
+
+        var realPurpose = audiences.buildSnapshot(
+                TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE, author, "corr-real-purpose");
+        assertThat(realPurpose.memberCount())
+                .as("the same customer, the same consent decision — only the purpose string changed")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("the snapshot's refusal breakdown tallies each excluded candidate under its own reason")
+    void refusalBreakdownTalliesEachReason() {
+        UUID suppressed = customer("+998905555555", "ru", true);
+        grantConsent(suppressed);
+        suppressions.suppress(
+                TENANT,
+                BRAND,
+                suppressed,
+                MarketingChannel.SMS,
+                SuppressionReason.HARD_BOUNCE,
+                MarketingSuppressionService.ACTOR_PROVIDER,
+                null,
+                ActorRef.service("sms-gateway"),
+                "The operator reported an invalid number",
+                "corr");
+
+        // No grantConsent call at all — CONSENT_WITHHELD, the "absence is not
+        // consent" case the next test below exercises on its own.
+        UUID noDecision = customer("+998906666666", "ru", true);
+
+        projection.backfill(TENANT, BRAND);
+        UUID audience = everybodyRegistered();
+
+        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE, author, "corr");
+
+        assertThat(snapshot.candidateCount()).isEqualTo(2);
+        assertThat(snapshot.memberCount()).isZero();
+        assertThat(snapshot.refusalBreakdown())
+                .as("a marketer who sees only a reach of zero cannot tell a suppression apart "
+                        + "from a missing consent decision — the breakdown is the diagnostic")
+                .containsEntry(RefusalReason.SUPPRESSED, 1)
+                .containsEntry(RefusalReason.CONSENT_WITHHELD, 1)
+                .containsEntry(RefusalReason.ACCOUNT_NOT_ACTIVE, 0)
+                .containsEntry(RefusalReason.FREQUENCY_CAP_REACHED, 0)
+                .containsEntry(RefusalReason.NO_VERIFIED_ENDPOINT, 0);
+        assertThat(snapshot.refusalBreakdown().values().stream()
+                        .mapToInt(Integer::intValue)
+                        .sum())
+                .as("the breakdown sums to exactly the excluded count, never more and never less")
+                .isEqualTo(snapshot.candidateCount() - snapshot.memberCount());
+        assertThat(exclusionReason(snapshot.snapshotId(), suppressed)).isEqualTo("SUPPRESSED");
+        assertThat(exclusionReason(snapshot.snapshotId(), noDecision)).isEqualTo("CONSENT_WITHHELD");
+    }
+
+    @Test
     @DisplayName("absence of a consent decision is not consent")
     void aMigratedCustomerWithNoDecisionIsExcluded() {
         UUID account = customer("+998903333333", "ru", true);
@@ -434,6 +514,57 @@ class MarketingCampaignTests {
                 .isEmpty();
         assertThat(audienceStore.includedMembersAfter(OTHER_TENANT, snapshot.snapshotId(), null, 100))
                 .isEmpty();
+    }
+
+    @Test
+    @DisplayName("exporting a snapshot through a sibling brand is refused, not just the source brand's own export")
+    void exportRefusesASiblingBrand() {
+        UUID account = customer("+998909999991", "ru", true);
+        grantConsent(account);
+        projection.backfill(TENANT, BRAND);
+
+        UUID audience = everybodyRegistered();
+        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE, author, "corr");
+
+        // The capability check alone would pass here: OTHER_BRAND is a real brand
+        // under TENANT, so this is exactly the gap a BRAND-scoped AUDIENCE_EXPORT
+        // grant on OTHER_BRAND, paired with BRAND's snapshotId, would otherwise
+        // exploit.
+        assertThatThrownBy(() ->
+                        audiences.export(TENANT, OTHER_BRAND, snapshot.snapshotId(), author, PURPOSE, "corr", 100))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("belongs to this brand");
+    }
+
+    @Test
+    @DisplayName("exporting a snapshot through another tenant is refused")
+    void exportRefusesAnotherTenant() {
+        UUID account = customer("+998909999992", "ru", true);
+        grantConsent(account);
+        projection.backfill(TENANT, BRAND);
+
+        UUID audience = everybodyRegistered();
+        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE, author, "corr");
+
+        assertThatThrownBy(() ->
+                        audiences.export(OTHER_TENANT, BRAND, snapshot.snapshotId(), author, PURPOSE, "corr", 100))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("belongs to this tenant");
+    }
+
+    @Test
+    @DisplayName("exporting a snapshot through its own brand returns the pseudonymous member ids")
+    void exportSucceedsForTheOwningBrand() {
+        UUID account = customer("+998909999993", "ru", true);
+        grantConsent(account);
+        projection.backfill(TENANT, BRAND);
+
+        UUID audience = everybodyRegistered();
+        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE, author, "corr");
+
+        List<UUID> exported = audiences.export(TENANT, BRAND, snapshot.snapshotId(), author, PURPOSE, "corr", 100);
+
+        assertThat(exported).containsExactly(account);
     }
 
     // ------------------------------------------------- retention and erasure

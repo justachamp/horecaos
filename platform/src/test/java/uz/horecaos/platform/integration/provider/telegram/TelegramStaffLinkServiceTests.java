@@ -20,7 +20,10 @@ import uz.horecaos.platform.support.TestDatabase;
 /**
  * {@link TelegramStaffLinkService#listForTenant}, added for staff-and-access.md's
  * People screen and person-record Безопасность tab (operations IA §9.1): "a
- * staff row's Telegram state is real data worth showing".
+ * staff row's Telegram state is real data worth showing". Also {@link
+ * TelegramStaffLinkService#revoke} (wave T20, operations-gap-map.md `9/X.1`):
+ * «unlink Aziza» — the piece the migration's own header called out as missing
+ * from this service.
  */
 class TelegramStaffLinkServiceTests {
 
@@ -83,6 +86,56 @@ class TelegramStaffLinkServiceTests {
     @Test
     void anUnlinkedTenantReportsNoLinks() {
         assertThat(links.listForTenant(TENANT)).isEmpty();
+    }
+
+    @Test
+    void revokeRemovesTheLinkAndItStopsAppearingInTheTenantList() throws Exception {
+        String code = links.issueCode(TENANT, "staff-1");
+        var pending = links.resolve(code).orElseThrow();
+        links.link(TENANT, pending.id(), "staff-1", 555_000_001L);
+        UUID linkId = links.listForTenant(TENANT).getFirst().id();
+
+        boolean changed = links.revoke(TENANT, linkId);
+
+        assertThat(changed).isTrue();
+        assertThat(links.listForTenant(TENANT)).isEmpty();
+    }
+
+    @Test
+    void aRevokedLinkCannotBeRetapped() throws Exception {
+        String code = links.issueCode(TENANT, "staff-1");
+        var pending = links.resolve(code).orElseThrow();
+        links.link(TENANT, pending.id(), "staff-1", 555_000_001L);
+        UUID linkId = links.listForTenant(TENANT).getFirst().id();
+
+        links.revoke(TENANT, linkId);
+
+        // The bot callback authorizer's own question — "who does this Telegram
+        // account act as, in this tenant" — must come back empty once the link
+        // is gone, exactly as it would for an account that was never linked.
+        assertThat(links.principalFor(TENANT, 555_000_001L)).isEmpty();
+    }
+
+    @Test
+    void revokingAnAlreadyGoneLinkChangesNothing() {
+        boolean changed = links.revoke(TENANT, UUID.randomUUID());
+
+        assertThat(changed).isFalse();
+    }
+
+    @Test
+    void revokeIsTenantScopedAndCannotReachAnotherTenantsLink() throws Exception {
+        String code = links.issueCode(TENANT, "staff-1");
+        var pending = links.resolve(code).orElseThrow();
+        links.link(TENANT, pending.id(), "staff-1", 555_000_001L);
+        UUID linkId = links.listForTenant(TENANT).getFirst().id();
+
+        // The right link id, the wrong tenant — the same cross-tenant shape
+        // DatabasePrivilegeTests and the tenant-isolation skill both watch for.
+        boolean changed = links.revoke(OTHER_TENANT, linkId);
+
+        assertThat(changed).isFalse();
+        assertThat(links.listForTenant(TENANT)).hasSize(1);
     }
 
     private void insertTenant(UUID id, String slug) {

@@ -3,6 +3,14 @@
     <div class="header">
       <h1 class="q-title">{{ 'customers.title' | t }}</h1>
       <div class="header__actions">
+        <button
+          type="button"
+          class="secondary"
+          (click)="openImport()"
+          data-testid="customers-import-button"
+        >
+          {{ 'customers.import.action' | t }}
+        </button>
         <button type="button" class="secondary" (click)="exportFiltered()" [disabled]="exporting()">
           {{ exporting() ? ('customers.export.exporting' | t) : ('customers.export.action' | t) }}
         </button>
@@ -45,6 +53,7 @@
         [placeholder]="'customers.search.placeholder' | t"
         (optionSelected)="onSearchOptionSelected($event)"
         (create)="onSearchCreateRequested($event)"
+        (search)="onSearchDebounced($event)"
         data-testid="customers-search"
       />
       <select
@@ -70,8 +79,11 @@
     }
     @if (exportedRows(); as rows) {
       <q-inline-alert
-        severity="success"
-        [text]="'customers.export.done' | t: { count: rows.length }"
+        [severity]="exportTruncated() ? 'warning' : 'success'"
+        [text]="
+          (exportTruncated() ? 'customers.export.doneTruncated' : 'customers.export.done')
+            | t: { count: rows.length }
+        "
         dismissible
         (dismiss)="dismissExportNotice()"
       />

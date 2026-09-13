@@ -28,6 +28,7 @@ import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAssetStatus;
 import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.media.api.ObjectStorage;
+import uz.horecaos.platform.media.domain.DerivativeVariant;
 import uz.horecaos.platform.media.domain.ImageCostLimits;
 import uz.horecaos.platform.media.domain.ImageProbe;
 import uz.horecaos.platform.media.domain.MediaAsset;
@@ -77,6 +78,7 @@ public class MediaAssetService implements MediaAvailability {
     private final JdbcMediaAssetStore store;
     private final JdbcDerivativeJobStore derivativeJobs;
     private final JdbcVerificationJobStore verificationJobs;
+    private final MediaDerivativeStore derivatives;
     private final ObjectStorage storage;
     private final TransactionTemplate transactions;
     private final ApplicationEventPublisher events;
@@ -89,6 +91,7 @@ public class MediaAssetService implements MediaAvailability {
             JdbcMediaAssetStore store,
             JdbcDerivativeJobStore derivativeJobs,
             JdbcVerificationJobStore verificationJobs,
+            MediaDerivativeStore derivatives,
             ObjectStorage storage,
             TransactionTemplate transactions,
             ApplicationEventPublisher events,
@@ -102,6 +105,7 @@ public class MediaAssetService implements MediaAvailability {
         this.store = store;
         this.derivativeJobs = derivativeJobs;
         this.verificationJobs = verificationJobs;
+        this.derivatives = derivatives;
         this.storage = storage;
         this.transactions = transactions;
         this.events = events;
@@ -471,12 +475,45 @@ public class MediaAssetService implements MediaAvailability {
         return changed;
     }
 
-    /** A short-lived read URL for a private asset. */
+    /** A short-lived read URL for a private asset's original. */
     @Transactional(readOnly = true)
     public Optional<java.net.URI> downloadUrl(UUID tenantId, MediaAssetId assetId) {
-        return store.findOwned(tenantId, assetId)
-                .filter(asset -> asset.status().isDisplayable())
-                .map(asset -> storage.presignDownload(asset.bucket(), asset.objectKey(), DOWNLOAD_WINDOW));
+        return downloadUrl(tenantId, assetId, null);
+    }
+
+    /**
+     * A short-lived read URL for a private asset, or for one of its
+     * renditions.
+     *
+     * <p>Before this overload existed, {@code MediaDerivativeWorker} rendered
+     * every {@link DerivativeVariant} and {@link MediaDerivativeStore} recorded
+     * it, and nothing ever read either back: every caller of {@link
+     * MediaController#downloadUrl} got the original, however many megabytes it
+     * was, because there was no way to ask for anything smaller. A grid
+     * rendering dozens of catalog photos loaded dozens of full-size originals.
+     *
+     * @param variant null for the original; otherwise the rendition, which must
+     *                already have rendered — no rendering happens on this path,
+     *                and a variant that has not rendered yet answers empty
+     *                exactly like an asset that does not exist, the same "not
+     *                distinguishable from absent" shape {@link #find} already
+     *                uses for a foreign tenant's asset
+     */
+    @Transactional(readOnly = true)
+    public Optional<java.net.URI> downloadUrl(
+            UUID tenantId, MediaAssetId assetId, @Nullable DerivativeVariant variant) {
+        Optional<MediaAsset> asset =
+                store.findOwned(tenantId, assetId).filter(a -> a.status().isDisplayable());
+        if (asset.isEmpty()) {
+            return Optional.empty();
+        }
+        if (variant == null) {
+            MediaAsset original = asset.get();
+            return Optional.of(storage.presignDownload(original.bucket(), original.objectKey(), DOWNLOAD_WINDOW));
+        }
+        return derivatives
+                .find(tenantId, assetId, variant)
+                .map(rendition -> storage.presignDownload(rendition.bucket(), rendition.objectKey(), DOWNLOAD_WINDOW));
     }
 
     @Transactional(readOnly = true)

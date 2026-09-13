@@ -2,8 +2,18 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../../core/api/api-client';
+import { command } from '../../../core/api/idempotency';
 import { LocationScope } from '../../../core/api/operations-paths';
 import { settingsPaths } from '../../../core/api/settings-paths';
+
+export type BrandLocaleCode = 'ru' | 'uz-Latn' | 'en';
+
+/** Mirrors uz.horecaos.platform.tenancy.application.TenantControlPlaneService.BrandLocaleView. */
+export interface BrandLocaleView {
+  readonly locale: BrandLocaleCode;
+  readonly description: string | null;
+  readonly isDefault: boolean;
+}
 
 /** Mirrors uz.horecaos.platform.tenancy.application.TenantControlPlaneService.BrandView. */
 export interface BrandView {
@@ -13,24 +23,45 @@ export interface BrandView {
   readonly slug: string;
   readonly displayName: string;
   readonly status: 'DRAFT' | 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
+  readonly contactPhone: string | null;
+  readonly telegramHandle: string | null;
+  readonly logoAssetId: string | null;
+  readonly bannerAssetId: string | null;
+  readonly locales: readonly BrandLocaleView[];
+  readonly version: number;
+}
+
+export interface ReviseBrandRequest {
+  readonly code: string;
+  readonly slug: string;
+  readonly displayName: string;
+}
+
+export interface UpdateBrandProfileRequest {
+  readonly contactPhone?: string;
+  readonly telegramHandle?: string;
+  readonly logoAssetId?: string;
+  readonly bannerAssetId?: string;
+  readonly locales: readonly {
+    readonly locale: BrandLocaleCode;
+    readonly description?: string;
+    readonly isDefault: boolean;
+  }[];
 }
 
 /**
- * 10.1 Brand profile's read (`OperationsBrandController`, added in wave 26 —
- * see this app's `docs/adr/partial/0065-*.md`). No write method exists here
- * on purpose: renaming a brand, replacing its logo, and every other field
- * `docs/operations-spec/settings.md` §10.1 lists has no backend yet (ADR
- * 0002/0010 own the gap), so this screen reads only, and the page itself
- * says so rather than rendering fields it cannot save.
+ * 10.1 Brand profile, 10.12 languages and regional formats.
  *
- * {@link list} was added for Terms of service's own brand picker (ADR 0067,
- * `terms-page.ts`): that screen resolves its tenant from `CurrentTenant`
- * rather than `CurrentLocation` (a `tenant-owner` principal holds no
- * `BRAND`-scoped grant to derive a `LocationScope` from), so it has only a
- * bare `tenantId` to call `OperationsBrandController.list` with — hence the
- * `{ tenantId, brandId: '', locationId: '' }` shape below rather than a real
- * `LocationScope`, the same "zero the unused field" idiom `loyalty-page.ts`
- * already uses for its own tenant-only reads.
+ * `getBrand`/`list` read `OperationsBrandController` (operations surface,
+ * wave 26). The two writes are cross-surface, the same shape {@link
+ * LocationsApi.describePlace} already established for the location place
+ * write: `reviseBrand` reuses `TenantControlPlaneController.reviseBrand`,
+ * already built and shipped for the control-plane console (If-Match against
+ * the brand's own version); `updateProfile` reuses the new `.../profile`
+ * endpoint P32 added beside it for contact, media and the 10.12
+ * supported-locale set — carries no `If-Match` of its own, since it is
+ * storefront content edited as often as a menu description rather than an
+ * identity two people could race on.
  */
 @Injectable({ providedIn: 'root' })
 export class BrandProfileApi {
@@ -48,5 +79,31 @@ export class BrandProfileApi {
       ),
     );
     return result.value ?? [];
+  }
+
+  async reviseBrand(
+    scope: LocationScope,
+    request: ReviseBrandRequest,
+    expectedVersion: number,
+  ): Promise<BrandView> {
+    return firstValueFrom(
+      this.api.put<ReviseBrandRequest, BrandView>(
+        settingsPaths.brandRevise(scope),
+        command(request),
+        { expectedVersion },
+      ),
+    );
+  }
+
+  async updateProfile(
+    scope: LocationScope,
+    request: UpdateBrandProfileRequest,
+  ): Promise<BrandView> {
+    return firstValueFrom(
+      this.api.put<UpdateBrandProfileRequest, BrandView>(
+        settingsPaths.brandProfileWrite(scope),
+        command(request),
+      ),
+    );
   }
 }

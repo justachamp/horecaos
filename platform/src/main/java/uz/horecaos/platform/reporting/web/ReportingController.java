@@ -240,6 +240,53 @@ public class ReportingController {
                 ProvenanceResponse.of(result.provenance())));
     }
 
+    @GetMapping("/operator-leaderboard")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "7.5: orders taken, revenue, average check and handling time, per operator",
+            description = "One row per operator, human or machine: operator_principal_id is a "
+                    + "staff Keycloak subject when a person created or accepted the order, or a "
+                    + "pseudo-operator named after its channel (\"channel:BOT\", "
+                    + "\"channel:WEBSITE\") otherwise, so the bot and the website compare "
+                    + "against people rather than disappearing from the board. No name is "
+                    + "attached until the staff-identity ADR lands — principalKind and subject "
+                    + "say what this build can say instead of a bare id.")
+    public ResponseEntity<OperatorLeaderboardResponse> operatorLeaderboard(
+            @PathVariable UUID tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId) {
+
+        var result = queries.operatorLeaderboard(tenantId, from, to, orEmpty(locationId));
+        return ResponseEntity.ok(new OperatorLeaderboardResponse(
+                result.rows().stream().map(OperatorLeaderboardRowResponse::of).toList(),
+                ProvenanceResponse.of(result.provenance())));
+    }
+
+    @GetMapping("/operator-products")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "7.5a: one operator's product mix, drilled down from the leaderboard",
+            description = "Straight off fact_order_line joined back to fact_order for the "
+                    + "operator who took it, on the same footing as /variant-sales. Pass an "
+                    + "operatorPrincipalId straight off an /operator-leaderboard row.")
+    public ResponseEntity<OperatorProductListResponse> operatorProducts(
+            @PathVariable UUID tenantId,
+            @RequestParam String operatorPrincipalId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId,
+            @RequestParam(required = false) Integer limit) {
+
+        var result = queries.operatorProducts(
+                tenantId, operatorPrincipalId, from, to, orEmpty(locationId), clampVariantLimit(limit));
+        return ResponseEntity.ok(new OperatorProductListResponse(
+                operatorPrincipalId,
+                result.rows().stream().map(VariantSalesRowResponse::of).toList(),
+                result.maybeMore(),
+                ProvenanceResponse.of(result.provenance())));
+    }
+
     @GetMapping("/demand-history")
     @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
     @Operation(
@@ -516,6 +563,58 @@ public class ReportingController {
 
     public record VariantSalesListResponse(
             List<VariantSalesRowResponse> rows, boolean maybeMore, ProvenanceResponse provenance) {}
+
+    /** 7.5: one operator's totals — see {@code ReportQueryService.OperatorLeaderboardRow}. */
+    public record OperatorLeaderboardRowResponse(
+            String operatorPrincipalId,
+            String principalKind,
+            String subject,
+            int orderCount,
+            long grossRevenueSom,
+            long netRevenueSom,
+            @Nullable Long averageCheckSom,
+            @Nullable Integer avgHandlingSeconds,
+            int deliveryCount,
+            int pickupCount,
+            int dineInCount,
+            double avgItemsPerOrder,
+            List<OperatorChannelCountResponse> byChannel) {
+
+        static OperatorLeaderboardRowResponse of(ReportQueryService.OperatorLeaderboardRow row) {
+            return new OperatorLeaderboardRowResponse(
+                    row.operatorPrincipalId(),
+                    row.principalKind(),
+                    row.subject(),
+                    row.orderCount(),
+                    row.grossRevenueSom(),
+                    row.netRevenueSom(),
+                    row.averageCheckSom(),
+                    row.avgHandlingSeconds(),
+                    row.deliveryCount(),
+                    row.pickupCount(),
+                    row.dineInCount(),
+                    row.avgItemsPerOrder(),
+                    row.byChannel().stream()
+                            .map(count -> new OperatorChannelCountResponse(count.channelCode(), count.orderCount()))
+                            .toList());
+        }
+    }
+
+    /** One operator's completed-order count on one channel. */
+    public record OperatorChannelCountResponse(String channelCode, int orderCount) {}
+
+    public record OperatorLeaderboardResponse(
+            List<OperatorLeaderboardRowResponse> rows, ProvenanceResponse provenance) {}
+
+    /**
+     * @param maybeMore true when the bounded read came back full — see
+     *                  {@code ReportQueryService.OperatorProductResult}
+     */
+    public record OperatorProductListResponse(
+            String operatorPrincipalId,
+            List<VariantSalesRowResponse> rows,
+            boolean maybeMore,
+            ProvenanceResponse provenance) {}
 
     /**
      * One hour-of-day's demand sample.

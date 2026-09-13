@@ -60,9 +60,34 @@ export const catalogPaths = {
     return `${this.product(scope, productId)}/variants`;
   },
 
+  /** Correct an existing variant's SKU, unit, status and default flag. */
+  variant(scope: BrandScope, productId: string, variantId: string): string {
+    return `${this.variants(scope, productId)}/${encodeURIComponent(variantId)}`;
+  },
+
+  /** Change a product's own status — read-only text until this wave. */
+  productStatus(scope: BrandScope, productId: string): string {
+    return `${this.product(scope, productId)}/status`;
+  },
+
+  /** Remove a product from a catalog (`DELETE`). Same path {@link products} uses for list/create. */
+  catalogProduct(scope: BrandScope, catalogId: string, productId: string): string {
+    return `${this.products(scope, catalogId)}/${encodeURIComponent(productId)}`;
+  },
+
   /** Create a category in a catalog. */
   createCategory(scope: BrandScope, catalogId: string): string {
     return `${this.base(scope)}/catalogs/${encodeURIComponent(catalogId)}/categories`;
+  },
+
+  /** Reparent, rename the code of, or re-sort an existing category. Same path also carries `/archive`. */
+  category(scope: BrandScope, catalogId: string, categoryId: string): string {
+    return `${this.createCategory(scope, catalogId)}/${encodeURIComponent(categoryId)}`;
+  },
+
+  /** Archive a category. Never a hard delete. */
+  archiveCategory(scope: BrandScope, catalogId: string, categoryId: string): string {
+    return `${this.category(scope, catalogId, categoryId)}/archive`;
   },
 
   /** Place (or move) a product within a category, with its sort order. */
@@ -95,6 +120,16 @@ export const catalogPaths = {
     return `${this.base(scope)}/translations`;
   },
 
+  /**
+   * The ИКПУ/MXIK reference, tenant alias (IA 4.2e) — the same read
+   * `FiscalReferenceController` serves PLATFORM-scoped, behind CATALOG_READ
+   * at BRAND scope instead so a tenant operator can call it. Query params
+   * `query` (required, 2+ characters) and `limit`.
+   */
+  mxikReference(scope: BrandScope): string {
+    return `${this.base(scope)}/fiscal-reference/mxik`;
+  },
+
   /** ИКПУ/MXIK and packaging for a variant. */
   variantFiscalClassification(scope: BrandScope, variantId: string): string {
     return `${this.base(scope)}/variants/${encodeURIComponent(variantId)}/fiscal-classification`;
@@ -115,9 +150,14 @@ export const catalogPaths = {
     return `${this.base(scope)}/variants/${encodeURIComponent(variantId)}/location-offerings/${encodeURIComponent(locationId)}`;
   },
 
-  /** catalog.md §4.6's read side: one location's sellable variants with current availability. */
+  /** catalog.md §4.6's read side / §4.5's Layer A matrix: one location's variants with current availability. */
   variantsAtLocation(scope: BrandScope, locationId: string): string {
     return `${this.base(scope)}/locations/${encodeURIComponent(locationId)}/variants`;
+  },
+
+  /** catalog.md §4.5's bulk stop/unstop. */
+  bulkOfferingStatus(scope: BrandScope, locationId: string): string {
+    return `${this.variantsAtLocation(scope, locationId)}/bulk-offering-status`;
   },
 
   /** The catalog's live validation report — blockers and warnings, never a side effect. */
@@ -138,6 +178,48 @@ export const catalogPaths = {
   /** Every publication the brand has produced, newest first (IA 4.6, Region 3). Query param `limit`. */
   publicationHistory(scope: BrandScope): string {
     return `${this.base(scope)}/publications`;
+  },
+
+  /**
+   * The published menu for one location (`StorefrontCatalogController`,
+   * ADR 0016) — unauthenticated by design, so it is reachable with the same
+   * bearer token as everything else here without a capability check of its
+   * own. Not on {@link CONTROL_PLANE}: this is the one path in this module
+   * that lives on `/api/v1/storefront/**`, because it is the customer-facing
+   * publication, not an authoring surface. The New order screen (wave P13,
+   * orders.md §5.5) reads it for prices and modifiers a location's sellable-
+   * variants list ({@link variantsAtLocation}) does not carry. Query params
+   * `locale` and `channel` (required — the tenant's operator channel code).
+   */
+  storefrontMenu(scope: BrandScope, locationId: string): string {
+    return `/api/v1/storefront${tenantBrand(scope)}/locations/${encodeURIComponent(locationId)}/menu`;
+  },
+
+  // -------------------------------------------------- P21 row actions and the fiscal workbench
+
+  /** Duplicates a product — its variants, translations, catalog/category placement, modifier groups and media. */
+  duplicateProduct(scope: BrandScope, productId: string): string {
+    return `${this.product(scope, productId)}/duplicate`;
+  },
+
+  /** Stops a product in every branch that currently offers it. */
+  stopInAllBranches(scope: BrandScope, productId: string): string {
+    return `${this.product(scope, productId)}/stop-in-all-branches`;
+  },
+
+  /** The fiscal workbench's bulk fill — many nodes classified in one call. */
+  bulkFiscalClassification(scope: BrandScope): string {
+    return `${this.base(scope)}/fiscal-classifications/bulk`;
+  },
+
+  /** The fiscal workbench's "N of M priceable nodes unclassified" coverage read and worklist. */
+  fiscalCoverage(scope: BrandScope): string {
+    return `${this.base(scope)}/fiscal-coverage`;
+  },
+
+  /** The content hash the draft would publish as right now, without writing anything. */
+  draftPreview(scope: BrandScope, catalogId: string): string {
+    return `${this.base(scope)}/catalogs/${encodeURIComponent(catalogId)}/draft-preview`;
   },
 } as const;
 
@@ -184,5 +266,15 @@ export const pricingPaths = {
   /** Puts a draft book in front of customers. Mutation: `If-Match` with the book's version. */
   activation(scope: BrandScope, priceBookId: string): string {
     return `${this.priceBook(scope, priceBookId)}/activation`;
+  },
+
+  /** Changes many prices in one call against one book, with a `dryRun` preview (row 4.8b). */
+  bulkApply(scope: BrandScope, priceBookId: string): string {
+    return `${this.priceBook(scope, priceBookId)}/prices/bulk-apply`;
+  },
+
+  /** The brand's VAT rate for a jurisdiction. `PUT`-only — there is no read side yet. */
+  taxProfile(scope: BrandScope, jurisdictionCode: string): string {
+    return `${this.base(scope)}/tax-profiles/${encodeURIComponent(jurisdictionCode)}`;
   },
 } as const;

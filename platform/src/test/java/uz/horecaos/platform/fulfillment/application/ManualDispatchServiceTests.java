@@ -28,6 +28,7 @@ import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.Waypoint;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryPlan;
 import uz.horecaos.platform.fulfillment.domain.sourcing.PlanStatus;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmentStore;
+import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcCourierEligibilityStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDispatchBranchStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcSourcingJobStore;
@@ -104,7 +105,8 @@ class ManualDispatchServiceTests {
         JdbcDeliveryPlanStore planStore = new JdbcDeliveryPlanStore(jdbc);
         assignments = new JdbcAssignmentStore(jdbc);
         audit = new RecordingAudit();
-        dispatch = new ManualDispatchService(planStore, assignments, audit, clock);
+        dispatch =
+                new ManualDispatchService(planStore, assignments, new JdbcCourierEligibilityStore(jdbc), audit, clock);
 
         seedTenancy();
         seedCourier(COURIER, "K-001");
@@ -169,6 +171,75 @@ class ManualDispatchServiceTests {
         assertThat(outcome.applied()).isFalse();
         assertThat(outcome.reason()).isEqualTo("STALE_VERSION");
         assertThat(countShipmentsFor(plan.id())).isZero();
+    }
+
+    @Test
+    @DisplayName("assigning a courier whose engagement is suspended for compliance is refused, "
+            + "and no shipment is created")
+    void assignRefusesASuspendedCourier() {
+        DeliveryPlan plan = openPlan();
+        UUID suspendedCourier = UUID.fromString("55555555-5555-5555-5555-555555555555");
+        seedCourier(suspendedCourier, "K-003");
+        jdbc.sql("UPDATE fulfillment.courier_engagements SET status = 'SUSPENDED_COMPLIANCE' WHERE courier_id = :id")
+                .param("id", suspendedCourier)
+                .update();
+
+        ManualDispatchService.DispatchOutcome outcome = dispatch.assign(
+                TENANT, plan.id(), suspendedCourier, plan.version(), "OPERATIONS_MANUAL_ASSIGN", OPERATOR);
+
+        assertThat(outcome.applied()).isFalse();
+        assertThat(outcome.reason()).isEqualTo("COURIER_NOT_ELIGIBLE");
+        assertThat(countShipmentsFor(plan.id())).isZero();
+        assertThat(audit.facts)
+                .as("a refused assignment leaves no audit fact behind it")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("assigning a courier whose compliance document has lapsed is refused even though "
+            + "their engagement is otherwise ACTIVE")
+    void assignRefusesALapsedCourier() {
+        DeliveryPlan plan = openPlan();
+        UUID lapsedCourier = UUID.fromString("66666666-6666-6666-6666-666666666666");
+        seedCourier(lapsedCourier, "K-004");
+        jdbc.sql("UPDATE fulfillment.courier_engagements SET warning_state = 'LAPSED' WHERE courier_id = :id")
+                .param("id", lapsedCourier)
+                .update();
+
+        ManualDispatchService.DispatchOutcome outcome =
+                dispatch.assign(TENANT, plan.id(), lapsedCourier, plan.version(), "OPERATIONS_MANUAL_ASSIGN", OPERATOR);
+
+        assertThat(outcome.applied()).isFalse();
+        assertThat(outcome.reason()).isEqualTo("COURIER_NOT_ELIGIBLE");
+        assertThat(countShipmentsFor(plan.id())).isZero();
+    }
+
+    @Test
+    @DisplayName("assigning a courier with no engagement record at all is refused, not a 500")
+    void assignRefusesACourierWithNoEngagement() {
+        DeliveryPlan plan = openPlan();
+        UUID unengagedCourier = UUID.fromString("77777777-7777-7777-7777-777777777777");
+        UUID typeId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO fulfillment.courier_types (id, tenant_id, code, display_name,
+                    vehicle_class, max_concurrent_assignments, offer_ttl_seconds, status)
+                VALUES (:id, :tenantId, 'SCOOTER-K005', 'Scooter', 'SCOOTER', 2, 60, 'ACTIVE')
+                """).param("id", typeId).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO fulfillment.couriers (id, tenant_id, courier_type_id,
+                    principal_subject, display_reference, protected_full_name, status, version)
+                VALUES (:id, :tenantId, :typeId, 'keycloak-K005', 'K-005', 'protected', 'ACTIVE', 1)
+                """)
+                .param("id", unengagedCourier)
+                .param("tenantId", TENANT)
+                .param("typeId", typeId)
+                .update();
+
+        ManualDispatchService.DispatchOutcome outcome = dispatch.assign(
+                TENANT, plan.id(), unengagedCourier, plan.version(), "OPERATIONS_MANUAL_ASSIGN", OPERATOR);
+
+        assertThat(outcome.applied()).isFalse();
+        assertThat(outcome.reason()).isEqualTo("COURIER_NOT_ELIGIBLE");
     }
 
     @Test
@@ -305,6 +376,48 @@ class ManualDispatchServiceTests {
                 .param("typeId", typeId)
                 .param("subject", "keycloak-" + reference)
                 .param("reference", reference)
+                .update();
+        seedEngagement(courierId, "ACTIVE", "VALID");
+    }
+
+    /**
+     * P18 second-pass adversarial review: {@link ManualDispatchService#assign}
+     * must refuse a courier whose engagement is not {@code ACTIVE} or whose
+     * compliance document has {@code LAPSED}, independent of the console's own
+     * drag-drop guard.
+     */
+    private void seedEngagement(UUID courierId, String status, String warningState) {
+        jdbc.sql("""
+                INSERT INTO fulfillment.courier_engagements (
+                    id, tenant_id, courier_id, engagement_type, status, engaged_from,
+                    protected_registration_ref, registration_valid_until,
+                    registration_verified_at, registration_verified_by, verification_method,
+                    reverification_due_on, warning_state, version, created_at, updated_at)
+                VALUES (:id, :tenantId, :courierId, 'SELF_EMPLOYED', :status, :engagedFrom,
+                    'ciphertext-not-exercised-here', :validUntil,
+                    :verifiedAt, 'test-fixture', 'MANUAL_ATTESTATION',
+                    :reverificationDue, :warningState, 1, :now, :now)
+                ON CONFLICT (id) DO NOTHING
+                """)
+                .param(
+                        "id",
+                        UUID.nameUUIDFromBytes(
+                                ("engagement:" + courierId).getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                .param("tenantId", TENANT)
+                .param("courierId", courierId)
+                .param("status", status)
+                .param(
+                        "engagedFrom",
+                        CONFIRMED.atOffset(ZoneOffset.UTC).toLocalDate().minusMonths(6))
+                .param(
+                        "validUntil",
+                        CONFIRMED.atOffset(ZoneOffset.UTC).toLocalDate().plusYears(1))
+                .param("verifiedAt", CONFIRMED.atOffset(ZoneOffset.UTC))
+                .param(
+                        "reverificationDue",
+                        CONFIRMED.atOffset(ZoneOffset.UTC).toLocalDate().plusMonths(6))
+                .param("warningState", warningState)
+                .param("now", CONFIRMED.atOffset(ZoneOffset.UTC))
                 .update();
     }
 

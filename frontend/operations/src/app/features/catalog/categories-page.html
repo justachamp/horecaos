@@ -16,26 +16,27 @@
             {{ 'catalog.categories.create' | t }}
           </button>
         </div>
-        @if (nodes().length === 0) {
-          <p class="q-body-sm categories__empty">{{ 'catalog.categories.tree.empty' | t }}</p>
+
+        @if (treeError(); as message) {
+          <div class="categories__tree-error" role="alert" data-testid="categories-tree-error">
+            {{ message }}
+          </div>
+        }
+
+        @if (treeNodes().length === 0) {
+          <q-empty-state titleKey="catalog.categories.tree.empty" />
         } @else {
-          <ul class="categories__list">
-            @for (node of nodes(); track node.category.categoryId) {
-              <li>
-                <button
-                  type="button"
-                  class="categories__node"
-                  [class.categories__node--selected]="selectedId() === node.category.categoryId"
-                  [style.paddingLeft.px]="12 + node.depth * 16"
-                  (click)="select(node.category.categoryId)"
-                  data-testid="category-node"
-                >
-                  <span>{{ node.category.name }}</span>
-                  <span class="q-caption categories__count">{{ node.category.productCount }}</span>
-                </button>
-              </li>
-            }
-          </ul>
+          <q-tree-view
+            [nodes]="treeNodes()"
+            [selectedId]="selectedId()"
+            [busy]="treeBusy()"
+            [ariaLabel]="'catalog.categories.title' | t"
+            [rootLabel]="'catalog.categories.form.parentNone' | t"
+            [cycleWarningLabel]="'catalog.editor.finding.CATEGORY_TREE_HAS_CYCLE' | t"
+            (select)="select($event)"
+            (move)="onMove($event)"
+            (rename)="onRename($event)"
+          />
         }
       </div>
 
@@ -45,17 +46,102 @@
           <dl class="categories__form">
             <dt class="q-caption">{{ 'catalog.categories.form.name' | t }}</dt>
             <dd>{{ category.name }}</dd>
+
             <dt class="q-caption">{{ 'catalog.categories.form.code' | t }}</dt>
-            <dd class="q-mono">{{ category.code }}</dd>
+            <dd class="categories__field-row">
+              <input
+                type="text"
+                class="categories__input q-mono"
+                [value]="codeDraft()"
+                (input)="setCodeDraft($any($event.target).value)"
+                data-testid="category-code-input"
+              />
+              <button
+                type="button"
+                class="categories__save"
+                (click)="saveCode()"
+                [disabled]="savingDetail()"
+                data-testid="category-code-save"
+              >
+                {{ 'catalog.categories.form.save' | t }}
+              </button>
+            </dd>
+
             <dt class="q-caption">{{ 'catalog.categories.form.parent' | t }}</dt>
             <dd>{{ categoryName(category.parentCategoryId) }}</dd>
+
             <dt class="q-caption">{{ 'catalog.categories.form.status' | t }}</dt>
             <dd>{{ statusLabel(category.status) }}</dd>
+
+            <dt class="q-caption">{{ 'catalog.categories.form.description' | t }}</dt>
+            <dd class="categories__field-row">
+              <textarea
+                class="categories__textarea"
+                rows="3"
+                [value]="descriptionDraft()"
+                (input)="setDescriptionDraft($any($event.target).value)"
+                data-testid="category-description-input"
+              ></textarea>
+              <button
+                type="button"
+                class="categories__save"
+                (click)="saveDescription()"
+                [disabled]="savingDetail()"
+                data-testid="category-description-save"
+              >
+                {{ 'catalog.categories.form.save' | t }}
+              </button>
+            </dd>
+
+            <dt class="q-caption">{{ 'catalog.categories.form.image' | t }}</dt>
+            <dd>
+              <label class="categories__photo-upload">
+                <input
+                  type="file"
+                  accept="image/*"
+                  [disabled]="uploadingPhoto()"
+                  (change)="onPhotoSelected($event)"
+                  data-testid="category-photo-input"
+                />
+                {{
+                  uploadingPhoto()
+                    ? ('catalog.categories.photo.uploading' | t)
+                    : ('catalog.categories.photo.upload' | t)
+                }}
+              </label>
+            </dd>
           </dl>
+
+          @if (detailError(); as message) {
+            <div class="categories__detail-error" role="alert" data-testid="category-detail-error">
+              {{ message }}
+            </div>
+          }
+
+          <div class="categories__archive-row">
+            <button
+              type="button"
+              class="categories__archive-button"
+              [disabled]="category.status === 'ARCHIVED'"
+              (click)="requestArchive(category)"
+              data-testid="category-archive"
+            >
+              {{ 'catalog.categories.archive' | t }}
+            </button>
+          </div>
+
           <h3 class="q-body-sm categories__products-title">
             {{ 'catalog.categories.products.title' | t }}
           </h3>
-          <p class="q-caption">{{ 'catalog.categories.products.empty' | t }}</p>
+          @if (selectedProducts().length === 0) {
+            <p class="q-caption">{{ 'catalog.categories.products.empty' | t }}</p>
+          } @else {
+            <ul class="categories__products-list">
+              @for (product of selectedProducts(); track product.productId) {
+                <li>{{ product.name }}</li>
+              }
+            </ul>
+          }
         } @else {
           <p class="q-body-sm categories__empty">{{ 'catalog.categories.selectPrompt' | t }}</p>
         }
@@ -70,6 +156,19 @@
       [error]="createError()"
       (confirm)="submitCreate($event)"
       (dismiss)="closeCreateDialog()"
+    />
+  }
+
+  @if (archiveTarget(); as target) {
+    <q-confirm-dialog
+      [title]="'catalog.categories.archiveConfirm.title' | t"
+      [body]="'catalog.categories.archiveConfirm.body' | t: { name: target.name }"
+      [confirmLabel]="'catalog.categories.archive' | t"
+      [cancelLabel]="'catalog.dialog.cancel' | t"
+      tone="destructive"
+      [busy]="archiving()"
+      (confirm)="confirmArchive()"
+      (cancel)="cancelArchive()"
     />
   }
 </div>

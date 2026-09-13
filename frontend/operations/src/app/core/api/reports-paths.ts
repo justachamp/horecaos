@@ -49,6 +49,20 @@ export const reportsPaths = {
   },
 
   /**
+   * T12 (7.5): orders taken, revenue, average check, average handling time,
+   * delivery/pickup/dine-in and a per-channel breakdown — one row per
+   * operator, human or pseudo.
+   */
+  operatorLeaderboard(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/operator-leaderboard`;
+  },
+
+  /** T12 (7.5a): one operator's product mix, drilled down from a leaderboard row. */
+  operatorProducts(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/operator-products`;
+  },
+
+  /**
    * 7.8's historical average order count by hour, for one location and
    * weekday — wave 48. Not a forecast id despite the section's own name: see
    * `demand-forecast-page.ts`'s doc for the owner's 2026-09-05 decision to

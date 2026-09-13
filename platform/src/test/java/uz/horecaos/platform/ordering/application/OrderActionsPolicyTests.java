@@ -130,17 +130,64 @@ class OrderActionsPolicyTests {
         assertThat(targetsOf(OrderStatus.READY, FulfillmentMode.DINE_IN)).containsExactly(OrderStatus.COMPLETED);
     }
 
+    /**
+     * {@code COMPLETE} (wave P09, gap map {@code 1.2j}) is offered exactly
+     * wherever the generic {@code ADVANCE} entry above would offer a
+     * {@code COMPLETED} target — the same {@link OrderStateMachine#permits}
+     * call, so the two can never disagree about when completion is legal.
+     */
     @Test
-    void cancelAppearsExactlyWhereTheCombinedGuardPermitsItWhenCancelIsGranted() {
+    void completeAppearsExactlyWhereTheStateMachinePermitsCompletionWhenAdvanceIsGranted() {
+        for (OrderStatus status : OrderStatus.values()) {
+            for (FulfillmentMode mode : FulfillmentMode.values()) {
+                boolean offered = OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS).stream()
+                        .anyMatch(a -> a.code() == OrderActionCode.COMPLETE);
+                boolean expected = OrderStateMachine.permits(status, OrderStatus.COMPLETED, mode);
+
+                assertThat(offered).as("COMPLETE for %s/%s", status, mode).isEqualTo(expected);
+            }
+        }
+    }
+
+    /**
+     * The pairing {@code OrderActionCode}'s own doc names: wherever the read
+     * model offers the generic {@code ADVANCE} entry to {@code COMPLETED}, it
+     * also offers {@code COMPLETE} beside it — never one without the other,
+     * so a client that only recognises the older code still has a working
+     * button and a client that prefers the newer one always finds it.
+     */
+    @Test
+    void completeNeverAppearsWithoutTheAdvanceCompletedEntryOrViceVersa() {
+        for (OrderStatus status : OrderStatus.values()) {
+            for (FulfillmentMode mode : FulfillmentMode.values()) {
+                List<OrderAction> actions = OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS);
+                boolean hasComplete = actions.stream().anyMatch(a -> a.code() == OrderActionCode.COMPLETE);
+                boolean hasAdvanceCompleted = actions.stream()
+                        .anyMatch(
+                                a -> a.code() == OrderActionCode.ADVANCE && a.targetStatus() == OrderStatus.COMPLETED);
+
+                assertThat(hasComplete)
+                        .as("%s/%s COMPLETE vs ADVANCE(COMPLETED)", status, mode)
+                        .isEqualTo(hasAdvanceCompleted);
+            }
+        }
+    }
+
+    /**
+     * Wave P09 (gap map {@code 1.2k}) widened the gate: {@code CANCEL} is
+     * offered wherever {@link OrderStateMachine} has any edge to {@code
+     * CANCELLED} at all, not only where a <em>reasonless</em> cancellation
+     * would be accepted. {@link #theReasonlessGuardStaysNarrowEvenThoughTheActionIsOfferedMoreWidely}
+     * is the companion assertion that the narrower guard itself is untouched.
+     */
+    @Test
+    void cancelAppearsExactlyWhereTheStateMachineHasAnEdgeToCancelledWhenCancelIsGranted() {
         for (OrderStatus status : OrderStatus.values()) {
             for (FulfillmentMode mode : FulfillmentMode.values()) {
                 boolean offered = OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS).stream()
                         .anyMatch(a -> a.code() == OrderActionCode.CANCEL);
 
-                // OrderStateService.cancel's reasonless path, read directly: the
-                // extracted policy predicate AND the state machine's CANCELLED edge.
-                boolean expected = OrderActionsPolicy.canCancelWithoutReason(status)
-                        && OrderStateMachine.permits(status, OrderStatus.CANCELLED);
+                boolean expected = OrderStateMachine.permits(status, OrderStatus.CANCELLED);
 
                 assertThat(offered).as("cancel for %s/%s", status, mode).isEqualTo(expected);
             }
@@ -148,21 +195,151 @@ class OrderActionsPolicyTests {
     }
 
     /**
-     * Names the concrete rule orders.md §0.3/§1.1 documents, so a refactor that
-     * kept the predicates individually correct but broke this specific,
-     * customer-visible boundary still fails a test that says what broke.
+     * Names the concrete rule orders.md §0.3/§1.1/§4.5 documents post-wave-P09:
+     * every non-terminal status is cancellable now that the console's dialog
+     * can supply a registry reason from {@code CONFIRMED} onward, so a
+     * refactor that kept the predicates individually correct but broke this
+     * specific, customer-visible boundary still fails a test that says what
+     * broke.
      */
     @Test
-    void cancelIsOfferedBeforeConfirmationAndNowhereFromConfirmedOnward() {
-        EnumSet<OrderStatus> expectedCancellable =
-                EnumSet.of(OrderStatus.RECEIVED, OrderStatus.PAYMENT_AUTHORIZING, OrderStatus.AWAITING_APPROVAL);
-
+    void cancelIsOfferedFromEveryNonTerminalStatusNowThatTheDialogCanSupplyAReason() {
         for (OrderStatus status : OrderStatus.values()) {
             boolean offered =
                     OrderActionsPolicy.availableFor(status, FulfillmentMode.DELIVERY, ALL_ACTION_CAPS).stream()
                             .anyMatch(a -> a.code() == OrderActionCode.CANCEL);
-            assertThat(offered).as("%s cancellable today", status).isEqualTo(expectedCancellable.contains(status));
+            assertThat(offered).as("%s cancellable today", status).isEqualTo(!status.terminal());
         }
+    }
+
+    /**
+     * The gate {@code CANCEL}'s emission widened past (wave P09) is untouched:
+     * {@code OrderStateService.cancel}'s reasonless overload still refuses
+     * exactly {@code CONFIRMED}/{@code PREPARING}/{@code READY}/{@code
+     * FULFILLING}, precisely as it did before this wave — a terminal status
+     * such as {@code PAYMENT_FAILED} reads as reasonless-cancellable by this
+     * predicate alone (it is simply not one of the four excluded statuses)
+     * and is refused only by {@link OrderStateMachine#permits}'s absent
+     * {@code CANCELLED} edge, a fact {@link
+     * #cancelAppearsExactlyWhereTheStateMachineHasAnEdgeToCancelledWhenCancelIsGranted}
+     * covers, not this test. Read directly from the guard {@code
+     * OrderStateService.cancel} itself calls, so this and the production code
+     * cannot silently drift apart.
+     */
+    @Test
+    void theReasonlessGuardStaysNarrowEvenThoughTheActionIsOfferedMoreWidely() {
+        EnumSet<OrderStatus> excludedFromReasonless =
+                EnumSet.of(OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.FULFILLING);
+
+        for (OrderStatus status : OrderStatus.values()) {
+            assertThat(OrderActionsPolicy.canCancelWithoutReason(status))
+                    .as("%s reasonless-cancellable", status)
+                    .isEqualTo(!excludedFromReasonless.contains(status));
+        }
+    }
+
+    // ------------------------------------------- compensating override (ADR 0110, wave P41)
+
+    /** {@link #ALL_ACTION_CAPS} plus {@code ORDER_STATE_OVERRIDE}, for the override-specific tests below. */
+    private static final Set<Capability> ALL_ACTION_CAPS_WITH_OVERRIDE;
+
+    static {
+        EnumSet<Capability> caps = EnumSet.copyOf(ALL_ACTION_CAPS);
+        caps.add(Capability.ORDER_STATE_OVERRIDE);
+        ALL_ACTION_CAPS_WITH_OVERRIDE = caps;
+    }
+
+    /**
+     * Drift-proofed exactly like {@link #everyAdvanceTargetIsExactlyWhatTheStateMachinePermitsWhenAdvanceIsGranted}:
+     * the offered {@code OVERRIDE} targets are read back against {@link
+     * OrderStateMachine#compensatingTransitionsFrom}, not a hand-written table,
+     * so a third compensating edge added to the machine without a matching
+     * branch here would fail this test rather than silently ship unoffered.
+     */
+    @Test
+    void everyOverrideTargetIsExactlyWhatTheMachineDeclaresCompensatingWhenOverrideIsGranted() {
+        for (OrderStatus status : OrderStatus.values()) {
+            for (FulfillmentMode mode : FulfillmentMode.values()) {
+                List<OrderStatus> offered =
+                        OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS_WITH_OVERRIDE).stream()
+                                .filter(a -> a.code() == OrderActionCode.OVERRIDE)
+                                .map(OrderAction::targetStatus)
+                                .toList();
+
+                assertThat(offered)
+                        .as("override targets for %s/%s", status, mode)
+                        .containsExactlyInAnyOrderElementsOf(OrderStateMachine.compensatingTransitionsFrom(status));
+            }
+        }
+    }
+
+    /** Names the two edges directly, so a change to the machine's compensating table cannot pass unnoticed. */
+    @Test
+    void overrideOffersExactlyTheTwoNamedCompensatingEdges() {
+        assertThat(OrderActionsPolicy.availableFor(
+                        OrderStatus.READY, FulfillmentMode.DELIVERY, ALL_ACTION_CAPS_WITH_OVERRIDE))
+                .filteredOn(a -> a.code() == OrderActionCode.OVERRIDE)
+                .extracting(OrderAction::targetStatus)
+                .containsExactly(OrderStatus.PREPARING);
+        assertThat(OrderActionsPolicy.availableFor(
+                        OrderStatus.FULFILLING, FulfillmentMode.DELIVERY, ALL_ACTION_CAPS_WITH_OVERRIDE))
+                .filteredOn(a -> a.code() == OrderActionCode.OVERRIDE)
+                .extracting(OrderAction::targetStatus)
+                .containsExactly(OrderStatus.READY);
+    }
+
+    /**
+     * The brief's own trap, stated as a test: an {@code ORDER_ADVANCE} holder —
+     * every line cook — never sees {@code OVERRIDE} on any status or mode,
+     * however far its grant otherwise reaches, because {@code
+     * ORDER_STATE_OVERRIDE} is absent from {@link #ALL_ACTION_CAPS}.
+     */
+    @Test
+    void overrideNeverAppearsForAPrincipalWithoutTheOverrideCapability() {
+        for (OrderStatus status : OrderStatus.values()) {
+            for (FulfillmentMode mode : FulfillmentMode.values()) {
+                assertThat(OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS))
+                        .as("%s/%s without ORDER_STATE_OVERRIDE", status, mode)
+                        .noneMatch(a -> a.code() == OrderActionCode.OVERRIDE);
+            }
+        }
+    }
+
+    /** Terminal orders stay terminal (the brief's other named trap): no override, even fully granted. */
+    @Test
+    void terminalStatusesOfferNoOverrideEvenWhenGranted() {
+        for (OrderStatus status : OrderStatus.values()) {
+            if (!status.terminal()) {
+                continue;
+            }
+            for (FulfillmentMode mode : FulfillmentMode.values()) {
+                assertThat(OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS_WITH_OVERRIDE))
+                        .as("%s/%s is terminal", status, mode)
+                        .isEmpty();
+            }
+        }
+    }
+
+    /**
+     * {@code TENANT_ADMIN} and {@code TENANT_OWNER} are the only two {@link
+     * PlatformRole} bundles holding {@code ORDER_STATE_OVERRIDE} today — "almost
+     * nobody" as {@link Capability#ORDER_ADVANCE}'s own doc puts it.
+     * {@code LOCATION_MANAGER}, which otherwise holds every other action
+     * capability, must still never see {@code OVERRIDE}.
+     */
+    @Test
+    void onlyTenantAdminAndTenantOwnerHoldTheOverrideCapabilityAmongInspectedRoles() {
+        assertThat(PlatformRole.TENANT_ADMIN.capabilities()).contains(Capability.ORDER_STATE_OVERRIDE);
+        assertThat(PlatformRole.TENANT_OWNER.capabilities()).contains(Capability.ORDER_STATE_OVERRIDE);
+        assertThat(PlatformRole.LOCATION_MANAGER.capabilities()).doesNotContain(Capability.ORDER_STATE_OVERRIDE);
+        assertThat(PlatformRole.LOCATION_STAFF.capabilities()).doesNotContain(Capability.ORDER_STATE_OVERRIDE);
+
+        assertThat(OrderActionsPolicy.availableFor(
+                        OrderStatus.READY, FulfillmentMode.DELIVERY, PlatformRole.TENANT_ADMIN.capabilities()))
+                .anyMatch(a -> a.code() == OrderActionCode.OVERRIDE);
+        assertThat(OrderActionsPolicy.availableFor(
+                        OrderStatus.READY, FulfillmentMode.DELIVERY, PlatformRole.LOCATION_MANAGER.capabilities()))
+                .noneMatch(a -> a.code() == OrderActionCode.OVERRIDE);
     }
 
     /** A terminal order offers nothing at all — not even a read-only advance. */
@@ -341,11 +518,11 @@ class OrderActionsPolicyTests {
     // ---------------------------------------------- every code has a route (P05)
 
     /**
-     * {@link OrderActionCode}'s widened set names four routes that do not yet
-     * exist from an order — {@code COMPLETE} needs the fulfilment-mode-aware
-     * completion reason (gap map {@code P09}), {@code RESOLVE} needs
+     * {@link OrderActionCode}'s widened set named four routes that did not
+     * exist from an order when wave P05 declared them. {@code COMPLETE} is
+     * wired now (wave P09, gap map {@code 1.2j}); {@code RESOLVE} still needs
      * per-amendment state {@code availableFor} does not carry, and {@code
-     * ASSIGN_COURIER}/{@code ISSUE_INVOICE} have no endpoint at all yet
+     * ASSIGN_COURIER}/{@code ISSUE_INVOICE} still have no endpoint at all
      * (gap map {@code P11}/{@code P12}). This switch is exhaustive on purpose:
      * adding a ninth {@link OrderActionCode} constant without adding a branch
      * here fails to <em>compile</em>, so a future change cannot silently start
@@ -366,7 +543,9 @@ class OrderActionsPolicyTests {
             case ADVANCE -> true; // POST .../state-actions
             case CANCEL -> true; // POST .../cancellations
             case AMEND -> true; // POST .../amendments
-            case COMPLETE, RESOLVE, ASSIGN_COURIER, ISSUE_INVOICE -> false;
+            case OVERRIDE -> true; // POST .../state-overrides (ADR 0110, wave P41)
+            case COMPLETE -> true; // POST .../completion (wave P09)
+            case RESOLVE, ASSIGN_COURIER, ISSUE_INVOICE -> false;
         };
     }
 
@@ -378,7 +557,9 @@ class OrderActionsPolicyTests {
                         OrderActionCode.REJECT,
                         OrderActionCode.ADVANCE,
                         OrderActionCode.CANCEL,
-                        OrderActionCode.AMEND);
+                        OrderActionCode.AMEND,
+                        OrderActionCode.OVERRIDE,
+                        OrderActionCode.COMPLETE);
     }
 
     /**

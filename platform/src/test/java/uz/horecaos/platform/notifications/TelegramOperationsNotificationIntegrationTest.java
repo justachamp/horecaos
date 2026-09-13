@@ -545,10 +545,11 @@ class TelegramOperationsNotificationIntegrationTest {
                 .forEach(locale -> wordings.put(locale, new Wording(null, "Order {{orderNumber}} confirmed")));
         int version = templates.addVersion(
                 TENANT,
+                BRAND,
                 templateId,
                 wordings,
                 Map.of("orderNumber", "string", "amount", "string", "currency", "string", "reasonCode", "string"));
-        templates.activate(TENANT, templateId, version, "test");
+        templates.activate(TENANT, BRAND, templateId, version, "test");
     }
 
     private void seedTenant() {

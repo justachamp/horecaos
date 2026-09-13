@@ -567,7 +567,7 @@ class NotificationDeliveryTests {
         twoOfThree.put(MessageLocale.RU, new Wording(null, "Готово"));
         twoOfThree.put(MessageLocale.EN, new Wording(null, "Ready"));
 
-        assertThat(catchThrowable(() -> templates.addVersion(TENANT, templateId, twoOfThree, Map.of())))
+        assertThat(catchThrowable(() -> templates.addVersion(TENANT, BRAND, templateId, twoOfThree, Map.of())))
                 .as("a missing translation must fail at authoring time, not at 22:00 at a counter")
                 .isInstanceOf(IncompleteTranslationException.class)
                 .hasMessageContaining("UZ_LATN");
@@ -582,8 +582,8 @@ class NotificationDeliveryTests {
         Map<MessageLocale, Wording> wordings = new LinkedHashMap<>();
         MessageLocale.required().forEach(locale -> wordings.put(locale, new Wording(null, "Order {{orderNumbr}}")));
 
-        assertThat(catchThrowable(
-                        () -> templates.addVersion(TENANT, templateId, wordings, Map.of("orderNumber", "string"))))
+        assertThat(catchThrowable(() ->
+                        templates.addVersion(TENANT, BRAND, templateId, wordings, Map.of("orderNumber", "string"))))
                 .hasMessageContaining("orderNumbr");
     }
 
@@ -778,10 +778,11 @@ class NotificationDeliveryTests {
 
         int versionNumber = templates.addVersion(
                 TENANT,
+                BRAND,
                 templateId,
                 wordings,
                 Map.of("orderNumber", "string", "amount", "string", "currency", "string", "reasonCode", "string"));
-        templates.activate(TENANT, templateId, versionNumber, "copy-approver");
+        templates.activate(TENANT, BRAND, templateId, versionNumber, "copy-approver");
     }
 
     private void seedTenantAndCustomer() {

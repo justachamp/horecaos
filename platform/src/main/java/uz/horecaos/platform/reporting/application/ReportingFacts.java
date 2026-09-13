@@ -25,6 +25,12 @@ public final class ReportingFacts {
      *                            that priced the order. Null means no fiscal
      *                            identity was recorded, which is its own group
      * @param customerSubjectHash ADR 0029 keyed hash, never an account id
+     * @param operatorPrincipalId T12 (ADR 0043): a staff subject when a
+     *                            {@code USER} created or accepted the order, or
+     *                            {@code "channel:<code>"} as a pseudo-operator
+     *                            otherwise — see {@link OperatorAttribution}.
+     *                            Never null on a fact this build writes; null
+     *                            only on a row closed before T12 and never recut
      * @param grossRevenueSom     order value before discount, including fee and
      *                            tax. Whole som
      * @param secondsLate         signed seconds past the promise; null when there
@@ -45,6 +51,7 @@ public final class ReportingFacts {
             String fulfilmentType,
             String terminalStatus,
             @Nullable String cancellationReasonCode,
+            @Nullable String operatorPrincipalId,
             @Nullable String customerSubjectHash,
             @Nullable Boolean isFirstOrder,
             long grossRevenueSom,

@@ -30,13 +30,12 @@ const LIST_CAPABILITY = 'CUSTOMER_READ';
  * 5.1 Customer list — the CRM grid.
  *
  * List + search + status (this component), header counters computed from
- * `CustomerListQueryService#counts` (never the ADR 0043 signed-metric layer —
- * see that service's own doc for why: the dashboard has no customer metrics
- * defined yet, and Statistics itself is not built in this console), manual
- * create, and a filtered export as an audited PII egress event. Bulk CSV
- * import is honestly not built (see the `import` child route) — the closest
- * built precedent is the SendPulse Telegram-contact import, which is a
- * different pipeline entirely.
+ * `CustomerListQueryService#counts` — since row `5.1a`, through
+ * `BusinessDayWindows`, the same tenant business-day boundary Reports and
+ * the live board use, rather than a second UTC-midnight notion of "today" —
+ * manual create, and a filtered export as an audited PII egress event. Bulk
+ * CSV import (row `5.1b`) is the `import` child route, `q-import-wizard`
+ * over `CustomerImportController`'s async job surface.
  *
  * The docked detail (`:accountId`) is a routed child, the same shape
  * `locations-page.ts` already uses in this app.
@@ -122,6 +121,8 @@ export class CustomersPage {
   protected readonly exporting = signal(false);
   protected readonly exportError = signal<string | null>(null);
   protected readonly exportedRows = signal<readonly CustomerExportRow[] | null>(null);
+  /** Set alongside {@link exportedRows} — a filter that matched more rows than the server's cap. */
+  protected readonly exportTruncated = signal(false);
 
   constructor() {
     void this.load();
@@ -130,6 +131,11 @@ export class CustomersPage {
 
   protected openCustomer(customer: CustomerSummary): void {
     void this.router.navigate([customer.id], { relativeTo: this.route });
+  }
+
+  /** Row X.13/5.1b: the docked `q-import-wizard` panel, the same master-detail pattern `:accountId` already uses. */
+  protected openImport(): void {
+    void this.router.navigate(['import'], { relativeTo: this.route });
   }
 
   /** `q-combobox`'s `optionSelected` carries only `{id, label}` — the row it came from is looked up here. */
@@ -166,7 +172,24 @@ export class CustomersPage {
     void this.load();
   }
 
+  /**
+   * `q-combobox`'s immediate `queryChange` — fires on every keystroke, so the
+   * input field itself stays responsive. Never triggers a request on its
+   * own; see {@link onSearchDebounced}.
+   */
   protected onSearchInput(value: string): void {
+    this.searchQuery.set(value);
+  }
+
+  /**
+   * Row 5.1b's own trap: this grid used to issue one request per keystroke,
+   * bound directly to `queryChange`. `q-combobox` already debounces its own
+   * `search` output (`Combobox.DEBOUNCE_MS`) for exactly this reason — "so
+   * the caller can debounce its own request", that component's own doc says
+   * — so the fix is binding the request to the output built for it rather
+   * than inventing a second timer here.
+   */
+  protected onSearchDebounced(value: string): void {
     this.searchQuery.set(value);
     this.pageState = resetOnFilterChange(this.pageState);
     void this.load();
@@ -309,13 +332,14 @@ export class CustomersPage {
     this.exporting.set(true);
     this.exportError.set(null);
     try {
-      const rows = await this.api.exportFiltered(
+      const result = await this.api.exportFiltered(
         scope,
         this.filters(),
         CustomersPage.EXPORT_PURPOSE,
       );
-      this.exportedRows.set(rows);
-      downloadCsv(rows, `customers-${new Date().toISOString().slice(0, 10)}.csv`);
+      this.exportedRows.set(result.rows);
+      this.exportTruncated.set(result.truncated);
+      downloadCsv(result.rows, `customers-${new Date().toISOString().slice(0, 10)}.csv`);
     } catch (error) {
       this.exportError.set(this.describe(error));
     } finally {
@@ -325,6 +349,7 @@ export class CustomersPage {
 
   protected dismissExportNotice(): void {
     this.exportedRows.set(null);
+    this.exportTruncated.set(false);
     this.exportError.set(null);
   }
 

@@ -45,6 +45,13 @@
   for those two is the ordering-side attempt ladder and stuck list, not
   correctness. Also still open: scheduled orders, which is why V0056 leaves the
   requested-time column out; guest carts; and legacy shadow comparison.
+  **Wave P41 ([ADR 0110](../partial/0110-wave-p41-compensating-order-transitions-and-the-override-policy.md))
+  closes the compensating-transition gap this record's own diagram left
+  open**: `OrderStateMachine` now declares `READY -> PREPARING` and
+  `FULFILLING -> READY` as compensating edges — a new forward step each,
+  never a literal reversal — gated on `Capability.ORDER_STATE_OVERRIDE` at a
+  dedicated `POST .../state-overrides`, distinct from `ORDER_ADVANCE`'s
+  `state-actions`.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), product
@@ -563,3 +570,24 @@ first slice takes pickup and dine-in orders.
 Guest carts are supported by the schema and refused by the storefront controller:
 ADR 0015's guest claim is outside the first slice, and a guest reference this
 release invented would have no path to becoming an account later.
+
+### Amended 2026-09-13 (ADR 0110, wave P41): compensating status transitions
+
+This record's own state-machine diagram above shows no way back once an order
+leaves `CONFIRMED`, and until now none existed: an order advanced to `READY`
+by mistake had no exit, because cancellation itself is refused past
+`CONFIRMED` (§0.3 above's write-off reasoning, mirrored in
+`docs/operations-spec/orders.md`). [ADR 0110](../partial/0110-wave-p41-compensating-order-transitions-and-the-override-policy.md)
+settles the question that spec's §0.2 and §11 posed — whether a correction
+exists at all — with **yes, narrowly**: `OrderStateMachine` now declares
+`READY -> PREPARING` and `FULFILLING -> READY` as *compensating* edges, in a
+table disjoint from the forward graph diagrammed above, never a literal
+reversal of it. Each is a new forward step with its own reason, its own
+`order_state_history` row and its own audit fact, gated on
+`Capability.ORDER_STATE_OVERRIDE` — already registered, already granted to
+nobody by default — through its own endpoint, `POST .../state-overrides`,
+kept separate from `ORDER_ADVANCE`'s `state-actions` for the same reason
+cancellation already has its own endpoint. No other status gains a way back,
+and no terminal order is reopened. ADR 0110 carries the full decision,
+alternatives and consequences; this note only records that the question is
+answered and points there rather than restating it here.

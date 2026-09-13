@@ -134,11 +134,18 @@
 }
 
 .rail__account {
+  display: block;
   color: var(--q-inverse-ink);
+  text-decoration: none;
   /* An operator name can be long. Truncating is better than reflowing the rail. */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.rail__account:hover,
+.rail__account:focus-visible {
+  text-decoration: underline;
 }
 
 .rail__signout {

@@ -5,14 +5,17 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,6 +28,8 @@ import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableNode;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableType;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.iam.api.Capability;
@@ -120,6 +125,63 @@ public class CatalogAuthoringController {
         return ResponseEntity.ok(new IdResponse(variantId));
     }
 
+    @PutMapping("/products/{productId}/variants/{variantId}")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Correct a variant's SKU, unit and status, and optionally make it the default",
+            description = "The variants tab was otherwise read-only apart from the price input. The "
+                    + "name is not here — it goes through PUT .../translations with entityType "
+                    + "VARIANT, the same path every other entity's name already uses.")
+    public ResponseEntity<Void> updateVariant(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID productId,
+            @PathVariable UUID variantId,
+            @Valid @RequestBody UpdateVariantRequest request) {
+        boolean updated = authoring.updateVariant(
+                tenantId, brandId, productId, variantId, request.sku(), request.unitCode(), request.status());
+        if (!updated) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such variant of this product in this brand");
+        }
+        if (request.isDefault()) {
+            boolean promoted = authoring.setDefaultVariant(tenantId, brandId, productId, variantId);
+            if (!promoted) {
+                throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such variant of this product in this brand");
+            }
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/catalogs/{catalogId}/products/{productId}")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Remove a product from a catalog",
+            description = "Removes the membership only — the product, its variants and its fiscal "
+                    + "classifications are untouched. Idempotent: removing a membership that is "
+                    + "already gone still answers 204.")
+    public ResponseEntity<Void> removeProductFromCatalog(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID catalogId,
+            @PathVariable UUID productId) {
+        authoring.removeProductFromCatalog(tenantId, brandId, catalogId, productId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/categories/{categoryId}/products/{productId}")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Remove a product from a category",
+            description = "Same idempotent shape as removing a catalog membership.")
+    public ResponseEntity<Void> removeProductFromCategory(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID categoryId,
+            @PathVariable UUID productId) {
+        authoring.removeProductFromCategory(tenantId, brandId, categoryId, productId);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/catalogs/{catalogId}/categories")
     @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
     @Operation(summary = "Create a category")
@@ -128,16 +190,77 @@ public class CatalogAuthoringController {
             @PathVariable UUID brandId,
             @PathVariable UUID catalogId,
             @Valid @RequestBody CreateCategoryRequest request) {
-        UUID categoryId = authoring.createCategory(
-                tenantId,
-                brandId,
-                catalogId,
-                request.parentCategoryId(),
-                request.code(),
-                request.name(),
-                request.locale(),
-                request.sortOrder());
-        return ResponseEntity.ok(new IdResponse(categoryId));
+        try {
+            UUID categoryId = authoring.createCategory(
+                    tenantId,
+                    brandId,
+                    catalogId,
+                    request.parentCategoryId(),
+                    request.code(),
+                    request.name(),
+                    request.locale(),
+                    request.sortOrder());
+            return ResponseEntity.ok(new IdResponse(categoryId));
+        } catch (CatalogAuthoringService.UnknownCatalogEntityException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
+    @PutMapping("/catalogs/{catalogId}/categories/{categoryId}")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Reparent, rename the code of, and re-sort a category",
+            description = "Categories were write-once before this endpoint: no PUT changed "
+                    + "parentCategoryId, sortOrder, code or description. Name and description "
+                    + "still go through PUT /translations; this is parentCategoryId, code and "
+                    + "sortOrder only. A reparent that would make the category its own ancestor "
+                    + "is refused (see the CATEGORY_TREE_HAS_CYCLE detail on the response).")
+    public ResponseEntity<Void> updateCategory(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID catalogId,
+            @PathVariable UUID categoryId,
+            @Valid @RequestBody UpdateCategoryRequest request) {
+        try {
+            authoring.updateCategory(
+                    tenantId,
+                    brandId,
+                    catalogId,
+                    categoryId,
+                    request.parentCategoryId(),
+                    request.code(),
+                    request.sortOrder());
+        } catch (CatalogAuthoringService.UnknownCatalogEntityException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        } catch (CatalogAuthoringService.CategoryTreeCycleException cycle) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    cycle.getMessage(),
+                    Map.of(
+                            "findingCode", CatalogAuthoringService.CategoryTreeCycleException.FINDING_CODE,
+                            "categoryId", cycle.categoryId(),
+                            "proposedParentId", cycle.proposedParentId()));
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/catalogs/{catalogId}/categories/{categoryId}/archive")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Archive a category",
+            description = "Never a hard delete: a product already placed in this category keeps "
+                    + "its row, exactly as an archived product keeps its variants.")
+    public ResponseEntity<Void> archiveCategory(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID catalogId,
+            @PathVariable UUID categoryId) {
+        try {
+            authoring.archiveCategory(tenantId, brandId, catalogId, categoryId);
+        } catch (CatalogAuthoringService.UnknownCatalogEntityException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/modifier-groups")
@@ -302,7 +425,35 @@ public class CatalogAuthoringController {
                 entityId,
                 new MediaAssetId(assetId),
                 request.role(),
-                request.sortOrder());
+                request.sortOrder(),
+                request.channelOrAll());
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/media/{entityType}/{entityId}/{assetId}")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Detach a media asset from a catalog entity",
+            description = "The undo attachMedia never had, at any layer — a wrong upload could not "
+                    + "be corrected short of leaving it attached. CATALOG_AUTHOR, not a media-specific "
+                    + "capability: the asset is catalog content once attached. Idempotent: detaching a "
+                    + "relation that is already gone still answers 204.")
+    public ResponseEntity<Void> detachMedia(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable EntityType entityType,
+            @PathVariable UUID entityId,
+            @PathVariable UUID assetId,
+            @RequestParam String role,
+            @RequestParam(required = false) @Nullable String channel) {
+        authoring.detachMedia(
+                tenantId,
+                brandId,
+                entityType,
+                entityId,
+                new MediaAssetId(assetId),
+                role,
+                channel == null || channel.isBlank() ? JdbcCatalogStore.ALL_CHANNELS : channel);
         return ResponseEntity.noContent().build();
     }
 
@@ -317,6 +468,84 @@ public class CatalogAuthoringController {
             @Valid @RequestBody SortOrderRequest request) {
         authoring.placeProductInCategory(tenantId, brandId, categoryId, productId, request.sortOrder());
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/products/{productId}/duplicate")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Duplicate a product",
+            description = "Copies every variant with its own fiscal classification and every "
+                    + "locale's translation, its catalog and category placements, its attached "
+                    + "modifier groups, and its media. catalog.md §4.1's row action.")
+    public ResponseEntity<ProductResponse> duplicateProduct(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID productId) {
+        try {
+            var duplicated = authoring.duplicateProduct(tenantId, brandId, productId, actorId());
+            return ResponseEntity.ok(new ProductResponse(duplicated.productId(), duplicated.defaultVariantId()));
+        } catch (CatalogAuthoringService.UnknownProductException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
+    @PutMapping("/products/{productId}/status")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Change a product's status",
+            description = "Черновик/Активен/Архивирован. catalog.md §4.1's archive/restore row action.")
+    public ResponseEntity<Void> setProductStatus(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID productId,
+            @Valid @RequestBody ProductStatusRequest request) {
+        try {
+            authoring.setProductStatus(
+                    tenantId,
+                    brandId,
+                    productId,
+                    request.status(),
+                    currentActor.get().subject());
+        } catch (CatalogAuthoringService.UnknownProductException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/products/{productId}/stop-in-all-branches")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Stop a product in every branch that currently offers it",
+            description = "A product-level fan-out over the per-variant, per-location offering "
+                    + "write — every AVAILABLE location offering across every variant of this "
+                    + "product moves to UNAVAILABLE. catalog.md §4.1's row action.")
+    public ResponseEntity<StopInAllBranchesResponse> stopInAllBranches(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID productId) {
+        try {
+            int changed = authoring.stopInAllBranches(
+                    tenantId, brandId, productId, currentActor.get().subject());
+            return ResponseEntity.ok(new StopInAllBranchesResponse(changed));
+        } catch (CatalogAuthoringService.UnknownProductException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
+    @PutMapping("/fiscal-classifications/bulk")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Classify many priceable nodes at once",
+            description = "The fiscal workbench's bulk fill: ИКПУ and package code filled down a "
+                    + "q-data-grid column across hundreds of rows in one call, rather than one "
+                    + "variant at a time through the single-node classification endpoints. "
+                    + "Idempotent, and one bad node id does not fail the rest of the batch — every "
+                    + "item gets its own outcome.")
+    public ResponseEntity<BulkClassifyResponse> bulkClassify(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody BulkClassifyRequest request) {
+        List<CatalogAuthoringService.BulkClassifyItem> items = request.items().stream()
+                .map(item -> new CatalogAuthoringService.BulkClassifyItem(item.node(), item.classification()))
+                .toList();
+        List<CatalogAuthoringService.BulkClassifyOutcome> outcomes =
+                authoring.bulkClassify(tenantId, brandId, items, actorId());
+        return ResponseEntity.ok(new BulkClassifyResponse(
+                outcomes.stream().map(BulkClassifyOutcomeResponse::of).toList()));
     }
 
     @PutMapping("/variants/{variantId}/location-offerings/{locationId}")
@@ -346,22 +575,32 @@ public class CatalogAuthoringController {
     @RequiresCapability(value = Capability.INVENTORY_READ, scope = ScopeType.LOCATION)
     @Operation(
             summary = "One location's sellable variants, with current availability",
-            description = "catalog.md §4.6, the 86 screen's read side: the read counterpart of "
-                    + "PUT .../inventory/variants/{variantId}/availability. Gated on inventory.read "
-                    + "rather than catalog.read, matching the screen's own denial rule — an actor "
-                    + "who can adjust stock but never touches draft authoring still needs this "
-                    + "list.")
+            description = "catalog.md §4.6, the 86 screen's read side, and catalog.md §4.5's "
+                    + "Layer A menu matrix. Gated on inventory.read rather than catalog.read, "
+                    + "matching the screen's own denial rule — an actor who can adjust stock but "
+                    + "never touches draft authoring still needs this list. Also the New order "
+                    + "screen's item search (orders.md §5.5, wave P13): `query` narrows by product "
+                    + "name, case-insensitively, exactly like `search` below but without also "
+                    + "matching on SKU. `search` matches the product name (in locale) or the "
+                    + "variant SKU; when both are given, `search` wins. `status` is one of "
+                    + "AVAILABLE/UNAVAILABLE/HIDDEN/NOT_ADDED — NOT_ADDED is how the matrix asks "
+                    + "\"what is missing from this branch's menu\", which the offering-status-blind "
+                    + "read this endpoint used to run could never answer. Omitting every filter is "
+                    + "the unfiltered 86-screen page it always was.")
     public Page<VariantAvailabilityResponse> variantsAtLocation(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @RequestParam(defaultValue = "uz") String locale,
+            @RequestParam(required = false) @Nullable String query,
             @RequestParam(required = false) @Nullable UUID cursor,
-            @RequestParam(required = false) @Nullable Integer limit) {
+            @RequestParam(required = false) @Nullable Integer limit,
+            @RequestParam(required = false) @Nullable String search,
+            @RequestParam(required = false) @Nullable String status) {
 
         int pageSize = Page.limitOrDefault(limit);
-        List<JdbcCatalogStore.VariantAvailabilityRow> rows =
-                authoring.variantsAtLocation(tenantId, brandId, locationId, locale, cursor, pageSize);
+        List<JdbcCatalogStore.VariantAvailabilityRow> rows = authoring.variantsAtLocation(
+                tenantId, brandId, locationId, locale, cursor, pageSize, search != null ? search : query, status);
         List<VariantAvailabilityResponse> items =
                 rows.stream().map(VariantAvailabilityResponse::of).toList();
 
@@ -373,6 +612,29 @@ public class CatalogAuthoringController {
                 ? null
                 : rows.get(rows.size() - 1).variantId().toString();
         return new Page<>(items, nextCursor);
+    }
+
+    @PostMapping("/locations/{locationId}/variants/bulk-offering-status")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Sets the offering status of many variants at one location in one gesture",
+            description = "catalog.md §4.5's bulk stop/unstop — absent until this endpoint. Leaves "
+                    + "fulfillmentModes untouched on a variant already offered here; a variant never "
+                    + "offered here starts with the same default a fresh single setOffering call "
+                    + "would give it.")
+    public ResponseEntity<BulkOfferingStatusResponse> bulkSetOfferingStatus(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @Valid @RequestBody BulkOfferingStatusRequest request) {
+        int updated = authoring.bulkSetOfferingStatus(
+                tenantId,
+                brandId,
+                locationId,
+                request.variantIds(),
+                request.status(),
+                currentActor.get().subject());
+        return ResponseEntity.ok(new BulkOfferingStatusResponse(updated));
     }
 
     /**
@@ -516,6 +778,16 @@ public class CatalogAuthoringController {
             @NotBlank String locale,
             @PositiveOrZero int sortOrder) {}
 
+    /**
+     * Reparents, renames the code of, and re-sorts an existing category.
+     * Name and description stay {@code TranslateRequest}'s: this never touches
+     * {@code catalog.translations}.
+     */
+    public record UpdateCategoryRequest(
+            @Nullable UUID parentCategoryId,
+            @NotBlank String code,
+            @PositiveOrZero int sortOrder) {}
+
     public record CreateModifierGroupRequest(
             @NotBlank String code,
             @NotBlank String name,
@@ -548,18 +820,94 @@ public class CatalogAuthoringController {
 
     public record SortOrderRequest(@PositiveOrZero int sortOrder) {}
 
+    /**
+     * Corrects a variant's editable fields (catalog.md §4.2 tab 2). Name is
+     * excluded on purpose — see {@link #updateVariant}'s own doc.
+     *
+     * @param isDefault when true, this variant becomes the product's default
+     *                  and every sibling stops being one (V0016's {@code
+     *                  ux_variant_single_default}); when false, nothing about
+     *                  the default changes — this is never how a variant is
+     *                  demoted, only how another one is promoted
+     */
+    public record UpdateVariantRequest(
+            @Nullable String sku,
+            @NotBlank String unitCode,
+            boolean isDefault,
+            @NotNull Status status) {}
+
+    /** catalog.md §4.1's archive/restore row action (the sole {@code PUT .../status} handler — see setProductStatus). */
+    public record ProductStatusRequest(@NotNull Status status) {}
+
+    /** How many {@code location_offerings} rows a stop-in-all-branches call changed. */
+    public record StopInAllBranchesResponse(int locationsChanged) {}
+
+    /** A {@link CatalogAuthoringController#bulkClassify} batch. */
+    public record BulkClassifyRequest(@NotEmpty @Valid List<BulkClassifyItemRequest> items) {}
+
+    /**
+     * One item of a bulk classify batch: a target node and what to set it to.
+     * An absent or empty {@code fiscal} is accepted and reported {@code
+     * SKIPPED_EMPTY} rather than rejected — a grid save with an untouched row
+     * mixed into the batch is a normal shape, not a client error.
+     */
+    public record BulkClassifyItemRequest(
+            @NotNull PriceableType nodeType,
+            @NotNull UUID nodeId,
+            @Valid @Nullable FiscalClassificationRequest fiscal) {
+
+        PriceableNode node() {
+            return new PriceableNode(nodeType, nodeId);
+        }
+
+        FiscalClassification classification() {
+            return fiscal == null ? FiscalClassification.unclassified() : fiscal.toClassification();
+        }
+    }
+
+    /** One node's outcome within a bulk classify batch. */
+    public record BulkClassifyOutcomeResponse(PriceableType nodeType, UUID nodeId, String status) {
+
+        static BulkClassifyOutcomeResponse of(CatalogAuthoringService.BulkClassifyOutcome outcome) {
+            return new BulkClassifyOutcomeResponse(
+                    outcome.node().type(), outcome.node().id(), outcome.status().name());
+        }
+    }
+
+    public record BulkClassifyResponse(List<BulkClassifyOutcomeResponse> outcomes) {}
+
+    /**
+     * @param channel {@code null} attaches the universal image every channel
+     *                falls back to; a {@code tenant.sales_channels.code}
+     *                overrides it for that channel alone (V0223, IA 4.2f)
+     */
     public record AttachMediaRequest(
-            @NotBlank String role, @PositiveOrZero int sortOrder) {}
+            @NotBlank String role,
+            @PositiveOrZero int sortOrder,
+            @Size(max = 32) @Nullable String channel) {
+
+        String channelOrAll() {
+            return channel == null || channel.isBlank() ? JdbcCatalogStore.ALL_CHANNELS : channel;
+        }
+    }
 
     public record SetOfferingRequest(
             @NotNull OfferingStatus status, @NotNull List<String> fulfillmentModes) {}
+
+    /** catalog.md §4.5's bulk stop/unstop — at least one variant, at most one page of the matrix. */
+    public record BulkOfferingStatusRequest(
+            @NotEmpty @Size(max = 200) List<UUID> variantIds,
+            @NotNull OfferingStatus status) {}
+
+    /** How many offerings a {@link BulkOfferingStatusRequest} actually changed. */
+    public record BulkOfferingStatusResponse(int updatedCount) {}
 
     public record IdResponse(UUID id) {}
 
     public record ProductResponse(UUID productId, UUID defaultVariantId) {}
 
     /**
-     * One row of the 86 screen.
+     * One row of the 86 screen and of the Layer A menu matrix.
      *
      * @param category  null when the product sits in no category
      * @param available whether this variant can be sold right now
@@ -569,17 +917,31 @@ public class CatalogAuthoringController {
      *                     false} — the client renders catalog.md's read-only
      *                     "Количественный учёт пока не поддерживается" state
      *                     rather than a control that would 409
+     * @param offeringStatus  {@code AVAILABLE}/{@code UNAVAILABLE}/{@code HIDDEN},
+     *                        or null when this variant was never offered at this
+     *                        location at all — distinct from {@code available},
+     *                        which is the inventory 86 flag, not the menu-structure
+     *                        question
+     * @param fulfillmentModes empty when {@code offeringStatus} is null
      */
     public record VariantAvailabilityResponse(
             UUID variantId,
             String productName,
             @Nullable String category,
             boolean available,
-            @Nullable String trackingMode) {
+            @Nullable String trackingMode,
+            @Nullable String offeringStatus,
+            List<String> fulfillmentModes) {
 
         static VariantAvailabilityResponse of(JdbcCatalogStore.VariantAvailabilityRow row) {
             return new VariantAvailabilityResponse(
-                    row.variantId(), row.productName(), row.categoryName(), row.available(), row.trackingMode());
+                    row.variantId(),
+                    row.productName(),
+                    row.categoryName(),
+                    row.available(),
+                    row.trackingMode(),
+                    row.offeringStatus(),
+                    row.fulfillmentModes());
         }
     }
 }

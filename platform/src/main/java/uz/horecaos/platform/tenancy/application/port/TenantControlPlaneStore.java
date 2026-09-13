@@ -2,10 +2,12 @@ package uz.horecaos.platform.tenancy.application.port;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.domain.Brand;
+import uz.horecaos.platform.tenancy.domain.BrandProfile;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityPolicy;
 import uz.horecaos.platform.tenancy.domain.Location;
@@ -123,6 +125,28 @@ public interface TenantControlPlaneStore {
      *         when another record still refers to it
      */
     boolean deleteBrand(Brand brand);
+
+    /**
+     * One brand's profile (10.1, 10.12) — empty ({@link BrandProfile#empty()}
+     * shaped) rather than {@code Optional}, since a brand that has configured
+     * none of this yet is a normal, expected state, not an absent row.
+     */
+    BrandProfile findBrandProfile(TenantId tenantId, BrandId brandId);
+
+    /**
+     * Every brand's profile in one tenant, batched.
+     *
+     * <p>{@link #findBrands} already answers a directory in one query; reading
+     * each row's profile with a separate {@link #findBrandProfile} call per
+     * brand would be exactly the N+1 the branch list's own service-state read
+     * is this wave's other half of closing. A brand absent from the returned
+     * map has configured nothing — the caller substitutes {@link
+     * BrandProfile#empty()}.
+     */
+    Map<BrandId, BrandProfile> findBrandProfiles(TenantId tenantId);
+
+    /** Replaces a brand's whole profile — contact, media and its locale set together. */
+    void updateBrandProfile(TenantId tenantId, BrandId brandId, BrandProfile profile);
 
     boolean locationCodeOrSlugExists(Brand brand, String code, Slug slug);
 

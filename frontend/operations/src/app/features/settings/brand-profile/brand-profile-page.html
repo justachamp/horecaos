@@ -12,37 +12,249 @@
 } @else if (loadError(); as message) {
   <p class="q-body-sm error" role="alert">{{ message }}</p>
 } @else if (brand(); as value) {
-  <dl class="fields">
-    <div class="field">
-      <dt class="q-caption">{{ 'settings.brandProfile.field.displayName' | t }}</dt>
-      <dd class="q-body">{{ value.displayName }}</dd>
-    </div>
-    <div class="field">
-      <dt class="q-caption">{{ 'settings.brandProfile.field.code' | t }}</dt>
-      <dd class="q-body q-mono">{{ value.code }}</dd>
-    </div>
-    <div class="field">
-      <dt class="q-caption">{{ 'settings.brandProfile.field.slug' | t }}</dt>
-      <dd class="q-body q-mono">{{ value.slug }}</dd>
-    </div>
-    <div class="field">
-      <dt class="q-caption">{{ 'settings.brandProfile.field.status' | t }}</dt>
-      <dd class="q-body">{{ statusLabel(value.status) }}</dd>
-    </div>
-  </dl>
+  <section class="block">
+    <h2 class="q-subhead">{{ 'settings.brandProfile.section.identity' | t }}</h2>
+    <dl class="fields">
+      <div class="field">
+        <dt class="q-caption">{{ 'settings.brandProfile.field.displayName' | t }}</dt>
+        <dd class="q-body">{{ value.displayName }}</dd>
+      </div>
+      <div class="field">
+        <dt class="q-caption">{{ 'settings.brandProfile.field.code' | t }}</dt>
+        <dd class="q-body q-mono">{{ value.code }}</dd>
+      </div>
+      <div class="field">
+        <dt class="q-caption">{{ 'settings.brandProfile.field.slug' | t }}</dt>
+        <dd class="q-body q-mono">{{ value.slug }}</dd>
+      </div>
+      <div class="field">
+        <dt class="q-caption">{{ 'settings.brandProfile.field.status' | t }}</dt>
+        <dd class="q-body">{{ statusLabel(value.status) }}</dd>
+      </div>
+    </dl>
 
-  <p class="q-caption readonly-note">{{ 'settings.brandProfile.readOnlyNote' | t }}</p>
+    @if (!editingName()) {
+      <button type="button" class="q-body primary" (click)="startEditingName()">
+        {{ 'settings.brandProfile.rename' | t }}
+      </button>
+    } @else {
+      <div class="form">
+        <label class="q-caption" for="brand-name">{{
+          'settings.brandProfile.field.displayName' | t
+        }}</label>
+        <input
+          id="brand-name"
+          class="q-body field"
+          type="text"
+          [value]="draftDisplayName()"
+          (input)="draftDisplayName.set($any($event.target).value)"
+          [disabled]="nameSaving()"
+        />
+        @if (nameError(); as message) {
+          <p class="q-body-sm error" role="alert">{{ message }}</p>
+        }
+        <div class="form__actions">
+          <button
+            type="button"
+            class="q-body secondary"
+            (click)="editingName.set(false)"
+            [disabled]="nameSaving()"
+          >
+            {{ 'settings.brandProfile.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            class="q-body primary"
+            (click)="saveName()"
+            [disabled]="nameSaving()"
+          >
+            {{
+              nameSaving()
+                ? ('settings.brandProfile.saving' | t)
+                : ('settings.brandProfile.save' | t)
+            }}
+          </button>
+        </div>
+      </div>
+    }
+  </section>
 
-  <div class="gap-panel">
-    <h2 class="q-subhead">{{ 'settings.brandProfile.gap.title' | t }}</h2>
-    <p class="q-body-sm">
-      {{ 'notBuilt.body' | t: { spec: 'operations-spec/settings.md §10.1' } }}
-    </p>
-    <ul class="q-body-sm gap-list">
-      <li>{{ 'settings.brandProfile.gap.legalName' | t }}</li>
-      <li>{{ 'settings.brandProfile.gap.logoBanner' | t }}</li>
-      <li>{{ 'settings.brandProfile.gap.description' | t }}</li>
-      <li>{{ 'settings.brandProfile.gap.contact' | t }}</li>
-    </ul>
-  </div>
+  <section class="block">
+    <h2 class="q-subhead">{{ 'settings.brandProfile.section.profile' | t }}</h2>
+
+    @if (!editingProfile()) {
+      <dl class="fields">
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.brandProfile.field.contactPhone' | t }}</dt>
+          <dd class="q-body">{{ value.contactPhone ?? '—' }}</dd>
+        </div>
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.brandProfile.field.telegramHandle' | t }}</dt>
+          <dd class="q-body">{{ value.telegramHandle ? '@' + value.telegramHandle : '—' }}</dd>
+        </div>
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.brandProfile.field.logoAssetId' | t }}</dt>
+          <dd class="q-body q-mono">{{ value.logoAssetId ?? '—' }}</dd>
+        </div>
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.brandProfile.field.bannerAssetId' | t }}</dt>
+          <dd class="q-body q-mono">{{ value.bannerAssetId ?? '—' }}</dd>
+        </div>
+      </dl>
+
+      <h3 class="q-subhead locales-title">{{ 'settings.brandProfile.locales.title' | t }}</h3>
+      @if (value.locales.length === 0) {
+        <p class="q-body-sm">{{ 'settings.brandProfile.locales.unconfigured' | t }}</p>
+      } @else {
+        <ul class="locale-list">
+          @for (entry of value.locales; track entry.locale) {
+            <li class="q-body-sm">
+              <strong>{{ localeLabel(entry.locale) }}</strong>
+              @if (entry.isDefault) {
+                <span class="default-badge">{{ 'settings.brandProfile.locales.default' | t }}</span>
+              }
+              @if (entry.description) {
+                <span class="locale-description"> — {{ entry.description }}</span>
+              }
+            </li>
+          }
+        </ul>
+      }
+
+      <button type="button" class="q-body primary" (click)="startEditingProfile()">
+        {{ 'settings.brandProfile.edit' | t }}
+      </button>
+    } @else {
+      <div class="form">
+        <label class="q-caption" for="brand-phone">{{
+          'settings.brandProfile.field.contactPhone' | t
+        }}</label>
+        <input
+          id="brand-phone"
+          class="q-body field"
+          type="text"
+          [value]="draftContactPhone()"
+          (input)="draftContactPhone.set($any($event.target).value)"
+          [disabled]="profileSaving()"
+          placeholder="+998712000000"
+        />
+
+        <label class="q-caption" for="brand-telegram">{{
+          'settings.brandProfile.field.telegramHandle' | t
+        }}</label>
+        <input
+          id="brand-telegram"
+          class="q-body field"
+          type="text"
+          [value]="draftTelegramHandle()"
+          (input)="draftTelegramHandle.set($any($event.target).value)"
+          [disabled]="profileSaving()"
+          placeholder="oshxona_bot"
+        />
+
+        <label class="q-caption" for="brand-logo">{{
+          'settings.brandProfile.field.logoAssetId' | t
+        }}</label>
+        <input
+          id="brand-logo"
+          class="q-body field q-mono"
+          type="text"
+          [value]="draftLogoAssetId()"
+          (input)="draftLogoAssetId.set($any($event.target).value)"
+          [disabled]="profileSaving()"
+        />
+
+        <label class="q-caption" for="brand-banner">{{
+          'settings.brandProfile.field.bannerAssetId' | t
+        }}</label>
+        <input
+          id="brand-banner"
+          class="q-body field q-mono"
+          type="text"
+          [value]="draftBannerAssetId()"
+          (input)="draftBannerAssetId.set($any($event.target).value)"
+          [disabled]="profileSaving()"
+        />
+        <p class="q-caption media-note">{{ 'settings.brandProfile.mediaNote' | t }}</p>
+
+        <h3 class="q-subhead locales-title">{{ 'settings.brandProfile.locales.title' | t }}</h3>
+        <p class="q-caption">{{ 'settings.brandProfile.locales.hint' | t }}</p>
+        <table class="locale-grid">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'settings.brandProfile.locales.include' | t }}</th>
+              <th class="q-caption">{{ 'settings.brandProfile.locales.language' | t }}</th>
+              <th class="q-caption">{{ 'settings.brandProfile.locales.default' | t }}</th>
+              <th class="q-caption">{{ 'settings.brandProfile.locales.description' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of draftLocales(); track row.locale) {
+              <tr>
+                <td>
+                  <input
+                    type="checkbox"
+                    [attr.aria-label]="localeLabel(row.locale)"
+                    [checked]="row.included"
+                    (change)="toggleLocaleIncluded(row.locale)"
+                    [disabled]="profileSaving()"
+                  />
+                </td>
+                <td class="q-body-sm">{{ localeLabel(row.locale) }}</td>
+                <td>
+                  <input
+                    type="radio"
+                    name="default-locale"
+                    [attr.aria-label]="
+                      localeLabel(row.locale) +
+                      ' — ' +
+                      ('settings.brandProfile.locales.default' | t)
+                    "
+                    [checked]="row.isDefault"
+                    [disabled]="profileSaving() || !row.included"
+                    (change)="setLocaleDefault(row.locale)"
+                  />
+                </td>
+                <td>
+                  <input
+                    class="q-body-sm field"
+                    type="text"
+                    [value]="row.description"
+                    (input)="setLocaleDescription(row.locale, $any($event.target).value)"
+                    [disabled]="profileSaving() || !row.included"
+                  />
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+
+        @if (profileError(); as message) {
+          <p class="q-body-sm error" role="alert">{{ message }}</p>
+        }
+        <div class="form__actions">
+          <button
+            type="button"
+            class="q-body secondary"
+            (click)="editingProfile.set(false)"
+            [disabled]="profileSaving()"
+          >
+            {{ 'settings.brandProfile.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            class="q-body primary"
+            (click)="saveProfile()"
+            [disabled]="profileSaving()"
+          >
+            {{
+              profileSaving()
+                ? ('settings.brandProfile.saving' | t)
+                : ('settings.brandProfile.save' | t)
+            }}
+          </button>
+        </div>
+      </div>
+    }
+  </section>
 }

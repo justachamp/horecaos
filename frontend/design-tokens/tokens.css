@@ -223,3 +223,29 @@ select,
 textarea {
   font-family: inherit;
 }
+
+/* The SLA colour ramp (wave P06, gap map rows 1.1g/X.39, orders.md §2.7) — a
+ * named ramp of its own rather than components reaching for --q-warning /
+ * --q-error directly. Those two are generic semantic colours shared by
+ * validation states and toasts; the order board's and the kitchen ticket
+ * queue's severity rail is a specific, closed system with its own precedence
+ * table, and giving it its own token names is what lets that one ramp be
+ * retuned later without touching every other warning/error consumer in the
+ * console. Aliased to the existing tokens today because the values are the
+ * same — this is a semantic seam, not a new palette.
+ *
+ * Three steps only, matching orders.md §2.7's Levels table exactly: BLOCKED
+ * and LATE share one step (the table pairs them — "4 px danger /
+ * danger-subtle" for both), AT_RISK is the one warning step, and NORMAL is a
+ * transparent rail rather than an absent one, so the number column stays
+ * aligned whether a row is flagged or not. The tenant-chosen late colour is
+ * refused per orders.md §2.7 — this ramp is not configurable, on purpose. */
+:root {
+  --q-sla-late: var(--q-error);
+  --q-sla-late-tint: var(--q-error-tint);
+  --q-sla-late-text: var(--q-error-text);
+  --q-sla-at-risk: var(--q-warning);
+  --q-sla-at-risk-tint: var(--q-warning-tint);
+  --q-sla-at-risk-text: var(--q-warning-text);
+  --q-sla-normal: transparent;
+}

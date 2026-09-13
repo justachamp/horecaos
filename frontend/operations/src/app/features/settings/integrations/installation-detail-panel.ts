@@ -9,13 +9,27 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 
 import { CurrentLocation } from '../../../core/auth/current-location';
+import { firstPage } from '../../../core/api/page';
 import { ApiError } from '../../../core/api/problem-details';
 import { I18n } from '../../../core/i18n/i18n';
 import { describeApiError } from '../../orders/order-errors';
 import { StatusPill } from '../../../shared/ui/status-pill';
 import { SecretInput } from '../../../shared/ui/secret-input/secret-input';
+import {
+  MappingPane,
+  MappingPaneConflict,
+  MappingPaneLinkIntent,
+  MappingPaneRow,
+} from '../../../shared/ui/mapping-pane';
+import {
+  MappingEntityType,
+  MappingView,
+  PosMappingApi,
+  UnmappedExternalResponse,
+} from '../../catalog/pos-mapping-api';
 import {
   BindingView,
   CloposSettingsView,
@@ -27,6 +41,15 @@ import {
   RotatedPartnerApiClient,
 } from './integrations-api';
 
+/** The five pairings the `10.8b` mapping tab offers, alongside `4.5a`'s own product tab on the import screen. */
+const MAPPING_ENTITY_TYPES: readonly MappingEntityType[] = [
+  'PAYMENT_TYPE',
+  'DISCOUNT',
+  'COURIER',
+  'CANCELLATION_REASON',
+  'CHANNEL_POS_CODE',
+];
+
 /**
  * The one screen for the five `10.8a` endpoints that had a real backend and
  * no caller (ADR 0106): an installation's own bindings (list, activate,
@@ -34,6 +57,13 @@ import {
  * installation only — the order-acceptance settings toggle. `MARKETPLACE`
  * installations additionally get their own partner API client section
  * (`10.8d`), since a partner credential is issued *against* an installation.
+ * A `POS` installation additionally gets the `10.8b`/`X.24` «Соответствия»
+ * tab: {@link MappingPane} over the five non-`PRODUCT` pairings
+ * (`PAYMENT_TYPE`, `DISCOUNT`, `COURIER`, `CANCELLATION_REASON`,
+ * `CHANNEL_POS_CODE`) for a binding chosen from the same list the details
+ * tab already loads — `PRODUCT`'s own mapping tab lives on the catalog
+ * import screen (`4.5a`) instead, next to the run history it reviews
+ * against.
  *
  * <p>A side drawer rather than the installations table growing five more
  * columns: every one of these is an occasional, deliberate action ("bring
@@ -54,7 +84,7 @@ import {
 @Component({
   selector: 'app-installation-detail-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StatusPill, SecretInput],
+  imports: [StatusPill, SecretInput, MappingPane],
   template: `
     <div class="backdrop" (click)="dismiss.emit()">
       <div
@@ -73,182 +103,89 @@ import {
           </button>
         </div>
 
+        @if (posApplicable()) {
+          <nav class="tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              [attr.aria-selected]="activeTab() === 'details'"
+              [class.active]="activeTab() === 'details'"
+              (click)="selectDetailTab('details')"
+            >
+              {{ i18n.t('settings.integrations.detail.tab.details') }}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              [attr.aria-selected]="activeTab() === 'mapping'"
+              [class.active]="activeTab() === 'mapping'"
+              (click)="selectDetailTab('mapping')"
+            >
+              {{ i18n.t('settings.integrations.detail.mapping.tabTitle') }}
+            </button>
+          </nav>
+        }
+
         <div class="body">
-          <q-secret-input
-            fieldId="detail-credential"
-            mode="configured"
-            [label]="i18n.t('settings.integrations.detail.credential')"
-            [configured]="
-              installation().secretReference !== null && installation().secretReference !== ''
-            "
-            [reference]="installation().secretReference"
-            [lastRotatedLabel]="lastRotatedLabel()"
-            [lastUsedLabel]="lastUsedLabel()"
-            (rotate)="rotateCredential.emit()"
-          />
+          @if (activeTab() === 'details') {
+            <q-secret-input
+              fieldId="detail-credential"
+              mode="configured"
+              [label]="i18n.t('settings.integrations.detail.credential')"
+              [configured]="
+                installation().secretReference !== null && installation().secretReference !== ''
+              "
+              [reference]="installation().secretReference"
+              [lastRotatedLabel]="lastRotatedLabel()"
+              [lastUsedLabel]="lastUsedLabel()"
+              (rotate)="rotateCredential.emit()"
+            />
 
-          <section class="block">
-            <div class="block-header">
-              <h3 class="q-body-sm strong">
-                {{ i18n.t('settings.integrations.detail.reconcile.title') }}
-              </h3>
-              <button
-                type="button"
-                class="q-body-sm secondary"
-                (click)="onReconcile()"
-                [disabled]="reconciling()"
-              >
-                {{
-                  reconciling()
-                    ? i18n.t('settings.integrations.detail.reconcile.running')
-                    : i18n.t('settings.integrations.detail.reconcile.action')
-                }}
-              </button>
-            </div>
-            @if (reconcileError(); as message) {
-              <p class="q-body-sm error" role="alert">{{ message }}</p>
-            } @else if (reconciliation(); as result) {
-              <p class="q-body-sm">
-                {{ i18n.t('settings.integrations.detail.reconcile.status') }}:
-                <strong>{{ result.connectionStatus }}</strong>
-                · {{ i18n.t('settings.integrations.detail.reconcile.adapter') }}:
-                {{ result.adapterVersion }}
-              </p>
-              @if (capabilityEntries(result).length > 0) {
-                <ul class="capability-list">
-                  @for (entry of capabilityEntries(result); track entry[0]) {
-                    <li class="q-caption">{{ entry[0] }}: {{ entry[1] }}</li>
-                  }
-                </ul>
-              }
-            }
-          </section>
-
-          <section class="block">
-            <h3 class="q-body-sm strong">
-              {{ i18n.t('settings.integrations.detail.bindings.title') }}
-            </h3>
-            @if (bindingActionError(); as message) {
-              <p class="q-body-sm error" role="alert">{{ message }}</p>
-            }
-            @if (bindingsLoading()) {
-              <p class="q-body-sm">{{ i18n.t('settings.integrations.detail.bindings.loading') }}</p>
-            } @else {
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th class="q-caption">
-                      {{ i18n.t('settings.integrations.detail.bindings.column.scope') }}
-                    </th>
-                    <th class="q-caption">
-                      {{ i18n.t('settings.integrations.detail.bindings.column.status') }}
-                    </th>
-                    <th class="q-caption">
-                      {{ i18n.t('settings.integrations.detail.bindings.column.actions') }}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (binding of bindings(); track binding.id) {
-                    <tr>
-                      <td class="q-body-sm">{{ scopeLabel(binding) }}</td>
-                      <td class="q-body-sm">
-                        <q-status-pill
-                          [label]="binding.status"
-                          [tone]="statusTone(binding.status)"
-                        />
-                      </td>
-                      <td class="q-body-sm actions">
-                        @if (binding.status === 'SUSPENDED' || binding.status === 'UNVERIFIED') {
-                          <button
-                            type="button"
-                            class="q-body-sm link"
-                            [disabled]="bindingActionPending() === binding.id"
-                            (click)="promptActivate(binding.id)"
-                          >
-                            {{ i18n.t('settings.integrations.detail.bindings.activate') }}
-                          </button>
-                        }
-                        @if (binding.status === 'ACTIVE') {
-                          <button
-                            type="button"
-                            class="q-body-sm link"
-                            [disabled]="bindingActionPending() === binding.id"
-                            (click)="promptSuspend(binding.id)"
-                          >
-                            {{ i18n.t('settings.integrations.detail.bindings.suspend') }}
-                          </button>
-                        }
-                      </td>
-                    </tr>
-                  } @empty {
-                    <tr>
-                      <td class="q-body-sm empty" colspan="3">
-                        {{ i18n.t('settings.integrations.detail.bindings.empty') }}
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            }
-          </section>
-
-          @if (settingsApplicable()) {
-            <section class="block">
-              <h3 class="q-body-sm strong">
-                {{ i18n.t('settings.integrations.detail.cloposSettings.title') }}
-              </h3>
-              @if (settingsError(); as message) {
-                <p class="q-body-sm error" role="alert">{{ message }}</p>
-              } @else if (settingsLoading()) {
-                <p class="q-body-sm">
-                  {{ i18n.t('settings.integrations.detail.bindings.loading') }}
-                </p>
-              } @else if (settings(); as current) {
-                <label class="q-body-sm checkbox-row">
-                  <input
-                    type="checkbox"
-                    [checked]="current.requireClerkApproval"
-                    [disabled]="settingsSubmitting()"
-                    (change)="onToggleSettings(!current.requireClerkApproval)"
-                  />
-                  {{ i18n.t('settings.integrations.detail.cloposSettings.requireClerkApproval') }}
-                </label>
-                <p class="q-caption hint">
-                  {{ i18n.t('settings.integrations.detail.cloposSettings.hint') }}
-                </p>
-              }
-            </section>
-          }
-
-          @if (marketplaceApplicable()) {
             <section class="block">
               <div class="block-header">
                 <h3 class="q-body-sm strong">
-                  {{ i18n.t('settings.integrations.detail.partnerClients.title') }}
+                  {{ i18n.t('settings.integrations.detail.reconcile.title') }}
                 </h3>
                 <button
                   type="button"
                   class="q-body-sm secondary"
-                  [disabled]="issuingPartnerClient()"
-                  (click)="promptIssue()"
+                  (click)="onReconcile()"
+                  [disabled]="reconciling()"
                 >
-                  {{ i18n.t('settings.integrations.detail.partnerClients.issue') }}
+                  {{
+                    reconciling()
+                      ? i18n.t('settings.integrations.detail.reconcile.running')
+                      : i18n.t('settings.integrations.detail.reconcile.action')
+                  }}
                 </button>
               </div>
-              @if (partnerClientActionError(); as message) {
+              @if (reconcileError(); as message) {
+                <p class="q-body-sm error" role="alert">{{ message }}</p>
+              } @else if (reconciliation(); as result) {
+                <p class="q-body-sm">
+                  {{ i18n.t('settings.integrations.detail.reconcile.status') }}:
+                  <strong>{{ result.connectionStatus }}</strong>
+                  · {{ i18n.t('settings.integrations.detail.reconcile.adapter') }}:
+                  {{ result.adapterVersion }}
+                </p>
+                @if (capabilityEntries(result).length > 0) {
+                  <ul class="capability-list">
+                    @for (entry of capabilityEntries(result); track entry[0]) {
+                      <li class="q-caption">{{ entry[0] }}: {{ entry[1] }}</li>
+                    }
+                  </ul>
+                }
+              }
+            </section>
+
+            <section class="block">
+              <h3 class="q-body-sm strong">
+                {{ i18n.t('settings.integrations.detail.bindings.title') }}
+              </h3>
+              @if (bindingActionError(); as message) {
                 <p class="q-body-sm error" role="alert">{{ message }}</p>
               }
-              @if (issuedSecret(); as issued) {
-                <p class="q-body-sm issued-secret" role="alert">
-                  {{ i18n.t('settings.integrations.detail.partnerClients.issuedOnce') }}
-                  <code class="q-mono">{{ issued.secretValue }}</code>
-                  <button type="button" class="q-body-sm link" (click)="issuedSecret.set(null)">
-                    {{ i18n.t('settings.integrations.detail.partnerClients.issuedDismiss') }}
-                  </button>
-                </p>
-              }
-              @if (partnerClientsLoading()) {
+              @if (bindingsLoading()) {
                 <p class="q-body-sm">
                   {{ i18n.t('settings.integrations.detail.bindings.loading') }}
                 </p>
@@ -257,7 +194,7 @@ import {
                   <thead>
                     <tr>
                       <th class="q-caption">
-                        {{ i18n.t('settings.integrations.detail.partnerClients.column.clientId') }}
+                        {{ i18n.t('settings.integrations.detail.bindings.column.scope') }}
                       </th>
                       <th class="q-caption">
                         {{ i18n.t('settings.integrations.detail.bindings.column.status') }}
@@ -268,30 +205,34 @@ import {
                     </tr>
                   </thead>
                   <tbody>
-                    @for (client of partnerClients(); track client.id) {
+                    @for (binding of bindings(); track binding.id) {
                       <tr>
-                        <td class="q-body-sm">{{ client.clientId }}</td>
+                        <td class="q-body-sm">{{ scopeLabel(binding) }}</td>
                         <td class="q-body-sm">
                           <q-status-pill
-                            [label]="client.status"
-                            [tone]="statusTone(client.status)"
+                            [label]="binding.status"
+                            [tone]="statusTone(binding.status)"
                           />
                         </td>
                         <td class="q-body-sm actions">
-                          @if (client.status !== 'RETIRED') {
+                          @if (binding.status === 'SUSPENDED' || binding.status === 'UNVERIFIED') {
                             <button
                               type="button"
                               class="q-body-sm link"
-                              (click)="promptRotate(client.id, client.version)"
+                              [disabled]="bindingActionPending() === binding.id"
+                              (click)="promptActivate(binding.id)"
                             >
-                              {{ i18n.t('settings.integrations.rotate.installationAction') }}
+                              {{ i18n.t('settings.integrations.detail.bindings.activate') }}
                             </button>
+                          }
+                          @if (binding.status === 'ACTIVE') {
                             <button
                               type="button"
                               class="q-body-sm link"
-                              (click)="promptRevoke(client.id, client.version)"
+                              [disabled]="bindingActionPending() === binding.id"
+                              (click)="promptSuspend(binding.id)"
                             >
-                              {{ i18n.t('settings.integrations.detail.partnerClients.revoke') }}
+                              {{ i18n.t('settings.integrations.detail.bindings.suspend') }}
                             </button>
                           }
                         </td>
@@ -299,12 +240,183 @@ import {
                     } @empty {
                       <tr>
                         <td class="q-body-sm empty" colspan="3">
-                          {{ i18n.t('settings.integrations.detail.partnerClients.empty') }}
+                          {{ i18n.t('settings.integrations.detail.bindings.empty') }}
                         </td>
                       </tr>
                     }
                   </tbody>
                 </table>
+              }
+            </section>
+
+            @if (settingsApplicable()) {
+              <section class="block">
+                <h3 class="q-body-sm strong">
+                  {{ i18n.t('settings.integrations.detail.cloposSettings.title') }}
+                </h3>
+                @if (settingsError(); as message) {
+                  <p class="q-body-sm error" role="alert">{{ message }}</p>
+                } @else if (settingsLoading()) {
+                  <p class="q-body-sm">
+                    {{ i18n.t('settings.integrations.detail.bindings.loading') }}
+                  </p>
+                } @else if (settings(); as current) {
+                  <label class="q-body-sm checkbox-row">
+                    <input
+                      type="checkbox"
+                      [checked]="current.requireClerkApproval"
+                      [disabled]="settingsSubmitting()"
+                      (change)="onToggleSettings(!current.requireClerkApproval)"
+                    />
+                    {{ i18n.t('settings.integrations.detail.cloposSettings.requireClerkApproval') }}
+                  </label>
+                  <p class="q-caption hint">
+                    {{ i18n.t('settings.integrations.detail.cloposSettings.hint') }}
+                  </p>
+                }
+              </section>
+            }
+
+            @if (marketplaceApplicable()) {
+              <section class="block">
+                <div class="block-header">
+                  <h3 class="q-body-sm strong">
+                    {{ i18n.t('settings.integrations.detail.partnerClients.title') }}
+                  </h3>
+                  <button
+                    type="button"
+                    class="q-body-sm secondary"
+                    [disabled]="issuingPartnerClient()"
+                    (click)="promptIssue()"
+                  >
+                    {{ i18n.t('settings.integrations.detail.partnerClients.issue') }}
+                  </button>
+                </div>
+                @if (partnerClientActionError(); as message) {
+                  <p class="q-body-sm error" role="alert">{{ message }}</p>
+                }
+                @if (issuedSecret(); as issued) {
+                  <p class="q-body-sm issued-secret" role="alert">
+                    {{ i18n.t('settings.integrations.detail.partnerClients.issuedOnce') }}
+                    <code class="q-mono">{{ issued.secretValue }}</code>
+                    <button type="button" class="q-body-sm link" (click)="issuedSecret.set(null)">
+                      {{ i18n.t('settings.integrations.detail.partnerClients.issuedDismiss') }}
+                    </button>
+                  </p>
+                }
+                @if (partnerClientsLoading()) {
+                  <p class="q-body-sm">
+                    {{ i18n.t('settings.integrations.detail.bindings.loading') }}
+                  </p>
+                } @else {
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th class="q-caption">
+                          {{
+                            i18n.t('settings.integrations.detail.partnerClients.column.clientId')
+                          }}
+                        </th>
+                        <th class="q-caption">
+                          {{ i18n.t('settings.integrations.detail.bindings.column.status') }}
+                        </th>
+                        <th class="q-caption">
+                          {{ i18n.t('settings.integrations.detail.bindings.column.actions') }}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (client of partnerClients(); track client.id) {
+                        <tr>
+                          <td class="q-body-sm">{{ client.clientId }}</td>
+                          <td class="q-body-sm">
+                            <q-status-pill
+                              [label]="client.status"
+                              [tone]="statusTone(client.status)"
+                            />
+                          </td>
+                          <td class="q-body-sm actions">
+                            @if (client.status !== 'RETIRED') {
+                              <button
+                                type="button"
+                                class="q-body-sm link"
+                                (click)="promptRotate(client.id, client.version)"
+                              >
+                                {{ i18n.t('settings.integrations.rotate.installationAction') }}
+                              </button>
+                              <button
+                                type="button"
+                                class="q-body-sm link"
+                                (click)="promptRevoke(client.id, client.version)"
+                              >
+                                {{ i18n.t('settings.integrations.detail.partnerClients.revoke') }}
+                              </button>
+                            }
+                          </td>
+                        </tr>
+                      } @empty {
+                        <tr>
+                          <td class="q-body-sm empty" colspan="3">
+                            {{ i18n.t('settings.integrations.detail.partnerClients.empty') }}
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+              </section>
+            }
+          } @else {
+            <section class="block" data-testid="q-installation-mapping-tab">
+              @if (mappingError(); as message) {
+                <p class="q-body-sm error" role="alert">{{ message }}</p>
+              }
+              @if (bindings().length === 0) {
+                <p class="q-body-sm empty">
+                  {{ i18n.t('settings.integrations.detail.mapping.noBindings') }}
+                </p>
+              } @else {
+                <div class="mapping-controls">
+                  <label class="q-body-sm" for="q-mapping-binding">
+                    {{ i18n.t('settings.integrations.detail.mapping.binding') }}
+                  </label>
+                  <select
+                    id="q-mapping-binding"
+                    [value]="mappingBindingId()"
+                    (change)="selectMappingBinding($any($event.target).value)"
+                  >
+                    @for (binding of bindings(); track binding.id) {
+                      <option [value]="binding.id">{{ scopeLabel(binding) }}</option>
+                    }
+                  </select>
+                </div>
+                <nav class="mapping-entity-types" role="tablist">
+                  @for (entityType of mappingEntityTypes; track entityType) {
+                    <button
+                      type="button"
+                      role="tab"
+                      [attr.aria-selected]="mappingEntityType() === entityType"
+                      [class.active]="mappingEntityType() === entityType"
+                      (click)="selectMappingEntityType(entityType)"
+                    >
+                      {{ mappingEntityTypeLabel(entityType) }}
+                    </button>
+                  }
+                </nav>
+                <q-mapping-pane
+                  [rows]="mappingRows()"
+                  [horecaosCandidates]="mappingUnmapped()?.horecaosCandidates ?? []"
+                  [externalCandidates]="mappingUnmapped()?.entities ?? []"
+                  [externalSourced]="mappingUnmapped()?.sourced ?? true"
+                  [externalSourcedDetail]="mappingUnmapped()?.detail ?? null"
+                  [conflicts]="mappingConflicts()"
+                  [loading]="mappingLoading()"
+                  [busy]="mappingBusy()"
+                  (link)="onMappingLink($event)"
+                  (unlink)="onMappingUnlink($event)"
+                  (bulkAutoMatch)="onMappingBulkAutoMatch()"
+                  (dismissConflict)="onMappingDismissConflict($event)"
+                />
               }
             </section>
           }
@@ -359,6 +471,53 @@ import {
       display: flex;
       flex-direction: column;
       gap: 24px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--q-hairline);
+    }
+
+    .tabs button {
+      padding: 8px 12px;
+      border: none;
+      background: none;
+      color: var(--q-ink-muted);
+      cursor: pointer;
+    }
+
+    .tabs button.active {
+      color: var(--q-ink);
+      border-bottom: 2px solid var(--q-primary);
+    }
+
+    .mapping-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mapping-entity-types {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      border-bottom: 1px solid var(--q-hairline);
+    }
+
+    .mapping-entity-types button {
+      padding: 6px 10px;
+      border: none;
+      background: none;
+      color: var(--q-ink-muted);
+      cursor: pointer;
+      font-size: var(--q-type-body-sm);
+    }
+
+    .mapping-entity-types button.active {
+      color: var(--q-ink);
+      border-bottom: 2px solid var(--q-primary);
     }
 
     .block-header {
@@ -502,6 +661,32 @@ export class InstallationDetailPanel {
     null,
   );
 
+  // -------------------------------------------------------------- mapping («Соответствия»)
+
+  private readonly mappingApi = inject(PosMappingApi);
+
+  /**
+   * Gap-map row `10.8b`: the five non-`PRODUCT` pairings, scoped to a `POS`
+   * installation the same way {@link settingsApplicable} scopes Clopos's own
+   * settings toggle — `PosMappingController`'s `bindingId` is a `pos_binding`,
+   * which only a `POS` installation ever has. `4.5a`'s own `PRODUCT` tab lives
+   * on the import screen instead, next to the run history it reviews against.
+   */
+  protected readonly posApplicable = computed(() => this.installation().category === 'POS');
+
+  protected readonly activeTab = signal<'details' | 'mapping'>('details');
+
+  protected readonly mappingBindingId = signal<string | null>(null);
+  protected readonly mappingEntityType = signal<MappingEntityType>(MAPPING_ENTITY_TYPES[0]);
+  protected readonly mappingRows = signal<readonly MappingView[]>([]);
+  protected readonly mappingUnmapped = signal<UnmappedExternalResponse | null>(null);
+  protected readonly mappingConflicts = signal<readonly MappingPaneConflict[]>([]);
+  protected readonly mappingLoading = signal(false);
+  protected readonly mappingBusy = signal(false);
+  protected readonly mappingError = signal<string | null>(null);
+
+  protected readonly mappingEntityTypes = MAPPING_ENTITY_TYPES;
+
   constructor() {
     // A required signal input has no value yet at construction time —
     // Angular applies a template's input bindings only once every directive
@@ -566,6 +751,29 @@ export class InstallationDetailPanel {
         return 'warning';
       default:
         return 'none';
+    }
+  }
+
+  /**
+   * `i18n.t` takes a message-key literal, not a template-string union — the
+   * catalogues' own keyof type is what actually catches a typo or a missing
+   * translation, and string concatenation from `entityType` would throw that
+   * checking away entirely.
+   */
+  protected mappingEntityTypeLabel(entityType: MappingEntityType): string {
+    switch (entityType) {
+      case 'PAYMENT_TYPE':
+        return this.i18n.t('settings.integrations.detail.mapping.entityType.PAYMENT_TYPE');
+      case 'DISCOUNT':
+        return this.i18n.t('settings.integrations.detail.mapping.entityType.DISCOUNT');
+      case 'COURIER':
+        return this.i18n.t('settings.integrations.detail.mapping.entityType.COURIER');
+      case 'CANCELLATION_REASON':
+        return this.i18n.t('settings.integrations.detail.mapping.entityType.CANCELLATION_REASON');
+      case 'CHANNEL_POS_CODE':
+        return this.i18n.t('settings.integrations.detail.mapping.entityType.CHANNEL_POS_CODE');
+      case 'PRODUCT':
+        return entityType;
     }
   }
 
@@ -805,6 +1013,148 @@ export class InstallationDetailPanel {
     } catch (failure) {
       this.partnerClientActionError.set(this.describeError(failure));
     }
+  }
+
+  // -------------------------------------------------------------- mapping («Соответствия»)
+
+  /**
+   * Switching into the tab is the trigger, not construction — this
+   * installation may have zero bindings (a fresh, unbound POS connection),
+   * and the five-type pane has nothing to call until one is chosen. The
+   * first `ACTIVE` binding is the default rather than the first row, matching
+   * `PosSyncRunController`'s own precedent of only ever syncing a live
+   * binding — falls back to the first binding of any status so a not-yet-
+   * activated installation still shows something to pick from.
+   */
+  protected selectDetailTab(tab: 'details' | 'mapping'): void {
+    this.activeTab.set(tab);
+    if (tab !== 'mapping') {
+      return;
+    }
+    if (this.mappingBindingId() === null) {
+      const bindings = this.bindings();
+      const defaultBinding = bindings.find((b) => b.status === 'ACTIVE') ?? bindings[0] ?? null;
+      this.mappingBindingId.set(defaultBinding?.id ?? null);
+    }
+    void this.loadMapping();
+  }
+
+  protected selectMappingBinding(bindingId: string): void {
+    this.mappingBindingId.set(bindingId);
+    void this.loadMapping();
+  }
+
+  protected selectMappingEntityType(entityType: MappingEntityType): void {
+    this.mappingEntityType.set(entityType);
+    void this.loadMapping();
+  }
+
+  private async loadMapping(): Promise<void> {
+    const scope = this.location.scope();
+    const bindingId = this.mappingBindingId();
+    if (!scope || !bindingId) {
+      return;
+    }
+    this.mappingLoading.set(true);
+    this.mappingError.set(null);
+    try {
+      const entityType = this.mappingEntityType();
+      const [page, unmapped] = await Promise.all([
+        firstValueFrom(
+          this.mappingApi.list(
+            { tenantId: scope.tenantId },
+            bindingId,
+            entityType,
+            'ACTIVE',
+            firstPage(),
+          ),
+        ),
+        firstValueFrom(
+          this.mappingApi.unmapped({ tenantId: scope.tenantId }, bindingId, entityType),
+        ),
+      ]);
+      this.mappingRows.set(page.items);
+      this.mappingUnmapped.set(unmapped);
+    } catch (failure) {
+      this.mappingError.set(this.describeError(failure));
+    } finally {
+      this.mappingLoading.set(false);
+    }
+  }
+
+  protected async onMappingLink(intent: MappingPaneLinkIntent): Promise<void> {
+    const scope = this.location.scope();
+    const bindingId = this.mappingBindingId();
+    if (!scope || !bindingId || this.mappingBusy()) {
+      return;
+    }
+    this.mappingBusy.set(true);
+    this.mappingError.set(null);
+    try {
+      await firstValueFrom(
+        this.mappingApi.create(
+          { tenantId: scope.tenantId },
+          bindingId,
+          this.mappingEntityType(),
+          intent.horecaosId,
+          intent.externalId,
+          null,
+        ),
+      );
+      await this.loadMapping();
+    } catch (failure) {
+      this.mappingError.set(this.describeError(failure));
+    } finally {
+      this.mappingBusy.set(false);
+    }
+  }
+
+  protected async onMappingUnlink(row: MappingPaneRow): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope || this.mappingBusy()) {
+      return;
+    }
+    this.mappingBusy.set(true);
+    this.mappingError.set(null);
+    try {
+      await firstValueFrom(
+        this.mappingApi.retire({ tenantId: scope.tenantId }, row.mappingId, row.version),
+      );
+      await this.loadMapping();
+    } catch (failure) {
+      this.mappingError.set(this.describeError(failure));
+    } finally {
+      this.mappingBusy.set(false);
+    }
+  }
+
+  protected async onMappingBulkAutoMatch(): Promise<void> {
+    const scope = this.location.scope();
+    const bindingId = this.mappingBindingId();
+    if (!scope || !bindingId || this.mappingBusy()) {
+      return;
+    }
+    this.mappingBusy.set(true);
+    this.mappingError.set(null);
+    try {
+      const result = await firstValueFrom(
+        this.mappingApi.bulkAutoMatch(
+          { tenantId: scope.tenantId },
+          bindingId,
+          this.mappingEntityType(),
+        ),
+      );
+      this.mappingConflicts.set(result.conflicts);
+      await this.loadMapping();
+    } catch (failure) {
+      this.mappingError.set(this.describeError(failure));
+    } finally {
+      this.mappingBusy.set(false);
+    }
+  }
+
+  protected onMappingDismissConflict(conflict: MappingPaneConflict): void {
+    this.mappingConflicts.update((conflicts) => conflicts.filter((c) => c !== conflict));
   }
 
   private describeError(failure: unknown): string {

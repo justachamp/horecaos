@@ -44,6 +44,9 @@ public final class MetricRegistry {
 
     private static final LocalDate PILOT = LocalDate.of(2026, 7, 1);
 
+    /** T12 (7.5a): when {@code operator_principal_id} started being written. */
+    private static final LocalDate T12_OPERATOR_ATTRIBUTION = LocalDate.of(2026, 9, 13);
+
     private static final Map<String, MetricDefinition> BY_CODE = index(List.of(
             new MetricDefinition(
                     new MetricId("revenue.gross", 1),
@@ -243,7 +246,95 @@ public final class MetricRegistry {
                             + "the external-delivery reconciliation do not exist as data. Every "
                             + "surface naming this metric must render it unbuilt rather than "
                             + "zero.",
-                    null)));
+                    null),
+            // Wave P26: the Customers grid header counters (frontend information
+            // architecture §5.1) used to be a second, unregistered code path
+            // computed at UTC midnight — CustomerListQueryService#counts's own
+            // former doc named this as a known simplification. Registering them
+            // here is what row 5.1a asks for: "the same metric layer as the
+            // dashboard". Provisional (no effectiveFrom) until finance signs
+            // them, exactly like every other metric here before its PILOT date.
+            new MetricDefinition(
+                    new MetricId("customers.total", 1),
+                    Grain.DAY,
+                    "customer.customer_accounts",
+                    true,
+                    Aggregation.COUNT,
+                    "ALL_NON_MERGED",
+                    CurrencyRule.NONE,
+                    "Integer",
+                    MetricUnit.COUNT,
+                    "Count of this tenant's customer accounts whose status is not MERGED.",
+                    "ACTIVE, SUSPENDED, CLOSED and ANONYMIZED accounts.",
+                    "MERGED accounts — a merge redirects one account onto another, and the "
+                            + "merged-away row is never a second customer.",
+                    "Not applicable.",
+                    null,
+                    null),
+            new MetricDefinition(
+                    new MetricId("customers.registered_today", 1),
+                    Grain.DAY,
+                    "customer.customer_accounts.created_at",
+                    true,
+                    Aggregation.COUNT,
+                    "CREATED_ON_BUSINESS_DATE",
+                    CurrencyRule.NONE,
+                    "Integer",
+                    MetricUnit.COUNT,
+                    "Count of customer accounts created inside the tenant's own business day "
+                            + "(BusinessDayBoundary), not the UTC calendar day.",
+                    "Accounts created inside [businessDayStart, businessDayEnd) in the "
+                            + "tenant's own zone and boundary.",
+                    "Accounts created on any other business date.",
+                    "Not applicable.",
+                    "Before this version, the same figure was computed against UTC midnight, "
+                            + "which excluded a Tashkent row dated \"today\" between 00:00 and "
+                            + "05:00 local time. See MetricDefinitionDriftException's own "
+                            + "reasoning for why that is a new version rather than a silent fix.",
+                    null),
+            new MetricDefinition(
+                    new MetricId("customers.ordered_today", 1),
+                    Grain.DAY,
+                    "ordering.orders, via CustomerOrderActivityPort",
+                    true,
+                    Aggregation.COUNT_DISTINCT,
+                    "AT_LEAST_ONE_ORDER_ON_BUSINESS_DATE",
+                    CurrencyRule.NONE,
+                    "Integer",
+                    MetricUnit.COUNT,
+                    "Distinct customer accounts with at least one order inside the tenant's own " + "business day.",
+                    "Accounts naming an order placed inside [businessDayStart, businessDayEnd).",
+                    "Guest orders, which carry no customer account to count.",
+                    "Not applicable.",
+                    "Read live from ordering rather than from reporting.agg_branch_day's own "
+                            + "distinct_customers, so it reflects orders placed since the last "
+                            + "close job ran rather than only what has already been aggregated.",
+                    null),
+            // Wave T12 (7.5a): the operator leaderboard's per-operator basket-size cut.
+            new MetricDefinition(
+                    new MetricId("receipt_depth", 1),
+                    Grain.DAY_LOCATION_OPERATOR,
+                    "reporting.fact_order.item_count over orders.count.v1, grouped by operator",
+                    true,
+                    Aggregation.RATIO,
+                    "COMPLETED_ONLY",
+                    CurrencyRule.NONE,
+                    "One decimal place; the whole figure is items divided by orders, not rounded " + "to an integer",
+                    MetricUnit.COUNT,
+                    "Average item count per completed order, per operator: item_count.v1 (from "
+                            + "orders.count.v1's own inclusion rule) over orders.count.v1, at the "
+                            + "operator grain rather than the branch grain every other count metric "
+                            + "here uses. What 7.2's per-order table already renders per row, "
+                            + "aggregated — a manager reading it asks whether upsell coaching moved "
+                            + "the basket, not what one receipt looked like.",
+                    "Orders whose terminal status is COMPLETED.",
+                    "Cancelled, rejected, and expired orders — the same exclusion " + "orders.count.v1 states.",
+                    "Not applicable: a refund does not change what was ordered.",
+                    "Answered by GET .../reporting/operator-leaderboard's avgItemsPerOrder, not "
+                            + "by /queries: the registry's one-value-per-slice contract does not "
+                            + "express a per-operator breakdown, the same reason order- and "
+                            + "variant-grain reads get their own endpoint (ADR 0043).",
+                    T12_OPERATOR_ATTRIBUTION)));
 
     private MetricRegistry() {}
 

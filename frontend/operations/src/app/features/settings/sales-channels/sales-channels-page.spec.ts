@@ -6,6 +6,9 @@ import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
+import { IntegrationsApi } from '../integrations/integrations-api';
+import { LocationsApi } from '../locations/locations-api';
+import { PaymentMethodView, PaymentMethodsApi } from '../payment-methods/payment-methods-api';
 import { ChannelMatrices, ChannelView, SalesChannelsApi } from './sales-channels-api';
 import { SalesChannelsPage } from './sales-channels-page';
 
@@ -22,12 +25,83 @@ const STOREFRONT: ChannelView = {
   guestOrdersAllowed: true,
   providerInstallationId: null,
   version: 3,
+  locationCount: 1,
+  enabledPaymentMethodCount: 1,
+  enabledFulfillmentModes: ['DELIVERY'],
 };
 
-const MATRICES: ChannelMatrices = {
-  paymentMethods: { CASH: true, CLICK: false, PAYME: false },
+const KIOSK: ChannelView = {
+  id: 'chan-2',
+  code: 'KIOSK',
+  systemType: 'KIOSK',
+  displayName: 'Front kiosk',
+  status: 'ACTIVE',
+  pricePlaneChannelId: null,
+  externallyPriced: false,
+  guestOrdersAllowed: true,
+  providerInstallationId: null,
+  version: 1,
+  // A problem row: zero payment methods, zero fulfilment modes -- severity 0.
+  locationCount: 0,
+  enabledPaymentMethodCount: 0,
+  enabledFulfillmentModes: [],
+};
+
+const CASH: PaymentMethodView = {
+  id: 'pm-cash',
+  code: 'CASH',
+  displayName: 'Cash',
+  localizedNames: {},
+  responsibility: 'OPERATOR',
+  settlesFromBalance: false,
+  status: 'ACTIVE',
+  icon: null,
+  sortOrder: 0,
+  providerInstallationId: null,
+  contractReference: null,
+  version: 1,
+};
+
+const CLICK: PaymentMethodView = {
+  id: 'pm-click',
+  code: 'CLICK',
+  displayName: 'Click',
+  localizedNames: {},
+  responsibility: 'PARTNER',
+  settlesFromBalance: false,
+  status: 'ACTIVE',
+  icon: null,
+  sortOrder: 1,
+  providerInstallationId: null,
+  contractReference: null,
+  version: 1,
+};
+
+const TERMINAL_CARD: PaymentMethodView = {
+  id: 'pm-terminal',
+  code: 'TERMINAL_CARD',
+  displayName: 'Terminal card',
+  localizedNames: {},
+  responsibility: 'TERMINAL',
+  settlesFromBalance: false,
+  status: 'ACTIVE',
+  icon: null,
+  sortOrder: 2,
+  providerInstallationId: null,
+  contractReference: null,
+  version: 1,
+};
+
+const STOREFRONT_MATRICES: ChannelMatrices = {
+  paymentMethods: { CASH: true, CLICK: false },
   fulfillmentModes: { DELIVERY: true, PICKUP: false, DINE_IN: false },
   locationIds: ['location-1'],
+};
+
+const KIOSK_MATRICES: ChannelMatrices = {
+  paymentMethods: {},
+  fulfillmentModes: {},
+  locationIds: [],
 };
 
 class FakeCurrentLocation {
@@ -46,26 +120,51 @@ describe('SalesChannelsPage', () => {
   let api: {
     list: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    deactivate: ReturnType<typeof vi.fn>;
+    reactivate: ReturnType<typeof vi.fn>;
     matrices: ReturnType<typeof vi.fn>;
     replacePaymentMethods: ReturnType<typeof vi.fn>;
     replaceFulfillmentModes: ReturnType<typeof vi.fn>;
+    replaceLocations: ReturnType<typeof vi.fn>;
     archive: ReturnType<typeof vi.fn>;
   };
+  let paymentMethodsApi: { list: ReturnType<typeof vi.fn> };
+  let integrationsApi: { listInstallations: ReturnType<typeof vi.fn> };
+  let locationsApi: { list: ReturnType<typeof vi.fn> };
+
+  function matricesFor(channelId: string): ChannelMatrices {
+    return channelId === 'chan-1' ? STOREFRONT_MATRICES : KIOSK_MATRICES;
+  }
 
   beforeEach(async () => {
     api = {
-      list: vi.fn().mockResolvedValue([STOREFRONT]),
+      list: vi.fn().mockResolvedValue([STOREFRONT, KIOSK]),
       create: vi.fn().mockResolvedValue(STOREFRONT),
-      matrices: vi.fn().mockResolvedValue(MATRICES),
+      update: vi.fn().mockResolvedValue({ ...STOREFRONT, version: 4 }),
+      deactivate: vi.fn().mockResolvedValue({ ...STOREFRONT, status: 'INACTIVE' }),
+      reactivate: vi.fn().mockResolvedValue({ ...STOREFRONT, status: 'ACTIVE' }),
+      matrices: vi
+        .fn()
+        .mockImplementation((_scope: LocationScope, channelId: string) =>
+          Promise.resolve(matricesFor(channelId)),
+        ),
       replacePaymentMethods: vi.fn().mockResolvedValue(undefined),
       replaceFulfillmentModes: vi.fn().mockResolvedValue(undefined),
+      replaceLocations: vi.fn().mockResolvedValue(undefined),
       archive: vi.fn().mockResolvedValue({ ...STOREFRONT, status: 'ARCHIVED' }),
     };
+    paymentMethodsApi = { list: vi.fn().mockResolvedValue([CASH, CLICK, TERMINAL_CARD]) };
+    integrationsApi = { listInstallations: vi.fn().mockResolvedValue([]) };
+    locationsApi = { list: vi.fn().mockResolvedValue([]) };
 
     await TestBed.configureTestingModule({
       imports: [SalesChannelsPage],
       providers: [
         { provide: SalesChannelsApi, useValue: api },
+        { provide: PaymentMethodsApi, useValue: paymentMethodsApi },
+        { provide: IntegrationsApi, useValue: integrationsApi },
+        { provide: LocationsApi, useValue: locationsApi },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
       ],
     }).compileComponents();
@@ -76,69 +175,148 @@ describe('SalesChannelsPage', () => {
     fixture.detectChanges();
   });
 
-  it('lists the registry', () => {
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Website');
+  it('lists the registry with its eleven columns, the kiosk row flagged as a problem', () => {
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Website');
+    expect(text).toContain('Front kiosk');
     expect(api.list).toHaveBeenCalledWith(SCOPE);
+
+    // Severity sort: the kiosk (zero methods, zero modes) outranks the storefront.
+    const rows = fixture.nativeElement.querySelectorAll('.row');
+    expect(rows[0].textContent).toContain('Front kiosk');
+    expect(rows[0].classList.contains('row--problem')).toBe(true);
   });
 
-  it('loads and renders a channel’s two matrices when its row is selected', async () => {
-    const row = fixture.nativeElement.querySelector('.row') as HTMLElement;
-    row.click();
-    fixture.detectChanges();
-    await flushMicrotasks();
-    fixture.detectChanges();
-
+  it('renders the cross-channel payment-method matrix from the payment-method registry, not a frontend constant', () => {
+    expect(paymentMethodsApi.list).toHaveBeenCalledWith(SCOPE);
     expect(api.matrices).toHaveBeenCalledWith(SCOPE, 'chan-1');
-    const cells = fixture.nativeElement.querySelectorAll('[data-testid="mg-cell"]');
-    expect(cells.length).toBe(6); // 3 payment methods + 3 fulfilment modes, one row each
-    const cash = fixture.nativeElement.querySelector('[data-row="chan-1"][data-col="CASH"]');
+
+    const cash = fixture.nativeElement.querySelector(
+      '[data-testid="payment-matrix"] [data-row="chan-1"][data-col="CASH"]',
+    );
     expect(cash?.getAttribute('data-state')).toBe('ON');
+    const click = fixture.nativeElement.querySelector(
+      '[data-testid="payment-matrix"] [data-row="chan-1"][data-col="CLICK"]',
+    );
+    expect(click?.getAttribute('data-state')).toBe('OFF');
+  });
+
+  it('hatches a TERMINAL-responsibility method for a channel bound to zero branches, and refuses a click on it', async () => {
+    // The kiosk channel (chan-2) has locationCount 0; a TERMINAL-responsibility
+    // method needs a fiscal terminal at a location the channel actually
+    // serves, so this cell is fiscally impossible, not merely disabled.
+    const kioskCell = fixture.nativeElement.querySelector(
+      '[data-testid="payment-matrix"] [data-row="chan-2"][data-col="TERMINAL_CARD"]',
+    ) as HTMLElement;
+    expect(kioskCell?.getAttribute('data-state')).toBe('UNAVAILABLE');
+    expect(kioskCell?.classList.contains('q-matrix-grid__cell--unavailable')).toBe(true);
+
+    kioskCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushMicrotasks();
+    expect(api.replacePaymentMethods).not.toHaveBeenCalled();
+
+    // The storefront channel (chan-1) has a branch, so the identical method is
+    // an ordinary OFF cell there, not hatched.
+    const storefrontCell = fixture.nativeElement.querySelector(
+      '[data-testid="payment-matrix"] [data-row="chan-1"][data-col="TERMINAL_CARD"]',
+    );
+    expect(storefrontCell?.getAttribute('data-state')).toBe('OFF');
   });
 
   it('toggles a payment method with the channel’s current version', async () => {
-    const row = fixture.nativeElement.querySelector('.row') as HTMLElement;
-    row.click();
-    fixture.detectChanges();
-    await flushMicrotasks();
-    fixture.detectChanges();
-
-    const clickCell = fixture.nativeElement.querySelector(
-      '[data-row="chan-1"][data-col="CLICK"]',
+    const cell = fixture.nativeElement.querySelector(
+      '[data-testid="payment-matrix"] [data-row="chan-1"][data-col="CLICK"]',
     ) as HTMLElement;
-    clickCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flushMicrotasks();
 
     expect(api.replacePaymentMethods).toHaveBeenCalledWith(
       SCOPE,
       'chan-1',
-      { CASH: true, CLICK: true, PAYME: false },
+      { CASH: true, CLICK: true },
       3,
     );
   });
 
-  it('bulk-toggles every payment method off in one call through the row-toggle button', async () => {
-    const row = fixture.nativeElement.querySelector('.row') as HTMLElement;
-    row.click();
-    fixture.detectChanges();
-    await flushMicrotasks();
-    fixture.detectChanges();
-
-    (
-      fixture.nativeElement.querySelector(
-        '[data-testid="payment-matrix"] [data-testid="mg-row-toggle-chan-1"]',
-      ) as HTMLButtonElement
-    ).click();
+  it('confirms before turning off the last enabled payment method on an active channel, and aborts on decline', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const cash = fixture.nativeElement.querySelector(
+      '[data-testid="payment-matrix"] [data-row="chan-1"][data-col="CASH"]',
+    ) as HTMLElement;
+    cash.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flushMicrotasks();
 
-    // CASH is already ON, so a row toggle turns every eligible cell ON — the
-    // three-method row is only heterogeneous (CASH on, CLICK/PAYME off), so
-    // "any off" means the bulk gesture's target is ON for all three.
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(api.replacePaymentMethods).not.toHaveBeenCalled();
+  });
+
+  it('proceeds once the last-method confirmation is accepted', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const cash = fixture.nativeElement.querySelector(
+      '[data-testid="payment-matrix"] [data-row="chan-1"][data-col="CASH"]',
+    ) as HTMLElement;
+    cash.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushMicrotasks();
+
     expect(api.replacePaymentMethods).toHaveBeenCalledWith(
       SCOPE,
       'chan-1',
-      { CASH: true, CLICK: true, PAYME: true },
+      { CASH: false, CLICK: false },
       3,
     );
+  });
+
+  it('edits a channel and saves its branch-serviceability list in the same gesture', async () => {
+    locationsApi.list.mockResolvedValue([
+      { id: 'location-1', displayName: 'Main branch' },
+      { id: 'location-2', displayName: 'Second branch' },
+    ]);
+    // Re-render with the richer location list.
+    fixture = TestBed.createComponent(SalesChannelsPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelectorAll('.row')[1] as HTMLElement; // Website, after severity sort
+    row.click();
+    fixture.detectChanges();
+
+    const nameInput = fixture.nativeElement.querySelector('#edit-name-chan-1') as HTMLInputElement;
+    nameInput.value = 'Our site';
+    nameInput.dispatchEvent(new Event('input'));
+
+    const checkboxes = fixture.nativeElement.querySelectorAll(
+      '[data-testid="location-checkbox"] input',
+    );
+    (checkboxes[1] as HTMLInputElement).click(); // add the second branch
+
+    const save = fixture.nativeElement.querySelector(
+      '[data-testid="save-channel"]',
+    ) as HTMLButtonElement;
+    save.click();
+    await flushMicrotasks();
+
+    expect(api.update).toHaveBeenCalledWith(
+      SCOPE,
+      'chan-1',
+      expect.objectContaining({ displayName: 'Our site' }),
+      3,
+    );
+    expect(api.replaceLocations).toHaveBeenCalledWith(
+      SCOPE,
+      'chan-1',
+      expect.arrayContaining(['location-1', 'location-2']),
+      4,
+    );
+  });
+
+  it('deactivates an active channel and reactivates an inactive one', async () => {
+    const deactivateButton = fixture.nativeElement.querySelector(
+      '[data-testid="deactivate"]',
+    ) as HTMLButtonElement;
+    deactivateButton.click();
+    await flushMicrotasks();
+    expect(api.deactivate).toHaveBeenCalledWith(SCOPE, expect.any(String), expect.any(Number));
   });
 
   it('creates a channel from the inline form', async () => {
@@ -156,9 +334,7 @@ describe('SalesChannelsPage', () => {
 
     const submit = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
-    ).find((button) =>
-      button.textContent?.trim() === 'Connect' ? false : button.textContent?.includes('Create'),
-    ) as HTMLButtonElement;
+    ).find((button) => button.textContent?.trim() === 'Create') as HTMLButtonElement;
     submit.click();
     await flushMicrotasks();
 
@@ -176,8 +352,28 @@ describe('SalesChannelsPage', () => {
     archiveButton.click();
     await flushMicrotasks();
 
-    expect(api.archive).toHaveBeenCalledWith(SCOPE, 'chan-1', 3);
+    expect(api.archive).toHaveBeenCalledWith(SCOPE, expect.any(String), expect.any(Number));
     expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Delete');
+  });
+
+  it('filters the registry table to only rows with a problem -- the capability matrix below still shows every channel', async () => {
+    const onlyProblems = fixture.nativeElement.querySelector(
+      '[data-testid="filter-only-problems"]',
+    ) as HTMLInputElement;
+    onlyProblems.click();
+    fixture.detectChanges();
+
+    const tableText =
+      (fixture.nativeElement.querySelector('.table') as HTMLElement).textContent ?? '';
+    expect(tableText).toContain('Front kiosk');
+    expect(tableText).not.toContain('Website');
+
+    // "A list over a matrix": the matrix is the whole-registry capability
+    // grid and is not narrowed by the list's own filter.
+    const matrixText = (
+      fixture.nativeElement.querySelector('[data-testid="payment-matrix"]') as HTMLElement
+    ).textContent;
+    expect(matrixText).toContain('Website');
   });
 
   // ------------------------------------------------------------------------ denied
@@ -192,6 +388,9 @@ describe('SalesChannelsPage', () => {
       imports: [SalesChannelsPage],
       providers: [
         { provide: SalesChannelsApi, useValue: { ...api, list } },
+        { provide: PaymentMethodsApi, useValue: paymentMethodsApi },
+        { provide: IntegrationsApi, useValue: integrationsApi },
+        { provide: LocationsApi, useValue: locationsApi },
         { provide: CurrentLocation, useValue: noScopeLocation },
       ],
     }).compileComponents();
@@ -216,6 +415,9 @@ describe('SalesChannelsPage', () => {
       imports: [SalesChannelsPage],
       providers: [
         { provide: SalesChannelsApi, useValue: { ...api, list } },
+        { provide: PaymentMethodsApi, useValue: paymentMethodsApi },
+        { provide: IntegrationsApi, useValue: integrationsApi },
+        { provide: LocationsApi, useValue: locationsApi },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
       ],
     }).compileComponents();

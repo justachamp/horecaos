@@ -217,8 +217,37 @@ describe('ShiftsPage', () => {
     await flushMicrotasks();
 
     const lastCall = shiftsFn.mock.calls.at(-1);
-    expect(lastCall?.[4]).toContain('2026-01-01');
-    expect(lastCall?.[5]).toContain('2026-01-07');
+    // Asserted against the same local-midnight/local-end-of-day construction
+    // the component itself uses, not a naive substring check -- see
+    // drafts-page.spec.ts's identical test for why a substring check on the
+    // date-only prefix would not catch the from/to asymmetry this pins.
+    expect(lastCall?.[4]).toBe(new Date('2026-01-01T00:00:00.000').toISOString());
+    expect(lastCall?.[5]).toBe(new Date('2026-01-07T23:59:59.999').toISOString());
+  });
+
+  it('anchors the from/to period boundaries to the same (local) timezone interpretation', async () => {
+    const shiftsFn = vi.fn().mockResolvedValue([]);
+    await render(apiDefaults({ shifts: shiftsFn }));
+
+    const host = fixture.nativeElement as HTMLElement;
+    const from = host.querySelector('[data-testid="shifts-from"]') as HTMLInputElement;
+    const to = host.querySelector('[data-testid="shifts-to"]') as HTMLInputElement;
+    from.value = '2026-01-01';
+    from.dispatchEvent(new Event('change'));
+    to.value = '2026-01-01';
+    to.dispatchEvent(new Event('change'));
+    (host.querySelector('[data-testid="shifts-apply-period"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const lastCall = shiftsFn.mock.calls.at(-1);
+    const fromInstant = new Date(lastCall?.[4] as string).getTime();
+    const toInstant = new Date(lastCall?.[5] as string).getTime();
+    // A single day's window, inclusive of its own last millisecond: just
+    // under 24h apart. Mixing a UTC-midnight `from` with a local-time `to`
+    // (the bug this pins) shrinks this gap for any timezone east of UTC,
+    // Asia/Tashkent (this app's own assumed zone) included.
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    expect(toInstant - fromInstant).toBe(ONE_DAY_MS - 1);
   });
 
   // ------------------------------------------------------------------------- roster

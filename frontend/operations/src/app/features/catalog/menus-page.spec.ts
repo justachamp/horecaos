@@ -180,4 +180,115 @@ describe('MenusPage', () => {
 
     expect(harness.routeNativeElement!.querySelector('[data-testid="menus-denied"]')).toBeTruthy();
   });
+
+  it(
+    'a HIDDEN offering and a never-added variant render with different labels — ' +
+      'row 4.4, the matrix distinction this wave adds',
+    async () => {
+      configure({
+        variantsAtLocation: () =>
+          of({
+            items: [
+              row({ variantId: 'v1', offeringStatus: 'HIDDEN' }),
+              row({ variantId: 'v2', offeringStatus: undefined }),
+            ],
+            nextCursor: null,
+          }),
+      });
+
+      const harness = await RouterTestingHarness.create('/catalog/menus');
+      await flushMicrotasks();
+
+      const badges = [
+        ...harness.routeNativeElement!.querySelectorAll('[data-testid="menus-offering-status"]'),
+      ];
+      expect(badges[0].textContent?.trim()).toBe('Скрыт');
+      expect(badges[1].textContent?.trim()).toBe('Не в меню');
+    },
+  );
+
+  it('clicking a status filter tab refetches with that status, dropping the previous page', async () => {
+    const variantsAtLocation = vi
+      .fn()
+      .mockReturnValue(of({ items: [row({ variantId: 'v1' })], nextCursor: null }));
+    configure({ variantsAtLocation });
+
+    const harness = await RouterTestingHarness.create('/catalog/menus');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="menus-filter-HIDDEN"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const lastCall = variantsAtLocation.mock.calls.at(-1)!;
+    expect(lastCall[3]).toEqual({ search: undefined, status: 'HIDDEN' });
+  });
+
+  it('selecting rows and confirming a bulk action calls bulkSetOfferingStatus with the selection', async () => {
+    const bulkSetOfferingStatus = vi.fn().mockReturnValue(of({ updatedCount: 2 }));
+    configure({
+      variantsAtLocation: () =>
+        of({ items: [row({ variantId: 'v1' }), row({ variantId: 'v2' })], nextCursor: null }),
+      bulkSetOfferingStatus,
+    });
+
+    const harness = await RouterTestingHarness.create('/catalog/menus');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    const checkboxes = [
+      ...host.querySelectorAll<HTMLInputElement>('[data-testid="menus-row-checkbox"]'),
+    ];
+    for (const checkbox of checkboxes) {
+      checkbox.checked = true;
+      checkbox.dispatchEvent(new Event('change'));
+    }
+    await flushMicrotasks();
+
+    (host.querySelector('[data-testid="menus-bulk-unavailable"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(bulkSetOfferingStatus).toHaveBeenCalledWith(FAKE_SCOPE, 'l1', {
+      variantIds: ['v1', 'v2'],
+      status: 'UNAVAILABLE',
+    });
+  });
+
+  /**
+   * P23 second-pass adversarial review: `BulkOfferingStatusRequest` refuses
+   * the whole request outright past 200 ids (`@Size(max = 200)`), and this
+   * matrix can load up to 4000 sellable variants — so "select all" on a
+   * large location used to build a selection the endpoint would always
+   * reject whole, applying nothing.
+   */
+  it('caps "select all" at 200 rows, matching the endpoint\'s own limit, rather than selecting every row', async () => {
+    const manyRows = Array.from({ length: 250 }, (_, i) => row({ variantId: `v${i}` }));
+    const bulkSetOfferingStatus = vi.fn().mockReturnValue(of({ updatedCount: 200 }));
+    configure({
+      variantsAtLocation: () => of({ items: manyRows, nextCursor: null }),
+      bulkSetOfferingStatus,
+    });
+
+    const harness = await RouterTestingHarness.create('/catalog/menus');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="menus-select-all"]') as HTMLInputElement).dispatchEvent(
+      new Event('change'),
+    );
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="menus-bulk-bar"]')?.textContent).toContain('200');
+    expect(host.querySelector('[data-testid="menus-selection-capped"]')).not.toBeNull();
+
+    (host.querySelector('[data-testid="menus-bulk-unavailable"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const call = bulkSetOfferingStatus.mock.calls.at(-1)!;
+    expect((call[2] as { variantIds: readonly string[] }).variantIds).toHaveLength(200);
+  });
 });

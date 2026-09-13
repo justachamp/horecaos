@@ -521,8 +521,8 @@ class SendPulseContactImportIntegrationTest {
                 SendPulseContactImportRowService.CONSENT_PURPOSE);
         Map<MessageLocale, Wording> wordings = new LinkedHashMap<>();
         MessageLocale.required().forEach(locale -> wordings.put(locale, new Wording(null, "SendPulse import proof")));
-        int version = templates.addVersion(tenantId, templateId, wordings, Map.of());
-        templates.activate(tenantId, templateId, version, "test");
+        int version = templates.addVersion(tenantId, brandId, templateId, wordings, Map.of());
+        templates.activate(tenantId, brandId, templateId, version, "test");
     }
 
     private void createIntent(UUID tenantId, UUID brandId, UUID orderId, String templateKey) {

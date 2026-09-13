@@ -1,14 +1,21 @@
 import { MessageKey } from '../../core/i18n/messages.en';
 
 /**
- * The four lifecycle actions the server can ever offer (orders.md §4.2, §4.3),
+ * The lifecycle actions the server can ever offer (orders.md §4.2, §4.3),
  * mirroring `uz.horecaos.platform.ordering.application.OrderActionCode`. A
  * closed set on the server; this client still renders an unrecognised code
  * harmlessly (see {@link actionLabel}) for the same forward-compatibility
  * reason `order-status.ts` renders an unknown order status — an additive
  * server release must not blank a row.
+ *
+ * `COMPLETE` (wave P09, gap map `1.2j`) is offered alongside — never instead
+ * of — the generic `ADVANCE` entry to a `COMPLETED` target; see
+ * `OrderActionsPolicy`'s own Java doc for why both exist. `order-detail-pane.ts`
+ * prefers `COMPLETE` and hides the redundant `ADVANCE` entry; `order-queue.ts`
+ * does not know about `COMPLETE` yet and keeps using `ADVANCE`, which the
+ * server still emits for exactly that reason.
  */
-export const ORDER_ACTION_CODES = ['APPROVE', 'REJECT', 'ADVANCE', 'CANCEL'] as const;
+export const ORDER_ACTION_CODES = ['APPROVE', 'REJECT', 'ADVANCE', 'CANCEL', 'COMPLETE'] as const;
 export type OrderActionCode = (typeof ORDER_ACTION_CODES)[number];
 
 /**
@@ -76,6 +83,10 @@ export function actionLabel(
       return translate('orders.action.reject');
     case 'CANCEL':
       return translate('orders.action.cancel');
+    case 'COMPLETE':
+      return fulfillmentMode === 'DELIVERY'
+        ? translate('orders.action.advance.completedDelivery')
+        : translate('orders.action.advance.completedPickup');
     case 'ADVANCE': {
       const target = action.targetStatus ?? '';
       if (target === 'COMPLETED') {

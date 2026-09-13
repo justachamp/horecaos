@@ -122,6 +122,52 @@ public class OrderOutcomeService {
     }
 
     /**
+     * A compensating transition under a reason from the tenant's registry
+     * (orders.md §0.2, §11.3; ADR 0019 amendment, ADR 0110).
+     *
+     * <p>Mirrors {@link #cancel}'s shape exactly: this service resolves and
+     * validates the registry reason, {@link OrderStateService#override} knows
+     * nothing about the registry and enforces only that the edge itself is a
+     * declared compensating one. {@code CANCELLATION}-kind reasons are what
+     * this cites — deliberately not a third {@code OutcomeReasonKind}. Minting
+     * one would widen {@code ck_outcome_reason_kind}, and this wave carries no
+     * migration; ADR 0110 records the reuse and leaves a dedicated kind as an
+     * open input for whichever wave next touches this table. The consequence
+     * columns a cancellation reason carries (stock disposition, liability,
+     * refund) are never read here — the order is not being cancelled, so only
+     * the reason's identity and versioned snapshot matter, exactly as little as
+     * a {@code COMPLETION} reason's fulfilment-mode list would if this method
+     * accepted one, which is exactly why it does not.
+     */
+    @Transactional
+    public OrderStateService.DecisionResult override(
+            UUID tenantId, UUID orderId, OrderStatus target, int expectedVersion, OverrideCommand command) {
+
+        ReasonRow reason = reasons.find(tenantId, command.reasonId())
+                .orElseThrow(() -> new OrderOutcomeReasonService.ReasonNotFoundException(command.reasonId()));
+        if (reason.kind() != OutcomeReasonKind.CANCELLATION) {
+            throw new IllegalArgumentException(
+                    "%s is a completion reason and cannot justify a status override".formatted(reason.internalName()));
+        }
+        if (!"ACTIVE".equals(reason.status())) {
+            throw new IllegalArgumentException(
+                    "%s has been archived and cannot be used".formatted(reason.internalName()));
+        }
+
+        return orderState.override(
+                tenantId,
+                orderId,
+                target,
+                expectedVersion,
+                reason.systemCategory(),
+                reason.id(),
+                reason.version(),
+                command.actorType(),
+                command.actorId(),
+                command.correlationId());
+    }
+
+    /**
      * Rejects an order under a reason from the platform's curated list (wave
      * 24, V0119) — the free-text {@code reasonCode} on {@code decide}'s own
      * {@code REJECT} action, closed.
@@ -254,6 +300,18 @@ public class OrderOutcomeService {
     public record CancelCommand(
             UUID reasonId,
             @Nullable String note,
+            String actorType,
+            String actorId,
+            @Nullable String correlationId) {}
+
+    /**
+     * A compensating status correction under {@code Capability.ORDER_STATE_OVERRIDE}.
+     *
+     * @param reasonId a registry reason, mandatory — {@link #override} refuses
+     *                 a missing, unknown, non-{@code CANCELLATION} or archived one
+     */
+    public record OverrideCommand(
+            UUID reasonId,
             String actorType,
             String actorId,
             @Nullable String correlationId) {}

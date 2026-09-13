@@ -352,13 +352,27 @@ public class CustomerController {
     @RequiresCapability(Capability.CUSTOMER_READ)
     @Operation(
             summary = "The grid header's three counters",
-            description = "Total, registered today, and ordered today — computed for UTC midnight "
-                    + "(CustomerListQueryService#counts explains why). 'Ordered today' asks the "
-                    + "ordering module's own OrderDirectory rather than this module's own tables.")
+            description = "Total, registered today, and ordered today — 'today' scoped to the "
+                    + "tenant's own ADR 0043 business-day boundary, the same one Reports and the "
+                    + "live board use (CustomerListQueryService#counts explains why this no longer "
+                    + "means UTC midnight). 'Ordered today' asks the ordering module's own "
+                    + "OrderDirectory rather than this module's own tables.")
     public ResponseEntity<CountsResponse> counts(@PathVariable UUID tenantId) {
         HeaderCounts counts = lists.counts(tenantId);
         return ResponseEntity.ok(new CountsResponse(counts.total(), counts.registeredToday(), counts.orderedToday()));
     }
+
+    /**
+     * Carries {@link CustomerListQueryService.ExportResult#truncated} without
+     * changing the response body's shape. {@code OpenApiContractTests}
+     * refuses a released endpoint's response type narrowing or changing —
+     * wrapping the array in `{rows, truncated}` failed that check ("array"
+     * to "object"), so the flag travels as a header instead, the same way
+     * {@code IdempotencyInterceptor.REPLAYED_HEADER} answers "was this
+     * replayed" without touching the body a caller already parses as one
+     * shape.
+     */
+    private static final String EXPORT_TRUNCATED_HEADER = "X-Export-Truncated";
 
     @GetMapping("/export")
     @RequiresCapability(Capability.CUSTOMER_PII_REVEAL)
@@ -367,16 +381,20 @@ public class CustomerController {
             description = "One audited PII egress event for the whole filtered set (frontend "
                     + "information architecture §5.1), never one reveal per row. Requires a "
                     + "stated purpose, exactly like every other reveal on this controller. Bounded "
-                    + "at 2000 rows.")
+                    + "at 2000 rows; the `X-Export-Truncated` response header is `true` when the "
+                    + "filter actually matched more than that, so a marketer can tell a complete "
+                    + "export from a silently cut one.")
     public ResponseEntity<List<CustomerExportResponse>> export(
             @PathVariable UUID tenantId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String query,
             @RequestParam @NotBlank String purpose) {
         requireKnownStatus(status);
-        return ResponseEntity.ok(lists.exportFiltered(tenantId, status, query, purpose, staffActor()).stream()
-                .map(CustomerExportResponse::of)
-                .toList());
+        CustomerListQueryService.ExportResult result =
+                lists.exportFiltered(tenantId, status, query, purpose, staffActor());
+        return ResponseEntity.ok()
+                .header(EXPORT_TRUNCATED_HEADER, Boolean.toString(result.truncated()))
+                .body(result.rows().stream().map(CustomerExportResponse::of).toList());
     }
 
     @PostMapping

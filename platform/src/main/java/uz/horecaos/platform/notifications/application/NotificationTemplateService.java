@@ -108,15 +108,18 @@ public class NotificationTemplateService {
      */
     @Transactional
     public int addVersion(
-            UUID tenantId, UUID templateId, Map<MessageLocale, Wording> wordings, Map<String, String> variablesSchema) {
+            UUID tenantId,
+            UUID brandId,
+            UUID templateId,
+            Map<MessageLocale, Wording> wordings,
+            Map<String, String> variablesSchema) {
 
-        // Read for its side effect: a template id from another tenant must not be
-        // given a version here, and the composite foreign key alone would let the
-        // insert through on a matching id.
-        TemplateRow owned = templates
-                .template(tenantId, templateId)
-                .orElseThrow(
-                        () -> new IllegalArgumentException("No template " + templateId + " belongs to this tenant"));
+        // Read for its side effect: a template id from another tenant, or a
+        // sibling brand's own template, must not be given a version here — the
+        // composite foreign key alone would let the insert through on a
+        // matching id, and the endpoint's BRAND-scoped capability only proves
+        // the caller was authorised for the brand in the URL.
+        TemplateRow owned = requireOwnedByBrand(tenantId, brandId, templateId);
         // ADR 0091, decided 2026-09-11: a new SMS wording for a gateway that
         // moderates texts waits for the gateway's approval before it can send.
         boolean awaitsGateway =
@@ -170,11 +173,8 @@ public class NotificationTemplateService {
      * discovering it from a customer.
      */
     @Transactional
-    public void activate(UUID tenantId, UUID templateId, int versionNumber, String approvedBy) {
-        TemplateRow template = templates
-                .template(tenantId, templateId)
-                .orElseThrow(
-                        () -> new IllegalArgumentException("No template " + templateId + " belongs to this tenant"));
+    public void activate(UUID tenantId, UUID brandId, UUID templateId, int versionNumber, String approvedBy) {
+        TemplateRow template = requireOwnedByBrand(tenantId, brandId, templateId);
 
         List<VersionRow> versions = templates.versions(tenantId, templateId, versionNumber);
         List<MessageLocale> present =
@@ -236,9 +236,16 @@ public class NotificationTemplateService {
 
     /** The declared variable names of a stored version. */
     public Set<String> declaredVariables(VersionRow version) {
-        return objectMapper
-                .readValue(version.variablesSchemaJson(), SCHEMA_TYPE)
-                .keySet();
+        return declaredVariablesSchema(version).keySet();
+    }
+
+    /**
+     * The full declared schema of a stored version — name to declared type —
+     * so a reader (the editor's own {@code GET}) sees what an author actually
+     * declared rather than only the names {@link #declaredVariables} keeps.
+     */
+    public Map<String, String> declaredVariablesSchema(VersionRow version) {
+        return objectMapper.readValue(version.variablesSchemaJson(), SCHEMA_TYPE);
     }
 
     @Transactional(readOnly = true)
@@ -247,8 +254,50 @@ public class NotificationTemplateService {
     }
 
     @Transactional(readOnly = true)
-    public List<VersionRow> versions(UUID tenantId, UUID templateId, int versionNumber) {
+    public List<VersionRow> versions(UUID tenantId, UUID brandId, UUID templateId, int versionNumber) {
+        // Read for its side effect, same as addVersion: neither another
+        // tenant's template id nor a sibling brand's own template may answer
+        // here.
+        requireOwnedByBrand(tenantId, brandId, templateId);
         return templates.versions(tenantId, templateId, versionNumber);
+    }
+
+    /**
+     * Every version of a template, every locale — the read a create-only
+     * editor never had a caller for. The caller groups by
+     * {@code versionNumber}; ordered newest version first.
+     */
+    @Transactional(readOnly = true)
+    public List<VersionRow> allVersions(UUID tenantId, UUID brandId, UUID templateId) {
+        // Read for its side effect, same as addVersion: a template id from
+        // another tenant, or a sibling brand's own template, must not answer
+        // here either.
+        TemplateRow owned = requireOwnedByBrand(tenantId, brandId, templateId);
+        // owned itself is unused past this point — the read above exists only to
+        // 404 a foreign template id before its versions are listed.
+        return templates.allVersionsOfTemplate(tenantId, owned.id());
+    }
+
+    /**
+     * @throws IllegalArgumentException {@code templateId} does not belong to
+     *         this tenant, or names a template that is a *different* brand's
+     *         own override — the endpoint's BRAND-scoped capability only
+     *         proves the caller was authorised for the brand in the URL, not
+     *         that {@code templateId} belongs to it, so every method reached
+     *         from that endpoint must re-check here. A tenant-wide default
+     *         ({@code brandId() == null}) is visible to every brand, matching
+     *         {@link #resolve}'s own precedence.
+     */
+    private TemplateRow requireOwnedByBrand(UUID tenantId, UUID brandId, UUID templateId) {
+        TemplateRow owned = templates
+                .template(tenantId, templateId)
+                .orElseThrow(
+                        () -> new IllegalArgumentException("No template " + templateId + " belongs to this tenant"));
+        UUID ownedBrandId = owned.brandId();
+        if (ownedBrandId != null && !ownedBrandId.equals(brandId)) {
+            throw new IllegalArgumentException("No template " + templateId + " belongs to this brand");
+        }
+        return owned;
     }
 
     private String contentHashOf(MessageLocale locale, Wording wording) {

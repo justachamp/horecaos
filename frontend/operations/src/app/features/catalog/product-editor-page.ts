@@ -17,12 +17,17 @@ import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ActorChip } from '../../shared/ui/actor-chip';
+import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
 import { LocalizedFieldGroup } from '../../shared/ui/localized-field-group';
+import { MediaUploader } from '../../shared/ui/media-uploader';
 import { describeApiError } from '../orders/order-errors';
 import { ActivityLogApi, AuditEventView } from '../staff/activity-log-api';
 import { CatalogApi, fetchAllVariantsAtLocation } from './catalog-api';
 import {
+  ALL_CHANNELS,
+  CatalogStatus,
   FiscalClassification,
+  MediaRelation,
   ModifierGroupSummary,
   ProductDetail,
   PublicationResult,
@@ -35,6 +40,8 @@ import {
 import { PricingApi } from './pricing-api';
 import { MediaApi } from './media-api';
 import { InventoryApi } from './inventory-api';
+
+const STATUSES: readonly CatalogStatus[] = ['DRAFT', 'ACTIVE', 'ARCHIVED'];
 
 type EditorTab =
   'BASIC' | 'VARIANTS' | 'MODIFIERS' | 'PHOTOS' | 'FISCAL' | 'AVAILABILITY' | 'HISTORY';
@@ -93,31 +100,46 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
  * catalog.md §4.2 — the product editor. One page, seven tabs, a live
  * readiness rail.
  *
- * **What this wave builds, against the real backend, and what it does not.**
- * Every write below exists as an endpoint (`CatalogAuthoringController`,
- * `PriceAuthoringController`) except: there is no product status-change
- * endpoint, no endpoint to remove a category/catalog membership, no combo
- * groups, no nested/hidden modifiers, no per-aggregator image override, no
- * `catalog.mxik_reference` typeahead (all named ADR 0016/0038 gaps the spec
- * itself lists as not built). Product creation, translation, variant/price
- * authoring, modifier-group attachment, fiscal classification, media
- * attachment and location availability are all real, wired writes.
+ * **What this wave (`P22`) closed.** Three defects the previous wave left:
+ * "Add variant" posted only `sortOrder` and an `UNCLASSIFIED` fiscal block
+ * although `AddVariantRequest` always accepted `sku`/`unitCode`/`name` — it
+ * now sends them, and the variants tab is fully editable (name via `PUT
+ * .../translations` with `entityType VARIANT`, sku/unit/status/default via
+ * the new `PUT .../variants/{variantId}`). A product's own status was
+ * read-only text; `PUT .../products/{productId}/status` fixes that. A
+ * product could not be removed from a category or catalog; both now have a
+ * `DELETE`. The photo grid rendered a role label and no `<img>` at all; it
+ * now renders a real thumbnail (`MediaAssetService.downloadUrl`'s new
+ * `variant` parameter — derivatives were rendered, stored and never served
+ * before this wave), can be reordered by re-`PUT`ting the attach endpoint,
+ * and can be detached. The fiscal tab exposed only ИКПУ/package code even
+ * though `FiscalClassification` always carried marking/excise/alcohol/age —
+ * every field is editable here now, plus an ИКПУ/MXIK typeahead against a new
+ * tenant-scoped alias of `FiscalReferenceController`'s search (empty until
+ * the official dataset is imported — an unanswered finance/owner input this
+ * wave does not resolve).
  *
- * **Tab 7 (wave 45): real, and narrower than "history" implies.** There was
- * no audit-read endpoint reachable from this app when this page was first
- * built; `AuditController`'s operations-surface mirror (Staff 9.3, wave 39)
- * changed that. But `CatalogAuthoringService` records exactly one audit fact
- * today — `catalog.offering.set`, this location's own availability toggle —
- * so this tab shows real, non-fabricated history and nothing invented, while
- * staying honest that product/variant/price/modifier/fiscal edits are not
- * audited yet and will not appear here. See `loadHistory`'s own doc.
+ * **Still not built:** combo groups, nested/hidden modifiers, and
+ * per-aggregator image overrides beyond the storage dimension (`4.2f`'s
+ * backend half — `catalog.media_relations.channel_code` — landed this wave;
+ * no screen here authors a channel-specific override yet). Video upload is
+ * accepted by `q-media-uploader`'s selection step but not by the server: see
+ * this wave's own report on why widening the allowlist needs a video
+ * dimension probe first.
+ *
+ * **Tab 7: real, and narrower than "history" implies.** `CatalogAuthoringService`
+ * records exactly one audit fact today — `catalog.offering.set`, this
+ * location's own availability toggle — so this tab shows real, non-fabricated
+ * history and nothing invented, while staying honest that product/variant/
+ * price/modifier/fiscal edits are not audited yet and will not appear here.
+ * See `loadHistory`'s own doc.
  *
  * Locale editing uses the plain `ru`/`uz`/`en` convention `toCatalogLocale`
  * documents, not the console's own `Locale` type — see that function's doc.
  */
 @Component({
   selector: 'q-product-editor-page',
-  imports: [TPipe, RouterLink, LocalizedFieldGroup, ActorChip],
+  imports: [TPipe, RouterLink, LocalizedFieldGroup, ActorChip, Combobox, MediaUploader],
   templateUrl: './product-editor-page.html',
   styleUrl: './product-editor-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -182,6 +204,13 @@ export class ProductEditorPage implements OnInit {
   protected readonly publishChannel = signal('STOREFRONT');
 
   protected readonly uploadingPhoto = signal(false);
+  protected readonly photoUrls = signal<Readonly<Record<string, string>>>({});
+  protected readonly statuses = STATUSES;
+
+  /** One combobox's search state per variant, keyed by `variantId` — IA 4.2e. */
+  protected readonly mxikQuery = signal<Readonly<Record<string, string>>>({});
+  protected readonly mxikOptions = signal<Readonly<Record<string, readonly ComboboxOption[]>>>({});
+  protected readonly mxikSearching = signal<Readonly<Record<string, boolean>>>({});
 
   async ngOnInit(): Promise<void> {
     this.editingLocale.set(toCatalogLocale(this.i18n.locale()));
@@ -198,6 +227,9 @@ export class ProductEditorPage implements OnInit {
       const product = await firstValueFrom(this.api.productDetail(scope, productId));
       this.product.set(product);
       this.denied.set(false);
+      this.mxikQuery.set(
+        Object.fromEntries(product.variants.map((v) => [v.variantId, v.fiscal?.mxikCode ?? ''])),
+      );
       void this.loadReadiness(product);
       void this.loadPrices(product);
     } catch (error) {
@@ -272,6 +304,42 @@ export class ProductEditorPage implements OnInit {
     if (tab === 'HISTORY' && !this.historyLoaded()) {
       void this.loadHistory();
     }
+    if (tab === 'PHOTOS') {
+      void this.loadPhotoUrls();
+    }
+  }
+
+  /**
+   * Thumbnails for the photo grid — the trap this wave closes: the grid
+   * rendered a role label and no `<img>` at all, because nothing ever asked
+   * `MediaAssetService.downloadUrl` for a rendition. One request per photo,
+   * best-effort: a rendition that has not rendered yet (or a 403 on a media
+   * asset owned outside this brand) leaves that tile on the role-label
+   * fallback rather than blocking the rest of the grid.
+   */
+  private async loadPhotoUrls(): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    if (!scope || !product) {
+      return;
+    }
+    const entries = await Promise.all(
+      product.media.map(async (item) => {
+        try {
+          const url = await firstValueFrom(
+            this.mediaApi.downloadUrl(scope.tenantId, item.mediaAssetId, 'THUMBNAIL'),
+          );
+          return [item.mediaAssetId, url] as const;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    this.photoUrls.set(
+      Object.fromEntries(
+        entries.filter((entry): entry is readonly [string, string] => entry !== null),
+      ),
+    );
   }
 
   private async loadModifierLibrary(): Promise<void> {
@@ -450,6 +518,68 @@ export class ProductEditorPage implements OnInit {
     }
   }
 
+  /** Черновик/Активен/Архив was read-only text; this is the write this wave added. */
+  protected async changeProductStatus(status: CatalogStatus): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    if (!scope || !product || status === product.status) {
+      return;
+    }
+    this.savingField.set('status');
+    try {
+      await firstValueFrom(this.api.setProductStatus(scope, product.productId, status));
+      this.product.set({ ...product, status });
+      this.saveNotice.set(this.i18n.t('catalog.editor.saved'));
+    } catch (error) {
+      this.handleSaveError(error);
+    } finally {
+      this.savingField.set(null);
+    }
+  }
+
+  /** The undo `placeInCategory`/`addProductToCatalog` never had — the other named defect on this tab. */
+  protected async removeFromCategory(categoryId: string): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    if (!scope || !product) {
+      return;
+    }
+    this.savingField.set(`remove-category:${categoryId}`);
+    try {
+      await firstValueFrom(
+        this.api.removeProductFromCategory(scope, categoryId, product.productId),
+      );
+      this.product.set({
+        ...product,
+        categoryIds: product.categoryIds.filter((id) => id !== categoryId),
+      });
+    } catch (error) {
+      this.handleSaveError(error);
+    } finally {
+      this.savingField.set(null);
+    }
+  }
+
+  protected async removeFromCatalog(catalogId: string): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    if (!scope || !product) {
+      return;
+    }
+    this.savingField.set(`remove-catalog:${catalogId}`);
+    try {
+      await firstValueFrom(this.api.removeProductFromCatalog(scope, catalogId, product.productId));
+      this.product.set({
+        ...product,
+        catalogIds: product.catalogIds.filter((id) => id !== catalogId),
+      });
+    } catch (error) {
+      this.handleSaveError(error);
+    } finally {
+      this.savingField.set(null);
+    }
+  }
+
   // ------------------------------------------------------------ Tab 2 — Варианты
 
   protected priceLabel(variantId: string): string {
@@ -482,7 +612,15 @@ export class ProductEditorPage implements OnInit {
     }
   }
 
-  protected async addVariant(): Promise<void> {
+  /**
+   * `AddVariantRequest` always accepted `sku`/`unitCode`/`name` — this used to
+   * post only `sortOrder` and an `UNCLASSIFIED` fiscal block, creating a
+   * nameless, SKU-less, unit-less variant this console then had no way to
+   * name at all. Sends all three now, and `entityType VARIANT` translations
+   * carry the name — `AddVariantRequest.locale`/`.name` write the very first
+   * one, exactly like `createProduct`'s own default variant already does.
+   */
+  protected async addVariant(name: string, sku: string, unitCode: string): Promise<void> {
     const scope = this.brand.scope();
     const product = this.product();
     if (!scope || !product) {
@@ -492,12 +630,64 @@ export class ProductEditorPage implements OnInit {
     try {
       await firstValueFrom(
         this.api.addVariant(scope, product.productId, {
+          sku: sku.trim() || null,
+          unitCode: unitCode.trim() || null,
+          name: name.trim() || null,
           locale: this.editingLocale(),
           sortOrder: product.variants.length,
           fiscal: UNCLASSIFIED,
         }),
       );
       this.product.set(await firstValueFrom(this.api.productDetail(scope, product.productId)));
+    } catch (error) {
+      this.handleSaveError(error);
+    } finally {
+      this.savingField.set(null);
+    }
+  }
+
+  /**
+   * The variants tab was otherwise read-only apart from the price input.
+   * `isDefault` promotes this variant and demotes every sibling
+   * (`ux_variant_single_default`); it never demotes one on its own — send it
+   * `true` on the variant that should become the default, never `false`.
+   */
+  protected async saveVariant(
+    variant: VariantDetail,
+    name: string,
+    sku: string,
+    unitCode: string,
+    isDefault: boolean,
+    status: CatalogStatus,
+  ): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    if (!scope || !product) {
+      return;
+    }
+    this.savingField.set(`variant:${variant.variantId}`);
+    try {
+      const trimmedName = name.trim();
+      if (trimmedName && trimmedName !== (variant.translations[this.editingLocale()]?.name ?? '')) {
+        await firstValueFrom(
+          this.api.setTranslation(scope, {
+            entityType: 'VARIANT',
+            entityId: variant.variantId,
+            locale: this.editingLocale(),
+            name: trimmedName,
+          }),
+        );
+      }
+      await firstValueFrom(
+        this.api.updateVariant(scope, product.productId, variant.variantId, {
+          sku: sku.trim() || null,
+          unitCode: unitCode.trim() || 'PIECE',
+          isDefault,
+          status,
+        }),
+      );
+      this.product.set(await firstValueFrom(this.api.productDetail(scope, product.productId)));
+      this.saveNotice.set(this.i18n.t('catalog.editor.saved'));
     } catch (error) {
       this.handleSaveError(error);
     } finally {
@@ -630,9 +820,15 @@ export class ProductEditorPage implements OnInit {
         ...product,
         media: [
           ...product.media,
-          { mediaAssetId: asset.assetId, role, sortOrder: product.media.length },
+          {
+            mediaAssetId: asset.assetId,
+            role,
+            sortOrder: product.media.length,
+            channelCode: ALL_CHANNELS,
+          },
         ],
       });
+      void this.loadPhotoUrls();
     } catch (error) {
       this.handleSaveError(error);
     } finally {
@@ -640,7 +836,135 @@ export class ProductEditorPage implements OnInit {
     }
   }
 
+  /** `q-media-uploader` rejected the file client-side — before any network call. */
+  protected onPhotoRejected(reason: string): void {
+    this.saveNotice.set(
+      this.i18n.t(
+        reason === 'tooLarge' ? 'ui.mediaUploader.tooLarge' : 'ui.mediaUploader.unsupportedType',
+      ),
+    );
+  }
+
+  /**
+   * Reorder by re-`PUT`ting the attach endpoint with a new `sortOrder` —
+   * exactly the shape the brief asked for, no new endpoint. Swaps this photo
+   * with its neighbour in the given direction; both re-attach so the array
+   * order and the server's `sort_order` never disagree.
+   */
+  protected async reorderPhoto(item: MediaRelation, direction: -1 | 1): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    if (!scope || !product) {
+      return;
+    }
+    const media = [...product.media];
+    const index = media.findIndex(
+      (m) => m.mediaAssetId === item.mediaAssetId && m.role === item.role,
+    );
+    const swapWith = index + direction;
+    if (index < 0 || swapWith < 0 || swapWith >= media.length) {
+      return;
+    }
+    [media[index], media[swapWith]] = [media[swapWith], media[index]];
+    this.savingField.set(`photo-reorder:${item.mediaAssetId}`);
+    try {
+      await Promise.all(
+        media.map((m, sortOrder) =>
+          firstValueFrom(
+            this.api.attachMedia(scope, 'PRODUCT', product.productId, m.mediaAssetId, {
+              role: m.role,
+              sortOrder,
+              channel: m.channelCode,
+            }),
+          ),
+        ),
+      );
+      this.product.set({
+        ...product,
+        media: media.map((m, sortOrder) => ({ ...m, sortOrder })),
+      });
+    } catch (error) {
+      this.handleSaveError(error);
+    } finally {
+      this.savingField.set(null);
+    }
+  }
+
+  /** The undo `attachMedia` never had, at any layer — a wrong upload could not be corrected. */
+  protected async detachPhoto(item: MediaRelation): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    if (!scope || !product) {
+      return;
+    }
+    this.savingField.set(`photo-detach:${item.mediaAssetId}`);
+    try {
+      await firstValueFrom(
+        this.api.detachMedia(
+          scope,
+          'PRODUCT',
+          product.productId,
+          item.mediaAssetId,
+          item.role,
+          item.channelCode,
+        ),
+      );
+      this.product.set({
+        ...product,
+        media: product.media.filter(
+          (m) => !(m.mediaAssetId === item.mediaAssetId && m.role === item.role),
+        ),
+      });
+    } catch (error) {
+      this.handleSaveError(error);
+    } finally {
+      this.savingField.set(null);
+    }
+  }
+
   // ------------------------------------------------------------ Tab 5 — Фискальные данные
+
+  /** `alcoholByVolumeBp` is basis points (4250 = 42.5%); the field is authored as a percent. */
+  protected alcoholPercentFor(variant: VariantDetail): string {
+    const bp = variant.fiscal?.alcoholByVolumeBp;
+    return bp == null ? '' : String(bp / 100);
+  }
+
+  /**
+   * Assembles a full {@link FiscalClassification} from every field this tab
+   * now edits — mxikCode/packageCode were the only two a screen could ever
+   * set; excisable, marked, alcoholic and age-restricted had message keys
+   * and a domain field each but no control anywhere.
+   */
+  protected buildFiscalRequest(
+    mxikCode: string,
+    packageCode: string,
+    fiscalUnitCode: string,
+    fiscalName: string,
+    barcode: string,
+    markingRequired: boolean,
+    excisable: boolean,
+    alcoholPercent: string,
+    ageYears: string,
+  ): FiscalClassification {
+    const parsedUnit = Number.parseInt(fiscalUnitCode, 10);
+    const parsedAlcohol = Number.parseFloat(alcoholPercent);
+    const parsedAge = Number.parseInt(ageYears, 10);
+    return {
+      mxikCode: mxikCode.trim() || null,
+      packageCode: packageCode.trim() || null,
+      fiscalUnitCode: Number.isFinite(parsedUnit) && fiscalUnitCode.trim() ? parsedUnit : null,
+      fiscalName: fiscalName.trim() || null,
+      barcode: barcode.trim() || null,
+      markingRequired,
+      excisable,
+      alcoholByVolumeBp:
+        Number.isFinite(parsedAlcohol) && alcoholPercent.trim()
+          ? Math.round(parsedAlcohol * 100)
+          : null,
+      ageRestrictionYears: Number.isFinite(parsedAge) && ageYears.trim() ? parsedAge : null,
+    };
+  }
 
   protected async saveFiscal(variant: VariantDetail, fiscal: FiscalClassification): Promise<void> {
     const scope = this.brand.scope();
@@ -663,6 +987,56 @@ export class ProductEditorPage implements OnInit {
     } finally {
       this.savingField.set(null);
     }
+  }
+
+  /** `q-combobox`'s controlled `query`/`options` pair, one instance per variant row (IA 4.2e). */
+  protected mxikQueryFor(variantId: string): string {
+    return this.mxikQuery()[variantId] ?? '';
+  }
+
+  protected mxikOptionsFor(variantId: string): readonly ComboboxOption[] {
+    return this.mxikOptions()[variantId] ?? [];
+  }
+
+  protected mxikSearchingFor(variantId: string): boolean {
+    return this.mxikSearching()[variantId] ?? false;
+  }
+
+  protected onMxikQueryChange(variantId: string, query: string): void {
+    this.mxikQuery.set({ ...this.mxikQuery(), [variantId]: query });
+  }
+
+  /**
+   * Debounced by `q-combobox` itself — see its own doc. Empty when the
+   * official ИКПУ/MXIK list has never been imported, which is a named,
+   * unresolved finance/owner input (`4.2e`), not a search that found nothing.
+   */
+  protected async searchMxik(variantId: string, query: string): Promise<void> {
+    const scope = this.brand.scope();
+    if (!scope || query.trim().length < 2) {
+      this.mxikOptions.set({ ...this.mxikOptions(), [variantId]: [] });
+      return;
+    }
+    this.mxikSearching.set({ ...this.mxikSearching(), [variantId]: true });
+    try {
+      const rows = await firstValueFrom(this.api.searchMxikReference(scope, query.trim()));
+      this.mxikOptions.set({
+        ...this.mxikOptions(),
+        [variantId]: rows.map((row) => ({
+          id: row.code,
+          label: `${row.code} — ${row.labelRu}`,
+          sublabel: row.labelUz,
+        })),
+      });
+    } catch {
+      this.mxikOptions.set({ ...this.mxikOptions(), [variantId]: [] });
+    } finally {
+      this.mxikSearching.set({ ...this.mxikSearching(), [variantId]: false });
+    }
+  }
+
+  protected onMxikOptionSelected(variantId: string, option: ComboboxOption): void {
+    this.onMxikQueryChange(variantId, option.id);
   }
 
   // ------------------------------------------------------------ readiness rail + publish

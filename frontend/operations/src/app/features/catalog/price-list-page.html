@@ -7,6 +7,14 @@
     </div>
   } @else {
     <div class="price-list__toolbar">
+      <nav class="price-list__links" [attr.aria-label]="'catalog.priceList.relatedLinks' | t">
+        <a routerLink="/catalog/prices/bulk" data-testid="price-list-bulk-link">{{
+          'catalog.priceBulk.title' | t
+        }}</a>
+        <a routerLink="/catalog/prices/tax-profile" data-testid="price-list-tax-link">{{
+          'catalog.taxProfile.title' | t
+        }}</a>
+      </nav>
       @if (actionError(); as error) {
         <span class="price-list__error">{{ error }}</span>
       }
@@ -46,26 +54,24 @@
             </td>
             <td class="price-list__num-col q-tnum">{{ book.priority }}</td>
             <td class="price-list__actions">
-              @if (book.status === 'DRAFT') {
-                <button
-                  type="button"
-                  class="price-list__action"
-                  [disabled]="!canAssignToBrand(book)"
-                  (click)="assignToBrand(book)"
-                  data-testid="price-book-assign"
-                >
-                  {{ 'catalog.priceList.assignBrand' | t }}
-                </button>
-                <button
-                  type="button"
-                  class="price-list__action price-list__action--activate"
-                  [disabled]="!canActivate(book)"
-                  (click)="activate(book)"
-                  data-testid="price-book-activate"
-                >
-                  {{ 'catalog.priceList.activate' | t }}
-                </button>
-              }
+              <button
+                type="button"
+                class="price-list__action"
+                [disabled]="!canAssign(book)"
+                (click)="openAssignDialog(book)"
+                data-testid="price-book-assign"
+              >
+                {{ 'catalog.priceList.assign' | t }}
+              </button>
+              <button
+                type="button"
+                class="price-list__action price-list__action--activate"
+                [disabled]="!canActivate(book)"
+                (click)="activate(book)"
+                data-testid="price-book-activate"
+              >
+                {{ 'catalog.priceList.activate' | t }}
+              </button>
             </td>
           </tr>
         } @empty {
@@ -111,6 +117,122 @@
             data-testid="price-list-submit"
           >
             {{ 'catalog.priceList.save' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (assigningBook(); as book) {
+    <div class="price-list__modal-backdrop" (click)="closeAssignDialog()">
+      <div
+        class="price-list__modal"
+        (click)="$event.stopPropagation()"
+        data-testid="price-book-assign-dialog"
+      >
+        <h3 class="q-subhead">{{ 'catalog.priceList.assign.title' | t: { name: book.name } }}</h3>
+
+        <div class="price-list__scope-toggle" role="radiogroup">
+          <button
+            type="button"
+            [class.price-list__scope-toggle-btn--active]="assignScope() === 'BRAND'"
+            class="price-list__scope-toggle-btn"
+            (click)="setAssignScope('BRAND')"
+            data-testid="price-book-assign-scope-brand"
+          >
+            {{ 'catalog.priceList.assign.scope.brand' | t }}
+          </button>
+          <button
+            type="button"
+            [class.price-list__scope-toggle-btn--active]="assignScope() === 'LOCATION'"
+            class="price-list__scope-toggle-btn"
+            (click)="setAssignScope('LOCATION')"
+            data-testid="price-book-assign-scope-location"
+          >
+            {{ 'catalog.priceList.assign.scope.location' | t }}
+          </button>
+          <button
+            type="button"
+            [class.price-list__scope-toggle-btn--active]="assignScope() === 'CHANNEL'"
+            class="price-list__scope-toggle-btn"
+            (click)="setAssignScope('CHANNEL')"
+            data-testid="price-book-assign-scope-channel"
+          >
+            {{ 'catalog.priceList.assign.scope.channel' | t }}
+          </button>
+        </div>
+
+        @if (assignScope() === 'LOCATION') {
+          <label class="price-list__field">
+            {{ 'catalog.priceList.assign.target' | t }}
+            <select
+              [value]="assignTargetId()"
+              (change)="assignTargetId.set($any($event.target).value)"
+              data-testid="price-book-assign-target"
+            >
+              <option value="">{{ 'catalog.priceList.assign.selectTarget' | t }}</option>
+              @for (location of locations(); track location.id) {
+                <option [value]="location.id">{{ location.displayName }}</option>
+              }
+            </select>
+          </label>
+        }
+        @if (assignScope() === 'CHANNEL') {
+          <label class="price-list__field">
+            {{ 'catalog.priceList.assign.target' | t }}
+            <select
+              [value]="assignTargetId()"
+              (change)="assignTargetId.set($any($event.target).value)"
+              data-testid="price-book-assign-target"
+            >
+              <option value="">{{ 'catalog.priceList.assign.selectTarget' | t }}</option>
+              @for (channel of channels(); track channel.id) {
+                <option [value]="channel.id">{{ channel.displayName }}</option>
+              }
+            </select>
+          </label>
+        }
+
+        <label class="price-list__field">
+          {{ 'catalog.priceList.assign.priority' | t }}
+          <input
+            type="number"
+            [value]="assignPriority()"
+            (input)="assignPriority.set($any($event.target).valueAsNumber || 0)"
+            data-testid="price-book-assign-priority"
+          />
+        </label>
+        <label class="price-list__field">
+          {{ 'catalog.priceList.assign.validFrom' | t }}
+          <input
+            type="date"
+            [value]="assignValidFrom()"
+            (input)="assignValidFrom.set($any($event.target).value)"
+            data-testid="price-book-assign-valid-from"
+          />
+        </label>
+        <label class="price-list__field">
+          {{ 'catalog.priceList.assign.validUntil' | t }}
+          <input
+            type="date"
+            [value]="assignValidUntil()"
+            (input)="assignValidUntil.set($any($event.target).value)"
+            data-testid="price-book-assign-valid-until"
+          />
+        </label>
+
+        <div class="price-list__modal-actions">
+          <button type="button" (click)="closeAssignDialog()">
+            {{ 'catalog.priceList.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            class="price-list__submit"
+            [disabled]="!canSubmitAssign()"
+            (click)="submitAssign()"
+            data-testid="price-book-assign-submit"
+          >
+            {{ 'catalog.priceList.assign' | t }}
           </button>
         </div>
       </div>

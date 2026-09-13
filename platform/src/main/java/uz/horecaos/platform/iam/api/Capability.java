@@ -292,6 +292,30 @@ public enum Capability {
     PAYMENT_MERCHANT_BINDING_MANAGE("payment.merchant-binding.manage", "payment", "merchant-binding.manage"),
 
     /**
+     * ADR 0038: reading the tenant-scoped {@code payments.payment_methods}
+     * registry — every method a tenant has registered, its localized names,
+     * icon, order, status and acquirer binding.
+     *
+     * <p>Held wherever {@link #CHANNEL_READ} is: the registry is what the
+     * {@code 10.4b} capability matrix's columns come from, so a principal who
+     * can read the matrix must be able to read what the columns mean.
+     */
+    PAYMENT_METHOD_READ("payment-method.read", "payment-method", "read"),
+
+    /**
+     * ADR 0038: registering, renaming, localizing, re-ordering, iconing,
+     * activating or disabling a payment method, and binding one to an acquirer
+     * installation.
+     *
+     * <p>Not folded into {@link #CHANNEL_MANAGE}: a channel decides which
+     * already-registered methods it offers, while this decides which methods
+     * exist for the tenant at all and whose fiscal responsibility backs each
+     * one — the same registry/usage split {@link #INTEGRATION_INSTALLATION_MANAGE}
+     * and {@link #PAYMENT_MERCHANT_BINDING_MANAGE} draw from each other.
+     */
+    PAYMENT_METHOD_MANAGE("payment-method.manage", "payment-method", "manage"),
+
+    /**
      * ADR 0013 and ADR 0038: reading an order's fiscal documents and the evidence
      * on them, including the recorded fact that a cash order has none.
      *
@@ -786,6 +810,22 @@ public enum Capability {
     POS_SYNC_APPLY("pos.sync.apply", "pos", "sync.apply"),
 
     /**
+     * ADR 0012/0026, gap-map row 10.8b: authoring the tenant-facing mapping
+     * pane over {@code integration.provider_entity_mappings} — creating an
+     * operator-typed mapping, retiring one, and bulk auto-match.
+     *
+     * <p>Deliberately not folded into {@link #POS_SYNC_APPLY}: that capability
+     * accepts what a run's own difference report found, under the review
+     * discipline ADR 0012 requires for a menu that might go live wrong during a
+     * lunch rush. This one lets a merchant pair a payment type, a discount, a
+     * courier, a cancellation reason or a channel's POS code by hand, entirely
+     * outside a sync run — a different, lower-stakes act with no run to review
+     * against, and the row's own point is that a merchant can do it without the
+     * platform.
+     */
+    POS_SYNC_MANAGE("pos.sync.manage", "pos", "sync.manage"),
+
+    /**
      * ADR 0011: reading an order's POS export, its attempts, and the candidate
      * orders a recovery read found at the provider.
      *
@@ -816,6 +856,14 @@ public enum Capability {
 
     NOTIFICATION_TEMPLATE_AUTHOR("notification.template.author", "notification", "template.author"),
     NOTIFICATION_TEMPLATE_ACTIVATE("notification.template.activate", "notification", "template.activate"),
+
+    /**
+     * ADR 0058, gap map row {@code 10.9b} (wave P36): which event classes a
+     * bound Telegram chat receives, its topic, and unbinding it. Separate
+     * from {@link #NOTIFICATION_TEMPLATE_AUTHOR} because routing an alert to
+     * a chat is a different act from authoring the wording that alert sends.
+     */
+    NOTIFICATION_ROUTING_MANAGE("notification.routing.manage", "notification", "routing.manage"),
 
     /**
      * ADR 0020: reading a notification's intent, its suppression reason, its

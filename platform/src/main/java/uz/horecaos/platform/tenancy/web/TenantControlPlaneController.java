@@ -14,6 +14,7 @@ import jakarta.validation.constraints.Size;
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,6 +32,7 @@ import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.LocationId;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService;
+import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.BrandLocaleInput;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.BrandView;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.CreateBrandCommand;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.CreateLocationCommand;
@@ -40,6 +42,7 @@ import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.Locati
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.ReviseBrandCommand;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.ReviseLocationCommand;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.TenantView;
+import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.UpdateBrandProfileCommand;
 import uz.horecaos.platform.tenancy.domain.CoordinateSource;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
 import uz.horecaos.platform.web.api.AggregateVersion;
@@ -243,6 +246,43 @@ public class TenantControlPlaneController {
                 .body(brand);
     }
 
+    /**
+     * Corrects a brand's customer-facing profile (Settings 10.1, 10.12):
+     * contact phone, Telegram handle, logo, banner, and which languages its
+     * storefront supports.
+     *
+     * <p>Separate from {@link #reviseBrand} on purpose, the same split {@link
+     * #describeLocation} draws between a location's identity and its place:
+     * this is storefront content edited as often as a menu description, not
+     * the identity two people could race on, so it carries no {@code If-Match}
+     * of its own.
+     */
+    @PutMapping("/{tenantId}/brands/{brandId}/profile")
+    @RequiresCapability(value = Capability.BRAND_WRITE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Correct a brand's customer-facing profile",
+            description = "Contact phone, Telegram handle, logo and banner (as already-uploaded "
+                    + "media asset ids), and the brand's whole supported-locale set with each "
+                    + "locale's own description and which one is default. A whole-set write for "
+                    + "`locales`: the screen's own checkbox grid always knows the full set it wants.")
+    BrandView updateBrandProfile(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @Valid @RequestBody UpdateBrandProfileRequest request) {
+        return service.updateBrandProfile(
+                new TenantId(tenantId),
+                new BrandId(brandId),
+                new UpdateBrandProfileCommand(
+                        request.contactPhone(),
+                        request.telegramHandle(),
+                        request.logoAssetId(),
+                        request.bannerAssetId(),
+                        request.locales().stream()
+                                .map(locale ->
+                                        new BrandLocaleInput(locale.locale(), locale.description(), locale.isDefault()))
+                                .toList()));
+    }
+
     @DeleteMapping("/{tenantId}/brands/{brandId}")
     @RequiresCapability(value = Capability.BRAND_WRITE, scope = ScopeType.BRAND, mutating = true)
     @Operation(
@@ -309,7 +349,8 @@ public class TenantControlPlaneController {
                         request.contactPhone(),
                         request.latitude(),
                         request.longitude(),
-                        request.coordinateSource()));
+                        request.coordinateSource(),
+                        request.clearLandmark()));
     }
 
     @PostMapping("/{tenantId}/brands/{brandId}/locations/{locationId}/activate")
@@ -372,10 +413,18 @@ public class TenantControlPlaneController {
     }
 
     /**
-     * @param landmark ориентир
+     * @param landmark ориентир. Omitted (or blank) leaves the stored landmark
+     *                 untouched — set {@code clearLandmark} to actually clear
+     *                 it, the same way {@code coordinateSource=NOT_GEOCODED}
+     *                 is the explicit signal to clear the point rather than
+     *                 leave it alone
      * @param coordinateSource omit to let the platform infer it: a supplied point
      *                         becomes a merchant pin, and no point stays
      *                         {@code NOT_GEOCODED} and on the backfill's work list
+     * @param clearLandmark true to remove a previously-set landmark. An omitted
+     *                       JSON key deserializes to {@code false}, which is
+     *                       exactly "leave the landmark as it is" — the default
+     *                       every write silent about this field already needs
      */
     record DescribeLocationRequest(
             @Size(max = 200) String addressLine,
@@ -392,7 +441,9 @@ public class TenantControlPlaneController {
             @DecimalMin("-180.0") @DecimalMax("180.0") @Schema(example = "69.240562")
             Double longitude,
 
-            CoordinateSource coordinateSource) {}
+            CoordinateSource coordinateSource,
+
+            boolean clearLandmark) {}
 
     record CreateTenantRequest(
             @NotBlank @Size(max = 63) @Pattern(regexp = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
@@ -435,6 +486,31 @@ public class TenantControlPlaneController {
             String slug,
 
             @NotBlank @Size(max = 200) String displayName) {}
+
+    /**
+     * @param logoAssetId a {@code media.assets} row already uploaded and
+     *                     verified with {@code owner_scope = 'BRAND'} for this
+     *                     brand; {@code null} clears the logo
+     * @param locales      the brand's whole supported-locale set, replacing it —
+     *                     empty clears it back to unconfigured
+     */
+    record UpdateBrandProfileRequest(
+            @Size(max = 32) @Pattern(regexp = "\\+[1-9][0-9]{7,14}") @Schema(example = "+998712000000") @Nullable
+            String contactPhone,
+
+            @Size(max = 64) @Pattern(regexp = "[A-Za-z][A-Za-z0-9_]{4,31}") @Nullable
+            String telegramHandle,
+
+            @Nullable UUID logoAssetId,
+            @Nullable UUID bannerAssetId,
+
+            @NotNull @Size(max = 8) List<@Valid BrandLocaleRequest> locales) {}
+
+    /** @param locale one of {@code uz.horecaos.platform.tenancy.domain.BrandProfile#KNOWN_LOCALES} */
+    record BrandLocaleRequest(
+            @NotBlank @Size(max = 16) String locale,
+            @Size(max = 2000) @Nullable String description,
+            boolean isDefault) {}
 
     /** The same rules as creation; which fields may actually change depends on the location's status. */
     record ReviseLocationRequest(

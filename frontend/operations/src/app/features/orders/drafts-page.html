@@ -12,13 +12,81 @@
       </div>
     }
 
+    <div class="drafts__filters" role="group" [attr.aria-label]="'orders.drafts.filters.label' | t">
+      <label class="drafts__filter-field">
+        <span class="q-caption">{{ 'orders.drafts.filters.from' | t }}</span>
+        <input
+          type="date"
+          class="drafts__filter-input"
+          [value]="fromDate()"
+          (change)="setFromDate($any($event.target).value)"
+          data-testid="drafts-from"
+        />
+      </label>
+      <label class="drafts__filter-field">
+        <span class="q-caption">{{ 'orders.drafts.filters.to' | t }}</span>
+        <input
+          type="date"
+          class="drafts__filter-input"
+          [value]="toDate()"
+          (change)="setToDate($any($event.target).value)"
+          data-testid="drafts-to"
+        />
+      </label>
+      <button
+        type="button"
+        class="drafts__apply"
+        (click)="applyPeriod()"
+        data-testid="drafts-apply-period"
+      >
+        {{ 'orders.drafts.filters.apply' | t }}
+      </button>
+      <label class="drafts__filter-field">
+        <span class="q-caption">{{ 'orders.drafts.filters.channel' | t }}</span>
+        <select
+          class="drafts__filter-select"
+          [value]="channelFilter()"
+          (change)="onChannelFilterChange($any($event.target).value)"
+          data-testid="drafts-channel-filter"
+        >
+          <option value="">{{ 'orders.drafts.filters.channelAll' | t }}</option>
+          @for (channel of channels(); track channel.id) {
+            <option [value]="channel.id">{{ channel.displayName }}</option>
+          }
+        </select>
+      </label>
+      <label class="drafts__filter-field">
+        <span class="q-caption">{{ 'orders.drafts.filters.owner' | t }}</span>
+        <select
+          class="drafts__filter-select"
+          [value]="ownerTypeFilter()"
+          (change)="onOwnerTypeFilterChange($any($event.target).value)"
+          data-testid="drafts-owner-filter"
+        >
+          <option value="ALL">{{ 'orders.drafts.filters.ownerAll' | t }}</option>
+          <option value="ACCOUNT">{{ 'orders.drafts.owner.account' | t }}</option>
+          <option value="GUEST">{{ 'orders.drafts.owner.guest' | t }}</option>
+        </select>
+      </label>
+    </div>
+
     <section class="drafts__breakdown" data-testid="drafts-breakdown">
       <h2 class="q-subhead">{{ 'orders.drafts.breakdown.title' | t }}</h2>
       <div class="drafts__bars">
         @for (slice of abandonmentByChannel(); track slice.channelId) {
-          <div class="drafts__bar-row">
+          <div class="drafts__bar-row" data-testid="drafts-breakdown-row">
             <span class="drafts__bar-label">{{ slice.channelName }}</span>
-            <span class="drafts__bar-count q-tnum">{{ slice.count }}</span>
+            <span class="drafts__bar-rate q-tnum" data-testid="drafts-breakdown-rate">
+              {{
+                'orders.drafts.breakdown.rate'
+                  | t
+                    : {
+                        rate: slice.ratePercent,
+                        abandoned: slice.abandonedCount,
+                        total: slice.totalCount,
+                      }
+              }}
+            </span>
           </div>
         } @empty {
           <p class="q-body-sm">{{ 'orders.drafts.breakdown.empty' | t }}</p>
@@ -32,20 +100,24 @@
           <th>{{ 'orders.drafts.column.cart' | t }}</th>
           <th>{{ 'orders.drafts.column.createdAt' | t }}</th>
           <th>{{ 'orders.drafts.column.channel' | t }}</th>
+          <th>{{ 'orders.drafts.column.location' | t }}</th>
           <th>{{ 'orders.drafts.column.owner' | t }}</th>
           <th class="drafts__num-col">{{ 'orders.drafts.column.lines' | t }}</th>
+          <th>{{ 'orders.drafts.column.expiresAt' | t }}</th>
           <th>{{ 'orders.drafts.column.status' | t }}</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
-        @for (draft of drafts(); track draft.cartId) {
+        @for (draft of visibleDrafts(); track draft.cartId) {
           <tr data-testid="draft-row">
             <td class="q-tnum">{{ draft.cartId.slice(0, 8) }}</td>
             <td class="q-tnum">{{ timeLabel(draft.createdAt) }}</td>
             <td>{{ channelName(draft.channelId) }}</td>
+            <td>{{ locationLabel(draft.locationId) }}</td>
             <td>{{ ownerLabel(draft) }}</td>
             <td class="drafts__num-col q-tnum">{{ draft.lineCount }}</td>
+            <td class="q-tnum">{{ expiresLabel(draft.expiresAt) }}</td>
             <td>
               <span class="status-badge">{{ statusLabel(draft.status) }}</span>
             </td>
@@ -62,7 +134,7 @@
           </tr>
         } @empty {
           <tr>
-            <td colspan="7" class="drafts__empty" data-testid="drafts-empty">
+            <td colspan="9" class="drafts__empty" data-testid="drafts-empty">
               {{ 'orders.drafts.empty' | t }}
             </td>
           </tr>

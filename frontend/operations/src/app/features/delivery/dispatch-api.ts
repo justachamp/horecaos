@@ -47,6 +47,21 @@ export interface DispatchResponse {
 }
 
 /**
+ * Mirrors `DispatchController.ExceptionResponse`. Why a `MANUAL_ACTION_REQUIRED`
+ * plan needs a human — no provider, an uncertain booking outcome, a promise
+ * sourcing could not meet. Never a customer name, address or phone (same
+ * reason `PlanQueueResponse` carries none — see this file's own doc).
+ */
+export interface ExceptionResponse {
+  readonly exceptionId: string;
+  readonly reasonCode: string;
+  readonly severity: string;
+  readonly status: string;
+  readonly detail?: string | null;
+  readonly raisedAt: string;
+}
+
+/**
  * The dispatch board (operations §3.1) — `DispatchController` (ADR 0014,
  * wave 30). The fleet rail reuses {@link CouriersApi.roster} rather than a
  * second endpoint — see that class's own doc.
@@ -92,5 +107,13 @@ export class DispatchApi {
         command({ expectedShipmentVersion, reasonCode }),
       ),
     );
+  }
+
+  /** Built by `DispatchController` and never called before this wave (operations gap map, row `3.1`). */
+  async exceptions(scope: LocationScope, planId: string): Promise<readonly ExceptionResponse[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly ExceptionResponse[]>(operationsPaths.dispatchExceptions(scope, planId)),
+    );
+    return result.value ?? [];
   }
 }

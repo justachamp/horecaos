@@ -5,7 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { BrandScope } from '../../../core/api/catalog-paths';
 import { CurrentBrand } from '../../../core/auth/current-brand';
 import { I18n } from '../../../core/i18n/i18n';
-import { PromoCodeView, PromoCodesApi } from './promo-codes-api';
+import { LocationsApi } from '../../settings/locations/locations-api';
+import { ChannelView, SalesChannelsApi } from '../../settings/sales-channels/sales-channels-api';
+import { PromoCodeRedemption, PromoCodeView, PromoCodesApi } from './promo-codes-api';
 import { PromoCodesPage } from './promo-codes-page';
 
 const BRAND_SCOPE: BrandScope = { tenantId: 't1', brandId: 'b1' };
@@ -49,9 +51,26 @@ function fakeApi(overrides: Partial<PromoCodesApi> = {}): Partial<PromoCodesApi>
     draft: vi.fn(),
     activate: vi.fn(),
     retire: vi.fn(),
+    listRedemptions: vi.fn().mockResolvedValue([]),
     ...overrides,
   };
 }
+
+const CHANNEL: ChannelView = {
+  id: 'channel-1',
+  code: 'WEBSITE',
+  systemType: 'WEB',
+  displayName: 'Website',
+  status: 'ACTIVE',
+  pricePlaneChannelId: null,
+  externallyPriced: false,
+  guestOrdersAllowed: true,
+  providerInstallationId: null,
+  version: 1,
+  locationCount: 0,
+  enabledPaymentMethodCount: 0,
+  enabledFulfillmentModes: [],
+};
 
 describe('PromoCodesPage', () => {
   let fixture: ComponentFixture<PromoCodesPage>;
@@ -59,6 +78,7 @@ describe('PromoCodesPage', () => {
   async function render(
     api: Partial<PromoCodesApi>,
     scope: BrandScope | null = BRAND_SCOPE,
+    channels: readonly ChannelView[] = [],
   ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [PromoCodesPage],
@@ -72,6 +92,8 @@ describe('PromoCodesPage', () => {
           },
         },
         { provide: PromoCodesApi, useValue: api },
+        { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
+        { provide: SalesChannelsApi, useValue: { list: vi.fn().mockResolvedValue(channels) } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -266,5 +288,143 @@ describe('PromoCodesPage', () => {
 
     expect(retire).toHaveBeenCalledWith(BRAND_SCOPE, 'coupon-2');
     expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  describe('validity window and scoping — 6.2', () => {
+    // The regression this wave fixes: the draft form had no field for any of
+    // these four, so every code it created ran forever across every channel
+    // and branch even though the request always accepted them.
+
+    it('sends validFrom, validUntil, channels and locationIds when the operator sets them', async () => {
+      const created: PromoCodeView = { ...SUSPENDED_CODE, plaintextCode: 'SCOPED10' };
+      const draft = vi.fn().mockResolvedValue(created);
+      const list = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([SUSPENDED_CODE]);
+      await render(fakeApi({ draft, list }), BRAND_SCOPE, [CHANNEL]);
+
+      const page = fixture.componentInstance;
+      page['openForm']();
+      page['formName'].set('Weekend only');
+      page['formCode'].set('SCOPED10');
+      page['formValidFrom'].set('2026-10-01');
+      page['formHasValidUntil'].set(true);
+      page['formValidUntil'].set('2026-10-31');
+      page['toggleChannel']('WEBSITE');
+      expect(page['canSubmit']()).toBe(true);
+
+      await page['submit']();
+
+      expect(draft).toHaveBeenCalledWith(
+        BRAND_SCOPE,
+        expect.objectContaining({
+          validFrom: new Date('2026-10-01').toISOString(),
+          validUntil: new Date('2026-10-31T23:59:59.999').toISOString(),
+          channels: ['WEBSITE'],
+        }),
+      );
+    });
+
+    it('sends no restriction at all when every field is left at its default', async () => {
+      const draft = vi.fn().mockResolvedValue({ ...SUSPENDED_CODE, plaintextCode: 'OPEN1234' });
+      await render(fakeApi({ draft }));
+
+      const page = fixture.componentInstance;
+      page['openForm']();
+      page['formName'].set('Open code');
+      page['formCode'].set('OPEN1234');
+      await page['submit']();
+
+      expect(draft).toHaveBeenCalledWith(
+        BRAND_SCOPE,
+        expect.objectContaining({
+          validFrom: null,
+          validUntil: null,
+          channels: [],
+          locationIds: [],
+        }),
+      );
+    });
+
+    it('refuses to submit when the expiry date is not after the start date', async () => {
+      await render(fakeApi());
+      const page = fixture.componentInstance;
+      page['openForm']();
+      page['formName'].set('Backwards dates');
+      page['formCode'].set('BACKWARD1');
+      page['formValidFrom'].set('2026-10-10');
+      page['formHasValidUntil'].set(true);
+      page['formValidUntil'].set('2026-10-01');
+
+      expect(page['canSubmit']()).toBe(false);
+    });
+
+    it('renders an expiry column with an em dash for an open-ended code', async () => {
+      await render(fakeApi({ list: vi.fn().mockResolvedValue([SUSPENDED_CODE]) }));
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="promo-codes-expiry"]')?.textContent?.trim()).toBe(
+        '—',
+      );
+    });
+
+    it('renders a formatted expiry date and flags an already-expired code', async () => {
+      const expired: PromoCodeView = { ...SUSPENDED_CODE, validUntil: '2020-01-01T00:00:00Z' };
+      await render(fakeApi({ list: vi.fn().mockResolvedValue([expired]) }));
+      const host = fixture.nativeElement as HTMLElement;
+      const cell = host.querySelector('[data-testid="promo-codes-expiry"]');
+      expect(cell?.textContent?.trim()).not.toBe('—');
+      expect(cell?.classList.contains('promo-codes__expiry--expired')).toBe(true);
+    });
+  });
+
+  describe('the redemption ledger — 6.2', () => {
+    const REDEMPTION: PromoCodeRedemption = {
+      redemptionId: 'redemption-1',
+      customerAccountId: 'account-1',
+      orderId: 'order-1',
+      status: 'REDEEMED',
+      amountMinor: 5_000,
+      currency: 'UZS',
+      reservedAt: '2026-09-05T10:00:00Z',
+      redeemedAt: '2026-09-05T10:00:05Z',
+      releasedAt: null,
+    };
+
+    it('opens the ledger for a code and renders who redeemed it, on which order, and when', async () => {
+      const listRedemptions = vi.fn().mockResolvedValue([REDEMPTION]);
+      await render(fakeApi({ list: vi.fn().mockResolvedValue([ACTIVE_CODE]), listRedemptions }));
+      const host = fixture.nativeElement as HTMLElement;
+
+      (
+        host.querySelector('[data-testid="promo-codes-redeemed-count"]') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(listRedemptions).toHaveBeenCalledWith(BRAND_SCOPE, 'coupon-2');
+      const dialog = host.querySelector('[data-testid="promo-codes-redemptions"]');
+      expect(dialog).not.toBeNull();
+      expect(dialog?.textContent).toContain('account-1');
+      expect(dialog?.textContent).toContain('order-1');
+    });
+
+    it('shows an honest empty state rather than a blank table when nobody has redeemed a code yet', async () => {
+      await render(fakeApi({ list: vi.fn().mockResolvedValue([SUSPENDED_CODE]) }));
+      const page = fixture.componentInstance;
+      await page['openRedemptions'](SUSPENDED_CODE);
+      fixture.detectChanges();
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="promo-codes-redemptions-empty"]',
+        ),
+      ).not.toBeNull();
+    });
+
+    it('disables the redeemed-count link when a code has never been redeemed', async () => {
+      await render(fakeApi({ list: vi.fn().mockResolvedValue([SUSPENDED_CODE]) }));
+      const button = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="promo-codes-redeemed-count"]',
+      ) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+    });
   });
 });

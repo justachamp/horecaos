@@ -689,8 +689,8 @@ class CampaignBroadcastIntegrationTest {
             NotificationTemplateService templates, UUID templateId, String body, Map<String, String> schema) {
         Map<MessageLocale, Wording> wordings = new LinkedHashMap<>();
         MessageLocale.required().forEach(locale -> wordings.put(locale, new Wording(null, body)));
-        int versionNumber = templates.addVersion(TENANT, templateId, wordings, schema);
-        templates.activate(TENANT, templateId, versionNumber, "test-approver");
+        int versionNumber = templates.addVersion(TENANT, BRAND, templateId, wordings, schema);
+        templates.activate(TENANT, BRAND, templateId, versionNumber, "test-approver");
     }
 
     private void subscribeOperationsChat(TelegramBindingStore bindingStore) {

@@ -25,6 +25,7 @@ import uz.horecaos.platform.catalog.application.CatalogQueryService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableType;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.media.api.MediaAssetId;
@@ -213,7 +214,8 @@ class CatalogQueryServiceTests {
         }
 
         int pageSize = 2;
-        List<CatalogQueryService.ProductSummary> firstPage = query.products(TENANT, BRAND, catalogId, null, pageSize);
+        List<CatalogQueryService.ProductSummary> firstPage =
+                query.products(TENANT, BRAND, catalogId, null, pageSize, null, null);
         assertThat(firstPage).hasSize(2);
         // The controller's own short-page-is-the-end rule (mirroring
         // variantsAtLocation): a full page carries a cursor.
@@ -223,7 +225,7 @@ class CatalogQueryServiceTests {
         assertThat(firstCursor).isNotNull();
 
         List<CatalogQueryService.ProductSummary> secondPage =
-                query.products(TENANT, BRAND, catalogId, UUID.fromString(firstCursor), pageSize);
+                query.products(TENANT, BRAND, catalogId, UUID.fromString(firstCursor), pageSize, null, null);
         assertThat(secondPage).hasSize(1);
         String secondCursor = secondPage.size() < pageSize
                 ? null
@@ -263,7 +265,7 @@ class CatalogQueryServiceTests {
         var undressed = authoring.createProduct(
                 TENANT, BRAND, catalogId, "SALAD", "Salat", null, LOCALE, "SKU-SALAD", "PIECE", UNCLASSIFIED, ACTOR);
 
-        List<CatalogQueryService.ProductSummary> page = query.products(TENANT, BRAND, catalogId, null, 50);
+        List<CatalogQueryService.ProductSummary> page = query.products(TENANT, BRAND, catalogId, null, 50, null, null);
 
         assertThat(page)
                 .filteredOn(p -> p.productId().equals(plov.productId()))
@@ -290,8 +292,97 @@ class CatalogQueryServiceTests {
         authoring.createProduct(
                 TENANT, BRAND, catalogId, "OURS", "Ours", null, LOCALE, "SKU-OURS", "PIECE", UNCLASSIFIED, ACTOR);
 
-        assertThat(query.products(OTHER_TENANT, OTHER_BRAND, catalogId, null, 50))
+        assertThat(query.products(OTHER_TENANT, OTHER_BRAND, catalogId, null, 50, null, null))
                 .isEmpty();
+    }
+
+    @Test
+    @DisplayName("search matches a product's code or its name in any locale, not only the default")
+    void productsSearchMatchesCodeOrNameInAnyLocale() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.translate(TENANT, BRAND, EntityType.PRODUCT, plov.productId(), "ru", "Плов", null);
+        authoring.createProduct(
+                TENANT, BRAND, catalogId, "SALAD", "Salat", null, LOCALE, "SKU-SALAD", "PIECE", UNCLASSIFIED, ACTOR);
+
+        // By code, case-insensitively.
+        assertThat(query.products(TENANT, BRAND, catalogId, null, 50, "plov", null))
+                .extracting(CatalogQueryService.ProductSummary::productId)
+                .containsExactly(plov.productId());
+
+        // By a locale that is not the brand's configured default (uz).
+        assertThat(query.products(TENANT, BRAND, catalogId, null, 50, "Плов", null))
+                .extracting(CatalogQueryService.ProductSummary::productId)
+                .containsExactly(plov.productId());
+
+        // No match at all.
+        assertThat(query.products(TENANT, BRAND, catalogId, null, 50, "burger", null))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the status filter narrows the page to one status tab, applied in SQL rather than after loading it")
+    void productsStatusFilterNarrowsToOneTab() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        var salad = authoring.createProduct(
+                TENANT, BRAND, catalogId, "SALAD", "Salat", null, LOCALE, "SKU-SALAD", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setProductStatus(TENANT, BRAND, salad.productId(), Status.ARCHIVED, "operator-1");
+
+        assertThat(query.products(TENANT, BRAND, catalogId, null, 50, null, "ACTIVE"))
+                .extracting(CatalogQueryService.ProductSummary::productId)
+                .containsExactly(plov.productId());
+        assertThat(query.products(TENANT, BRAND, catalogId, null, 50, null, "ARCHIVED"))
+                .extracting(CatalogQueryService.ProductSummary::productId)
+                .containsExactly(salad.productId());
+    }
+
+    @Test
+    @DisplayName(
+            "NO_MXIK is product-level — any classified variant excludes the whole product — never the node-level count")
+    void productsNoMxikStatusIsProductLevelNotNodeLevel() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        var classified = authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "PLOV",
+                "Osh",
+                null,
+                LOCALE,
+                "SKU-PLOV",
+                "PIECE",
+                FiscalClassification.of("10101001001000000", "1", 796, "Osh"),
+                ACTOR);
+        var unclassified = authoring.createProduct(
+                TENANT, BRAND, catalogId, "SALAD", "Salat", null, LOCALE, "SKU-SALAD", "PIECE", UNCLASSIFIED, ACTOR);
+        // A product with one classified and one unclassified variant is still
+        // "has MXIK" at the product level — the trap this row's own gap-map
+        // entry names is exactly this "any variant" question, not a count of
+        // how many of its nodes still need a code.
+        var partiallyClassified = authoring.createProduct(
+                TENANT, BRAND, catalogId, "SOUP", "Sho'rva", null, LOCALE, "SKU-SOUP", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.addVariant(
+                TENANT,
+                BRAND,
+                partiallyClassified.productId(),
+                "SKU-SOUP-L",
+                "PIECE",
+                "Katta",
+                LOCALE,
+                1,
+                FiscalClassification.of("10101001001000000", "1", 796, "Sho'rva katta"),
+                ACTOR);
+
+        assertThat(query.products(TENANT, BRAND, catalogId, null, 50, null, "NO_MXIK"))
+                .extracting(CatalogQueryService.ProductSummary::productId)
+                .containsExactly(unclassified.productId());
+        assertThat(query.products(TENANT, BRAND, catalogId, null, 50, null, null))
+                .extracting(CatalogQueryService.ProductSummary::productId)
+                .containsExactlyInAnyOrder(
+                        classified.productId(), unclassified.productId(), partiallyClassified.productId());
     }
 
     // ---------------------------------------------------------- product detail

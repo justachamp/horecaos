@@ -55,9 +55,16 @@ export interface RoleDescriptor {
 
 /** Mirrors `TelegramStaffLinkService.StaffLinkView`. */
 export interface TelegramStaffLinkView {
+  readonly id: string;
   readonly principalSubject: string;
   readonly telegramUserId: number;
   readonly linkedAt: string;
+}
+
+/** Mirrors `TelegramStaffLinkCodeController.LinkCodeResponse`. */
+export interface TelegramLinkCodeResponse {
+  readonly code: string;
+  readonly command: string;
 }
 
 /** Mirrors `TenantControlPlaneService.BrandView`, the fields this screen needs. */
@@ -147,6 +154,36 @@ export class StaffApi {
       this.api.get<readonly TelegramStaffLinkView[]>(staffPaths.telegramStaffLinks(tenantId)),
     );
     return result.value ?? [];
+  }
+
+  /**
+   * `TelegramStaffLinkCodeController.issue` — the self-service `/link <code>`
+   * card (staff-and-access.md §10, operations-gap-map.md `9/X.1`). Mints a
+   * code for the caller's own principal; there is no "issue for someone else".
+   */
+  async issueTelegramLinkCode(tenantId: string): Promise<TelegramLinkCodeResponse> {
+    return firstValueFrom(
+      this.api.post<Record<string, never>, TelegramLinkCodeResponse>(
+        staffPaths.telegramStaffLinkCodes(tenantId),
+        command({}),
+      ),
+    );
+  }
+
+  /** `TelegramStaffLinkCodeController.unlink` — an administrator's «Отвязать» on the Безопасность tab. */
+  async revokeTelegramLink(
+    tenantId: string,
+    linkId: string,
+    reason: string,
+  ): Promise<{ changed: boolean; outcome: string }> {
+    const response = await firstValueFrom(
+      this.api.send<ReasonRequest, { changed: boolean; outcome: string }>(
+        'DELETE',
+        staffPaths.telegramStaffLink(tenantId, linkId),
+        command({ reason }),
+      ),
+    );
+    return response.body as { changed: boolean; outcome: string };
   }
 
   /**

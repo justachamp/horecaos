@@ -10,6 +10,8 @@ import { ApiClient } from '../../core/api/api-client';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
+import { PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
+import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { OrderActionsApi } from './order-actions-api';
 import { OrderCounts, zeroTabCounts } from './order-counts';
 import { OrderQueue } from './order-queue';
@@ -71,7 +73,11 @@ const FRAME_MS = 20;
  * (`mockReturnValueOnce`, etc.) for a second, unrelated request every
  * refresh, which is exactly the kind of cross-talk this file's own docstring
  * says it exists to avoid. `OrderCounts`'s own endpoint-consuming behaviour
- * is `order-counts.spec.ts`'s job.
+ * is `order-counts.spec.ts`'s job. `LatenessPolicyApi` (wave P06) is stubbed
+ * for the identical reason: `start()` resolves it once via its own
+ * `ApiClient.get` call, which would otherwise be the extra, unrelated
+ * request every `getOrders`-call-count assertion in this file did not
+ * budget for.
  */
 function configure(getOrders: ReturnType<typeof vi.fn>): void {
   TestBed.configureTestingModule({
@@ -88,6 +94,10 @@ function configure(getOrders: ReturnType<typeof vi.fn>): void {
       { provide: ApiClient, useValue: { get: getOrders } },
       { provide: OrderCounts, useValue: { forOrders: () => Promise.resolve(zeroTabCounts()) } },
       { provide: RejectReasonsApi, useValue: stubRejectReasons() },
+      {
+        provide: LatenessPolicyApi,
+        useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+      },
     ],
   });
   TestBed.inject(I18n).setLocale('en');
@@ -444,6 +454,10 @@ function configureWithActions(
       { provide: OrderCounts, useValue: { forOrders: () => Promise.resolve(zeroTabCounts()) } },
       { provide: OrderActionsApi, useValue: actionsApi },
       { provide: RejectReasonsApi, useValue: rejectReasonsApi },
+      {
+        provide: LatenessPolicyApi,
+        useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+      },
     ],
   });
   TestBed.inject(I18n).setLocale('en');

@@ -71,6 +71,16 @@ export const operationsPaths = {
     return `${this.orders(scope)}/drafts`;
   },
 
+  /**
+   * IA 1.3a's phone lookup (orders.md §5.3) — a returning caller, by phone,
+   * in the body, never a query string. `Idempotent` server-side, but a fresh
+   * `Idempotency-Key` is minted per keystroke-settle regardless, since each
+   * lookup is its own audited read.
+   */
+  orderCustomerLookups(scope: LocationScope): string {
+    return `${this.orders(scope)}/customer-lookups`;
+  },
+
   /** One order with its snapshotted lines. Returns an `ETag`. */
   order(scope: LocationScope, orderId: string): string {
     return `${this.orders(scope)}/${encodeURIComponent(orderId)}`;
@@ -98,6 +108,24 @@ export const operationsPaths = {
     return `${this.order(scope, orderId)}/timeline`;
   },
 
+  /**
+   * Every revision of this order (ADR 0039, wave P09/gap map `1.2p`) — the
+   * append-only chain `orderQuery.revisions` already serves and no screen has
+   * read before now.
+   */
+  orderRevisions(scope: LocationScope, orderId: string): string {
+    return `${this.order(scope, orderId)}/revisions`;
+  },
+
+  /**
+   * Complete an order, naming how (orders.md §4.6, wave P09/gap map `1.2j`).
+   * Mutation: `If-Match` required, `reasonId` optional in the body — omitting
+   * it records the reason the fulfilment mode implies.
+   */
+  orderCompletion(scope: LocationScope, orderId: string): string {
+    return `${this.order(scope, orderId)}/completion`;
+  },
+
   /** Approve or reject an order awaiting a decision. Mutation: key required. */
   orderApprovalDecisions(scope: LocationScope, orderId: string): string {
     return `${this.order(scope, orderId)}/approval-decisions`;
@@ -114,6 +142,17 @@ export const operationsPaths = {
   /** Move a confirmed order along the kitchen path. Mutation: key and `If-Match`. */
   orderStateActions(scope: LocationScope, orderId: string): string {
     return `${this.order(scope, orderId)}/state-actions`;
+  },
+
+  /**
+   * The resolved `ordering.lateness` policy (ADR 0030, orders.md §2.7, wave
+   * P06) — the one source the order board and the kitchen ticket queue both
+   * read instead of each hard-coding its own thresholds. On the ADR 0031
+   * prefix, like {@link orderRejectReasons}'s sibling reads that were born
+   * after the split.
+   */
+  orderLatenessPolicy(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/orders/lateness-policy`;
   },
 
   /** Cancel an order that has not been confirmed. Mutation: key and `If-Match`. */
@@ -297,6 +336,11 @@ export const operationsPaths = {
     return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/plans/${encodeURIComponent(planId)}/unassign`;
   },
 
+  /** Why a `MANUAL_ACTION_REQUIRED` plan needs a human (§3.1). Read, same capability as {@link operationsPaths.dispatchQueue}. */
+  dispatchExceptions(scope: LocationScope, planId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/plans/${encodeURIComponent(planId)}/exceptions`;
+  },
+
   /**
    * The dispatcher's live map (ADR 0045, `OperationsCourierPositionController`,
    * IA 3.2) — on the ADR 0031 prefix, but under its own `operations/couriers`
@@ -348,6 +392,17 @@ export const operationsPaths = {
   voiceCallLog(scope: LocationScope): string {
     return `${OPERATIONS}${tenantBrandLocation(scope)}/voice/call-log`;
   },
+
+  /**
+   * T12 (7.5b): offered/answered/missed/transferred and talk seconds, by
+   * hour and operator, for one business date (`CallStatsController`).
+   * Written by the same day-close pipeline every other ADR 0043 fact uses —
+   * empty until the day closes, never live.
+   */
+  voiceCallStats(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/voice/call-stats`;
+  },
+
   /**
    * The CRM grid: `CustomerController`, tenant-scoped like `orders` — never
    * moved onto the ADR 0031 prefix, so this sits on {@link LEGACY_TENANT_PREFIX}
@@ -366,6 +421,21 @@ export const operationsPaths = {
   /** A filtered export, decrypted, behind one audited egress event (query params `status`, `query`, `purpose`). */
   customersExport(scope: LocationScope): string {
     return `${this.customers(scope)}/export`;
+  },
+
+  /** Row X.13/5.1b: queue a customer CSV import (`CustomerImportController`). */
+  customerImports(scope: LocationScope): string {
+    return `${this.customers(scope)}/imports`;
+  },
+
+  /** One import run's status and progress. */
+  customerImport(scope: LocationScope, runId: string): string {
+    return `${this.customerImports(scope)}/${encodeURIComponent(runId)}`;
+  },
+
+  /** One import run's per-row report. */
+  customerImportRows(scope: LocationScope, runId: string): string {
+    return `${this.customerImport(scope, runId)}/rows`;
   },
 
   /** One customer's profile. */
@@ -678,6 +748,31 @@ export const mediaPaths = {
   /** A short-lived signed URL, only for an `AVAILABLE` asset. */
   downloadUrl(tenantId: string, assetId: string): string {
     return `${this.asset(tenantId, assetId)}/download-url`;
+  },
+} as const;
+
+/**
+ * Handover verification (ADR 0040, `MarketplaceOperationsController`) — one
+ * of the surfaces already on the ADR 0031 prefix, tenant-scoped only (the
+ * challenge table has no location column of its own; the order it belongs to
+ * does). Kept apart from {@link operationsPaths} for the same reason {@link
+ * mediaPaths} is: every call here takes a bare `tenantId`, not a full {@link
+ * LocationScope} order-scoped call — wave P09/gap map `1.2m`.
+ */
+export const marketplacePaths = {
+  /** The handover challenge's current state — never the expected value. */
+  handoverChallenge(scope: LocationScope, orderId: string): string {
+    return `${OPERATIONS}${tenant(scope)}/marketplace/orders/${encodeURIComponent(orderId)}/handover-challenge`;
+  },
+
+  /** Consumes one verification attempt, whether or not the code matches. */
+  handoverVerifications(scope: LocationScope, orderId: string): string {
+    return `${OPERATIONS}${tenant(scope)}/marketplace/orders/${encodeURIComponent(orderId)}/handover-verifications`;
+  },
+
+  /** The audited supervisor override, past exhaustion as well as before it. */
+  handoverBypasses(scope: LocationScope, orderId: string): string {
+    return `${OPERATIONS}${tenant(scope)}/marketplace/orders/${encodeURIComponent(orderId)}/handover-bypasses`;
   },
 } as const;
 

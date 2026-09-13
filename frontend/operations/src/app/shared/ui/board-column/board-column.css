@@ -1,0 +1,82 @@
+:host {
+  display: block;
+  flex: 0 0 260px;
+  height: 100%;
+}
+
+.q-board-column {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-surface-1);
+}
+
+.q-board-column__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+}
+
+.q-board-column__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.q-board-column__load {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--q-radius);
+  background: var(--q-surface-2);
+  color: var(--q-ink-muted);
+}
+
+.q-board-column__load--full {
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.q-board-column__load--over {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.q-board-column__body {
+  flex: 1;
+  min-height: 48px;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.q-board-column__body.cdk-drop-list-dragging {
+  background: var(--q-info-tint);
+}
+
+.q-board-column__body.cdk-drop-list-receiving {
+  outline: 2px dashed var(--q-primary);
+  outline-offset: -2px;
+}
+
+.q-board-column--ineligible {
+  opacity: 0.6;
+}
+
+.q-board-column--ineligible .q-board-column__header {
+  background: var(--q-error-tint);
+}
+
+.q-board-column__ineligible {
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 0.85em;
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+}

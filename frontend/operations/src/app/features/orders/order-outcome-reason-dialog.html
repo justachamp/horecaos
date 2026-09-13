@@ -1,0 +1,62 @@
+<div class="outcome-dialog__backdrop" data-testid="order-outcome-reason-dialog">
+  <div class="outcome-dialog" role="dialog" aria-modal="true" [attr.aria-label]="titleKey() | t">
+    <h2 class="q-emphasis outcome-dialog__title">{{ titleKey() | t }}</h2>
+
+    <fieldset class="outcome-dialog__field" [attr.aria-invalid]="reasonMissing() ? 'true' : null">
+      <legend class="q-body-sm">{{ 'orders.dialog.reasonCode.label' | t }}</legend>
+      @for (reason of orderedReasons(); track reason.id) {
+        <label class="outcome-dialog__option">
+          <input
+            type="radio"
+            name="outcome-reason"
+            [value]="reason.id"
+            [checked]="selectedId() === reason.id"
+            (change)="select(reason.id)"
+            [attr.data-testid]="'order-outcome-reason-option-' + reason.id"
+          />
+          <span>{{ label(reason) }}</span>
+        </label>
+        @if (showConsequences() && selectedId() === reason.id) {
+          <ul class="outcome-dialog__consequences" data-testid="order-outcome-reason-consequences">
+            @for (line of consequenceLines(reason); track line) {
+              <li class="q-caption">{{ line }}</li>
+            }
+          </ul>
+        }
+      }
+      @if (reasonMissing()) {
+        <span class="q-caption outcome-dialog__error" data-testid="order-outcome-reason-required">{{
+          'orders.dialog.reasonRequired' | t
+        }}</span>
+      }
+    </fieldset>
+
+    @if (noteEnabled()) {
+      <label class="outcome-dialog__field">
+        <span class="q-body-sm">{{ 'orders.dialog.note.label' | t }}</span>
+        <textarea
+          class="outcome-dialog__textarea"
+          rows="3"
+          [value]="note()"
+          (input)="setNote($any($event.target).value)"
+          data-testid="order-outcome-reason-note"
+        ></textarea>
+      </label>
+    }
+
+    <div class="outcome-dialog__actions">
+      <button type="button" class="outcome-dialog__dismiss" (click)="close()" [disabled]="busy()">
+        {{ 'orders.dialog.dismiss' | t }}
+      </button>
+      <button
+        type="button"
+        class="outcome-dialog__confirm"
+        (click)="submit()"
+        [disabled]="busy()"
+        data-testid="order-outcome-reason-confirm"
+      >
+        {{ confirmLabelKey() | t }}
+      </button>
+    </div>
+  </div>
+</div>

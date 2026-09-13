@@ -55,6 +55,9 @@ function channel(overrides: Partial<ChannelView> = {}): ChannelView {
     guestOrdersAllowed: false,
     providerInstallationId: null,
     version: 1,
+    locationCount: 0,
+    enabledPaymentMethodCount: 0,
+    enabledFulfillmentModes: [],
     ...overrides,
   };
 }
@@ -140,18 +143,30 @@ describe('ReservationsPage', () => {
     (host.querySelector('[data-testid="reservations-cell-booked"]') as HTMLElement).click();
     fixture.detectChanges();
 
-    (host.querySelector('[data-testid="reservations-action-CONFIRMED"]') as HTMLButtonElement).click();
+    (
+      host.querySelector('[data-testid="reservations-action-CONFIRMED"]') as HTMLButtonElement
+    ).click();
     fixture.detectChanges();
 
     const code = host.querySelector('[data-testid="order-reason-dialog-code"]') as HTMLInputElement;
     code.value = 'Table confirmed available';
     code.dispatchEvent(new Event('input'));
-    (host.querySelector('[data-testid="order-reason-dialog-confirm"]') as HTMLButtonElement).click();
+    (
+      host.querySelector('[data-testid="order-reason-dialog-confirm"]') as HTMLButtonElement
+    ).click();
     await flushMicrotasks();
     fixture.detectChanges();
 
-    expect(stateAction).toHaveBeenCalledWith(SCOPE, 'res-1', 'CONFIRMED', 'Table confirmed available', 1);
-    expect(host.querySelector('[data-testid="reservations-detail"]')?.textContent).toContain('Confirmed');
+    expect(stateAction).toHaveBeenCalledWith(
+      SCOPE,
+      'res-1',
+      'CONFIRMED',
+      'Table confirmed available',
+      1,
+    );
+    expect(host.querySelector('[data-testid="reservations-detail"]')?.textContent).toContain(
+      'Confirmed',
+    );
   });
 
   it('creates a new booking from the form', async () => {
@@ -193,9 +208,7 @@ describe('ReservationsPage', () => {
   });
 
   it('amends a booking’s party size and time, never its guest details', async () => {
-    const amend = vi
-      .fn()
-      .mockReturnValue(of(reservation({ partySize: 6, version: 2 })));
+    const amend = vi.fn().mockReturnValue(of(reservation({ partySize: 6, version: 2 })));
     await render({
       availability: () => Promise.resolve([table()]),
       listForDay: () => Promise.resolve([reservation()]),
@@ -214,7 +227,9 @@ describe('ReservationsPage', () => {
     const party = host.querySelector('[data-testid="reservations-form-party"]') as HTMLInputElement;
     party.value = '6';
     party.dispatchEvent(new Event('input'));
-    const reason = host.querySelector('[data-testid="reservations-form-reason"]') as HTMLInputElement;
+    const reason = host.querySelector(
+      '[data-testid="reservations-form-reason"]',
+    ) as HTMLInputElement;
     reason.value = 'Party grew by two';
     reason.dispatchEvent(new Event('input'));
 

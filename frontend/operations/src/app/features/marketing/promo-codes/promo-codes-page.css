@@ -220,3 +220,70 @@
   border-color: var(--q-hairline);
   color: var(--q-ink-muted);
 }
+
+.dialog--wide {
+  width: 640px;
+}
+
+.field--group {
+  border: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+
+.field--group legend {
+  padding: 0;
+  color: var(--q-ink);
+  font-size: var(--q-type-caption);
+}
+
+.promo-codes__checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  max-height: 160px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.promo-codes__expiry--expired {
+  color: var(--q-error-text);
+}
+
+.promo-codes__redeemed-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--q-primary);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+
+.promo-codes__redeemed-link:disabled {
+  color: inherit;
+  cursor: default;
+  text-decoration: none;
+}
+
+.promo-codes__redemptions-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.promo-codes__redemptions-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: var(--q-type-caption);
+  color: var(--q-ink-subtle);
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.promo-codes__redemptions-table td {
+  padding: 8px 12px;
+  font-size: var(--q-type-body-sm);
+  border-bottom: 1px solid var(--q-hairline);
+}

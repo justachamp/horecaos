@@ -70,3 +70,123 @@
   opacity: 0.6;
   cursor: default;
 }
+
+.menus__toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.menus__search {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font: inherit;
+  min-width: 220px;
+}
+
+.menus__filter-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.menus__filter-tab {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  cursor: pointer;
+  font-size: var(--q-type-body-xs);
+}
+
+.menus__filter-tab--active {
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+  border-color: var(--q-info-text);
+}
+
+.menus__bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.menus__bulk-button {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  cursor: pointer;
+  font-size: var(--q-type-body-xs);
+}
+
+.menus__selection-capped {
+  color: var(--q-warning-text);
+}
+
+.menus__reloading {
+  padding: 4px 0;
+  color: var(--q-ink-subtle);
+}
+
+.menus__checkbox-col {
+  width: 32px;
+  text-align: center;
+}
+
+.menus__offering {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-body-xs);
+}
+
+.menus__offering--available {
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+  border-color: transparent;
+}
+
+.menus__offering--unavailable {
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+  border-color: transparent;
+}
+
+.menus__offering--hidden {
+  background: var(--q-surface-1);
+  color: var(--q-ink-muted);
+  border-color: transparent;
+}
+
+.menus__offering--not-added {
+  background: transparent;
+  color: var(--q-ink-subtle);
+  border-style: dashed;
+}
+
+.menus__fulfillment {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.menus__fulfillment-badge {
+  padding: 2px 6px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  color: var(--q-ink-subtle);
+  font-size: var(--q-type-caption-sm);
+}
+
+.menus__fulfillment-badge--on {
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+  border-color: transparent;
+}

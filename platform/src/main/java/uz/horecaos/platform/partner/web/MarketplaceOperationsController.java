@@ -25,6 +25,8 @@ import uz.horecaos.platform.partner.application.HandoverVerificationService;
 import uz.horecaos.platform.partner.application.MarketplaceLivenessService;
 import uz.horecaos.platform.partner.domain.ExternalReference;
 import uz.horecaos.platform.partner.infrastructure.persistence.JdbcPartnerStore;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -41,7 +43,10 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  *
  * <p><strong>Handover.</strong> Verification and its override, on one table, for
  * every kind of handover. The two capabilities differ because the acts differ in
- * frequency and consequence.
+ * frequency and consequence. {@link #handoverChallenge} (wave P09/gap map
+ * {@code 1.2m}) is the read side of the same table: the order detail pane's
+ * only way to show whether a handover code has been satisfied without itself
+ * consuming an attempt.
  *
  * <p><strong>Liveness.</strong> Which branch has heard from which aggregator and
  * how long ago. A dead integration produces no errors, so this is the only place
@@ -84,6 +89,24 @@ public class MarketplaceOperationsController {
 
         return ResponseEntity.ok(
                 matches.stream().map(ReferenceMatchResponse::of).toList());
+    }
+
+    @GetMapping("/orders/{orderId}/handover-challenge")
+    @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "The handover challenge's current state (orders.md §3.8, «Код выдачи»)",
+            description = "PENDING/VERIFIED/BYPASSED/FAILED/EXPIRED, for whichever challenge is most "
+                    + "recent on this order. Never the expected value — verification stays "
+                    + "server-side, the same rule {@link #verify} and {@link #bypass} both keep. "
+                    + "404 when no challenge was ever issued for this order (a branch that never "
+                    + "configures a handover proof for this fulfilment path).")
+    public ResponseEntity<ChallengeStateResponse> handoverChallenge(
+            @PathVariable UUID tenantId, @PathVariable UUID orderId) {
+
+        JdbcPartnerStore.Challenge challenge = store.findChallengeForOrder(tenantId, orderId)
+                .orElseThrow(
+                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No handover challenge for this order"));
+        return ResponseEntity.ok(ChallengeStateResponse.of(challenge));
     }
 
     @PostMapping("/orders/{orderId}/handover-verifications")
@@ -146,6 +169,29 @@ public class MarketplaceOperationsController {
             @NotBlank @Size(max = 255) String supervisorName) {}
 
     public record VerificationResponse(boolean verified, String status, int attemptsRemaining) {}
+
+    /**
+     * The read-only projection of a handover challenge (wave P09/gap map
+     * {@code 1.2m}) — {@code type} and {@code status} exactly as {@link
+     * uz.horecaos.platform.partner.domain.HandoverChallengeType}/{@link
+     * uz.horecaos.platform.partner.domain.HandoverChallengeStatus} name them,
+     * {@code attemptsRemaining} the same {@code max(0, maxAttempts -
+     * attempts)} {@link VerificationResponse} reports. No expected value, on
+     * this or any handover response — see the class doc.
+     */
+    public record ChallengeStateResponse(
+            UUID id, String type, String status, int attempts, int maxAttempts, int attemptsRemaining) {
+
+        static ChallengeStateResponse of(JdbcPartnerStore.Challenge challenge) {
+            return new ChallengeStateResponse(
+                    challenge.id(),
+                    challenge.type().name(),
+                    challenge.status().name(),
+                    challenge.attempts(),
+                    challenge.maxAttempts(),
+                    Math.max(0, challenge.maxAttempts() - challenge.attempts()));
+        }
+    }
 
     public record ReferenceMatchResponse(
             UUID orderId,

@@ -188,6 +188,62 @@ export interface DemandHistoryResponse {
   readonly provenance: ProvenanceResponse;
 }
 
+/**
+ * T12 (7.5): one operator's completed-order count on one channel — the
+ * leaderboard's per-channel column. Mirrors
+ * `ReportingController.OperatorChannelCountResponse`.
+ */
+export interface OperatorChannelCountResponse {
+  readonly channelCode: string;
+  readonly orderCount: number;
+}
+
+/**
+ * T12 (7.5): one operator's totals across the range — human or pseudo.
+ * Mirrors `ReportingController.OperatorLeaderboardRowResponse`.
+ *
+ * @property operatorPrincipalId a staff Keycloak subject, or
+ *   `"channel:<code>"` as a pseudo-operator when no human touched the order.
+ * @property principalKind `'STAFF'` or `'MACHINE'` — the only "kind" this
+ *   build can say until the staff-identity ADR lands, so a caller never
+ *   renders a bare id with no explanation.
+ * @property subject the Keycloak subject for `STAFF`, or the channel code for
+ *   `MACHINE` — what a surface prints beside `principalKind`.
+ * @property averageCheckSom null when `orderCount` is zero — never a
+ *   zero-som average.
+ * @property avgHandlingSeconds average seconds from order creation to
+ *   confirmation, across orders that recorded one; null when none did.
+ * @property avgItemsPerOrder 7.5a's receipt depth (`receipt_depth.v1`).
+ */
+export interface OperatorLeaderboardRowResponse {
+  readonly operatorPrincipalId: string;
+  readonly principalKind: 'STAFF' | 'MACHINE';
+  readonly subject: string;
+  readonly orderCount: number;
+  readonly grossRevenueSom: number;
+  readonly netRevenueSom: number;
+  readonly averageCheckSom: number | null;
+  readonly avgHandlingSeconds: number | null;
+  readonly deliveryCount: number;
+  readonly pickupCount: number;
+  readonly dineInCount: number;
+  readonly avgItemsPerOrder: number;
+  readonly byChannel: readonly OperatorChannelCountResponse[];
+}
+
+export interface OperatorLeaderboardResponse {
+  readonly rows: readonly OperatorLeaderboardRowResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/** T12 (7.5a): one operator's product mix. Mirrors `ReportingController.OperatorProductListResponse`. */
+export interface OperatorProductListResponse {
+  readonly operatorPrincipalId: string;
+  readonly rows: readonly VariantSalesRowResponse[];
+  readonly maybeMore: boolean;
+  readonly provenance: ProvenanceResponse;
+}
+
 export interface QueryParams {
   readonly from: string;
   readonly to: string;
@@ -313,6 +369,38 @@ export class ReportingApi {
     const result = await firstValueFrom(
       this.api.get<VariantSalesListResponse>(reportsPaths.variantSales(tenantId), {
         params: {
+          from: params.from,
+          to: params.to,
+          locationId: params.locationId,
+          limit: params.limit,
+        },
+      }),
+    );
+    return result.value;
+  }
+
+  /** T12 (7.5): the operator leaderboard, human and pseudo rows together. */
+  async operatorLeaderboard(
+    tenantId: string,
+    params: RangeParams,
+  ): Promise<OperatorLeaderboardResponse> {
+    const result = await firstValueFrom(
+      this.api.get<OperatorLeaderboardResponse>(reportsPaths.operatorLeaderboard(tenantId), {
+        params: { from: params.from, to: params.to, locationId: params.locationId },
+      }),
+    );
+    return result.value;
+  }
+
+  /** T12 (7.5a): one operator's product mix, drilled down from a leaderboard row. */
+  async operatorProducts(
+    tenantId: string,
+    params: RangeParams & { readonly operatorPrincipalId: string; readonly limit?: number },
+  ): Promise<OperatorProductListResponse> {
+    const result = await firstValueFrom(
+      this.api.get<OperatorProductListResponse>(reportsPaths.operatorProducts(tenantId), {
+        params: {
+          operatorPrincipalId: params.operatorPrincipalId,
           from: params.from,
           to: params.to,
           locationId: params.locationId,

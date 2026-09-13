@@ -1058,8 +1058,8 @@ class TelegramInteractiveBotIntegrationTest {
                 null);
         Map<MessageLocale, Wording> wordings = new LinkedHashMap<>();
         MessageLocale.required().forEach(locale -> wordings.put(locale, new Wording(null, "Order needs a decision")));
-        int version = templates.addVersion(tenantId, templateId, wordings, Map.of());
-        templates.activate(tenantId, templateId, version, "test");
+        int version = templates.addVersion(tenantId, brandId, templateId, wordings, Map.of());
+        templates.activate(tenantId, brandId, templateId, version, "test");
     }
 
     /** A generic sibling of {@link #activateAwaitingApprovalTemplate}, for a template that names variables. */
@@ -1076,8 +1076,8 @@ class TelegramInteractiveBotIntegrationTest {
         UUID templateId = templates.createTemplate(tenantId, brandId, templateKey, notificationClass, channel, null);
         Map<MessageLocale, Wording> wordings = new LinkedHashMap<>();
         MessageLocale.required().forEach(locale -> wordings.put(locale, new Wording(null, body)));
-        int version = templates.addVersion(tenantId, templateId, wordings, declaredVariables);
-        templates.activate(tenantId, templateId, version, "test");
+        int version = templates.addVersion(tenantId, brandId, templateId, wordings, declaredVariables);
+        templates.activate(tenantId, brandId, templateId, version, "test");
     }
 
     /**

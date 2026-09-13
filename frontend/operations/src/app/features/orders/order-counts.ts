@@ -3,6 +3,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
+import { LatenessPolicy } from '../../core/lateness-policy';
 import { OrderCountsResponse } from './order-detail';
 import { OrderSeverityInput, computeOrderSeverity } from './order-severity';
 import { ORDER_TABS, OrderTabId, isOrderTabMember } from './order-tabs';
@@ -55,8 +56,9 @@ export class OrderCounts {
     scope: LocationScope,
     orders: readonly CountableOrder[],
     now: Date,
+    policy: LatenessPolicy,
   ): Promise<TabCounts> {
-    const attention = countMembers('attention', orders, now);
+    const attention = countMembers('attention', orders, now, policy);
 
     try {
       const result = await firstValueFrom(
@@ -67,21 +69,25 @@ export class OrderCounts {
         // render `NaN`/`undefined` badges from a response this client
         // misread — the same "throw on the unexpected" instinct as
         // `money.ts`'s unknown-currency guard.
-        return this.deriveAll(orders, now);
+        return this.deriveAll(orders, now, policy);
       }
       return fromEndpoint(result.value, attention);
     } catch {
       // Network failure, a capability the operator does not hold, or a server
       // that has not deployed the endpoint yet — the documented fallback,
       // wrong only in the way the class doc above already accepts.
-      return this.deriveAll(orders, now);
+      return this.deriveAll(orders, now, policy);
     }
   }
 
-  private deriveAll(orders: readonly CountableOrder[], now: Date): TabCounts {
+  private deriveAll(
+    orders: readonly CountableOrder[],
+    now: Date,
+    policy: LatenessPolicy,
+  ): TabCounts {
     const counts = { ...zeroTabCounts() } as Record<OrderTabId, number>;
     for (const tab of ORDER_TABS) {
-      counts[tab] = countMembers(tab, orders, now);
+      counts[tab] = countMembers(tab, orders, now, policy);
     }
     return counts;
   }
@@ -103,11 +109,16 @@ function isOrderCountsResponse(value: unknown): value is OrderCountsResponse {
   );
 }
 
-function countMembers(tab: OrderTabId, orders: readonly CountableOrder[], now: Date): number {
+function countMembers(
+  tab: OrderTabId,
+  orders: readonly CountableOrder[],
+  now: Date,
+  policy: LatenessPolicy,
+): number {
   return orders.filter((order) =>
     isOrderTabMember(tab, {
       status: order.status,
-      severityLevel: computeOrderSeverity(order, now).level,
+      severityLevel: computeOrderSeverity(order, now, policy).level,
     }),
   ).length;
 }

@@ -529,12 +529,16 @@ variant, three states, and a fulfilment-mode list. Channels exist separately in
 assigned at `CHANNEL` scope (`pricing.price_book_assignments`, fixed and bound in
 ADR 0036).
 
-What does not exist: a **named Menu entity** bound to branches, per-channel item
-enablement, per-item schedules, and per-item counted stock.
-[IA Part 5 §2 and §3](../frontend-information-architecture.md) name this as a
-data-model decision, and ADR 0036's covered list includes "per-channel menu item
-enablement" without `V0020` building a table for it. **Owning ADR: 0036, with an
-0016 amendment for the Menu entity itself. Neither is built.**
+What does not exist: a **named Menu entity** bound to branches, per-item
+schedules, and per-item counted stock. Per-channel item enablement is a
+half-built exception, not a clean absence — see Layer B below: `V0020` built
+`catalog.channel_offering_exclusions`, with a reader
+(`JdbcCatalogStore.channelExcludedVariantIds`) and no writer anywhere, so an
+operator still cannot express "hide this dish on Uzum Tezkor" from any screen.
+[IA Part 5 §2 and §3](../frontend-information-architecture.md) name the Menu
+entity as a data-model decision. **Owning ADR: 0036 for the enablement writer,
+with an 0016 amendment for the Menu entity itself. The Menu entity is not
+built; the enablement table is built and unwritten.**
 
 The screen is therefore specified in two layers, and the first is buildable
 today.
@@ -571,7 +575,11 @@ A second axis, switched by a segmented control above the matrix: **Локаци�
 tenant (`code`, `display_name`, `system_type`, `status`), each cell holding two
 independent facts:
 
-- `offered_on_channel` — boolean, **not built; ADR 0036**
+- `offered_on_channel` — modelled as a sparse exclusion, not a boolean column:
+  `catalog.channel_offering_exclusions` (`V0020`) holds a row only where a
+  variant is hidden on a channel (brand-wide, or narrowed to one location);
+  absence means offered. The table and its reader exist; **no writer exists
+  yet — ADR 0036, wave P45**
 - `price_on_channel` — resolvable **today** through
   `pricing.price_book_assignments` at `CHANNEL` scope, honouring the channel's
   `price_plane_channel_id` (the mechanism by which QR and kiosk take hall prices,
@@ -1334,7 +1342,7 @@ an existing table.
 | Missing data | Where it is needed | Owner |
 |---|---|---|
 | A named **Menu** entity between catalog and channel, bound to locations | 4.5, copy-menu, bind-to-branch | **ADR 0016 amendment** — none exists; IA Part 5 §2 names it as a data-model decision |
-| `offered_on_channel` per (item, channel) — separate from price | 4.5 layer B | **ADR 0036** (listed in its covered scope; `V0020` did not build the table) |
+| A writer for `offered_on_channel` per (item, channel) — separate from price | 4.5 layer B | **ADR 0036**, wave P45. `V0020` built `catalog.channel_offering_exclusions` and a reader; nothing writes it yet |
 | Per-item sale schedule (`sales_schedule_id` on `catalog.location_offerings`) | 4.7, 4.5 | **ADR 0036** (ADR 0016 sketched the column; `V0016` never created it) |
 | Counted per-item stock with a daily default and automatic reset | 4.6 | **ADR 0017** — `QUANTITY` mode is decided and refused by the service; the scheduled daily seed is unowned |
 | Stop **scope** and stop **source** (operator / POS terminal / rule) | 4.6 | **ADR 0017 + ADR 0041** |

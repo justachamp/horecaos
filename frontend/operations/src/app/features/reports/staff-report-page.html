@@ -1,0 +1,249 @@
+<div class="staff-reports">
+  <div class="staff-reports__header">
+    <h1 class="q-title">{{ 'reports.staff.title' | t }}</h1>
+    <q-provenance-banner [provenance]="provenance()" [requestedTo]="requestedTo()" />
+  </div>
+
+  <div class="staff-reports__tabs" role="tablist">
+    @for (tab of tabs; track tab.id) {
+      <button
+        type="button"
+        role="tab"
+        class="tab"
+        [class.tab--active]="activeTab() === tab.id"
+        [attr.aria-selected]="activeTab() === tab.id"
+        (click)="selectTab(tab.id)"
+      >
+        {{ tab.labelKey | t }}
+      </button>
+    }
+  </div>
+
+  @switch (activeTab()) {
+    @case ('leaderboard') {
+      @switch (state()) {
+        @case ('loading') {
+          <p class="q-body-sm">{{ 'reports.staff.loading' | t }}</p>
+        }
+        @case ('denied') {
+          <p class="q-body-sm denied">{{ 'reports.denied.notGranted' | t }}</p>
+        }
+        @case ('error') {
+          <div class="error-band" role="alert">
+            <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+            <button type="button" class="secondary" (click)="retry()">
+              {{ 'reports.error.retry' | t }}
+            </button>
+          </div>
+        }
+        @case ('ready') {
+          @if (rows().length === 0) {
+            <p class="q-body-sm muted">{{ 'reports.staff.leaderboard.empty' | t }}</p>
+          } @else {
+            <table class="table">
+              <thead>
+                <tr>
+                  <th class="q-caption">{{ 'reports.staff.leaderboard.column.operator' | t }}</th>
+                  <th class="q-caption num">{{ 'reports.staff.leaderboard.column.orders' | t }}</th>
+                  <th class="q-caption num">
+                    {{ 'reports.staff.leaderboard.column.revenue' | t }}
+                  </th>
+                  <th class="q-caption num">
+                    {{ 'reports.staff.leaderboard.column.averageCheck' | t }}
+                  </th>
+                  <th class="q-caption num">
+                    {{ 'reports.staff.leaderboard.column.handlingTime' | t }}
+                  </th>
+                  <th class="q-caption num">
+                    {{ 'reports.staff.leaderboard.column.delivery' | t }}
+                  </th>
+                  <th class="q-caption num">{{ 'reports.staff.leaderboard.column.pickup' | t }}</th>
+                  <th class="q-caption num">{{ 'reports.staff.leaderboard.column.dineIn' | t }}</th>
+                  <th class="q-caption num">
+                    {{ 'reports.staff.leaderboard.column.receiptDepth' | t }}
+                  </th>
+                  <th class="q-caption"></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of rows(); track row.operatorPrincipalId) {
+                  <tr>
+                    <td class="q-body-sm">
+                      @if (row.principalKind === 'MACHINE') {
+                        <span class="badge badge--machine q-caption">{{
+                          'reports.staff.leaderboard.kind.MACHINE' | t
+                        }}</span>
+                        <span class="q-caption operator-subject">{{ row.subject }}</span>
+                      } @else {
+                        <span class="badge badge--staff q-caption">{{
+                          'reports.staff.leaderboard.kind.STAFF' | t
+                        }}</span>
+                        <span class="q-mono q-caption operator-subject">{{
+                          shortSubject(row.subject)
+                        }}</span>
+                      }
+                    </td>
+                    <td class="q-body-sm q-tnum num">{{ formatCountValue(row.orderCount) }}</td>
+                    <td class="q-body-sm q-tnum num">
+                      {{ formatMoneyValue(row.grossRevenueSom) }}
+                    </td>
+                    <td class="q-body-sm q-tnum num">
+                      {{
+                        row.averageCheckSom === null ? '—' : formatMoneyValue(row.averageCheckSom)
+                      }}
+                    </td>
+                    <td class="q-body-sm q-tnum num">
+                      {{ formatHandling(row.avgHandlingSeconds) }}
+                    </td>
+                    <td class="q-body-sm q-tnum num">{{ formatCountValue(row.deliveryCount) }}</td>
+                    <td class="q-body-sm q-tnum num">{{ formatCountValue(row.pickupCount) }}</td>
+                    <td class="q-body-sm q-tnum num">{{ formatCountValue(row.dineInCount) }}</td>
+                    <td class="q-body-sm q-tnum num">
+                      {{ formatAverageValue(row.avgItemsPerOrder) }}
+                    </td>
+                    <td class="q-body-sm">
+                      <button type="button" class="link" (click)="selectOperator(row)">
+                        {{ 'reports.staff.leaderboard.viewProducts' | t }}
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        }
+      }
+    }
+    @case ('products') {
+      @if (selectedOperator(); as operator) {
+        <h2 class="q-subhead">
+          {{ 'reports.staff.products.title' | t }}
+          <span class="q-body-sm muted">
+            —
+            {{
+              operator.principalKind === 'MACHINE'
+                ? operator.subject
+                : shortSubject(operator.subject)
+            }}
+          </span>
+        </h2>
+        @switch (productsState()) {
+          @case ('loading') {
+            <p class="q-body-sm">{{ 'reports.staff.loading' | t }}</p>
+          }
+          @case ('error') {
+            <div class="error-band" role="alert">
+              <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+              <button type="button" class="secondary" (click)="retryProducts()">
+                {{ 'reports.error.retry' | t }}
+              </button>
+            </div>
+          }
+          @case ('ready') {
+            @if (productRows().length === 0) {
+              <p class="q-body-sm muted">{{ 'reports.staff.products.empty' | t }}</p>
+            } @else {
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th class="q-caption">{{ 'reports.staff.products.column.product' | t }}</th>
+                    <th class="q-caption num">
+                      {{ 'reports.staff.products.column.quantity' | t }}
+                    </th>
+                    <th class="q-caption num">{{ 'reports.staff.products.column.revenue' | t }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of productRows(); track row.variantId ?? row.productName) {
+                    <tr>
+                      <td class="q-body-sm">{{ row.productName }}</td>
+                      <td class="q-body-sm q-tnum num">
+                        {{ formatCountValue(row.totalQuantity) }}
+                      </td>
+                      <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.totalNetSom) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+              @if (productsMaybeMore()) {
+                <p class="q-caption muted">{{ 'reports.products.maybeMore' | t }}</p>
+              }
+            }
+          }
+        }
+      } @else {
+        <p class="q-body-sm muted">{{ 'reports.staff.products.selectOperator' | t }}</p>
+      }
+    }
+    @case ('telephony') {
+      <p class="q-body-sm muted">{{ 'reports.staff.telephony.intro' | t }}</p>
+      @switch (telephonyState()) {
+        @case ('loading') {
+          <p class="q-body-sm">{{ 'reports.staff.loading' | t }}</p>
+        }
+        @case ('idle') {
+          <p class="q-body-sm">{{ 'reports.staff.loading' | t }}</p>
+        }
+        @case ('error') {
+          <div class="error-band" role="alert">
+            <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+            <button type="button" class="secondary" (click)="retryTelephony()">
+              {{ 'reports.error.retry' | t }}
+            </button>
+          </div>
+        }
+        @case ('ready') {
+          @if (telephonyRangeCapped()) {
+            <p class="q-caption muted">
+              {{ 'reports.staff.telephony.rangeCapped' | t: { days: telephonyDayCount } }}
+            </p>
+          }
+          @if (telephonyRows().length === 0) {
+            <p class="q-body-sm muted">{{ 'reports.staff.telephony.empty' | t }}</p>
+          } @else {
+            <table class="table">
+              <thead>
+                <tr>
+                  <th class="q-caption">{{ 'reports.staff.telephony.column.operator' | t }}</th>
+                  <th class="q-caption num">{{ 'reports.staff.telephony.column.offered' | t }}</th>
+                  <th class="q-caption num">{{ 'reports.staff.telephony.column.answered' | t }}</th>
+                  <th class="q-caption num">
+                    {{ 'reports.staff.telephony.column.answerRate' | t }}
+                  </th>
+                  <th class="q-caption num">{{ 'reports.staff.telephony.column.missed' | t }}</th>
+                  <th class="q-caption num">
+                    {{ 'reports.staff.telephony.column.transferred' | t }}
+                  </th>
+                  <th class="q-caption num">{{ 'reports.staff.telephony.column.talkTime' | t }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of telephonyRows(); track row.operatorPrincipalId) {
+                  <tr>
+                    <td class="q-body-sm q-mono">{{ shortSubject(row.operatorPrincipalId) }}</td>
+                    <td class="q-body-sm q-tnum num">{{ formatCountValue(row.offeredCount) }}</td>
+                    <td class="q-body-sm q-tnum num">{{ formatCountValue(row.answeredCount) }}</td>
+                    <td class="q-body-sm q-tnum num">{{ answerRate(row) }}</td>
+                    <td class="q-body-sm q-tnum num">{{ formatCountValue(row.missedCount) }}</td>
+                    <td class="q-body-sm q-tnum num">
+                      {{ formatCountValue(row.transferredCount) }}
+                    </td>
+                    <td class="q-body-sm q-tnum num">
+                      {{ formatDuration(row.talkDurationSeconds) }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+          <p class="q-caption muted not-built">
+            {{ 'reports.staff.telephony.answerSpeedNotBuilt' | t }}
+          </p>
+          <p class="q-caption muted not-built">
+            {{ 'reports.staff.telephony.conversionNotBuilt' | t }}
+          </p>
+        }
+      }
+    }
+  }
+</div>

@@ -83,7 +83,7 @@ export const SETTINGS_NAVIGATION: readonly SettingsNavGroup[] = [
         path: 'payment-methods',
         label: 'settings.nav.paymentMethods',
         description: 'settings.home.description.paymentMethods',
-        builtRoute: false,
+        builtRoute: true,
       },
       {
         path: 'fiscalization',

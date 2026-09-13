@@ -77,6 +77,31 @@ public record FieldAuthorityPolicy(int version, Map<String, FieldAuthority> byFi
     }
 
     /**
+     * {@link #INITIAL} with {@code product.price}, {@code variant.price} and
+     * {@code modifier.price} moved to {@link FieldAuthority#REVIEWED_IMPORT}
+     * (gap-map row 4.5a's {@code priceReImport} run parameter).
+     *
+     * <p>A separate, numbered policy rather than a runtime toggle over {@link
+     * #INITIAL}: a run snapshots {@code field_policy_version}, and a resume must
+     * reinterpret staged data under exactly the ownership rules the original run
+     * used — the same argument this record's own class doc makes for
+     * versioning at all. An operator who opts into re-importing prices for one
+     * run (onboarding from a POS whose price list <em>is</em> the source of
+     * truth, say) gets a reviewable difference instead of a permanently
+     * ignored one; {@link #INITIAL}'s protection is still the default for
+     * every run that does not ask for this.
+     */
+    public static final FieldAuthorityPolicy PRICE_REVIEWED_IMPORT = withReviewedPrices();
+
+    private static FieldAuthorityPolicy withReviewedPrices() {
+        Map<String, FieldAuthority> fields = new java.util.HashMap<>(INITIAL.byField());
+        fields.put("product.price", FieldAuthority.REVIEWED_IMPORT);
+        fields.put("variant.price", FieldAuthority.REVIEWED_IMPORT);
+        fields.put("modifier.price", FieldAuthority.REVIEWED_IMPORT);
+        return new FieldAuthorityPolicy(2, fields);
+    }
+
+    /**
      * Who owns the given field under this policy version.
      *
      * @return {@link FieldAuthority#HORECAOS} for a field nobody assigned. The safe

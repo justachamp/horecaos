@@ -135,7 +135,26 @@ class CustomerIdentityTests {
                 protection,
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 clock,
-                new uz.horecaos.platform.customers.api.CustomerOrderActivityPort() {});
+                new uz.horecaos.platform.customers.api.CustomerOrderActivityPort() {},
+                utcMidnightBusinessDays());
+    }
+
+    /**
+     * A {@code BusinessDayWindows} double reproducing exactly the UTC-midnight
+     * arithmetic {@code CustomerListQueryService#counts} used before row
+     * {@code 5.1a} — every other test in this suite predates the tenant
+     * business-day boundary and asserts against UTC calendar dates, so this
+     * keeps them passing unchanged. {@link
+     * #registeredTodayUsesTheTenantsOwnBusinessDayNotUtcMidnight} is the one
+     * test that exercises the real Tashkent boundary instead.
+     */
+    private static uz.horecaos.platform.customers.api.BusinessDayWindows utcMidnightBusinessDays() {
+        return (tenantId, at) -> {
+            java.time.LocalDate day = java.time.LocalDate.ofInstant(at, ZoneOffset.UTC);
+            return new uz.horecaos.platform.customers.api.BusinessDayWindows.Window(
+                    day.atStartOfDay(ZoneOffset.UTC).toInstant(),
+                    day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant());
+        };
     }
 
     @Test
@@ -1609,6 +1628,53 @@ class CustomerIdentityTests {
     }
 
     @Test
+    @DisplayName("registered-today uses the tenant's own business day, not UTC midnight (row 5.1a)")
+    void registeredTodayUsesTheTenantsOwnBusinessDayNotUtcMidnight() {
+        // Tashkent is UTC+5 with no daylight saving. Local 2026-08-22 02:00 is
+        // UTC 2026-08-21T21:00:00Z: a registration the wall calendar dates
+        // "22 August", stamped with a *UTC* calendar date of "21 August".
+        Instant registeredAt = Instant.parse("2026-08-21T21:00:00Z");
+        MovableClock movable = new MovableClock(registeredAt);
+        uz.horecaos.platform.reporting.domain.BusinessDayBoundary tashkentMidnight =
+                uz.horecaos.platform.reporting.domain.BusinessDayBoundary.midnight(
+                        java.time.ZoneId.of("Asia/Tashkent"));
+        uz.horecaos.platform.customers.api.BusinessDayWindows tashkentBusinessDays = (tenantId, at) -> {
+            var businessDate = tashkentMidnight.dateOf(at);
+            return new uz.horecaos.platform.customers.api.BusinessDayWindows.Window(
+                    tashkentMidnight.startOf(businessDate), tashkentMidnight.endOf(businessDate));
+        };
+
+        CustomerIdentityService localIdentity = new CustomerIdentityService(
+                store,
+                new ConfiguredCustomerPolicyLookup(jdbc),
+                movable,
+                blacklist,
+                new JdbcAuditRecorder(jdbc, objectMapper));
+        CustomerListQueryService localLists = new CustomerListQueryService(
+                store,
+                protectionField(),
+                new JdbcAuditRecorder(jdbc, objectMapper),
+                movable,
+                new uz.horecaos.platform.customers.api.CustomerOrderActivityPort() {},
+                tashkentBusinessDays);
+
+        localIdentity.resolve(TENANT, BRAND_A, ISSUER, "subject-tashkent-boundary");
+
+        // Advance to local 06:00 Tashkent the *same* business day (UTC
+        // 2026-08-22T01:00:00Z — now on the *next* UTC calendar date). This is
+        // exactly the gap the row names: a UTC-midnight window would already
+        // have rolled over to UTC 22 August and never contained a row stamped
+        // UTC 21 August, permanently losing it from "registered today" for
+        // the rest of this local business day.
+        movable.set(Instant.parse("2026-08-22T01:00:00Z"));
+
+        assertThat(localLists.counts(TENANT).registeredToday())
+                .as("a customer who registered at 02:00 Tashkent must still count as "
+                        + "\"registered today\" once the clock reaches 06:00 Tashkent the same day")
+                .isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("a filtered export decrypts every matched row behind exactly one audit fact")
     void exportWritesOneAuditFactForTheWholeFilteredSet() {
         var first = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-export-1");
@@ -1616,10 +1682,11 @@ class CustomerIdentityTests {
         var second = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-export-2");
         profiles.addContactPoint(TENANT, second.account().accountId(), ContactType.PHONE, "+998933334444", true);
 
-        var rows = lists.exportFiltered(TENANT, null, null, "audit-export-test", STAFF_ACTOR);
+        var result = lists.exportFiltered(TENANT, null, null, "audit-export-test", STAFF_ACTOR);
 
-        assertThat(rows).hasSize(2);
-        assertThat(rows)
+        assertThat(result.truncated()).isFalse();
+        assertThat(result.rows()).hasSize(2);
+        assertThat(result.rows())
                 .extracting(CustomerListQueryService.ExportRow::phone)
                 .containsExactlyInAnyOrder("+998911112222", "+998933334444");
         assertThat(auditFactCount("customer.list.exported")).isEqualTo(1);
@@ -1966,5 +2033,33 @@ class CustomerIdentityTests {
                 .param("id", accountId)
                 .query(Long.class)
                 .single();
+    }
+
+    /** A clock a test can move between two calls, for a scenario a fixed {@link Clock} cannot express. */
+    private static final class MovableClock extends Clock {
+        private Instant now;
+
+        MovableClock(Instant now) {
+            this.now = now;
+        }
+
+        void set(Instant instant) {
+            this.now = instant;
+        }
+
+        @Override
+        public java.time.ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(java.time.ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return now;
+        }
     }
 }

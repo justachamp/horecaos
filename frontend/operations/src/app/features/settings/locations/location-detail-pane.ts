@@ -15,9 +15,12 @@ type LocationTab = 'basics' | 'hours' | 'load' | 'fiscal' | 'channels' | 'notifi
  * tabs, per the spec; three are real, three link out honestly.
  *
  * **Tab 1 (Основное)** reads `LocationServiceOperationsController.profile`
- * (new, operations surface) and writes address/phone/point through
+ * (new, operations surface) and writes address/phone/landmark through
  * `TenantControlPlaneController`'s existing `place` endpoint, cross-surface.
  * name/code/slug/timezone/status stay read-only — nothing writes them.
+ * The map pin itself has no editor here yet (10.2b's own named gap) — but
+ * wave P32 fixed the data-loss bug that made every save here erase it: see
+ * `savePlace`'s own doc.
  *
  * **Tabs 2 and 3 (Часы, Загрузка и приготовление)** read the new
  * `service-summary` endpoint — the manual override, every bound schedule's
@@ -62,6 +65,7 @@ export class LocationDetailPane {
   protected readonly draftDistrict = signal('');
   protected readonly draftCity = signal('');
   protected readonly draftContactPhone = signal('');
+  protected readonly draftLandmark = signal('');
 
   protected readonly stateSaving = signal(false);
   protected readonly stateError = signal<string | null>(null);
@@ -95,10 +99,29 @@ export class LocationDetailPane {
     this.draftDistrict.set(current?.district ?? '');
     this.draftCity.set(current?.city ?? '');
     this.draftContactPhone.set(current?.contactPhone ?? '');
+    this.draftLandmark.set(current?.landmark ?? '');
     this.placeError.set(null);
     this.editingPlace.set(true);
   }
 
+  /**
+   * P32: latitude/longitude/coordinateSource are deliberately never sent from
+   * here. The backend now carries the existing point through whenever a
+   * write is silent about it (`DescribeLocationCommand.toPlace`'s own doc) —
+   * before that fix, this form's own omission of them was exactly what
+   * erased a surveyed branch's map pin on every address or phone edit.
+   * `landmark` used to be omitted the same way; it is sent now that this
+   * form has a field for it.
+   *
+   * **Clearing the landmark.** An emptied `draftLandmark` collapses to
+   * `landmark: undefined` on the wire, which the backend reads as "this
+   * write did not touch the landmark" and carries the stored value through
+   * unchanged -- indistinguishable from a phone-only edit that never opened
+   * this field at all. `clearLandmark` is sent, true, only when the draft is
+   * blank *and* the loaded profile actually had a landmark to clear, so an
+   * operator who empties the field and saves gets what the console already
+   * showed as having happened.
+   */
   protected async savePlace(): Promise<void> {
     const scope = this.scope();
     if (!scope || this.placeSaving()) {
@@ -107,11 +130,15 @@ export class LocationDetailPane {
     this.placeSaving.set(true);
     this.placeError.set(null);
     try {
+      const trimmedLandmark = this.draftLandmark().trim();
+      const clearLandmark = trimmedLandmark === '' && !!this.profile()?.landmark;
       const updated = await this.api.describePlace(scope, {
         addressLine: this.draftAddressLine().trim() || undefined,
         district: this.draftDistrict().trim() || undefined,
         city: this.draftCity().trim() || undefined,
         contactPhone: this.draftContactPhone().trim() || undefined,
+        landmark: trimmedLandmark || undefined,
+        clearLandmark: clearLandmark || undefined,
       });
       this.profile.set(updated);
       this.editingPlace.set(false);

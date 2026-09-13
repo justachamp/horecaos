@@ -261,6 +261,13 @@ class JdbcAuthorizationServiceTests {
                 Capability.ORDER_READ,
                 Capability.REVIEW_READ,
                 Capability.PAYMENT_READ,
+                // ADR 0038, wave P33: reading the tenant's payment_methods registry
+                // (names, icon, order, status, acquirer binding) — its own Javadoc
+                // says it is held wherever CHANNEL_READ is, since the 10.4b
+                // capability matrix's columns come from this registry. Same tier
+                // as CHANNEL_READ/CATALOG_READ: a suspended tenant reading its own
+                // configuration takes nothing out.
+                Capability.PAYMENT_METHOD_READ,
                 Capability.FISCAL_DOCUMENT_READ,
                 Capability.DELIVERY_PLAN_READ,
                 Capability.DELIVERY_ZONE_READ,

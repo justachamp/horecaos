@@ -47,6 +47,22 @@ public interface PosOrderSource {
      *                             this module; the export row keeps its hash
      * @param customerAddress      revealed for this call only. Null for a pickup
      *                             or dine-in order, which is not an error
+     * @param acceptedByActorType  {@code ordering.orders.accepted_by_actor_type}
+     *                             (V0029) — {@code "USER"} when a signed-in
+     *                             operator moved the order to {@code CONFIRMED},
+     *                             null when nobody has yet, and one of {@code
+     *                             SERVICE}/{@code SYSTEM_JOB}/{@code PROVIDER}/
+     *                             {@code CUSTOMER} for every other path. Carried
+     *                             so an export can attribute the order to a POS
+     *                             operator (operations-gap-map.md {@code 9.2c})
+     *                             without this port reaching back into ordering
+     *                             a second time
+     * @param acceptedByActorId    the matching actor id — a Keycloak subject
+     *                             (parseable as a {@link UUID}) only when {@code
+     *                             acceptedByActorType} is {@code "USER"}; for
+     *                             every other actor type this is an opaque
+     *                             string (for example {@code "pos:clopos"}) and
+     *                             must not be parsed as one
      */
     record ExportableOrder(
             UUID orderId,
@@ -64,6 +80,8 @@ public interface PosOrderSource {
             @Nullable String customerName,
             @Nullable String customerPhone,
             @Nullable String customerAddress,
+            @Nullable String acceptedByActorType,
+            @Nullable String acceptedByActorId,
             List<Line> lines) {
 
         public ExportableOrder {

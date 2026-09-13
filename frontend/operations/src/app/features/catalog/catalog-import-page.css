@@ -1,0 +1,93 @@
+.q-catalog-import-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px;
+}
+
+.q-catalog-import-page__binding-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.q-catalog-import-page__tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.q-catalog-import-page__tabs button {
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  color: var(--q-ink-muted);
+  cursor: pointer;
+}
+
+.q-catalog-import-page__tabs button.active {
+  color: var(--q-ink);
+  border-bottom: 2px solid var(--q-primary);
+}
+
+.q-catalog-import-page__start,
+.q-catalog-import-page__runs,
+.q-catalog-import-page__detail,
+.q-catalog-import-page__mapping {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.q-catalog-import-page__start-form {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.q-catalog-import-page__language-input {
+  width: 90px;
+  margin-left: 6px;
+}
+
+.q-catalog-import-page__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.q-catalog-import-page__table th {
+  text-align: left;
+  color: var(--q-ink-muted);
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.q-catalog-import-page__table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--q-hairline);
+  color: var(--q-ink);
+}
+
+.q-catalog-import-page__table tbody tr {
+  cursor: pointer;
+}
+
+.q-catalog-import-page__table tbody tr.selected {
+  background: var(--q-info-tint);
+}
+
+.q-catalog-import-page__detail-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 12px;
+  margin: 0;
+}
+
+.q-catalog-import-page__detail-grid dt {
+  color: var(--q-ink-muted);
+}
+
+.q-catalog-import-page__detail-grid dd {
+  margin: 0;
+}

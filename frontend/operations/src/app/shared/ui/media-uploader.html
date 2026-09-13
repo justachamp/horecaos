@@ -1,0 +1,102 @@
+@if (cropping(); as isCropping) {
+  <div class="uploader__crop">
+    <div class="uploader__ratios" role="group" [attr.aria-label]="'ui.mediaUploader.ratio' | t">
+      @for (ratio of aspectRatios(); track ratio) {
+        <button
+          type="button"
+          class="uploader__ratio"
+          [class.uploader__ratio--active]="selectedRatio() === ratio"
+          (click)="selectRatio(ratio)"
+          [attr.data-testid]="'uploader-ratio-' + ratio"
+        >
+          {{ ratio }}
+        </button>
+      }
+    </div>
+
+    <div
+      #cropBox
+      class="uploader__box"
+      [style.aspect-ratio]="aspectCss()"
+      (pointerdown)="onPanPointerDown($event)"
+      (pointermove)="onPanPointerMove($event, cropBox)"
+      (pointerup)="onPanPointerUp($event)"
+      data-testid="uploader-crop-box"
+    >
+      @if (previewUrl(); as url) {
+        <img
+          [src]="url"
+          alt=""
+          class="uploader__image"
+          [style.transform]="imageTransform(cropBox.clientWidth, cropBox.clientHeight)"
+          (load)="onPreviewLoad($any($event.target))"
+        />
+      }
+    </div>
+
+    <label class="uploader__zoom">
+      <span class="q-caption">{{ 'ui.mediaUploader.zoom' | t }}</span>
+      <input
+        type="range"
+        min="1"
+        max="3"
+        step="0.05"
+        [value]="zoom()"
+        (input)="onZoomInput($any($event.target).value)"
+        data-testid="uploader-zoom"
+      />
+    </label>
+
+    <div class="uploader__actions">
+      <button
+        type="button"
+        class="uploader__cancel"
+        (click)="cancelCrop()"
+        data-testid="uploader-crop-cancel"
+      >
+        {{ 'ui.mediaUploader.cancel' | t }}
+      </button>
+      <button
+        type="button"
+        class="uploader__confirm"
+        (click)="confirmCrop(cropBox)"
+        data-testid="uploader-crop-confirm"
+      >
+        {{ 'ui.mediaUploader.confirm' | t }}
+      </button>
+    </div>
+  </div>
+} @else {
+  <div
+    class="uploader__dropzone"
+    [class.uploader__dropzone--over]="dragOver()"
+    (dragover)="onDropZoneDragOver($event)"
+    (dragleave)="onDropZoneDragLeave()"
+    (drop)="onDrop($event)"
+    data-testid="uploader-dropzone"
+  >
+    <input
+      #fileInput
+      type="file"
+      hidden
+      [attr.accept]="accept()"
+      (change)="onFileInput($any($event.target).files)"
+      data-testid="uploader-file-input"
+    />
+    @if (uploading()) {
+      <div class="uploader__progress" role="progressbar" [attr.aria-valuenow]="progress()">
+        <div
+          class="uploader__progress-bar"
+          [class.uploader__progress-bar--indeterminate]="progress() === null"
+          [style.width.%]="progress() ?? 100"
+        ></div>
+        <span class="q-caption">{{ 'ui.mediaUploader.uploading' | t }}</span>
+      </div>
+    } @else {
+      <p class="q-body-sm">{{ 'ui.mediaUploader.dropHint' | t }}</p>
+      <button type="button" (click)="fileInput.click()" data-testid="uploader-browse">
+        {{ 'ui.mediaUploader.browse' | t }}
+      </button>
+    }
+  </div>
+}
