@@ -1227,7 +1227,8 @@ public class TenantControlPlaneService {
             @Nullable String contactPhone,
             @Nullable Double latitude,
             @Nullable Double longitude,
-            @Nullable CoordinateSource coordinateSource) {
+            @Nullable CoordinateSource coordinateSource,
+            boolean clearLandmark) {
 
         /**
          * @param existing the location's place before this write, carried through
@@ -1265,7 +1266,15 @@ public class TenantControlPlaneService {
                 source = existing.coordinateSource();
             }
 
-            String resolvedLandmark = landmark != null ? landmark : existing.landmark();
+            // clearLandmark is the same escape hatch coordinateSource==NOT_GEOCODED
+            // gives the point: an emptied form field collapses to a JSON body
+            // with no "landmark" key at all (undefined drops from a request
+            // body), which is indistinguishable on the wire from a caller that
+            // never touched this field at all. Without an explicit signal,
+            // "clear the landmark" and "I did not touch the landmark" both
+            // read as landmark == null here, and the silent-carry-through
+            // branch below would keep the stale value forever.
+            String resolvedLandmark = clearLandmark ? null : (landmark != null ? landmark : existing.landmark());
             return new LocationPlace(addressLine, district, city, resolvedLandmark, contactPhone, point, source);
         }
     }

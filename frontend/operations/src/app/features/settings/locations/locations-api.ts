@@ -37,6 +37,14 @@ export interface DescribeLocationRequest {
   readonly latitude?: number;
   readonly longitude?: number;
   readonly coordinateSource?: CoordinateSource;
+  /**
+   * Explicitly removes a previously-set landmark, the same escape hatch
+   * `coordinateSource: 'NOT_GEOCODED'` is for the point. An omitted
+   * `landmark` alone (the shape an emptied form field collapses to) means
+   * "this write did not touch the landmark" and carries the stored value
+   * through unchanged — see `DescribeLocationCommand.toPlace`'s own doc.
+   */
+  readonly clearLandmark?: boolean;
 }
 
 export interface RuleView {

@@ -707,7 +707,8 @@ class TenantControlPlaneServiceTests {
                         "+998712000000",
                         41.311081,
                         69.240562,
-                        uz.horecaos.platform.tenancy.domain.CoordinateSource.MERCHANT_PIN));
+                        uz.horecaos.platform.tenancy.domain.CoordinateSource.MERCHANT_PIN,
+                        false));
 
         // Only the phone changes; address, landmark and the point are silent
         // in this write, the exact shape `location-detail-pane.ts`'s
@@ -717,7 +718,7 @@ class TenantControlPlaneServiceTests {
                 brandId,
                 locationId,
                 new TenantControlPlaneService.DescribeLocationCommand(
-                        "Amir Temur 1", "Yunusabad", "Tashkent", null, "+998712009999", null, null, null));
+                        "Amir Temur 1", "Yunusabad", "Tashkent", null, "+998712009999", null, null, null, false));
 
         assertThat(after.contactPhone()).isEqualTo("+998712009999");
         assertThat(after.latitude())
@@ -751,7 +752,8 @@ class TenantControlPlaneServiceTests {
                         null,
                         41.0,
                         69.0,
-                        uz.horecaos.platform.tenancy.domain.CoordinateSource.MERCHANT_PIN));
+                        uz.horecaos.platform.tenancy.domain.CoordinateSource.MERCHANT_PIN,
+                        false));
 
         var cleared = h.service.describeLocation(
                 h.tenantId,
@@ -765,12 +767,59 @@ class TenantControlPlaneServiceTests {
                         null,
                         null,
                         null,
-                        uz.horecaos.platform.tenancy.domain.CoordinateSource.NOT_GEOCODED));
+                        uz.horecaos.platform.tenancy.domain.CoordinateSource.NOT_GEOCODED,
+                        false));
 
         assertThat(cleared.latitude()).isNull();
         assertThat(cleared.longitude()).isNull();
         assertThat(cleared.coordinateSource())
                 .isEqualTo(uz.horecaos.platform.tenancy.domain.CoordinateSource.NOT_GEOCODED);
+    }
+
+    /**
+     * The paired bug the same wave's own review found: {@code landmark}'s
+     * silent-carry-through has no clear signal of its own, unlike the point's
+     * {@code NOT_GEOCODED}. An emptied form field collapses to an absent JSON
+     * key on the wire, indistinguishable from "this write never touched the
+     * landmark" — so before this fix, an operator who cleared the field and
+     * saved saw the console report success while the stale landmark stayed.
+     */
+    @Test
+    @DisplayName("an explicit clearLandmark actually clears a previously-set landmark")
+    void anExplicitClearLandmarkClearsTheLandmark() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("LANDMARKED", "landmarked");
+        LocationId locationId = h.location(brandId, "MALL");
+
+        h.service.describeLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                new TenantControlPlaneService.DescribeLocationCommand(
+                        "Address", null, null, "Next to the blue mosque", null, null, null, null, false));
+
+        // A write that is silent about landmark (clearLandmark left at its
+        // default false) still carries the existing one through — the
+        // untouched-field case aPhoneOnlyPlaceWritePreservesTheExistingPinAndLandmark
+        // already pins, exercised again here as the control for the next call.
+        var untouched = h.service.describeLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                new TenantControlPlaneService.DescribeLocationCommand(
+                        "Address", null, null, null, "+998712009999", null, null, null, false));
+        assertThat(untouched.landmark()).isEqualTo("Next to the blue mosque");
+
+        var cleared = h.service.describeLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                new TenantControlPlaneService.DescribeLocationCommand(
+                        "Address", null, null, null, null, null, null, null, true));
+
+        assertThat(cleared.landmark())
+                .as("clearLandmark=true must actually remove the stale landmark")
+                .isNull();
     }
 
     // ------------------------------------------------ P32: the brand profile (10.1, 10.12)

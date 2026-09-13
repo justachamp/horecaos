@@ -349,7 +349,8 @@ public class TenantControlPlaneController {
                         request.contactPhone(),
                         request.latitude(),
                         request.longitude(),
-                        request.coordinateSource()));
+                        request.coordinateSource(),
+                        request.clearLandmark()));
     }
 
     @PostMapping("/{tenantId}/brands/{brandId}/locations/{locationId}/activate")
@@ -412,10 +413,18 @@ public class TenantControlPlaneController {
     }
 
     /**
-     * @param landmark ориентир
+     * @param landmark ориентир. Omitted (or blank) leaves the stored landmark
+     *                 untouched — set {@code clearLandmark} to actually clear
+     *                 it, the same way {@code coordinateSource=NOT_GEOCODED}
+     *                 is the explicit signal to clear the point rather than
+     *                 leave it alone
      * @param coordinateSource omit to let the platform infer it: a supplied point
      *                         becomes a merchant pin, and no point stays
      *                         {@code NOT_GEOCODED} and on the backfill's work list
+     * @param clearLandmark true to remove a previously-set landmark. An omitted
+     *                       JSON key deserializes to {@code false}, which is
+     *                       exactly "leave the landmark as it is" — the default
+     *                       every write silent about this field already needs
      */
     record DescribeLocationRequest(
             @Size(max = 200) String addressLine,
@@ -432,7 +441,9 @@ public class TenantControlPlaneController {
             @DecimalMin("-180.0") @DecimalMax("180.0") @Schema(example = "69.240562")
             Double longitude,
 
-            CoordinateSource coordinateSource) {}
+            CoordinateSource coordinateSource,
+
+            boolean clearLandmark) {}
 
     record CreateTenantRequest(
             @NotBlank @Size(max = 63) @Pattern(regexp = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")

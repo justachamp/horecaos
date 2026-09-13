@@ -193,6 +193,38 @@ describe('LocationDetailPane', () => {
     );
   });
 
+  /**
+   * P32 second-pass adversarial review: emptying the field must send the
+   * explicit clear signal, not merely omit `landmark` -- an omission reads
+   * to the backend as "this write never touched the landmark" and the stale
+   * value would survive the save while the console showed it as gone.
+   */
+  it('sends the explicit clear signal when the landmark field is emptied and saved', async () => {
+    const editButton = () =>
+      fixture.nativeElement.querySelector('.primary') as HTMLButtonElement;
+    const saveButton = () =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+      ).find((button) => button.textContent?.includes('Save')) as HTMLButtonElement;
+
+    editButton().click();
+    fixture.detectChanges();
+    const landmarkInput = fixture.nativeElement.querySelector(
+      '#place-landmark',
+    ) as HTMLInputElement;
+    landmarkInput.value = '';
+    landmarkInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    saveButton().click();
+    await flushMicrotasks();
+
+    expect(api.describePlace).toHaveBeenCalledWith(
+      SCOPE,
+      expect.objectContaining({ landmark: undefined, clearLandmark: true }),
+    );
+  });
+
   it('requires a reason code before forcing the location closed', async () => {
     const tabs = fixture.nativeElement.querySelectorAll('.tab');
     (tabs[1] as HTMLButtonElement).click();

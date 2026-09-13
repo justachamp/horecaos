@@ -112,6 +112,15 @@ export class LocationDetailPane {
    * erased a surveyed branch's map pin on every address or phone edit.
    * `landmark` used to be omitted the same way; it is sent now that this
    * form has a field for it.
+   *
+   * **Clearing the landmark.** An emptied `draftLandmark` collapses to
+   * `landmark: undefined` on the wire, which the backend reads as "this
+   * write did not touch the landmark" and carries the stored value through
+   * unchanged -- indistinguishable from a phone-only edit that never opened
+   * this field at all. `clearLandmark` is sent, true, only when the draft is
+   * blank *and* the loaded profile actually had a landmark to clear, so an
+   * operator who empties the field and saves gets what the console already
+   * showed as having happened.
    */
   protected async savePlace(): Promise<void> {
     const scope = this.scope();
@@ -121,12 +130,15 @@ export class LocationDetailPane {
     this.placeSaving.set(true);
     this.placeError.set(null);
     try {
+      const trimmedLandmark = this.draftLandmark().trim();
+      const clearLandmark = trimmedLandmark === '' && !!this.profile()?.landmark;
       const updated = await this.api.describePlace(scope, {
         addressLine: this.draftAddressLine().trim() || undefined,
         district: this.draftDistrict().trim() || undefined,
         city: this.draftCity().trim() || undefined,
         contactPhone: this.draftContactPhone().trim() || undefined,
-        landmark: this.draftLandmark().trim() || undefined,
+        landmark: trimmedLandmark || undefined,
+        clearLandmark: clearLandmark || undefined,
       });
       this.profile.set(updated);
       this.editingPlace.set(false);
