@@ -116,6 +116,19 @@ public final class OrderActionsPolicy {
             actions.add(new OrderAction(OrderActionCode.CANCEL, null));
         }
 
+        // ADR 0019 amendment (ADR 0110), wave P41 (orders.md §0.2, §11.3). A
+        // compensating transition is a different power from ORDER_ADVANCE, and
+        // a different table: OrderStateMachine.compensatingTransitionsFrom is
+        // disjoint from transitionsFrom, so an ORDER_ADVANCE holder is never
+        // offered one of these under the ADVANCE branch above, and an
+        // ORDER_STATE_OVERRIDE holder never sees it merge with an ordinary
+        // advance. POST .../state-overrides declares ORDER_STATE_OVERRIDE.
+        if (grantedCapabilities.contains(Capability.ORDER_STATE_OVERRIDE)) {
+            for (OrderStatus target : OrderStateMachine.compensatingTransitionsFrom(status)) {
+                actions.add(new OrderAction(OrderActionCode.OVERRIDE, target));
+            }
+        }
+
         // POST .../amendments (propose) declares ORDER_AMEND. Only the
         // "order has not ended" half of OrderAmendmentService.propose's guard
         // is expressible here (orders.md §4.4): the seven financial commands'

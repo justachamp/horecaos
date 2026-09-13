@@ -3472,6 +3472,11 @@ export interface StaffSignInRequest {
   username: string;
 }
 
+export interface StateOverrideRequest {
+  reasonId: string;
+  targetStatus: "RECEIVED" | "PAYMENT_AUTHORIZING" | "AWAITING_APPROVAL" | "PAYMENT_FAILED" | "CONFIRMED" | "REJECTED" | "EXPIRED" | "PREPARING" | "READY" | "FULFILLING" | "COMPLETED" | "CANCELLED";
+}
+
 export interface StatementLineView {
   amount?: ApiMoney;
   description?: string;
@@ -4230,6 +4235,7 @@ export interface Operations {
   "revealNote": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/lines/{lineId}/note"; request: { parameters: { path: { brandId: string; lineId: string; locationId: string; orderId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": NoteResponse } };
   "revisions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/revisions"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": Array<RevisionResponse> } };
   "stateAction_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/state-actions"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: OperationsOrderControllerStateActionRequest }; responses: { "200": OperationsOrderControllerDecisionResponse } };
+  "stateOverride": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/state-overrides"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: StateOverrideRequest }; responses: { "200": OperationsOrderControllerDecisionResponse } };
   "timeline": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/timeline"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": Array<TimelineEntryResponse> } };
   "list_2": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/reservations"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { from: string; to: string } } }; responses: { "200": Array<ReservationResponse> } };
   "request": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/reservations"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: ReservationRequest }; responses: { "200": ReservationResponse } };

@@ -18109,6 +18109,20 @@
         "required" : [ "planVersionId", "reason" ],
         "type" : "object"
       },
+      "StateOverrideRequest" : {
+        "properties" : {
+          "reasonId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "targetStatus" : {
+            "enum" : [ "RECEIVED", "PAYMENT_AUTHORIZING", "AWAITING_APPROVAL", "PAYMENT_FAILED", "CONFIRMED", "REJECTED", "EXPIRED", "PREPARING", "READY", "FULFILLING", "COMPLETED", "CANCELLED" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "reasonId", "targetStatus" ],
+        "type" : "object"
+      },
       "StatementIssueRequest" : {
         "properties" : {
           "periodKey" : {
@@ -48315,6 +48329,69 @@
           }
         },
         "summary" : "Move a confirmed order along the kitchen path",
+        "tags" : [ "Operations orders" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/state-overrides" : {
+      "post" : {
+        "description" : "Not a literal reversal: OrderStateMachine declares each compensating edge as its own forward step, gated on ORDER_STATE_OVERRIDE rather than ORDER_ADVANCE and carrying a mandatory reason from the tenant's registry, its own timeline entry and its own audit fact. Refused for any target that is not a declared compensating edge, including every terminal order — a correction is never a reopening.",
+        "operationId" : "stateOverride",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StateOverrideRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OperationsOrderControllerDecisionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Force a compensating transition that restores an earlier status",
         "tags" : [ "Operations orders" ]
       }
     },

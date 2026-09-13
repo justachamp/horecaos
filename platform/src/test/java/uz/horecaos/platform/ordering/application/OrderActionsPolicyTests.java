@@ -165,6 +165,110 @@ class OrderActionsPolicyTests {
         }
     }
 
+    // ------------------------------------------- compensating override (ADR 0110, wave P41)
+
+    /** {@link #ALL_ACTION_CAPS} plus {@code ORDER_STATE_OVERRIDE}, for the override-specific tests below. */
+    private static final Set<Capability> ALL_ACTION_CAPS_WITH_OVERRIDE;
+
+    static {
+        EnumSet<Capability> caps = EnumSet.copyOf(ALL_ACTION_CAPS);
+        caps.add(Capability.ORDER_STATE_OVERRIDE);
+        ALL_ACTION_CAPS_WITH_OVERRIDE = caps;
+    }
+
+    /**
+     * Drift-proofed exactly like {@link #everyAdvanceTargetIsExactlyWhatTheStateMachinePermitsWhenAdvanceIsGranted}:
+     * the offered {@code OVERRIDE} targets are read back against {@link
+     * OrderStateMachine#compensatingTransitionsFrom}, not a hand-written table,
+     * so a third compensating edge added to the machine without a matching
+     * branch here would fail this test rather than silently ship unoffered.
+     */
+    @Test
+    void everyOverrideTargetIsExactlyWhatTheMachineDeclaresCompensatingWhenOverrideIsGranted() {
+        for (OrderStatus status : OrderStatus.values()) {
+            for (FulfillmentMode mode : FulfillmentMode.values()) {
+                List<OrderStatus> offered =
+                        OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS_WITH_OVERRIDE).stream()
+                                .filter(a -> a.code() == OrderActionCode.OVERRIDE)
+                                .map(OrderAction::targetStatus)
+                                .toList();
+
+                assertThat(offered)
+                        .as("override targets for %s/%s", status, mode)
+                        .containsExactlyInAnyOrderElementsOf(OrderStateMachine.compensatingTransitionsFrom(status));
+            }
+        }
+    }
+
+    /** Names the two edges directly, so a change to the machine's compensating table cannot pass unnoticed. */
+    @Test
+    void overrideOffersExactlyTheTwoNamedCompensatingEdges() {
+        assertThat(OrderActionsPolicy.availableFor(
+                        OrderStatus.READY, FulfillmentMode.DELIVERY, ALL_ACTION_CAPS_WITH_OVERRIDE))
+                .filteredOn(a -> a.code() == OrderActionCode.OVERRIDE)
+                .extracting(OrderAction::targetStatus)
+                .containsExactly(OrderStatus.PREPARING);
+        assertThat(OrderActionsPolicy.availableFor(
+                        OrderStatus.FULFILLING, FulfillmentMode.DELIVERY, ALL_ACTION_CAPS_WITH_OVERRIDE))
+                .filteredOn(a -> a.code() == OrderActionCode.OVERRIDE)
+                .extracting(OrderAction::targetStatus)
+                .containsExactly(OrderStatus.READY);
+    }
+
+    /**
+     * The brief's own trap, stated as a test: an {@code ORDER_ADVANCE} holder —
+     * every line cook — never sees {@code OVERRIDE} on any status or mode,
+     * however far its grant otherwise reaches, because {@code
+     * ORDER_STATE_OVERRIDE} is absent from {@link #ALL_ACTION_CAPS}.
+     */
+    @Test
+    void overrideNeverAppearsForAPrincipalWithoutTheOverrideCapability() {
+        for (OrderStatus status : OrderStatus.values()) {
+            for (FulfillmentMode mode : FulfillmentMode.values()) {
+                assertThat(OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS))
+                        .as("%s/%s without ORDER_STATE_OVERRIDE", status, mode)
+                        .noneMatch(a -> a.code() == OrderActionCode.OVERRIDE);
+            }
+        }
+    }
+
+    /** Terminal orders stay terminal (the brief's other named trap): no override, even fully granted. */
+    @Test
+    void terminalStatusesOfferNoOverrideEvenWhenGranted() {
+        for (OrderStatus status : OrderStatus.values()) {
+            if (!status.terminal()) {
+                continue;
+            }
+            for (FulfillmentMode mode : FulfillmentMode.values()) {
+                assertThat(OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS_WITH_OVERRIDE))
+                        .as("%s/%s is terminal", status, mode)
+                        .isEmpty();
+            }
+        }
+    }
+
+    /**
+     * {@code TENANT_ADMIN} and {@code TENANT_OWNER} are the only two {@link
+     * PlatformRole} bundles holding {@code ORDER_STATE_OVERRIDE} today — "almost
+     * nobody" as {@link Capability#ORDER_ADVANCE}'s own doc puts it.
+     * {@code LOCATION_MANAGER}, which otherwise holds every other action
+     * capability, must still never see {@code OVERRIDE}.
+     */
+    @Test
+    void onlyTenantAdminAndTenantOwnerHoldTheOverrideCapabilityAmongInspectedRoles() {
+        assertThat(PlatformRole.TENANT_ADMIN.capabilities()).contains(Capability.ORDER_STATE_OVERRIDE);
+        assertThat(PlatformRole.TENANT_OWNER.capabilities()).contains(Capability.ORDER_STATE_OVERRIDE);
+        assertThat(PlatformRole.LOCATION_MANAGER.capabilities()).doesNotContain(Capability.ORDER_STATE_OVERRIDE);
+        assertThat(PlatformRole.LOCATION_STAFF.capabilities()).doesNotContain(Capability.ORDER_STATE_OVERRIDE);
+
+        assertThat(OrderActionsPolicy.availableFor(
+                        OrderStatus.READY, FulfillmentMode.DELIVERY, PlatformRole.TENANT_ADMIN.capabilities()))
+                .anyMatch(a -> a.code() == OrderActionCode.OVERRIDE);
+        assertThat(OrderActionsPolicy.availableFor(
+                        OrderStatus.READY, FulfillmentMode.DELIVERY, PlatformRole.LOCATION_MANAGER.capabilities()))
+                .noneMatch(a -> a.code() == OrderActionCode.OVERRIDE);
+    }
+
     /** A terminal order offers nothing at all — not even a read-only advance. */
     @Test
     void terminalStatusesOfferNoActions() {
@@ -366,6 +470,7 @@ class OrderActionsPolicyTests {
             case ADVANCE -> true; // POST .../state-actions
             case CANCEL -> true; // POST .../cancellations
             case AMEND -> true; // POST .../amendments
+            case OVERRIDE -> true; // POST .../state-overrides (ADR 0110, wave P41)
             case COMPLETE, RESOLVE, ASSIGN_COURIER, ISSUE_INVOICE -> false;
         };
     }
@@ -378,7 +483,8 @@ class OrderActionsPolicyTests {
                         OrderActionCode.REJECT,
                         OrderActionCode.ADVANCE,
                         OrderActionCode.CANCEL,
-                        OrderActionCode.AMEND);
+                        OrderActionCode.AMEND,
+                        OrderActionCode.OVERRIDE);
     }
 
     /**

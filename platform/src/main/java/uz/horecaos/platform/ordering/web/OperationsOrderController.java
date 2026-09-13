@@ -115,7 +115,13 @@ public class OperationsOrderController {
      * a grant read per order.
      */
     private static final Set<Capability> ACTIONS_POLICY_CAPABILITIES = EnumSet.of(
-            Capability.ORDER_APPROVE, Capability.ORDER_ADVANCE, Capability.ORDER_CANCEL, Capability.ORDER_AMEND);
+            Capability.ORDER_APPROVE,
+            Capability.ORDER_ADVANCE,
+            Capability.ORDER_CANCEL,
+            Capability.ORDER_AMEND,
+            // ADR 0019 amendment (ADR 0110), wave P41: OrderActionsPolicy's
+            // OVERRIDE branch reads this capability exactly like the other four.
+            Capability.ORDER_STATE_OVERRIDE);
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OperationsOrderController(
@@ -728,6 +734,51 @@ public class OperationsOrderController {
         }
     }
 
+    @PostMapping("/{orderId}/state-overrides")
+    @RequiresCapability(value = Capability.ORDER_STATE_OVERRIDE, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Force a compensating transition that restores an earlier status",
+            description = "Not a literal reversal: OrderStateMachine declares each compensating edge "
+                    + "as its own forward step, gated on ORDER_STATE_OVERRIDE rather than ORDER_ADVANCE "
+                    + "and carrying a mandatory reason from the tenant's registry, its own timeline entry "
+                    + "and its own audit fact. Refused for any target that is not a declared compensating "
+                    + "edge, including every terminal order — a correction is never a reopening.")
+    public ResponseEntity<DecisionResponse> stateOverride(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID orderId,
+            @Valid @RequestBody StateOverrideRequest body,
+            HttpServletRequest request) {
+        try {
+            long expected = AggregateVersion.requireIfMatch(request);
+            var result = outcomes.override(
+                    tenantId,
+                    orderId,
+                    body.targetStatus(),
+                    (int) expected,
+                    new OrderOutcomeService.OverrideCommand(
+                            body.reasonId(), "USER", currentActor.get().subject(), null));
+            return ResponseEntity.ok(new DecisionResponse(
+                    orderId, result.status().name(), result.orderVersion(), result.applied(), null, null));
+        } catch (OrderStateService.StaleOrderException stale) {
+            throw ApiException.staleVersion(stale.expected(), stale.actual());
+        } catch (OrderStateMachine.IllegalTransitionException illegal) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    illegal.getMessage(),
+                    java.util.Map.of(
+                            "from", illegal.from().name(), "to", illegal.to().name()));
+        } catch (OrderStateService.KitchenAtCapacityException atCapacity) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, atCapacity.getMessage(), java.util.Map.of("reason", "AT_CAPACITY"));
+        } catch (OrderOutcomeReasonService.ReasonNotFoundException missing) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
+        } catch (IllegalArgumentException refused) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, refused.getMessage());
+        }
+    }
+
     @PostMapping("/{orderId}/cancellations")
     @RequiresCapability(value = Capability.ORDER_CANCEL, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
@@ -1225,6 +1276,16 @@ public class OperationsOrderController {
     public record StateActionRequest(
             @NotNull OrderStatus targetStatus,
             @NotBlank @Size(max = 64) String reasonCode) {}
+
+    /**
+     * A compensating transition request (ADR 0019 amendment, ADR 0110).
+     *
+     * @param reasonId mandatory — a {@code CANCELLATION}-kind reason from the
+     *                 tenant's registry ({@code ordering.order_outcome_reasons});
+     *                 there is no free-text path, unlike {@link StateActionRequest}
+     */
+    public record StateOverrideRequest(
+            @NotNull OrderStatus targetStatus, @NotNull UUID reasonId) {}
 
     /**
      * A cancellation request, with an optional registry reason and note.
