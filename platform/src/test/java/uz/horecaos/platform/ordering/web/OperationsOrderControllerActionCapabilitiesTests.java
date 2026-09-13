@@ -91,8 +91,22 @@ class OperationsOrderControllerActionCapabilitiesTests {
         assertThat(granted).containsExactly(Capability.ORDER_CANCEL);
     }
 
+    /** ADR 0019 amendment (ADR 0110), wave P41: the fifth policy capability, read exactly like the first four. */
     @Test
-    void grantingAllFourYieldsAllFour() {
+    void grantingOnlyOrderStateOverrideYieldsExactlyThatOneCapability() {
+        AuthorizationService authorization = mock(AuthorizationService.class);
+        when(authorization.has(any(), any(), any())).thenReturn(false);
+        when(authorization.has(
+                        SUBJECT, Capability.ORDER_STATE_OVERRIDE, ResourceScope.location(TENANT, BRAND, LOCATION)))
+                .thenReturn(true);
+
+        Set<Capability> granted = controllerFor(authorization).grantedOrderActionCapabilities(TENANT, BRAND, LOCATION);
+
+        assertThat(granted).containsExactly(Capability.ORDER_STATE_OVERRIDE);
+    }
+
+    @Test
+    void grantingEveryPolicyCapabilityYieldsAllOfThem() {
         AuthorizationService authorization = mock(AuthorizationService.class);
         when(authorization.has(any(), any(), any())).thenReturn(true);
 
@@ -103,7 +117,9 @@ class OperationsOrderControllerActionCapabilitiesTests {
                         Capability.ORDER_APPROVE,
                         Capability.ORDER_ADVANCE,
                         Capability.ORDER_CANCEL,
-                        Capability.ORDER_AMEND);
+                        Capability.ORDER_AMEND,
+                        // ADR 0019 amendment (ADR 0110), wave P41.
+                        Capability.ORDER_STATE_OVERRIDE);
     }
 
     /**
@@ -127,5 +143,10 @@ class OperationsOrderControllerActionCapabilitiesTests {
                 .has(eq(SUBJECT), eq(Capability.ORDER_CANCEL), eq(ResourceScope.location(TENANT, BRAND, LOCATION)));
         verify(authorization)
                 .has(eq(SUBJECT), eq(Capability.ORDER_AMEND), eq(ResourceScope.location(TENANT, BRAND, LOCATION)));
+        verify(authorization)
+                .has(
+                        eq(SUBJECT),
+                        eq(Capability.ORDER_STATE_OVERRIDE),
+                        eq(ResourceScope.location(TENANT, BRAND, LOCATION)));
     }
 }

@@ -4,6 +4,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -21,6 +22,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -206,6 +208,42 @@ class OperationsOrderControllerActionCapabilitiesHttpTests {
         }
     }
 
+    /**
+     * ADR 0019 amendment (ADR 0110), wave P41. {@code APPROVER} holds {@code
+     * ORDER_ADVANCE} at {@code LOCATION_A} — every line cook's capability — and
+     * not {@code ORDER_STATE_OVERRIDE}, which almost nobody should hold. This
+     * proves the brief's own named trap: the refusal happens {@code at the
+     * endpoint}, not merely by the array omitting {@code OVERRIDE} — the same
+     * {@code RequiresCapability} interceptor every other mutating endpoint here
+     * goes through, exercised with a real request body naming a real
+     * compensating edge, so a reviewer cannot mistake this for a request that
+     * was refused for some other reason first.
+     */
+    @Test
+    @DisplayName("ORDER_ADVANCE without ORDER_STATE_OVERRIDE is refused at POST .../state-overrides, "
+            + "not merely omitted from actions[]")
+    void orderAdvanceAloneIsRefusedAtTheOverrideEndpoint() throws Exception {
+        UUID orderId = seedReadyOrder(LOCATION_A, "3001");
+
+        MvcResult overrideAttempt = mvc.perform(post(ordersPath(LOCATION_A) + "/" + orderId + "/state-overrides")
+                        .with(tokenFor(APPROVER))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("If-Match", "\"1\"")
+                        .content("{\"targetStatus\":\"PREPARING\",\"reasonId\":\"" + UUID.randomUUID() + "\"}"))
+                .andReturn();
+
+        assertThat(overrideAttempt.getResponse().getStatus())
+                .as("APPROVER holds ORDER_ADVANCE, never ORDER_STATE_OVERRIDE")
+                .isEqualTo(403);
+
+        // And confirmed the other way round: actions[] never offered OVERRIDE to
+        // this principal either, so the 403 above is a second, independent gate
+        // — not the only place the capability is checked.
+        for (String body : readAllThreeAt(LOCATION_A, orderId, APPROVER)) {
+            assertThat(body).doesNotContain("\"action\":\"OVERRIDE\"");
+        }
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     /** The list, board and detail response bodies for one order, all read as one subject. All three must be 200. */
@@ -290,6 +328,78 @@ class OperationsOrderControllerActionCapabilitiesHttpTests {
                 .param("ch", channelId)
                 .param("guest", "guest-" + orderId)
                 .param("deadline", now.plus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
+                .param("quote", quoteId)
+                .param("hash", "hash-" + orderId)
+                .param("pub", publicationId)
+                .param("cart", cartId)
+                .param("key", "idem-" + orderId)
+                .param("at", now.atOffset(ZoneOffset.UTC))
+                .update();
+
+        return orderId;
+    }
+
+    /**
+     * A {@code READY} order (ADR 0019 amendment, ADR 0110, wave P41) —
+     * {@code OrderStateMachine.compensatingTransitionsFrom(READY)} names
+     * {@code PREPARING}, the edge {@link
+     * #orderAdvanceAloneIsRefusedAtTheOverrideEndpoint} targets. {@code
+     * fulfillment_mode} is {@code PICKUP} so the seed needs no delivery
+     * destination; the compensating edge under test does not depend on mode.
+     */
+    private UUID seedReadyOrder(UUID locationId, String number) {
+        UUID orderId = UUID.randomUUID();
+        UUID cartId = UUID.randomUUID();
+        UUID quoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+
+        jdbc.sql("""
+                INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
+                    fulfillment_mode, currency, status, guest_reference_hash, expires_at)
+                VALUES (:id, :t, :b, :loc, :ch, 'PICKUP', 'UZS', 'ACTIVE', :guest,
+                    now() + interval '1 hour')
+                """)
+                .param("id", cartId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", locationId)
+                .param("ch", channelId)
+                .param("guest", "guest-" + orderId)
+                .update();
+
+        jdbc.sql("""
+                INSERT INTO pricing.quotes (id, tenant_id, brand_id, location_id, currency,
+                    catalog_publication_id, calculation_version, context_hash, subtotal_minor,
+                    tax_minor, total_minor, expires_at)
+                VALUES (:id, :t, :b, :loc, 'UZS', :pub, 1, :hash, 20000, 0, 20000,
+                    now() + interval '1 hour')
+                """)
+                .param("id", quoteId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", locationId)
+                .param("pub", publicationId)
+                .param("hash", "hash-" + orderId)
+                .update();
+
+        jdbc.sql("""
+                INSERT INTO ordering.orders (id, public_order_number, tenant_id, brand_id,
+                    location_id, channel_id, channel_code_snapshot, guest_reference_hash,
+                    fulfillment_mode, acceptance_mode_snapshot, approval_channel_snapshot, status,
+                    currency, subtotal_minor, tax_minor, fee_minor, total_minor, pricing_quote_id,
+                    pricing_context_hash, catalog_publication_id, cart_id, idempotency_key, version,
+                    created_at, confirmed_at)
+                VALUES (:id, :number, :t, :b, :loc, :ch, 'WEB', :guest, 'PICKUP', 'AUTO_CONFIRM',
+                    'HORECAOS_OPERATIONS', 'READY', 'UZS', 20000, 0, 0, 20000, :quote, :hash, :pub,
+                    :cart, :key, 1, :at, :at)
+                """)
+                .param("id", orderId)
+                .param("number", number)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", locationId)
+                .param("ch", channelId)
+                .param("guest", "guest-" + orderId)
                 .param("quote", quoteId)
                 .param("hash", "hash-" + orderId)
                 .param("pub", publicationId)
