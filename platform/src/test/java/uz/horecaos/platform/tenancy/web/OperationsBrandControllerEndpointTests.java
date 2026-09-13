@@ -112,8 +112,7 @@ class OperationsBrandControllerEndpointTests {
                 .contains("INSUFFICIENT_CAPABILITY")
                 .contains(Capability.BRAND_READ.code());
 
-        MvcResult getRefused = mvc.perform(
-                        get(BRANDS + "/" + BRAND).with(tokenFor(LOCATION_ONLY)))
+        MvcResult getRefused = mvc.perform(get(BRANDS + "/" + BRAND).with(tokenFor(LOCATION_ONLY)))
                 .andReturn();
         assertThat(getRefused.getResponse().getStatus()).isEqualTo(403);
     }
@@ -126,8 +125,8 @@ class OperationsBrandControllerEndpointTests {
         assertThat(locations.getResponse().getStatus()).isEqualTo(200);
         assertThat(locations.getResponse().getContentAsString()).contains(LOCATION.toString());
 
-        MvcResult states = mvc.perform(get(BRANDS + "/" + BRAND + "/locations/service-states")
-                        .with(tokenFor(LOCATION_ONLY)))
+        MvcResult states = mvc.perform(
+                        get(BRANDS + "/" + BRAND + "/locations/service-states").with(tokenFor(LOCATION_ONLY)))
                 .andReturn();
         assertThat(states.getResponse().getStatus()).isEqualTo(200);
     }
@@ -225,9 +224,7 @@ class OperationsBrandControllerEndpointTests {
      */
     private static RequestPostProcessor tokenFor(String subject) {
         return jwt().jwt(builder -> builder.subject(subject)
-                .claim(
-                        "resource_access",
-                        Map.of("horecaos-api", Map.of("roles", List.of("platform-admin")))));
+                .claim("resource_access", Map.of("horecaos-api", Map.of("roles", List.of("platform-admin")))));
     }
 
     @TestConfiguration(proxyBeanMethods = false)

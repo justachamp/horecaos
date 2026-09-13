@@ -220,8 +220,7 @@ class CategoryAuthoringTests {
         UUID catalogB = authoring.createCatalog(TENANT, BRAND, "DELIVERY", "Delivery menu", LOCALE);
         UUID categoryInB = authoring.createCategory(TENANT, BRAND, catalogB, null, "B", "B", LOCALE, 0);
 
-        assertThatThrownBy(
-                        () -> authoring.createCategory(TENANT, BRAND, catalogA, categoryInB, "A", "A", LOCALE, 0))
+        assertThatThrownBy(() -> authoring.createCategory(TENANT, BRAND, catalogA, categoryInB, "A", "A", LOCALE, 0))
                 .isInstanceOf(CatalogAuthoringService.UnknownCatalogEntityException.class);
         assertThat(store.categoriesInCatalog(TENANT, BRAND, catalogA)).isEmpty();
     }
@@ -239,8 +238,8 @@ class CategoryAuthoringTests {
         UUID otherBrandCategory =
                 authoring.createCategory(TENANT, otherBrand, otherCatalogId, null, "A", "A", LOCALE, 0);
 
-        assertThatThrownBy(() -> authoring.updateCategory(
-                        TENANT, BRAND, catalogId, otherBrandCategory, null, "STOLEN", 0))
+        assertThatThrownBy(
+                        () -> authoring.updateCategory(TENANT, BRAND, catalogId, otherBrandCategory, null, "STOLEN", 0))
                 .isInstanceOf(CatalogAuthoringService.UnknownCatalogEntityException.class);
     }
 
@@ -264,8 +263,8 @@ class CategoryAuthoringTests {
         UUID otherTenantCategory =
                 authoring.createCategory(otherTenant, otherBrand, otherCatalogId, null, "A", "A", LOCALE, 0);
 
-        assertThatThrownBy(() -> authoring.updateCategory(
-                        TENANT, BRAND, catalogId, otherTenantCategory, null, "STOLEN", 0))
+        assertThatThrownBy(() ->
+                        authoring.updateCategory(TENANT, BRAND, catalogId, otherTenantCategory, null, "STOLEN", 0))
                 .isInstanceOf(CatalogAuthoringService.UnknownCatalogEntityException.class);
     }
 }

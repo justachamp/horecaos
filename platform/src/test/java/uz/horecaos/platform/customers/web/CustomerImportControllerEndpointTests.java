@@ -132,8 +132,7 @@ class CustomerImportControllerEndpointTests {
                 mvc.perform(get(IMPORTS + "/" + runId).with(tokenFor(OWNER))).andReturn();
         assertThat(status.getResponse().getStatus()).isEqualTo(200);
 
-        MvcResult rows = mvc.perform(
-                        get(IMPORTS + "/" + runId + "/rows").with(tokenFor(OWNER)))
+        MvcResult rows = mvc.perform(get(IMPORTS + "/" + runId + "/rows").with(tokenFor(OWNER)))
                 .andReturn();
         assertThat(rows.getResponse().getStatus()).isEqualTo(200);
     }
@@ -147,8 +146,8 @@ class CustomerImportControllerEndpointTests {
                 .content(submitBody()));
         UUID runId = runId();
 
-        MvcResult status =
-                mvc.perform(get(IMPORTS + "/" + runId).with(tokenFor(READ_ONLY))).andReturn();
+        MvcResult status = mvc.perform(get(IMPORTS + "/" + runId).with(tokenFor(READ_ONLY)))
+                .andReturn();
 
         assertThat(status.getResponse().getStatus()).isEqualTo(200);
     }

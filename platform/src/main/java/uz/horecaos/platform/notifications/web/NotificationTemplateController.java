@@ -195,7 +195,11 @@ public class NotificationTemplateController {
             // Taking it from the request would let anyone holding this capability
             // sign somebody else's name to a copy change.
             templates.activate(
-                    tenantId, brandId, templateId, versionNumber, currentActor.get().subject());
+                    tenantId,
+                    brandId,
+                    templateId,
+                    versionNumber,
+                    currentActor.get().subject());
         } catch (NotificationTemplateService.IncompleteTranslationException incomplete) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, incomplete.getMessage());
         } catch (IllegalStateException conflict) {

@@ -130,7 +130,8 @@ public class PosMappingService {
         // table-wide rather than ACTIVE-only, retiring it later permanently
         // burns that id for this binding and type.
         if (!mappings.horecaosEntityExists(tenantId, binding.get().brandId(), type, horecaosEntityId)) {
-            return CreateOutcome.notFound("No such %s entity".formatted(type.name().toLowerCase(Locale.ROOT)));
+            return CreateOutcome.notFound(
+                    "No such %s entity".formatted(type.name().toLowerCase(Locale.ROOT)));
         }
         if (mappings.findActiveConflict(tenantId, bindingId, type, horecaosEntityId, externalEntityId)
                 .isPresent()) {

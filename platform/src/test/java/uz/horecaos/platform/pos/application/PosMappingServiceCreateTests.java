@@ -139,10 +139,7 @@ class PosMappingServiceCreateTests {
                 INSERT INTO tenant.tenants
                     (id, slug, legal_name, display_name, default_currency, default_timezone, status, version)
                 VALUES (:id, :slug, 'Legal', 'POS create', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
-                """)
-                .param("id", id)
-                .param("slug", slug)
-                .update();
+                """).param("id", id).param("slug", slug).update();
     }
 
     private UUID insertPaymentMethod(UUID tenantId, String code, String displayName) {

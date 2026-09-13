@@ -582,8 +582,8 @@ class NotificationDeliveryTests {
         Map<MessageLocale, Wording> wordings = new LinkedHashMap<>();
         MessageLocale.required().forEach(locale -> wordings.put(locale, new Wording(null, "Order {{orderNumbr}}")));
 
-        assertThat(catchThrowable(
-                        () -> templates.addVersion(TENANT, BRAND, templateId, wordings, Map.of("orderNumber", "string"))))
+        assertThat(catchThrowable(() ->
+                        templates.addVersion(TENANT, BRAND, templateId, wordings, Map.of("orderNumber", "string"))))
                 .hasMessageContaining("orderNumbr");
     }
 

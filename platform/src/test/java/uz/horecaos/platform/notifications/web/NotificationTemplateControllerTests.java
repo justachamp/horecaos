@@ -260,9 +260,9 @@ class NotificationTemplateControllerTests {
     @DisplayName("activate refuses a templateId that belongs to a sibling brand")
     void activateRefusesASiblingBrand() {
         UUID templateId = createSmsTemplate("ORDER_READY");
-        NotificationTemplateController.VersionResponse saved =
-                Objects.requireNonNull(controller.addVersion(tenantId, brandId, templateId, wordings("Готово"))
-                        .getBody());
+        NotificationTemplateController.VersionResponse saved = Objects.requireNonNull(controller
+                .addVersion(tenantId, brandId, templateId, wordings("Готово"))
+                .getBody());
 
         assertThatThrownBy(() -> controller.activate(tenantId, otherBrandId, templateId, saved.versionNumber()))
                 .isInstanceOf(ApiException.class);
@@ -282,9 +282,9 @@ class NotificationTemplateControllerTests {
     @DisplayName("one version refuses a templateId that belongs to a sibling brand")
     void oneVersionRefusesASiblingBrand() {
         UUID templateId = createSmsTemplate("ORDER_READY");
-        NotificationTemplateController.VersionResponse saved =
-                Objects.requireNonNull(controller.addVersion(tenantId, brandId, templateId, wordings("Готово"))
-                        .getBody());
+        NotificationTemplateController.VersionResponse saved = Objects.requireNonNull(controller
+                .addVersion(tenantId, brandId, templateId, wordings("Готово"))
+                .getBody());
 
         assertThatThrownBy(() -> controller.version(tenantId, otherBrandId, templateId, saved.versionNumber()))
                 .isInstanceOf(ApiException.class);
@@ -320,14 +320,19 @@ class NotificationTemplateControllerTests {
     @DisplayName("every endpoint still works normally through the template's own brand")
     void everyEndpointStillWorksThroughItsOwnBrand() {
         UUID templateId = createSmsTemplate("ORDER_READY");
-        NotificationTemplateController.VersionResponse saved =
-                Objects.requireNonNull(controller.addVersion(tenantId, brandId, templateId, wordings("Готово"))
-                        .getBody());
+        NotificationTemplateController.VersionResponse saved = Objects.requireNonNull(controller
+                .addVersion(tenantId, brandId, templateId, wordings("Готово"))
+                .getBody());
 
         assertThat(controller.versions(tenantId, brandId, templateId).getBody()).isNotEmpty();
-        assertThat(controller.version(tenantId, brandId, templateId, saved.versionNumber()).getBody())
+        assertThat(controller
+                        .version(tenantId, brandId, templateId, saved.versionNumber())
+                        .getBody())
                 .isNotEmpty();
-        assertThat(controller.activate(tenantId, brandId, templateId, saved.versionNumber()).getStatusCode().value())
+        assertThat(controller
+                        .activate(tenantId, brandId, templateId, saved.versionNumber())
+                        .getStatusCode()
+                        .value())
                 .isEqualTo(204);
     }
 

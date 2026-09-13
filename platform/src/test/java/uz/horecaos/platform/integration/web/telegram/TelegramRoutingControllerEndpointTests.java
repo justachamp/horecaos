@@ -56,8 +56,7 @@ class TelegramRoutingControllerEndpointTests {
     private static final String MANAGER = "telegram-routing-manager";
     private static final String READ_ONLY = "telegram-routing-read-only";
 
-    private static final String ROUTING =
-            "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/notification-routing";
+    private static final String ROUTING = "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/notification-routing";
 
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
@@ -130,8 +129,8 @@ class TelegramRoutingControllerEndpointTests {
                 .andReturn();
         assertThat(topicRefused.getResponse().getStatus()).isEqualTo(403);
 
-        MvcResult unbindRefused = mvc.perform(post(ROUTING + "/bindings/" + BINDING + "/unbind")
-                        .with(tokenFor(READ_ONLY)))
+        MvcResult unbindRefused = mvc.perform(
+                        post(ROUTING + "/bindings/" + BINDING + "/unbind").with(tokenFor(READ_ONLY)))
                 .andReturn();
         assertThat(unbindRefused.getResponse().getStatus()).isEqualTo(403);
 
@@ -140,8 +139,8 @@ class TelegramRoutingControllerEndpointTests {
 
     @Test
     void aManagerCanSubscribeMoveAndUnbind() throws Exception {
-        MvcResult eventClasses =
-                mvc.perform(get(ROUTING + "/event-classes").with(tokenFor(MANAGER))).andReturn();
+        MvcResult eventClasses = mvc.perform(get(ROUTING + "/event-classes").with(tokenFor(MANAGER)))
+                .andReturn();
         assertThat(eventClasses.getResponse().getStatus()).isEqualTo(200);
 
         MvcResult subscribed = mvc.perform(post(ROUTING + "/bindings/" + BINDING + "/subscriptions")
@@ -206,10 +205,7 @@ class TelegramRoutingControllerEndpointTests {
                         'Pilot bot', 'ACTIVE',
                         'horecaos:test:provider_notification:platform:telegram-routing-endpoint',
                         'horecaos:test:provider_notification:platform:telegram-routing-endpoint')
-                """)
-                .param("id", INSTALLATION)
-                .param("tenantId", TENANT)
-                .update();
+                """).param("id", INSTALLATION).param("tenantId", TENANT).update();
         jdbc.sql("""
                 INSERT INTO integration.bindings (id, tenant_id, installation_id, brand_id, status)
                 VALUES (:id, :tenantId, :installationId, :brandId, 'ACTIVE')
@@ -222,10 +218,7 @@ class TelegramRoutingControllerEndpointTests {
         jdbc.sql("""
                 INSERT INTO integration.telegram_bindings (binding_id, tenant_id, chat_id, audience)
                 VALUES (:bindingId, :tenantId, -100987654321, 'OPERATIONS')
-                """)
-                .param("bindingId", BINDING)
-                .param("tenantId", TENANT)
-                .update();
+                """).param("bindingId", BINDING).param("tenantId", TENANT).update();
     }
 
     private void grant(String subject, PlatformRole role) {
