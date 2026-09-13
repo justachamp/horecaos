@@ -1109,6 +1109,38 @@ export interface CustomerExportResponse {
   status?: string;
 }
 
+export interface CustomerImportRowResponse {
+  customerAccountId?: string;
+  outcome?: string;
+  rejectReason?: string;
+  rowNumber?: number;
+}
+
+export interface CustomerImportStatusResponse {
+  dryRun?: boolean;
+  failureReason?: string;
+  rowsCreatedCustomer?: number;
+  rowsMatchedCustomer?: number;
+  rowsProcessed?: number;
+  rowsRejected?: number;
+  rowsTotal?: number;
+  runId?: string;
+  sourceFileName?: string;
+  status?: string;
+}
+
+export interface CustomerImportSubmitRequest {
+  brandId: string;
+  content: string;
+  fileName: string;
+}
+
+export interface CustomerImportSubmitResponse {
+  rowsTotal?: number;
+  runId?: string;
+  status?: string;
+}
+
 export interface CustomerLookupCandidateResponse {
   accountId?: string;
   lastOrderAt?: string;
@@ -4252,7 +4284,7 @@ export interface Operations {
   "launch": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/launches"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } } }; responses: { "200": unknown } };
   "recipients": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/recipients"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": Array<RecipientResponse> } };
   "resume": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/resumptions"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } }; body: OperationsMarketingControllerReasonRequest }; responses: { "200": ResumeResponse } };
-  "submit": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/submissions"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "submit_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/submissions"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } } }; responses: { "200": unknown } };
   "listSuppressions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/suppressions"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { activeOnly?: boolean } } }; responses: { "200": Array<SuppressionListItemResponse> } };
   "suppress": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/suppressions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: SuppressionRequest }; responses: { "200": SuppressionResponse } };
   "liftSuppression": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/suppressions/{suppressionId}/lifts"; request: { parameters: { path: { brandId: string; suppressionId: string; tenantId: string } }; body: OperationsMarketingControllerReasonRequest }; responses: { "200": LiftSuppressionResponse } };
@@ -4280,6 +4312,9 @@ export interface Operations {
   "counts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/counts"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CountsResponse } };
   "tenantErasureRequests": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/erasure-requests"; request: { parameters: { path: { tenantId: string }; query: { limit?: number; status?: string } } }; responses: { "200": Array<TenantErasureRequestResponse> } };
   "export_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/export"; request: { parameters: { path: { tenantId: string }; query: { purpose: string; query?: string; status?: string } } }; responses: { "200": Array<CustomerExportResponse> } };
+  "submit": { method: "POST"; path: "/api/v1/tenants/{tenantId}/customers/imports"; request: { parameters: { path: { tenantId: string }; query: { dryRun?: boolean } }; body: CustomerImportSubmitRequest }; responses: { "200": CustomerImportSubmitResponse } };
+  "status": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/imports/{runId}"; request: { parameters: { path: { runId: string; tenantId: string } } }; responses: { "200": CustomerImportStatusResponse } };
+  "rows": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/imports/{runId}/rows"; request: { parameters: { path: { runId: string; tenantId: string }; query: { limit?: number; offset?: number } } }; responses: { "200": Array<CustomerImportRowResponse> } };
   "resolve": { method: "POST"; path: "/api/v1/tenants/{tenantId}/customers/resolve"; request: { parameters: { path: { tenantId: string } }; body: CustomerControllerResolveRequest }; responses: { "200": ResolveResponse } };
   "profile": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": CustomerProfileResponse } };
   "addresses": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/addresses"; request: { parameters: { path: { accountId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": Array<RevealedAddress> } };

@@ -362,6 +362,18 @@ public class CustomerController {
         return ResponseEntity.ok(new CountsResponse(counts.total(), counts.registeredToday(), counts.orderedToday()));
     }
 
+    /**
+     * Carries {@link CustomerListQueryService.ExportResult#truncated} without
+     * changing the response body's shape. {@code OpenApiContractTests}
+     * refuses a released endpoint's response type narrowing or changing —
+     * wrapping the array in `{rows, truncated}` failed that check ("array"
+     * to "object"), so the flag travels as a header instead, the same way
+     * {@code IdempotencyInterceptor.REPLAYED_HEADER} answers "was this
+     * replayed" without touching the body a caller already parses as one
+     * shape.
+     */
+    private static final String EXPORT_TRUNCATED_HEADER = "X-Export-Truncated";
+
     @GetMapping("/export")
     @RequiresCapability(Capability.CUSTOMER_PII_REVEAL)
     @Operation(
@@ -369,9 +381,10 @@ public class CustomerController {
             description = "One audited PII egress event for the whole filtered set (frontend "
                     + "information architecture §5.1), never one reveal per row. Requires a "
                     + "stated purpose, exactly like every other reveal on this controller. Bounded "
-                    + "at 2000 rows; `truncated` is true when the filter actually matched more than "
-                    + "that, so a marketer can tell a complete export from a silently cut one.")
-    public ResponseEntity<CustomerExportResultResponse> export(
+                    + "at 2000 rows; the `X-Export-Truncated` response header is `true` when the "
+                    + "filter actually matched more than that, so a marketer can tell a complete "
+                    + "export from a silently cut one.")
+    public ResponseEntity<List<CustomerExportResponse>> export(
             @PathVariable UUID tenantId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String query,
@@ -379,8 +392,9 @@ public class CustomerController {
         requireKnownStatus(status);
         CustomerListQueryService.ExportResult result =
                 lists.exportFiltered(tenantId, status, query, purpose, staffActor());
-        return ResponseEntity.ok(new CustomerExportResultResponse(
-                result.rows().stream().map(CustomerExportResponse::of).toList(), result.truncated()));
+        return ResponseEntity.ok()
+                .header(EXPORT_TRUNCATED_HEADER, Boolean.toString(result.truncated()))
+                .body(result.rows().stream().map(CustomerExportResponse::of).toList());
     }
 
     @PostMapping
@@ -825,12 +839,6 @@ public class CustomerController {
             return new CustomerExportResponse(row.accountId(), row.status(), row.displayName(), row.phone());
         }
     }
-
-    /**
-     * {@code GET .../customers/export}'s whole body: the decrypted rows plus
-     * whether the filter matched more than {@code EXPORT_LIMIT} and was cut.
-     */
-    public record CustomerExportResultResponse(List<CustomerExportResponse> rows, boolean truncated) {}
 
     /** A manually created customer. {@code brandId} decides the identity partition, same as {@code resolve}. */
     public record CreateCustomerRequest(
