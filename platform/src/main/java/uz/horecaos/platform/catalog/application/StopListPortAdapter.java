@@ -36,8 +36,14 @@ public class StopListPortAdapter implements StopListPort {
 
     @Override
     public List<Item> listAtLocation(UUID tenantId, UUID brandId, UUID locationId) {
-        List<VariantAvailabilityRow> rows =
-                authoring.variantsAtLocation(tenantId, brandId, locationId, DEFAULT_LOCALE, null, null, MAX_ITEMS);
+        // "AVAILABLE" reproduces exactly what this adapter always saw, before
+        // P23 widened the underlying read to also surface HIDDEN offerings and
+        // variants never offered here at all (catalog.md §4.5's Layer A
+        // matrix). The bot's 86 command answers "what does this branch sell
+        // right now", not "what is missing from its menu" — the wider question
+        // belongs to the operations console, not a chat command.
+        List<VariantAvailabilityRow> rows = authoring.variantsAtLocation(
+                tenantId, brandId, locationId, DEFAULT_LOCALE, null, MAX_ITEMS, null, "AVAILABLE");
         return rows.stream()
                 .map(row -> new Item(row.variantId(), row.productName(), row.available()))
                 .toList();

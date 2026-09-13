@@ -1568,6 +1568,14 @@ export const messagesRu: MessageCatalogue = {
   'catalog.categories.loading': 'Загрузка категорий',
   'catalog.categories.selectPrompt': 'Выберите категорию для редактирования',
   'catalog.categories.noCatalog': 'У этого бренда пока нет каталога',
+  'catalog.categories.form.description': 'Описание',
+  'catalog.categories.form.image': 'Изображение',
+  'catalog.categories.photo.upload': 'Загрузить изображение',
+  'catalog.categories.photo.uploading': 'Загрузка…',
+  'catalog.categories.archive': 'Архивировать',
+  'catalog.categories.archiveConfirm.title': 'Архивировать категорию?',
+  'catalog.categories.archiveConfirm.body':
+    '«{name}» больше не будет показываться в дереве категорий. Товары, размещённые в ней, останутся на месте.',
 
   'catalog.menus.title': 'Меню',
   'catalog.menus.location.label': 'Филиал',
@@ -1585,6 +1593,18 @@ export const messagesRu: MessageCatalogue = {
   'catalog.menus.denied': 'Нет доступа к меню этого филиала',
   'catalog.menus.loading': 'Загрузка меню',
   'catalog.menus.noLocation': 'Этой учётной записи пока не назначен филиал',
+  'catalog.menus.filter.all': 'Все',
+  'catalog.menus.search.placeholder': 'Поиск по названию или SKU',
+  'catalog.menus.selectAll': 'Выбрать все строки',
+  'catalog.menus.column.offering': 'Статус в меню',
+  'catalog.menus.column.fulfillment': 'Типы заказов',
+  'catalog.menus.fulfillment.DELIVERY': 'Дост',
+  'catalog.menus.fulfillment.PICKUP': 'Самов',
+  'catalog.menus.fulfillment.DINE_IN': 'Зал',
+  'catalog.menus.bulk.setAvailable': 'Включить в меню',
+  'catalog.menus.bulk.setStopped': 'Массово: стоп',
+  'catalog.menus.bulk.confirmTitle': 'Изменить статус выбранных позиций?',
+  'catalog.menus.bulk.confirmBody': 'Это изменит статус {count} позиций в меню этого филиала.',
   'catalog.menus.channelsNote':
     'Включение по каналам не построено (ADR 0036) — эта матрица показывает только филиалы',
 

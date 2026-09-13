@@ -247,6 +247,130 @@ public class CatalogAuthoringService {
         return store.setDefaultVariant(tenantId, brandId, productId, variantId);
     }
 
+    /**
+     * Reparents, renames the code of, and re-sorts an existing category —
+     * categories were write-once before this wave (row {@code 4.3}).
+     *
+     * <p>The database refuses only the one-step cycle, a category naming
+     * itself as its own parent ({@code ck_category_not_self_parent}). A longer
+     * cycle — reparenting a category under its own descendant — passes that
+     * constraint and would otherwise only be caught later, as a publication
+     * blocker ({@code CatalogValidator}'s {@code CATEGORY_TREE_HAS_CYCLE}), by
+     * which point the tree has already been unusable for however long nobody
+     * published. So it is refused here, synchronously, before the write:
+     * {@link #wouldCreateCycle} walks the brand's existing category graph from
+     * the proposed new parent upward, and if that walk ever reaches {@code
+     * categoryId} itself, the reparent would make the category its own
+     * ancestor.
+     *
+     * @throws CategoryTreeCycleException the reparent would create a cycle
+     * @throws UnknownCatalogEntityException no such category in this brand and catalog
+     */
+    @Transactional
+    public void updateCategory(
+            UUID tenantId,
+            UUID brandId,
+            UUID catalogId,
+            UUID categoryId,
+            @Nullable UUID parentCategoryId,
+            String code,
+            int sortOrder) {
+        if (parentCategoryId != null) {
+            assertNoCycle(tenantId, brandId, catalogId, categoryId, parentCategoryId);
+        }
+        boolean updated =
+                store.updateCategory(tenantId, brandId, catalogId, categoryId, parentCategoryId, code, sortOrder);
+        if (!updated) {
+            throw new UnknownCatalogEntityException(EntityType.CATEGORY, categoryId);
+        }
+    }
+
+    /**
+     * Archives a category. Never a hard delete — a product still placed in it
+     * keeps its row, matching catalog.md's "archive, never delete" rule for
+     * every catalog entity.
+     *
+     * @throws UnknownCatalogEntityException no such category in this brand and catalog
+     */
+    @Transactional
+    public void archiveCategory(UUID tenantId, UUID brandId, UUID catalogId, UUID categoryId) {
+        boolean archived = store.archiveCategory(tenantId, brandId, catalogId, categoryId);
+        if (!archived) {
+            throw new UnknownCatalogEntityException(EntityType.CATEGORY, categoryId);
+        }
+    }
+
+    /**
+     * Refuses a reparent that would make {@code categoryId} its own ancestor.
+     *
+     * <p>Walks from {@code proposedParentId} upward through the brand's
+     * existing {@code parentCategoryId} links. Reaching {@code categoryId}
+     * means the reparent closes a loop back to itself. A pre-existing cycle
+     * elsewhere in the tree — unrelated to this category — is left for {@code
+     * CatalogValidator} to report at publication; this walk only needs to
+     * terminate, not to certify the rest of the tree, so it stops the moment it
+     * revisits a node rather than looping forever.
+     */
+    private void assertNoCycle(UUID tenantId, UUID brandId, UUID catalogId, UUID categoryId, UUID proposedParentId) {
+        Map<UUID, UUID> parentById = new java.util.HashMap<>();
+        for (var category : store.categoriesInCatalog(tenantId, brandId, catalogId)) {
+            parentById.put(category.id(), category.parentCategoryId());
+        }
+
+        java.util.Set<UUID> walked = new java.util.LinkedHashSet<>();
+        UUID current = proposedParentId;
+        while (current != null) {
+            if (current.equals(categoryId)) {
+                throw new CategoryTreeCycleException(categoryId, proposedParentId, walked);
+            }
+            if (!walked.add(current)) {
+                // A cycle exists already, but not through categoryId — not this
+                // reparent's problem to fix.
+                return;
+            }
+            current = parentById.get(current);
+        }
+    }
+
+    /**
+     * Sets the offering status of many variants at one location in a single
+     * gesture — catalog.md §4.5's bulk stop/unstop, absent until this wave.
+     *
+     * <p>Loops rather than one bulk statement: the set a bulk selection spans
+     * is bounded by what one screen can show and select (the matrix's own
+     * cursor page size), never large enough that N round trips inside one
+     * transaction cost more than the plumbing a single multi-row statement
+     * would need.
+     *
+     * @return how many variants were updated
+     */
+    @Transactional
+    public int bulkSetOfferingStatus(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            List<UUID> variantIds,
+            OfferingStatus status,
+            String actorSubject) {
+        for (UUID variantId : variantIds) {
+            store.upsertOfferingStatus(tenantId, brandId, locationId, variantId, status);
+        }
+
+        if (!variantIds.isEmpty()) {
+            audit.record(AuditFact.of("catalog.offering.bulkSet", AuditClass.BUSINESS)
+                    .by(ActorRef.user(actorSubject, null))
+                    .at(ResourceScope.location(tenantId, brandId, locationId))
+                    .target("LocationOffering", locationId)
+                    .because("Bulk-set %d variants to %s".formatted(variantIds.size(), status))
+                    .usingCapability(Capability.CATALOG_AUTHOR.code())
+                    .changed(Map.of("status", status.name(), "variantCount", variantIds.size()))
+                    .correlatedBy(locationId.toString())
+                    .occurredAt(clock.instant())
+                    .build());
+        }
+        return variantIds.size();
+    }
+
     @Transactional
     public UUID createModifierGroup(
             UUID tenantId,
@@ -745,6 +869,27 @@ public class CatalogAuthoringService {
     }
 
     /**
+     * The Layer A menu matrix's own read (catalog.md §4.5): the same query as
+     * the four-argument overload above, widened with an optional search and an
+     * optional offering-status filter — {@code NOT_ADDED} answers "what is
+     * missing from this branch's menu", the question the narrower overload
+     * cannot answer at all.
+     */
+    @Transactional(readOnly = true)
+    public List<JdbcCatalogStore.VariantAvailabilityRow> variantsAtLocation(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String locale,
+            @Nullable UUID cursor,
+            int limit,
+            @Nullable String search,
+            @Nullable String offeringStatusFilter) {
+        return store.variantsAtLocation(
+                tenantId, brandId, locationId, locale, cursor, limit, search, offeringStatusFilter);
+    }
+
+    /**
      * Sets one entity's name and description in one locale.
      *
      * <p>{@code entityId} arrives from the caller and {@code catalog.translations}
@@ -805,6 +950,36 @@ public class CatalogAuthoringService {
 
         public UUID entityId() {
             return entityId;
+        }
+    }
+
+    /**
+     * A category update was refused because it would make the category its
+     * own ancestor. Carries {@code CatalogValidator}'s own finding code,
+     * {@code CATEGORY_TREE_HAS_CYCLE}, so the console can render the exact
+     * copy an operator already sees on a blocked publication, rather than a
+     * second message for the same fact.
+     */
+    public static class CategoryTreeCycleException extends RuntimeException {
+
+        /** {@link uz.horecaos.platform.catalog.application.CatalogValidator}'s own finding code. */
+        public static final String FINDING_CODE = "CATEGORY_TREE_HAS_CYCLE";
+
+        private final transient UUID categoryId;
+        private final transient UUID proposedParentId;
+
+        public CategoryTreeCycleException(UUID categoryId, UUID proposedParentId, java.util.Set<UUID> walked) {
+            super("Reparenting %s under %s would form a cycle: %s".formatted(categoryId, proposedParentId, walked));
+            this.categoryId = categoryId;
+            this.proposedParentId = proposedParentId;
+        }
+
+        public UUID categoryId() {
+            return categoryId;
+        }
+
+        public UUID proposedParentId() {
+            return proposedParentId;
         }
     }
 

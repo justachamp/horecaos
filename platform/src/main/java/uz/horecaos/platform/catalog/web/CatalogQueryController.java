@@ -222,6 +222,7 @@ public class CatalogQueryController {
             @Nullable UUID parentCategoryId,
             String code,
             String name,
+            @Nullable String description,
             int sortOrder,
             String status,
             int productCount) {
@@ -232,6 +233,7 @@ public class CatalogQueryController {
                     summary.parentCategoryId(),
                     summary.code(),
                     summary.name(),
+                    summary.description(),
                     summary.sortOrder(),
                     summary.status(),
                     summary.productCount());

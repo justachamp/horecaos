@@ -136,6 +136,77 @@ public class JdbcCatalogStore {
                 .update();
     }
 
+    /**
+     * Reparents, renames the code of, and re-sorts an existing category.
+     *
+     * <p>Categories were write-once until this wave: {@link #insertCategory} was
+     * the only statement in this class that touched {@code catalog.categories}.
+     * The cycle {@code parentCategoryId} could otherwise form is refused one
+     * layer up, in {@code CatalogAuthoringService.updateCategory}, which walks
+     * the brand's existing category graph before this statement ever runs — the
+     * database only rejects a category being its own direct parent (
+     * {@code ck_category_not_self_parent}), never a longer A→B→A cycle.
+     *
+     * <p>Name and description are not columns here at all — {@code
+     * catalog.translations} owns them, through the existing {@code PUT
+     * /translations} endpoint — so this statement never touches them.
+     *
+     * @return whether a row in this tenant, brand and catalog matched
+     */
+    public boolean updateCategory(
+            UUID tenantId,
+            UUID brandId,
+            UUID catalogId,
+            UUID categoryId,
+            @Nullable UUID parentCategoryId,
+            String code,
+            int sortOrder) {
+        return jdbc.sql("""
+                        UPDATE catalog.categories
+                        SET parent_category_id = :parentId,
+                            code = :code,
+                            sort_order = :sortOrder,
+                            version = version + 1,
+                            updated_at = now()
+                        WHERE id = :categoryId AND tenant_id = :tenantId AND brand_id = :brandId
+                          AND catalog_id = :catalogId
+                        """)
+                        .param("parentId", parentCategoryId)
+                        .param("code", code)
+                        .param("sortOrder", sortOrder)
+                        .param("categoryId", categoryId)
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
+                        .param("catalogId", catalogId)
+                        .update()
+                == 1;
+    }
+
+    /**
+     * Archives a category. Never a hard delete: a product placed in this
+     * category (`catalog.category_products`) keeps its row, exactly as an
+     * archived product keeps its variants — the same "archive, never delete"
+     * rule catalog.md states for products applies here.
+     *
+     * @return whether a row in this tenant, brand and catalog matched
+     */
+    public boolean archiveCategory(UUID tenantId, UUID brandId, UUID catalogId, UUID categoryId) {
+        return jdbc.sql("""
+                        UPDATE catalog.categories
+                        SET status = 'ARCHIVED',
+                            version = version + 1,
+                            updated_at = now()
+                        WHERE id = :categoryId AND tenant_id = :tenantId AND brand_id = :brandId
+                          AND catalog_id = :catalogId
+                        """)
+                        .param("categoryId", categoryId)
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
+                        .param("catalogId", catalogId)
+                        .update()
+                == 1;
+    }
+
     public void insertModifierGroup(ModifierGroup group) {
         jdbc.sql("""
                 INSERT INTO catalog.modifier_groups (
@@ -579,6 +650,38 @@ public class JdbcCatalogStore {
                         .param("modes", fulfillmentModes)
                         .update()
                 == 1;
+    }
+
+    /**
+     * Sets only the status half of an offering — the bulk stop/unstop gesture's
+     * own write, and {@link #upsertOffering}'s sibling for exactly the reason
+     * {@link #insertOfferingIfAbsent}'s Javadoc explains for its own case: a
+     * caller that must not clobber something it never meant to touch. A bulk
+     * selection spans rows with different fulfilment-mode restrictions an
+     * operator set individually; overwriting all of them to the default the
+     * way {@link #upsertOffering} does would undo that work silently. A newly
+     * created row (nothing was offered here before) still needs a starting
+     * fulfilment-mode list, so it takes the same default {@link #upsertOffering}
+     * seeds a fresh row with.
+     */
+    public void upsertOfferingStatus(
+            UUID tenantId, UUID brandId, UUID locationId, UUID variantId, OfferingStatus status) {
+        jdbc.sql("""
+                INSERT INTO catalog.location_offerings (
+                    id, tenant_id, brand_id, location_id, variant_id, status, fulfillment_modes)
+                VALUES (:id, :tenantId, :brandId, :locationId, :variantId, :status, 'DELIVERY,PICKUP')
+                ON CONFLICT (location_id, variant_id) DO UPDATE
+                SET status = EXCLUDED.status,
+                    version = catalog.location_offerings.version + 1,
+                    updated_at = now()
+                """)
+                .param("id", Ids.newId())
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("variantId", variantId)
+                .param("status", status.name())
+                .update();
     }
 
     // --------------------------------------------------- fiscal classification
@@ -1224,6 +1327,22 @@ public class JdbcCatalogStore {
     }
 
     public List<VariantAvailabilityRow> variantsAtLocation(
+            UUID tenantId, UUID brandId, UUID locationId, String locale, @Nullable UUID cursorVariantId, int limit) {
+        return variantsAtLocation(tenantId, brandId, locationId, locale, cursorVariantId, limit, null, null);
+    }
+
+    /**
+     * The New order screen's item search (orders.md §5.5, ADR 0039):
+     * delegates to the five-argument overload below with {@code query} as the
+     * search term and no status filter, so a picker result is exactly the
+     * rows a search-only, status-unfiltered call to that overload would
+     * return — including offerings the location has hidden or never added,
+     * unchanged from this method's own pre-P23 behaviour, since it never
+     * filtered on offering status either. {@code null} or blank keeps the
+     * unfiltered 86-screen behaviour untouched — every caller that passes
+     * null must keep seeing every row.
+     */
+    public List<VariantAvailabilityRow> variantsAtLocation(
             UUID tenantId,
             UUID brandId,
             UUID locationId,
@@ -1231,24 +1350,64 @@ public class JdbcCatalogStore {
             @Nullable String query,
             @Nullable UUID cursorVariantId,
             int limit) {
-        // The New order screen's item search (orders.md §5.5, ADR 0039): a
-        // case-insensitive substring match on the product's own translated
-        // name, in the same locale the row already renders. Null or blank
-        // stays the unfiltered 86-screen behaviour untouched — every existing
-        // caller of this method passes null and must keep seeing every row.
-        String likePattern = normalisedLikePattern(query);
+        return variantsAtLocation(tenantId, brandId, locationId, locale, cursorVariantId, limit, query, null);
+    }
+
+    /**
+     * The sellable variants of one location, joined with their current
+     * availability, widened (catalog.md §4.5's Layer A matrix) to answer the
+     * question the narrower overloads above cannot: whether a variant absent
+     * from the result is hidden at the offering level or was never offered
+     * here at all.
+     *
+     * <p>The join used to be {@code JOIN ... AND lo.status = 'AVAILABLE'} —
+     * `AVAILABLE`-only, so a `HIDDEN` row and no row at all were the same
+     * absence. This is a {@code LEFT JOIN} with no status filter of its own:
+     * {@code offeringStatus} on the result is null exactly when no {@code
+     * location_offerings} row exists ("never added"), and otherwise names the
+     * row's real status, `HIDDEN` included. {@link #offeringsForLocation} keeps
+     * its own separate `<> 'HIDDEN'` filter for the storefront-facing 86 list —
+     * that one guard is deliberately unrelated to this one, which serves an
+     * operator console that needs to see the very state the storefront must not.
+     *
+     * @param search               matches product name (this locale) or SKU,
+     *                             case-insensitively; {@code null} for no filter
+     * @param offeringStatusFilter one of {@code AVAILABLE}/{@code UNAVAILABLE}/
+     *                             {@code HIDDEN}/{@code NOT_ADDED}, or
+     *                             {@code null} for every status. {@code
+     *                             "AVAILABLE"} reproduces the six-argument
+     *                             overload's exact original rows — that overload
+     *                             is what {@code StopListPortAdapter}'s Telegram
+     *                             86 command still calls, unfiltered and
+     *                             unsearched, so its list of "what does this
+     *                             branch sell right now" does not silently grow
+     *                             to include dishes hidden from the menu or never
+     *                             put on it
+     */
+    public List<VariantAvailabilityRow> variantsAtLocation(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String locale,
+            @Nullable UUID cursorVariantId,
+            int limit,
+            @Nullable String search,
+            @Nullable String offeringStatusFilter) {
+        String searchPattern = search == null || search.isBlank() ? null : "%" + search.trim() + "%";
         return jdbc.sql("""
                 SELECT v.id AS variant_id,
                        t.name AS product_name,
                        ct.name AS category_name,
                        si.tracking_mode AS tracking_mode,
-                       pos.binary_available AS binary_available
+                       pos.binary_available AS binary_available,
+                       lo.status AS offering_status,
+                       lo.fulfillment_modes AS fulfillment_modes
                 FROM catalog.variants v
                 JOIN catalog.products p
                     ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
-                JOIN catalog.location_offerings lo
+                LEFT JOIN catalog.location_offerings lo
                     ON lo.variant_id = v.id AND lo.tenant_id = v.tenant_id AND lo.brand_id = v.brand_id
-                       AND lo.location_id = :locationId AND lo.status = 'AVAILABLE'
+                       AND lo.location_id = :locationId
                 LEFT JOIN catalog.translations t
                     ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
                        AND t.brand_id = p.brand_id AND t.locale = :locale
@@ -1271,7 +1430,11 @@ public class JdbcCatalogStore {
                 WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId
                   AND v.status = 'ACTIVE' AND p.status = 'ACTIVE'
                   AND (CAST(:cursor AS uuid) IS NULL OR v.id > CAST(:cursor AS uuid))
-                  AND (CAST(:query AS text) IS NULL OR t.name ILIKE :query)
+                  AND (CAST(:search AS varchar) IS NULL
+                       OR t.name ILIKE :search OR v.sku ILIKE :search)
+                  AND (CAST(:statusFilter AS varchar) IS NULL
+                       OR (:statusFilter = 'NOT_ADDED' AND lo.id IS NULL)
+                       OR lo.status = :statusFilter)
                 ORDER BY v.id
                 LIMIT :limit
                 """)
@@ -1280,7 +1443,8 @@ public class JdbcCatalogStore {
                 .param("locationId", locationId)
                 .param("locale", locale)
                 .param("cursor", cursorVariantId)
-                .param("query", likePattern)
+                .param("search", searchPattern)
+                .param("statusFilter", offeringStatusFilter)
                 .param("limit", limit)
                 .query((row, number) -> {
                     String trackingMode = row.getString("tracking_mode");
@@ -1298,29 +1462,17 @@ public class JdbcCatalogStore {
                         // service. Never orderable in this release.
                         available = false;
                     }
+                    String fulfillmentModesRaw = row.getString("fulfillment_modes");
                     return new VariantAvailabilityRow(
                             row.getObject("variant_id", UUID.class),
                             row.getString("product_name"),
                             row.getString("category_name"),
                             available,
-                            trackingMode);
+                            trackingMode,
+                            row.getString("offering_status"),
+                            fulfillmentModesRaw == null ? List.of() : List.of(fulfillmentModesRaw.split(",")));
                 })
                 .list();
-    }
-
-    /**
-     * {@code "%" + trimmed + "%"} for an {@code ILIKE}, or {@code null} — never
-     * an empty-string pattern, which would match every row and turn a blank
-     * query into "show everything" rather than "nothing typed yet". Mirrors
-     * {@link #searchMxikReference}'s own pattern, unescaped: a literal
-     * {@code %} or {@code _} in a product name is rare enough here that the
-     * MXIK reference search accepted the same trade-off first.
-     */
-    private static @Nullable String normalisedLikePattern(@Nullable String query) {
-        if (query == null || query.isBlank()) {
-            return null;
-        }
-        return "%" + query.trim() + "%";
     }
 
     /**
@@ -1912,19 +2064,33 @@ public class JdbcCatalogStore {
     }
 
     /**
-     * One row of the 86 screen (catalog.md §4.6).
+     * One row of the 86 screen (catalog.md §4.6) and of the Layer A menu matrix
+     * (catalog.md §4.5).
      *
-     * @param categoryName null when the product sits in no category
-     * @param trackingMode {@code BINARY}, {@code UNTRACKED}, {@code QUANTITY},
-     *                     or null when the variant carries no {@code
-     *                     inventory.stock_items} row at this location at all
+     * @param categoryName    null when the product sits in no category
+     * @param trackingMode    {@code BINARY}, {@code UNTRACKED}, {@code QUANTITY},
+     *                        or null when the variant carries no {@code
+     *                        inventory.stock_items} row at this location at all
+     * @param offeringStatus  {@code AVAILABLE}, {@code UNAVAILABLE} or {@code
+     *                        HIDDEN} — {@code catalog.location_offerings.status}
+     *                        at this location — or null when no offering row
+     *                        exists here at all ("never added"). Independent of
+     *                        {@link #available}: that field is the inventory 86
+     *                        flag, this one is the menu-structure question, and
+     *                        the two vocabularies answer genuinely different
+     *                        questions (a HIDDEN dish can still carry an
+     *                        available stock item nobody sees)
+     * @param fulfillmentModes {@code catalog.location_offerings.fulfillment_modes}
+     *                         — empty when no offering row exists here at all
      */
     public record VariantAvailabilityRow(
             UUID variantId,
             String productName,
             @Nullable String categoryName,
             boolean available,
-            @Nullable String trackingMode) {}
+            @Nullable String trackingMode,
+            @Nullable String offeringStatus,
+            List<String> fulfillmentModes) {}
 
     public record PublicationRow(
             UUID id, PublicationStatus status, String contentHash, UUID catalogId, String channel) {}

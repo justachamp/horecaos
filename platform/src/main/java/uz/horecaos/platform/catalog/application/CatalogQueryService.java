@@ -75,12 +75,14 @@ public class CatalogQueryService {
         List<Category> categories = store.categoriesInCatalog(tenantId, brandId, catalogId);
         Map<UUID, List<UUID>> productsByCategory = store.productIdsByCategory(tenantId, brandId, catalogId);
         Map<UUID, String> names = defaultLocaleNames(tenantId, brandId, EntityType.CATEGORY);
+        Map<UUID, String> descriptions = defaultLocaleDescriptions(tenantId, brandId, EntityType.CATEGORY);
         return categories.stream()
                 .map(category -> new CategorySummary(
                         category.id(),
                         category.parentCategoryId(),
                         category.code(),
                         names.getOrDefault(category.id(), category.code()),
+                        descriptions.get(category.id()),
                         category.sortOrder(),
                         category.status().name(),
                         productsByCategory
@@ -311,6 +313,23 @@ public class CatalogQueryService {
         return names;
     }
 
+    /**
+     * The default locale's description per entity, absent when there is none.
+     * {@link #categories} needs this alongside {@link #defaultLocaleNames} so
+     * the console's inline rename can resend the description unchanged — a PUT
+     * /translations that carried the request's own new name but a null
+     * description would silently clear whatever an operator had written.
+     */
+    private Map<UUID, String> defaultLocaleDescriptions(UUID tenantId, UUID brandId, EntityType type) {
+        Map<UUID, String> descriptions = new HashMap<>();
+        for (TranslationRow row : store.translations(tenantId, brandId)) {
+            if (row.entityType() == type && defaultLocale.equals(row.locale()) && row.description() != null) {
+                descriptions.put(row.entityId(), row.description());
+            }
+        }
+        return descriptions;
+    }
+
     /** Inverts a parent-to-children map into a child-to-parents map. */
     private static Map<UUID, List<UUID>> invert(Map<UUID, List<UUID>> productIdsByCategory) {
         Map<UUID, List<UUID>> categoriesByProduct = new LinkedHashMap<>();
@@ -394,6 +413,7 @@ public class CatalogQueryService {
             @Nullable UUID parentCategoryId,
             String code,
             String name,
+            @Nullable String description,
             int sortOrder,
             String status,
             int productCount) {}

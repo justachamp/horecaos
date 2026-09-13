@@ -1582,6 +1582,14 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.categories.loading': 'Kategoriyalar yuklanmoqda',
   'catalog.categories.selectPrompt': 'Tahrirlash uchun kategoriya tanlang',
   'catalog.categories.noCatalog': 'Bu brendda hali katalog yoʻq',
+  'catalog.categories.form.description': 'Tavsif',
+  'catalog.categories.form.image': 'Rasm',
+  'catalog.categories.photo.upload': 'Rasm yuklash',
+  'catalog.categories.photo.uploading': 'Yuklanmoqda…',
+  'catalog.categories.archive': 'Arxivlash',
+  'catalog.categories.archiveConfirm.title': 'Kategoriyani arxivlaysizmi?',
+  'catalog.categories.archiveConfirm.body':
+    '«{name}» endi kategoriyalar daraxtida koʻrsatilmaydi. Unga joylashtirilgan mahsulotlar oʻz oʻrnida qoladi.',
 
   'catalog.menus.title': 'Menyular',
   'catalog.menus.location.label': 'Filial',
@@ -1599,6 +1607,19 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.menus.denied': 'Bu filial menyusiga kirish huquqi yoʻq',
   'catalog.menus.loading': 'Menyu yuklanmoqda',
   'catalog.menus.noLocation': 'Bu hisobga hali filial biriktirilmagan',
+  'catalog.menus.filter.all': 'Barchasi',
+  'catalog.menus.search.placeholder': 'Nomi yoki SKU boʻyicha qidirish',
+  'catalog.menus.selectAll': 'Barcha qatorlarni tanlash',
+  'catalog.menus.column.offering': 'Menyudagi holati',
+  'catalog.menus.column.fulfillment': 'Buyurtma turlari',
+  'catalog.menus.fulfillment.DELIVERY': 'Yetk',
+  'catalog.menus.fulfillment.PICKUP': 'Olib ket',
+  'catalog.menus.fulfillment.DINE_IN': 'Zal',
+  'catalog.menus.bulk.setAvailable': 'Menyuga qoʻshish',
+  'catalog.menus.bulk.setStopped': 'Ommaviy: toʻxtatish',
+  'catalog.menus.bulk.confirmTitle': 'Tanlangan pozitsiyalar holati oʻzgartirilsinmi?',
+  'catalog.menus.bulk.confirmBody':
+    'Bu ushbu filialdagi {count} ta pozitsiyaning menyudagi holatini oʻzgartiradi.',
   'catalog.menus.channelsNote':
     'Kanal boʻyicha yoqish qurilmagan (ADR 0036) — bu jadval faqat filiallarni koʻrsatadi',
 

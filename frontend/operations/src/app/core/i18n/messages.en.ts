@@ -1596,6 +1596,14 @@ export const messagesEn = {
   'catalog.categories.loading': 'Loading categories',
   'catalog.categories.selectPrompt': 'Select a category to edit it',
   'catalog.categories.noCatalog': 'This brand has no catalog yet',
+  'catalog.categories.form.description': 'Description',
+  'catalog.categories.form.image': 'Image',
+  'catalog.categories.photo.upload': 'Upload image',
+  'catalog.categories.photo.uploading': 'Uploading…',
+  'catalog.categories.archive': 'Archive',
+  'catalog.categories.archiveConfirm.title': 'Archive this category?',
+  'catalog.categories.archiveConfirm.body':
+    '“{name}” will no longer show in the category tree. Products already placed in it stay exactly where they are.',
 
   'catalog.menus.title': 'Menus',
   'catalog.menus.location.label': 'Location',
@@ -1613,6 +1621,19 @@ export const messagesEn = {
   'catalog.menus.denied': 'No access to this location’s menu',
   'catalog.menus.loading': 'Loading the menu',
   'catalog.menus.noLocation': 'No location resolved for this account yet',
+  'catalog.menus.filter.all': 'All',
+  'catalog.menus.search.placeholder': 'Search by name or SKU',
+  'catalog.menus.selectAll': 'Select every row',
+  'catalog.menus.column.offering': 'Menu status',
+  'catalog.menus.column.fulfillment': 'Order types',
+  'catalog.menus.fulfillment.DELIVERY': 'Del',
+  'catalog.menus.fulfillment.PICKUP': 'Pickup',
+  'catalog.menus.fulfillment.DINE_IN': 'Hall',
+  'catalog.menus.bulk.setAvailable': 'Add to menu',
+  'catalog.menus.bulk.setStopped': 'Bulk: stop',
+  'catalog.menus.bulk.confirmTitle': 'Change the status of the selected items?',
+  'catalog.menus.bulk.confirmBody':
+    'This changes the menu status of {count} items at this location.',
   'catalog.menus.channelsNote':
     'Per-channel enablement is not built (ADR 0036) — this matrix shows locations only',
 

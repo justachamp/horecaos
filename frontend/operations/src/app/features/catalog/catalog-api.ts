@@ -10,6 +10,8 @@ import {
   AttachMediaRequest,
   BulkClassifyItem,
   BulkClassifyResult,
+  BulkOfferingStatusRequest,
+  BulkOfferingStatusResult,
   CatalogEntityType,
   CatalogStatus,
   CatalogSummary,
@@ -35,6 +37,7 @@ import {
   SortOrderRequest,
   StopInAllBranchesResult,
   TranslateRequest,
+  UpdateCategoryRequest,
   UpdateVariantRequest,
   ValidationReport,
   VariantAvailabilityRow,
@@ -126,8 +129,8 @@ export class CatalogApi {
   }
 
   /**
-   * catalog.md §4.6's read side / §4.2 tab 6: one location's sellable
-   * variants with current availability.
+   * catalog.md §4.6's read side / §4.2 tab 6 / §4.5's Layer A matrix: one
+   * location's variants with current availability.
    *
    * `CatalogAuthoringController.variantsAtLocation` answers a cursor
    * `Page<VariantAvailabilityResponse>` (ADR 0031), not a bare array — this
@@ -137,15 +140,40 @@ export class CatalogApi {
    * every spec stubbed this method wholesale with a plain array; against
    * the real endpoint, `menus-page.ts`'s `@for` over that object throws
    * (see its own regression spec).
+   *
+   * @param filters `search` (product name or SKU) and `status`
+   *                (`AVAILABLE`/`UNAVAILABLE`/`HIDDEN`/`NOT_ADDED`), both
+   *                optional — `resetOnFilterChange` on the caller's own
+   *                `CursorState` before a filter change, or a cursor minted
+   *                under the old filter set is sent with the new one.
    */
   variantsAtLocation(
     scope: BrandScope,
     locationId: string,
     page: CursorState,
+    filters: { readonly search?: string; readonly status?: string } = {},
   ): Observable<Page<VariantAvailabilityRow>> {
     return this.api.page<VariantAvailabilityRow>(
       catalogPaths.variantsAtLocation(scope, locationId),
       page,
+      filters.search || filters.status
+        ? {
+            ...(filters.search ? { search: filters.search } : {}),
+            ...(filters.status ? { status: filters.status } : {}),
+          }
+        : {},
+    );
+  }
+
+  /** catalog.md §4.5's bulk stop/unstop — sets many variants' offering status at one location in one call. */
+  bulkSetOfferingStatus(
+    scope: BrandScope,
+    locationId: string,
+    request: BulkOfferingStatusRequest,
+  ): Observable<BulkOfferingStatusResult> {
+    return this.api.post<BulkOfferingStatusRequest, BulkOfferingStatusResult>(
+      catalogPaths.bulkOfferingStatus(scope, locationId),
+      command(request),
     );
   }
 
@@ -243,6 +271,34 @@ export class CatalogApi {
     return this.api.post<CreateCategoryRequest, IdResponse>(
       catalogPaths.createCategory(scope, catalogId),
       command(request),
+    );
+  }
+
+  /**
+   * Reparents, renames the code of, or re-sorts an existing category —
+   * categories were write-once before this (catalog.md §4.3). Name and
+   * description still go through {@link setTranslation}. A reparent that
+   * would make the category its own ancestor answers a
+   * `findingCode: 'CATEGORY_TREE_HAS_CYCLE'` property on the problem
+   * response, the same code a blocked publication renders.
+   */
+  updateCategory(
+    scope: BrandScope,
+    catalogId: string,
+    categoryId: string,
+    request: UpdateCategoryRequest,
+  ): Observable<void> {
+    return this.api.put<UpdateCategoryRequest, void>(
+      catalogPaths.category(scope, catalogId, categoryId),
+      command(request),
+    );
+  }
+
+  /** Never a hard delete — a product already placed in this category keeps its row. */
+  archiveCategory(scope: BrandScope, catalogId: string, categoryId: string): Observable<void> {
+    return this.api.post<undefined, void>(
+      catalogPaths.archiveCategory(scope, catalogId, categoryId),
+      command(undefined),
     );
   }
 
@@ -474,11 +530,12 @@ export async function fetchAllVariantsAtLocation(
   api: CatalogApi,
   scope: BrandScope,
   locationId: string,
+  filters: { readonly search?: string; readonly status?: string } = {},
 ): Promise<readonly VariantAvailabilityRow[]> {
   const rows: VariantAvailabilityRow[] = [];
   let state: CursorState = firstPage(200);
   for (let fetched = 0; fetched < MAX_VARIANT_PAGES; fetched++) {
-    const page = await firstValueFrom(api.variantsAtLocation(scope, locationId, state));
+    const page = await firstValueFrom(api.variantsAtLocation(scope, locationId, state, filters));
     rows.push(...page.items);
     const next = nextPage(state, page);
     if (!next) {
