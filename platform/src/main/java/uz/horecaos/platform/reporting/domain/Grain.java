@@ -26,14 +26,29 @@ public enum Grain {
      */
     DAY_LEGAL_ENTITY(List.of(Dimension.LEGAL_ENTITY)),
 
-    DAY_LOCATION_LEGAL_ENTITY(List.of(Dimension.LOCATION, Dimension.LEGAL_ENTITY));
+    DAY_LOCATION_LEGAL_ENTITY(List.of(Dimension.LOCATION, Dimension.LEGAL_ENTITY)),
+
+    /**
+     * T12 (7.5/7.5a): the operator leaderboard and receipt-depth grain. Not
+     * money — a per-operator revenue cut is a bespoke bounded read (like the
+     * order- and variant-grain reports beside it), never the typed {@code
+     * /queries} pipeline, so nothing here needs {@link Dimension#LEGAL_ENTITY}.
+     */
+    DAY_LOCATION_OPERATOR(List.of(Dimension.LOCATION, Dimension.OPERATOR));
 
     /** The axes a reporting query may group by. */
     public enum Dimension {
         LOCATION,
         CHANNEL,
         FULFILMENT_TYPE,
-        LEGAL_ENTITY
+        LEGAL_ENTITY,
+
+        /**
+         * T12: a human staff subject, or a pseudo-operator named after its
+         * channel when no human touched the order. See {@code
+         * reporting.application.OperatorAttribution}.
+         */
+        OPERATOR
     }
 
     // ImmutableEnumChecker judges by the field's declared type, which is the
