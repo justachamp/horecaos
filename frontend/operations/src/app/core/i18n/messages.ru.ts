@@ -1236,6 +1236,47 @@ export const messagesRu: MessageCatalogue = {
   'catalog.products.empty.noCatalog': 'У этого бренда пока нет каталога',
   'catalog.products.loadMore': 'Показать ещё',
 
+  // P21 — действия строки, массовые действия и фискальный кабинет
+  'catalog.products.action.duplicate': 'Дублировать',
+  'catalog.products.action.archive': 'Архивировать',
+  'catalog.products.action.restore': 'Восстановить',
+  'catalog.products.action.addToCategory': 'Добавить в категорию',
+  'catalog.products.action.stopInAllBranches': 'Стоп во всех филиалах',
+  'catalog.products.action.copyId': 'Копировать ID',
+  'catalog.products.action.copyShareSlug': 'Копировать слаг для публикации',
+  'catalog.products.bulk.archive': 'Архивировать',
+  'catalog.products.bulk.stopInAllBranches': 'Стоп во всех филиалах',
+  'catalog.products.bulk.partial': '{failed} из выбранных строк не обновлено',
+  'catalog.products.bulk.done': 'Обновлено строк: {count}',
+  'catalog.products.notice.archived': 'Товар архивирован',
+  'catalog.products.notice.restored': 'Товар восстановлен',
+  'catalog.products.notice.stopped': 'Остановлено в {count} филиалах',
+  'catalog.products.notice.idCopied': 'ID скопирован',
+  'catalog.products.notice.slugCopied': 'Слаг скопирован',
+  'catalog.products.notice.addedToCategory': 'Добавлено в категорию',
+  'catalog.products.workbench.open': 'Фискальный кабинет',
+
+  'catalog.products.addToCategory.title': 'Добавить в категорию',
+  'catalog.products.addToCategory.label': 'Категория',
+  'catalog.products.addToCategory.placeholder': 'Выберите категорию',
+  'catalog.products.addToCategory.empty': 'В этом каталоге пока нет категорий',
+  'catalog.products.addToCategory.confirm': 'Добавить',
+
+  'catalog.fiscalWorkbench.title': 'Фискальный кабинет',
+  'catalog.fiscalWorkbench.summary': 'Не классифицировано {unclassified} из {total} позиций',
+  'catalog.fiscalWorkbench.loading': 'Загрузка отчёта о фискальном покрытии',
+  'catalog.fiscalWorkbench.denied': 'Нет доступа к фискальной классификации этого бренда',
+  'catalog.fiscalWorkbench.empty': 'Все позиции классифицированы',
+  'catalog.fiscalWorkbench.column.node': 'Позиция',
+  'catalog.fiscalWorkbench.column.type': 'Тип',
+  'catalog.fiscalWorkbench.column.mxik': 'ИКПУ',
+  'catalog.fiscalWorkbench.column.packageCode': 'Код упаковки',
+  'catalog.fiscalWorkbench.column.fiscalUnitCode': 'Фискальная единица',
+  'catalog.fiscalWorkbench.column.fiscalName': 'Фискальное наименование',
+  'catalog.fiscalWorkbench.nodeType.VARIANT': 'Блюдо',
+  'catalog.fiscalWorkbench.nodeType.MODIFIER_OPTION': 'Модификатор',
+  'catalog.fiscalWorkbench.nodeType.FEE': 'Сбор',
+
   'catalog.editor.loading': 'Загрузка товара',
   'catalog.editor.notFound': 'Этого товара больше нет',
   'catalog.editor.backToList': 'К списку товаров',
@@ -3737,7 +3778,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.detail.bindings.activate': 'Активировать',
   'settings.integrations.detail.bindings.activate.reasonPrompt': 'Причина запуска этой привязки:',
   'settings.integrations.detail.bindings.suspend': 'Приостановить',
-  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Причина приостановки этой привязки:',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Причина приостановки этой привязки:',
   'settings.integrations.detail.bindings.empty': 'Привязок пока нет.',
   'settings.integrations.detail.bindings.wholeTenant': 'Вся компания',
   'settings.integrations.detail.cloposSettings.title': 'Приём заказов',
@@ -3749,13 +3791,15 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.detail.partnerClients.issue': 'Выпустить клиента',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'Название для этого клиента (для вашего удобства):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Причина выпуска этого клиента:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Причина выпуска этого клиента:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Скопируйте этот секрет сейчас — он больше не будет показан:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'Я скопировал(а)',
   'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
   'settings.integrations.detail.partnerClients.revoke': 'Отозвать',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Причина отзыва этого клиента:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Причина отзыва этого клиента:',
   'settings.integrations.detail.partnerClients.empty': 'Клиенты партнёрского API ещё не выпущены.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

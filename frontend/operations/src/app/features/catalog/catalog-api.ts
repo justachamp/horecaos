@@ -8,7 +8,10 @@ import {
   AddModifierOptionRequest,
   AddVariantRequest,
   AttachMediaRequest,
+  BulkClassifyItem,
+  BulkClassifyResult,
   CatalogEntityType,
+  CatalogStatus,
   CatalogSummary,
   CategorySummary,
   CreateCatalogRequest,
@@ -16,16 +19,19 @@ import {
   CreateModifierGroupRequest,
   CreateProductRequest,
   FiscalClassification,
+  FiscalCoverageSummary,
   IdResponse,
   ModifierGroupDetail,
   ModifierGroupSummary,
   ProductCreated,
   ProductDetail,
+  ProductListStatus,
   ProductSummary,
   PublicationHistoryEntry,
   PublicationResult,
   SetOfferingRequest,
   SortOrderRequest,
+  StopInAllBranchesResult,
   TranslateRequest,
   ValidationReport,
   VariantAvailabilityRow,
@@ -45,6 +51,12 @@ import { CursorState, Page, firstPage, nextPage } from '../../core/api/page';
  * {@link setOffering}: it takes effect immediately, deliberately, and its own
  * Javadoc on the server says so.
  */
+/** {@link CatalogApi.listProducts}'s server-side filters — the products list's search box and status tabs. */
+export interface ProductListFilters {
+  readonly query?: string;
+  readonly status?: ProductListStatus;
+}
+
 @Injectable({ providedIn: 'root' })
 export class CatalogApi {
   private readonly api = inject(ApiClient);
@@ -61,12 +73,22 @@ export class CatalogApi {
     );
   }
 
+  /**
+   * `query`/`status` are applied server-side (`CatalogQueryController`), not
+   * over whatever page happens to be loaded — the whole reason this row
+   * exists: on a 1000+ item catalogue, filtering a page already in hand
+   * cannot find a dish sitting past it.
+   */
   listProducts(
     scope: BrandScope,
     catalogId: string,
     page: CursorState,
+    filters: ProductListFilters = {},
   ): Observable<Page<ProductSummary>> {
-    return this.api.page<ProductSummary>(catalogPaths.products(scope, catalogId), page);
+    return this.api.page<ProductSummary>(catalogPaths.products(scope, catalogId), page, {
+      query: filters.query || undefined,
+      status: filters.status || undefined,
+    });
   }
 
   productDetail(scope: BrandScope, productId: string): Observable<ProductDetail> {
@@ -248,6 +270,48 @@ export class CatalogApi {
       catalogPaths.locationOffering(scope, variantId, locationId),
       command(request),
     );
+  }
+
+  // ---------------------------------------------------------- P21 row actions and the fiscal workbench
+
+  /** Duplicates a product with its variants, translations, catalog/category placement, modifier groups and media. */
+  duplicateProduct(scope: BrandScope, productId: string): Observable<ProductCreated> {
+    return this.api.post<undefined, ProductCreated>(
+      catalogPaths.duplicateProduct(scope, productId),
+      command(undefined),
+    );
+  }
+
+  /** Archive/restore — the only mutation `Product.status` has ever had. */
+  setProductStatus(scope: BrandScope, productId: string, status: CatalogStatus): Observable<void> {
+    return this.api.put<{ status: CatalogStatus }, void>(
+      catalogPaths.productStatus(scope, productId),
+      command({ status }),
+    );
+  }
+
+  /** Stops a product in every branch that currently offers it. */
+  stopInAllBranches(scope: BrandScope, productId: string): Observable<StopInAllBranchesResult> {
+    return this.api.post<undefined, StopInAllBranchesResult>(
+      catalogPaths.stopInAllBranches(scope, productId),
+      command(undefined),
+    );
+  }
+
+  /** The fiscal workbench's bulk fill — many priceable nodes classified in one call. */
+  bulkClassify(
+    scope: BrandScope,
+    items: readonly BulkClassifyItem[],
+  ): Observable<BulkClassifyResult> {
+    return this.api.put<{ items: readonly BulkClassifyItem[] }, BulkClassifyResult>(
+      catalogPaths.bulkFiscalClassification(scope),
+      command({ items }),
+    );
+  }
+
+  /** "N of M priceable nodes unclassified" and the unclassified worklist (MODIFIER_OPTION and FEE nodes included). */
+  fiscalCoverage(scope: BrandScope): Observable<FiscalCoverageSummary> {
+    return unwrap(this.api.get<FiscalCoverageSummary>(catalogPaths.fiscalCoverage(scope)));
   }
 
   // ---------------------------------------------------------- publication

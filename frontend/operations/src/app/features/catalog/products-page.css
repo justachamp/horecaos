@@ -64,6 +64,16 @@
   font-size: var(--q-type-body-sm);
 }
 
+.products__workbench {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
 .products__error-band {
   padding: 8px 16px;
   background: var(--q-error-tint);

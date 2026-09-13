@@ -1264,6 +1264,47 @@ export const messagesEn = {
   'catalog.products.empty.noCatalog': 'This brand has no catalog yet',
   'catalog.products.loadMore': 'Load more',
 
+  // P21 — row actions, bulk actions and the fiscal workbench
+  'catalog.products.action.duplicate': 'Duplicate',
+  'catalog.products.action.archive': 'Archive',
+  'catalog.products.action.restore': 'Restore',
+  'catalog.products.action.addToCategory': 'Add to category',
+  'catalog.products.action.stopInAllBranches': 'Stop in all branches',
+  'catalog.products.action.copyId': 'Copy ID',
+  'catalog.products.action.copyShareSlug': 'Copy share slug',
+  'catalog.products.bulk.archive': 'Archive',
+  'catalog.products.bulk.stopInAllBranches': 'Stop in all branches',
+  'catalog.products.bulk.partial': '{failed} of the selected rows failed',
+  'catalog.products.bulk.done': '{count} rows updated',
+  'catalog.products.notice.archived': 'Product archived',
+  'catalog.products.notice.restored': 'Product restored',
+  'catalog.products.notice.stopped': 'Stopped in {count} branches',
+  'catalog.products.notice.idCopied': 'ID copied',
+  'catalog.products.notice.slugCopied': 'Share slug copied',
+  'catalog.products.notice.addedToCategory': 'Added to category',
+  'catalog.products.workbench.open': 'Fiscal workbench',
+
+  'catalog.products.addToCategory.title': 'Add to category',
+  'catalog.products.addToCategory.label': 'Category',
+  'catalog.products.addToCategory.placeholder': 'Choose a category',
+  'catalog.products.addToCategory.empty': 'This catalog has no categories yet',
+  'catalog.products.addToCategory.confirm': 'Add',
+
+  'catalog.fiscalWorkbench.title': 'Fiscal workbench',
+  'catalog.fiscalWorkbench.summary': '{unclassified} of {total} priceable nodes unclassified',
+  'catalog.fiscalWorkbench.loading': 'Loading the fiscal coverage report',
+  'catalog.fiscalWorkbench.denied': 'No access to this brand’s fiscal classification',
+  'catalog.fiscalWorkbench.empty': 'Every priceable node is classified',
+  'catalog.fiscalWorkbench.column.node': 'Node',
+  'catalog.fiscalWorkbench.column.type': 'Type',
+  'catalog.fiscalWorkbench.column.mxik': 'ИКПУ',
+  'catalog.fiscalWorkbench.column.packageCode': 'Package code',
+  'catalog.fiscalWorkbench.column.fiscalUnitCode': 'Fiscal unit',
+  'catalog.fiscalWorkbench.column.fiscalName': 'Fiscal name',
+  'catalog.fiscalWorkbench.nodeType.VARIANT': 'Dish',
+  'catalog.fiscalWorkbench.nodeType.MODIFIER_OPTION': 'Modifier',
+  'catalog.fiscalWorkbench.nodeType.FEE': 'Fee',
+
   'catalog.editor.loading': 'Loading product',
   'catalog.editor.notFound': 'This product no longer exists',
   'catalog.editor.backToList': 'Back to Products',
@@ -3773,9 +3814,11 @@ export const messagesEn = {
   'settings.integrations.detail.bindings.column.status': 'Status',
   'settings.integrations.detail.bindings.column.actions': 'Actions',
   'settings.integrations.detail.bindings.activate': 'Activate',
-  'settings.integrations.detail.bindings.activate.reasonPrompt': 'Reason for bringing this binding live:',
+  'settings.integrations.detail.bindings.activate.reasonPrompt':
+    'Reason for bringing this binding live:',
   'settings.integrations.detail.bindings.suspend': 'Suspend',
-  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Reason for suspending this binding:',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Reason for suspending this binding:',
   'settings.integrations.detail.bindings.empty': 'No bindings yet.',
   'settings.integrations.detail.bindings.wholeTenant': 'Entire company',
   'settings.integrations.detail.cloposSettings.title': 'Order acceptance',
@@ -3787,13 +3830,15 @@ export const messagesEn = {
   'settings.integrations.detail.partnerClients.issue': 'Issue a client',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'A name for this client (for your own reference):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Reason for issuing this client:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Reason for issuing this client:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Copy this secret now — it will not be shown again:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'I have copied it',
   'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
   'settings.integrations.detail.partnerClients.revoke': 'Revoke',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Reason for revoking this client:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Reason for revoking this client:',
   'settings.integrations.detail.partnerClients.empty': 'No partner API clients issued yet.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

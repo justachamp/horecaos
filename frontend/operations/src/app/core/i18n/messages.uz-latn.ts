@@ -1250,6 +1250,47 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.products.empty.noCatalog': 'Bu brendda hali katalog yoʻq',
   'catalog.products.loadMore': 'Yana koʻrsatish',
 
+  // P21 — qator amallari, ommaviy amallar va fiskal kabinet
+  'catalog.products.action.duplicate': 'Nusxalash',
+  'catalog.products.action.archive': 'Arxivlash',
+  'catalog.products.action.restore': 'Tiklash',
+  'catalog.products.action.addToCategory': 'Kategoriyaga qoʻshish',
+  'catalog.products.action.stopInAllBranches': 'Barcha filiallarda toʻxtatish',
+  'catalog.products.action.copyId': 'ID nusxalash',
+  'catalog.products.action.copyShareSlug': 'Ulashish slugini nusxalash',
+  'catalog.products.bulk.archive': 'Arxivlash',
+  'catalog.products.bulk.stopInAllBranches': 'Barcha filiallarda toʻxtatish',
+  'catalog.products.bulk.partial': 'Tanlangan qatorlardan {failed} tasi bajarilmadi',
+  'catalog.products.bulk.done': '{count} ta qator yangilandi',
+  'catalog.products.notice.archived': 'Mahsulot arxivlandi',
+  'catalog.products.notice.restored': 'Mahsulot tiklandi',
+  'catalog.products.notice.stopped': '{count} ta filialda toʻxtatildi',
+  'catalog.products.notice.idCopied': 'ID nusxalandi',
+  'catalog.products.notice.slugCopied': 'Slug nusxalandi',
+  'catalog.products.notice.addedToCategory': 'Kategoriyaga qoʻshildi',
+  'catalog.products.workbench.open': 'Fiskal kabinet',
+
+  'catalog.products.addToCategory.title': 'Kategoriyaga qoʻshish',
+  'catalog.products.addToCategory.label': 'Kategoriya',
+  'catalog.products.addToCategory.placeholder': 'Kategoriyani tanlang',
+  'catalog.products.addToCategory.empty': 'Bu katalogda hali kategoriyalar yoʻq',
+  'catalog.products.addToCategory.confirm': 'Qoʻshish',
+
+  'catalog.fiscalWorkbench.title': 'Fiskal kabinet',
+  'catalog.fiscalWorkbench.summary': '{total} tadan {unclassified} tasi klassifikatsiya qilinmagan',
+  'catalog.fiscalWorkbench.loading': 'Fiskal qamrov hisoboti yuklanmoqda',
+  'catalog.fiscalWorkbench.denied': 'Bu brendning fiskal klassifikatsiyasiga kirish huquqi yoʻq',
+  'catalog.fiscalWorkbench.empty': 'Barcha pozitsiyalar klassifikatsiya qilingan',
+  'catalog.fiscalWorkbench.column.node': 'Pozitsiya',
+  'catalog.fiscalWorkbench.column.type': 'Turi',
+  'catalog.fiscalWorkbench.column.mxik': 'ИКПУ',
+  'catalog.fiscalWorkbench.column.packageCode': 'Qadoq kodi',
+  'catalog.fiscalWorkbench.column.fiscalUnitCode': 'Fiskal birlik',
+  'catalog.fiscalWorkbench.column.fiscalName': 'Fiskal nomi',
+  'catalog.fiscalWorkbench.nodeType.VARIANT': 'Taom',
+  'catalog.fiscalWorkbench.nodeType.MODIFIER_OPTION': 'Modifikator',
+  'catalog.fiscalWorkbench.nodeType.FEE': 'Yigʻim',
+
   'catalog.editor.loading': 'Mahsulot yuklanmoqda',
   'catalog.editor.notFound': 'Bu mahsulot endi mavjud emas',
   'catalog.editor.backToList': 'Mahsulotlar roʻyxatiga',
@@ -3778,13 +3819,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.detail.partnerClients.issue': 'Mijoz chiqarish',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'Ushbu mijoz uchun nom (oʻzingiz uchun):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Ushbu mijozni chiqarish sababi:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Ushbu mijozni chiqarish sababi:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Ushbu maxfiy kalitni hozir nusxalang — u qayta koʻrsatilmaydi:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'Nusxaladim',
   'settings.integrations.detail.partnerClients.column.clientId': 'Mijoz ID',
   'settings.integrations.detail.partnerClients.revoke': 'Bekor qilish',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Ushbu mijozni bekor qilish sababi:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Ushbu mijozni bekor qilish sababi:',
   'settings.integrations.detail.partnerClients.empty': 'Hali hamkor API mijozlari chiqarilmagan.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------
