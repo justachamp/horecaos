@@ -1,8 +1,11 @@
 package uz.horecaos.platform.ordering.api;
 
 import java.math.BigDecimal;
+import java.util.Set;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.ordering.domain.OrderLatenessPolicy;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
+import uz.horecaos.platform.tenancy.api.PolicyKey;
 
 /**
  * The ordering module's ADR 0030 configuration keys.
@@ -131,6 +134,32 @@ public final class OrderingConfigurationKeys {
             .tenantVisible()
             .describedAs("Minutes after acceptance at which an order is coloured late on the board.")
             .build();
+
+    /**
+     * Wave P06 (gap map rows {@code 1.1g}/{@code X.39}): the policy document
+     * orders.md §2.7 actually specifies, and the one both the order board and
+     * the kitchen ticket queue read — unlike {@link #LATE_ORDER_THRESHOLD_MINUTES}
+     * above, which is card 2's single settings-screen scalar and has no reader
+     * yet. This is a {@link PolicyKey}, not a {@link ConfigurationKey}, because
+     * §2.7 needs three numbers per {@link
+     * uz.horecaos.platform.tenancy.api.FulfillmentMode}
+     * (at-risk-before/late-after/no-promise-fallback), and ADR 0030 draws the
+     * line at exactly this shape: "a setting is a scalar value... a policy is a
+     * versioned document". Authoring this key is {@code
+     * Capability.TENANT_CONFIGURATION_WRITE} and lands with wave P31; this wave
+     * ships the key, its resolver, and its platform default only.
+     */
+    public static final String LATENESS_POLICY_CODE = "ordering.lateness";
+
+    /** See {@link #LATENESS_POLICY_CODE}. Consumed by {@code OrderLatenessPolicyService}. */
+    public static final PolicyKey<OrderLatenessPolicy> LATENESS_POLICY = new PolicyKey<>(
+            LATENESS_POLICY_CODE,
+            OrderLatenessPolicy.class,
+            Set.of(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION),
+            "ordering",
+            false,
+            "Per-fulfilment-mode lateness thresholds: at-risk-before, late-after, and the "
+                    + "no-promise fallback (orders.md §2.7).");
 
     /** Card 2: "Минимальная сумма заказа" — pickup and dine-in; delivery is a zone concern. */
     public static final String MINIMUM_ORDER_AMOUNT_MINOR_CODE = "ordering.minimum_order_amount_minor";
