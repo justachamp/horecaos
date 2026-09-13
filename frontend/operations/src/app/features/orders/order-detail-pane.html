@@ -115,6 +115,16 @@
       </div>
     </header>
 
+    @if (detail.value.warnings.length > 0) {
+      <div class="pane__warnings-band" role="status" data-testid="order-detail-warnings">
+        <ul class="pane__warnings-list">
+          @for (warning of detail.value.warnings; track warning) {
+            <li class="q-body-sm" data-testid="order-detail-warning">{{ warning }}</li>
+          }
+        </ul>
+      </div>
+    }
+
     <!-- ================================================================ Состав (§3.4) -->
     <section class="pane__section" [attr.aria-label]="'orders.detail.section.lines' | t">
       <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.lines' | t }}</h2>
@@ -221,6 +231,157 @@
               }}
             </p>
           </div>
+        }
+      }
+    </section>
+
+    <!-- ================================================================ Исход (outcome, §3.9-ish, row 1.2) -->
+    @if (detail.value.outcome; as outcome) {
+      <section class="pane__section" [attr.aria-label]="'orders.detail.section.outcome' | t">
+        <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.outcome' | t }}</h2>
+        <dl class="pane__fields" data-testid="order-detail-outcome">
+          <div class="pane__field">
+            <dt class="q-caption">{{ 'orders.detail.outcome.kind' | t }}</dt>
+            <dd class="q-body-sm">{{ outcomeKindLabel(outcome.kind) }}</dd>
+          </div>
+          <div class="pane__field">
+            <dt class="q-caption">{{ 'orders.detail.outcome.category' | t }}</dt>
+            <dd class="q-body-sm">{{ outcomeCategoryLabel(outcome.systemCategory ?? '') }}</dd>
+          </div>
+          @if (outcome.stockDisposition) {
+            <div class="pane__field">
+              <dt class="q-caption">{{ 'orders.detail.outcome.stockDisposition' | t }}</dt>
+              <dd class="q-body-sm">{{ stockDispositionLabel(outcome.stockDisposition) }}</dd>
+            </div>
+          }
+          @if (outcome.liabilityParty) {
+            <div class="pane__field">
+              <dt class="q-caption">{{ 'orders.detail.outcome.liabilityParty' | t }}</dt>
+              <dd class="q-body-sm">{{ liabilityPartyLabel(outcome.liabilityParty) }}</dd>
+            </div>
+          }
+          @if (outcome.customerRefund) {
+            <div class="pane__field">
+              <dt class="q-caption">{{ 'orders.detail.outcome.customerRefund' | t }}</dt>
+              <dd class="q-body-sm">{{ customerRefundLabel(outcome.customerRefund) }}</dd>
+            </div>
+          }
+          <div class="pane__field">
+            <dt class="q-caption">{{ 'orders.detail.outcome.occurredAt' | t }}</dt>
+            <dd class="q-body-sm q-tnum">{{ formatOccurredAt(outcome.occurredAt) }}</dd>
+          </div>
+        </dl>
+      </section>
+    }
+
+    <!-- ================================================================ Детали (interim: kitchen note, callback, cash — §3.6/§3.9 own their real panels later) -->
+    <section class="pane__section" [attr.aria-label]="'orders.detail.section.details' | t">
+      <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.details' | t }}</h2>
+      <dl class="pane__fields" data-testid="order-detail-details">
+        <div class="pane__field">
+          <dt class="q-caption">{{ 'orders.detail.details.acceptanceMode' | t }}</dt>
+          <dd class="q-body-sm">{{ detail.value.acceptanceMode ?? '—' }}</dd>
+        </div>
+        <div class="pane__field">
+          <dt class="q-caption">{{ 'orders.detail.details.kitchenNote' | t }}</dt>
+          <dd class="q-body-sm" data-testid="order-detail-kitchen-note">
+            {{ detail.value.kitchenNote ?? ('orders.detail.details.kitchenNote.none' | t) }}
+          </dd>
+        </div>
+        <div class="pane__field">
+          <dt class="q-caption">{{ 'orders.detail.details.callback' | t }}</dt>
+          <dd class="q-body-sm" data-testid="order-detail-callback">
+            @if (detail.value.callbackRequested) {
+              @if (detail.value.callbackResolvedAt) {
+                {{
+                  'orders.detail.details.callback.resolved'
+                    | t: { at: formatOccurredAt(detail.value.callbackResolvedAt) }
+                }}
+              } @else {
+                {{ 'orders.detail.details.callback.outstanding' | t }}
+              }
+            } @else {
+              {{ 'orders.detail.details.callback.none' | t }}
+            }
+          </dd>
+        </div>
+        @if (
+          detail.value.cashTenderedExpectedMinor !== null &&
+          detail.value.cashTenderedExpectedMinor !== undefined
+        ) {
+          <div class="pane__field">
+            <dt class="q-caption">{{ 'orders.detail.details.cashTendered' | t }}</dt>
+            <dd class="q-body-sm q-mono q-tnum" data-testid="order-detail-cash-tendered">
+              {{
+                formatMoneyMinor(
+                  detail.value.cashTenderedExpectedMinor,
+                  detail.value.summary.currency
+                )
+              }}
+            </dd>
+          </div>
+          <div class="pane__field">
+            <dt class="q-caption">{{ 'orders.detail.details.changeDue' | t }}</dt>
+            <dd class="q-body-sm q-mono q-tnum" data-testid="order-detail-change-due">
+              {{
+                formatMoneyMinor(detail.value.changeDueMinor ?? 0, detail.value.summary.currency)
+              }}
+            </dd>
+          </div>
+        }
+      </dl>
+    </section>
+
+    <!-- ================================================================ Ревизии (§3.9, row 1.2p) -->
+    <section class="pane__section" [attr.aria-label]="'orders.detail.section.revisions' | t">
+      <h2 class="q-emphasis pane__section-title">
+        {{ 'orders.detail.section.revisions' | t: { count: detail.value.currentRevision } }}
+      </h2>
+      <button
+        type="button"
+        class="pane__reveal-link"
+        (click)="toggleRevisions()"
+        data-testid="order-detail-revisions-toggle"
+      >
+        {{
+          (revisionsOpen() ? 'orders.detail.revisions.hide' : 'orders.detail.revisions.show') | t
+        }}
+      </button>
+
+      @if (revisionsOpen()) {
+        @if (revisionsLoading()) {
+          <p class="q-body-sm pane__state-inline">{{ 'orders.detail.loading' | t }}</p>
+        } @else if (revisionsError()) {
+          <p class="q-body-sm pane__state-inline" data-testid="order-detail-revisions-error">
+            {{ 'orders.detail.revisions.error' | t }}
+          </p>
+        } @else if (revisions(); as list) {
+          <table class="pane__lines-table" data-testid="order-detail-revisions-table">
+            <thead>
+              <tr>
+                <th>{{ 'orders.detail.revisions.column.revision' | t }}</th>
+                <th>{{ 'orders.detail.revisions.column.source' | t }}</th>
+                <th class="pane__num-col">{{ 'orders.detail.revisions.column.total' | t }}</th>
+                <th class="pane__num-col">{{ 'orders.detail.revisions.column.delta' | t }}</th>
+                <th>{{ 'orders.detail.revisions.column.createdAt' | t }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (revision of list; track revision.revision) {
+                <tr data-testid="order-detail-revision-row">
+                  <td class="q-tnum">{{ revision.revision }}</td>
+                  <td>{{ revision.source }}</td>
+                  <td class="pane__num-col q-mono q-tnum">
+                    {{ formatMoneyMinor(revision.totalMinor, revision.currency) }}
+                  </td>
+                  <td class="pane__num-col q-mono q-tnum">
+                    {{ formatMoneyMinor(revision.deltaTotalMinor, revision.currency) }}
+                  </td>
+                  <td class="q-tnum">{{ formatOccurredAt(revision.createdAt) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
         }
       }
     </section>
@@ -358,6 +519,14 @@
       </section>
     }
 
+    <!-- ================================================================ Код выдачи (handover, §3.8, row 1.2m) -->
+    <section class="pane__section" [attr.aria-label]="'orders.detail.section.handover' | t">
+      <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.handover' | t }}</h2>
+      @if (currentScope(); as scope) {
+        <q-order-handover-panel [scope]="scope" [orderId]="detail.value.summary.orderId" />
+      }
+    </section>
+
     <!-- ================================================================ Хронология (§3.10) -->
     <section class="pane__section" [attr.aria-label]="'orders.detail.section.timeline' | t">
       <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.timeline' | t }}</h2>
@@ -402,15 +571,60 @@
         <p class="q-caption">{{ 'orders.detail.timeline.lane.notBuilt' | t }}</p>
       </div>
     </section>
+
+    <!-- ================================================================ Атрибуция (§3.12) -->
+    <section class="pane__section" [attr.aria-label]="'orders.detail.section.attribution' | t">
+      <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.attribution' | t }}</h2>
+      <dl class="pane__fields" data-testid="order-detail-attribution">
+        <div class="pane__field">
+          <dt class="q-caption">{{ 'orders.detail.attribution.createdBy' | t }}</dt>
+          <dd class="q-body-sm" data-testid="order-detail-created-by">
+            {{
+              actorDisplay(detail.value.createdByActorType, detail.value.createdByActorId) ?? '—'
+            }}
+          </dd>
+        </div>
+        <div class="pane__field">
+          <dt class="q-caption">{{ 'orders.detail.attribution.acceptedBy' | t }}</dt>
+          <dd class="q-body-sm" data-testid="order-detail-accepted-by">
+            @if (
+              actorDisplay(detail.value.acceptedByActorType, detail.value.acceptedByActorId);
+              as actor
+            ) {
+              {{ actor }}
+              @if (detail.value.acceptedAt) {
+                <span class="q-caption"> · {{ formatOccurredAt(detail.value.acceptedAt) }}</span>
+              }
+            } @else {
+              {{ 'orders.detail.attribution.notYetAccepted' | t }}
+            }
+          </dd>
+        </div>
+      </dl>
+    </section>
   }
 
   @if (dialog() === 'cancel') {
-    <q-order-reason-dialog
+    <q-order-outcome-reason-dialog
       titleKey="orders.dialog.cancel.title"
       confirmLabelKey="orders.action.cancel"
+      [reasons]="outcomeReasons()"
+      [showConsequences]="true"
       [noteEnabled]="true"
       [busy]="busy()"
       (confirm)="onCancelDialogConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'complete') {
+    <q-order-outcome-reason-dialog
+      titleKey="orders.dialog.complete.title"
+      confirmLabelKey="orders.action.complete"
+      [reasons]="outcomeReasons()"
+      [showConsequences]="false"
+      [noteEnabled]="false"
+      [busy]="busy()"
+      (confirm)="onCompletionDialogConfirm($event)"
       (dismiss)="onDialogDismiss()"
     />
   }

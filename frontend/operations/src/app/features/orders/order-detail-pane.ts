@@ -11,7 +11,7 @@ import { Observable, firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { Versioned } from '../../core/api/aggregate-version';
-import { operationsPaths } from '../../core/api/operations-paths';
+import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { TimeZone, formatDateTime } from '../../core/format/datetime';
@@ -21,6 +21,7 @@ import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { StepItem, Steps } from '../../shared/ui/steps';
 import { Timeline, TimelineEntry } from '../../shared/ui/timeline';
+import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
 import {
   DecisionIdRegistry,
   OrderActionResponse,
@@ -33,11 +34,20 @@ import {
   OrderDetailResponse,
   OrderLine,
   OrderTimelineEntry,
+  RevisionResponse,
 } from './order-detail';
 import { describeApiError, mutationErrorNotice } from './order-errors';
+import { OrderHandoverPanel } from './order-handover-panel';
 import { orderLifecycleSteps } from './order-lifecycle-steps';
 import { MoneyReconciliation, reconcileMoney } from './order-money';
-import { OrderReasonDialog, OrderReasonSubmission } from './order-reason-dialog';
+import {
+  outcomeKindLabel,
+  outcomeSystemCategoryLabel,
+  stockDispositionLabel,
+  liabilityPartyLabel,
+  customerRefundLabel,
+} from './order-outcome-labels';
+import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outcome-reason-dialog';
 import {
   OrderRejectReasonDialog,
   OrderRejectSubmission,
@@ -66,7 +76,7 @@ const REVEAL_PURPOSE = {
 } as const;
 
 /** Which reason dialog is open, if any. */
-type DialogKind = 'reject' | 'cancel';
+type DialogKind = 'reject' | 'cancel' | 'complete';
 
 /**
  * The order detail — `docs/operations-spec/orders.md` §3, docked beside the
@@ -87,7 +97,14 @@ type DialogKind = 'reject' | 'cancel';
  */
 @Component({
   selector: 'q-order-detail-pane',
-  imports: [TPipe, OrderReasonDialog, OrderRejectReasonDialog, Steps, Timeline],
+  imports: [
+    TPipe,
+    OrderOutcomeReasonDialog,
+    OrderRejectReasonDialog,
+    OrderHandoverPanel,
+    Steps,
+    Timeline,
+  ],
   templateUrl: './order-detail-pane.html',
   styleUrl: './order-detail-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -97,6 +114,7 @@ export class OrderDetailPane {
   private readonly location = inject(CurrentLocation);
   private readonly actionsApi = inject(OrderActionsApi);
   private readonly rejectReasonsApi = inject(RejectReasonsApi);
+  private readonly referenceDataApi = inject(ReferenceDataApi);
   private readonly revealApi = inject(OrderRevealApi);
   private readonly i18n = inject(I18n);
 
@@ -116,11 +134,16 @@ export class OrderDetailPane {
    * `q-timeline`'s own shape, row `X.26` — the same idea as the staff
    * activity log's event list, so the same component: a gap notice stays
    * its own row (§3.10's "hiding it hides a bug"), computed exactly as
-   * before via {@link missingSequenceBefore}. No `actor` on these
-   * entries — `OrderTimelineEntry.actorType` is a bare wire tag with no
-   * resolvable name or subject behind it (unlike an audit event's
-   * `actorDisplay`/`actorSubject`), and a chip that could only ever render
-   * the fallback dash on every row would be noise, not information.
+   * before via {@link missingSequenceBefore}.
+   *
+   * **Wave P09.** `actor` used to be omitted here on the premise that
+   * `OrderTimelineEntry.actorType` — a bare wire tag with no resolvable name
+   * or subject behind it, unlike an audit event's `actorDisplay`/
+   * `actorSubject` — would render nothing but the same fallback dash on
+   * every row. That premise undersold `q-actor-chip`: even with no name it
+   * still marks *which kind* of actor moved the order (a customer, an
+   * operator, the system itself), which is exactly the fact a raw
+   * `reasonCode` next to it cannot supply on its own.
    */
   protected readonly commercialTimelineEntries = computed<readonly TimelineEntry[] | null>(() => {
     const entries = this.timeline();
@@ -130,6 +153,7 @@ export class OrderDetailPane {
     return entries.map((entry, index) => ({
       id: String(entry.sequence),
       timestamp: this.formatOccurredAt(entry.occurredAt),
+      actor: { kind: entry.actorType, displayName: null, subject: null },
       title: `${this.statusLabel(entry.fromStatus)} → ${this.statusLabel(entry.toStatus)}`,
       detail: entry.reasonCode
         ? `${this.triggerLabel(entry.trigger)} · ${entry.reasonCode}`
@@ -164,8 +188,26 @@ export class OrderDetailPane {
   protected readonly dialog = signal<DialogKind | null>(null);
   /** Fetched before the reject dialog opens — see {@link onActionClick}'s REJECT case. */
   protected readonly rejectReasons = signal<readonly RejectReasonOption[]>([]);
+  /**
+   * Fetched before the cancel or completion dialog opens (§4.5/§4.6, wave
+   * P09) — whichever one is currently relevant; the two dialogs never open
+   * at once, so one signal is enough.
+   */
+  protected readonly outcomeReasons = signal<readonly ReasonResponse[]>([]);
   protected readonly headerOverflowOpen = signal(false);
   private readonly decisionIds = new DecisionIdRegistry();
+
+  /**
+   * `GET .../revisions` (§3.9, ADR 0039, row `1.2p`) — fetched on demand, not
+   * on load: an order with no amendments has one revision nobody needs to
+   * see, and the pane's own load already makes two calls (the order, the
+   * timeline). `null` before the operator has asked; `[]` would be
+   * indistinguishable from "still loading".
+   */
+  protected readonly revisions = signal<readonly RevisionResponse[] | null>(null);
+  protected readonly revisionsOpen = signal(false);
+  protected readonly revisionsLoading = signal(false);
+  protected readonly revisionsError = signal(false);
 
   protected readonly revealedPhone = signal<string | null>(null);
   protected readonly revealingPhone = signal(false);
@@ -195,6 +237,9 @@ export class OrderDetailPane {
     this.revealedPhone.set(null);
     this.revealedAddress.set(null);
     this.revealedNotes.set(new Map());
+    this.revisions.set(null);
+    this.revisionsOpen.set(false);
+    this.revisionsError.set(false);
 
     await this.location.ensureLoaded();
     const scope = this.location.scope();
@@ -270,6 +315,11 @@ export class OrderDetailPane {
     this.notice.set(null);
   }
 
+  /** For `q-order-handover-panel`'s `[scope]` input — the template cannot reach `location` directly. */
+  protected currentScope(): LocationScope | null {
+    return this.location.scope();
+  }
+
   // ------------------------------------------------------------ header severity
 
   protected headerSeverity(): OrderSeverity | null {
@@ -298,12 +348,31 @@ export class OrderDetailPane {
 
   // ------------------------------------------------------------ §3.11/§4.3 actions
 
+  /**
+   * The server offers `ADVANCE`→`COMPLETED` and `COMPLETE` together whenever
+   * either is legal (`OrderActionsPolicy`'s own doc explains why: a client
+   * built before wave P09 — `order-queue.ts` — still works against the
+   * generic entry). This pane prefers `COMPLETE`, which lets it name the
+   * fulfilment-mode-appropriate reason instead of always booking
+   * `DELIVERED_OWN_COURIER` (row `1.2j`), so the redundant `ADVANCE` entry is
+   * filtered out here rather than rendered as a second, competing button.
+   */
+  private visibleActions(): readonly OrderActionResponse[] {
+    const actions = this.order()?.value.summary.actions ?? [];
+    const hasComplete = actions.some((action) => action.action === 'COMPLETE');
+    return hasComplete
+      ? actions.filter(
+          (action) => !(action.action === 'ADVANCE' && action.targetStatus === 'COMPLETED'),
+        )
+      : actions;
+  }
+
   protected primaryAction(): OrderActionResponse | null {
-    return (this.order()?.value.summary.actions ?? [])[0] ?? null;
+    return this.visibleActions()[0] ?? null;
   }
 
   protected overflowActions(): readonly OrderActionResponse[] {
-    return (this.order()?.value.summary.actions ?? []).slice(1);
+    return this.visibleActions().slice(1);
   }
 
   protected actionLabel(action: OrderActionResponse): string {
@@ -340,7 +409,10 @@ export class OrderDetailPane {
         void this.openRejectDialog();
         return;
       case 'CANCEL':
-        this.dialog.set('cancel');
+        void this.openCancelDialog();
+        return;
+      case 'COMPLETE':
+        void this.startCompletion();
         return;
       case 'ADVANCE':
         if (action.targetStatus) {
@@ -378,11 +450,86 @@ export class OrderDetailPane {
     }
   }
 
+  /**
+   * Fetch-before-open (orders.md §4.5, wave P09 row `1.2k`), the same rule as
+   * {@link openRejectDialog}: the picker needs the tenant's active
+   * `CANCELLATION` reasons before it has anything to show. `ORDER_ACTION`s
+   * cancel is now offered from `CONFIRMED` onward too — the reasoned path
+   * this dialog exists for.
+   */
+  private async openCancelDialog(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      this.outcomeReasons.set(await this.referenceDataApi.list(scope, 'CANCELLATION'));
+      this.dialog.set('cancel');
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.notice.set(this.errorMessage(error));
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * §4.6: "where exactly one reason is valid for the order's mode... the
+   * action completes without a dialog." Fetches the tenant's active
+   * `COMPLETION` reasons, narrows them to this order's fulfilment mode, and
+   * either submits the one unambiguous choice directly or opens the picker
+   * for the operator to choose among several. An empty result (a tenant that
+   * configured no completion reason for this mode) falls back to the
+   * reasonless call — the server's own honest default, never invented here.
+   */
+  private async startCompletion(): Promise<void> {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    const mode = detail.value.summary.fulfillmentMode ?? '';
+    try {
+      const reasons = await this.referenceDataApi.list(scope, 'COMPLETION');
+      const eligible = reasons.filter(
+        (reason) =>
+          !reason.allowedFulfillmentModes || reason.allowedFulfillmentModes.includes(mode),
+      );
+      if (eligible.length === 0) {
+        void this.submitCompletion();
+      } else if (eligible.length === 1) {
+        void this.submitCompletion(eligible[0].id);
+      } else {
+        this.outcomeReasons.set(eligible);
+        this.dialog.set('complete');
+      }
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.notice.set(this.errorMessage(error));
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  private async submitCompletion(reasonId?: string): Promise<void> {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    const orderId = detail.value.summary.orderId;
+    const version = detail.value.summary.version ?? 0;
+
+    await this.submitStateMutation(this.actionsApi.complete(scope, orderId, version, reasonId));
+  }
+
   protected onDialogDismiss(): void {
     this.dialog.set(null);
   }
 
-  protected onCancelDialogConfirm(submission: OrderReasonSubmission): void {
+  protected onCancelDialogConfirm(submission: OutcomeReasonSubmission): void {
     const detail = this.order();
     const scope = this.location.scope();
     if (!detail || !scope) {
@@ -392,8 +539,19 @@ export class OrderDetailPane {
     const version = detail.value.summary.version ?? 0;
 
     void this.submitStateMutation(
-      this.actionsApi.cancel(scope, orderId, version, submission.reasonCode, submission.note),
+      this.actionsApi.cancelWithReason(
+        scope,
+        orderId,
+        version,
+        submission.reasonId,
+        submission.reasonCode,
+        submission.note,
+      ),
     ).finally(() => this.dialog.set(null));
+  }
+
+  protected onCompletionDialogConfirm(submission: OutcomeReasonSubmission): void {
+    void this.submitCompletion(submission.reasonId).finally(() => this.dialog.set(null));
   }
 
   protected onRejectDialogConfirm(submission: OrderRejectSubmission): void {
@@ -646,6 +804,83 @@ export class OrderDetailPane {
     return missing === null
       ? null
       : this.i18n.t('orders.detail.timeline.gap', { sequence: missing });
+  }
+
+  // ------------------------------------------------------------ §3.9 revisions (row 1.2p)
+
+  /**
+   * Toggles the revisions view, fetching on first open only — `revisions()`
+   * stays populated across a collapse/re-expand within the same order so a
+   * second look costs nothing.
+   */
+  protected async toggleRevisions(): Promise<void> {
+    const opening = !this.revisionsOpen();
+    this.revisionsOpen.set(opening);
+    if (!opening || this.revisions() !== null) {
+      return;
+    }
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    this.revisionsLoading.set(true);
+    this.revisionsError.set(false);
+    try {
+      const result = await firstValueFrom(
+        this.api.get<RevisionResponse[]>(
+          operationsPaths.orderRevisions(scope, detail.value.summary.orderId),
+        ),
+      );
+      this.revisions.set(result.value ?? []);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.revisionsError.set(true);
+      } else {
+        throw error;
+      }
+    } finally {
+      this.revisionsLoading.set(false);
+    }
+  }
+
+  // ------------------------------------------------------------ §3.4/§3.9 attribution and outcome
+
+  protected outcomeKindLabel(kind: string): string {
+    return outcomeKindLabel(kind, (key, values) => this.i18n.t(key, values));
+  }
+
+  protected outcomeCategoryLabel(category: string): string {
+    return outcomeSystemCategoryLabel(category, (key, values) => this.i18n.t(key, values));
+  }
+
+  protected stockDispositionLabel(value: string): string {
+    return stockDispositionLabel(value, (key, values) => this.i18n.t(key, values));
+  }
+
+  protected liabilityPartyLabel(value: string): string {
+    return liabilityPartyLabel(value, (key, values) => this.i18n.t(key, values));
+  }
+
+  protected customerRefundLabel(value: string): string {
+    return customerRefundLabel(value, (key, values) => this.i18n.t(key, values));
+  }
+
+  /**
+   * `createdByActorType`/`acceptedByActorType` name a bare wire tag with no
+   * resolvable display name behind it — same limitation the commercial
+   * timeline's own doc comment names for `actorType` — so this renders the
+   * type and the raw id together rather than pretending a name exists.
+   * Machine principals (`"SYSTEM"`) carry no id and render as the type alone.
+   */
+  protected actorDisplay(
+    actorType: string | null | undefined,
+    actorId: string | null | undefined,
+  ): string | null {
+    if (!actorType) {
+      return null;
+    }
+    return actorId ? `${actorType} · ${actorId}` : actorType;
   }
 }
 
