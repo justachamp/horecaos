@@ -294,6 +294,7 @@ public enum PlatformRole {
                     POS_EXPORT_RESOLVE,
                     NOTIFICATION_TEMPLATE_AUTHOR,
                     NOTIFICATION_TEMPLATE_ACTIVATE,
+                    NOTIFICATION_ROUTING_MANAGE,
                     NOTIFICATION_READ,
                     NOTIFICATION_RETRY,
                     COMMERCIAL_SUBSCRIPTION_MANAGE,
@@ -449,6 +450,7 @@ public enum PlatformRole {
                     POS_EXPORT_RESOLVE,
                     NOTIFICATION_TEMPLATE_AUTHOR,
                     NOTIFICATION_TEMPLATE_ACTIVATE,
+                    NOTIFICATION_ROUTING_MANAGE,
                     NOTIFICATION_READ,
                     NOTIFICATION_RETRY,
                     COMMERCIAL_PLAN_READ,
@@ -563,6 +565,7 @@ public enum PlatformRole {
                     DELIVERY_TARIFF_MANAGE,
                     MARKETPLACE_AVAILABILITY_PUSH,
                     NOTIFICATION_TEMPLATE_AUTHOR,
+                    NOTIFICATION_ROUTING_MANAGE,
                     REPORTING_READ,
                     // ADR 0060: a brand manager who can toggle the stop list needs a
                     // way to act on it from the pocket floor too.

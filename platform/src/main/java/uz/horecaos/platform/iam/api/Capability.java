@@ -834,6 +834,14 @@ public enum Capability {
     NOTIFICATION_TEMPLATE_ACTIVATE("notification.template.activate", "notification", "template.activate"),
 
     /**
+     * ADR 0058, gap map row {@code 10.9b} (wave P36): which event classes a
+     * bound Telegram chat receives, its topic, and unbinding it. Separate
+     * from {@link #NOTIFICATION_TEMPLATE_AUTHOR} because routing an alert to
+     * a chat is a different act from authoring the wording that alert sends.
+     */
+    NOTIFICATION_ROUTING_MANAGE("notification.routing.manage", "notification", "routing.manage"),
+
+    /**
      * ADR 0020: reading a notification's intent, its suppression reason, its
      * attempts, and the statuses the provider gave.
      *

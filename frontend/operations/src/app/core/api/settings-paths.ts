@@ -477,6 +477,57 @@ export const settingsPaths = {
     return `${this.notificationTemplateVersion(scope, templateId, versionNumber)}/activate`;
   },
 
+  /** `NotificationTemplateController.testSend` — wave P36, SMS only today. */
+  notificationTemplateTestSend(
+    scope: LocationScope,
+    templateId: string,
+    versionNumber: number,
+  ): string {
+    return `${this.notificationTemplateVersion(scope, templateId, versionNumber)}/test-send`;
+  },
+
+  /**
+   * `NotificationTemplateController.variableCatalogue` — wave P36, gap map
+   * `X.27`: fixes the `variablesSchema: {}` defect that made the editor
+   * unable to author a variable-bearing template at all.
+   */
+  notificationVariableCatalogue(scope: LocationScope): string {
+    return `${this.notificationTemplates(scope)}/variable-catalogue`;
+  },
+
+  // ------------------------------------------- 10.9 Notifications, Tab 2 routing
+
+  /**
+   * `TelegramRoutingController` — wave P36, gap map `10.9b`, over ADR 0058's
+   * bindings. Same `/api/v1/tenants/**` surface as {@link notificationTemplates},
+   * not the `OPERATIONS`-prefixed one — this is a brand-new controller with
+   * no cross-surface caller to preserve, so it lands directly where its
+   * sibling notification-template endpoints already live.
+   */
+  notificationRouting(scope: LocationScope): string {
+    return `${TENANT}/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/notification-routing`;
+  },
+
+  notificationRoutingEventClasses(scope: LocationScope): string {
+    return `${this.notificationRouting(scope)}/event-classes`;
+  },
+
+  notificationRoutingBindings(scope: LocationScope): string {
+    return `${this.notificationRouting(scope)}/bindings`;
+  },
+
+  notificationRoutingSubscription(scope: LocationScope, bindingId: string): string {
+    return `${this.notificationRoutingBindings(scope)}/${enc(bindingId)}/subscriptions`;
+  },
+
+  notificationRoutingTopic(scope: LocationScope, bindingId: string): string {
+    return `${this.notificationRoutingBindings(scope)}/${enc(bindingId)}/topic`;
+  },
+
+  notificationRoutingUnbind(scope: LocationScope, bindingId: string): string {
+    return `${this.notificationRoutingBindings(scope)}/${enc(bindingId)}/unbind`;
+  },
+
   // ---------------------------------------------------------- 10.10 Reference data
 
   /**

@@ -236,9 +236,16 @@ public class NotificationTemplateService {
 
     /** The declared variable names of a stored version. */
     public Set<String> declaredVariables(VersionRow version) {
-        return objectMapper
-                .readValue(version.variablesSchemaJson(), SCHEMA_TYPE)
-                .keySet();
+        return declaredVariablesSchema(version).keySet();
+    }
+
+    /**
+     * The full declared schema of a stored version — name to declared type —
+     * so a reader (the editor's own {@code GET}) sees what an author actually
+     * declared rather than only the names {@link #declaredVariables} keeps.
+     */
+    public Map<String, String> declaredVariablesSchema(VersionRow version) {
+        return objectMapper.readValue(version.variablesSchemaJson(), SCHEMA_TYPE);
     }
 
     @Transactional(readOnly = true)
@@ -249,6 +256,24 @@ public class NotificationTemplateService {
     @Transactional(readOnly = true)
     public List<VersionRow> versions(UUID tenantId, UUID templateId, int versionNumber) {
         return templates.versions(tenantId, templateId, versionNumber);
+    }
+
+    /**
+     * Every version of a template, every locale — the read a create-only
+     * editor never had a caller for. The caller groups by
+     * {@code versionNumber}; ordered newest version first.
+     */
+    @Transactional(readOnly = true)
+    public List<VersionRow> allVersions(UUID tenantId, UUID templateId) {
+        // Read for its side effect, same as addVersion: a template id from
+        // another tenant must not answer here either.
+        TemplateRow owned = templates
+                .template(tenantId, templateId)
+                .orElseThrow(
+                        () -> new IllegalArgumentException("No template " + templateId + " belongs to this tenant"));
+        // owned itself is unused past this point — the read above exists only to
+        // 404 a foreign template id before its versions are listed.
+        return templates.allVersionsOfTemplate(tenantId, owned.id());
     }
 
     private String contentHashOf(MessageLocale locale, Wording wording) {

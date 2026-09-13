@@ -153,3 +153,63 @@
 .denied {
   color: var(--q-ink-muted);
 }
+
+.card {
+  max-width: 720px;
+  margin-bottom: 24px;
+  padding: 16px 20px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.hint {
+  color: var(--q-ink-muted);
+  margin: 2px 0 12px;
+}
+
+.row-menu {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--q-primary);
+  cursor: pointer;
+  font: inherit;
+}
+
+.field--inline {
+  display: inline-block;
+  width: 120px;
+  height: 28px;
+  padding: 2px 8px;
+  margin-right: 4px;
+}
+
+.locale-chip {
+  display: inline-block;
+  padding: 2px 6px;
+  margin-inline-end: 4px;
+  border-radius: var(--q-radius);
+  background: var(--q-surface-2);
+  color: var(--q-ink);
+  font-size: var(--q-type-caption-sm);
+  text-transform: none;
+}
+
+.locale-chip--missing {
+  color: var(--q-ink-subtle);
+  border: 1px dashed var(--q-hairline);
+  background: none;
+}
+
+.events-cell {
+  min-width: 280px;
+}
+
+.test-send {
+  margin-top: 24px;
+}

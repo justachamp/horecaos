@@ -1,0 +1,117 @@
+@if (!isWired()) {
+  <q-inline-alert
+    severity="warning"
+    [text]="'settings.notifications.editor.channelUnwired' | t"
+    data-testid="channel-unwired-warning"
+  />
+}
+
+@if (result(); as outcome) {
+  @if (outcome.awaitsProviderReview) {
+    <q-inline-alert
+      severity="warning"
+      [text]="'settings.notifications.editor.saved.warning' | t: { version: outcome.versionNumber }"
+      data-testid="save-provider-review-warning"
+    />
+  } @else {
+    <q-inline-alert
+      severity="success"
+      [text]="'settings.notifications.editor.saved.ok' | t: { version: outcome.versionNumber }"
+    />
+  }
+}
+
+<div class="editor">
+  <div class="editor__form">
+    <div class="locale-tabs" role="tablist">
+      @for (tag of localeTags; track tag) {
+        <button
+          type="button"
+          role="tab"
+          class="locale-tab"
+          [class.locale-tab--active]="activeLocale() === tag"
+          [attr.aria-selected]="activeLocale() === tag"
+          (click)="selectLocale(tag)"
+        >
+          {{ tag }}
+          @if (bodies()[tag].trim().length === 0) {
+            <span class="locale-tab__missing" aria-hidden="true">•</span>
+          }
+        </button>
+      }
+    </div>
+
+    @if (hasSubject()) {
+      <label class="q-caption" [for]="'subject-' + activeLocale()">{{
+        'settings.notifications.editor.subject' | t
+      }}</label>
+      <input
+        [id]="'subject-' + activeLocale()"
+        class="q-body field"
+        type="text"
+        [value]="subjects()[activeLocale()]"
+        (input)="setSubject(activeLocale(), $any($event.target).value)"
+      />
+    }
+
+    <label class="q-caption" [for]="'body-' + activeLocale()">{{
+      'settings.notifications.editor.body' | t
+    }}</label>
+    <textarea
+      [id]="'body-' + activeLocale()"
+      class="q-body field textarea"
+      rows="6"
+      data-testid="editor-body"
+      [value]="bodies()[activeLocale()]"
+      (input)="setBody(activeLocale(), $any($event.target).value)"
+    ></textarea>
+
+    <span class="q-caption">{{ 'settings.notifications.editor.variables' | t }}</span>
+    <div class="variable-chips" data-testid="variable-chips">
+      @if (catalogueLoading()) {
+        <span class="q-caption">…</span>
+      } @else if (variablesForClass().length === 0) {
+        <span class="q-caption">{{ 'settings.notifications.editor.variables.empty' | t }}</span>
+      } @else {
+        @for (variable of variablesForClass(); track variable.name) {
+          <button
+            type="button"
+            class="variable-chip"
+            [title]="variable.description"
+            (click)="insertVariable(variable.name)"
+          >
+            {{ '{{' + variable.name + '}}' }}
+          </button>
+        }
+      }
+    </div>
+
+    @if (error(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    }
+    @if (!canSave() && anyBodyStarted()) {
+      <p class="q-body-sm hint">{{ 'settings.notifications.editor.locale.incomplete' | t }}</p>
+    }
+
+    <div class="editor__actions">
+      <button type="button" class="q-body secondary" (click)="cancel()" [disabled]="submitting()">
+        {{ 'settings.notifications.cancel' | t }}
+      </button>
+      <button
+        type="button"
+        class="q-body primary"
+        data-testid="editor-save"
+        (click)="submit()"
+        [disabled]="!canSave()"
+      >
+        {{ submitting() ? ('settings.notifications.editor.saving' | t) : ('settings.notifications.editor.save' | t) }}
+      </button>
+    </div>
+  </div>
+
+  <div class="editor__preview">
+    <q-phone-frame [caption]="'settings.notifications.editor.preview' | t">
+      <div class="preview-message" data-testid="preview-body">{{ preview() }}</div>
+    </q-phone-frame>
+  </div>
+</div>
