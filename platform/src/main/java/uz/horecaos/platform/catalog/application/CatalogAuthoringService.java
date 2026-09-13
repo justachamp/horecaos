@@ -1,8 +1,13 @@
 package uz.horecaos.platform.catalog.application;
 
 import java.time.Clock;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -16,7 +21,9 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierGroup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierOption;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableNode;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.commercial.api.EntitlementKeys;
@@ -254,6 +261,237 @@ public class CatalogAuthoringService {
     }
 
     /**
+     * Duplicates a product: every variant (its own fiscal classification and
+     * every locale's translation), its catalog and category placements, its
+     * attached modifier groups, and its media — everything a 600-item
+     * onboarding operator would otherwise retype variant by variant and
+     * locale by locale for "the same dish, slightly different." catalog.md
+     * §4.1's row action; no endpoint answered it before this.
+     *
+     * <p>The duplicate starts at the source product's own status: an
+     * ARCHIVED product does not spring back to sellable just because it was
+     * copied, and an ACTIVE one is exactly as ready as the row an operator
+     * picked. Its code, and a variant's SKU when it had one, are suffixed
+     * with a slice of the new id — {@code uq_product_code}/{@code
+     * uq_variant_sku} would otherwise refuse the copy outright.
+     */
+    @Transactional
+    public ProductCreated duplicateProduct(UUID tenantId, UUID brandId, UUID productId, @Nullable UUID actorId) {
+        Product original = store.productById(tenantId, brandId, productId)
+                .orElseThrow(() -> new UnknownProductException(productId));
+
+        // Same "before mutation" shape as createProduct: a duplicate is one
+        // more product row, and the entitlement is checked before any of it
+        // is written.
+        entitlements.require(tenantId, EntitlementKeys.CATALOG_PRODUCTS_MAX_COUNT, 1);
+
+        UUID newProductId = UUID.randomUUID();
+        store.insertProduct(
+                newProductId, tenantId, brandId, suffixed(original.code(), newProductId), original.status());
+        usage.record(new UsageMovement(
+                tenantId,
+                EntitlementKeys.CATALOG_PRODUCTS_MAX_COUNT,
+                1,
+                "catalog.ProductDuplicated",
+                newProductId.toString(),
+                clock.instant(),
+                // Only "brand_id" is allowlisted for this key (EntitlementKeys);
+                // the source product id belongs in sourceEventId's neighbourhood,
+                // not in a dimension, which UsageMovement refuses at construction.
+                Map.of("brand_id", brandId.toString())));
+
+        List<JdbcCatalogStore.TranslationRow> allTranslations = store.translations(tenantId, brandId);
+        copyTranslations(tenantId, brandId, allTranslations, EntityType.PRODUCT, productId, newProductId);
+
+        Map<UUID, FiscalClassification> classifications = store.classificationsForBrand(tenantId, brandId);
+        Map<UUID, UUID> variantIdMap = new HashMap<>();
+        UUID defaultVariantId = null;
+        for (Variant variant : store.variantsForProduct(tenantId, brandId, productId)) {
+            UUID newVariantId = UUID.randomUUID();
+            variantIdMap.put(variant.id(), newVariantId);
+            if (variant.isDefault()) {
+                defaultVariantId = newVariantId;
+            }
+            store.insertVariant(
+                    newVariantId,
+                    tenantId,
+                    brandId,
+                    newProductId,
+                    variant.sku() == null ? null : suffixed(variant.sku(), newVariantId),
+                    variant.unitCode(),
+                    variant.isDefault(),
+                    variant.sortOrder(),
+                    variant.status());
+            FiscalClassification fiscal = classifications.get(variant.id());
+            if (fiscal != null) {
+                classify(tenantId, brandId, PriceableNode.variant(newVariantId), fiscal, actorId);
+            }
+            copyTranslations(tenantId, brandId, allTranslations, EntityType.VARIANT, variant.id(), newVariantId);
+        }
+
+        int catalogSortOrder = 0;
+        for (UUID catalogId : store.catalogsForProduct(tenantId, brandId, productId)) {
+            store.addProductToCatalog(tenantId, brandId, catalogId, newProductId, catalogSortOrder++);
+        }
+        int categorySortOrder = 0;
+        for (UUID categoryId : store.categoriesForProduct(tenantId, brandId, productId)) {
+            store.addProductToCategory(tenantId, brandId, categoryId, newProductId, categorySortOrder++);
+        }
+        for (JdbcCatalogStore.AttachedGroup group : store.modifierGroupsForProduct(tenantId, brandId, productId)) {
+            store.attachModifierGroupToProduct(tenantId, brandId, newProductId, group.groupId(), group.sortOrder());
+        }
+
+        Set<UUID> sourceEntityIds = new HashSet<>(variantIdMap.keySet());
+        sourceEntityIds.add(productId);
+        for (JdbcCatalogStore.MediaRelationRow media :
+                store.mediaRelationsForEntities(tenantId, brandId, sourceEntityIds)) {
+            UUID newEntityId = media.entityId().equals(productId) ? newProductId : variantIdMap.get(media.entityId());
+            if (newEntityId != null) {
+                store.attachMedia(
+                        tenantId,
+                        brandId,
+                        media.entityType(),
+                        newEntityId,
+                        media.mediaAssetId(),
+                        media.role(),
+                        media.sortOrder());
+            }
+        }
+
+        // Every product this service creates has exactly one default variant
+        // (createProduct enforces it), so this is reached only if that
+        // invariant was somehow broken upstream of here — falling back to any
+        // copied variant, or the product itself, is strictly better than a
+        // null the caller was not typed to expect.
+        if (defaultVariantId == null) {
+            defaultVariantId = variantIdMap.values().stream().findFirst().orElse(newProductId);
+        }
+        return new ProductCreated(newProductId, defaultVariantId);
+    }
+
+    private void copyTranslations(
+            UUID tenantId,
+            UUID brandId,
+            List<JdbcCatalogStore.TranslationRow> allTranslations,
+            EntityType type,
+            UUID sourceId,
+            UUID targetId) {
+        for (JdbcCatalogStore.TranslationRow row : allTranslations) {
+            if (row.entityType() == type && row.entityId().equals(sourceId)) {
+                store.upsertTranslation(tenantId, brandId, type, targetId, row.locale(), row.name(), row.description());
+            }
+        }
+    }
+
+    /** A short, uppercase slice of {@code id} appended to {@code value} — just enough to dodge a unique constraint. */
+    private static String suffixed(String value, UUID id) {
+        return value + "-" + id.toString().replace("-", "").substring(0, 6).toUpperCase(Locale.ROOT);
+    }
+
+    /**
+     * Changes a product's status — Черновик/Активен/Архивирован, catalog.md
+     * §4.1's archive/restore row action. {@code Product.status} has carried
+     * this since V0016; nothing mutated it until now.
+     */
+    @Transactional
+    public void setProductStatus(UUID tenantId, UUID brandId, UUID productId, Status status, String actorSubject) {
+        Product product = store.productById(tenantId, brandId, productId)
+                .orElseThrow(() -> new UnknownProductException(productId));
+        if (product.status() == status) {
+            return;
+        }
+        store.updateProductStatus(tenantId, brandId, productId, status);
+        audit.record(AuditFact.of("catalog.product.status_changed", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("Product", productId)
+                .because("Changed product status from " + product.status() + " to " + status)
+                .usingCapability(Capability.CATALOG_AUTHOR.code())
+                .changed(Map.of("previousStatus", product.status().name(), "status", status.name()))
+                .correlatedBy(productId.toString())
+                .occurredAt(clock.instant())
+                .build());
+    }
+
+    /**
+     * Stops a product in every branch it is currently offered in — a
+     * product-level fan-out over {@link #setOffering}'s own table, done in
+     * one statement rather than once per branch. catalog.md §4.1's row
+     * action; nothing computed "every branch for this product" before this.
+     *
+     * @return how many location offerings changed
+     */
+    @Transactional
+    public int stopInAllBranches(UUID tenantId, UUID brandId, UUID productId, String actorSubject) {
+        if (store.productById(tenantId, brandId, productId).isEmpty()) {
+            throw new UnknownProductException(productId);
+        }
+        int changed = store.stopProductEverywhere(tenantId, brandId, productId);
+        if (changed > 0) {
+            audit.record(AuditFact.of("catalog.product.stopped_everywhere", AuditClass.BUSINESS)
+                    .by(ActorRef.user(actorSubject, null))
+                    .at(ResourceScope.brand(tenantId, brandId))
+                    .target("Product", productId)
+                    .because("Stopped in all branches (" + changed + " location offerings)")
+                    .usingCapability(Capability.CATALOG_AUTHOR.code())
+                    .changed(Map.of("locationOfferingsChanged", changed))
+                    .correlatedBy(productId.toString())
+                    .occurredAt(clock.instant())
+                    .build());
+        }
+        return changed;
+    }
+
+    /**
+     * Classifies many priceable nodes in one call — the fiscal workbench's
+     * bulk fill, so ИКПУ and package code can be filled down a
+     * {@code q-data-grid} column across hundreds of rows instead of one
+     * variant at a time in the editor (ADR 0038's own coverage tooling,
+     * catalog.md §4.1a).
+     *
+     * <p>Idempotent: {@link #classify} upserts, so calling this twice with
+     * the same items leaves the same rows in the same state. One bad node id
+     * in the batch does not fail the rest — it is reported {@link
+     * BulkClassifyStatus#NOT_FOUND} and every other item is still applied,
+     * the same "N independent outcomes, never one all-or-nothing" contract
+     * {@code POST .../orders/bulk-actions} already uses.
+     */
+    @Transactional
+    public List<BulkClassifyOutcome> bulkClassify(
+            UUID tenantId, UUID brandId, List<BulkClassifyItem> items, @Nullable UUID actorId) {
+        List<BulkClassifyOutcome> outcomes = new ArrayList<>(items.size());
+        for (BulkClassifyItem item : items) {
+            if (!store.priceableNodeExistsInBrand(tenantId, brandId, item.node())) {
+                outcomes.add(new BulkClassifyOutcome(item.node(), BulkClassifyStatus.NOT_FOUND));
+                continue;
+            }
+            FiscalClassification fiscal = item.fiscal();
+            if (fiscal == null || fiscal.isEmpty()) {
+                outcomes.add(new BulkClassifyOutcome(item.node(), BulkClassifyStatus.SKIPPED_EMPTY));
+                continue;
+            }
+            classify(tenantId, brandId, item.node(), fiscal, actorId);
+            outcomes.add(new BulkClassifyOutcome(item.node(), BulkClassifyStatus.CLASSIFIED));
+        }
+        return outcomes;
+    }
+
+    /** One item of a {@link #bulkClassify} batch: a target node and what to set it to. */
+    public record BulkClassifyItem(
+            PriceableNode node, @Nullable FiscalClassification fiscal) {}
+
+    /** One node's outcome within a {@link #bulkClassify} batch. */
+    public enum BulkClassifyStatus {
+        CLASSIFIED,
+        /** The classification carried no fields at all — nothing was written. */
+        SKIPPED_EMPTY,
+        /** The node id does not belong to this brand, or does not exist. */
+        NOT_FOUND
+    }
+
+    public record BulkClassifyOutcome(PriceableNode node, BulkClassifyStatus status) {}
+
+    /**
      * Records what a priceable node is, fiscally (ADR 0038).
      *
      * <p>An empty classification writes no row at all. The absence of a row is
@@ -481,4 +719,19 @@ public class CatalogAuthoringService {
     }
 
     public record ProductCreated(UUID productId, UUID defaultVariantId) {}
+
+    /** A product this brand does not have — either never existed, or another brand's. */
+    public static final class UnknownProductException extends RuntimeException {
+
+        private final transient UUID productId;
+
+        public UnknownProductException(UUID productId) {
+            super("No product " + productId + " in this brand");
+            this.productId = productId;
+        }
+
+        public UUID productId() {
+            return productId;
+        }
+    }
 }

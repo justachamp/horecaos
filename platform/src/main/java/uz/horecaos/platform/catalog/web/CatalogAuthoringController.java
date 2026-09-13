@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -25,6 +26,8 @@ import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableNode;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableType;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.iam.api.Capability;
@@ -319,6 +322,84 @@ public class CatalogAuthoringController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/products/{productId}/duplicate")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Duplicate a product",
+            description = "Copies every variant with its own fiscal classification and every "
+                    + "locale's translation, its catalog and category placements, its attached "
+                    + "modifier groups, and its media. catalog.md §4.1's row action.")
+    public ResponseEntity<ProductResponse> duplicateProduct(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID productId) {
+        try {
+            var duplicated = authoring.duplicateProduct(tenantId, brandId, productId, actorId());
+            return ResponseEntity.ok(new ProductResponse(duplicated.productId(), duplicated.defaultVariantId()));
+        } catch (CatalogAuthoringService.UnknownProductException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
+    @PutMapping("/products/{productId}/status")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Change a product's status",
+            description = "Черновик/Активен/Архивирован. catalog.md §4.1's archive/restore row action.")
+    public ResponseEntity<Void> setProductStatus(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID productId,
+            @Valid @RequestBody ProductStatusRequest request) {
+        try {
+            authoring.setProductStatus(
+                    tenantId,
+                    brandId,
+                    productId,
+                    request.status(),
+                    currentActor.get().subject());
+        } catch (CatalogAuthoringService.UnknownProductException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/products/{productId}/stop-in-all-branches")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Stop a product in every branch that currently offers it",
+            description = "A product-level fan-out over the per-variant, per-location offering "
+                    + "write — every AVAILABLE location offering across every variant of this "
+                    + "product moves to UNAVAILABLE. catalog.md §4.1's row action.")
+    public ResponseEntity<StopInAllBranchesResponse> stopInAllBranches(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID productId) {
+        try {
+            int changed = authoring.stopInAllBranches(
+                    tenantId, brandId, productId, currentActor.get().subject());
+            return ResponseEntity.ok(new StopInAllBranchesResponse(changed));
+        } catch (CatalogAuthoringService.UnknownProductException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
+    @PutMapping("/fiscal-classifications/bulk")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Classify many priceable nodes at once",
+            description = "The fiscal workbench's bulk fill: ИКПУ and package code filled down a "
+                    + "q-data-grid column across hundreds of rows in one call, rather than one "
+                    + "variant at a time through the single-node classification endpoints. "
+                    + "Idempotent, and one bad node id does not fail the rest of the batch — every "
+                    + "item gets its own outcome.")
+    public ResponseEntity<BulkClassifyResponse> bulkClassify(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody BulkClassifyRequest request) {
+        List<CatalogAuthoringService.BulkClassifyItem> items = request.items().stream()
+                .map(item -> new CatalogAuthoringService.BulkClassifyItem(item.node(), item.classification()))
+                .toList();
+        List<CatalogAuthoringService.BulkClassifyOutcome> outcomes =
+                authoring.bulkClassify(tenantId, brandId, items, actorId());
+        return ResponseEntity.ok(new BulkClassifyResponse(
+                outcomes.stream().map(BulkClassifyOutcomeResponse::of).toList()));
+    }
+
     @PutMapping("/variants/{variantId}/location-offerings/{locationId}")
     @RequiresCapability(value = Capability.OFFERING_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
@@ -547,6 +628,46 @@ public class CatalogAuthoringController {
     }
 
     public record SortOrderRequest(@PositiveOrZero int sortOrder) {}
+
+    /** catalog.md §4.1's archive/restore row action. */
+    public record ProductStatusRequest(@NotNull Status status) {}
+
+    /** How many {@code location_offerings} rows a stop-in-all-branches call changed. */
+    public record StopInAllBranchesResponse(int locationsChanged) {}
+
+    /** A {@link CatalogAuthoringController#bulkClassify} batch. */
+    public record BulkClassifyRequest(@NotEmpty @Valid List<BulkClassifyItemRequest> items) {}
+
+    /**
+     * One item of a bulk classify batch: a target node and what to set it to.
+     * An absent or empty {@code fiscal} is accepted and reported {@code
+     * SKIPPED_EMPTY} rather than rejected — a grid save with an untouched row
+     * mixed into the batch is a normal shape, not a client error.
+     */
+    public record BulkClassifyItemRequest(
+            @NotNull PriceableType nodeType,
+            @NotNull UUID nodeId,
+            @Valid @Nullable FiscalClassificationRequest fiscal) {
+
+        PriceableNode node() {
+            return new PriceableNode(nodeType, nodeId);
+        }
+
+        FiscalClassification classification() {
+            return fiscal == null ? FiscalClassification.unclassified() : fiscal.toClassification();
+        }
+    }
+
+    /** One node's outcome within a bulk classify batch. */
+    public record BulkClassifyOutcomeResponse(PriceableType nodeType, UUID nodeId, String status) {
+
+        static BulkClassifyOutcomeResponse of(CatalogAuthoringService.BulkClassifyOutcome outcome) {
+            return new BulkClassifyOutcomeResponse(
+                    outcome.node().type(), outcome.node().id(), outcome.status().name());
+        }
+    }
+
+    public record BulkClassifyResponse(List<BulkClassifyOutcomeResponse> outcomes) {}
 
     public record AttachMediaRequest(
             @NotBlank String role, @PositiveOrZero int sortOrder) {}
