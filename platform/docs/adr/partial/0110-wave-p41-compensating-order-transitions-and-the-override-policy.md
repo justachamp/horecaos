@@ -18,18 +18,27 @@
   principal lacking it is refused at the endpoint by the same
   `RequiresCapability` interceptor every other mutating endpoint here goes
   through, proved by `OperationsOrderControllerActionCapabilitiesHttpTests`
-  through the real HTTP stack. `OrderActionsPolicy.availableFor` offers
+  through the real HTTP stack; `stateOverride` also now calls the controller's
+  own `requireOrderAtLocation(tenantId, orderId, locationId)` guard before
+  touching the order — a second-pass adversarial review found this endpoint
+  was the one mutating handler on `OperationsOrderController` that resolved
+  its order by tenant+id alone, so a principal holding the capability at
+  Branch A only could name an order actually belonging to Branch B of the
+  same tenant and have the compensating transition, its timeline row and its
+  ADR 0036 capacity claim/reclaim applied there; `OperationsOrderControllerActionCapabilitiesHttpTests`
+  now proves the cross-location call is refused 404, not merely the
+  capability name. `OrderActionsPolicy.availableFor` offers
   `OrderActionCode.OVERRIDE` exactly where the compensating table names an
   edge and the principal holds the capability — `OrderActionsPolicyTests`
   drift-proofs the offered targets against the machine's own table and proves
   `TENANT_ADMIN`/`TENANT_OWNER` are the only two `PlatformRole` bundles that
-  hold it among those inspected. Not built: a frontend affordance — this wave
-  is backend-only by brief, and the console has no override button or dialog
-  yet; a dedicated `OutcomeReasonKind` for the override reason (see Open
-  inputs); and a test exercising the `FULFILLING -> READY` capacity-reclaim
-  refusal path under an actual at-capacity branch (the reclaim itself is
-  built and exercised on the open path, `overrideFromFulfillingReclaimsTheKitchenSlot`
-  is not — see Open inputs).
+  hold it among those inspected. The `FULFILLING -> READY` capacity-reclaim
+  refusal path is now proved under an actual at-capacity branch too
+  (`overridingFulfillingToReadyRefusesWhenTheBranchIsAtCapacity`, alongside
+  the successful-reclaim proof already in place). Not built: a frontend
+  affordance — this wave is backend-only by brief, and the console has no
+  override button or dialog yet; and a dedicated `OutcomeReasonKind` for the
+  override reason (see Open inputs).
 - Date proposed: 2026-09-13
 - Date decided: —
 - Deciders: proposed by Claude and built on the platform owner's instruction of
@@ -367,9 +376,12 @@ either — a tenant admin already holds it the moment this ships, by virtue of
       the fifth capability is asked for at `LOCATION` scope; a principal
       holding `ORDER_ADVANCE` alone is refused at the endpoint with a real
       HTTP 403, not merely omitted from `actions[]`
-- [ ] A test that fills a branch to its ADR 0036 ceiling and proves
-      `FULFILLING -> READY` is refused as `KitchenAtCapacityException`
-      (open input above)
+- [x] A test that fills a branch to its ADR 0036 ceiling and proves
+      `FULFILLING -> READY` is refused as `KitchenAtCapacityException`,
+      leaving the order and its capacity hold untouched
+- [x] `stateOverride` calls `requireOrderAtLocation` before invoking
+      `outcomes.override(...)`, and a regression test proves a same-tenant,
+      cross-location order id is refused 404 rather than transitioned
 - [ ] A dedicated `OutcomeReasonKind` for the override reason, if the
       reused `CANCELLATION` vocabulary proves not to fit (open input above)
 - [ ] The console affordance: button, confirmation dialog and reason
@@ -384,10 +396,10 @@ and the result is a distinct, audited, timelined fact — proved today by
 `OrderAmendmentAndOutcomeTests` and
 `OperationsOrderControllerActionCapabilitiesHttpTests`. A principal lacking
 the capability is refused at the endpoint, not merely unable to see the
-button. No other status ever gains a way back, and no terminal order is ever
-reopened. Fully met once a console affordance exists to reach this endpoint at
-all (open input above) and the capacity-ceiling refusal path carries its own
-test.
+button, and a principal holding it only at a sibling branch is refused 404
+rather than transitioning another branch's order. No other status ever gains
+a way back, and no terminal order is ever reopened. Fully met once a console
+affordance exists to reach this endpoint at all (open input above).
 
 ## References
 

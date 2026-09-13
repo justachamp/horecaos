@@ -45,7 +45,7 @@
   for those two is the ordering-side attempt ladder and stuck list, not
   correctness. Also still open: scheduled orders, which is why V0056 leaves the
   requested-time column out; guest carts; and legacy shadow comparison.
-  **Wave P41 ([ADR 0110](0110-wave-p41-compensating-order-transitions-and-the-override-policy.md))
+  **Wave P41 ([ADR 0110](../partial/0110-wave-p41-compensating-order-transitions-and-the-override-policy.md))
   closes the compensating-transition gap this record's own diagram left
   open**: `OrderStateMachine` now declares `READY -> PREPARING` and
   `FULFILLING -> READY` as compensating edges — a new forward step each,
@@ -577,7 +577,7 @@ This record's own state-machine diagram above shows no way back once an order
 leaves `CONFIRMED`, and until now none existed: an order advanced to `READY`
 by mistake had no exit, because cancellation itself is refused past
 `CONFIRMED` (§0.3 above's write-off reasoning, mirrored in
-`docs/operations-spec/orders.md`). [ADR 0110](0110-wave-p41-compensating-order-transitions-and-the-override-policy.md)
+`docs/operations-spec/orders.md`). [ADR 0110](../partial/0110-wave-p41-compensating-order-transitions-and-the-override-policy.md)
 settles the question that spec's §0.2 and §11 posed — whether a correction
 exists at all — with **yes, narrowly**: `OrderStateMachine` now declares
 `READY -> PREPARING` and `FULFILLING -> READY` as *compensating* edges, in a
