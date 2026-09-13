@@ -55,6 +55,7 @@ class NotificationTemplateControllerTests {
     private NotificationTemplateController controller;
     private UUID tenantId;
     private UUID brandId;
+    private UUID otherBrandId;
     private FakeTransport transport;
 
     @BeforeAll
@@ -106,6 +107,12 @@ class NotificationTemplateControllerTests {
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status)
                 VALUES (:id, :tenantId, 'PILOT', 'p36-brand', 'Pilot brand', 'ACTIVE')
                 """).param("id", brandId).param("tenantId", tenantId).update();
+
+        otherBrandId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status)
+                VALUES (:id, :tenantId, 'SIBLING', 'p36-sibling-brand', 'Sibling brand', 'ACTIVE')
+                """).param("id", otherBrandId).param("tenantId", tenantId).update();
     }
 
     @Test
@@ -228,6 +235,100 @@ class NotificationTemplateControllerTests {
         NotificationDispatch dispatch = Objects.requireNonNull(transport.lastDispatch);
         assertThat(dispatch.body()).contains("A-1042");
         assertThat(dispatch.recipientValue()).isEqualTo("+998901234567");
+    }
+
+    // -------------------------------------------- P36 second-pass adversarial review
+
+    /**
+     * The core cross-brand isolation gap: every endpoint here declares a
+     * BRAND-scoped capability, so {@code brandId} in the URL only proves the
+     * caller was authorised for {@code brandId} -- never that {@code
+     * templateId} actually belongs to it. A template created under {@code
+     * brandId} must be unreachable through {@code otherBrandId}'s own path,
+     * for every one of addVersion/activate/versions/version/testSend.
+     */
+    @Test
+    @DisplayName("addVersion refuses a templateId that belongs to a sibling brand")
+    void addVersionRefusesASiblingBrand() {
+        UUID templateId = createSmsTemplate("ORDER_READY");
+
+        assertThatThrownBy(() -> controller.addVersion(tenantId, otherBrandId, templateId, wordings("Готово")))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    @DisplayName("activate refuses a templateId that belongs to a sibling brand")
+    void activateRefusesASiblingBrand() {
+        UUID templateId = createSmsTemplate("ORDER_READY");
+        NotificationTemplateController.VersionResponse saved =
+                Objects.requireNonNull(controller.addVersion(tenantId, brandId, templateId, wordings("Готово"))
+                        .getBody());
+
+        assertThatThrownBy(() -> controller.activate(tenantId, otherBrandId, templateId, saved.versionNumber()))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    @DisplayName("the versions list refuses a templateId that belongs to a sibling brand")
+    void versionsListRefusesASiblingBrand() {
+        UUID templateId = createSmsTemplate("ORDER_READY");
+        controller.addVersion(tenantId, brandId, templateId, wordings("Готово"));
+
+        assertThatThrownBy(() -> controller.versions(tenantId, otherBrandId, templateId))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    @DisplayName("one version refuses a templateId that belongs to a sibling brand")
+    void oneVersionRefusesASiblingBrand() {
+        UUID templateId = createSmsTemplate("ORDER_READY");
+        NotificationTemplateController.VersionResponse saved =
+                Objects.requireNonNull(controller.addVersion(tenantId, brandId, templateId, wordings("Готово"))
+                        .getBody());
+
+        assertThatThrownBy(() -> controller.version(tenantId, otherBrandId, templateId, saved.versionNumber()))
+                .isInstanceOf(ApiException.class);
+    }
+
+    /**
+     * The urgent half: a real outbound SMS. Without the fix, an actor
+     * authorised only for {@code otherBrandId} could render {@code brandId}'s
+     * private wording and reach the transport -- a live side effect and a
+     * content leak, not merely a read.
+     */
+    @Test
+    @DisplayName("testSend refuses a templateId that belongs to a sibling brand, and never reaches the transport")
+    void testSendRefusesASiblingBrand() {
+        UUID templateId = createSmsTemplate("OTP_CODE");
+        NotificationTemplateController.VersionResponse saved = Objects.requireNonNull(controller
+                .addVersion(tenantId, brandId, templateId, wordingsWithSchema("Код {{code}}", "code"))
+                .getBody());
+
+        assertThatThrownBy(() -> controller.testSend(
+                        tenantId,
+                        otherBrandId,
+                        templateId,
+                        saved.versionNumber(),
+                        new NotificationTemplateController.TestSendRequest("ru", "+998901234567")))
+                .isInstanceOf(ApiException.class);
+        assertThat(transport.lastDispatch)
+                .as("a refused cross-brand test send must never reach the transport")
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("every endpoint still works normally through the template's own brand")
+    void everyEndpointStillWorksThroughItsOwnBrand() {
+        UUID templateId = createSmsTemplate("ORDER_READY");
+        NotificationTemplateController.VersionResponse saved =
+                Objects.requireNonNull(controller.addVersion(tenantId, brandId, templateId, wordings("Готово"))
+                        .getBody());
+
+        assertThat(controller.versions(tenantId, brandId, templateId).getBody()).isNotEmpty();
+        assertThat(controller.version(tenantId, brandId, templateId, saved.versionNumber()).getBody())
+                .isNotEmpty();
+        assertThat(controller.activate(tenantId, brandId, templateId, saved.versionNumber()).getStatusCode().value())
+                .isEqualTo(204);
     }
 
     // ------------------------------------------------------------- fixtures

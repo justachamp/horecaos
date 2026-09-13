@@ -127,7 +127,7 @@ class SmsWordingModerationTests {
                 NotificationClass.TRANSACTIONAL_REQUIRED,
                 NotificationChannel.TELEGRAM,
                 null);
-        templates.addVersion(tenantId, templateId, wordings(), Map.of());
+        templates.addVersion(tenantId, brandId, templateId, wordings(), Map.of());
 
         assertThat(reviewOf(templateId)).isEqualTo(TemplateProviderReviewService.NOT_REQUIRED);
     }
@@ -142,7 +142,7 @@ class SmsWordingModerationTests {
                 NotificationClass.TRANSACTIONAL_REQUIRED,
                 NotificationChannel.SMS,
                 null);
-        templates.addVersion(tenantId, templateId, wordings(), Map.of());
+        templates.addVersion(tenantId, brandId, templateId, wordings(), Map.of());
         return reviewOf(templateId);
     }
 

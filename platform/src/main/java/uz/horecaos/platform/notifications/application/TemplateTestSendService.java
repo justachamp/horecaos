@@ -71,6 +71,16 @@ public class TemplateTestSendService {
         TemplateRow template = templates
                 .template(tenantId, templateId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such notification template"));
+        // The endpoint declares a BRAND-scoped capability, so the caller was
+        // only ever authorised for the brand in the URL. Without this check,
+        // NOTIFICATION_TEMPLATE_AUTHOR for one brand would be enough to
+        // render a sibling brand's private wording into a real outbound SMS
+        // and read it back in this response — a live side effect, not merely
+        // a read. A tenant-wide default template is visible to every brand,
+        // matching NotificationTemplateService's own precedence.
+        if (template.brandId() != null && !template.brandId().equals(brandId)) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such notification template");
+        }
 
         NotificationChannel channel = NotificationChannel.valueOf(template.channel());
         if (channel != NotificationChannel.SMS) {

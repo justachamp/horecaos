@@ -157,14 +157,15 @@ public class NotificationTemplateController {
         });
 
         try {
-            int versionNumber = templates.addVersion(tenantId, templateId, wordings, request.variablesSchema());
+            int versionNumber =
+                    templates.addVersion(tenantId, brandId, templateId, wordings, request.variablesSchema());
             // ADR 0091: told here, immediately, rather than left for the author
             // to discover after activating — the exact silent failure this
             // wave's row exists to close. Read back rather than threaded through
             // addVersion's own return type, so every other caller of that
             // service method (several pre-existing tests among them) is
             // untouched by this wave.
-            boolean awaitsProviderReview = templates.versions(tenantId, templateId, versionNumber).stream()
+            boolean awaitsProviderReview = templates.versions(tenantId, brandId, templateId, versionNumber).stream()
                     .anyMatch(row -> TemplateProviderReviewService.withheld(row.providerReview()));
             return ResponseEntity.ok(new VersionResponse(templateId, versionNumber, awaitsProviderReview));
         } catch (NotificationTemplateService.IncompleteTranslationException incomplete) {
@@ -194,7 +195,7 @@ public class NotificationTemplateController {
             // Taking it from the request would let anyone holding this capability
             // sign somebody else's name to a copy change.
             templates.activate(
-                    tenantId, templateId, versionNumber, currentActor.get().subject());
+                    tenantId, brandId, templateId, versionNumber, currentActor.get().subject());
         } catch (NotificationTemplateService.IncompleteTranslationException incomplete) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, incomplete.getMessage());
         } catch (IllegalStateException conflict) {
@@ -216,7 +217,7 @@ public class NotificationTemplateController {
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID templateId) {
 
         try {
-            return ResponseEntity.ok(templates.allVersions(tenantId, templateId).stream()
+            return ResponseEntity.ok(templates.allVersions(tenantId, brandId, templateId).stream()
                     .map(this::toWordingResponse)
                     .toList());
         } catch (IllegalArgumentException refused) {
@@ -233,9 +234,13 @@ public class NotificationTemplateController {
             @PathVariable UUID templateId,
             @PathVariable int versionNumber) {
 
-        return ResponseEntity.ok(templates.versions(tenantId, templateId, versionNumber).stream()
-                .map(this::toWordingResponse)
-                .toList());
+        try {
+            return ResponseEntity.ok(templates.versions(tenantId, brandId, templateId, versionNumber).stream()
+                    .map(this::toWordingResponse)
+                    .toList());
+        } catch (IllegalArgumentException refused) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, refused.getMessage());
+        }
     }
 
     @PostMapping("/{templateId}/versions/{versionNumber}/test-send")
