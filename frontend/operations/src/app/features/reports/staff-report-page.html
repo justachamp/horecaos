@@ -70,12 +70,12 @@
                   <tr>
                     <td class="q-body-sm">
                       @if (row.principalKind === 'MACHINE') {
-                        <span class="badge badge--machine">{{
+                        <span class="badge badge--machine q-caption">{{
                           'reports.staff.leaderboard.kind.MACHINE' | t
                         }}</span>
                         <span class="q-caption operator-subject">{{ row.subject }}</span>
                       } @else {
-                        <span class="badge badge--staff">{{
+                        <span class="badge badge--staff q-caption">{{
                           'reports.staff.leaderboard.kind.STAFF' | t
                         }}</span>
                         <span class="q-mono q-caption operator-subject">{{
