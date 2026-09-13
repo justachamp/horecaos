@@ -60,6 +60,21 @@ export const catalogPaths = {
     return `${this.product(scope, productId)}/variants`;
   },
 
+  /** Correct an existing variant's SKU, unit, status and default flag. */
+  variant(scope: BrandScope, productId: string, variantId: string): string {
+    return `${this.variants(scope, productId)}/${encodeURIComponent(variantId)}`;
+  },
+
+  /** Change a product's own status — read-only text until this wave. */
+  productStatus(scope: BrandScope, productId: string): string {
+    return `${this.product(scope, productId)}/status`;
+  },
+
+  /** Remove a product from a catalog (`DELETE`). Same path {@link products} uses for list/create. */
+  catalogProduct(scope: BrandScope, catalogId: string, productId: string): string {
+    return `${this.products(scope, catalogId)}/${encodeURIComponent(productId)}`;
+  },
+
   /** Create a category in a catalog. */
   createCategory(scope: BrandScope, catalogId: string): string {
     return `${this.base(scope)}/catalogs/${encodeURIComponent(catalogId)}/categories`;
@@ -93,6 +108,16 @@ export const catalogPaths = {
   /** Set one entity's name/description in one locale (upsert). */
   translations(scope: BrandScope): string {
     return `${this.base(scope)}/translations`;
+  },
+
+  /**
+   * The ИКПУ/MXIK reference, tenant alias (IA 4.2e) — the same read
+   * `FiscalReferenceController` serves PLATFORM-scoped, behind CATALOG_READ
+   * at BRAND scope instead so a tenant operator can call it. Query params
+   * `query` (required, 2+ characters) and `limit`.
+   */
+  mxikReference(scope: BrandScope): string {
+    return `${this.base(scope)}/fiscal-reference/mxik`;
   },
 
   /** ИКПУ/MXIK and packaging for a variant. */

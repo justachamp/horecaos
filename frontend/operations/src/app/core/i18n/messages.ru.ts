@@ -1258,10 +1258,11 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.basic.code': 'Код',
   'catalog.editor.basic.codeNote': 'Неизменяем после первой публикации',
   'catalog.editor.basic.status': 'Статус',
-  'catalog.editor.basic.statusNote': 'Смена статуса пока не реализована на бэкенде',
+  'catalog.editor.basic.statusNote': 'Черновик, Активен или Архив',
   'catalog.editor.basic.catalogs': 'Каталоги',
   'catalog.editor.basic.categories': 'Категории',
   'catalog.editor.basic.addCategory': 'Добавить в категорию…',
+  'catalog.editor.basic.remove': 'Убрать',
   'catalog.editor.basic.kitchenDept': 'Отдел кухни',
   'catalog.editor.basic.kitchenDeptNote': 'Не построено — открытый вопрос ADR 0016',
   'catalog.editor.variants.column.name': 'Название варианта',
@@ -1287,6 +1288,9 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.photos.empty': 'Фото ещё нет',
   'catalog.editor.photos.upload': 'Загрузить фото',
   'catalog.editor.photos.uploading': 'Загрузка…',
+  'catalog.editor.photos.moveUp': 'Переместить раньше',
+  'catalog.editor.photos.moveDown': 'Переместить позже',
+  'catalog.editor.photos.detach': 'Удалить фото',
   'catalog.editor.photos.role.PRIMARY': 'Основное',
   'catalog.editor.photos.role.GALLERY': 'Галерея',
   'catalog.editor.fiscal.mxik': 'ИКПУ/MXIK',
@@ -1302,6 +1306,8 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.fiscal.inherited': 'Унаследовано от товара',
   'catalog.editor.fiscal.notBuilt':
     'Схема маркировки, акциз, крепость и возрастной ценз хранятся, но пока не проверяются при публикации — ADR 0038',
+  'catalog.editor.fiscal.mxikReferenceNote':
+    'Пустой результат означает, что официальный справочник ИКПУ/MXIK ещё не загружен на платформу — а не что ничего не найдено.',
   'catalog.editor.availability.location': 'Филиал',
   'catalog.editor.availability.inMenu': 'В меню',
   'catalog.editor.availability.fulfillment': 'Типы заказов',
@@ -3586,6 +3592,15 @@ export const messagesRu: MessageCatalogue = {
   'ui.combobox.loading': 'Поиск…',
   'ui.combobox.createOption': 'Создать «{query}»',
   'ui.combobox.removeChip': 'Удалить «{label}»',
+  'ui.mediaUploader.dropHint': 'Перетащите фото сюда или',
+  'ui.mediaUploader.browse': 'Выбрать файл',
+  'ui.mediaUploader.tooLarge': 'Файл больше допустимого размера',
+  'ui.mediaUploader.unsupportedType': 'Этот тип файла здесь не принимается',
+  'ui.mediaUploader.ratio': 'Соотношение сторон',
+  'ui.mediaUploader.zoom': 'Масштаб',
+  'ui.mediaUploader.confirm': 'Применить кадрирование',
+  'ui.mediaUploader.cancel': 'Отмена',
+  'ui.mediaUploader.uploading': 'Загрузка…',
   'ui.localizedFieldGroup.default': 'По умолчанию',
   'ui.localizedFieldGroup.complete': 'Заполнено',
   'ui.localizedFieldGroup.incomplete': 'Не заполнено',
@@ -3737,7 +3752,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.detail.bindings.activate': 'Активировать',
   'settings.integrations.detail.bindings.activate.reasonPrompt': 'Причина запуска этой привязки:',
   'settings.integrations.detail.bindings.suspend': 'Приостановить',
-  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Причина приостановки этой привязки:',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Причина приостановки этой привязки:',
   'settings.integrations.detail.bindings.empty': 'Привязок пока нет.',
   'settings.integrations.detail.bindings.wholeTenant': 'Вся компания',
   'settings.integrations.detail.cloposSettings.title': 'Приём заказов',
@@ -3749,13 +3765,15 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.detail.partnerClients.issue': 'Выпустить клиента',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'Название для этого клиента (для вашего удобства):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Причина выпуска этого клиента:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Причина выпуска этого клиента:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Скопируйте этот секрет сейчас — он больше не будет показан:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'Я скопировал(а)',
   'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
   'settings.integrations.detail.partnerClients.revoke': 'Отозвать',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Причина отзыва этого клиента:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Причина отзыва этого клиента:',
   'settings.integrations.detail.partnerClients.empty': 'Клиенты партнёрского API ещё не выпущены.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

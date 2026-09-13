@@ -1272,10 +1272,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.basic.code': 'Kodi',
   'catalog.editor.basic.codeNote': 'Birinchi chop etishdan keyin oʻzgarmaydi',
   'catalog.editor.basic.status': 'Holati',
-  'catalog.editor.basic.statusNote': 'Holatni oʻzgartirish endpointi hali yoʻq',
+  'catalog.editor.basic.statusNote': 'Qoralama, Faol yoki Arxiv',
   'catalog.editor.basic.catalogs': 'Kataloglar',
   'catalog.editor.basic.categories': 'Kategoriyalar',
   'catalog.editor.basic.addCategory': 'Kategoriyaga qoʻshish…',
+  'catalog.editor.basic.remove': 'Olib tashlash',
   'catalog.editor.basic.kitchenDept': 'Oshxona boʻlimi',
   'catalog.editor.basic.kitchenDeptNote': 'Qurilmagan — ADR 0016 ochiq savoli',
   'catalog.editor.variants.column.name': 'Variant nomi',
@@ -1301,6 +1302,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.photos.empty': 'Hali rasm yoʻq',
   'catalog.editor.photos.upload': 'Rasm yuklash',
   'catalog.editor.photos.uploading': 'Yuklanmoqda…',
+  'catalog.editor.photos.moveUp': 'Oldinga siljitish',
+  'catalog.editor.photos.moveDown': 'Keyinga siljitish',
+  'catalog.editor.photos.detach': 'Rasmni olib tashlash',
   'catalog.editor.photos.role.PRIMARY': 'Asosiy',
   'catalog.editor.photos.role.GALLERY': 'Galereya',
   'catalog.editor.fiscal.mxik': 'IKPU/MXIK',
@@ -1316,6 +1320,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.fiscal.inherited': 'Mahsulotdan meros qilingan',
   'catalog.editor.fiscal.notBuilt':
     'Markirovka sxemasi, aksiz, spirt darajasi va yosh chegarasi saqlanadi, lekin chop etishda hali tekshirilmaydi — ADR 0038',
+  'catalog.editor.fiscal.mxikReferenceNote':
+    'Boʻsh natija rasmiy ИКПУ/MXIK roʻyxati platformaga hali yuklanmaganini bildiradi — hech narsa topilmagani emas.',
   'catalog.editor.availability.location': 'Filial',
   'catalog.editor.availability.inMenu': 'Menyuda',
   'catalog.editor.availability.fulfillment': 'Buyurtma turlari',
@@ -3611,6 +3617,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'ui.combobox.loading': 'Qidirilmoqda…',
   'ui.combobox.createOption': '«{query}»ni yaratish',
   'ui.combobox.removeChip': '{label}ni olib tashlash',
+  'ui.mediaUploader.dropHint': 'Rasmni shu yerga torting yoki',
+  'ui.mediaUploader.browse': 'Fayl tanlash',
+  'ui.mediaUploader.tooLarge': 'Fayl ruxsat etilgan hajmdan katta',
+  'ui.mediaUploader.unsupportedType': 'Bu fayl turi qabul qilinmaydi',
+  'ui.mediaUploader.ratio': 'Kesish nisbati',
+  'ui.mediaUploader.zoom': 'Kattalashtirish',
+  'ui.mediaUploader.confirm': 'Kesishni qoʻllash',
+  'ui.mediaUploader.cancel': 'Bekor qilish',
+  'ui.mediaUploader.uploading': 'Yuklanmoqda…',
   'ui.localizedFieldGroup.default': 'Standart',
   'ui.localizedFieldGroup.complete': 'Toʻldirilgan',
   'ui.localizedFieldGroup.incomplete': 'Toʻldirilmagan',
@@ -3778,13 +3793,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.detail.partnerClients.issue': 'Mijoz chiqarish',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'Ushbu mijoz uchun nom (oʻzingiz uchun):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Ushbu mijozni chiqarish sababi:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Ushbu mijozni chiqarish sababi:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Ushbu maxfiy kalitni hozir nusxalang — u qayta koʻrsatilmaydi:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'Nusxaladim',
   'settings.integrations.detail.partnerClients.column.clientId': 'Mijoz ID',
   'settings.integrations.detail.partnerClients.revoke': 'Bekor qilish',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Ushbu mijozni bekor qilish sababi:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Ushbu mijozni bekor qilish sababi:',
   'settings.integrations.detail.partnerClients.empty': 'Hali hamkor API mijozlari chiqarilmagan.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

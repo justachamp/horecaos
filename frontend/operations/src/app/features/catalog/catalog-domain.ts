@@ -129,11 +129,16 @@ export interface AttachedModifierGroup {
   readonly sortOrder: number;
 }
 
+/** The universal channel: no per-aggregator override, every channel without one of its own falls back to this. */
+export const ALL_CHANNELS = 'ALL';
+
 /** `MediaRelationView`. */
 export interface MediaRelation {
   readonly mediaAssetId: string;
   readonly role: string;
   readonly sortOrder: number;
+  /** {@link ALL_CHANNELS} or a `tenant.sales_channels.code` override (IA 4.2f). */
+  readonly channelCode: string;
 }
 
 /** `ModifierGroupSummaryResponse` — one row of the group library. */
@@ -273,6 +278,33 @@ export interface SetOfferingRequest {
 export interface AttachMediaRequest {
   readonly role: string;
   readonly sortOrder: number;
+  /** Omitted (or null) attaches {@link ALL_CHANNELS}; a channel code overrides for that channel alone (IA 4.2f). */
+  readonly channel?: string | null;
+}
+
+/** `UpdateVariantRequest` — catalog.md §4.2 tab 2, otherwise read-only apart from the price input. */
+export interface UpdateVariantRequest {
+  readonly sku?: string | null;
+  readonly unitCode: string;
+  readonly isDefault: boolean;
+  readonly status: CatalogStatus;
+}
+
+/** `SetProductStatusRequest`. */
+export interface SetProductStatusRequest {
+  readonly status: CatalogStatus;
+}
+
+/** `JdbcCatalogStore.MxikReferenceRow` — one ИКПУ/MXIK reference row (IA 4.2e). */
+export interface MxikReferenceRow {
+  readonly code: string;
+  readonly parentCode?: string | null;
+  readonly labelRu: string;
+  readonly labelUz: string;
+  readonly labelEn?: string | null;
+  readonly defaultPackageCodes: readonly string[];
+  readonly validFrom: string;
+  readonly validUntil?: string | null;
 }
 
 /** `IdResponse`. */

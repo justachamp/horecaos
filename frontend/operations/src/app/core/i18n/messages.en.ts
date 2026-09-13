@@ -1286,10 +1286,11 @@ export const messagesEn = {
   'catalog.editor.basic.code': 'Code',
   'catalog.editor.basic.codeNote': 'Immutable after the first publication',
   'catalog.editor.basic.status': 'Status',
-  'catalog.editor.basic.statusNote': 'No status-change endpoint exists yet',
+  'catalog.editor.basic.statusNote': 'Draft, Active or Archived',
   'catalog.editor.basic.catalogs': 'Catalogs',
   'catalog.editor.basic.categories': 'Categories',
   'catalog.editor.basic.addCategory': 'Add to category…',
+  'catalog.editor.basic.remove': 'Remove',
   'catalog.editor.basic.kitchenDept': 'Kitchen department',
   'catalog.editor.basic.kitchenDeptNote': 'Not built — ADR 0016 open input',
   'catalog.editor.variants.column.name': 'Variant name',
@@ -1315,6 +1316,9 @@ export const messagesEn = {
   'catalog.editor.photos.empty': 'No photos yet',
   'catalog.editor.photos.upload': 'Upload photo',
   'catalog.editor.photos.uploading': 'Uploading…',
+  'catalog.editor.photos.moveUp': 'Move earlier',
+  'catalog.editor.photos.moveDown': 'Move later',
+  'catalog.editor.photos.detach': 'Remove photo',
   'catalog.editor.photos.role.PRIMARY': 'Primary',
   'catalog.editor.photos.role.GALLERY': 'Gallery',
   'catalog.editor.fiscal.mxik': 'ИКПУ/MXIK',
@@ -1330,6 +1334,8 @@ export const messagesEn = {
   'catalog.editor.fiscal.inherited': 'Inherited from the product',
   'catalog.editor.fiscal.notBuilt':
     'Marking scheme, excise, alcohol % and age gate are stored but not yet enforced by publication — ADR 0038',
+  'catalog.editor.fiscal.mxikReferenceNote':
+    'Empty results mean the official ИКПУ/MXIK list has never been imported for this platform — not that nothing matched.',
   'catalog.editor.availability.location': 'Location',
   'catalog.editor.availability.inMenu': 'In menu',
   'catalog.editor.availability.fulfillment': 'Order types',
@@ -3612,6 +3618,15 @@ export const messagesEn = {
   'ui.combobox.loading': 'Searching…',
   'ui.combobox.createOption': 'Create “{query}”',
   'ui.combobox.removeChip': 'Remove {label}',
+  'ui.mediaUploader.dropHint': 'Drag a photo here, or',
+  'ui.mediaUploader.browse': 'Choose a file',
+  'ui.mediaUploader.tooLarge': 'That file is larger than this upload allows',
+  'ui.mediaUploader.unsupportedType': 'That file type is not accepted here',
+  'ui.mediaUploader.ratio': 'Crop ratio',
+  'ui.mediaUploader.zoom': 'Zoom',
+  'ui.mediaUploader.confirm': 'Use this crop',
+  'ui.mediaUploader.cancel': 'Cancel',
+  'ui.mediaUploader.uploading': 'Uploading…',
   'ui.localizedFieldGroup.default': 'Default',
   'ui.localizedFieldGroup.complete': 'Complete',
   'ui.localizedFieldGroup.incomplete': 'Incomplete',
@@ -3773,9 +3788,11 @@ export const messagesEn = {
   'settings.integrations.detail.bindings.column.status': 'Status',
   'settings.integrations.detail.bindings.column.actions': 'Actions',
   'settings.integrations.detail.bindings.activate': 'Activate',
-  'settings.integrations.detail.bindings.activate.reasonPrompt': 'Reason for bringing this binding live:',
+  'settings.integrations.detail.bindings.activate.reasonPrompt':
+    'Reason for bringing this binding live:',
   'settings.integrations.detail.bindings.suspend': 'Suspend',
-  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Reason for suspending this binding:',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Reason for suspending this binding:',
   'settings.integrations.detail.bindings.empty': 'No bindings yet.',
   'settings.integrations.detail.bindings.wholeTenant': 'Entire company',
   'settings.integrations.detail.cloposSettings.title': 'Order acceptance',
@@ -3787,13 +3804,15 @@ export const messagesEn = {
   'settings.integrations.detail.partnerClients.issue': 'Issue a client',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'A name for this client (for your own reference):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Reason for issuing this client:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Reason for issuing this client:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Copy this secret now — it will not be shown again:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'I have copied it',
   'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
   'settings.integrations.detail.partnerClients.revoke': 'Revoke',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Reason for revoking this client:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Reason for revoking this client:',
   'settings.integrations.detail.partnerClients.empty': 'No partner API clients issued yet.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------
