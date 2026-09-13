@@ -93,15 +93,17 @@ public class JdbcBenefitGrantStore {
                 .optional();
     }
 
-    public List<GrantRow> listForCustomer(UUID tenantId, UUID customerAccountId) {
+    /** Scoped to one brand at the query itself, not filtered afterwards — a caller never even receives a sibling brand's row. */
+    public List<GrantRow> listForCustomer(UUID tenantId, UUID brandId, UUID customerAccountId) {
         return jdbc.sql("""
                 SELECT id, brand_id, customer_account_id, benefit_type, value, maximum_discount_minor,
                        currency, min_basket_minor, status, valid_from, expires_at
                 FROM pricing.benefit_grants
-                WHERE tenant_id = :tenantId AND customer_account_id = :customerId
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND customer_account_id = :customerId
                 ORDER BY created_at DESC
                 """)
                 .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("customerId", customerAccountId)
                 .query(this::mapGrantRow)
                 .list();

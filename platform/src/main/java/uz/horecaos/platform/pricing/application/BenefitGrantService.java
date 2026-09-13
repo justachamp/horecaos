@@ -200,8 +200,8 @@ public class BenefitGrantService {
                 row.minBasketMinor());
     }
 
-    public List<GrantRow> forCustomer(UUID tenantId, UUID customerAccountId) {
-        return store.listForCustomer(tenantId, customerAccountId);
+    public List<GrantRow> forCustomer(UUID tenantId, UUID brandId, UUID customerAccountId) {
+        return store.listForCustomer(tenantId, brandId, customerAccountId);
     }
 
     private String generate() {

@@ -109,8 +109,7 @@ public class BenefitGrantController {
                     + "minted for.")
     public ResponseEntity<List<BenefitGrantResponse>> forCustomer(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @RequestParam UUID customerAccountId) {
-        return ResponseEntity.ok(grants.forCustomer(tenantId, customerAccountId).stream()
-                .filter(row -> row.brandId().equals(brandId))
+        return ResponseEntity.ok(grants.forCustomer(tenantId, brandId, customerAccountId).stream()
                 .map(BenefitGrantResponse::of)
                 .toList());
     }
