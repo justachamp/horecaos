@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
+import { PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
+import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { BoardResponse, KitchenApi, TicketResponse } from './kitchen-api';
 import { VduPage } from './vdu-page';
 
@@ -49,6 +51,10 @@ describe('VduPage', () => {
           },
         },
         { provide: KitchenApi, useValue: { board: () => Promise.resolve(board) } },
+        {
+          provide: LatenessPolicyApi,
+          useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+        },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -88,6 +94,10 @@ describe('VduPage', () => {
           },
         },
         { provide: KitchenApi, useValue: { board: vi.fn() } },
+        {
+          provide: LatenessPolicyApi,
+          useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+        },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');

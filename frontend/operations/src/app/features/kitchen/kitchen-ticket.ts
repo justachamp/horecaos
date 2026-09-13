@@ -1,3 +1,4 @@
+import { LatenessPolicy, evaluateLateness } from '../../core/lateness-policy';
 import { MessageKey } from '../../core/i18n/messages.en';
 
 /**
@@ -51,20 +52,22 @@ export function isKitchenTabMember(tab: KitchenTabId, fulfilmentMode: string): b
 }
 
 /**
- * SLA colour-coding (IA 2.1: "colour-coded by SLA").
+ * SLA colour-coding (IA 2.1: "colour-coded by SLA", gap map rows
+ * `1.1g`/`X.39`).
  *
  * **More real than the order board's own severity model, not less.** A
  * kitchen ticket carries `targetReadyAt` — a genuine, server-computed promise
  * (`KitchenTicketService`/ADR 0041's own time model) — so this needs none of
- * `order-severity.ts`'s ADR 0014 workarounds. Two tiers only: `BREACHED` once
- * the target has passed, `AT_RISK` inside a five-minute warning window before
- * it, mirroring §2.6's own "AWAITING_APPROVAL, under two minutes" precedent of
- * a named threshold ahead of the deadline rather than only after it. A ticket
- * with no `targetReadyAt` (a fixture, or a future response shape this client
- * has not learned yet) falls back to `orders.md` §2.7's own number — 45
- * minutes with no promise — applied to `createdAt`, exactly the fallback
- * `order-severity.ts`'s `NO_PROMISE_FALLBACK_MS` already uses for the same
- * reason.
+ * `order-severity.ts`'s ADR 0014 workarounds. Before this wave the two tiers
+ * here (`BREACHED`/`AT_RISK`) were computed against a five-minute window this
+ * file invented on its own (`AT_RISK_THRESHOLD_MS`), independent of
+ * `order-severity.ts`'s own, different invented number. Both now call
+ * `core/lateness-policy.ts`'s shared `evaluateLateness` against the same
+ * resolved `ordering.lateness` policy the order board reads, so the two
+ * boards agree on the AT_RISK/LATE boundary by construction — this row's
+ * whole point. `BREACHED` is this file's own name for that shared module's
+ * `LATE`; kept rather than renamed because every caller of this type
+ * (`kitchen-queue-page.ts`, `vdu-page.ts`) already matches on it.
  */
 export type TicketSeverityLevel = 'BREACHED' | 'AT_RISK' | 'NORMAL';
 export type TicketSeverityTone = 'danger' | 'warning' | 'none';
@@ -72,6 +75,8 @@ export type TicketSeverityTone = 'danger' | 'warning' | 'none';
 export interface TicketSeverityInput {
   readonly targetReadyAt: Date | null;
   readonly createdAt: Date;
+  /** `DELIVERY` | `PICKUP` | `DINE_IN` — selects the resolved policy's per-mode thresholds. */
+  readonly fulfilmentMode: string | null | undefined;
 }
 
 export interface TicketSeverity {
@@ -79,30 +84,35 @@ export interface TicketSeverity {
   readonly tone: TicketSeverityTone;
 }
 
-/** The warning window before `targetReadyAt`. */
-export const AT_RISK_THRESHOLD_MS = 5 * 60 * 1000;
-
-/** `orders.md` §2.7's own fallback, reused: no promise, 45 minutes. */
-export const NO_PROMISE_FALLBACK_MS = 45 * 60 * 1000;
-
 const NORMAL_SEVERITY: TicketSeverity = { level: 'NORMAL', tone: 'none' };
 
-export function computeTicketSeverity(input: TicketSeverityInput, now: Date): TicketSeverity {
-  if (input.targetReadyAt !== null) {
-    const remainingMs = input.targetReadyAt.getTime() - now.getTime();
-    if (remainingMs <= 0) {
-      return { level: 'BREACHED', tone: 'danger' };
-    }
-    if (remainingMs <= AT_RISK_THRESHOLD_MS) {
-      return { level: 'AT_RISK', tone: 'warning' };
-    }
-    return NORMAL_SEVERITY;
-  }
+export function computeTicketSeverity(
+  input: TicketSeverityInput,
+  now: Date,
+  policy: LatenessPolicy,
+): TicketSeverity {
+  const level = evaluateLateness(
+    {
+      fulfilmentMode: input.fulfilmentMode,
+      // The kitchen's own promise is targetReadyAt (already net of travel,
+      // ADR 0041) — not the order's full promisedAt, which is the order
+      // board's own concern.
+      promisedAt: input.targetReadyAt,
+      createdAt: input.createdAt,
+      isTerminal: false, // a ticket carries no order status here; the board filters handed-over tickets itself
+    },
+    policy,
+    now,
+  );
 
-  const elapsedMs = now.getTime() - input.createdAt.getTime();
-  return elapsedMs > NO_PROMISE_FALLBACK_MS
-    ? { level: 'BREACHED', tone: 'danger' }
-    : NORMAL_SEVERITY;
+  switch (level) {
+    case 'LATE':
+      return { level: 'BREACHED', tone: 'danger' };
+    case 'AT_RISK':
+      return { level: 'AT_RISK', tone: 'warning' };
+    case 'NORMAL':
+      return NORMAL_SEVERITY;
+  }
 }
 
 /**

@@ -9,6 +9,8 @@ import {
 
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
+import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { KitchenApi, TicketResponse } from './kitchen-api';
 import { computeTicketSeverity } from './kitchen-ticket';
@@ -43,6 +45,7 @@ const POLL_INTERVAL_MS = 10_000;
 export class VduPage implements OnInit {
   private readonly kitchen = inject(KitchenApi);
   private readonly location = inject(CurrentLocation);
+  private readonly latenessPolicyApi = inject(LatenessPolicyApi);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly tickets = signal<readonly TicketResponse[]>([]);
@@ -50,6 +53,8 @@ export class VduPage implements OnInit {
   protected readonly denied = signal(false);
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
+  /** The resolved `ordering.lateness` policy (wave P06) — fetched once in {@link start}. */
+  private latenessPolicy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
 
   ngOnInit(): void {
     this.pollHandle = setInterval(() => void this.refresh(), POLL_INTERVAL_MS);
@@ -63,6 +68,10 @@ export class VduPage implements OnInit {
 
   private async start(): Promise<void> {
     await this.location.ensureLoaded();
+    const scope = this.location.scope();
+    if (scope) {
+      this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
+    }
     await this.refresh();
   }
 
@@ -95,8 +104,10 @@ export class VduPage implements OnInit {
       {
         targetReadyAt: ticket.targetReadyAt ? new Date(ticket.targetReadyAt) : null,
         createdAt: new Date(ticket.createdAt),
+        fulfilmentMode: ticket.fulfilmentMode,
       },
       new Date(),
+      this.latenessPolicy,
     ).tone;
   }
 }
