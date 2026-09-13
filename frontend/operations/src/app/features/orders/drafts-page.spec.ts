@@ -169,9 +169,45 @@ describe('DraftsPage', () => {
     fixture.detectChanges();
 
     const lastCall = list.mock.calls.at(-1);
-    expect(lastCall?.[1]?.from).toContain('2026-09-01');
-    expect(lastCall?.[1]?.to).toContain('2026-09-10');
+    // Both boundaries are asserted against the same local-midnight/local-end-
+    // of-day construction the component itself uses, rather than a naive
+    // substring check: a UTC-midnight `from` paired with a local-time `to`
+    // (the bug this pairing guards against) would put `from` a whole UTC
+    // offset away from the date typed into the field in any zone east or
+    // west of UTC, and a substring check on the date-only prefix would not
+    // catch it whenever the offset does not cross a day boundary.
+    expect(lastCall?.[1]?.from).toBe(new Date('2026-09-01T00:00:00.000').toISOString());
+    expect(lastCall?.[1]?.to).toBe(new Date('2026-09-10T23:59:59.999').toISOString());
     expect(lastCall?.[1]?.channelId).toBe('chan-1');
+  });
+
+  it('anchors the from/to period boundaries to the same (local) timezone interpretation', async () => {
+    const list = vi.fn().mockResolvedValue([]);
+    await render({ list }, { list: () => Promise.resolve([]) });
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const from = host.querySelector('[data-testid="drafts-from"]') as HTMLInputElement;
+    const to = host.querySelector('[data-testid="drafts-to"]') as HTMLInputElement;
+    from.value = '2026-09-01';
+    from.dispatchEvent(new Event('change'));
+    to.value = '2026-09-01';
+    to.dispatchEvent(new Event('change'));
+    (host.querySelector('[data-testid="drafts-apply-period"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const lastCall = list.mock.calls.at(-1);
+    const fromInstant = new Date(lastCall?.[1]?.from as string).getTime();
+    const toInstant = new Date(lastCall?.[1]?.to as string).getTime();
+    // A single day's window, inclusive of its own last millisecond: just
+    // under 24h apart. The bug this pins mixed a UTC-midnight `from` with a
+    // local-time `to`, which -- for any timezone east of UTC, Asia/Tashkent
+    // (this app's own assumed zone) included -- shrinks this gap well below
+    // 24h and silently excludes the early part of the day from both the
+    // table and the abandonment-by-channel breakdown.
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    expect(toInstant - fromInstant).toBe(ONE_DAY_MS - 1);
   });
 
   it('narrows by owner type client-side without a request the endpoint cannot serve', async () => {

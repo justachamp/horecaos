@@ -95,7 +95,7 @@ export class ShiftsPage implements OnInit {
       this.rosterLoading.set(false);
       return;
     }
-    const from = this.fromDate() ? new Date(this.fromDate()).toISOString() : undefined;
+    const from = this.fromDate() ? startOfDayIso(this.fromDate()) : undefined;
     // Inclusive of the whole end day, not just its midnight.
     const to = this.toDate() ? endOfDayIso(this.toDate()) : undefined;
 
@@ -469,6 +469,19 @@ export class ShiftsPage implements OnInit {
       ? describeApiError(error, (key, values) => this.i18n.t(key, values))
       : this.i18n.t('error.unknown.noReference');
   }
+}
+
+/**
+ * The start of a `yyyy-MM-dd` date, in the browser's own zone, as an ISO
+ * instant — the same local-time interpretation {@link endOfDayIso} already
+ * uses for the end boundary. A bare `new Date(dateOnly)` is parsed as UTC
+ * midnight per ECMA-262 rather than local midnight, so pairing it with
+ * {@link endOfDayIso}'s local-time end would silently exclude the start of
+ * the window for any operator east of UTC (Asia/Tashkent, UTC+5, included).
+ */
+function startOfDayIso(dateOnly: string): string {
+  const date = new Date(`${dateOnly}T00:00:00.000`);
+  return date.toISOString();
 }
 
 /** The end of a `yyyy-MM-dd` date, in the browser's own zone, as an ISO instant. */

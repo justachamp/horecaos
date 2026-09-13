@@ -164,7 +164,7 @@ export class DraftsPage implements OnInit {
   private query(): DraftsQuery {
     const channelId = this.channelFilter();
     return {
-      from: this.fromDate() ? new Date(this.fromDate()).toISOString() : undefined,
+      from: this.fromDate() ? startOfDayIso(this.fromDate()) : undefined,
       // Inclusive of the whole end day, not just its midnight.
       to: this.toDate() ? endOfDayIso(this.toDate()) : undefined,
       channelId: channelId ? channelId : undefined,
@@ -282,6 +282,19 @@ export class DraftsPage implements OnInit {
     const match = this.location.options().find((option) => option.id === locationId);
     return match?.displayName ?? locationId.slice(0, 8);
   }
+}
+
+/**
+ * The start of a `yyyy-MM-dd` date, in the browser's own zone, as an ISO
+ * instant — the same local-time interpretation {@link endOfDayIso} already
+ * uses for the end boundary. A bare `new Date(dateOnly)` is parsed as UTC
+ * midnight per ECMA-262 rather than local midnight, so pairing it with
+ * {@link endOfDayIso}'s local-time end would silently drop early-day drafts
+ * for any operator east of UTC (Asia/Tashkent, UTC+5, included).
+ */
+function startOfDayIso(dateOnly: string): string {
+  const date = new Date(`${dateOnly}T00:00:00.000`);
+  return date.toISOString();
 }
 
 /** The end of a `yyyy-MM-dd` date, in the browser's own zone, as an ISO instant. Mirrors `shifts-page.ts`'s helper. */
