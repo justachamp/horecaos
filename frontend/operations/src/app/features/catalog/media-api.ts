@@ -22,6 +22,13 @@ export interface MediaAssetView {
   readonly status: MediaAssetStatus;
 }
 
+/** `DerivativeVariant` — the fixed set of renditions the platform renders (ADR 0010). */
+export type MediaDerivativeVariant = 'THUMBNAIL' | 'CARD' | 'DETAIL';
+
+export interface DownloadUrlResponse {
+  readonly url: string;
+}
+
 /**
  * `MediaController` (ADR 0010) — presigned-upload flow, `operations` surface,
  * tenant-scoped. catalog.md §4.9's own doc names the contract: request a URL,
@@ -98,5 +105,27 @@ export class MediaApi {
     return this.api
       .get<MediaAssetView>(mediaPaths.asset(tenantId, assetId))
       .pipe(map((result) => result.value));
+  }
+
+  /**
+   * A short-lived signed URL, for the original or for one rendition.
+   *
+   * `MediaAssetService`'s own trap: derivatives were rendered, stored, and
+   * never served — `variant` omitted asked for the original regardless of how
+   * many kilobytes it was, because there was no way to ask for anything
+   * smaller. Pass `'THUMBNAIL'` for a grid, `'CARD'`/`'DETAIL'` for a closer
+   * view. A variant that has not rendered yet answers the same 404 as an
+   * asset that does not exist — see the endpoint's own doc.
+   */
+  downloadUrl(
+    tenantId: string,
+    assetId: string,
+    variant?: MediaDerivativeVariant,
+  ): Observable<string> {
+    return this.api
+      .get<DownloadUrlResponse>(mediaPaths.downloadUrl(tenantId, assetId), {
+        params: variant ? { variant } : {},
+      })
+      .pipe(map((result) => result.value.url));
   }
 }
