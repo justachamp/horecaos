@@ -1,0 +1,50 @@
+# Mailpit for a PRE-PRODUCTION host only: an SMTP sink that accepts every message the
+# platform sends and shows it in a web inbox instead of delivering it. Nothing leaves the
+# machine, so a fresh host can prove invitations and password resets end to end with no
+# provider, no DNS and no data-residency question (ADR 0097's SMTP relay decision stays
+# open). Never run this beside a production stack that is expected to deliver mail.
+#
+# Runs as its own compose project, joined to the production stack's internal network so
+# `mailpit:1025` resolves from platform-app, and independent of session-start.sh and the
+# boot service (its restart policy brings it back after a reboot on its own):
+#
+#   sudo docker compose -f /opt/horecaos/compose.preprod-mailpit.yml -p horecaos-preprod-mail up -d
+#
+# Then in /etc/horecaos/production.env:
+#   HORECAOS_MAIL_SMTP_HOST=mailpit  HORECAOS_MAIL_SMTP_PORT=1025
+#   HORECAOS_MAIL_SMTP_SECURITY=NONE HORECAOS_MAIL_SMTP_USERNAME=
+# and recreate platform-app. The inbox listens on the host's loopback only; read it through
+# an IAP tunnel:  gcloud compute ssh horecaos --zone europe-west1-b --tunnel-through-iap -- -L 8025:127.0.0.1:8025
+# and open http://localhost:8025. Messages live in memory and vanish when the container restarts.
+name: horecaos-preprod-mail
+
+services:
+  mailpit:
+    image: axllent/mailpit:v1.28.0
+    container_name: mailpit
+    restart: unless-stopped
+    environment:
+      MP_MAX_MESSAGES: "1000"
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "127.0.0.1:8025:8025"
+    networks:
+      - core
+      - inbox
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  core:
+    external: true
+    name: horecaos-production_core
+  inbox:
+    driver: bridge

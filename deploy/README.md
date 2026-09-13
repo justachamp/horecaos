@@ -19,6 +19,7 @@ Read that to actually deploy something. This file is the map.
 |---|---|
 | `compose.production.yml` | The stack: edge, three frontend bundles, the platform JVM, PostgreSQL, Kafka, Keycloak, OpenBao, backup tooling. Pulls pinned images; contains no `build:` block. The edge image is `horecaos-edge`, CI's eighth published image — stock `caddy:2.10-alpine` recompiled with `caddy-ratelimit` (ADR 0023), since the stock image cannot run this file's `rate_limit` directives. |
 | `compose.local-test.override.yml` | Port remapping ONLY, applied by `local-smoke.sh`. Never used on a real host. |
+| `compose.preprod-mailpit.yml` | PRE-PRODUCTION ONLY: a Mailpit SMTP sink as its own compose project on the stack's internal network, so invitations and password resets can be proven end to end with no provider; inbox on the host's loopback, read through the IAP tunnel. Never beside a stack expected to deliver mail. |
 | `env.template` | The per-environment file, exhaustively documented inline. Copy it, fill it, keep the result outside this repository. |
 | `env.staging.example` | A filled example for a hypothetical aHOST staging VM — a different provider than production, which ADR 0061 requires. |
 | `env.local-test` | What `local-smoke.sh` uses. Test values only; never copy this onto a server. |
