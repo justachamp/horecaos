@@ -91,12 +91,13 @@
   color: var(--q-ink-muted);
 }
 
+/* The SLA ramp (P06, tokens.css), not the generic warning/error tokens. */
 .pane__severity-caption--danger {
-  color: var(--q-error-text);
+  color: var(--q-sla-late-text);
 }
 
 .pane__severity-caption--warning {
-  color: var(--q-warning-text);
+  color: var(--q-sla-at-risk-text);
 }
 
 .pane__version {

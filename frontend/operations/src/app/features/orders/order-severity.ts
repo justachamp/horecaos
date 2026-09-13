@@ -1,3 +1,4 @@
+import { LatenessPolicy, evaluateLateness } from '../../core/lateness-policy';
 import { formatDuration } from '../../core/format/datetime';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { isTerminalOrderStatus } from './order-status';
@@ -6,42 +7,38 @@ import { isTerminalOrderStatus } from './order-status';
  * Severity, derived per render — never stored (§2.7: "a stored flag is wrong
  * five seconds after it is written").
  *
- * **What this implements, and why it is smaller than §2.6–2.7.** The full
+ * **What this implements, and how it changed under wave P06.** The full
  * model ranks six tiers — process failure, a breached delivery/pickup promise,
  * an approval deadline about to pass, a failed payment, a *predicted* breach,
- * an unresolved callback — against `promised_delivery_end` /
- * `estimated_ready_at`, both **not built — ADR 0014**. Nothing on this board
- * can compute a promise breach or predict one, because there is no promise.
- * So this module implements exactly the subset the spec's own fallback policy
- * already defines without that data, in strict precedence order:
+ * an unresolved callback — against `promised_at`. Before this wave, nothing on
+ * this board could compute a promise breach or predict one, because
+ * `promisedAt` was not on the wire; `LATE` and `AT_RISK` were dead code and
+ * `NO_PROMISE_FALLBACK` stood in for both, at a flat 45-minute mark this file
+ * invented itself. ADR 0102 put `promisedAt` and `processAttention` on
+ * `OrderSummaryResponse`, and this wave reads them, resolving the two live
+ * tiers this board can now compute against `core/lateness-policy.ts`'s shared
+ * evaluator — the same one `kitchen-ticket.ts` calls, so the two boards agree
+ * on the AT_RISK/LATE boundary by construction. In strict precedence order
+ * (§2.6):
  *
- *   1. `BLOCKED` — any `ordering.order_process_states` row is
- *      `MANUAL_ACTION_REQUIRED`. Highest rank: a human must act and nothing
- *      else will (§2.6 tier 0). `OrderSummaryResponse` — the entire wire shape
- *      `GET .../orders` returns today — carries no process state, so every
- *      caller in this application passes `hasBlockedProcess: false` until the
- *      backend adds it. The predicate is implemented and tested regardless,
- *      so the board picks it up the moment the field exists with no change
- *      here.
- *   2. `AWAITING_APPROVAL_DEADLINE` — status is `AWAITING_APPROVAL` and under
- *      two minutes remain before `approval_deadline_at`. This is §2.6 tier
- *      2's own named threshold, the one number in the full comparator that
- *      does not depend on ADR 0014 — `approval_deadline_at` is a real column,
- *      on the wire today.
- *   3. `NO_PROMISE_FALLBACK` — non-terminal and older than
- *      `no_promise_fallback_seconds` (§2.7's `ordering.lateness` policy,
- *      default 2700s / 45 min), which is the policy's own documented stand-in
- *      for a promise that does not exist: "45 min from created_at when no
- *      plan exists". `late_after_seconds` defaults to 0, so once the 45
- *      minutes pass there is no further grace before this fires.
- *   4. `NORMAL` — none of the above.
+ *   1. `BLOCKED` — `processAttention === 'MANUAL_ACTION_REQUIRED'` (§2.6 tier
+ *      0). Highest rank: a human must act and nothing else will.
+ *   2. `LATE` — non-terminal, and either the promise is breached past the
+ *      resolved policy's `late_after_seconds` grace, or there is no promise
+ *      at all and `no_promise_fallback_seconds` has elapsed since
+ *      `created_at` (§2.7's own documented stand-in for a missing promise).
+ *   3. `AWAITING_APPROVAL_DEADLINE` — status is `AWAITING_APPROVAL` and under
+ *      two minutes remain before `approval_deadline_at`. §2.6 tier 2's own
+ *      named threshold — a fixed spec number, not part of `ordering.lateness`,
+ *      unaffected by this wave.
+ *   4. `AT_RISK` — non-terminal and inside the resolved policy's
+ *      `at_risk_before_seconds` warning window ahead of the promise.
+ *   5. `NORMAL` — none of the above.
  *
- * `PAYMENT_FAILED` (tier 3 of the full comparator) and the predictive
- * `AT_RISK` (tier 4) are not modelled as their own severity levels — both need
- * data this board does not have (a payment aggregate read, and a promise to
- * predict against). `PAYMENT_FAILED` still surfaces through tab membership
- * (`order-tabs.ts`'s Внимание rule) and, once it has sat for 45 minutes,
- * through `NO_PROMISE_FALLBACK` like any other stalled order.
+ * `PAYMENT_FAILED` (tier 3 of the full comparator) is not modelled as its own
+ * severity level — it still surfaces through tab membership
+ * (`order-tabs.ts`'s Внимание rule) and, once it has sat long enough with no
+ * promise, through `LATE`'s own fallback like any other stalled order.
  *
  * **Terminal orders are never flagged, whatever their history** (§2.7,
  * verbatim) — checked first, unconditionally, before any other predicate. A
@@ -49,13 +46,13 @@ import { isTerminalOrderStatus } from './order-status';
  * action must not resurrect it as a severity row.
  */
 export type OrderSeverityLevel =
-  'BLOCKED' | 'AWAITING_APPROVAL_DEADLINE' | 'NO_PROMISE_FALLBACK' | 'NORMAL';
+  'BLOCKED' | 'LATE' | 'AWAITING_APPROVAL_DEADLINE' | 'AT_RISK' | 'NORMAL';
 
 /**
  * Rail colour and row tint move together (§2.7's table pairs them on every
  * row) — this application never sets one without the other, so one field
- * carries both. `'warning'` exists for forward compatibility with the full
- * `AT_RISK` tier; nothing in this module produces it yet.
+ * carries both. `BLOCKED` and `LATE` share `'danger'`, exactly as §2.7's
+ * Levels table pairs them.
  */
 export type OrderSeverityTone = 'danger' | 'warning' | 'none';
 
@@ -64,10 +61,14 @@ export interface OrderSeverityInput {
   readonly createdAt: Date;
   /** Null when the order never entered `AWAITING_APPROVAL`. */
   readonly approvalDeadlineAt: Date | null;
+  /** `DELIVERY` | `PICKUP` | `DINE_IN`, or unset — selects the resolved policy's per-mode thresholds. */
+  readonly fulfillmentMode: string | null | undefined;
+  /** ADR 0036's promise (`OrderSummaryResponse.promisedAt`). Null means no promise was ever made. */
+  readonly promisedAt: Date | null;
   /**
-   * Any `ordering.order_process_states` row `MANUAL_ACTION_REQUIRED` for this
-   * order. Not on `OrderSummaryResponse` yet (see `order-summary.ts`) — pass
-   * `false` until it is.
+   * `processAttention === 'MANUAL_ACTION_REQUIRED'` for this order (ADR
+   * 0102). Absent from a summary read outside the board (the detail screen's
+   * own header) reads as `false` there, exactly as before this wave.
    */
   readonly hasBlockedProcess: boolean;
 }
@@ -77,15 +78,12 @@ export interface OrderSeverity {
   readonly tone: OrderSeverityTone;
   /** Time left before the approval deadline, in ms. Set only at `AWAITING_APPROVAL_DEADLINE`. */
   readonly remainingMs: number | null;
-  /** Time since `createdAt`, in ms. Set only at `NO_PROMISE_FALLBACK`. */
+  /** Time since `createdAt`, in ms. Set only at `LATE` via the no-promise fallback. */
   readonly elapsedMs: number | null;
 }
 
-/** §2.6's own number: "AWAITING_APPROVAL with < 2 min to deadline". */
+/** §2.6's own number: "AWAITING_APPROVAL with < 2 min to deadline". Not part of `ordering.lateness`. */
 export const APPROVAL_DEADLINE_THRESHOLD_MS = 2 * 60 * 1000;
-
-/** `ordering.lateness.no_promise_fallback_seconds`, default 2700 (§2.7). */
-export const NO_PROMISE_FALLBACK_MS = 45 * 60 * 1000;
 
 const NORMAL_SEVERITY: OrderSeverity = {
   level: 'NORMAL',
@@ -95,13 +93,41 @@ const NORMAL_SEVERITY: OrderSeverity = {
 };
 
 /** The pure function itself. `now` is a parameter, never read from the clock internally. */
-export function computeOrderSeverity(input: OrderSeverityInput, now: Date): OrderSeverity {
+export function computeOrderSeverity(
+  input: OrderSeverityInput,
+  now: Date,
+  policy: LatenessPolicy,
+): OrderSeverity {
   if (isTerminalOrderStatus(input.status)) {
     return NORMAL_SEVERITY;
   }
 
   if (input.hasBlockedProcess) {
     return { level: 'BLOCKED', tone: 'danger', remainingMs: null, elapsedMs: null };
+  }
+
+  const latenessLevel = evaluateLateness(
+    {
+      fulfilmentMode: input.fulfillmentMode,
+      promisedAt: input.promisedAt,
+      createdAt: input.createdAt,
+      isTerminal: false, // already excluded above
+    },
+    policy,
+    now,
+  );
+  if (latenessLevel === 'LATE') {
+    // How overdue, measured from whichever baseline applied: the promise
+    // itself when one was made, `created_at` when §2.7's no-promise fallback
+    // is what fired instead.
+    const sinceMs =
+      input.promisedAt !== null ? input.promisedAt.getTime() : input.createdAt.getTime();
+    return {
+      level: 'LATE',
+      tone: 'danger',
+      remainingMs: null,
+      elapsedMs: now.getTime() - sinceMs,
+    };
   }
 
   if (input.status === 'AWAITING_APPROVAL' && input.approvalDeadlineAt !== null) {
@@ -116,9 +142,8 @@ export function computeOrderSeverity(input: OrderSeverityInput, now: Date): Orde
     }
   }
 
-  const elapsedMs = now.getTime() - input.createdAt.getTime();
-  if (elapsedMs > NO_PROMISE_FALLBACK_MS) {
-    return { level: 'NO_PROMISE_FALLBACK', tone: 'danger', remainingMs: null, elapsedMs };
+  if (latenessLevel === 'AT_RISK') {
+    return { level: 'AT_RISK', tone: 'warning', remainingMs: null, elapsedMs: null };
   }
 
   return NORMAL_SEVERITY;
@@ -126,9 +151,10 @@ export function computeOrderSeverity(input: OrderSeverityInput, now: Date): Orde
 
 const LEVEL_RANK: Readonly<Record<OrderSeverityLevel, number>> = {
   BLOCKED: 0,
-  AWAITING_APPROVAL_DEADLINE: 1,
-  NO_PROMISE_FALLBACK: 2,
-  NORMAL: 3,
+  LATE: 1,
+  AWAITING_APPROVAL_DEADLINE: 2,
+  AT_RISK: 3,
+  NORMAL: 4,
 };
 
 export interface SeverityRankable {
@@ -179,17 +205,19 @@ export function formatSeverityCaption(
   switch (severity.level) {
     case 'BLOCKED':
       return translate('orders.severity.blocked');
-    case 'AWAITING_APPROVAL_DEADLINE':
-      return translate('orders.severity.approvalDeadline', {
-        mmss: formatCountdown(severity.remainingMs ?? 0),
-      });
-    case 'NO_PROMISE_FALLBACK':
-      return translate('orders.severity.noPromiseFallback', {
+    case 'LATE':
+      return translate('orders.severity.late', {
         duration: formatDuration(Math.floor((severity.elapsedMs ?? 0) / 60_000), {
           hour: translate('orders.duration.hour'),
           minute: translate('orders.duration.minute'),
         }),
       });
+    case 'AWAITING_APPROVAL_DEADLINE':
+      return translate('orders.severity.approvalDeadline', {
+        mmss: formatCountdown(severity.remainingMs ?? 0),
+      });
+    case 'AT_RISK':
+      return translate('orders.severity.atRisk');
     case 'NORMAL':
       return null;
   }

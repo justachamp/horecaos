@@ -24,6 +24,21 @@ export interface OrderSummaryResponse {
   readonly channelCode?: string | null;
   /** `DELIVERY` | `PICKUP` | `DINE_IN` (`uz.horecaos.platform.tenancy.api.FulfillmentMode`), or unset. */
   readonly fulfillmentMode?: string | null;
+  /**
+   * ADR 0036's promise, decided once at checkout (ADR 0102 put it on this
+   * response; wave P06 is the first reader). RFC 3339, UTC. Null means the
+   * order carries no promise at all — `order-severity.ts`'s own no-promise
+   * fallback applies then, never a fabricated time.
+   */
+  readonly promisedAt?: string | null;
+  /**
+   * `MANUAL_ACTION_REQUIRED` or `FAILED_RETRYABLE` when a process needs
+   * attention, null otherwise (ADR 0102). `order-severity.ts`'s `BLOCKED`
+   * level is exactly `processAttention === 'MANUAL_ACTION_REQUIRED'` —
+   * `FAILED_RETRYABLE` is retried automatically and is not this severity's
+   * concern.
+   */
+  readonly processAttention?: string | null;
   readonly totalMinor: number;
   readonly currency: string;
   readonly version?: number;
