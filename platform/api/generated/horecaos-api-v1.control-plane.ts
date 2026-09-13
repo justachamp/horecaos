@@ -901,6 +901,7 @@ export interface DeliveryTariffControllerVersionView {
 export interface DescribeLocationRequest {
   addressLine?: string;
   city?: string;
+  clearLandmark?: boolean;
   contactPhone?: string;
   coordinateSource?: "NOT_GEOCODED" | "GEOCODER" | "MERCHANT_PIN" | "OPERATOR_PIN";
   district?: string;

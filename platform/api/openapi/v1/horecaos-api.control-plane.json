@@ -2847,6 +2847,9 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "clearLandmark" : {
+            "type" : "boolean"
+          },
           "contactPhone" : {
             "example" : "+998712000000",
             "maxLength" : 32,
