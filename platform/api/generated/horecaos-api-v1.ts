@@ -3490,6 +3490,39 @@ export interface OperationsTraceLevel {
   scopeType?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
 }
 
+export interface OperatorChannelCountResponse {
+  channelCode?: string;
+  orderCount?: number;
+}
+
+export interface OperatorLeaderboardResponse {
+  provenance?: ProvenanceResponse;
+  rows?: Array<OperatorLeaderboardRowResponse>;
+}
+
+export interface OperatorLeaderboardRowResponse {
+  averageCheckSom?: number;
+  avgHandlingSeconds?: number;
+  avgItemsPerOrder?: number;
+  byChannel?: Array<OperatorChannelCountResponse>;
+  deliveryCount?: number;
+  dineInCount?: number;
+  grossRevenueSom?: number;
+  netRevenueSom?: number;
+  operatorPrincipalId?: string;
+  orderCount?: number;
+  pickupCount?: number;
+  principalKind?: string;
+  subject?: string;
+}
+
+export interface OperatorProductListResponse {
+  maybeMore?: boolean;
+  operatorPrincipalId?: string;
+  provenance?: ProvenanceResponse;
+  rows?: Array<VariantSalesRowResponse>;
+}
+
 export interface OrderActionResponse {
   action?: string;
   targetStatus?: string;
@@ -7364,6 +7397,8 @@ export interface Operations {
   "byNumber": { method: "GET"; path: "/api/v1/tenants/{tenantId}/orders/by-number"; request: { parameters: { path: { tenantId: string }; query: { publicOrderNumber: string } } }; responses: { "200": OrderNumberLookupResponse } };
   "demandHistory": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/demand-history"; request: { parameters: { path: { tenantId: string }; query: { locationId: string; sampleSize?: number; weekday: number } } }; responses: { "200": DemandHistoryResponse } };
   "metrics": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/metrics"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<MetricResponse> } };
+  "operatorLeaderboard": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/operator-leaderboard"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": OperatorLeaderboardResponse } };
+  "operatorProducts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/operator-products"; request: { parameters: { path: { tenantId: string }; query: { from: string; limit?: number; locationId?: Array<string>; operatorPrincipalId: string; to: string } } }; responses: { "200": OperatorProductListResponse } };
   "orderOutcomes": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/order-outcomes"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; locationId?: Array<string>; to: string } } }; responses: { "200": OutcomeListResponse } };
   "orders": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/orders"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; limit?: number; locationId?: Array<string>; sort?: string; to: string } } }; responses: { "200": OrderListResponse } };
   "preparationTime": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/preparation-time"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": MedianResponse } };
