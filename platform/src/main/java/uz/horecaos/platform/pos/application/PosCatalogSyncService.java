@@ -64,7 +64,7 @@ public class PosCatalogSyncService {
     private final JdbcPosSyncStore runs;
     private final JdbcPosTargetCatalog targets;
     private final PosRawSnapshotWriter rawSnapshots;
-    private final FieldAuthorityPolicy policy;
+    private final FieldAuthorityPolicy defaultPolicy;
     private final Clock clock;
 
     public PosCatalogSyncService(
@@ -85,7 +85,7 @@ public class PosCatalogSyncService {
         // on each run. The shipped default is the whole policy today; when the
         // control plane can author one, this becomes a lookup and the run already
         // records which version it used.
-        this.policy = FieldAuthorityPolicy.INITIAL;
+        this.defaultPolicy = FieldAuthorityPolicy.INITIAL;
         this.clock = clock;
     }
 
@@ -98,6 +98,36 @@ public class PosCatalogSyncService {
      *               anything is switched on
      */
     public RunResult run(UUID tenantId, UUID bindingId, String triggerType, boolean dryRun) {
+        return run(tenantId, bindingId, triggerType, dryRun, null, false);
+    }
+
+    /**
+     * {@link #run(UUID, UUID, String, boolean)}, with the two manual-import
+     * parameters gap-map row 4.5a adds. Only the console's own {@code
+     * PosSyncRunController#start} takes these; the durable-scheduler and
+     * resume paths keep calling the four-argument overload above unchanged.
+     *
+     * @param importLanguage which locale the comparison reads {@code
+     *                       catalog.translations} at, overriding the binding's
+     *                       {@code catalog.defaultLocale} configuration for
+     *                       this run only. Null or blank keeps the binding's
+     *                       own default
+     * @param priceReImport  when true, compares this run's prices under {@link
+     *                       FieldAuthorityPolicy#PRICE_REVIEWED_IMPORT} instead
+     *                       of {@link FieldAuthorityPolicy#INITIAL} — a price
+     *                       difference becomes reviewable instead of
+     *                       permanently ignored. See that field's own doc for
+     *                       why this is a distinct, versioned policy rather
+     *                       than a mutation of the default
+     */
+    public RunResult run(
+            UUID tenantId,
+            UUID bindingId,
+            String triggerType,
+            boolean dryRun,
+            @Nullable String importLanguage,
+            boolean priceReImport) {
+        FieldAuthorityPolicy policy = priceReImport ? FieldAuthorityPolicy.PRICE_REVIEWED_IMPORT : defaultPolicy;
         Optional<BindingRef> resolved = binding(tenantId, bindingId);
         if (resolved.isEmpty()) {
             return RunResult.refused("BINDING_NOT_CATALOG_CAPABLE", "This binding does not provide catalog read");
@@ -147,8 +177,10 @@ public class PosCatalogSyncService {
                 .ifPresent(key -> runs.recordRawObjectKey(tenantId, runId, key));
         runs.markStatus(tenantId, runId, "COMPARING", "normalized_at", clock.instant());
 
-        TargetCatalog target = targets.read(
-                tenantId, bindingId, binding.brandId(), config.getOrDefault("catalog.defaultLocale", "uz-UZ"));
+        String locale = importLanguage == null || importLanguage.isBlank()
+                ? config.getOrDefault("catalog.defaultLocale", "uz-UZ")
+                : importLanguage;
+        TargetCatalog target = targets.read(tenantId, bindingId, binding.brandId(), locale);
 
         AbsenceHistory absences = runs.recordAbsences(
                 tenantId,
