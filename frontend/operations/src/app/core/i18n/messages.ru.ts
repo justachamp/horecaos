@@ -71,11 +71,14 @@ export const messagesRu: MessageCatalogue = {
   'orders.drafts.empty': 'Черновиков и брошенных корзин пока нет',
   'orders.drafts.breakdown.title': 'Отказы по каналам',
   'orders.drafts.breakdown.empty': 'Пока нечего показать',
+  'orders.drafts.breakdown.rate': '{rate}% отказов ({abandoned} из {total})',
   'orders.drafts.column.cart': 'Корзина',
   'orders.drafts.column.createdAt': 'Начата',
   'orders.drafts.column.channel': 'Канал',
+  'orders.drafts.column.location': 'Филиал',
   'orders.drafts.column.owner': 'Владелец',
   'orders.drafts.column.lines': 'Позиций',
+  'orders.drafts.column.expiresAt': 'Истекает',
   'orders.drafts.column.status': 'Статус',
   'orders.drafts.openCustomer': 'Открыть клиента',
   'orders.drafts.owner.account': 'Аккаунт',
@@ -83,6 +86,14 @@ export const messagesRu: MessageCatalogue = {
   'orders.drafts.status.ACTIVE': 'Активна',
   'orders.drafts.status.EXPIRED': 'Истекла',
   'orders.drafts.status.ABANDONED': 'Брошена',
+  'orders.drafts.filters.label': 'Фильтры',
+  'orders.drafts.filters.from': 'С',
+  'orders.drafts.filters.to': 'По',
+  'orders.drafts.filters.apply': 'Применить',
+  'orders.drafts.filters.channel': 'Канал',
+  'orders.drafts.filters.channelAll': 'Все каналы',
+  'orders.drafts.filters.owner': 'Владелец',
+  'orders.drafts.filters.ownerAll': 'Все',
 
   // Reservations (1.5) — wave 43
   'reservations.title': 'Бронирования',
@@ -3737,7 +3748,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.detail.bindings.activate': 'Активировать',
   'settings.integrations.detail.bindings.activate.reasonPrompt': 'Причина запуска этой привязки:',
   'settings.integrations.detail.bindings.suspend': 'Приостановить',
-  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Причина приостановки этой привязки:',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Причина приостановки этой привязки:',
   'settings.integrations.detail.bindings.empty': 'Привязок пока нет.',
   'settings.integrations.detail.bindings.wholeTenant': 'Вся компания',
   'settings.integrations.detail.cloposSettings.title': 'Приём заказов',
@@ -3749,13 +3761,15 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.detail.partnerClients.issue': 'Выпустить клиента',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'Название для этого клиента (для вашего удобства):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Причина выпуска этого клиента:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Причина выпуска этого клиента:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Скопируйте этот секрет сейчас — он больше не будет показан:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'Я скопировал(а)',
   'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
   'settings.integrations.detail.partnerClients.revoke': 'Отозвать',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Причина отзыва этого клиента:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Причина отзыва этого клиента:',
   'settings.integrations.detail.partnerClients.empty': 'Клиенты партнёрского API ещё не выпущены.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

@@ -73,11 +73,14 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.drafts.empty': 'Hozircha qoralama yoki tashlab ketilgan savat yoʻq',
   'orders.drafts.breakdown.title': 'Kanal boʻyicha tashlab ketishlar',
   'orders.drafts.breakdown.empty': 'Hali koʻrsatadigan narsa yoʻq',
+  'orders.drafts.breakdown.rate': '{rate}% tashlab ketish ({abandoned} / {total})',
   'orders.drafts.column.cart': 'Savat',
   'orders.drafts.column.createdAt': 'Boshlangan',
   'orders.drafts.column.channel': 'Kanal',
+  'orders.drafts.column.location': 'Filial',
   'orders.drafts.column.owner': 'Egasi',
   'orders.drafts.column.lines': 'Pozitsiyalar',
+  'orders.drafts.column.expiresAt': 'Amal qilish muddati',
   'orders.drafts.column.status': 'Holati',
   'orders.drafts.openCustomer': 'Mijozni ochish',
   'orders.drafts.owner.account': 'Hisob',
@@ -85,6 +88,14 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.drafts.status.ACTIVE': 'Faol',
   'orders.drafts.status.EXPIRED': 'Muddati oʻtgan',
   'orders.drafts.status.ABANDONED': 'Tashlab ketilgan',
+  'orders.drafts.filters.label': 'Filtrlar',
+  'orders.drafts.filters.from': 'Dan',
+  'orders.drafts.filters.to': 'Gacha',
+  'orders.drafts.filters.apply': 'Qoʻllash',
+  'orders.drafts.filters.channel': 'Kanal',
+  'orders.drafts.filters.channelAll': 'Barcha kanallar',
+  'orders.drafts.filters.owner': 'Egasi',
+  'orders.drafts.filters.ownerAll': 'Barchasi',
 
   // Bronlar (1.5) — 43-toʻlqin
   'reservations.title': 'Bronlar',
@@ -3778,13 +3789,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.detail.partnerClients.issue': 'Mijoz chiqarish',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'Ushbu mijoz uchun nom (oʻzingiz uchun):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Ushbu mijozni chiqarish sababi:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Ushbu mijozni chiqarish sababi:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Ushbu maxfiy kalitni hozir nusxalang — u qayta koʻrsatilmaydi:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'Nusxaladim',
   'settings.integrations.detail.partnerClients.column.clientId': 'Mijoz ID',
   'settings.integrations.detail.partnerClients.revoke': 'Bekor qilish',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Ushbu mijozni bekor qilish sababi:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Ushbu mijozni bekor qilish sababi:',
   'settings.integrations.detail.partnerClients.empty': 'Hali hamkor API mijozlari chiqarilmagan.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

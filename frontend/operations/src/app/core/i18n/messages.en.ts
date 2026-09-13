@@ -83,11 +83,14 @@ export const messagesEn = {
   'orders.drafts.empty': 'No drafts or abandoned carts right now',
   'orders.drafts.breakdown.title': 'Abandonment by channel',
   'orders.drafts.breakdown.empty': 'Nothing to break down yet',
+  'orders.drafts.breakdown.rate': '{rate}% abandoned ({abandoned} of {total})',
   'orders.drafts.column.cart': 'Cart',
   'orders.drafts.column.createdAt': 'Started',
   'orders.drafts.column.channel': 'Channel',
+  'orders.drafts.column.location': 'Location',
   'orders.drafts.column.owner': 'Owner',
   'orders.drafts.column.lines': 'Lines',
+  'orders.drafts.column.expiresAt': 'Expires',
   'orders.drafts.column.status': 'Status',
   'orders.drafts.openCustomer': 'Open customer',
   'orders.drafts.owner.account': 'Account',
@@ -95,6 +98,14 @@ export const messagesEn = {
   'orders.drafts.status.ACTIVE': 'Active',
   'orders.drafts.status.EXPIRED': 'Expired',
   'orders.drafts.status.ABANDONED': 'Abandoned',
+  'orders.drafts.filters.label': 'Filters',
+  'orders.drafts.filters.from': 'From',
+  'orders.drafts.filters.to': 'To',
+  'orders.drafts.filters.apply': 'Apply',
+  'orders.drafts.filters.channel': 'Channel',
+  'orders.drafts.filters.channelAll': 'All channels',
+  'orders.drafts.filters.owner': 'Owner',
+  'orders.drafts.filters.ownerAll': 'All',
 
   // Reservations (1.5) — wave 43
   'reservations.title': 'Reservations',
@@ -3773,9 +3784,11 @@ export const messagesEn = {
   'settings.integrations.detail.bindings.column.status': 'Status',
   'settings.integrations.detail.bindings.column.actions': 'Actions',
   'settings.integrations.detail.bindings.activate': 'Activate',
-  'settings.integrations.detail.bindings.activate.reasonPrompt': 'Reason for bringing this binding live:',
+  'settings.integrations.detail.bindings.activate.reasonPrompt':
+    'Reason for bringing this binding live:',
   'settings.integrations.detail.bindings.suspend': 'Suspend',
-  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Reason for suspending this binding:',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Reason for suspending this binding:',
   'settings.integrations.detail.bindings.empty': 'No bindings yet.',
   'settings.integrations.detail.bindings.wholeTenant': 'Entire company',
   'settings.integrations.detail.cloposSettings.title': 'Order acceptance',
@@ -3787,13 +3800,15 @@ export const messagesEn = {
   'settings.integrations.detail.partnerClients.issue': 'Issue a client',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'A name for this client (for your own reference):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Reason for issuing this client:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Reason for issuing this client:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Copy this secret now — it will not be shown again:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'I have copied it',
   'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
   'settings.integrations.detail.partnerClients.revoke': 'Revoke',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Reason for revoking this client:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Reason for revoking this client:',
   'settings.integrations.detail.partnerClients.empty': 'No partner API clients issued yet.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------
