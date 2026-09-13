@@ -234,11 +234,12 @@ export const routes: Routes = [
       {
         // The Settings section (wave 26, ADR 0065): its own shell nests a
         // second rail (§Navigation groups) beside whichever P-tier screen is
-        // routed under here. Two of its own rail entries — channel-setup and
-        // payment-methods — still resolve to the shared NotBuiltPage below,
-        // the same "omit, do not disable" rule the top-level rail already
-        // follows: a screen with a real backend gap gets an honest page that
-        // names the spec section, not a greyed-out link.
+        // routed under here. One of its own rail entries — channel-setup —
+        // still resolves to the shared NotBuiltPage below, the same "omit,
+        // do not disable" rule the top-level rail already follows: a screen
+        // with a real backend gap gets an honest page that names the spec
+        // section, not a greyed-out link. payment-methods (wave P33) is real
+        // now.
         path: 'settings',
         loadComponent: () =>
           import('./features/settings/settings-shell').then((m) => m.SettingsShell),
@@ -306,8 +307,9 @@ export const routes: Routes = [
           {
             path: 'payment-methods',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'operations-spec/settings.md §10.6 (Payment methods)' },
+              import('./features/settings/payment-methods/payment-methods-page').then(
+                (m) => m.PaymentMethodsPage,
+              ),
           },
           {
             path: 'fiscalization',

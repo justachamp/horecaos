@@ -1,0 +1,284 @@
+<h1 class="q-title">{{ 'settings.paymentMethods.title' | t }}</h1>
+<p class="q-body-sm lead">{{ 'settings.paymentMethods.lead' | t }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+} @else if (denied()) {
+  <p class="q-body-sm denied" data-testid="payment-methods-denied">
+    {{ 'settings.scope.denied' | t }}
+  </p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm error" role="alert">{{ message }}</p>
+} @else {
+  <div class="toolbar">
+    <button type="button" class="q-body primary" (click)="showCreateForm.set(!showCreateForm())">
+      {{ 'settings.paymentMethods.create.action' | t }}
+    </button>
+  </div>
+
+  @if (showCreateForm()) {
+    <div class="create-form">
+      <label class="q-caption" for="new-method-code">{{
+        'settings.paymentMethods.field.code' | t
+      }}</label>
+      <input
+        id="new-method-code"
+        class="q-body field"
+        type="text"
+        [value]="newCode()"
+        (input)="newCode.set($any($event.target).value)"
+        [disabled]="createSubmitting()"
+      />
+
+      <label class="q-caption" for="new-method-name">{{
+        'settings.paymentMethods.field.displayName' | t
+      }}</label>
+      <input
+        id="new-method-name"
+        class="q-body field"
+        type="text"
+        [value]="newDisplayName()"
+        (input)="newDisplayName.set($any($event.target).value)"
+        [disabled]="createSubmitting()"
+      />
+
+      <label class="q-caption" for="new-method-responsibility">{{
+        'settings.paymentMethods.field.responsibility' | t
+      }}</label>
+      <select
+        id="new-method-responsibility"
+        class="q-body field"
+        [value]="newResponsibility()"
+        (change)="newResponsibility.set($any($event.target).value)"
+        [disabled]="createSubmitting()"
+      >
+        @for (kind of responsibilities; track kind) {
+          <option [value]="kind">{{ responsibilityKey(kind) | t }}</option>
+        }
+      </select>
+
+      <label class="q-caption" for="new-method-icon">{{
+        'settings.paymentMethods.field.icon' | t
+      }}</label>
+      <input
+        id="new-method-icon"
+        class="q-body field"
+        type="text"
+        [value]="newIcon()"
+        (input)="newIcon.set($any($event.target).value)"
+        [disabled]="createSubmitting()"
+      />
+
+      <label class="q-caption" for="new-method-installation">{{
+        'settings.paymentMethods.field.installation' | t
+      }}</label>
+      <select
+        id="new-method-installation"
+        class="q-body field"
+        [value]="newInstallationId()"
+        (change)="newInstallationId.set($any($event.target).value)"
+        [disabled]="createSubmitting()"
+      >
+        <option value="">{{ 'settings.paymentMethods.field.installation.none' | t }}</option>
+        @for (installation of installations(); track installation.id) {
+          <option [value]="installation.id">{{ installation.displayName }}</option>
+        }
+      </select>
+
+      @if (createError(); as message) {
+        <p class="q-body-sm error" role="alert">{{ message }}</p>
+      }
+
+      <div class="create-form__actions">
+        <button
+          type="button"
+          class="q-body secondary"
+          (click)="showCreateForm.set(false)"
+          [disabled]="createSubmitting()"
+        >
+          {{ 'settings.paymentMethods.create.cancel' | t }}
+        </button>
+        <button
+          type="button"
+          class="q-body primary"
+          (click)="submitCreate()"
+          [disabled]="!canCreate()"
+        >
+          {{
+            createSubmitting()
+              ? ('settings.paymentMethods.create.submitting' | t)
+              : ('settings.paymentMethods.create.submit' | t)
+          }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th class="q-caption">{{ 'settings.paymentMethods.field.displayName' | t }}</th>
+        <th class="q-caption">{{ 'settings.paymentMethods.field.code' | t }}</th>
+        <th class="q-caption">{{ 'settings.paymentMethods.field.responsibility' | t }}</th>
+        <th class="q-caption">{{ 'settings.paymentMethods.field.installation' | t }}</th>
+        <th class="q-caption">{{ 'settings.paymentMethods.field.status' | t }}</th>
+        <th class="q-caption">{{ 'settings.paymentMethods.field.actions' | t }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (method of methods(); track method.id) {
+        <tr
+          class="row"
+          [class.row--selected]="selectedId() === method.id"
+          (click)="selectMethod(method)"
+        >
+          <td class="q-body-sm">
+            @if (method.icon) {
+              <span class="q-caption icon-chip">{{ method.icon }}</span>
+            }
+            {{ method.displayName }}
+          </td>
+          <td class="q-body-sm q-mono">{{ method.code }}</td>
+          <td class="q-body-sm">{{ responsibilityKey(method.responsibility) | t }}</td>
+          <td class="q-body-sm">{{ installationName()(method.providerInstallationId) ?? '—' }}</td>
+          <td class="q-body-sm">
+            <span class="status-badge">{{ method.status }}</span>
+          </td>
+          <td class="q-body-sm">
+            <button
+              type="button"
+              class="q-body-sm link"
+              (click)="$event.stopPropagation(); toggleStatus(method)"
+              data-testid="toggle-status"
+            >
+              {{
+                method.status === 'ACTIVE'
+                  ? ('settings.paymentMethods.action.disable' | t)
+                  : ('settings.paymentMethods.action.activate' | t)
+              }}
+            </button>
+          </td>
+        </tr>
+        @if (selectedId() === method.id) {
+          <tr class="detail-row">
+            <td colspan="6">
+              <div class="detail" [class.detail--saving]="rowSaving()">
+                <label class="q-caption" [attr.for]="'edit-name-' + method.id">{{
+                  'settings.paymentMethods.field.displayName' | t
+                }}</label>
+                <input
+                  [id]="'edit-name-' + method.id"
+                  class="q-body field"
+                  type="text"
+                  [value]="editDisplayName()"
+                  (input)="editDisplayName.set($any($event.target).value)"
+                />
+
+                <label class="q-caption" [attr.for]="'edit-icon-' + method.id">{{
+                  'settings.paymentMethods.field.icon' | t
+                }}</label>
+                <input
+                  [id]="'edit-icon-' + method.id"
+                  class="q-body field"
+                  type="text"
+                  [value]="editIcon()"
+                  (input)="editIcon.set($any($event.target).value)"
+                />
+
+                <label class="q-caption" [attr.for]="'edit-order-' + method.id">{{
+                  'settings.paymentMethods.field.sortOrder' | t
+                }}</label>
+                <input
+                  [id]="'edit-order-' + method.id"
+                  class="q-body field"
+                  type="number"
+                  min="0"
+                  [value]="editSortOrder()"
+                  (input)="editSortOrder.set($any($event.target).valueAsNumber || 0)"
+                />
+
+                <label class="q-caption" [attr.for]="'edit-installation-' + method.id">{{
+                  'settings.paymentMethods.field.installation' | t
+                }}</label>
+                <select
+                  [id]="'edit-installation-' + method.id"
+                  class="q-body field"
+                  [value]="editInstallationId()"
+                  (change)="editInstallationId.set($any($event.target).value)"
+                >
+                  <option value="">
+                    {{ 'settings.paymentMethods.field.installation.none' | t }}
+                  </option>
+                  @for (installation of installations(); track installation.id) {
+                    <option [value]="installation.id">{{ installation.displayName }}</option>
+                  }
+                </select>
+
+                <label class="q-caption" [attr.for]="'edit-contract-' + method.id">{{
+                  'settings.paymentMethods.field.contractReference' | t
+                }}</label>
+                <input
+                  [id]="'edit-contract-' + method.id"
+                  class="q-body field"
+                  type="text"
+                  [value]="editContractReference()"
+                  (input)="editContractReference.set($any($event.target).value)"
+                />
+
+                <div class="detail__locales">
+                  <h3 class="q-caption matrix__label">
+                    {{ 'settings.paymentMethods.field.localizedNames' | t }}
+                  </h3>
+                  <q-localized-field-group
+                    [locales]="locales"
+                    [activeLocale]="editLocale()"
+                    (activeLocaleChange)="editLocale.set($event)"
+                    [defaultLocale]="i18n.locale()"
+                    [completeness]="translationCompleteness()"
+                    data-testid="translations-locale-group"
+                  />
+                  <input
+                    class="q-body field"
+                    type="text"
+                    [attr.data-testid]="'translation-' + editLocale()"
+                    [value]="editTranslations()[editLocale()] ?? ''"
+                    (input)="setTranslation(editLocale(), $any($event.target).value)"
+                    [placeholder]="method.displayName"
+                  />
+                </div>
+
+                @if (rowError(); as message) {
+                  <p class="q-body-sm error" role="alert">{{ message }}</p>
+                }
+
+                <div class="create-form__actions">
+                  <button
+                    type="button"
+                    class="q-body secondary"
+                    (click)="selectedId.set(null)"
+                    [disabled]="rowSaving()"
+                  >
+                    {{ 'settings.paymentMethods.create.cancel' | t }}
+                  </button>
+                  <button
+                    type="button"
+                    class="q-body primary"
+                    (click)="saveEdit(method)"
+                    [disabled]="rowSaving()"
+                    data-testid="save-method"
+                  >
+                    {{ 'settings.paymentMethods.action.save' | t }}
+                  </button>
+                </div>
+              </div>
+            </td>
+          </tr>
+        }
+      } @empty {
+        <tr>
+          <td class="q-body-sm empty" colspan="6">{{ 'settings.paymentMethods.empty' | t }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}

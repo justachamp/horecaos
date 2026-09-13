@@ -158,6 +158,37 @@ export const settingsPaths = {
     return `${this.salesChannel(scope, channelId)}/archive`;
   },
 
+  salesChannelDeactivate(scope: LocationScope, channelId: string): string {
+    return `${this.salesChannel(scope, channelId)}/deactivate`;
+  },
+
+  salesChannelReactivate(scope: LocationScope, channelId: string): string {
+    return `${this.salesChannel(scope, channelId)}/reactivate`;
+  },
+
+  // ---------------------------------------------------------------- 10.6 Payment methods
+
+  /** `PaymentMethodController` (operations surface, wave P33) -- the tenant-scoped registry. */
+  paymentMethods(scope: LocationScope): string {
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/payment-methods`;
+  },
+
+  paymentMethod(scope: LocationScope, methodId: string): string {
+    return `${this.paymentMethods(scope)}/${enc(methodId)}`;
+  },
+
+  paymentMethodTranslations(scope: LocationScope, methodId: string): string {
+    return `${this.paymentMethod(scope, methodId)}/translations`;
+  },
+
+  paymentMethodActivate(scope: LocationScope, methodId: string): string {
+    return `${this.paymentMethod(scope, methodId)}/activate`;
+  },
+
+  paymentMethodDisable(scope: LocationScope, methodId: string): string {
+    return `${this.paymentMethod(scope, methodId)}/disable`;
+  },
+
   // ---------------------------------------------------------- 10.7 Fiscalization
 
   /**
