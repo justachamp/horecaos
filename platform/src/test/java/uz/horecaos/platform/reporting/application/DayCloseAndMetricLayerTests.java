@@ -199,6 +199,107 @@ class DayCloseAndMetricLayerTests {
         assertThat(aggregate.lateCount()).isEqualTo(1);
     }
 
+    // -------------------------------------------------- T12 (7.5): operator attribution
+
+    @Test
+    void theCloseJobCopiesTheAcceptingOperatorWhenOneApproved() {
+        // ADR 0039's approval-decision path outranks who created the order —
+        // real work an operator did confirming somebody else's order.
+        insertOrder(
+                "APPROVED",
+                ENTITY_A,
+                "COMPLETED",
+                tashkent(13, 0),
+                tashkent(13, 40),
+                90_000,
+                0,
+                null,
+                "CUSTOMER",
+                CUSTOMER.toString(),
+                "USER",
+                "staff-accept-1");
+
+        close.close(TENANT, DAY);
+
+        Map<String, Object> fact = jdbc.sql("""
+                SELECT operator_principal_id FROM reporting.fact_order
+                 WHERE tenant_id = :t AND order_id = :id
+                """)
+                .param("t", TENANT)
+                .param("id", orderId("APPROVED"))
+                .query()
+                .singleRow();
+
+        assertThat(fact).containsEntry("operator_principal_id", "staff-accept-1");
+    }
+
+    @Test
+    void theCloseJobCopiesTheCreatingOperatorWhenNobodyAccepted() {
+        // OperatorOrderingService: an operator-placed order, auto-confirmed, so
+        // accepted_by is never set.
+        insertOrder(
+                "PHONE",
+                ENTITY_A,
+                "COMPLETED",
+                tashkent(13, 0),
+                tashkent(13, 40),
+                90_000,
+                0,
+                null,
+                "USER",
+                "staff-create-1",
+                null,
+                null);
+
+        close.close(TENANT, DAY);
+
+        Map<String, Object> fact = jdbc.sql("""
+                SELECT operator_principal_id FROM reporting.fact_order
+                 WHERE tenant_id = :t AND order_id = :id
+                """)
+                .param("t", TENANT)
+                .param("id", orderId("PHONE"))
+                .query()
+                .singleRow();
+
+        assertThat(fact).containsEntry("operator_principal_id", "staff-create-1");
+    }
+
+    @Test
+    void theCloseJobTypesAMachinePrincipalAsAPseudoOperatorRatherThanDroppingIt() {
+        // StorefrontOrderingController/CustomerBotOrderingAdapter both name the
+        // account as CUSTOMER — never a member of staff — so a checkout with no
+        // human operator is credited to a channel-named pseudo-operator rather
+        // than left null.
+        insertOrder(
+                "SELF_SERVICE",
+                ENTITY_A,
+                "COMPLETED",
+                tashkent(13, 0),
+                tashkent(13, 40),
+                90_000,
+                0,
+                null,
+                "CUSTOMER",
+                CUSTOMER.toString(),
+                null,
+                null);
+
+        close.close(TENANT, DAY);
+
+        Map<String, Object> fact = jdbc.sql("""
+                SELECT operator_principal_id FROM reporting.fact_order
+                 WHERE tenant_id = :t AND order_id = :id
+                """)
+                .param("t", TENANT)
+                .param("id", orderId("SELF_SERVICE"))
+                .query()
+                .singleRow();
+
+        // The fixture's own channel_code_snapshot is 'TELEGRAM' — see insertOrder.
+        assertThat(fact).containsEntry("operator_principal_id", "channel:TELEGRAM");
+    }
+
     // ---------------------------------------------------- ADR 0064 call facts
 
     @Test
@@ -721,6 +822,39 @@ class DayCloseAndMetricLayerTests {
             long totalMinor,
             long discountMinor,
             @Nullable Instant promisedAt) {
+        insertOrder(
+                seed,
+                legalEntityId,
+                status,
+                createdAt,
+                closedAt,
+                totalMinor,
+                discountMinor,
+                promisedAt,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    /**
+     * T12: the same insert, additionally naming who created and/or accepted
+     * the order (V0029) — what {@code OperatorAttribution} reads to fill
+     * {@code operator_principal_id}.
+     */
+    private void insertOrder(
+            String seed,
+            UUID legalEntityId,
+            String status,
+            Instant createdAt,
+            Instant closedAt,
+            long totalMinor,
+            long discountMinor,
+            @Nullable Instant promisedAt,
+            @Nullable String createdByActorType,
+            @Nullable String createdByActorId,
+            @Nullable String acceptedByActorType,
+            @Nullable String acceptedByActorId) {
 
         UUID orderId = orderId(seed);
         UUID cartId = UUID.nameUUIDFromBytes(("cart:" + seed).getBytes(StandardCharsets.UTF_8));
@@ -773,12 +907,16 @@ class DayCloseAndMetricLayerTests {
                     status, currency, subtotal_minor, tax_minor, discount_minor, fee_minor,
                     total_minor, pricing_quote_id, pricing_context_hash, catalog_publication_id,
                     cart_id, idempotency_key, promised_at, promise_basis, promise_prep_minutes,
+                    created_by_actor_type, created_by_actor_id,
+                    accepted_by_actor_type, accepted_by_actor_id, accepted_at,
                     version, created_at, confirmed_at, closed_at)
                 VALUES (:id, :number, :t, :b, :loc, :ch, 'TELEGRAM', :cust,
                     'DELIVERY', 'AUTO_CONFIRM', 'NONE',
                     :status, 'UZS', :subtotal, 0, :discount, 0,
                     :total, :quote, :hash, :pub,
                     :cart, :key, :promisedAt, :basis, :prep,
+                    :createdByActorType, :createdByActorId,
+                    :acceptedByActorType, :acceptedByActorId, :acceptedAt,
                     1, :createdAt, :confirmedAt, :closedAt)
                 """)
                 .param("id", orderId)
@@ -800,6 +938,15 @@ class DayCloseAndMetricLayerTests {
                 .param("promisedAt", promisedAt == null ? null : promisedAt.atOffset(ZoneOffset.UTC))
                 .param("basis", promisedAt == null ? "NOT_PROMISED" : "PREPARATION_BAND")
                 .param("prep", promisedAt == null ? null : 40)
+                .param("createdByActorType", createdByActorType)
+                .param("createdByActorId", createdByActorId)
+                .param("acceptedByActorType", acceptedByActorType)
+                .param("acceptedByActorId", acceptedByActorId)
+                .param(
+                        "acceptedAt",
+                        acceptedByActorType == null
+                                ? null
+                                : createdAt.plusSeconds(90).atOffset(ZoneOffset.UTC))
                 .param("createdAt", createdAt.atOffset(ZoneOffset.UTC))
                 .param("confirmedAt", createdAt.plusSeconds(120).atOffset(ZoneOffset.UTC))
                 .param("closedAt", closedAt == null ? null : closedAt.atOffset(ZoneOffset.UTC))
