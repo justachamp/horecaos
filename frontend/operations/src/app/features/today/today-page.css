@@ -184,41 +184,6 @@
   margin: 0 0 12px;
 }
 
-.mix-row {
-  display: grid;
-  grid-template-columns: 1fr 2fr auto;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-}
-
-.mix-row__label {
-  color: var(--q-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mix-row__bar {
-  display: block;
-  height: 8px;
-  background: var(--q-surface-1);
-  border-radius: var(--q-radius);
-  overflow: hidden;
-}
-
-.mix-row__bar span {
-  display: block;
-  height: 100%;
-  background: var(--q-primary);
-}
-
-.mix-row__count {
-  color: var(--q-ink-muted);
-  text-align: right;
-  min-width: 2ch;
-}
-
 /* ---- branch leaderboard --------------------------------------------------- */
 
 .today__branches {
@@ -242,7 +207,7 @@
   text-align: left;
   padding: 4px 8px;
   color: var(--q-ink-subtle);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   font-weight: 400;
   letter-spacing: 0.32px;
   border-bottom: 1px solid var(--q-hairline);

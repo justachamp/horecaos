@@ -51,14 +51,11 @@
   margin-top: 16px;
 }
 
+/* `q-combobox`'s own template supplies the box styling now — this only
+ * places it in the `.filters` flex row. */
 .search {
   flex: 1;
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  background: var(--q-canvas);
-  color: var(--q-ink);
+  min-width: 0;
 }
 
 .status-select {
@@ -102,7 +99,7 @@
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   color: var(--q-ink-muted);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 /* The empty row, the denied branch and the two notice bands are
@@ -122,7 +119,7 @@
   padding: 0 16px;
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .primary {

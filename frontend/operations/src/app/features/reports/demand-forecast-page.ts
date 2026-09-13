@@ -6,6 +6,8 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { HeatmapChart } from '../../shared/ui/charts/heatmap-chart';
+import { ChartHeatRow } from '../../shared/ui/charts/chart-model';
 import { ProvenanceBanner } from './provenance-banner';
 import { ddmmyyyy, formatAverage } from './report-formatting';
 import { DemandHistoryResponse, ReportingApi } from './reporting-api';
@@ -70,7 +72,7 @@ type LoadState = 'loading' | 'ready' | 'denied' | 'error';
  */
 @Component({
   selector: 'q-demand-forecast-page',
-  imports: [TPipe, ProvenanceBanner],
+  imports: [TPipe, ProvenanceBanner, HeatmapChart],
   templateUrl: './demand-forecast-page.html',
   styleUrl: './demand-forecast-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -88,6 +90,17 @@ export class DemandForecastPage implements OnInit {
   protected readonly weekday = signal<number>(defaultWeekday());
   protected readonly sampleSize = signal<number>(SAMPLE_SIZE_OPTIONS[0]);
   protected readonly response = signal<DemandHistoryResponse | null>(null);
+
+  /**
+   * The hour-of-day heatmap (IA X.19) — every weekday at once, which
+   * `demandHistory` cannot answer in a single call (it takes one `weekday`).
+   * Opt-in, not fetched on load: firing seven requests the moment this
+   * screen opens for a manager who only ever wants Monday would be seven
+   * calls nobody asked for. `null` until the operator asks for it.
+   */
+  protected readonly weekGrid = signal<readonly ChartHeatRow[] | null>(null);
+  protected readonly weekGridLoading = signal(false);
+  protected readonly weekGridError = signal(false);
 
   protected readonly formatAverage = formatAverage;
   protected readonly ddmmyyyy = ddmmyyyy;
@@ -136,9 +149,58 @@ export class DemandForecastPage implements OnInit {
     void this.load();
   }
 
+  /**
+   * Fetches every weekday at the current sample size and builds the heatmap
+   * grid (IA X.19) — one row per weekday, one column per hour, shaded by
+   * `averageOrders`. Reuses `demandHistory`'s own honesty rule as-is: a
+   * below-minimum-sample hour is `null` in the response already, and the
+   * heatmap renders `null` as an uncoloured cell rather than inventing a
+   * shade for it (see `heatmap-chart.ts`).
+   */
+  protected async showWeekOverview(): Promise<void> {
+    const scope = this.scope;
+    if (!scope || this.weekGridLoading()) {
+      return;
+    }
+    this.weekGridLoading.set(true);
+    this.weekGridError.set(false);
+    try {
+      const responses = await Promise.all(
+        WEEKDAYS.map((weekday) =>
+          this.api.demandHistory(scope.tenantId, {
+            locationId: scope.locationId,
+            weekday,
+            sampleSize: this.sampleSize(),
+          }),
+        ),
+      );
+      this.weekGrid.set(
+        WEEKDAYS.map((weekday, index) => ({
+          key: String(weekday),
+          label: this.weekdayLabel(weekday),
+          cells: responses[index].hours.map((hour) => ({
+            key: String(hour.hourOfDay),
+            label: this.hourWindowLabel(hour.hourOfDay),
+            value: hour.averageOrders,
+          })),
+        })),
+      );
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.weekGridError.set(true);
+      } else {
+        throw error;
+      }
+    } finally {
+      this.weekGridLoading.set(false);
+    }
+  }
+
   /** True when `sampleDates` is non-empty but shorter than `minimumSampleSize` — the raw-counts state. */
   protected belowMinimum(response: DemandHistoryResponse): boolean {
-    return response.sampleDates.length > 0 && response.sampleDates.length < response.minimumSampleSize;
+    return (
+      response.sampleDates.length > 0 && response.sampleDates.length < response.minimumSampleSize
+    );
   }
 
   private async load(): Promise<void> {

@@ -5,7 +5,17 @@ import { Subscription } from 'rxjs';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { OrdersService } from '../../../services/orders.service';
 import { TranslateService } from '../../../services/translate.service';
+import { MenuService } from '../../../services/menu.service';
+import { AnalyticsInjector } from '../../../core/analytics/analytics-injector';
+import { pushEcommerceEvent } from '../../../core/analytics/ecommerce-events';
+import { money, toMajorUnits } from '../../../core/money/money';
 import type { ApiOrderDetail, ApiOrderLineItem } from '../../../services/orders.service';
+
+/** Fallback ISO currency when the menu that built this cart was never loaded this session. */
+const FALLBACK_CURRENCY = 'UZS';
+
+/** `sessionStorage` prefix for the purchase dedup flag — see {@link CartOrderStatusComponent.trackPurchaseOnce}. */
+const PURCHASE_TRACKED_KEY_PREFIX = 'horecaos:ga4:purchase:';
 
 /** How often the order re-reads while this screen is open and visible. */
 const POLL_INTERVAL_MS = 10_000;
@@ -61,13 +71,15 @@ const STATUS_I18N_KEY: Readonly<Record<string, string>> = {
   standalone: true,
   templateUrl: './cart-order-status.component.html',
   styleUrl: './cart-order-status.component.scss',
-  imports: [CommonModule, TranslatePipe]
+  imports: [CommonModule, TranslatePipe],
 })
 export class CartOrderStatusComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly ordersService = inject(OrdersService);
   private readonly translate = inject(TranslateService);
+  private readonly menuService = inject(MenuService);
+  private readonly analytics = inject(AnalyticsInjector);
 
   /** Order ID from route */
   readonly orderId = signal<string | null>(null);
@@ -89,15 +101,23 @@ export class CartOrderStatusComponent implements OnInit, OnDestroy {
       this.loading.set(false);
       return;
     }
+    // ADR 0106, gap-map row 10.8e: fire-and-forget — a customer's order
+    // confirmation must never wait on, or fail because of, a third-party
+    // analytics script.
+    void this.analytics.ensureLoaded();
+
     this.ordersService.getOrderDetail(id).subscribe({
       next: (order) => {
         this.loading.set(false);
         this.order.set(order);
         this.lastUpdated.set(new Date());
+        this.trackPurchaseOnce(id, order);
       },
       error: (err) => {
         this.loading.set(false);
-        this.loadError.set(err?.error?.message ?? err?.message ?? this.translate.get('orders.orderNotFound'));
+        this.loadError.set(
+          err?.error?.message ?? err?.message ?? this.translate.get('orders.orderNotFound'),
+        );
       },
     });
     this.pollSub = this.ordersService
@@ -170,7 +190,9 @@ export class CartOrderStatusComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.cancelling.set(false);
-        this.cancelError.set(err?.error?.message ?? err?.message ?? this.translate.get('orders.cancelError'));
+        this.cancelError.set(
+          err?.error?.message ?? err?.message ?? this.translate.get('orders.cancelError'),
+        );
       },
     });
   }
@@ -182,6 +204,52 @@ export class CartOrderStatusComponent implements OnInit, OnDestroy {
     } else {
       this.router.navigate(['/orders', 'active']).catch(() => {});
     }
+  }
+
+  /**
+   * ADR 0106, gap-map row 10.8e: `purchase`, GA4 ecommerce event contract v1,
+   * fired once per order.
+   *
+   * Deduplicated in `sessionStorage` by `transaction_id` (the platform order
+   * id) rather than relying only on this method's own call site running
+   * once — a browser refresh remounts this component and re-subscribes to
+   * `getOrderDetail`, which would otherwise re-fire `purchase` on every
+   * reload of the confirmation screen. GA4 itself also deduplicates
+   * `purchase` events sharing a `transaction_id` (its own documented
+   * behaviour), so this is belt-and-braces against a poll or a remount
+   * counting one order twice, not the only safeguard.
+   */
+  private trackPurchaseOnce(orderId: string, order: ApiOrderDetail): void {
+    const key = `${PURCHASE_TRACKED_KEY_PREFIX}${orderId}`;
+    try {
+      if (sessionStorage.getItem(key) === '1') {
+        return;
+      }
+      sessionStorage.setItem(key, '1');
+    } catch {
+      // Private browsing or storage disabled: track anyway rather than
+      // silently dropping the one event this wave wires — a rare double
+      // count from a refresh is a smaller cost than never counting at all.
+    }
+
+    // GA4's ecommerce object is major units (so'm), not this platform's own
+    // minor-units wire convention (ADR 0018) — `toMajorUnits` is the one
+    // conversion boundary the event contract's own doc names, see
+    // `docs/analytics/ga4-ecommerce-event-contract-v1.md`.
+    const currency = this.menuService.currency() ?? FALLBACK_CURRENCY;
+    const items = (order.items ?? []).map((item) => ({
+      item_id: String(item.variant_id ?? item.item_id ?? ''),
+      item_name: item.name ?? '',
+      price: toMajorUnits(money(item.price ?? 0, currency)),
+      quantity: item.quantity ?? 0,
+    }));
+
+    pushEcommerceEvent('purchase', {
+      currency,
+      value: toMajorUnits(money(this.priceOf(order.total), currency)),
+      items,
+      transaction_id: orderId,
+    });
   }
 
   private rawStatus(): string | null {

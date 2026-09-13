@@ -64,10 +64,13 @@ describe('MenusPage', () => {
   it('renders one row per variant offered at the location', async () => {
     configure({
       variantsAtLocation: () =>
-        of([
-          row({ variantId: 'v1', productName: 'Плов' }),
-          row({ variantId: 'v2', productName: 'Лагман', available: false }),
-        ]),
+        of({
+          items: [
+            row({ variantId: 'v1', productName: 'Плов' }),
+            row({ variantId: 'v2', productName: 'Лагман', available: false }),
+          ],
+          nextCursor: null,
+        }),
     });
 
     const harness = await RouterTestingHarness.create('/catalog/menus');
@@ -109,7 +112,10 @@ describe('MenusPage', () => {
   it('toggles a cell from В меню to Стоп through the audited inventory endpoint, not the offering one', async () => {
     const setAvailability = vi.fn().mockReturnValue(of(undefined));
     configure(
-      { variantsAtLocation: () => of([row({ variantId: 'v1', available: true })]) },
+      {
+        variantsAtLocation: () =>
+          of({ items: [row({ variantId: 'v1', available: true })], nextCursor: null }),
+      },
       {},
       { setAvailability },
     );
@@ -128,6 +134,40 @@ describe('MenusPage', () => {
     expect(setAvailability).toHaveBeenCalledWith(FAKE_SCOPE, 'v1', false);
     expect(host.querySelector('[data-testid="menus-cell"]')?.textContent?.trim()).toBe('Стоп');
   });
+
+  it(
+    'regression: reads variantsAtLocation as a Page<T> envelope and pages through ' +
+      'every cursor rather than iterating the envelope object as if it were the array of rows',
+    async () => {
+      const variantsAtLocation = vi
+        .fn()
+        .mockReturnValueOnce(
+          of({ items: [row({ variantId: 'v1', productName: 'Плов' })], nextCursor: 'cursor-1' }),
+        )
+        .mockReturnValueOnce(
+          of({ items: [row({ variantId: 'v2', productName: 'Лагман' })], nextCursor: null }),
+        );
+      configure({ variantsAtLocation });
+
+      const harness = await RouterTestingHarness.create('/catalog/menus');
+      await flushMicrotasks();
+
+      // Before the fix, `unwrap(api.get(...))` handed the page-shaped body
+      // straight to `@for` as if it were `readonly VariantAvailabilityRow[]`
+      // — an object has no iteration protocol, so this would have thrown
+      // rather than rendering two rows across two fetched pages.
+      expect(variantsAtLocation).toHaveBeenCalledTimes(2);
+      const [, , firstPageArg] = variantsAtLocation.mock.calls[0];
+      const [, , secondPageArg] = variantsAtLocation.mock.calls[1];
+      expect(firstPageArg.cursor).toBeNull();
+      expect(secondPageArg.cursor).toBe('cursor-1');
+
+      const cells = [...harness.routeNativeElement!.querySelectorAll('[data-testid="menus-cell"]')];
+      expect(cells.length).toBe(2);
+      expect(harness.routeNativeElement!.textContent).toContain('Плов');
+      expect(harness.routeNativeElement!.textContent).toContain('Лагман');
+    },
+  );
 
   it('renders the denied state on a 403 rather than an empty matrix', async () => {
     configure({

@@ -85,7 +85,23 @@ public enum ApprovalAction {
      * V0082); tightening the default requires the same reviewed, observed
      * change ADR 0050 requires of every other action.
      */
-    IAM_PLATFORM_GRANT_MANAGE("iam.platform-grant.manage", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL);
+    IAM_PLATFORM_GRANT_MANAGE("iam.platform-grant.manage", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
+
+    /**
+     * ADR 0043's {@code BusinessDayService.setBoundary} own Javadoc: "the
+     * caller is responsible for the ADR 0027 approval." Moving a tenant's
+     * business-day boundary rewrites which date every already-recorded fact
+     * is filed under until a full recut catches up, so it is gated the same
+     * way a residency change is — but, unlike {@link #TENANT_COUNTRY_CHANGE},
+     * this is a brand-new action with no existing single-signature behaviour
+     * to preserve, so {@code ALLOW_WITHOUT_APPROVAL} is the honest starting
+     * mode ADR 0050 asks new actions to carry. A tenant wanting a second
+     * signature on its own boundary changes authors an
+     * {@code audit.approval_policies} row naming this code at {@code TENANT}
+     * scope.
+     */
+    REPORTING_BUSINESS_DAY_BOUNDARY_CHANGE(
+            "reporting.business-day-boundary.change", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL);
 
     /** What an action does when no valid policy resolves at the requested scope. */
     public enum MissingPolicyMode {

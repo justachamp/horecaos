@@ -1,0 +1,7 @@
+{
+  "name": "eslint-plugin-horecaos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "This console's own ESLint rules (ADR 0101, wave P02) — not published, installed as a file: dependency of frontend/operations.",
+  "main": "index.js"
+}

@@ -1,0 +1,95 @@
+<h1 class="q-title">{{ 'settings.catalog.title' | t }}</h1>
+<p class="q-body-sm lead">{{ 'settings.catalog.lead' | t }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+} @else if (denied()) {
+  <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm error" role="alert">{{ message }}</p>
+} @else {
+  <p class="q-caption tenant-wide-note">{{ 'settings.catalog.tenantWideNote' | t }}</p>
+
+  <section class="card">
+    <h2 class="q-subhead">{{ 'settings.catalog.useStockLogic.title' | t }}</h2>
+    <p class="q-body-sm">{{ 'settings.catalog.useStockLogic.body' | t }}</p>
+
+    <dl class="fields">
+      <div class="field">
+        <dt class="q-caption">{{ 'settings.catalog.useStockLogic.field' | t }}</dt>
+        <dd class="q-body q-tnum" data-testid="use-stock-logic-value">
+          {{ yesNo(useStockLogic()?.value) }}
+        </dd>
+      </div>
+    </dl>
+
+    <p class="q-caption not-yet-enforced" data-testid="use-stock-logic-reason">
+      {{ 'settings.catalog.useStockLogic.notYetEnforced' | t }}
+    </p>
+  </section>
+
+  <section class="card">
+    <h2 class="q-subhead">{{ 'settings.catalog.qrKioskPricePlane.title' | t }}</h2>
+    <p class="q-body-sm">{{ 'settings.catalog.qrKioskPricePlane.body' | t }}</p>
+
+    @if (!editingQrKiosk()) {
+      <q-inherited-field
+        [label]="'settings.catalog.qrKioskPricePlane.field' | t"
+        [resolution]="qrKioskPricePlane()"
+        currentScopeType="TENANT"
+        [settableScopes]="tenantOnlyScopes"
+        [formatValue]="formatYesNo"
+        (override)="startEditingQrKiosk()"
+        (setValueRequested)="startEditingQrKiosk()"
+        (revertToInherit)="revertQrKiosk()"
+      />
+    } @else {
+      <div class="form">
+        <label class="checkbox q-body-sm">
+          <input
+            type="checkbox"
+            [checked]="draftQrKiosk()"
+            (change)="draftQrKiosk.set($any($event.target).checked)"
+          />
+          {{ 'settings.catalog.qrKioskPricePlane.field' | t }}
+        </label>
+
+        <label class="q-caption" for="qr-kiosk-reason">{{ 'settings.orderPolicy.field.reason' | t }}</label>
+        <input
+          id="qr-kiosk-reason"
+          class="q-body field"
+          type="text"
+          [value]="draftReason()"
+          (input)="draftReason.set($any($event.target).value)"
+        />
+
+        @if (saveError(); as message) {
+          <p class="q-body-sm error" role="alert">{{ message }}</p>
+        }
+
+        <div class="form__actions">
+          <button
+            type="button"
+            class="q-body secondary"
+            (click)="cancelEditingQrKiosk()"
+            [disabled]="saving()"
+          >
+            {{ 'settings.orderPolicy.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            class="q-body primary"
+            (click)="saveQrKiosk()"
+            [disabled]="!canSaveQrKiosk()"
+          >
+            {{
+              saving()
+                ? ('settings.orderPolicy.publishing' | t)
+                : ('settings.orderPolicy.publish' | t)
+            }}
+          </button>
+        </div>
+      </div>
+    }
+  </section>
+}

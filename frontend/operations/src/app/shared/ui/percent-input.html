@@ -1,0 +1,14 @@
+<div class="q-percent-input" data-testid="q-percent-input">
+  <input
+    type="text"
+    inputmode="decimal"
+    class="q-percent-input__field q-tnum"
+    [value]="displayText()"
+    [disabled]="disabled()"
+    [attr.aria-label]="ariaLabel()"
+    (input)="onInput($any($event.target).value)"
+    (blur)="onBlur()"
+    data-testid="q-percent-input-field"
+  />
+  <span class="q-body-sm q-percent-input__suffix">%</span>
+</div>

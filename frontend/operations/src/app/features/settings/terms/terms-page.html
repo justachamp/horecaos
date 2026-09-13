@@ -45,32 +45,41 @@
       <section class="card">
         <h2 class="q-subhead">{{ 'settings.terms.editor.title' | t }}</h2>
 
-        <label class="q-caption" for="terms-ru">{{ 'settings.terms.field.ru' | t }}</label>
-        <textarea
-          id="terms-ru"
-          class="q-body field textarea"
+        <label class="q-caption" id="terms-ru-label">{{ 'settings.terms.field.ru' | t }}</label>
+        <q-rich-text
           [value]="editRu()"
-          (input)="editRu.set($any($event.target).value)"
+          (valueChange)="editRu.set($event)"
           [disabled]="publishSubmitting()"
-        ></textarea>
+          [kindLabels]="richTextKindLabels()"
+          [blockTypeLabel]="'ui.richText.blockType' | t"
+          [addBlockLabel]="'ui.richText.addBlock' | t"
+          [removeBlockLabel]="'ui.richText.removeBlock' | t"
+          [ariaLabel]="'settings.terms.field.ru' | t"
+        />
 
-        <label class="q-caption" for="terms-uz">{{ 'settings.terms.field.uz' | t }}</label>
-        <textarea
-          id="terms-uz"
-          class="q-body field textarea"
+        <label class="q-caption" id="terms-uz-label">{{ 'settings.terms.field.uz' | t }}</label>
+        <q-rich-text
           [value]="editUz()"
-          (input)="editUz.set($any($event.target).value)"
+          (valueChange)="editUz.set($event)"
           [disabled]="publishSubmitting()"
-        ></textarea>
+          [kindLabels]="richTextKindLabels()"
+          [blockTypeLabel]="'ui.richText.blockType' | t"
+          [addBlockLabel]="'ui.richText.addBlock' | t"
+          [removeBlockLabel]="'ui.richText.removeBlock' | t"
+          [ariaLabel]="'settings.terms.field.uz' | t"
+        />
 
-        <label class="q-caption" for="terms-en">{{ 'settings.terms.field.en' | t }}</label>
-        <textarea
-          id="terms-en"
-          class="q-body field textarea"
+        <label class="q-caption" id="terms-en-label">{{ 'settings.terms.field.en' | t }}</label>
+        <q-rich-text
           [value]="editEn()"
-          (input)="editEn.set($any($event.target).value)"
+          (valueChange)="editEn.set($event)"
           [disabled]="publishSubmitting()"
-        ></textarea>
+          [kindLabels]="richTextKindLabels()"
+          [blockTypeLabel]="'ui.richText.blockType' | t"
+          [addBlockLabel]="'ui.richText.addBlock' | t"
+          [removeBlockLabel]="'ui.richText.removeBlock' | t"
+          [ariaLabel]="'settings.terms.field.en' | t"
+        />
 
         <label class="q-caption" for="terms-note">{{ 'settings.terms.field.note' | t }}</label>
         <input
@@ -136,30 +145,33 @@
                     <div class="preview">
                       <div class="preview__locale">
                         <h3 class="q-caption">{{ 'settings.terms.field.ru' | t }}</h3>
-                        <p class="q-body-sm preview__text">
-                          {{
-                            preview.contentsByLocale['ru'] ??
-                              ('settings.terms.preview.notIncluded' | t)
-                          }}
-                        </p>
+                        @if (previewHtml(preview, 'ru'); as html) {
+                          <div class="q-body-sm preview__text" [innerHTML]="html"></div>
+                        } @else {
+                          <p class="q-body-sm preview__text">
+                            {{ 'settings.terms.preview.notIncluded' | t }}
+                          </p>
+                        }
                       </div>
                       <div class="preview__locale">
                         <h3 class="q-caption">{{ 'settings.terms.field.uz' | t }}</h3>
-                        <p class="q-body-sm preview__text">
-                          {{
-                            preview.contentsByLocale['uz-Latn'] ??
-                              ('settings.terms.preview.notIncluded' | t)
-                          }}
-                        </p>
+                        @if (previewHtml(preview, 'uz-Latn'); as html) {
+                          <div class="q-body-sm preview__text" [innerHTML]="html"></div>
+                        } @else {
+                          <p class="q-body-sm preview__text">
+                            {{ 'settings.terms.preview.notIncluded' | t }}
+                          </p>
+                        }
                       </div>
                       <div class="preview__locale">
                         <h3 class="q-caption">{{ 'settings.terms.field.en' | t }}</h3>
-                        <p class="q-body-sm preview__text">
-                          {{
-                            preview.contentsByLocale['en'] ??
-                              ('settings.terms.preview.notIncluded' | t)
-                          }}
-                        </p>
+                        @if (previewHtml(preview, 'en'); as html) {
+                          <div class="q-body-sm preview__text" [innerHTML]="html"></div>
+                        } @else {
+                          <p class="q-body-sm preview__text">
+                            {{ 'settings.terms.preview.notIncluded' | t }}
+                          </p>
+                        }
                       </div>
                     </div>
                   }

@@ -67,6 +67,7 @@ public class CourierShiftService {
     private final CourierPolicyResolver policies;
     private final FieldProtection protection;
     private final AuditRecorder audit;
+    private final AdjustmentRuleEvaluator adjustmentRules;
     private final Clock clock;
 
     public CourierShiftService(
@@ -78,6 +79,7 @@ public class CourierShiftService {
             CourierPolicyResolver policies,
             FieldProtection protection,
             AuditRecorder audit,
+            AdjustmentRuleEvaluator adjustmentRules,
             Clock clock) {
         this.shifts = shifts;
         this.couriers = couriers;
@@ -87,6 +89,7 @@ public class CourierShiftService {
         this.policies = policies;
         this.protection = protection;
         this.audit = audit;
+        this.adjustmentRules = adjustmentRules;
         this.clock = clock;
     }
 
@@ -292,6 +295,14 @@ public class CourierShiftService {
         UUID handoverId = openCashHandover(shift, command.currency());
         if (status == ShiftStatus.CLOSED) {
             creditShiftEarning(shift, paidSeconds, closedAt);
+            // ADR 0108: SHIFT-window rules see this shift's outcome the moment
+            // it is final, exactly like the earning above. A manager close
+            // lands hours in AWAITING_APPROVAL instead, so its rules evaluate
+            // from approveHours once a human has reviewed the variance. `shift`
+            // (read before this method wrote the close) still carries the
+            // identity fields the evaluator needs — only status and the paid
+            // figures changed, and it reads neither off this row.
+            adjustmentRules.evaluateShiftClose(command.tenantId(), shift);
         }
 
         audit.record(fact(
@@ -338,6 +349,10 @@ public class CourierShiftService {
                 shift,
                 shift.paidSeconds() == null ? 0 : shift.paidSeconds(),
                 shift.closedAt() == null ? clock.instant() : shift.closedAt());
+        // ADR 0108: the manager-close and auto-close paths reach a final
+        // paidSeconds only here, one approval later than the courier's own
+        // close — so this is where their SHIFT-window rules evaluate.
+        adjustmentRules.evaluateShiftClose(tenantId, shift);
 
         audit.record(fact(
                 "courier.shift.hours-approved",

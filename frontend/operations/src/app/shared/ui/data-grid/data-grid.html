@@ -1,0 +1,120 @@
+<ng-template #rowTpl let-row let-ri="ri">
+  <div
+    class="q-data-grid__row"
+    role="row"
+    data-testid="dg-row"
+    [attr.data-row-error]="rowError(row)"
+    [style.grid-template-columns]="gridTemplateColumns()"
+  >
+    @for (col of columns(); track col.key; let ci = $index) {
+      <div
+        class="q-data-grid__cell"
+        role="gridcell"
+        tabindex="0"
+        data-testid="dg-cell"
+        [class.q-data-grid__cell--active]="isActive(ri, ci)"
+        [class.q-data-grid__cell--editing]="isEditing(ri, ci)"
+        [class.q-data-grid__cell--dirty]="isDirtyCell(row, col)"
+        [class.q-data-grid__cell--selected]="isInSelection(ri, ci)"
+        [class.q-data-grid__num-col]="col.numeric"
+        [attr.data-row]="ri"
+        [attr.data-col]="ci"
+        (mousedown)="onCellMouseDown(ri, ci, $event)"
+        (dblclick)="onCellDblClick(ri, ci)"
+      >
+        @if (isEditing(ri, ci)) {
+          <input
+            class="q-data-grid__input"
+            data-testid="dg-input"
+            [value]="editValue()"
+            (input)="onEditInput($any($event.target).value)"
+            (blur)="commitEdit()"
+          />
+        } @else {
+          {{ displayValue(row, col) }}
+        }
+      </div>
+    }
+  </div>
+</ng-template>
+
+<div class="q-data-grid" role="grid">
+  @if (dirtyCount() > 0) {
+    <div class="q-data-grid__toolbar" data-testid="dg-toolbar">
+      <span class="q-caption" data-testid="dg-dirty-count">{{
+        'shared.dataGrid.unsavedCount' | t: { count: dirtyCount() }
+      }}</span>
+      <button
+        type="button"
+        class="q-body-sm"
+        (click)="save()"
+        [disabled]="saving()"
+        data-testid="dg-save"
+      >
+        {{ (saving() ? 'shared.dataGrid.saving' : 'shared.dataGrid.save') | t }}
+      </button>
+      <button
+        type="button"
+        class="q-body-sm q-data-grid__discard"
+        (click)="discard()"
+        [disabled]="saving()"
+        data-testid="dg-discard"
+      >
+        {{ 'shared.dataGrid.discard' | t }}
+      </button>
+    </div>
+  }
+
+  @if (saveError()) {
+    <q-inline-alert
+      severity="error"
+      messageKey="shared.dataGrid.saveError"
+      [dismissible]="true"
+      (dismiss)="dismissSaveError()"
+      data-testid="dg-save-error"
+    />
+  }
+
+  <div class="q-data-grid__header" role="row" [style.grid-template-columns]="gridTemplateColumns()">
+    @for (col of columns(); track col.key) {
+      <div
+        class="q-data-grid__header-cell q-caption"
+        role="columnheader"
+        [class.q-data-grid__num-col]="col.numeric"
+      >
+        {{ col.header }}
+      </div>
+    }
+  </div>
+
+  <div
+    class="q-data-grid__body"
+    data-testid="dg-scroll"
+    tabindex="-1"
+    (keydown)="onKeydown($event)"
+  >
+    @if (virtualized()) {
+      <cdk-virtual-scroll-viewport
+        [itemSize]="ROW_HEIGHT"
+        [minBufferPx]="VIRTUAL_MIN_BUFFER"
+        [maxBufferPx]="VIRTUAL_MAX_BUFFER"
+        class="q-data-grid__viewport"
+        data-testid="dg-viewport"
+      >
+        <ng-container *cdkVirtualFor="let row of rows(); let ri = index; trackBy: trackByRowId">
+          <ng-container
+            [ngTemplateOutlet]="rowTpl"
+            [ngTemplateOutletContext]="{ $implicit: row, ri: ri }"
+          />
+        </ng-container>
+      </cdk-virtual-scroll-viewport>
+    } @else {
+      @for (row of rows(); track trackByRowId($index, row); let ri = $index) {
+        <ng-container
+          [ngTemplateOutlet]="rowTpl"
+          [ngTemplateOutletContext]="{ $implicit: row, ri: ri }"
+        />
+      }
+    }
+  </div>
+</div>

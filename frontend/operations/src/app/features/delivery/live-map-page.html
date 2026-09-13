@@ -1,5 +1,26 @@
 <div class="live-map">
   <div class="live-map__toolbar">
+    @if (branchOptions().length > 1) {
+      <label class="live-map__branch q-caption">
+        <span class="q-visually-hidden">{{ 'delivery.liveMap.branchFilter.label' | t }}</span>
+        <select
+          class="live-map__branchSelect q-caption"
+          (change)="onBranchChange($any($event.target).value)"
+          data-testid="live-map-branch-filter"
+        >
+          <!-- `[selected]` per option, not `[value]` on the `<select>` — same
+               race `shell.html`'s identical picker documents: options arrive
+               asynchronously and a `[value]` bound before its option exists
+               is silently dropped and never retried. -->
+          @for (option of branchOptions(); track option.id) {
+            <option [value]="option.id" [selected]="option.id === selectedBranchId()">
+              {{ option.displayName }}
+            </option>
+          }
+        </select>
+      </label>
+    }
+
     @if (formatUpdatedAt(); as stamp) {
       <span class="q-caption">{{ stamp }}</span>
     }
@@ -31,9 +52,13 @@
         <tr>
           <th>{{ 'delivery.liveMap.column.courier' | t }}</th>
           <th>{{ 'delivery.liveMap.column.position' | t }}</th>
+          <th class="live-map__num-col">{{ 'delivery.liveMap.column.accuracy' | t }}</th>
+          <th class="live-map__num-col">{{ 'delivery.liveMap.column.heading' | t }}</th>
+          <th class="live-map__num-col">{{ 'delivery.liveMap.column.speed' | t }}</th>
           <th class="live-map__num-col">{{ 'delivery.liveMap.column.activeOrders' | t }}</th>
           <th>{{ 'delivery.liveMap.column.battery' | t }}</th>
           <th>{{ 'delivery.liveMap.column.capturedAt' | t }}</th>
+          <th>{{ 'delivery.liveMap.column.reveal' | t }}</th>
         </tr>
       </thead>
       <tbody>
@@ -41,26 +66,107 @@
           <tr data-testid="live-map-pin">
             <td class="q-tnum">{{ pin.courierId }}</td>
             <td class="q-tnum">{{ coordinateLabel(pin) }}</td>
+            <td class="live-map__num-col q-tnum">{{ accuracyLabel(pin) }}</td>
+            <td class="live-map__num-col q-tnum">{{ headingLabel(pin) }}</td>
+            <td class="live-map__num-col q-tnum">{{ speedLabel(pin) }}</td>
             <td class="live-map__num-col q-tnum">{{ pin.activeAssignmentCount }}</td>
             <td class="q-tnum">{{ batteryLabel(pin) }}</td>
             <td class="q-tnum">{{ capturedAtLabel(pin.capturedAt) }}</td>
+            <td>
+              <button
+                type="button"
+                class="live-map__revealTrigger q-caption"
+                (click)="openReveal(pin.courierId)"
+                data-testid="live-map-reveal-trigger"
+              >
+                {{ 'delivery.liveMap.reveal.trigger' | t }}
+              </button>
+            </td>
           </tr>
         }
         @for (courier of withoutPin(); track courier.courierId) {
           <tr class="live-map__coarse" data-testid="live-map-coarse">
             <td class="q-tnum">{{ courier.courierId }}</td>
-            <td colspan="3" class="q-caption">{{ coarseReasonLabel(courier.reason) }}</td>
+            <td colspan="6" class="q-caption">{{ coarseReasonLabel(courier.reason) }}</td>
             <td class="q-tnum">{{ capturedAtLabel(courier.lastFixAt) }}</td>
+            <td>
+              <button
+                type="button"
+                class="live-map__revealTrigger q-caption"
+                (click)="openReveal(courier.courierId)"
+                data-testid="live-map-reveal-trigger"
+              >
+                {{ 'delivery.liveMap.reveal.trigger' | t }}
+              </button>
+            </td>
           </tr>
         }
         @if (pins().length === 0 && withoutPin().length === 0) {
           <tr>
-            <td colspan="5" class="live-map__empty" data-testid="live-map-empty">
+            <td colspan="9" class="live-map__empty" data-testid="live-map-empty">
               <p class="q-body-sm">{{ 'delivery.liveMap.empty' | t }}</p>
             </td>
           </tr>
         }
       </tbody>
     </table>
+  }
+
+  @if (revealResult(); as result) {
+    <div class="live-map__revealResult" data-testid="live-map-reveal-result">
+      <div class="live-map__revealResultHeader">
+        <span class="q-emphasis">{{
+          'delivery.liveMap.reveal.resultTitle' | t: { courierId: result.courierId }
+        }}</span>
+        <button
+          type="button"
+          class="live-map__revealResultClose q-caption"
+          (click)="dismissRevealResult()"
+          [attr.aria-label]="'delivery.liveMap.reveal.dismiss' | t"
+        >
+          ×
+        </button>
+      </div>
+      <p class="q-caption live-map__revealResultPurpose">{{ result.purpose }}</p>
+      @if (result.windows.length === 0) {
+        <p class="q-body-sm">{{ 'delivery.liveMap.reveal.empty' | t }}</p>
+      }
+      @for (window of result.windows; track window.windowStart) {
+        <div class="live-map__revealWindow">
+          <p class="q-caption q-tnum">
+            {{ windowLabel(window.windowStart) }} — {{ windowLabel(window.windowEnd) }} ·
+            {{ window.observationCount }} · {{ window.distanceMeters }} m
+          </p>
+          <table class="live-map__revealTable">
+            <thead>
+              <tr>
+                <th>{{ 'delivery.liveMap.reveal.column.time' | t }}</th>
+                <th>{{ 'delivery.liveMap.column.position' | t }}</th>
+                <th class="live-map__num-col">{{ 'delivery.liveMap.column.accuracy' | t }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (point of window.observations; track $index) {
+                <tr>
+                  <td class="q-tnum">{{ windowLabel(point.t) }}</td>
+                  <td class="q-tnum">{{ point.lat.toFixed(5) }}, {{ point.lon.toFixed(5) }}</td>
+                  <td class="live-map__num-col q-tnum">±{{ point.acc }} m</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  }
+
+  @if (revealCourierId(); as courierId) {
+    <q-track-reveal-dialog
+      [courierId]="courierId"
+      [busy]="revealBusy()"
+      [errorText]="revealErrorText()"
+      (confirm)="submitReveal($event)"
+      (dismiss)="closeReveal()"
+    />
   }
 </div>

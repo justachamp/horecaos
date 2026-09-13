@@ -1,0 +1,92 @@
+<q-modal
+  [title]="'delivery.shifts.plan.title' | t"
+  [dismissible]="!busy()"
+  (dismiss)="close()"
+  data-testid="plan-shift-dialog"
+>
+  <label class="plan-shift__field">
+    <span class="q-body-sm">{{ 'delivery.shifts.plan.courier.label' | t }}</span>
+    <select
+      class="plan-shift__input q-body-sm"
+      [value]="courierId()"
+      (change)="setCourierId($any($event.target).value)"
+      [attr.aria-invalid]="courierMissing() ? 'true' : null"
+      data-testid="plan-shift-dialog-courier"
+    >
+      <option value="">{{ 'delivery.shifts.plan.courier.placeholder' | t }}</option>
+      @for (courier of couriers(); track courier.courierId) {
+        <option [value]="courier.courierId">{{ courier.displayReference }}</option>
+      }
+    </select>
+    @if (courierMissing()) {
+      <span class="q-caption plan-shift__error">{{
+        'delivery.shifts.plan.courier.required' | t
+      }}</span>
+    }
+  </label>
+
+  <label class="plan-shift__field">
+    <span class="q-body-sm">{{ 'delivery.shifts.plan.start.label' | t }}</span>
+    <input
+      type="datetime-local"
+      class="plan-shift__input q-body-sm"
+      [value]="plannedStart()"
+      (input)="setPlannedStart($any($event.target).value)"
+      data-testid="plan-shift-dialog-start"
+    />
+  </label>
+
+  <label class="plan-shift__field">
+    <span class="q-body-sm">{{ 'delivery.shifts.plan.end.label' | t }}</span>
+    <input
+      type="datetime-local"
+      class="plan-shift__input q-body-sm"
+      [value]="plannedEnd()"
+      (input)="setPlannedEnd($any($event.target).value)"
+      [attr.aria-invalid]="windowInvalid() ? 'true' : null"
+      data-testid="plan-shift-dialog-end"
+    />
+    @if (windowInvalid()) {
+      <span class="q-caption plan-shift__error">{{
+        'delivery.shifts.plan.window.invalid' | t
+      }}</span>
+    }
+  </label>
+
+  <label class="plan-shift__field">
+    <span class="q-body-sm">{{ 'delivery.shifts.plan.reason.label' | t }}</span>
+    <input
+      type="text"
+      class="plan-shift__input q-body-sm"
+      [value]="reason()"
+      (input)="setReason($any($event.target).value)"
+      [attr.aria-invalid]="reasonMissing() ? 'true' : null"
+      data-testid="plan-shift-dialog-reason"
+    />
+    @if (reasonMissing()) {
+      <span class="q-caption plan-shift__error">{{
+        'delivery.shifts.plan.reason.required' | t
+      }}</span>
+    }
+  </label>
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="plan-shift__dismiss q-body-sm"
+      (click)="close()"
+      [disabled]="busy()"
+    >
+      {{ 'delivery.shifts.plan.dismiss' | t }}
+    </button>
+    <button
+      type="button"
+      class="plan-shift__confirm q-body-sm"
+      (click)="submit()"
+      [disabled]="busy()"
+      data-testid="plan-shift-dialog-confirm"
+    >
+      {{ 'delivery.shifts.plan.confirm' | t }}
+    </button>
+  </ng-container>
+</q-modal>

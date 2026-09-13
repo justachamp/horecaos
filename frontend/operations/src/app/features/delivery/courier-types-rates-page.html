@@ -15,6 +15,16 @@
     <section class="rates__section">
       <div class="rates__section-header">
         <h2 class="q-subhead">{{ 'delivery.rates.types.title' | t }}</h2>
+        <div>
+          <label class="rates__checkbox-field">
+            <input
+              type="checkbox"
+              [checked]="includeArchivedTypes()"
+              (change)="toggleIncludeArchivedTypes()"
+            />
+            {{ 'delivery.rates.types.showArchived' | t }}
+          </label>
+        </div>
         <button
           type="button"
           class="rates__add"
@@ -31,8 +41,13 @@
             <th>{{ 'delivery.rates.types.column.name' | t }}</th>
             <th>{{ 'delivery.rates.types.column.vehicleClass' | t }}</th>
             <th class="rates__num-col">{{ 'delivery.rates.types.column.minDistance' | t }}</th>
+            <th class="rates__num-col">{{ 'delivery.rates.types.column.maxDistance' | t }}</th>
             <th class="rates__num-col">{{ 'delivery.rates.types.column.maxConcurrent' | t }}</th>
             <th class="rates__num-col">{{ 'delivery.rates.types.column.offerTtl' | t }}</th>
+            <th class="rates__num-col">{{ 'delivery.rates.types.column.startingMinute' | t }}</th>
+            <th>{{ 'delivery.rates.types.column.workMode' | t }}</th>
+            <th>{{ 'delivery.rates.types.column.status' | t }}</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -42,12 +57,64 @@
               <td>{{ type.displayName }}</td>
               <td>{{ type.vehicleClass }}</td>
               <td class="rates__num-col q-tnum">{{ type.minDistanceMeters }}</td>
+              <td class="rates__num-col q-tnum">{{ type.maxDistanceMeters ?? '—' }}</td>
               <td class="rates__num-col q-tnum">{{ type.maxConcurrentAssignments }}</td>
               <td class="rates__num-col q-tnum">{{ type.offerTtlSeconds }}</td>
+              <td class="rates__num-col q-tnum">{{ type.startingMinuteOffset }}</td>
+              <td>{{ workModeLabel(type.workMode) }}</td>
+              <td>
+                <span class="status-badge">{{ type.status }}</span>
+              </td>
+              <td class="rates__actions">
+                @if (type.status === 'ACTIVE') {
+                  <button
+                    type="button"
+                    class="rates__secondary"
+                    (click)="openEditType(type)"
+                    data-testid="type-edit"
+                  >
+                    {{ 'delivery.rates.edit' | t }}
+                  </button>
+                  @if (archivingTypeId() === type.courierTypeId) {
+                    <div class="rates__inline-confirm">
+                      <input
+                        type="text"
+                        [placeholder]="'delivery.rates.archiveReasonPlaceholder' | t"
+                        [value]="archiveTypeReason()"
+                        (input)="archiveTypeReason.set($any($event.target).value)"
+                      />
+                      <button
+                        type="button"
+                        class="rates__secondary"
+                        [disabled]="!canConfirmArchiveType()"
+                        (click)="confirmArchiveType()"
+                        data-testid="type-archive-confirm"
+                      >
+                        {{ 'delivery.rates.confirm' | t }}
+                      </button>
+                      <button type="button" class="rates__secondary" (click)="cancelArchiveType()">
+                        {{ 'delivery.rates.cancel' | t }}
+                      </button>
+                    </div>
+                  } @else {
+                    <button
+                      type="button"
+                      class="rates__secondary"
+                      (click)="startArchiveType(type)"
+                      data-testid="type-archive"
+                    >
+                      {{ 'delivery.rates.archive' | t }}
+                    </button>
+                  }
+                  @if (archiveTypeError(); as error) {
+                    <p class="rates__form-error">{{ error }}</p>
+                  }
+                }
+              </td>
             </tr>
           } @empty {
             <tr>
-              <td colspan="6" class="rates__empty">{{ 'delivery.rates.types.empty' | t }}</td>
+              <td colspan="11" class="rates__empty">{{ 'delivery.rates.types.empty' | t }}</td>
             </tr>
           }
         </tbody>
@@ -78,6 +145,8 @@
             <th>{{ 'delivery.rates.cards.column.scope' | t }}</th>
             <th>{{ 'delivery.rates.cards.column.status' | t }}</th>
             <th>{{ 'delivery.rates.cards.column.currency' | t }}</th>
+            <th>{{ 'delivery.rates.cards.column.effectiveFrom' | t }}</th>
+            <th>{{ 'delivery.rates.cards.column.effectiveTo' | t }}</th>
             <th></th>
           </tr>
         </thead>
@@ -90,7 +159,17 @@
                 <span class="status-badge">{{ card.status }}</span>
               </td>
               <td class="q-tnum">{{ card.currency }}</td>
+              <td class="q-tnum">{{ card.effectiveFrom ?? '—' }}</td>
+              <td class="q-tnum">{{ card.effectiveTo ?? '—' }}</td>
               <td class="rates__actions">
+                <button
+                  type="button"
+                  class="rates__secondary"
+                  (click)="openCardDetail(card)"
+                  data-testid="rate-card-show-components"
+                >
+                  {{ 'delivery.rates.cards.showComponents' | t }}
+                </button>
                 @if (card.status === 'DRAFT') {
                   <button
                     type="button"
@@ -101,12 +180,142 @@
                   >
                     {{ 'delivery.rates.cards.activate' | t }}
                   </button>
+                } @else if (card.status === 'ACTIVE') {
+                  <button
+                    type="button"
+                    class="rates__secondary"
+                    (click)="openReVersionCardForm(card)"
+                    data-testid="rate-card-reversion"
+                  >
+                    {{ 'delivery.rates.cards.newVersion' | t }}
+                  </button>
                 }
               </td>
             </tr>
           } @empty {
             <tr>
-              <td colspan="5" class="rates__empty">{{ 'delivery.rates.cards.empty' | t }}</td>
+              <td colspan="7" class="rates__empty">{{ 'delivery.rates.cards.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (viewCardLoading()) {
+        <div class="rates__detail-panel">{{ 'delivery.rates.loading' | t }}</div>
+      } @else if (viewCardError(); as error) {
+        <div class="rates__error-band" role="alert">{{ error }}</div>
+      } @else if (viewingCard(); as detail) {
+        <div class="rates__detail-panel" data-testid="rate-card-detail">
+          <h3 class="q-subhead">
+            {{ viewingCardCode() }} v{{ detail.cardVersion }} ({{ detail.currency }})
+          </h3>
+          <table class="rates__table">
+            <thead>
+              <tr>
+                <th>{{ 'delivery.rates.cards.column.componentType' | t }}</th>
+                <th class="rates__num-col">{{ 'delivery.rates.cards.column.amount' | t }}</th>
+                <th class="rates__num-col">{{ 'delivery.rates.cards.column.bandFrom' | t }}</th>
+                <th class="rates__num-col">{{ 'delivery.rates.cards.column.bandTo' | t }}</th>
+                <th class="rates__num-col">
+                  {{ 'delivery.rates.cards.column.minimumSeconds' | t }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (component of sortedComponents(detail.components); track component.componentId) {
+                <tr data-testid="rate-card-component-row">
+                  <td>{{ componentTypeLabel(component.componentType) }}</td>
+                  <td class="rates__num-col q-tnum">{{ component.amountMinor }}</td>
+                  <td class="rates__num-col q-tnum">{{ component.bandFromMeters ?? '—' }}</td>
+                  <td class="rates__num-col q-tnum">{{ component.bandToMeters ?? '∞' }}</td>
+                  <td class="rates__num-col q-tnum">{{ component.minimumPaidSeconds ?? '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          <button type="button" class="rates__secondary" (click)="closeCardDetail()">
+            {{ 'delivery.rates.cancel' | t }}
+          </button>
+        </div>
+      }
+    </section>
+
+    <section class="rates__section">
+      <div class="rates__section-header">
+        <h2 class="q-subhead">{{ 'delivery.rates.reasons.title' | t }}</h2>
+        <button
+          type="button"
+          class="rates__add"
+          (click)="openReasonForm()"
+          data-testid="rates-add-reason"
+        >
+          {{ 'delivery.rates.reasons.add' | t }}
+        </button>
+      </div>
+      <table class="rates__table">
+        <thead>
+          <tr>
+            <th>{{ 'delivery.rates.reasons.column.code' | t }}</th>
+            <th>{{ 'delivery.rates.reasons.column.kind' | t }}</th>
+            <th>{{ 'delivery.rates.reasons.column.name' | t }}</th>
+            <th>{{ 'delivery.rates.reasons.column.rule' | t }}</th>
+            <th>{{ 'delivery.rates.reasons.column.status' | t }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (reason of adjustmentReasons(); track reason.reasonId) {
+            <tr data-testid="adjustment-reason-row">
+              <td class="q-tnum">{{ reason.code }}</td>
+              <td>{{ reasonKindLabel(reason.kind) }}</td>
+              <td>{{ reason.displayName }}</td>
+              <td data-testid="adjustment-reason-rule">{{ reasonRuleSummary(reason) }}</td>
+              <td>
+                <span class="status-badge">{{ reason.status }}</span>
+              </td>
+              <td class="rates__actions">
+                @if (reason.status === 'ACTIVE') {
+                  @if (archivingReasonId() === reason.reasonId) {
+                    <div class="rates__inline-confirm">
+                      <input
+                        type="text"
+                        [placeholder]="'delivery.rates.archiveReasonPlaceholder' | t"
+                        [value]="archiveReasonReason()"
+                        (input)="archiveReasonReason.set($any($event.target).value)"
+                      />
+                      <button
+                        type="button"
+                        class="rates__secondary"
+                        [disabled]="!canConfirmArchiveReason()"
+                        (click)="confirmArchiveReason()"
+                        data-testid="reason-archive-confirm"
+                      >
+                        {{ 'delivery.rates.confirm' | t }}
+                      </button>
+                      <button
+                        type="button"
+                        class="rates__secondary"
+                        (click)="cancelArchiveReason()"
+                      >
+                        {{ 'delivery.rates.cancel' | t }}
+                      </button>
+                    </div>
+                  } @else {
+                    <button
+                      type="button"
+                      class="rates__secondary"
+                      (click)="startArchiveReason(reason)"
+                      data-testid="reason-archive"
+                    >
+                      {{ 'delivery.rates.archive' | t }}
+                    </button>
+                  }
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="6" class="rates__empty">{{ 'delivery.rates.reasons.empty' | t }}</td>
             </tr>
           }
         </tbody>
@@ -159,6 +368,18 @@
           />
         </label>
         <label class="rates__field">
+          {{ 'delivery.rates.types.column.maxDistance' | t }}
+          <input
+            type="number"
+            [value]="newTypeMaxDistance()"
+            (input)="
+              newTypeMaxDistance.set(
+                $any($event.target).value === '' ? null : $any($event.target).valueAsNumber
+              )
+            "
+          />
+        </label>
+        <label class="rates__field">
           {{ 'delivery.rates.types.column.maxConcurrent' | t }}
           <input
             type="number"
@@ -173,6 +394,25 @@
             [value]="newTypeOfferTtl()"
             (input)="newTypeOfferTtl.set($any($event.target).valueAsNumber)"
           />
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.startingMinute' | t }}
+          <input
+            type="number"
+            [value]="newTypeStartingMinute()"
+            (input)="newTypeStartingMinute.set($any($event.target).valueAsNumber)"
+          />
+        </label>
+        <p class="rates__hint">{{ 'delivery.rates.types.notYetEnforcedHint' | t }}</p>
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.workMode' | t }}
+          <select
+            [value]="newTypeWorkMode()"
+            (change)="newTypeWorkMode.set($any($event.target).value)"
+          >
+            <option value="SHIFT">{{ 'delivery.rates.types.workMode.SHIFT' | t }}</option>
+            <option value="ON_DEMAND">{{ 'delivery.rates.types.workMode.ON_DEMAND' | t }}</option>
+          </select>
         </label>
         <div class="rates__modal-actions">
           <button type="button" (click)="closeTypeForm()">{{ 'delivery.rates.cancel' | t }}</button>
@@ -190,9 +430,123 @@
     </div>
   }
 
+  @if (editingType(); as type) {
+    <div class="rates__modal-backdrop" (click)="closeEditType()">
+      <div class="rates__modal" (click)="$event.stopPropagation()">
+        <h3 class="q-subhead">{{ 'delivery.rates.types.editTitle' | t }}</h3>
+        @if (editTypeError(); as error) {
+          <p class="rates__form-error">{{ error }}</p>
+        }
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.code' | t }}
+          <input
+            type="text"
+            [value]="editTypeCode()"
+            (input)="editTypeCode.set($any($event.target).value)"
+          />
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.name' | t }}
+          <input
+            type="text"
+            [value]="editTypeDisplayName()"
+            (input)="editTypeDisplayName.set($any($event.target).value)"
+          />
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.vehicleClass' | t }}
+          <select
+            [value]="editTypeVehicleClass()"
+            (change)="editTypeVehicleClass.set($any($event.target).value)"
+          >
+            <option value="FOOT">FOOT</option>
+            <option value="BICYCLE">BICYCLE</option>
+            <option value="SCOOTER">SCOOTER</option>
+            <option value="MOTORCYCLE">MOTORCYCLE</option>
+            <option value="CAR">CAR</option>
+          </select>
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.minDistance' | t }}
+          <input
+            type="number"
+            [value]="editTypeMinDistance()"
+            (input)="editTypeMinDistance.set($any($event.target).valueAsNumber)"
+          />
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.maxDistance' | t }}
+          <input
+            type="number"
+            [value]="editTypeMaxDistance()"
+            (input)="
+              editTypeMaxDistance.set(
+                $any($event.target).value === '' ? null : $any($event.target).valueAsNumber
+              )
+            "
+          />
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.maxConcurrent' | t }}
+          <input
+            type="number"
+            [value]="editTypeMaxConcurrent()"
+            (input)="editTypeMaxConcurrent.set($any($event.target).valueAsNumber)"
+          />
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.offerTtl' | t }}
+          <input
+            type="number"
+            [value]="editTypeOfferTtl()"
+            (input)="editTypeOfferTtl.set($any($event.target).valueAsNumber)"
+          />
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.startingMinute' | t }}
+          <input
+            type="number"
+            [value]="editTypeStartingMinute()"
+            (input)="editTypeStartingMinute.set($any($event.target).valueAsNumber)"
+          />
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.types.column.workMode' | t }}
+          <select
+            [value]="editTypeWorkMode()"
+            (change)="editTypeWorkMode.set($any($event.target).value)"
+          >
+            <option value="SHIFT">{{ 'delivery.rates.types.workMode.SHIFT' | t }}</option>
+            <option value="ON_DEMAND">{{ 'delivery.rates.types.workMode.ON_DEMAND' | t }}</option>
+          </select>
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.reason' | t }}
+          <input
+            type="text"
+            [value]="editTypeReason()"
+            (input)="editTypeReason.set($any($event.target).value)"
+          />
+        </label>
+        <div class="rates__modal-actions">
+          <button type="button" (click)="closeEditType()">{{ 'delivery.rates.cancel' | t }}</button>
+          <button
+            type="button"
+            class="rates__submit"
+            [disabled]="!canSaveEditType()"
+            (click)="submitEditType()"
+            data-testid="rates-submit-type-edit"
+          >
+            {{ 'delivery.rates.save' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
   @if (showCardForm()) {
     <div class="rates__modal-backdrop" (click)="closeCardForm()">
-      <div class="rates__modal" (click)="$event.stopPropagation()">
+      <div class="rates__modal rates__modal--wide" (click)="$event.stopPropagation()">
         <h3 class="q-subhead">{{ 'delivery.rates.cards.add' | t }}</h3>
         @if (cardError(); as error) {
           <p class="rates__form-error">{{ error }}</p>
@@ -206,6 +560,16 @@
           />
         </label>
         <label class="rates__field">
+          {{ 'delivery.rates.cards.column.version' | t }}
+          <input
+            type="number"
+            min="1"
+            [value]="newCardVersion()"
+            (input)="newCardVersion.set($any($event.target).valueAsNumber)"
+            data-testid="new-card-version"
+          />
+        </label>
+        <label class="rates__field">
           {{ 'delivery.rates.cards.column.currency' | t }}
           <input
             type="text"
@@ -214,21 +578,123 @@
           />
         </label>
         <label class="rates__field">
-          {{ 'delivery.rates.cards.perOrder' | t }}
+          {{ 'delivery.rates.cards.narrowerLocation' | t }}
           <input
-            type="number"
-            [value]="newCardPerOrderMinor()"
-            (input)="newCardPerOrderMinor.set($any($event.target).valueAsNumber)"
+            type="text"
+            [placeholder]="'delivery.rates.cards.narrowerLocationPlaceholder' | t"
+            [value]="newCardLocationId()"
+            (input)="newCardLocationId.set($any($event.target).value)"
+            data-testid="new-card-location"
           />
         </label>
         <label class="rates__field">
-          {{ 'delivery.rates.cards.perShift' | t }}
-          <input
-            type="number"
-            [value]="newCardPerShiftMinor()"
-            (input)="newCardPerShiftMinor.set($any($event.target).valueAsNumber)"
-          />
+          {{ 'delivery.rates.cards.narrowerCourierType' | t }}
+          <select
+            [value]="newCardCourierTypeId()"
+            (change)="newCardCourierTypeId.set($any($event.target).value)"
+            data-testid="new-card-courier-type"
+          >
+            <option value="">{{ 'delivery.rates.cards.everyType' | t }}</option>
+            @for (type of types(); track type.courierTypeId) {
+              <option [value]="type.courierTypeId">{{ type.displayName }}</option>
+            }
+          </select>
         </label>
+
+        <div class="rates__component-list">
+          @for (component of newCardComponents(); track $index) {
+            <div class="rates__component-row" data-testid="new-card-component-row">
+              <div class="rates__component-row-fields">
+                <span class="rates__component-label">{{
+                  componentTypeLabel(component.componentType)
+                }}</span>
+                <input
+                  type="number"
+                  [placeholder]="'delivery.rates.cards.amount' | t"
+                  [value]="component.amountMinor"
+                  (input)="updateComponentAmount($index, $any($event.target).valueAsNumber)"
+                  data-testid="component-amount"
+                />
+                @if (component.componentType === 'PER_KM_BAND') {
+                  <input
+                    type="number"
+                    [placeholder]="'delivery.rates.cards.bandFrom' | t"
+                    [value]="component.bandFromMeters"
+                    (input)="updateComponentBandFrom($index, $any($event.target).valueAsNumber)"
+                    data-testid="component-band-from"
+                  />
+                  <input
+                    type="number"
+                    [placeholder]="'delivery.rates.cards.bandToUnbounded' | t"
+                    [value]="component.bandToMeters"
+                    (input)="
+                      updateComponentBandTo(
+                        $index,
+                        $any($event.target).value === '' ? null : $any($event.target).valueAsNumber
+                      )
+                    "
+                    data-testid="component-band-to"
+                  />
+                }
+                @if (component.componentType === 'PER_SHIFT_FIXED') {
+                  <input
+                    type="number"
+                    [placeholder]="'delivery.rates.cards.minimumSeconds' | t"
+                    [value]="component.minimumPaidSeconds"
+                    (input)="
+                      updateComponentMinimumSeconds($index, $any($event.target).valueAsNumber)
+                    "
+                    data-testid="component-minimum-seconds"
+                  />
+                }
+              </div>
+              <button
+                type="button"
+                class="rates__link-button"
+                (click)="removeComponent($index)"
+                data-testid="component-remove"
+              >
+                {{ 'delivery.rates.cards.removeComponent' | t }}
+              </button>
+            </div>
+          }
+          <div class="rates__add-component-row">
+            <button
+              type="button"
+              class="rates__link-button"
+              (click)="addComponent('PER_ORDER')"
+              data-testid="add-per-order"
+            >
+              + {{ 'delivery.rates.componentType.PER_ORDER' | t }}
+            </button>
+            <button
+              type="button"
+              class="rates__link-button"
+              (click)="addComponent('PER_SHIFT_FIXED')"
+              data-testid="add-per-shift-fixed"
+            >
+              + {{ 'delivery.rates.componentType.PER_SHIFT_FIXED' | t }}
+            </button>
+            <button
+              type="button"
+              class="rates__link-button"
+              (click)="addComponent('PER_KM_BAND')"
+              data-testid="add-per-km-band"
+            >
+              + {{ 'delivery.rates.componentType.PER_KM_BAND' | t }}
+            </button>
+            <button
+              type="button"
+              class="rates__link-button"
+              (click)="addComponent('PER_ORDER_MINIMUM')"
+              data-testid="add-per-order-minimum"
+            >
+              + {{ 'delivery.rates.componentType.PER_ORDER_MINIMUM' | t }}
+            </button>
+          </div>
+          <p class="rates__hint">{{ 'delivery.rates.cards.bandHint' | t }}</p>
+        </div>
+
         <div class="rates__modal-actions">
           <button type="button" (click)="closeCardForm()">{{ 'delivery.rates.cancel' | t }}</button>
           <button
@@ -237,6 +703,145 @@
             [disabled]="!canCreateCard()"
             (click)="submitCard()"
             data-testid="rates-submit-card"
+          >
+            {{ 'delivery.rates.save' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showReasonForm()) {
+    <div class="rates__modal-backdrop" (click)="closeReasonForm()">
+      <div class="rates__modal" (click)="$event.stopPropagation()">
+        <h3 class="q-subhead">{{ 'delivery.rates.reasons.add' | t }}</h3>
+        @if (reasonError(); as error) {
+          <p class="rates__form-error">{{ error }}</p>
+        }
+        <label class="rates__field">
+          {{ 'delivery.rates.reasons.column.code' | t }}
+          <input
+            type="text"
+            [value]="newReasonCode()"
+            (input)="newReasonCode.set($any($event.target).value)"
+          />
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.reasons.column.kind' | t }}
+          <select [value]="newReasonKind()" (change)="newReasonKind.set($any($event.target).value)">
+            <option value="BONUS">{{ 'delivery.rates.reasons.kind.BONUS' | t }}</option>
+            <option value="PENALTY">{{ 'delivery.rates.reasons.kind.PENALTY' | t }}</option>
+          </select>
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.reasons.outcomeBasis' | t }}
+          <select
+            [value]="newReasonOutcomeBasis()"
+            (change)="newReasonOutcomeBasis.set($any($event.target).value)"
+            data-testid="new-reason-basis"
+          >
+            @for (basis of outcomeBases; track basis) {
+              <option [value]="basis">{{ basis }}</option>
+            }
+          </select>
+        </label>
+        <label class="rates__field">
+          {{ 'delivery.rates.reasons.column.name' | t }}
+          <input
+            type="text"
+            [value]="newReasonDisplayName()"
+            (input)="newReasonDisplayName.set($any($event.target).value)"
+          />
+        </label>
+        <label class="rates__checkbox-field">
+          <input
+            type="checkbox"
+            [checked]="newReasonWired()"
+            [disabled]="!basisIsEvaluated(newReasonOutcomeBasis())"
+            (change)="newReasonWired.set($any($event.target).checked)"
+            data-testid="new-reason-wire-toggle"
+          />
+          {{ 'delivery.rates.reasons.wireToRule' | t }}
+        </label>
+        @if (!basisIsEvaluated(newReasonOutcomeBasis())) {
+          <p class="rates__hint">{{ 'delivery.rates.reasons.notEvaluatedHint' | t }}</p>
+        }
+        @if (newReasonWired()) {
+          <label class="rates__field">
+            {{ 'delivery.rates.reasons.amount' | t }}
+            <input
+              type="number"
+              min="0"
+              [value]="newReasonAmount()"
+              (input)="newReasonAmount.set($any($event.target).valueAsNumber)"
+              data-testid="new-reason-amount"
+            />
+          </label>
+          <label class="rates__field">
+            {{ 'delivery.rates.cards.column.currency' | t }}
+            <input
+              type="text"
+              [value]="newReasonCurrency()"
+              (input)="newReasonCurrency.set($any($event.target).value)"
+            />
+          </label>
+          <label class="rates__field">
+            {{ 'delivery.rates.reasons.comparator' | t }}
+            <select
+              [value]="newReasonComparator()"
+              (change)="newReasonComparator.set($any($event.target).value)"
+            >
+              <option value="GTE">≥</option>
+              <option value="LTE">≤</option>
+            </select>
+          </label>
+          <label class="rates__field">
+            {{ 'delivery.rates.reasons.threshold' | t }}
+            <input
+              type="number"
+              min="0"
+              [value]="newReasonThreshold()"
+              (input)="newReasonThreshold.set($any($event.target).valueAsNumber)"
+              data-testid="new-reason-threshold"
+            />
+          </label>
+          <label class="rates__field">
+            {{ 'delivery.rates.reasons.window' | t }}
+            <select
+              [value]="newReasonWindow()"
+              (change)="newReasonWindow.set($any($event.target).value)"
+            >
+              <option value="SHIFT">{{ 'delivery.rates.reasons.window.SHIFT' | t }}</option>
+              <option value="SETTLEMENT_PERIOD">
+                {{ 'delivery.rates.reasons.window.SETTLEMENT_PERIOD' | t }}
+              </option>
+            </select>
+          </label>
+          <label class="rates__field">
+            {{ 'delivery.rates.reasons.trigger' | t }}
+            <select
+              [value]="newReasonTrigger()"
+              (change)="newReasonTrigger.set($any($event.target).value)"
+            >
+              <option value="SHIFT_CLOSE">
+                {{ 'delivery.rates.reasons.trigger.SHIFT_CLOSE' | t }}
+              </option>
+              <option value="SETTLEMENT_PERIOD_CLOSE">
+                {{ 'delivery.rates.reasons.trigger.SETTLEMENT_PERIOD_CLOSE' | t }}
+              </option>
+            </select>
+          </label>
+        }
+        <div class="rates__modal-actions">
+          <button type="button" (click)="closeReasonForm()">
+            {{ 'delivery.rates.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            class="rates__submit"
+            [disabled]="!canCreateReason()"
+            (click)="submitReasonForm()"
+            data-testid="rates-submit-reason"
           >
             {{ 'delivery.rates.save' | t }}
           </button>

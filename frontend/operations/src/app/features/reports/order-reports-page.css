@@ -29,7 +29,7 @@
   color: var(--q-ink-muted);
   border-bottom: 2px solid transparent;
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .tab--active {
@@ -139,7 +139,7 @@
   border-right: 1px solid var(--q-hairline);
   background: var(--q-canvas);
   color: var(--q-ink-muted);
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
   cursor: pointer;
 }
 

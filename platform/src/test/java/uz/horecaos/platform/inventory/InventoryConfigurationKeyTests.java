@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.inventory.api.InventoryConfigurationKeys;
 import uz.horecaos.platform.inventory.application.InventoryService;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
@@ -41,6 +42,22 @@ class InventoryConfigurationKeyTests {
                 .isEqualTo((int) InventoryService.RESERVATION_TTL.toSeconds())
                 .isEqualTo(900);
         assertThat(InventoryService.RESERVATION_TTL).isEqualTo(Duration.ofMinutes(15));
+    }
+
+    /** Gap map row {@code 4.4d}, wave P46: the catalog base setting inventory reads. */
+    @Test
+    @DisplayName("the catalog.use_stock_logic declaration is identical on both sides, off by default, tenant-only")
+    void theUseStockLogicKeyAgreesAndIsTenantOnly() {
+        assertThat(registered(InventoryConfigurationKeys.CATALOG_USE_STOCK_LOGIC_CODE))
+                .isEqualTo(InventoryConfigurationKeys.CATALOG_USE_STOCK_LOGIC);
+        assertThat(InventoryConfigurationKeys.CATALOG_USE_STOCK_LOGIC.defaultValue())
+                .as("off by default: turning it on does not turn anything on")
+                .isEqualTo(false);
+        assertThat(InventoryConfigurationKeys.CATALOG_USE_STOCK_LOGIC.tenantVisible())
+                .isTrue();
+        assertThat(InventoryConfigurationKeys.CATALOG_USE_STOCK_LOGIC.settableScopes())
+                .as("a whole-company switch, not per brand or per branch")
+                .containsExactlyInAnyOrder(ScopeType.PLATFORM, ScopeType.TENANT);
     }
 
     private static ConfigurationKey<?> registered(String code) {

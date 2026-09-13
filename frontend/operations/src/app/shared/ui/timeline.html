@@ -1,0 +1,69 @@
+@if (entries().length === 0) {
+  @if (emptyLabel(); as label) {
+    <p class="q-body-sm q-timeline__empty" data-testid="q-timeline-empty">{{ label }}</p>
+  }
+} @else {
+  <ol class="q-timeline" data-testid="q-timeline">
+    @for (entry of entries(); track entry.id) {
+      @if (entry.gapBefore; as gap) {
+        <li class="q-timeline__gap q-caption" data-testid="q-timeline-gap">{{ gap }}</li>
+      }
+      <li class="q-timeline__row">
+        @if (entry.selectable) {
+          <button
+            type="button"
+            class="q-timeline__entry q-timeline__entry--selectable"
+            [class.q-timeline__entry--selected]="selectedId() === entry.id"
+            [attr.aria-expanded]="selectedId() === entry.id"
+            (click)="onEntryClick(entry)"
+            data-testid="q-timeline-entry"
+          >
+            <span class="q-timeline__time q-caption q-mono">{{ entry.timestamp }}</span>
+            @if (entry.actor; as actor) {
+              <q-actor-chip
+                [kind]="actor.kind"
+                [displayName]="actor.displayName"
+                [subject]="actor.subject"
+              />
+            }
+            <span class="q-timeline__title q-body-sm">{{ entry.title }}</span>
+            @if (entry.badge; as badge) {
+              <span
+                class="q-timeline__badge q-caption"
+                [class]="'q-timeline__badge--' + badge.tone"
+                data-testid="q-timeline-badge"
+                >{{ badge.label }}</span
+              >
+            }
+            @if (entry.detail; as detail) {
+              <span class="q-timeline__detail q-caption">{{ detail }}</span>
+            }
+          </button>
+        } @else {
+          <div class="q-timeline__entry" data-testid="q-timeline-entry">
+            <span class="q-timeline__time q-caption q-mono">{{ entry.timestamp }}</span>
+            @if (entry.actor; as actor) {
+              <q-actor-chip
+                [kind]="actor.kind"
+                [displayName]="actor.displayName"
+                [subject]="actor.subject"
+              />
+            }
+            <span class="q-timeline__title q-body-sm">{{ entry.title }}</span>
+            @if (entry.badge; as badge) {
+              <span
+                class="q-timeline__badge q-caption"
+                [class]="'q-timeline__badge--' + badge.tone"
+                data-testid="q-timeline-badge"
+                >{{ badge.label }}</span
+              >
+            }
+            @if (entry.detail; as detail) {
+              <span class="q-timeline__detail q-caption">{{ detail }}</span>
+            }
+          </div>
+        }
+      </li>
+    }
+  </ol>
+}

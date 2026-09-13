@@ -98,6 +98,17 @@ describe('StaffApi', () => {
     expect(await promise).toEqual({ changed: true, outcome: 'revoked' });
   });
 
+  /** Staff 9.3c: `staff-page.ts`'s bulk fan-out sends this so every revoke shares one correlation id. */
+  it('revoke carries a caller-supplied correlation id, for a bulk fan-out', async () => {
+    const promise = api.revoke('t1', 'g1', 'Left the company', 'bulk-suspend-abc');
+    const request = http.expectOne(url('/api/v1/control-plane/tenants/t1/grants/g1'));
+
+    expect(request.request.headers.get('X-Correlation-Id')).toBe('bulk-suspend-abc');
+    request.flush({ changed: true, outcome: 'revoked' });
+
+    await promise;
+  });
+
   it('reads the tenant-visible role catalogue', async () => {
     const promise = api.roles('t1');
     http

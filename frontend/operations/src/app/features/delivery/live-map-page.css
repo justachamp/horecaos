@@ -13,6 +13,21 @@
   border-bottom: 1px solid var(--q-hairline);
 }
 
+.live-map__branch {
+  margin-right: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.live-map__branchSelect {
+  padding: 4px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
 .live-map__refresh {
   padding: 4px 12px;
   border: 1px solid var(--q-primary);
@@ -20,7 +35,7 @@
   color: var(--q-primary);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .live-map__error-band {
@@ -37,7 +52,7 @@
 .live-map__table th {
   text-align: left;
   padding: 8px 16px;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
   background: var(--q-surface-1);
   position: sticky;
@@ -46,7 +61,7 @@
 
 .live-map__table td {
   padding: 10px 16px;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   border-top: 1px solid var(--q-hairline);
 }
 
@@ -68,4 +83,66 @@
   height: 120px;
   margin: 16px;
   background: var(--q-surface-1);
+}
+
+.live-map__revealTrigger {
+  padding: 3px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.live-map__revealResult {
+  margin: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-surface-1);
+}
+
+.live-map__revealResultHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.live-map__revealResultClose {
+  border: none;
+  background: none;
+  color: var(--q-ink-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.live-map__revealResultPurpose {
+  margin: 4px 0 12px;
+  color: var(--q-ink-muted);
+}
+
+.live-map__revealWindow {
+  margin-top: 12px;
+}
+
+.live-map__revealWindow:first-of-type {
+  margin-top: 0;
+}
+
+.live-map__revealTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4px;
+}
+
+.live-map__revealTable th {
+  text-align: left;
+  padding: 4px 8px;
+  color: var(--q-ink-subtle);
+}
+
+.live-map__revealTable td {
+  padding: 4px 8px;
+  border-top: 1px solid var(--q-hairline);
 }

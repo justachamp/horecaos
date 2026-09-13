@@ -194,7 +194,11 @@ class MarketplaceChannelTests {
         settlementService = new uz.horecaos.platform.payments.settlement.OrderSettlementService(
                 settlementStore, NO_REDEMPTION, clock);
         settlementPlanner = new uz.horecaos.platform.payments.settlement.CheckoutSettlementPlanner(
-                settlementStore, settlementService, clock);
+                settlementStore,
+                settlementService,
+                clock,
+                new uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalTerminalStore(
+                        jdbc, new tools.jackson.databind.ObjectMapper()));
 
         ingestion = new MarketplaceIngestionService(
                 store, intake, settlementPlanner, new PassthroughFieldProtection(), hasher, transactions, clock);

@@ -10,43 +10,54 @@
       <span class="q-body-sm">{{ error }}</span>
     </div>
   } @else if (policy(); as p) {
+    <div
+      class="policy__scopeSelector"
+      role="radiogroup"
+      [attr.aria-label]="'delivery.policy.scopeSelector.label' | t"
+      data-testid="policy-scope-selector"
+    >
+      @for (level of scopeLevels; track level) {
+        <button
+          type="button"
+          class="policy__scopeOption q-body-sm"
+          [class.policy__scopeOption--active]="resolutionScope() === level"
+          role="radio"
+          [attr.aria-checked]="resolutionScope() === level"
+          (click)="selectScope(level)"
+          [attr.data-testid]="'policy-scope-option-' + level"
+        >
+          {{ scopeLevelLabel(level) | t }}
+        </button>
+      }
+    </div>
+
     <div class="policy__scope" data-testid="policy-scope">
       {{ 'delivery.policy.resolvedAt' | t: { scope: p.winningScope } }}
+      <span class="policy__identity q-mono" data-testid="policy-identity">
+        {{ 'delivery.policy.policyIdentity' | t: { id: p.policyId, version: p.policyVersion } }}
+      </span>
     </div>
 
     <dl class="policy__rows">
-      <div class="policy__row">
-        <dt>{{ 'delivery.policy.shiftEnforcement' | t }}</dt>
-        <dd>{{ shiftEnforcementLabel(p.shiftEnforcement) }}</dd>
-      </div>
-      <div class="policy__row">
-        <dt>{{ 'delivery.policy.cashCeiling' | t }}</dt>
-        <dd class="q-tnum">{{ sumLabel(p.cashCeilingMinor) }}</dd>
-      </div>
-      <div class="policy__row">
-        <dt>{{ 'delivery.policy.penaltyThreshold' | t }}</dt>
-        <dd class="q-tnum">{{ sumLabel(p.penaltyApprovalThresholdMinor) }}</dd>
-      </div>
-      <div class="policy__row">
-        <dt>{{ 'delivery.policy.reverificationDays' | t }}</dt>
-        <dd class="q-tnum">{{ p.reverificationDays }}</dd>
-      </div>
-      <div class="policy__row">
-        <dt>{{ 'delivery.policy.warningDays' | t }}</dt>
-        <dd class="q-tnum">{{ p.warningDays }}</dd>
-      </div>
-      <div class="policy__row">
-        <dt>{{ 'delivery.policy.settlementPeriodDays' | t }}</dt>
-        <dd class="q-tnum">{{ p.settlementPeriodDays }}</dd>
-      </div>
-      <div class="policy__row">
-        <dt>{{ 'delivery.policy.graceSeconds' | t }}</dt>
-        <dd class="q-tnum">{{ p.graceSeconds }}</dd>
-      </div>
-      <div class="policy__row">
-        <dt>{{ 'delivery.policy.confirmationPointRetentionDays' | t }}</dt>
-        <dd class="q-tnum">{{ p.confirmationPointRetentionDays }}</dd>
-      </div>
+      @for (row of rows(); track row.key) {
+        <div class="policy__row" [attr.data-testid]="'policy-row-' + row.key">
+          <div class="policy__rowHead">
+            <dt class="q-body-sm">{{ row.labelKey | t }}</dt>
+            @if (row.overridden) {
+              <q-status-pill [label]="'delivery.policy.overridden' | t" tone="warning" />
+            }
+          </div>
+          <dd class="q-emphasis">
+            {{ row.value }}
+            @if (row.inheritedValue; as inherited) {
+              <span class="policy__inherited q-caption" data-testid="policy-row-inherited">
+                {{ 'delivery.policy.inherited' | t: { value: inherited } }}
+              </span>
+            }
+          </dd>
+          <p class="policy__consequence q-caption">{{ row.consequenceKey | t }}</p>
+        </div>
+      }
     </dl>
 
     <div class="policy__not-built">

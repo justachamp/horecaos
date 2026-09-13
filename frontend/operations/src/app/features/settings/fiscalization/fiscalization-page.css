@@ -132,10 +132,31 @@
 .status-badge {
   display: inline-block;
   padding: 2px 8px;
+  margin-left: 8px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   color: var(--q-ink-muted);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
+}
+
+.status-badge--good {
+  border-color: var(--q-success-text);
+  color: var(--q-success-text);
+}
+
+.status-badge--bad {
+  border-color: var(--q-error-text);
+  color: var(--q-error-text);
+}
+
+.row-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.hint {
+  color: var(--q-ink-subtle);
+  margin-top: 4px;
 }
 
 .link {

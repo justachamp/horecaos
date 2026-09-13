@@ -1,6 +1,7 @@
 package uz.horecaos.platform.audit.web;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.util.List;
@@ -59,7 +60,8 @@ public class AuditController {
     @Operation(
             summary = "Search audit evidence within a tenant",
             description = "Reading audit is itself audited. The change document is not returned in a "
-                    + "list; retrieving it is a separate, individually audited read.")
+                    + "list; retrieving it is a separate, individually audited read. Cursor-paginated "
+                    + "per ADR 0031: pass the previous page's nextCursor back as cursor.")
     public Page<AuditQueryService.AuditEventView> search(
             @PathVariable UUID tenantId,
             @RequestParam(required = false) String actorSubject,
@@ -72,7 +74,9 @@ public class AuditController {
             @RequestParam(required = false) String correlationId,
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
-            @RequestParam(required = false) Integer limit) {
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) @Schema(description = "The nextCursor of the previous page")
+                    String cursor) {
         return searchAndRecord(
                 tenantId,
                 actorSubject,
@@ -85,7 +89,8 @@ public class AuditController {
                 correlationId,
                 from,
                 to,
-                limit);
+                limit,
+                cursor);
     }
 
     @GetMapping("/control-plane/tenants/{tenantId}/audit-events/{eventId}")
@@ -106,7 +111,8 @@ public class AuditController {
     @Operation(
             summary = "Search audit evidence within a tenant — Staff 9.3's activity log",
             description = "The same read as the control-plane route, reachable from the "
-                    + "operations frontend. Reading audit is itself audited.")
+                    + "operations frontend. Reading audit is itself audited. Cursor-paginated per "
+                    + "ADR 0031: pass the previous page's nextCursor back as cursor.")
     public Page<AuditQueryService.AuditEventView> operationsSearch(
             @PathVariable UUID tenantId,
             @RequestParam(required = false) String actorSubject,
@@ -119,7 +125,9 @@ public class AuditController {
             @RequestParam(required = false) String correlationId,
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
-            @RequestParam(required = false) Integer limit) {
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) @Schema(description = "The nextCursor of the previous page")
+                    String cursor) {
         return searchAndRecord(
                 tenantId,
                 actorSubject,
@@ -132,7 +140,8 @@ public class AuditController {
                 correlationId,
                 from,
                 to,
-                limit);
+                limit,
+                cursor);
     }
 
     @GetMapping("/operations/tenants/{tenantId}/audit-events/{eventId}")
@@ -155,8 +164,10 @@ public class AuditController {
             String correlationId,
             Instant from,
             Instant to,
-            Integer limit) {
+            Integer limit,
+            String cursor) {
 
+        int pageSize = AuditQueryService.boundedLimit(limit);
         List<AuditQueryService.AuditEventView> events = audits.search(new AuditQueryService.AuditQuery(
                 tenantId,
                 actorSubject,
@@ -169,10 +180,17 @@ public class AuditController {
                 correlationId,
                 from,
                 to,
-                limit));
+                pageSize,
+                cursor));
 
         recordTheRead(tenantId, events.size(), actorSubject, actionCode);
-        return Page.last(events);
+
+        // Staff 9.3: `Page.last(events)` used to run unconditionally here, so an
+        // operator past 200 events had no way to see the rest of the log. A
+        // short page is the end of the collection; a full one may or may not
+        // be — the same keyset-cursor idiom CatalogQueryController.products uses.
+        String nextCursor = events.size() < pageSize ? null : AuditQueryService.cursorFor(events.getLast());
+        return new Page<>(events, nextCursor);
     }
 
     private ResponseEntity<AuditQueryService.AuditEventDetail> detailAndRecord(UUID tenantId, UUID eventId) {

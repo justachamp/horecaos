@@ -109,6 +109,49 @@ class ProviderCapabilityReconciliationServiceTests {
                 .isTrue();
     }
 
+    /**
+     * ADR 0106, gap-map row X.14: the one genuine backend gap the row named —
+     * "last-used has no column, no field and no endpoint anywhere" — closed at
+     * the one call site that can prove a secret resolved without an external
+     * effect. A test that only checked the column moved would still pass if
+     * the code stamped it unconditionally on every reconcile, so the failing
+     * counterpart below is what makes this assertion mean something.
+     */
+    @Test
+    void itStampsSecretLastUsedAtOnlyWhenThePreflightResolvesTheSecret() {
+        UUID installation = installation();
+
+        reconciliation.reconcile(TENANT, installation);
+
+        assertThat(jdbc.sql("""
+                SELECT secret_last_used_at FROM integration.installations WHERE id = :id
+                """)
+                        .param("id", installation)
+                        .query(java.time.OffsetDateTime.class)
+                        .single()
+                        .toInstant())
+                .isEqualTo(NOW);
+    }
+
+    @Test
+    void itLeavesSecretLastUsedAtUntouchedWhenThePreflightFailsToResolveTheSecret() {
+        UUID installation = installation();
+        reconciliation = new ProviderCapabilityReconciliationService(
+                jdbc,
+                List.of(new NotificationCatalog()),
+                new MissingSecretResolver(),
+                new ObjectMapper(),
+                Clock.fixed(NOW, ZoneOffset.UTC));
+
+        reconciliation.reconcile(TENANT, installation);
+
+        assertThat(jdbc.sql("""
+                SELECT secret_last_used_at IS NULL FROM integration.installations WHERE id = :id
+                """).param("id", installation).query(Boolean.class).single())
+                .as("a secret that never resolved was never used")
+                .isTrue();
+    }
+
     @Test
     void anUnavailableSecretFailsTheConnectionPreflightWithoutClaimingAProviderCapability() {
         UUID installation = installation();

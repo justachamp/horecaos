@@ -16,8 +16,13 @@ const TELEGRAM: ProviderConnectDeclaration = {
 const CLICK: ProviderConnectDeclaration = {
   providerType: 'CLICK',
   category: 'PAYMENT',
+  // Mirrors ConnectFieldCatalog's own CLICK declaration exactly (merchantId,
+  // serviceId, secretKey) — the "leaves serviceId blank and still holds its
+  // position" test below depends on there being a second non-secret field to
+  // leave blank.
   fields: [
     { key: 'merchantId', secret: false },
+    { key: 'serviceId', secret: false },
     { key: 'secretKey', secret: true },
   ],
 };
@@ -207,12 +212,16 @@ describe('ConnectProviderPanel', () => {
 
     submitButton().click();
 
+    // serviceId is left blank and still holds its position (ADR 0106): the
+    // server splits this same string back apart by position against
+    // ConnectFieldCatalog's own field order, so a dropped blank field would
+    // shift every later field left.
     expect(connect).toHaveBeenCalledWith({
       providerType: 'CLICK',
       category: 'PAYMENT',
       displayName: 'Click prod',
       environmentCode: 'click-prod',
-      reference: 'merchant-42',
+      reference: 'merchant-42/',
       secretValue: 'super-secret',
     } satisfies ConnectSubmission);
   });
@@ -262,6 +271,44 @@ describe('ConnectProviderPanel', () => {
 
     (host().querySelector('.close') as HTMLButtonElement).click();
     expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Row `X.33`: this drawer rendered no step indicator at all before
+   * `q-steps` existed — an operator on the connect step had no way to tell
+   * a bind step followed at all.
+   */
+  describe('the step indicator', () => {
+    function stepItems(): NodeListOf<HTMLElement> {
+      return host().querySelectorAll('[data-testid="q-steps-item"]');
+    }
+
+    it('renders both steps, with connect current and bind upcoming, on the connect step', async () => {
+      await render();
+
+      const steps = stepItems();
+      expect(steps).toHaveLength(2);
+      expect(steps[0].textContent).toContain('Connect');
+      expect(steps[0].className).toContain('q-steps__item--current');
+      expect(steps[1].textContent).toContain('Bind');
+      expect(steps[1].className).toContain('q-steps__item--upcoming');
+    });
+
+    it('marks connect complete and bind current once the drawer moves to the bind step', async () => {
+      await TestBed.configureTestingModule({ imports: [ConnectProviderPanel] }).compileComponents();
+      TestBed.inject(I18n).setLocale('en');
+      fixture = TestBed.createComponent(ConnectProviderPanel);
+      fixture.componentRef.setInput('providers', [TELEGRAM, CLICK]);
+      fixture.componentRef.setInput('phase', 'bind');
+      fixture.componentRef.setInput('brands', [BRAND_ONE]);
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      const steps = stepItems();
+      expect(steps[0].className).toContain('q-steps__item--complete');
+      expect(steps[1].className).toContain('q-steps__item--current');
+    });
   });
 
   /**
@@ -329,7 +376,10 @@ describe('ConnectProviderPanel', () => {
 
       bindSubmitButton().click();
 
-      expect(bind).toHaveBeenCalledWith({ brandId: 'brand-1', locationId: null } satisfies BindSubmission);
+      expect(bind).toHaveBeenCalledWith({
+        brandId: 'brand-1',
+        locationId: null,
+      } satisfies BindSubmission);
     });
 
     it('re-narrows the location list and clears the old selection when the brand changes', async () => {

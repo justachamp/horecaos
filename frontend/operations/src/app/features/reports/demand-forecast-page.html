@@ -9,7 +9,9 @@
       <p class="q-body-sm">{{ 'reports.forecast.loading' | t }}</p>
     }
     @case ('denied') {
-      <p class="q-body-sm denied" data-testid="forecast-denied">{{ 'reports.denied.notGranted' | t }}</p>
+      <p class="q-body-sm denied" data-testid="forecast-denied">
+        {{ 'reports.denied.notGranted' | t }}
+      </p>
     }
     @case ('error') {
       <div class="error-band" role="alert">
@@ -54,13 +56,49 @@
 
         <q-provenance-banner [provenance]="r.provenance" />
 
+        <div class="forecast__week-overview">
+          @if (weekGrid(); as grid) {
+            <q-heatmap-chart
+              [rows]="grid"
+              [ariaLabel]="'reports.forecast.weekOverview.title' | t"
+            />
+          } @else {
+            <button
+              type="button"
+              class="secondary"
+              (click)="showWeekOverview()"
+              [disabled]="weekGridLoading()"
+              data-testid="forecast-week-overview-button"
+            >
+              {{ 'reports.forecast.weekOverview.show' | t }}
+            </button>
+            @if (weekGridLoading()) {
+              <p class="q-caption" data-testid="forecast-week-overview-loading">
+                {{ 'reports.forecast.weekOverview.loading' | t }}
+              </p>
+            }
+            @if (weekGridError()) {
+              <p
+                class="q-caption forecast__week-overview-error"
+                data-testid="forecast-week-overview-error"
+              >
+                {{ 'reports.forecast.weekOverview.error' | t }}
+              </p>
+            }
+          }
+        </div>
+
         @if (r.sampleDates.length === 0) {
           <p class="q-body-sm forecast__state" data-testid="forecast-no-history">
             {{ 'reports.forecast.thin.zero' | t }}
           </p>
         } @else if (belowMinimum(r)) {
           <p class="q-body-sm forecast__state" data-testid="forecast-thin-sample">
-            {{ r.sampleDates.length === 1 ? ('reports.forecast.thin.one' | t) : ('reports.forecast.thin.two' | t) }}
+            {{
+              r.sampleDates.length === 1
+                ? ('reports.forecast.thin.one' | t)
+                : ('reports.forecast.thin.two' | t)
+            }}
           </p>
           <table class="forecast__table" data-testid="forecast-raw-table">
             <thead>

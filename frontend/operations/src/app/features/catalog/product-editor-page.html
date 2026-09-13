@@ -37,16 +37,14 @@
 
     <div class="editor__locale-strip">
       <span class="q-caption">{{ 'catalog.editor.locale.label' | t }}</span>
-      @for (locale of editingLocales; track locale) {
-        <button
-          type="button"
-          class="editor__locale"
-          [class.editor__locale--active]="editingLocale() === locale"
-          (click)="editingLocale.set(locale)"
-        >
-          {{ locale }}
-        </button>
-      }
+      <q-localized-field-group
+        [locales]="editingLocales"
+        [activeLocale]="editingLocale()"
+        (activeLocaleChange)="editingLocale.set($event)"
+        [defaultLocale]="catalogDefaultLocale"
+        [completeness]="localeCompleteness()"
+        data-testid="editor-locale-group"
+      />
     </div>
 
     <div class="editor__body">
@@ -419,7 +417,13 @@
                       @for (event of historyEvents(); track event.id) {
                         <tr>
                           <td class="q-mono">{{ event.recordedAt }}</td>
-                          <td>{{ historyActorLabel(event) }}</td>
+                          <td>
+                            <q-actor-chip
+                              [kind]="event.actorType"
+                              [displayName]="event.actorDisplay"
+                              [subject]="event.actorSubject"
+                            />
+                          </td>
                           <td>{{ variantLabel(event.targetId) }}</td>
                           <td>{{ event.reason ?? '—' }}</td>
                         </tr>

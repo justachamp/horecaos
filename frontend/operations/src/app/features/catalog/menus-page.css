@@ -30,14 +30,14 @@
 .menus__table th {
   text-align: left;
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
   border-bottom: 1px solid var(--q-hairline);
 }
 
 .menus__table td {
   padding: 8px 12px;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   border-bottom: 1px solid var(--q-hairline);
 }
 
@@ -51,7 +51,7 @@
   border-radius: var(--q-radius);
   background: var(--q-canvas);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .menus__cell--available {

@@ -31,7 +31,12 @@ const SUSPENDED_CODE: PromoCodeView = {
   validUntil: null,
 };
 
-const ACTIVE_CODE: PromoCodeView = { ...SUSPENDED_CODE, couponId: 'coupon-2', status: 'ACTIVE', redeemedCount: 3 };
+const ACTIVE_CODE: PromoCodeView = {
+  ...SUSPENDED_CODE,
+  couponId: 'coupon-2',
+  status: 'ACTIVE',
+  redeemedCount: 3,
+};
 
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -51,7 +56,10 @@ function fakeApi(overrides: Partial<PromoCodesApi> = {}): Partial<PromoCodesApi>
 describe('PromoCodesPage', () => {
   let fixture: ComponentFixture<PromoCodesPage>;
 
-  async function render(api: Partial<PromoCodesApi>, scope: BrandScope | null = BRAND_SCOPE): Promise<void> {
+  async function render(
+    api: Partial<PromoCodesApi>,
+    scope: BrandScope | null = BRAND_SCOPE,
+  ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [PromoCodesPage],
       providers: [
@@ -108,7 +116,7 @@ describe('PromoCodesPage', () => {
     page['openForm']();
     page['formName'].set('Welcome 10%');
     page['formCode'].set('WELCOME10');
-    page['formPercent'].set(10);
+    page['formBasisPoints'].set(1_000);
     expect(page['canSubmit']()).toBe(true);
 
     await page['submit']();
@@ -129,6 +137,56 @@ describe('PromoCodesPage', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('WELCOME10');
   });
 
+  it('switches to a fixed amount through q-money-or-percent’s own toggle and submits it', async () => {
+    const created: PromoCodeView = { ...SUSPENDED_CODE, plaintextCode: 'FIXED10' };
+    const draft = vi.fn().mockResolvedValue(created);
+    const list = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([SUSPENDED_CODE]);
+    await render(fakeApi({ draft, list }));
+
+    const host = fixture.nativeElement as HTMLElement;
+    const page = fixture.componentInstance;
+    page['openForm']();
+    page['formName'].set('Fixed off');
+    page['formCode'].set('FIXED10');
+    fixture.detectChanges();
+
+    // The widget's own AMOUNT/PERCENT toggle drives `formShape` itself — no
+    // separate interaction with the shape `<select>` above it is needed.
+    (
+      host.querySelector('[data-testid="q-money-or-percent-amount-toggle"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    expect(page['formShape']()).toBe('FIXED_AMOUNT_OFF_ORDER');
+
+    const amountField = host.querySelector<HTMLInputElement>(
+      '[data-testid="q-money-input-field"]',
+    )!;
+    amountField.value = '25 000';
+    amountField.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    await page['submit']();
+    fixture.detectChanges();
+
+    expect(draft).toHaveBeenCalledWith(
+      BRAND_SCOPE,
+      expect.objectContaining({ shape: 'FIXED_AMOUNT_OFF_ORDER', value: 25_000 }),
+    );
+  });
+
+  it('hides the money-or-percent value editor entirely for free delivery', async () => {
+    // Free delivery carries no amount and no percentage at all — the widget
+    // must not render for a shape it cannot represent.
+    await render(fakeApi());
+    const host = fixture.nativeElement as HTMLElement;
+    const page = fixture.componentInstance;
+    page['openForm']();
+    page['formShape'].set('FREE_DELIVERY');
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="promo-codes-value"]')).toBeNull();
+  });
+
   it('refuses to submit a code shorter than four characters before it ever reaches the server', async () => {
     await render(fakeApi());
     const page = fixture.componentInstance;
@@ -139,13 +197,43 @@ describe('PromoCodesPage', () => {
     expect(page['canSubmit']()).toBe(false);
   });
 
+  it('reflects a cleared percent field rather than resubmitting the pre-edit amount', async () => {
+    const draft = vi.fn();
+    await render(fakeApi({ draft }));
+    const host = fixture.nativeElement as HTMLElement;
+    const page = fixture.componentInstance;
+    page['openForm']();
+    page['formName'].set('Clear test');
+    page['formCode'].set('CLEARTST');
+    fixture.detectChanges();
+
+    const percentField = host.querySelector<HTMLInputElement>(
+      '[data-testid="q-percent-input-field"]',
+    )!;
+    percentField.value = '';
+    percentField.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Before PercentInput.onInput emitted on empty input, it returned early
+    // and left `formBasisPoints` at its stale default (1000 — the form's own
+    // opening default) — `canSubmit` would wrongly stay true, and hitting
+    // submit right after clearing would silently draft the pre-edit 10%
+    // discount as if the operator had never touched the field.
+    expect(page['formBasisPoints']()).toBe(0);
+    expect(page['canSubmit']()).toBe(false);
+
+    await page['submit']();
+
+    expect(draft).not.toHaveBeenCalled();
+  });
+
   it('refuses a percentage outside 0-100% before it ever reaches the server', async () => {
     await render(fakeApi());
     const page = fixture.componentInstance;
     page['openForm']();
     page['formName'].set('Too much');
     page['formCode'].set('TOOMUCH1');
-    page['formPercent'].set(150);
+    page['formBasisPoints'].set(15_000);
 
     expect(page['canSubmit']()).toBe(false);
   });

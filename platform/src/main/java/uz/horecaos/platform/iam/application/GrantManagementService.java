@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.MDC;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -113,6 +114,7 @@ public class GrantManagementService {
                         command.scope().type().name(),
                         "validUntil",
                         String.valueOf(command.validUntil())),
+                correlationIdFor(grantId),
                 clock.instant()));
         return grantId;
     }
@@ -212,6 +214,7 @@ public class GrantManagementService {
                         command.scope().type().name(),
                         "validUntil",
                         String.valueOf(command.validUntil())),
+                correlationIdFor(grantId),
                 clock.instant()));
         return grantId;
     }
@@ -283,6 +286,7 @@ public class GrantManagementService {
                         command.scope().type().name(),
                         "validUntil",
                         String.valueOf(command.validUntil())),
+                correlationIdFor(grantId),
                 now));
         return grantId;
     }
@@ -375,6 +379,7 @@ public class GrantManagementService {
                     revokerSubject,
                     reason,
                     Map.of("scope", grant.scopeType()),
+                    correlationIdFor(grantId),
                     clock.instant()));
         }
         return updated == 1;
@@ -405,6 +410,41 @@ public class GrantManagementService {
                 """)
                 .param("tenantId", tenantId)
                 .param("includeInactive", includeInactive)
+                .query(GrantManagementService::toGrantView)
+                .list();
+    }
+
+    /**
+     * One subject's active grants that carry a named capability, anywhere in
+     * this tenant — the reason chain Staff 9.5's access check reads: not just
+     * whether the covering scope has it, but every scope this subject holds it
+     * at, so a negative answer can point at the grant that almost worked
+     * ("she has this job, but only at Chilonzor branch") instead of a bare no.
+     *
+     * <p>Unlike {@link #listForTenant}, this is one subject's rows only, and it
+     * joins through {@code iam.role_capabilities} rather than filtering a
+     * tenant's whole grant list client-side — the same join {@code
+     * JdbcAuthorizationService#SELECT_GRANTS} already uses to answer {@code
+     * has()}, so the two never disagree about which grants carry a capability.
+     */
+    public List<GrantView> grantsCarrying(UUID tenantId, String subject, Capability capability) {
+        return jdbc.sql("""
+                SELECT g.id, g.principal_subject, r.code AS role_code, g.scope_type, g.scope_id,
+                       g.status, g.granted_by, g.reason, g.valid_from, g.valid_until,
+                       g.revoked_at, g.revoked_by, g.revoked_reason
+                  FROM iam.grants g
+                  JOIN iam.roles r ON r.id = g.role_id
+                  JOIN iam.role_capabilities rc ON rc.role_id = r.id
+                 WHERE g.principal_subject = :subject
+                   AND rc.capability_code = :capabilityCode
+                   AND g.status = 'ACTIVE'
+                   AND r.status = 'ACTIVE'
+                   AND (g.scope_type = 'PLATFORM' OR g.tenant_id = :tenantId)
+                 ORDER BY g.created_at DESC
+                """)
+                .param("subject", subject)
+                .param("capabilityCode", capability.code())
+                .param("tenantId", tenantId)
                 .query(GrantManagementService::toGrantView)
                 .list();
     }
@@ -556,6 +596,24 @@ public class GrantManagementService {
     private void evictAndPublish(GrantChanged event) {
         cacheOwner.evictGrants(event.principalSubject(), event.scope().tenantId());
         events.publishEvent(event);
+    }
+
+    /**
+     * Staff 9.3c: a bulk action is N grant changes that must audit as one
+     * group, not N. {@code CorrelationIdFilter} already puts the request's own
+     * {@code X-Correlation-Id} (client-supplied, or generated when absent)
+     * into MDC before any controller runs, so reusing it here is what lets
+     * {@code staff-page.ts}'s {@code suspend}/{@code restore} fan-out — one
+     * minted id sent on every call in a {@code Promise.allSettled} batch —
+     * turn into one shared {@code correlation_id} across every resulting
+     * {@code GrantChanged}, instead of {@code grantId} grouping each row
+     * alone. Falls back to {@code grantId} only when nothing put a
+     * correlation id on this thread — a system-initiated grant with no
+     * request behind it at all.
+     */
+    private static String correlationIdFor(UUID grantId) {
+        String fromRequest = MDC.get("correlationId");
+        return fromRequest == null || fromRequest.isBlank() ? grantId.toString() : fromRequest;
     }
 
     private static OffsetDateTime at(Instant instant) {

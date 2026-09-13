@@ -34,7 +34,7 @@
 .capacity__table th {
   text-align: left;
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
   background: var(--q-surface-1);
 }

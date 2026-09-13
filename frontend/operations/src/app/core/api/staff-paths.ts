@@ -73,6 +73,21 @@ export const staffPaths = {
   approvalDecision(tenantId: string, requestId: string): string {
     return `${this.approvalRequests(tenantId)}/${enc(requestId)}/decision`;
   },
+
+  /** `ApprovalRequestController.decided` — Staff 9.4's decided-history read (ADR 0109). */
+  approvalRequestsDecided(tenantId: string): string {
+    return `${this.approvalRequests(tenantId)}/decided`;
+  },
+
+  /**
+   * `GrantController.accessCheck` — Staff 9.5's "Проверка доступа" (ADR
+   * 0109), deliberately on `/api/v1/tenants/**` rather than
+   * `/control-plane/**`: see that method's own doc for why the latter would
+   * be unreachable from this app's OpenAPI client.
+   */
+  accessCheck(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/access-check`;
+  },
 } as const;
 
 function enc(value: string): string {

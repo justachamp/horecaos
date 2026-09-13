@@ -8,6 +8,7 @@ import { formatDate } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
 import { DeniedState } from '../../shared/ui/denied-state';
 import { EmptyState } from '../../shared/ui/empty-state';
 import { InlineAlert } from '../../shared/ui/inline-alert';
@@ -42,7 +43,15 @@ const LIST_CAPABILITY = 'CUSTOMER_READ';
  */
 @Component({
   selector: 'q-customers-page',
-  imports: [TPipe, RouterOutlet, CreateCustomerDialog, InlineAlert, DeniedState, EmptyState],
+  imports: [
+    TPipe,
+    RouterOutlet,
+    CreateCustomerDialog,
+    InlineAlert,
+    DeniedState,
+    EmptyState,
+    Combobox,
+  ],
   templateUrl: './customers-page.html',
   styleUrl: './customers-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -83,7 +92,30 @@ export class CustomersPage {
   protected readonly hasMore = signal(false);
   protected readonly loadingMore = signal(false);
 
+  /**
+   * `q-combobox`'s suggestion list — the same rows {@link load} already
+   * fetched for the search query, capped, so choosing one is exact rather
+   * than a second guess at what the filtered grid already found.
+   */
+  protected readonly searchOptions = computed<readonly ComboboxOption[]>(() =>
+    this.searchQuery().trim().length === 0
+      ? []
+      : this.customers()
+          .slice(0, 8)
+          .map((customer) => ({
+            id: customer.id,
+            label: customer.displayName ?? customer.id,
+            sublabel: customerStatusLabel(customer.status, (key) => this.i18n.t(key)),
+          })),
+  );
+
+  protected readonly searchCreateLabel = computed(() =>
+    this.i18n.t('customers.search.createNew', { query: this.searchQuery().trim() }),
+  );
+
   protected readonly createDialogOpen = signal(false);
+  /** Prefilled into `q-create-customer-dialog` when opened from the combobox's create-on-miss row. */
+  protected readonly createDialogInitialPhone = signal('');
   protected readonly creating = signal(false);
   protected readonly createError = signal<string | null>(null);
 
@@ -98,6 +130,21 @@ export class CustomersPage {
 
   protected openCustomer(customer: CustomerSummary): void {
     void this.router.navigate([customer.id], { relativeTo: this.route });
+  }
+
+  /** `q-combobox`'s `optionSelected` carries only `{id, label}` — the row it came from is looked up here. */
+  protected onSearchOptionSelected(option: ComboboxOption): void {
+    const customer = this.customers().find((candidate) => candidate.id === option.id);
+    if (customer) {
+      this.openCustomer(customer);
+    }
+  }
+
+  /** `q-combobox`'s create-on-miss row — the typed text becomes the dialog's prefilled phone. */
+  protected onSearchCreateRequested(query: string): void {
+    this.createError.set(null);
+    this.createDialogInitialPhone.set(query);
+    this.createDialogOpen.set(true);
   }
 
   /** Bound to `<router-outlet (activate) (deactivate)>` — see `orders-page.ts` for the same idiom. */
@@ -208,6 +255,7 @@ export class CustomersPage {
 
   protected openCreateDialog(): void {
     this.createError.set(null);
+    this.createDialogInitialPhone.set('');
     this.createDialogOpen.set(true);
   }
 

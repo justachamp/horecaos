@@ -1,9 +1,18 @@
 <div class="zones">
   <div class="zones__toolbar">
     <h1 class="q-subhead">{{ 'delivery.zones.title' | t }}</h1>
-    <button type="button" class="zones__create" (click)="openCreateForm()">
-      {{ 'delivery.zones.create.action' | t }}
-    </button>
+    <div class="zones__toolbar-actions">
+      <a
+        class="zones__import-link"
+        routerLink="/delivery/zones/import"
+        data-testid="zones-import-link"
+      >
+        {{ 'delivery.zones.import.link' | t }}
+      </a>
+      <button type="button" class="zones__create" (click)="openCreateForm()">
+        {{ 'delivery.zones.create.action' | t }}
+      </button>
+    </div>
   </div>
 
   @if (loading()) {

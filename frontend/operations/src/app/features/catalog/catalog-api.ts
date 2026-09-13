@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { Observable, firstValueFrom, map } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { BrandScope, catalogPaths } from '../../core/api/catalog-paths';
@@ -30,7 +30,7 @@ import {
   ValidationReport,
   VariantAvailabilityRow,
 } from './catalog-domain';
-import { CursorState, Page } from '../../core/api/page';
+import { CursorState, Page, firstPage, nextPage } from '../../core/api/page';
 
 /**
  * `GET/POST/PUT .../catalog/**` — `CatalogAuthoringController` and
@@ -83,15 +83,27 @@ export class CatalogApi {
     return unwrap(this.api.get<ModifierGroupDetail>(catalogPaths.modifierGroup(scope, groupId)));
   }
 
-  /** catalog.md §4.6's read side / §4.2 tab 6: one location's sellable variants with current availability. */
+  /**
+   * catalog.md §4.6's read side / §4.2 tab 6: one location's sellable
+   * variants with current availability.
+   *
+   * `CatalogAuthoringController.variantsAtLocation` answers a cursor
+   * `Page<VariantAvailabilityResponse>` (ADR 0031), not a bare array — this
+   * used to call the non-paged `api.get` and unwrap it as if it were one,
+   * which produced a `{ items, nextCursor }` object wherever the caller
+   * expected `readonly VariantAvailabilityRow[]`. Nothing caught it because
+   * every spec stubbed this method wholesale with a plain array; against
+   * the real endpoint, `menus-page.ts`'s `@for` over that object throws
+   * (see its own regression spec).
+   */
   variantsAtLocation(
     scope: BrandScope,
     locationId: string,
-  ): Observable<readonly VariantAvailabilityRow[]> {
-    return unwrap(
-      this.api.get<readonly VariantAvailabilityRow[]>(
-        catalogPaths.variantsAtLocation(scope, locationId),
-      ),
+    page: CursorState,
+  ): Observable<Page<VariantAvailabilityRow>> {
+    return this.api.page<VariantAvailabilityRow>(
+      catalogPaths.variantsAtLocation(scope, locationId),
+      page,
     );
   }
 
@@ -281,4 +293,34 @@ export class CatalogApi {
 /** `ApiClient.get` returns the value with its `ETag` version; these reads have no aggregate to version. */
 function unwrap<T>(versioned: Observable<{ value: T }>): Observable<T> {
   return versioned.pipe(map((result) => result.value));
+}
+
+/** A generous cap, not a real limit — one location's sellable menu is not thousands of rows. */
+const MAX_VARIANT_PAGES = 20;
+
+/**
+ * Pages through {@link CatalogApi.variantsAtLocation} until the cursor is
+ * exhausted, for the two screens that want the *whole* location matrix
+ * rather than a paginated UI of their own (`menus-page`, and
+ * `product-editor-page`'s availability tab, which filters the same read
+ * down to one product's variants). Centralised here so the cursor loop is
+ * written once, not once per caller.
+ */
+export async function fetchAllVariantsAtLocation(
+  api: CatalogApi,
+  scope: BrandScope,
+  locationId: string,
+): Promise<readonly VariantAvailabilityRow[]> {
+  const rows: VariantAvailabilityRow[] = [];
+  let state: CursorState = firstPage(200);
+  for (let fetched = 0; fetched < MAX_VARIANT_PAGES; fetched++) {
+    const page = await firstValueFrom(api.variantsAtLocation(scope, locationId, state));
+    rows.push(...page.items);
+    const next = nextPage(state, page);
+    if (!next) {
+      break;
+    }
+    state = next;
+  }
+  return rows;
 }

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError } from '../../../core/api/problem-details';
@@ -10,12 +10,15 @@ import { BrandProfileApi, BrandView } from '../brand-profile/brand-profile-api';
 import { FiscalizationApi, LegalEntityView } from '../fiscalization/fiscalization-api';
 import { LocationsApi, LocationView } from '../locations/locations-api';
 import { BindSubmission, ConnectProviderPanel, ConnectSubmission } from './connect-provider-panel';
+import { InstallationDetailPanel } from './installation-detail-panel';
 import {
   InstallationView,
   IntegrationsApi,
   MerchantBindingView,
   ProviderConnectDeclaration,
 } from './integrations-api';
+import { LivenessPanel } from './liveness-panel';
+import { FailureInboxPanel } from './failure-inbox-panel';
 import {
   IntegrationBindingOption,
   RegisterBindingSubmission,
@@ -77,7 +80,14 @@ type RotationTarget =
 @Component({
   selector: 'q-integrations-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ConnectProviderPanel, RegisterMerchantBindingPanel, RotateSecretDialog],
+  imports: [
+    ConnectProviderPanel,
+    RegisterMerchantBindingPanel,
+    RotateSecretDialog,
+    InstallationDetailPanel,
+    LivenessPanel,
+    FailureInboxPanel,
+  ],
   templateUrl: './integrations-page.html',
   styleUrl: './integrations-page.css',
 })
@@ -127,6 +137,31 @@ export class IntegrationsPage {
   protected readonly rotating = signal<RotationTarget | null>(null);
   protected readonly rotateSubmitting = signal(false);
   protected readonly rotateError = signal<string | null>(null);
+
+  // ---------------------------------------------------- 10.8a installation detail
+  // The five endpoints ADR 0106 wires: an installation's own bindings (list,
+  // activate, suspend), a fresh capability-reconciliation preflight, and the
+  // clopos-only settings toggle — all behind one drawer per installation
+  // rather than five more table columns. `InstallationDetailPanel` owns its
+  // own loading and mutation state (bindings, settings, and — for a
+  // MARKETPLACE installation — its 10.8d partner API clients); this page
+  // only tracks which installation's drawer is open and reloads the
+  // installations table when the drawer reports a change, since a
+  // reconciliation can change what the table itself shows
+  // (`secretLastUsedAt`, `lastConnectionStatus`).
+  protected readonly detailInstallation = signal<InstallationView | null>(null);
+
+  /** Brand/location display names for the detail panel's binding scope column. */
+  protected readonly scopeNames = computed(() => {
+    const names = new Map<string, string>();
+    for (const brand of this.brands()) {
+      names.set(brand.id, brand.displayName);
+    }
+    for (const location of this.locations()) {
+      names.set(location.id, location.displayName);
+    }
+    return names;
+  });
 
   constructor() {
     void this.load();
@@ -290,6 +325,42 @@ export class IntegrationsPage {
       id: installation.id,
       verifiable: installation.providerType === VERIFIABLE_PROVIDER_TYPE,
     });
+  }
+
+  /**
+   * ADR 0106, gap-map row 10.8a: the five endpoints
+   * `OperationsProviderInstallationController` publishes and this app never
+   * called — bindings (list, activate, suspend), capability-reconciliation,
+   * and the clopos settings toggle — all behind one drawer per installation.
+   */
+  protected openInstallationDetail(installation: InstallationView): void {
+    this.detailInstallation.set(installation);
+  }
+
+  protected closeInstallationDetail(): void {
+    this.detailInstallation.set(null);
+  }
+
+  /** The drawer's own reconciliation or binding actions can change what the table shows. */
+  protected async onInstallationDetailChanged(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    await this.reloadInstallations(scope);
+    const current = this.detailInstallation();
+    if (current !== null) {
+      const refreshed = this.installations().find((candidate) => candidate.id === current.id);
+      if (refreshed !== undefined) {
+        this.detailInstallation.set(refreshed);
+      }
+    }
+  }
+
+  /** The drawer's credential rotate action opens this page's own shared dialog instead of a second one. */
+  protected onRotateFromDetail(installation: InstallationView): void {
+    this.closeInstallationDetail();
+    this.openRotateInstallation(installation);
   }
 
   protected openRotateBinding(binding: MerchantBindingView): void {

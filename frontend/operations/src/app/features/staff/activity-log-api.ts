@@ -48,9 +48,15 @@ export interface AuditSearchFilters {
   readonly from?: string;
   readonly to?: string;
   readonly limit?: number;
+  /** The previous page's `nextCursor` (Staff 9.3) — omit for the first page. */
+  readonly cursor?: string;
 }
 
-/** `Page.last(events)` from `AuditController` — always a terminal page; `AuditQueryService.MAXIMUM_PAGE` (200) bounds it. */
+/**
+ * A page of the log. `nextCursor` is `null` at the end of the collection and
+ * a real cursor otherwise — `AuditController` no longer answers `Page.last`
+ * unconditionally (Staff 9.3), so an operator past 200 events can page on.
+ */
 export interface AuditEventPage {
   readonly items: readonly AuditEventView[];
   readonly nextCursor: string | null;
@@ -81,6 +87,7 @@ export class ActivityLogApi {
           from: filters.from,
           to: filters.to,
           limit: filters.limit,
+          cursor: filters.cursor,
         },
       }),
     );

@@ -10,3 +10,55 @@
     word-break: break-all;
   }
 }
+
+/*
+ * `q-rich-text`'s own block tags (row X.31) — the same spacing the legacy
+ * plain-text path gets from `<section class="mt-4 block first:mt-0">` per
+ * numbered point, given to each block element directly since the editor's
+ * own `<p>`/`<h1-3>`/`<ul>`/`<ol>`/`<li>` already carry that separation.
+ */
+.terms-content__html {
+  > :first-child {
+    margin-top: 0;
+  }
+
+  p,
+  h1,
+  h2,
+  h3,
+  ul,
+  ol,
+  blockquote {
+    margin: 1rem 0 0;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
+    color: inherit;
+  }
+
+  ul,
+  ol {
+    padding-left: 1.25rem;
+  }
+
+  ul {
+    list-style: disc;
+  }
+
+  ol {
+    list-style: decimal;
+  }
+
+  li + li {
+    margin-top: 0.25rem;
+  }
+
+  blockquote {
+    padding-left: 0.75rem;
+    border-left: 2px solid currentColor;
+    opacity: 0.85;
+  }
+}

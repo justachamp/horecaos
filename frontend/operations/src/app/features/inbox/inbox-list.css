@@ -123,7 +123,7 @@
   background: var(--q-surface-1);
   color: var(--q-ink-subtle);
   text-align: left;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   font-weight: 400;
   letter-spacing: 0.32px;
   padding: 8px 12px;
@@ -146,7 +146,7 @@
   padding: 4px 12px;
   vertical-align: middle;
   color: var(--q-ink);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .conversation-row:hover {

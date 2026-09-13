@@ -411,9 +411,11 @@ constraint name. Overlaps are legal and resolved by `priority` — show the reso
 **Tab 4 — Фискальные данные** — read-only summary plus a link to 10.7.
 Legal entity, ИНН, VAT registration, effective-from date, and the fiscal terminals bound here.
 The underlying tables are built (`tenant.legal_entities`, `.location_fiscal_assignments`, V0053;
-`fiscal.fiscal_terminals`, V0039), but nothing in operations reads them yet — same gap as 10.7,
-not a separate one. Read-only here on purpose regardless: assigning a branch to a legal entity is
-an approval-bearing act and belongs on one screen (10.7), not on thirty branch pages.
+`fiscal.fiscal_terminals`, V0247 — not V0039, which is `fiscal.fiscal_documents` and never held
+this table; see 10.7's own correction), and as of wave P34 both halves of 10.7 read from
+operations. This tab itself still has no reader of its own — same gap as before, just narrower
+now that 10.7 is real. Read-only here on purpose regardless: assigning a branch to a legal entity
+is an approval-bearing act and belongs on one screen (10.7), not on thirty branch pages.
 
 **Tab 5 — Каналы** — which channels sell from this location.
 A checkbox list of `tenant.sales_channels` for the tenant, writing `tenant.sales_channel_locations`.
@@ -766,22 +768,29 @@ legally appear on a receipt.
 three different times: a bookkeeper assigns entities, an IT admin registers terminals, and a
 catalog manager fills in ИКПУ codes.
 
-**This screen was written when ADR 0038 was Proposed; it is now Accepted and substantially
-built, just not from here.** `tenant.legal_entities` and `tenant.location_fiscal_assignments`
-exist (V0053) with `LegalEntityService` behind them; `fiscal.fiscal_terminals` and
-`fiscal.fiscal_documents` exist (V0039, V0053) with a document lifecycle, a `BLOCKED` state and
-a reporting sweeper running on a timer; `catalog.fiscal_classifications` and the ИКПУ reference
-`catalog.mxik_reference` exist (V0028) with per-node classification endpoints. **None of it is
-reachable from this screen yet**, which is the actual gap: `LegalEntityController` and
-`CatalogAuthoringController` both sit on control-plane (`/api/v1/control-plane/...`), and no
-controller of any kind exists yet for `fiscal.fiscal_terminals`. Tab 1 and Tab 3 below describe
-real, running machinery that only HorecaOS staff can currently drive; Tab 2 describes a table
-nobody can drive at all. V0021's interim slice — `catalog.products.mxik_code`, `catalog.variants.mxik_code`,
-`catalog.modifier_options.mxik_code` and the matching `package_code` columns, nullable,
-unvalidated except non-blank, plus the two partial indexes for the coverage question — is what
-those endpoints write. A tenant's own staff can act on none of it yet; every classification
-column here is set through `CatalogAuthoringController`, on control-plane, same as the rest of
-this screen.
+**This screen was written when ADR 0038 was Proposed; it is now Accepted and, as of wave P34,
+built from here too.** `tenant.legal_entities` and `tenant.location_fiscal_assignments` exist
+(V0053) with `LegalEntityService` behind them; `fiscal.fiscal_documents` exists (V0039) with a
+document lifecycle, a `BLOCKED` state and a reporting sweeper running on a timer;
+`catalog.fiscal_classifications` and the ИКПУ reference `catalog.mxik_reference` exist (V0028)
+with per-node classification endpoints. **`fiscal.fiscal_terminals` did not exist at all** —
+this list previously named it alongside `fiscal.fiscal_documents` under V0039/V0053, which was
+simply wrong: neither of those migrations touches it, no migration did, and ADR 0038 lines
+503-513 were a sketch with no schema behind it. Wave P34 built the table (V0247) and
+`OperationsFiscalTerminalController` together, so Tab 2 below is the first of the three that was
+ever reachable from nothing. Tab 1 (`OperationsLegalEntityController`) and Tab 3's coverage read
+(`CatalogQueryController.fiscalCoverage`, built locally the same wave in place of P21's
+not-yet-merged fiscal workbench) are likewise reachable from this screen now — every controller
+this section used to cite as control-plane-only now has an operations mirror, except
+`CatalogAuthoringController` itself: per-node classification (`classifyVariant` /
+`classifyModifierOption` / `classifyFee`) still answers only on control-plane, which is why Tab 3
+below is a coverage report plus the one write this screen keeps for itself — the delivery fee's
+own ИКПУ and marking control — rather than a full editor; that stays the product editor's per
+10.7's own text, "not an editor". V0021's interim slice — `catalog.products.mxik_code`,
+`catalog.variants.mxik_code`, `catalog.modifier_options.mxik_code` and the matching
+`package_code` columns, nullable, unvalidated except non-blank — is gone; V0028 moved
+everything onto `catalog.fiscal_classifications`, which is what `CatalogAuthoringController`'s
+endpoints write today, on control-plane only.
 
 ### Tab 1 — Юридические лица
 
@@ -811,8 +820,12 @@ receipt obligation. Surface that on the row, in 10.2's list, and in the 10.0 rea
 
 `fiscal.fiscal_terminals`: kind (`POS / COURIER_TERMINAL / KIOSK / VIRTUAL`), location, legal
 entity, provider binding, terminal reference, capability snapshot, status, last health check.
-The table exists (V0039/V0053); **no controller reads or writes it yet, on control-plane or
-operations** — this tab has a schema to render and nothing to call.
+**Built by wave P34 (V0247), operations-native from the start** —
+`OperationsFiscalTerminalController` registers, lists, health-checks, suspends, reactivates and
+retires a terminal, and `CheckoutSettlementPlanner.responsibilityOf` reads the same
+`hasCapableTerminal` query this tab renders, so cash's fiscal responsibility can finally be
+declared `TERMINAL` rather than always falling back to `OPERATOR`. Before this wave the table did
+not exist at all, at any migration number; this section previously claimed otherwise.
 Sort by severity: failing health (0) → never checked (1) → healthy (2).
 Actions: `Проверить связь` (writes `last_health_check_at`/`last_health_status`), `Отключить`.
 Endpoints come from the platform-owned approved catalogue (`integration.provider_environments`),
@@ -825,11 +838,17 @@ Not an editor — a **coverage report and a bulk tool**. The editing happens in 
 (Catalog 4.2); this tab exists because the fiscal blocker is a per-brand number and somebody has to
 close it before launch. Per-node classification itself is built —
 `CatalogAuthoringController.classifyVariant`/`classifyModifierOption`/`classifyFee` exist and
-write the columns below — but only from control-plane, same as this whole screen; the bulk tool
-this tab specifically adds is, separately, genuinely **not built** (see below).
+write the columns below — but only from control-plane; that part of this screen is still
+cross-surface. The headline and the node list below it are built as of wave P34
+(`CatalogQueryController.fiscalCoverage`, operations-native, the minimum this wave puts up in
+place of P21's not-yet-merged fiscal workbench), and this wave's own write is the delivery fee's
+own row — reusing `classifyFee` for just the ИКПУ and marking fields, since it is "the one people
+forget" and blocks the pilot on its own. **Bulk assign — a filtered selection classified in one
+action from `catalog.mxik_reference` — is, separately, genuinely still not built** (see below).
 
-- A headline: `неклассифицировано: 143 из 1 204 позиций` from `ix_variants_unclassified` +
-  `ix_modifier_options_unclassified`.
+- A headline: `неклассифицировано: 143 из 1 204 позиций` from `ix_fiscal_classifications_incomplete`
+  (V0028 replaced the two per-table indexes this line used to cite — `ix_variants_unclassified` and
+  `ix_modifier_options_unclassified` were dropped in that same migration).
 - A table of unclassified priceable nodes: type (`VARIANT` / `MODIFIER_OPTION` / `FEE`), name,
   category, locations offering it. Sorted by "offered in most locations" descending — fix the ones
   actually being sold first.
@@ -1093,23 +1112,39 @@ third-party settlement quietly lose it.
 ### Производственный календарь
 
 Holidays including movable Islamic dates, the weekend definition, and the **business-day boundary
-that may cross midnight**. **Not built.** The matrix records the open question: Delever's forecast
-window defaults to 09:00→09:00. This is a reporting foundation (ADR 0043) and a settings screen
-cannot invent it; the card links to the open question rather than shipping a half-answer.
+that may cross midnight**. **Built (wave P37).** `BusinessCalendarController` reads and writes
+`tenant.business_calendars` (weekend, ISO weekday numbers) and `tenant.business_calendar_holidays`
+(this tenant's own closures, additional to the platform's `tenant.public_holidays`), and moves the
+`reporting.business_day_policies` boundary `BusinessDayService.setBoundary` had built with no
+production caller — gated by the ADR 0027 approval model. Moving the boundary marks a recut
+outstanding rather than performing one inline; the screen surfaces that state and the reports
+provenance banner now states `businessDayStart` read-only. Delever's forecast window default of
+09:00→09:00 remains the open product question the matrix records — this wave answers "can a
+tenant set its own boundary at all", not "what should the default be".
 
 Note the relationship to `tenant.service_schedule_exceptions`: a holiday in the calendar should
 *offer* to create schedule exceptions across selected schedules, and never silently create them.
 
 ### Границы SLA
 
-Tenant-configurable time buckets for the SLA distribution reports. **Not built, ADR 0043.**
-HorecaOS beats Delever here on purpose: Delever hard-codes six buckets, which cannot be changed later
-without invalidating historical comparison. Changing a boundary must therefore be versioned and
-the reports must state which boundary set they were computed under.
+**Correction (wave P37, ADR 0107):** this section used to promise tenant-configurable time
+buckets. It does not exist and will not: ADR 0043 decided the buckets are platform-fixed and
+versioned — `SlaBucketController`'s own Javadoc says so, and `reporting.SlaBucketSet` is
+deliberately not a tenant-editable table. **Built, read-only:** a version card
+(`ReportingController.slaBucketSet`, tenant-readable) names the active bucket set and its version
+so a report can be read against the definition it was computed under. HorecaOS still beats Delever
+here, but on the axis that was actually decided — the buckets are *versioned*, so a future release
+can cut a `v2` set without rewriting last quarter's chart — not on tenant configurability, which
+would rewrite the meaning of every chart already drawn and is exactly what ADR 0043 refuses. See
+ADR 0107 for the contradiction this correction resolves and why configurability is declined rather
+than deferred.
 
 ### Теги филиалов
 
-**Not built.** Delever's page exists and is empty. Wave 2.
+**Built (wave P37).** A tenant registers its own tags (`tenant.branch_tags`) and assigns any
+number to a branch (`tenant.location_branch_tags`), over `BranchTagController`. The settings
+screen renders the registry, an archive action, and a location × tag matrix — the
+filter-and-group affordance that makes a tag worth having, per this section's own opening line.
 
 ---
 
@@ -1322,7 +1357,7 @@ hand the customer a correct fiscal document.
 | Zones | One zone entity with a typed role | Delever has three overlapping geometry layers and its docs never say which wins |
 | Delivery fee | One written total order of resolution, each step recording what decided it | Delever has four possible fee sources and no stated precedence |
 | Dispatch config | One provider-agnostic rule engine | Delever duplicates near-identical config in five provider pages and therefore cannot express fallback |
-| SLA buckets | Tenant-configurable and versioned | Delever hard-codes six, unchangeable without invalidating history |
+| SLA buckets | Platform-fixed and versioned (corrected wave P37, ADR 0107 — this row previously said "tenant-configurable") | Delever hard-codes six with no version at all; a future HorecaOS release can cut a v2 set without rewriting last quarter's chart, which is the axis actually decided |
 | Template moderation | A blocking state on the template row | Delever does not model provider moderation at all |
 | Static pages | Block-based, sanitized | Delever accepts raw HTML from tenants, pointed at their own customers |
 | Findability | A search over the code-owned key registry | Only possible because ADR 0030 made keys enumerable. Nothing in Delever can do this |
@@ -1396,8 +1431,7 @@ Named precisely, with the owning decision. Everything not listed here is built a
 | `delivery.out_of_zone_policy` as a registered ADR 0030 key | ADR 0037 + ADR 0030 |
 | Order-policy config keys with no declaration today: business-day start/end, average order time, maximum order time, late threshold, late indicator colour, minimum order sum, routing poll interval, pre-order branch resolution rule, operator promo-code permission | ADR 0030 registry (`ConfigurationKeys`), content owned by ADR 0002 / 0019 / 0037 |
 | Auto-accept eligible-channel set and minimum-prior-successful-orders gate on the acceptance policy document | ADR 0002 + ADR 0030 |
-| An operations-facing resolution-trace endpoint for the §1.2 origin chip, and operations controllers over the ADR 0037 zone/tariff registry and the ADR 0038 legal-entity registry | `ConfigurationController`, `ServiceZoneController`, `DeliveryTariffController` and `LegalEntityController` all exist and do the work — every one of them sits on `/api/v1/control-plane/...`, none on `/api/v1/operations/...` |
-| An operations controller over `fiscal.fiscal_terminals` | ADR 0038 — the table exists (V0039/V0053) and nothing reads or writes it yet, on either surface |
+| An operations-facing resolution-trace endpoint for the §1.2 origin chip | `ConfigurationController` does the work; it sits on `/api/v1/control-plane/...`, not `/api/v1/operations/...` |
 | `payments.payment_method_entity_bindings`, fiscal-responsibility validation at method activation, bulk fiscal-classification assignment, and the three `CatalogValidator` rules becoming publication errors rather than warnings | ADR 0038 |
 | Provider template moderation state and the send block it implies | ADR 0020 — the rest of the `notifications` schema and template authoring are built; see §10.9 |
 | Per-location notification routing (`recipient_endpoints.operations_endpoint_reference` has no reader or writer) | ADR 0020 |
@@ -1408,12 +1442,13 @@ Named precisely, with the owning decision. Everything not listed here is built a
 
 | Was listed as missing | What actually shipped |
 |---|---|
-| `tenant.legal_entities`, `tenant.location_fiscal_assignments` with the non-overlap exclusion constraint | Built by V0053, with `LegalEntityService` and `payments.PaymentLegalEntityResolver` already using them. Control-plane can manage both today; operations still cannot (§10.7) |
-| `fulfillment.service_zones` / `_versions` / `zone_location_bindings` / `regions` / `delivery_tariffs` / `_bands` / `_time_rules` / `delivery_fee_resolutions` | The whole schema was built by V0025 (PostGIS included) and corrected by V0032, with `ServiceZoneService` and `DeliveryFeeResolver` implementing the model in full. Control-plane can manage zones and tariffs today; operations still cannot (§10.13) |
+| `tenant.legal_entities`, `tenant.location_fiscal_assignments` with the non-overlap exclusion constraint | Built by V0053, with `LegalEntityService` and `payments.PaymentLegalEntityResolver` already using them. `OperationsLegalEntityController` mirrors every operation, and wave P34 finished it (correct/suspend/archive) and pointed this screen's Tab 1 at it (§10.7) |
+| `fiscal.fiscal_terminals` and an operations controller over it | Built by wave P34 (V0247, `OperationsFiscalTerminalController`) — the table did not exist at any earlier migration number; this list previously and wrongly cited V0039/V0053 for it. `CheckoutSettlementPlanner.responsibilityOf` now declares cash's fiscal responsibility `TERMINAL` where a capable terminal is bound (§10.7 Tab 2) |
+| `fulfillment.service_zones` / `_versions` / `zone_location_bindings` / `regions` / `delivery_tariffs` / `_bands` / `_time_rules` / `delivery_fee_resolutions`, and operations controllers over the registry | The whole schema was built by V0025 (PostGIS included) and corrected by V0032, with `ServiceZoneService` and `DeliveryFeeResolver` implementing the model in full. `OperationsServiceZoneController`, `OperationsDeliveryTariffController` and `OperationsRegionController` now mirror it (§10.13) |
 | Location contact and geography: phone, structured address, latitude/longitude on `tenant.locations` | Built by V0023. `RADIUS` distance mode can already compute from the point; the point just has no operations write path yet (§10.2b) |
 | The whole `notifications` schema | Built by V0026 (seven tables). Template authoring is reachable from operations today (§10.9); routing and moderation are the actual remaining gaps, listed above |
 | `ordering.order_outcome_reasons` + `order_outcome_reason_texts`, `ordering.order_outcomes` | Built by V0029. Control-plane can manage the registry (`OrderOutcomeReasonController`); operations still cannot |
-| `catalog.fiscal_classifications` and `catalog.mxik_reference` | Built by V0028, with per-node classification endpoints on `CatalogAuthoringController` (§10.7) — control-plane only, and the three `CatalogValidator` rules genuinely remain warnings, not blockers |
+| `catalog.fiscal_classifications` and `catalog.mxik_reference` | Built by V0028, with per-node classification endpoints on `CatalogAuthoringController` (§10.7) — those endpoints stay control-plane only. Wave P34 added the operations-native coverage read (`CatalogQueryController.fiscalCoverage`) and lets this screen classify just the delivery fee's ИКПУ and marking through the existing `classifyFee`; the three `CatalogValidator` rules genuinely remain warnings, not blockers |
 | `payments.payment_methods` and the foreign key from `channel_payment_methods.payment_method_code` | Built by V0042 (ADR 0046) and V0175. What is still missing from the row is narrower — see above |
 
 ### Blocks a good version of the section, not the pilot
@@ -1423,10 +1458,10 @@ Named precisely, with the owning decision. Everything not listed here is built a
 | A purpose/role column on `media.assets`, so "the logo" and "the aggregator banner" are distinguishable | ADR 0010 |
 | Brand contact fields and a brand description with translations | ADR 0002 |
 | Per-brand supported-language set (only `platform.default_locale` exists) | ADR 0030 key, content ADR 0002 |
-| Location sort order, tags, and venue attributes | ADR 0002 |
+| Location sort order and venue attributes (branch tags built wave P37 — `BranchTagController`, §10.10) | ADR 0002 |
 | Courier policy settings: billing mode, shift enforcement, ready-only visibility, address-before-accept, post-delivery payment check, acceptance SLA, max concurrent orders, GPS radii | ADR 0042, Proposed |
-| Business calendar, business-day boundary that may cross midnight, weekend definition | ADR 0043 + an open product question the matrix records |
-| Tenant-configurable SLA bucket boundaries, versioned | ADR 0043 |
+| ~~Business calendar, business-day boundary that may cross midnight, weekend definition~~ — built wave P37, `BusinessCalendarController`, §10.10. Delever's forecast-window default (09:00→09:00) is still an open product question the matrix records | ADR 0043 |
+| ~~Tenant-configurable SLA bucket boundaries, versioned~~ — declined, not deferred: ADR 0043 fixes the buckets platform-side. Corrected wave P37, ADR 0107; a read-only version card is built (§10.10) | ADR 0043 |
 | `ordering.orders.callback_requested`, `cash_tendered_expected_minor` | ADR 0039 |
 | Courier-first vs branch-first acceptance ordering — **design-forcing, not configuration**: it reorders the lifecycle and ADR 0019's state machine must carry it as a parameter or refuse it | ADR 0019 |
 | Retention schedules, consent state definitions, DSAR request handling | ADR 0029 |

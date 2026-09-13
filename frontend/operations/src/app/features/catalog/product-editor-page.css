@@ -20,7 +20,7 @@
 .editor__back {
   display: block;
   color: var(--q-ink-muted);
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
   text-decoration: none;
   margin-bottom: 4px;
 }
@@ -57,22 +57,6 @@
   border-bottom: 1px solid var(--q-hairline);
 }
 
-.editor__locale {
-  padding: 4px 10px;
-  border: 1px solid var(--q-hairline);
-  background: var(--q-canvas);
-  border-radius: var(--q-radius);
-  cursor: pointer;
-  font-size: 12px;
-  text-transform: uppercase;
-}
-
-.editor__locale--active {
-  background: var(--q-ink);
-  color: #fff;
-  border-color: var(--q-ink);
-}
-
 .editor__body {
   flex: 1;
   min-height: 0;
@@ -98,7 +82,7 @@
   background: none;
   color: var(--q-ink-muted);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
   border-bottom: 2px solid transparent;
 }
 
@@ -129,7 +113,7 @@
   padding: 8px 10px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .editor__readonly {
@@ -156,14 +140,14 @@
 .editor__table th {
   text-align: left;
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
   border-bottom: 1px solid var(--q-hairline);
 }
 
 .editor__table td {
   padding: 6px 10px;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   border-bottom: 1px solid var(--q-hairline);
 }
 
@@ -252,14 +236,14 @@
   padding: 2px 6px;
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .status-badge {
   padding: 2px 8px;
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   margin-left: 8px;
 }
 
@@ -302,14 +286,14 @@
   padding: 8px 10px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .dialog__banner {
   padding: 8px 10px;
   background: var(--q-error-tint);
   color: var(--q-error-text);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .dialog__actions {
@@ -326,7 +310,7 @@
   border-radius: var(--q-radius);
   background: var(--q-canvas);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .dialog__confirm {

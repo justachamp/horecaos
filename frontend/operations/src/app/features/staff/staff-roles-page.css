@@ -45,7 +45,7 @@
   padding: 2px 8px;
   border: 1px solid var(--q-hairline);
   border-radius: 999px;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .detail-row td {
@@ -98,7 +98,7 @@
   border: none;
   color: var(--q-primary);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
   padding: 2px 6px;
 }
 
@@ -128,7 +128,7 @@
   background: var(--q-canvas);
   color: var(--q-ink);
   font-family: var(--q-font-sans);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .empty {

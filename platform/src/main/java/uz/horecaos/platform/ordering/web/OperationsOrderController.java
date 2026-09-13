@@ -16,10 +16,12 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
@@ -34,8 +36,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
@@ -97,11 +101,21 @@ public class OperationsOrderController {
     private final RejectReasonQueryService rejectReasons;
     private final JdbcCartStore carts;
     private final CurrentActor currentActor;
+    private final AuthorizationService authorization;
     private final OrderCallProvenanceService callProvenance;
     private final OperatorOrderingService operatorOrdering;
     private final OperatorCustomerLookupService customerLookup;
     private final OrderBulkActionService bulkActions;
     private final LiveBoardQueryService liveBoard;
+
+    /**
+     * Every capability {@link OrderActionsPolicy#availableFor} reads. Computed
+     * once per request (§ list/detail below) rather than once per {@link
+     * AuthorizationService#has} call per row, so a queue page does not pay for
+     * a grant read per order.
+     */
+    private static final Set<Capability> ACTIONS_POLICY_CAPABILITIES = EnumSet.of(
+            Capability.ORDER_APPROVE, Capability.ORDER_ADVANCE, Capability.ORDER_CANCEL, Capability.ORDER_AMEND);
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OperationsOrderController(
@@ -112,6 +126,7 @@ public class OperationsOrderController {
             RejectReasonQueryService rejectReasons,
             JdbcCartStore carts,
             CurrentActor currentActor,
+            AuthorizationService authorization,
             OrderCallProvenanceService callProvenance,
             OperatorOrderingService operatorOrdering,
             OperatorCustomerLookupService customerLookup,
@@ -124,11 +139,40 @@ public class OperationsOrderController {
         this.rejectReasons = rejectReasons;
         this.carts = carts;
         this.currentActor = currentActor;
+        this.authorization = authorization;
         this.callProvenance = callProvenance;
         this.operatorOrdering = operatorOrdering;
         this.customerLookup = customerLookup;
         this.bulkActions = bulkActions;
         this.liveBoard = liveBoard;
+    }
+
+    /**
+     * Which of {@link #ACTIONS_POLICY_CAPABILITIES} the current principal holds
+     * at this order's {@code LOCATION} scope (ADR 0025) — the input {@link
+     * OrderActionsPolicy#availableFor} gates every action on. Read once per
+     * request and threaded through every row (list) or the one row (detail),
+     * never recomputed per order: {@link AuthorizationService#has} is a pure
+     * function of the principal's already-cached grants, but there is no
+     * reason to call it once per row when the scope is the same for all of
+     * them.
+     *
+     * <p>Package-private, not {@code private}, so {@code
+     * OperationsOrderControllerActionCapabilitiesTests} can call it directly
+     * against a mocked {@link AuthorizationService} without constructing a
+     * whole order — the same reason {@link OrderActionsPolicy#canCancel} is
+     * package-private rather than {@code private}.
+     */
+    Set<Capability> grantedOrderActionCapabilities(UUID tenantId, UUID brandId, UUID locationId) {
+        String subject = currentActor.get().subject();
+        ResourceScope scope = ResourceScope.location(tenantId, brandId, locationId);
+        EnumSet<Capability> granted = EnumSet.noneOf(Capability.class);
+        for (Capability capability : ACTIONS_POLICY_CAPABILITIES) {
+            if (authorization.has(subject, capability, scope)) {
+                granted.add(capability);
+            }
+        }
+        return granted;
     }
 
     @GetMapping
@@ -152,8 +196,9 @@ public class OperationsOrderController {
 
         JdbcOrderStore.OrderListQuery query =
                 boardQuery(tenantId, brandId, locationId, status, null, null, null, null, null, null, null, null);
+        Set<Capability> granted = grantedOrderActionCapabilities(tenantId, brandId, locationId);
         return ResponseEntity.ok(orderQuery.forLocation(query, null, limit).stream()
-                .map(OrderSummaryResponse::of)
+                .map(row -> OrderSummaryResponse.of(row, granted))
                 .toList());
     }
 
@@ -223,8 +268,9 @@ public class OperationsOrderController {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "This cursor does not name an order of this branch");
         }
 
+        Set<Capability> granted = grantedOrderActionCapabilities(tenantId, brandId, locationId);
         List<OrderSummaryResponse> items =
-                rows.stream().map(OrderSummaryResponse::of).toList();
+                rows.stream().map(row -> OrderSummaryResponse.of(row, granted)).toList();
 
         // A short page is the end of the collection. A full one may or may not
         // be, and answering "maybe" with a cursor costs the caller one empty
@@ -514,10 +560,11 @@ public class OperationsOrderController {
                 .filter(found -> found.order().locationId().equals(locationId))
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
 
+        Set<Capability> granted = grantedOrderActionCapabilities(tenantId, brandId, locationId);
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(detail.order().version()))
                 .body(OrderDetailResponse.of(
-                        detail, orderQuery.outcome(tenantId, orderId).orElse(null)));
+                        detail, orderQuery.outcome(tenantId, orderId).orElse(null), granted));
     }
 
     @GetMapping("/{orderId}/revisions")
@@ -1607,11 +1654,11 @@ public class OperationsOrderController {
          * The summary of an order read outside the board — the detail read's own
          * header — where no process state was projected alongside it.
          */
-        static OrderSummaryResponse of(JdbcOrderStore.OrderRow order) {
-            return of(new JdbcOrderStore.OrderBoardRow(order, null));
+        static OrderSummaryResponse of(JdbcOrderStore.OrderRow order, Set<Capability> grantedCapabilities) {
+            return of(new JdbcOrderStore.OrderBoardRow(order, null), grantedCapabilities);
         }
 
-        static OrderSummaryResponse of(JdbcOrderStore.OrderBoardRow row) {
+        static OrderSummaryResponse of(JdbcOrderStore.OrderBoardRow row, Set<Capability> grantedCapabilities) {
             JdbcOrderStore.OrderRow order = row.order();
             return new OrderSummaryResponse(
                     order.orderId(),
@@ -1624,7 +1671,7 @@ public class OperationsOrderController {
                     order.version(),
                     order.createdAt(),
                     order.approvalDeadlineAt(),
-                    OrderActionResponse.allFor(order.status(), order.fulfillmentMode()),
+                    OrderActionResponse.allFor(order.status(), order.fulfillmentMode(), grantedCapabilities),
                     order.promise().promisedAt(),
                     order.promise().basis().name(),
                     order.paymentStatusProjection(),
@@ -1652,8 +1699,10 @@ public class OperationsOrderController {
             String action, @Nullable String targetStatus) {
 
         static List<OrderActionResponse> allFor(
-                OrderStatus status, uz.horecaos.platform.tenancy.api.FulfillmentMode mode) {
-            return OrderActionsPolicy.availableFor(status, mode).stream()
+                OrderStatus status,
+                uz.horecaos.platform.tenancy.api.FulfillmentMode mode,
+                Set<Capability> grantedCapabilities) {
+            return OrderActionsPolicy.availableFor(status, mode, grantedCapabilities).stream()
                     .map(OrderActionResponse::of)
                     .toList();
         }
@@ -1702,10 +1751,12 @@ public class OperationsOrderController {
             CustomerResponse customer) {
 
         static OrderDetailResponse of(
-                OrderQueryService.OrderDetail detail, JdbcOrderStore.@Nullable OutcomeRow outcomeRow) {
+                OrderQueryService.OrderDetail detail,
+                JdbcOrderStore.@Nullable OutcomeRow outcomeRow,
+                Set<Capability> grantedCapabilities) {
             var order = detail.order();
             return new OrderDetailResponse(
-                    OrderSummaryResponse.of(order),
+                    OrderSummaryResponse.of(order, grantedCapabilities),
                     order.subtotalMinor(),
                     order.taxMinor(),
                     order.acceptanceMode(),

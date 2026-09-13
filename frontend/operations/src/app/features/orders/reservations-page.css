@@ -109,7 +109,7 @@
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 18px;
+  font-size: var(--q-type-body-lg);
   line-height: 1;
 }
 
@@ -208,7 +208,7 @@
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 16px;
+  font-size: var(--q-type-body);
   color: inherit;
 }
 

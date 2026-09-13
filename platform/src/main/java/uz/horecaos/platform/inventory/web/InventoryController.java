@@ -60,14 +60,14 @@ public class InventoryController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @Valid @RequestBody ListVariantRequest body) {
-        try {
-            UUID stockItemId = inventory.listVariantAtLocation(
-                    tenantId, brandId, locationId, body.variantId(), body.trackingMode());
-            return ResponseEntity.ok(
-                    new StockItemResponse(stockItemId, body.trackingMode().name()));
-        } catch (InventoryService.UnsupportedTrackingModeException unsupported) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, unsupported.getMessage());
-        }
+        // InventoryService.UnsupportedTrackingModeException (QUANTITY is not
+        // implemented) is mapped to a legible Problem Details response by
+        // InventoryApiErrorHandler, shared with every other endpoint on this
+        // controller rather than caught here alone.
+        UUID stockItemId =
+                inventory.listVariantAtLocation(tenantId, brandId, locationId, body.variantId(), body.trackingMode());
+        return ResponseEntity.ok(
+                new StockItemResponse(stockItemId, body.trackingMode().name()));
     }
 
     @PutMapping("/variants/{variantId}/availability")

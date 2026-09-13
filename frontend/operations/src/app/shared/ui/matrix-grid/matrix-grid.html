@@ -1,0 +1,56 @@
+<div class="q-matrix-grid" role="grid">
+  <div class="q-matrix-grid__row" role="row" [style.grid-template-columns]="gridTemplateColumns()">
+    <div class="q-matrix-grid__corner" role="columnheader" aria-hidden="true"></div>
+    @for (col of columnHeaders(); track trackById($index, col)) {
+      <button
+        type="button"
+        class="q-matrix-grid__col-header q-caption"
+        role="columnheader"
+        [attr.aria-label]="('shared.matrixGrid.toggleColumn' | t) + ': ' + col.label"
+        (click)="toggleColumn(col)"
+        [attr.data-testid]="'mg-col-toggle-' + col.id"
+      >
+        {{ col.label }}
+      </button>
+    }
+  </div>
+
+  @for (row of rowHeaders(); track trackById($index, row); let ri = $index) {
+    <div
+      class="q-matrix-grid__row"
+      role="row"
+      [style.grid-template-columns]="gridTemplateColumns()"
+    >
+      <button
+        type="button"
+        class="q-matrix-grid__row-header q-caption"
+        role="rowheader"
+        [attr.aria-label]="('shared.matrixGrid.toggleRow' | t) + ': ' + row.label"
+        (click)="toggleRow(row)"
+        [attr.data-testid]="'mg-row-toggle-' + row.id"
+      >
+        {{ row.label }}
+      </button>
+      @for (col of columnHeaders(); track trackById($index, col); let ci = $index) {
+        <div
+          class="q-matrix-grid__cell"
+          role="gridcell"
+          tabindex="0"
+          data-testid="mg-cell"
+          [class.q-matrix-grid__cell--on]="stateOf(row.id, col.id) === 'ON'"
+          [class.q-matrix-grid__cell--off]="stateOf(row.id, col.id) === 'OFF'"
+          [class.q-matrix-grid__cell--unavailable]="stateOf(row.id, col.id) === 'UNAVAILABLE'"
+          [class.q-matrix-grid__cell--selected]="isSelected(ri, ci)"
+          [attr.aria-disabled]="stateOf(row.id, col.id) === 'UNAVAILABLE' ? true : null"
+          [attr.title]="
+            stateOf(row.id, col.id) === 'UNAVAILABLE' ? ('shared.matrixGrid.unavailable' | t) : null
+          "
+          [attr.data-row]="row.id"
+          [attr.data-col]="col.id"
+          [attr.data-state]="stateOf(row.id, col.id)"
+          (click)="onCellClick(ri, ci, $event)"
+        ></div>
+      }
+    </div>
+  }
+</div>

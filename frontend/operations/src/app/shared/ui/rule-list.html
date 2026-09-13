@@ -1,0 +1,59 @@
+@if (items().length === 0) {
+  <p class="q-body-sm rule-list__empty">{{ 'ui.ruleList.empty' | t }}</p>
+} @else {
+  <ol class="rule-list" role="list">
+    @for (item of items(); track item.id; let i = $index) {
+      <li
+        class="rule-list__row"
+        draggable="true"
+        (dragstart)="onDragStart(i, $event)"
+        (dragover)="onDragOver($event)"
+        (drop)="onDrop(i, $event)"
+        (dragend)="onDragEnd()"
+      >
+        <span class="rule-list__priority q-tnum" [attr.aria-label]="'ui.ruleList.priority' | t">{{
+          i + 1
+        }}</span>
+
+        <div class="rule-list__move-group" [attr.aria-label]="'ui.ruleList.dragHandle' | t">
+          <button
+            type="button"
+            class="rule-list__move"
+            [attr.aria-label]="'ui.ruleList.moveUp' | t"
+            [disabled]="i === 0"
+            (click)="moveUp(i)"
+          >
+            ▲
+          </button>
+          <button
+            type="button"
+            class="rule-list__move"
+            [attr.aria-label]="'ui.ruleList.moveDown' | t"
+            [disabled]="i === items().length - 1"
+            (click)="moveDown(i)"
+          >
+            ▼
+          </button>
+        </div>
+
+        <div class="rule-list__body">
+          <span class="q-body-sm rule-list__label">{{ item.label }}</span>
+          @if (item.description; as description) {
+            <span class="q-caption rule-list__description">{{ description }}</span>
+          }
+        </div>
+
+        <label class="rule-list__toggle">
+          <input
+            type="checkbox"
+            [checked]="item.enabled"
+            (change)="onToggle(item, $any($event.target).checked)"
+          />
+          <span class="q-caption">{{
+            (item.enabled ? 'ui.ruleList.enabled' : 'ui.ruleList.disabled') | t
+          }}</span>
+        </label>
+      </li>
+    }
+  </ol>
+}

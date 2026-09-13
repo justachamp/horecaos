@@ -133,7 +133,7 @@
   padding: 2px 8px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .status-pill--revoked {
@@ -150,7 +150,7 @@
   background: var(--q-primary);
   color: #fff;
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .text-button {
@@ -158,7 +158,7 @@
   border: none;
   color: var(--q-primary);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
   padding: 2px 6px;
 }
 

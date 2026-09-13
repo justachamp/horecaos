@@ -15,6 +15,12 @@ import { ProvenanceResponse } from './reporting-api';
  *
  * ADR 0023: "a report that cannot state its freshness is not shipped." This is
  * the one component that states it, so every 7.x screen states it the same way.
+ *
+ * Wave P37: `businessDayStart` was already on every `ProvenanceResponse` and
+ * rendered nowhere — a report cutting the day at, say, 09:00 gave no hint why
+ * its numbers did not line up with the wall clock. It is now the freshness
+ * line's third clause, read-only (10.10b's settings screen is where a tenant
+ * changes it; this banner only states what it was computed under).
  */
 @Component({
   selector: 'q-provenance-banner',
@@ -29,6 +35,7 @@ import { ProvenanceResponse } from './reporting-api';
           } @else {
             · {{ 'reports.provenance.neverClosed' | t }}
           }
+          · {{ 'reports.provenance.businessDayStart' | t: { time: p.businessDayStart } }}
         </span>
 
         @if (dayNotYetClosed()) {
@@ -62,7 +69,7 @@ import { ProvenanceResponse } from './reporting-api';
     }
     .provenance__band {
       padding: 6px 10px;
-      font-size: 13px;
+      font-size: var(--q-type-body-xs);
       border-left: 3px solid transparent;
     }
     .provenance__band--amber {

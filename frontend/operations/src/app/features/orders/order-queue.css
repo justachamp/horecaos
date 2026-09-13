@@ -38,7 +38,7 @@
   background: transparent;
   color: var(--q-ink-muted);
   font-family: var(--q-font-sans);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   line-height: 1.29;
   letter-spacing: 0.16px;
   cursor: pointer;
@@ -63,7 +63,7 @@
   border-radius: var(--q-radius);
   background: var(--q-surface-2);
   color: var(--q-ink-muted);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   line-height: 18px;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -164,7 +164,7 @@
   border: none;
   background: transparent;
   color: inherit;
-  font-size: 16px;
+  font-size: var(--q-type-body);
   line-height: 1;
   cursor: pointer;
   flex-shrink: 0;
@@ -190,7 +190,7 @@
   background: var(--q-surface-1);
   color: var(--q-ink-subtle);
   text-align: left;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   font-weight: 400;
   letter-spacing: 0.32px;
   padding: 8px 12px;
@@ -218,7 +218,7 @@
   padding: 4px 12px;
   vertical-align: middle;
   color: var(--q-ink);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .order-row:hover {
@@ -265,7 +265,7 @@
   padding: 2px 8px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink-muted);
   white-space: nowrap;
 }
@@ -289,7 +289,7 @@
   border-radius: var(--q-radius);
   background: var(--q-canvas);
   color: var(--q-ink);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -343,7 +343,7 @@
   border: none;
   background: transparent;
   color: var(--q-ink);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   text-align: left;
   cursor: pointer;
 }

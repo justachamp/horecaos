@@ -19,6 +19,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalAction;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.application.ApprovalDecisionService;
+import uz.horecaos.platform.audit.application.ApprovalDecisionService.DecidedApprovalHistoryEntry;
 import uz.horecaos.platform.audit.application.ApprovalDecisionService.PendingApproval;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
@@ -203,6 +204,29 @@ public class ApprovalRequestController {
         return decideAndRespond(tenantId, requestId, body);
     }
 
+    /**
+     * Staff 9.4's own named gap: "a manager also cannot see what she approved
+     * last week." The pending worklist above answers what is waiting; this
+     * answers what already happened, newest decision first.
+     */
+    @GetMapping("/api/v1/operations/tenants/{tenantId}/approval-requests/decided")
+    @RequiresCapability(value = Capability.APPROVAL_DECIDE, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "What this tenant has already approved or declined, newest first",
+            description = "Filter with actionCode, or omit it for every action. The maker's free-text "
+                    + "reason stays withheld for the same reason as the pending worklist: it is "
+                    + "unclassified prose about a named customer (ADR 0029).")
+    Page<DecidedApprovalResponse> decided(
+            @PathVariable UUID tenantId,
+            @RequestParam(required = false) String actionCode,
+            @RequestParam(required = false) Integer limit) {
+        List<DecidedApprovalResponse> decided =
+                decisions.decided(tenantId, actionCode, Page.limitOrDefault(limit)).stream()
+                        .map(DecidedApprovalResponse::of)
+                        .toList();
+        return Page.last(decided);
+    }
+
     private Page<PendingApprovalResponse> pendingResponse(UUID tenantId, String actionCode, Integer limit) {
         List<PendingApprovalResponse> waiting =
                 decisions.pending(tenantId, actionCode, Page.limitOrDefault(limit), subject()).stream()
@@ -317,4 +341,44 @@ public class ApprovalRequestController {
      */
     public record DecisionResponse(
             UUID id, String actionCode, String status, String decidedBy, java.time.Instant decidedAt) {}
+
+    /** One already-decided request, as the decided-history read returns it. */
+    public record DecidedApprovalResponse(
+            UUID id,
+            String actionCode,
+            String parametersHash,
+            String scopeType,
+            UUID scopeId,
+            String thresholdDescription,
+            int policyVersion,
+            String requiredApproverCapability,
+            String status,
+            String requestedBy,
+            java.time.Instant requestedAt,
+            String decidedBy,
+            java.time.Instant decidedAt,
+            @Nullable UUID subjectTenantId,
+            @Nullable String subjectTenantName,
+            Map<String, String> subject) {
+
+        static DecidedApprovalResponse of(DecidedApprovalHistoryEntry entry) {
+            return new DecidedApprovalResponse(
+                    entry.id(),
+                    entry.actionCode(),
+                    entry.parametersHash(),
+                    entry.scopeType(),
+                    entry.scopeId(),
+                    entry.thresholdDescription(),
+                    entry.policyVersion(),
+                    entry.requiredApproverCapability(),
+                    entry.status(),
+                    entry.requestedBy(),
+                    entry.requestedAt(),
+                    entry.decidedBy(),
+                    entry.decidedAt(),
+                    entry.subjectTenantId(),
+                    entry.subjectTenantName(),
+                    entry.subject());
+        }
+    }
 }

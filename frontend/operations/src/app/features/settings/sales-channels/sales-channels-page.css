@@ -110,6 +110,15 @@
 .matrix {
   display: flex;
   gap: 40px;
+  flex-wrap: wrap;
+}
+
+.matrix--saving {
+  opacity: 0.6;
+}
+
+.matrix__group {
+  min-width: 200px;
 }
 
 .matrix__label {
@@ -118,20 +127,13 @@
   text-transform: uppercase;
 }
 
-.matrix__cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
 .status-badge {
   display: inline-block;
   padding: 2px 8px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   color: var(--q-ink-muted);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .link {

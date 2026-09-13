@@ -555,9 +555,37 @@ export const courierPaths = {
     return `${this.courierBranchBindings(tenantId, courierId)}/${encodeURIComponent(brandId)}/${encodeURIComponent(locationId)}/removal`;
   },
 
-  /** Vehicle classes, for the registration form's picker. */
+  /** Vehicle classes, for the registration form's picker and the IA 3.4 management screen. Query param: `includeArchived`. */
   courierTypes(tenantId: string): string {
     return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-types`;
+  },
+
+  /** One vehicle class (ADR 0108). `PUT` corrects it; same path plus `/archival` for `POST` archives it. */
+  courierType(tenantId: string, typeId: string): string {
+    return `${this.courierTypes(tenantId)}/${encodeURIComponent(typeId)}`;
+  },
+
+  courierTypeArchival(tenantId: string, typeId: string): string {
+    return `${this.courierType(tenantId, typeId)}/archival`;
+  },
+
+  /** The bonus/penalty registry (ADR 0108). Same path for `POST` (define one). */
+  adjustmentReasons(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/adjustment-reasons`;
+  },
+
+  adjustmentReasonArchival(tenantId: string, reasonId: string): string {
+    return `${this.adjustmentReasons(tenantId)}/${encodeURIComponent(reasonId)}/archival`;
+  },
+
+  /** Record a bonus or a penalty against one courier. Mutation: key required. */
+  courierAdjustments(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/adjustments`;
+  },
+
+  /** A courier's ledger (ADR 0042). Query param: `limit`. */
+  courierLedger(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/ledger`;
   },
 
   /** Attest that the registration evidence was sighted. Mutation: key required. */
@@ -585,9 +613,37 @@ export const courierPaths = {
     return `${this.rateCard(tenantId, cardId)}/activation`;
   },
 
-  /** The branch's shifts, newest first (IA 3.5). Query params: `brandId`, `locationId`, `limit`. */
+  /**
+   * The branch's shifts, newest first (IA 3.5). Query params: `brandId`,
+   * `locationId`, `limit`, and optionally `from`/`to` to window the read to a
+   * period.
+   */
   courierShifts(tenantId: string): string {
     return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-shifts`;
+  },
+
+  /**
+   * The branch's planned shifts (IA 3.5's roster). `GET` with `brandId`,
+   * `locationId`, optional `from`/`to`/`limit`; `POST` drafts one (mutation:
+   * key required).
+   */
+  courierRosterEntries(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-roster-entries`;
+  },
+
+  /** Planned-versus-actual, for one period (IA 3.5). `GET` with `brandId`, `locationId`, `from`, `to`. */
+  courierRosterComparison(tenantId: string): string {
+    return `${this.courierRosterEntries(tenantId)}/comparison`;
+  },
+
+  /** Publish a planned shift (`POST`). Mutation: key required. */
+  courierRosterEntryPublish(tenantId: string, entryId: string): string {
+    return `${this.courierRosterEntries(tenantId)}/${encodeURIComponent(entryId)}/publish`;
+  },
+
+  /** Cancel a planned shift still DRAFT or PUBLISHED (`POST`). Mutation: key required. */
+  courierRosterEntryCancel(tenantId: string, entryId: string): string {
+    return `${this.courierRosterEntries(tenantId)}/${encodeURIComponent(entryId)}/cancel`;
   },
 
   /** The courier compensation policy in force (IA 3.9). Query params: optional `brandId`, `locationId`. */

@@ -24,8 +24,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.ApprovalOutcome;
+import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
+import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.courier.application.AdjustmentRuleEvaluator;
+import uz.horecaos.platform.courier.application.CourierAdjustmentService;
 import uz.horecaos.platform.courier.application.CourierDispatchGate;
 import uz.horecaos.platform.courier.application.CourierEngagementService;
 import uz.horecaos.platform.courier.application.CourierLedgerService;
@@ -146,6 +151,29 @@ class CourierDispatchPortTests {
 
     private int chainSequence;
 
+    /**
+     * Never asked in this suite — see the comment where {@link
+     * CourierAdjustmentService} is constructed in {@link #setUp()} — but
+     * {@link ApprovalService} is not a functional interface, so a full stub is
+     * simpler than a mock nothing here would ever verify.
+     */
+    private static final ApprovalService NEVER_REQUIRED = new ApprovalService() {
+        @Override
+        public ApprovalOutcome requireApproval(ApprovalRequestCommand command) {
+            return new ApprovalOutcome.NotRequired();
+        }
+
+        @Override
+        public void decide(UUID requestId, Decision decision, ActorRef approver, String reason) {
+            throw new UnsupportedOperationException("Not exercised by this suite");
+        }
+
+        @Override
+        public int expireOverdue() {
+            return 0;
+        }
+    };
+
     @BeforeAll
     static void startDatabase() {
         Assumptions.assumeTrue(
@@ -207,8 +235,27 @@ class CourierDispatchPortTests {
                 new CourierLedgerService(ledgerStore, courierStore, policyResolver, legalEntities, clock);
         engagements = new CourierEngagementService(
                 courierStore, protection, audit, policyResolver, (tenantId, assetIds) -> false, clock);
+        // Nothing in this test class posts a bonus or a penalty; the evaluator
+        // and its ApprovalService dependency exist here only because
+        // CourierShiftService now closes every SHIFT-window rule at close/
+        // approveHours (ADR 0108), and CourierAdjustmentService needs one to
+        // construct. NEVER_REQUIRED is correct for a suite that seeds no
+        // adjustment reason with a rule at all — ruleReasonsAt always answers
+        // empty, so requireApproval is never actually called.
+        CourierAdjustmentService adjustments =
+                new CourierAdjustmentService(courierStore, ledger, NEVER_REQUIRED, audit, policyResolver, clock);
+        AdjustmentRuleEvaluator adjustmentRules = new AdjustmentRuleEvaluator(courierStore, ledgerStore, adjustments);
         shifts = new CourierShiftService(
-                shiftStore, courierStore, ledgerStore, rateCardStore, ledger, policyResolver, protection, audit, clock);
+                shiftStore,
+                courierStore,
+                ledgerStore,
+                rateCardStore,
+                ledger,
+                policyResolver,
+                protection,
+                audit,
+                adjustmentRules,
+                clock);
 
         CourierDispatchGate gate = new CourierDispatchGate(courierStore, shiftStore, policyResolver);
         CourierProximityPort proximity = new LivePositionProximity(telemetryStore, clock);
@@ -759,7 +806,7 @@ class CourierDispatchPortTests {
 
         UUID theirType = UUID.randomUUID();
         courierStore.insertType(new CourierTypeRow(
-                theirType, OTHER_TENANT, "SCOOTER", "Scooter", "SCOOTER", 0, 15_000, 2, 60, "ACTIVE"));
+                theirType, OTHER_TENANT, "SCOOTER", "Scooter", "SCOOTER", 0, 15_000, 2, 60, 0, "SHIFT", "ACTIVE", 1));
         CourierEngagementService.Registration theirs = engagements.register(new CourierEngagementService.NewCourier(
                 OTHER_TENANT,
                 theirType,
@@ -831,7 +878,19 @@ class CourierDispatchPortTests {
 
         UUID id = UUID.randomUUID();
         courierStore.insertType(new CourierTypeRow(
-                id, TENANT, code, code, "SCOOTER", minMetres, maxMetres, ceiling, offerTtlSeconds, "ACTIVE"));
+                id,
+                TENANT,
+                code,
+                code,
+                "SCOOTER",
+                minMetres,
+                maxMetres,
+                ceiling,
+                offerTtlSeconds,
+                0,
+                "SHIFT",
+                "ACTIVE",
+                1));
         return id;
     }
 

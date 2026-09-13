@@ -88,6 +88,14 @@
   max-width: 60ch;
 }
 
+.forecast__week-overview {
+  margin: 12px 0 20px;
+}
+
+.forecast__week-overview-error {
+  color: var(--q-error-text);
+}
+
 .forecast__table {
   width: 100%;
   border-collapse: collapse;

@@ -63,6 +63,198 @@ export class IntegrationsApi {
     return result.value ?? [];
   }
 
+  /**
+   * ADR 0106, gap-map row 10.8a: the bindings-list read whose path helper
+   * existed with only a POST caller. Before this wave a tenant admin had no
+   * way to see a binding created in an earlier session — only ones this page
+   * had itself created since it loaded ({@link createdBindings} in the page,
+   * kept for the reason its own doc comment gives).
+   */
+  async listBindings(
+    scope: LocationScope,
+    installationId: string,
+  ): Promise<readonly BindingView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly BindingView[]>(
+        settingsPaths.integrationInstallationBindings(scope, installationId),
+      ),
+    );
+    return result.value ?? [];
+  }
+
+  async activateBinding(
+    scope: LocationScope,
+    installationId: string,
+    bindingId: string,
+    reason: string,
+  ): Promise<{ readonly changed: boolean; readonly outcome: string }> {
+    return firstValueFrom(
+      this.api.post<{ reason: string }, { changed: boolean; outcome: string }>(
+        settingsPaths.integrationInstallationBindingActivate(scope, installationId, bindingId),
+        command({ reason }),
+      ),
+    );
+  }
+
+  async suspendBinding(
+    scope: LocationScope,
+    installationId: string,
+    bindingId: string,
+    reason: string,
+  ): Promise<{ readonly changed: boolean; readonly outcome: string }> {
+    return firstValueFrom(
+      this.api.post<{ reason: string }, { changed: boolean; outcome: string }>(
+        settingsPaths.integrationInstallationBindingSuspend(scope, installationId, bindingId),
+        command({ reason }),
+      ),
+    );
+  }
+
+  /**
+   * ADR 0106, gap-map row 10.8a / X.14: records a fresh preflight (the secret
+   * still resolves, the wired adapter declares each capability) and, as of
+   * this wave, stamps the installation's `secretLastUsedAt` on success.
+   */
+  async reconcileCapabilities(
+    scope: LocationScope,
+    installationId: string,
+  ): Promise<ReconciliationView> {
+    return firstValueFrom(
+      this.api.post<null, ReconciliationView>(
+        settingsPaths.integrationInstallationCapabilityReconciliation(scope, installationId),
+        command(null),
+      ),
+    );
+  }
+
+  /** Refused server-side for any installation whose `providerType` is not `clopos`. */
+  async getInstallationSettings(
+    scope: LocationScope,
+    installationId: string,
+  ): Promise<CloposSettingsView> {
+    const result = await firstValueFrom(
+      this.api.get<CloposSettingsView>(
+        settingsPaths.integrationInstallationSettings(scope, installationId),
+      ),
+    );
+    return result.value;
+  }
+
+  async updateInstallationSettings(
+    scope: LocationScope,
+    installationId: string,
+    requireClerkApproval: boolean,
+  ): Promise<CloposSettingsView> {
+    return firstValueFrom(
+      this.api.post<{ requireClerkApproval: boolean }, CloposSettingsView>(
+        settingsPaths.integrationInstallationSettings(scope, installationId),
+        command({ requireClerkApproval }),
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------- marketplace liveness
+
+  /** ADR 0106, gap-map row 10.8c: built and capability-gated, never rendered until this wave. */
+  async marketplaceLiveness(scope: LocationScope): Promise<readonly LivenessView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly LivenessView[]>(settingsPaths.marketplaceLiveness(scope)),
+    );
+    return result.value ?? [];
+  }
+
+  // -------------------------------------------------------------- tenant failure surface
+
+  async failureTaxonomy(scope: LocationScope): Promise<readonly TenantCategoryCount[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly TenantCategoryCount[]>(settingsPaths.integrationFailureTaxonomy(scope)),
+    );
+    return result.value ?? [];
+  }
+
+  async failureInbox(scope: LocationScope): Promise<readonly InboxFailureSummary[]> {
+    const result = await firstValueFrom(
+      this.api.get<Page<InboxFailureSummary>>(settingsPaths.integrationFailureInbox(scope)),
+    );
+    return result.value?.items ?? [];
+  }
+
+  async replayInboxMessage(
+    scope: LocationScope,
+    consumerName: string,
+    eventId: string,
+    reason: string,
+  ): Promise<{ readonly changed: boolean; readonly outcome: string }> {
+    return firstValueFrom(
+      this.api.post<{ reason: string }, { changed: boolean; outcome: string }>(
+        settingsPaths.integrationFailureReplay(scope, consumerName, eventId),
+        command({ reason }),
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------- partner API clients
+
+  async listPartnerApiClients(
+    scope: LocationScope,
+    installationId: string,
+  ): Promise<readonly PartnerApiClientView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly PartnerApiClientView[]>(
+        settingsPaths.partnerApiClients(scope, installationId),
+      ),
+    );
+    return result.value ?? [];
+  }
+
+  async issuePartnerApiClient(
+    scope: LocationScope,
+    installationId: string,
+    displayLabel: string,
+    reason: string,
+  ): Promise<IssuedPartnerApiClient> {
+    return firstValueFrom(
+      this.api.post<{ displayLabel: string; reason: string }, IssuedPartnerApiClient>(
+        settingsPaths.partnerApiClients(scope, installationId),
+        command({ displayLabel, reason }),
+      ),
+    );
+  }
+
+  async rotatePartnerApiClient(
+    scope: LocationScope,
+    installationId: string,
+    clientId: string,
+    expectedVersion: number,
+    reason: string,
+  ): Promise<RotatedPartnerApiClient> {
+    return firstValueFrom(
+      this.api.post<{ reason: string }, RotatedPartnerApiClient>(
+        settingsPaths.partnerApiClientRotate(scope, installationId, clientId),
+        command({ reason }),
+        { params: { expectedVersion } },
+      ),
+    );
+  }
+
+  async revokePartnerApiClient(
+    scope: LocationScope,
+    installationId: string,
+    clientId: string,
+    expectedVersion: number,
+    reason: string,
+  ): Promise<{ readonly changed: boolean; readonly outcome: string }> {
+    const response = await firstValueFrom(
+      this.api.send<{ reason: string }, { changed: boolean; outcome: string }>(
+        'DELETE',
+        settingsPaths.partnerApiClientRevoke(scope, installationId, clientId),
+        command({ reason }),
+        { params: { expectedVersion } },
+      ),
+    );
+    return response.body as { changed: boolean; outcome: string };
+  }
+
   // -------------------------------------------------------------- the door
 
   /**
@@ -192,6 +384,10 @@ export interface InstallationView {
   readonly lastConnectionStatus: string | null;
   readonly adapterVersion: string | null;
   readonly lastSecretRotatedAt: string | null;
+  /** ADR 0106, gap-map row X.14: when the secret last resolved during a capability-reconciliation preflight. */
+  readonly secretLastUsedAt: string | null;
+  /** ADR 0106: raw jsonb text, e.g. `{"gtmContainerId":"GTM-ABC1234"}`. Never a secret. */
+  readonly nonSensitiveConfig: string | null;
 }
 
 /** Mirrors uz.horecaos.platform.payments.web.MerchantBindingController.MerchantBindingView. */
@@ -297,4 +493,96 @@ export interface RegisterMerchantBindingRequest {
   readonly supportsPartnerFiscalization: boolean;
   readonly effectiveFrom: string;
   readonly effectiveUntil?: string | null;
+}
+
+/** Mirrors ...ProviderInstallationController.BindingView. Where an installation applies: a brand, or one location of it. */
+export interface BindingView {
+  readonly id: string;
+  readonly brandId: string | null;
+  readonly locationId: string | null;
+  readonly status: string;
+  readonly priority: number;
+  readonly effectiveFrom: string;
+  readonly effectiveUntil: string | null;
+}
+
+/** Mirrors ProviderCapabilityReconciliationService.Reconciliation. */
+export interface ReconciliationView {
+  readonly connectionStatus: string;
+  readonly adapterVersion: string;
+  readonly capabilities: Readonly<Record<string, string>>;
+}
+
+/** Mirrors ...ProviderInstallationController.CloposSettingsView. Refused for any non-`clopos` provider type. */
+export interface CloposSettingsView {
+  readonly requireClerkApproval: boolean;
+}
+
+/** Mirrors MarketplaceOperationsController.LivenessResponse. `silenceSeconds` null means nothing has ever arrived. */
+export interface LivenessView {
+  readonly bindingId: string;
+  readonly locationId: string;
+  readonly providerName: string;
+  readonly direction: string;
+  readonly lastSuccessAt: string | null;
+  readonly lastSuccessReference: string | null;
+  readonly lastFailureAt: string | null;
+  readonly lastFailureCode: string | null;
+  readonly staleAfterSeconds: number;
+  readonly observedMedianIntervalSeconds: number | null;
+  readonly alertState: string;
+  readonly silenceSeconds: number | null;
+}
+
+/** Mirrors FailureOperationsService.TenantCategoryCount. */
+export interface TenantCategoryCount {
+  readonly code: string;
+  readonly retryableByTimer: boolean;
+  readonly requiresReconciliation: boolean;
+  readonly securityRelevant: boolean;
+  readonly outboxDeadLettered: number;
+  readonly outboxWaiting: number;
+  readonly inboxDeadLettered: number;
+  readonly inboxWaiting: number;
+}
+
+/** Mirrors FailureOperationsService.InboxFailureSummary — never the payload itself (ADR 0029). */
+export interface InboxFailureSummary {
+  readonly consumerName: string;
+  readonly id: string;
+  readonly tenantId: string;
+  readonly eventType: string;
+  readonly status: string;
+  readonly attemptCount: number;
+  readonly errorCode: string;
+  readonly lastError: string;
+}
+
+/** Mirrors PartnerApiClientController.PartnerClientResponse. Never the secret value or its ADR 0028 reference. */
+export interface PartnerApiClientView {
+  readonly id: string;
+  readonly clientId: string;
+  readonly status: string;
+  readonly secretConfigured: boolean;
+  readonly secretRotatedAt: string | null;
+  readonly secretExpiresAt: string | null;
+  readonly lastAuthenticatedAt: string | null;
+  readonly version: number;
+}
+
+/** Mirrors PartnerApiClientController.IssuedClientResponse. Carries the plaintext secret exactly once. */
+export interface IssuedPartnerApiClient {
+  readonly id: string;
+  readonly clientId: string;
+  readonly secretValue: string;
+  readonly secretExpiresAt: string | null;
+  readonly version: number;
+}
+
+/** Mirrors PartnerApiClientController.RotatedClientResponse. Carries the plaintext secret exactly once. */
+export interface RotatedPartnerApiClient {
+  readonly id: string;
+  readonly secretValue: string;
+  readonly secretExpiresAt: string | null;
+  readonly version: number;
 }

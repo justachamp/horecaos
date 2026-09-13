@@ -132,6 +132,39 @@ public class CatalogQueryController {
         }
     }
 
+    @GetMapping("/fiscal-coverage")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "How much of this brand's menu still lacks ADR 0038 fiscal classification",
+            description = "Settings 10.7 Tab 3, built locally by wave P34 in place of P21's "
+                    + "not-yet-merged fiscal workbench. The unclassified list is ordered with the "
+                    + "delivery fee first, then by offering breadth descending.")
+    public FiscalCoverageResponse fiscalCoverage(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return FiscalCoverageResponse.of(query.fiscalCoverage(tenantId, brandId));
+    }
+
+    public record FiscalCoverageResponse(
+            int totalNodes, int unclassifiedCount, List<FiscalCoverageNodeResponse> nodes) {
+        static FiscalCoverageResponse of(CatalogQueryService.FiscalCoverageSummary summary) {
+            return new FiscalCoverageResponse(
+                    summary.totalNodes(),
+                    summary.unclassifiedCount(),
+                    summary.nodes().stream().map(FiscalCoverageNodeResponse::of).toList());
+        }
+    }
+
+    public record FiscalCoverageNodeResponse(
+            uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableType nodeType,
+            UUID nodeId,
+            @Nullable String name,
+            @Nullable String categoryName,
+            int locationCount) {
+        static FiscalCoverageNodeResponse of(CatalogQueryService.FiscalCoverageNode node) {
+            return new FiscalCoverageNodeResponse(
+                    node.nodeType(), node.nodeId(), node.name(), node.categoryName(), node.locationCount());
+        }
+    }
+
     public record CatalogSummaryResponse(UUID catalogId, String code, String name, String status) {
 
         static CatalogSummaryResponse of(CatalogQueryService.CatalogSummary summary) {

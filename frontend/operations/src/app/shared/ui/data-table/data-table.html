@@ -1,0 +1,209 @@
+<div class="q-data-table">
+  <div class="q-data-table__toolbar">
+    @if (viewId()) {
+      <div class="q-data-table__views">
+        <button
+          type="button"
+          class="q-data-table__toolbar-btn q-body-sm"
+          (click)="toggleViewsMenu()"
+          data-testid="dt-views-toggle"
+        >
+          {{ 'shared.dataTable.views.toggle' | t }}
+        </button>
+        @if (viewsMenuOpen()) {
+          <div class="q-data-table__views-menu" data-testid="dt-views-menu">
+            @for (view of savedViews(); track view.id) {
+              <div class="q-data-table__view-item">
+                <button
+                  type="button"
+                  class="q-data-table__view-apply q-body-sm"
+                  (click)="applyView(view)"
+                  [attr.data-testid]="'dt-view-' + view.id"
+                >
+                  {{ view.name }}
+                </button>
+                <button
+                  type="button"
+                  class="q-data-table__view-remove"
+                  [attr.aria-label]="'shared.dataTable.views.remove' | t"
+                  (click)="removeView(view.id, $event)"
+                >
+                  ×
+                </button>
+              </div>
+            }
+            <div class="q-data-table__view-save">
+              <input
+                type="text"
+                class="q-body-sm"
+                [value]="newViewName()"
+                (input)="onNewViewNameInput($any($event.target).value)"
+                [placeholder]="'shared.dataTable.views.namePlaceholder' | t"
+                data-testid="dt-view-name-input"
+              />
+              <button
+                type="button"
+                class="q-body-sm"
+                (click)="saveCurrentView()"
+                data-testid="dt-view-save"
+              >
+                {{ 'shared.dataTable.views.save' | t }}
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    }
+    <div class="q-data-table__chooser">
+      <button
+        type="button"
+        class="q-data-table__toolbar-btn q-body-sm"
+        (click)="toggleChooser()"
+        data-testid="dt-chooser-toggle"
+      >
+        {{ 'shared.dataTable.columns.toggle' | t }}
+      </button>
+      @if (chooserOpen()) {
+        <div class="q-data-table__chooser-menu" data-testid="dt-chooser-menu">
+          @for (col of columns(); track col.key) {
+            @if (col.hideable !== false) {
+              <label class="q-data-table__chooser-item q-body-sm">
+                <input
+                  type="checkbox"
+                  [checked]="isColumnVisible(col.key)"
+                  (change)="toggleColumn(col.key)"
+                  [attr.data-testid]="'dt-chooser-item-' + col.key"
+                />
+                {{ col.header }}
+              </label>
+            }
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  @if (selectable() && selectedCount() > 0) {
+    <div class="q-data-table__bulk-bar" data-testid="dt-bulk-bar">
+      <span class="q-caption">{{
+        'shared.dataTable.bulk.selected' | t: { count: selectedCount() }
+      }}</span>
+      @for (action of bulkActions(); track action.id) {
+        <button
+          type="button"
+          [class.q-data-table__bulk-action--destructive]="action.destructive"
+          class="q-body-sm"
+          [disabled]="bulkActionsDisabled()"
+          (click)="runBulkAction(action.id)"
+          [attr.data-testid]="'dt-bulk-action-' + action.id"
+        >
+          {{ action.label }}
+        </button>
+      }
+      <button
+        type="button"
+        class="q-data-table__bulk-clear q-body-sm"
+        (click)="clearSelection()"
+        data-testid="dt-bulk-clear"
+      >
+        {{ 'shared.dataTable.bulk.clear' | t }}
+      </button>
+    </div>
+  }
+
+  <div class="q-data-table__scroll" (scroll)="onScroll($event)" data-testid="dt-scroll">
+    <table class="q-data-table__table">
+      <thead>
+        <tr>
+          @if (selectable()) {
+            <th class="q-data-table__select-col">
+              <input
+                type="checkbox"
+                [checked]="allOnPageSelected()"
+                (change)="toggleAllOnPage()"
+                [attr.aria-label]="'shared.dataTable.selectAll' | t"
+                data-testid="dt-select-all"
+              />
+            </th>
+          }
+          @for (col of visibleColumns(); track col.key) {
+            <th
+              [class.q-data-table__num-col]="col.numeric"
+              class="q-caption"
+              [attr.data-testid]="'dt-col-' + col.key"
+            >
+              {{ col.header }}
+            </th>
+          }
+          @if (rowActions().length > 0) {
+            <th class="q-data-table__actions-col" aria-hidden="true"></th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track trackByRowId($index, row)) {
+          <tr class="q-data-table__row" data-testid="dt-row" (click)="rowClick.emit(row)">
+            @if (selectable()) {
+              <td class="q-data-table__select-col" (click)="$event.stopPropagation()">
+                <input
+                  type="checkbox"
+                  [checked]="isSelected(rowIdOf(row))"
+                  (change)="toggleRow(rowIdOf(row))"
+                  [attr.aria-label]="'shared.dataTable.selectRow' | t"
+                  data-testid="dt-row-select"
+                />
+              </td>
+            }
+            @for (col of visibleColumns(); track col.key) {
+              <td
+                [class.q-data-table__num-col]="col.numeric"
+                [attr.data-testid]="'dt-cell-' + col.key"
+              >
+                <ng-container
+                  [ngTemplateOutlet]="cellTemplate(col.key)"
+                  [ngTemplateOutletContext]="{ $implicit: row }"
+                />
+              </td>
+            }
+            @if (rowActions().length > 0) {
+              <td class="q-data-table__actions-col" (click)="$event.stopPropagation()">
+                <q-action-menu
+                  [triggerLabel]="'shared.dataTable.rowMenu.toggle' | t"
+                  [items]="rowMenuItems(row)"
+                  [open]="openRowMenuId() === rowIdOf(row)"
+                  (openChange)="onRowMenuOpenChange(rowIdOf(row), $event)"
+                  (select)="runRowAction($event, row)"
+                />
+              </td>
+            }
+          </tr>
+        } @empty {
+          <tr class="q-data-table__empty-row">
+            <td [attr.colspan]="colspan()" data-testid="dt-empty">
+              <ng-content select="[emptyState]" />
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (pagingMode() === 'paged' && hasMore()) {
+      <div class="q-data-table__load-more">
+        <button
+          type="button"
+          class="q-body-sm"
+          (click)="onLoadMoreClick()"
+          [disabled]="loading()"
+          data-testid="dt-load-more"
+        >
+          {{ (loading() ? 'shared.dataTable.loading' : 'shared.dataTable.loadMore') | t }}
+        </button>
+      </div>
+    }
+    @if (pagingMode() === 'infinite' && loading()) {
+      <div class="q-data-table__infinite-spinner q-caption" data-testid="dt-infinite-spinner">
+        {{ 'shared.dataTable.loading' | t }}
+      </div>
+    }
+  </div>
+</div>

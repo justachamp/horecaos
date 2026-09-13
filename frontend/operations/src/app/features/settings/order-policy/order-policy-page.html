@@ -178,34 +178,148 @@
     }
   </section>
 
+  @if (fieldsError(); as message) {
+    <p class="q-body-sm error" role="alert">{{ message }}</p>
+  }
+
   <section class="card">
     <h2 class="q-subhead">{{ 'settings.orderPolicy.card2.title' | t }}</h2>
-    <p class="q-body-sm">
-      {{
-        'notBuilt.body' | t: { spec: 'operations-spec/settings.md §10.3 (Card 2 — Тайминги и SLA)' }
-      }}
-    </p>
+    <div class="field-list">
+      <ng-container
+        *ngTemplateOutlet="fieldEditor; context: { fields: card2Fields }"
+      ></ng-container>
+    </div>
   </section>
 
   <section class="card">
     <h2 class="q-subhead">{{ 'settings.orderPolicy.card3.title' | t }}</h2>
     <p class="q-body-sm">{{ 'settings.orderPolicy.card3.body' | t }}</p>
+    <div class="field-list">
+      <ng-container
+        *ngTemplateOutlet="fieldEditor; context: { fields: card3Fields }"
+      ></ng-container>
+    </div>
   </section>
 
   <section class="card">
     <h2 class="q-subhead">{{ 'settings.orderPolicy.card4.title' | t }}</h2>
-    <p class="q-body-sm">
-      {{ 'notBuilt.body' | t: { spec: 'operations-spec/settings.md §10.3 (Card 4 — Условия)' } }}
-    </p>
+    <div class="field-list">
+      <ng-container
+        *ngTemplateOutlet="fieldEditor; context: { fields: card4Fields }"
+      ></ng-container>
+    </div>
   </section>
 
   <section class="card">
     <h2 class="q-subhead">{{ 'settings.orderPolicy.card5.title' | t }}</h2>
-    <p class="q-body-sm">
-      {{
-        'notBuilt.body'
-          | t: { spec: 'operations-spec/settings.md §10.3 (Card 5 — Оформление заказа оператором)' }
-      }}
-    </p>
+    <div class="field-list">
+      <ng-container
+        *ngTemplateOutlet="fieldEditor; context: { fields: card5Fields }"
+      ></ng-container>
+    </div>
   </section>
 }
+
+<!-- Shared row for every Card 2-5 field: q-inherited-field when idle, the value's own
+     input plus a required reason when `editingFieldCode()` names this field. -->
+<ng-template #fieldEditor let-fields="fields">
+  @for (field of fields; track field.code) {
+    <div class="field-row">
+      @if (editingFieldCode() === field.code) {
+        <div class="form">
+          <label class="q-caption" [for]="'field-' + field.code">{{ field.labelKey | t }}</label>
+
+          @switch (field.kind) {
+            @case ('boolean') {
+              <label class="checkbox q-body-sm">
+                <input
+                  type="checkbox"
+                  [checked]="draftFieldBoolean()"
+                  (change)="draftFieldBoolean.set($any($event.target).checked)"
+                />
+                {{ field.labelKey | t }}
+              </label>
+            }
+            @case ('enumSelect') {
+              <select
+                [id]="'field-' + field.code"
+                class="q-body field"
+                [value]="draftFieldText()"
+                (change)="draftFieldText.set($any($event.target).value)"
+              >
+                @for (option of field.options ?? []; track option.value) {
+                  <option [value]="option.value">{{ option.labelKey | t }}</option>
+                }
+              </select>
+            }
+            @default {
+              <input
+                [id]="'field-' + field.code"
+                class="q-body field"
+                [type]="field.kind === 'text' ? 'text' : 'number'"
+                [attr.min]="field.min ?? null"
+                [attr.max]="field.max ?? null"
+                [attr.step]="field.step ?? (field.kind === 'integer' ? 1 : null)"
+                [value]="draftFieldText()"
+                (input)="draftFieldText.set($any($event.target).value)"
+              />
+            }
+          }
+
+          <label class="q-caption" [for]="'field-reason-' + field.code">{{
+            'settings.orderPolicy.field.reason' | t
+          }}</label>
+          <input
+            [id]="'field-reason-' + field.code"
+            class="q-body field"
+            type="text"
+            [value]="draftFieldReason()"
+            (input)="draftFieldReason.set($any($event.target).value)"
+          />
+
+          @if (fieldSaveError(); as message) {
+            <p class="q-body-sm error" role="alert">{{ message }}</p>
+          }
+
+          <div class="form__actions">
+            <button
+              type="button"
+              class="q-body secondary"
+              (click)="cancelEditingField()"
+              [disabled]="fieldSaving()"
+            >
+              {{ 'settings.orderPolicy.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              class="q-body primary"
+              (click)="saveField(field)"
+              [disabled]="!canSaveField()"
+            >
+              {{
+                fieldSaving()
+                  ? ('settings.orderPolicy.publishing' | t)
+                  : ('settings.orderPolicy.publish' | t)
+              }}
+            </button>
+          </div>
+        </div>
+      } @else {
+        <q-inherited-field
+          [label]="field.labelKey | t"
+          [resolution]="resolutionFor(field.code)"
+          [loading]="fieldsLoading()"
+          [currentScopeType]="scope.level()"
+          [settableScopes]="editableScopes"
+          [formatValue]="fieldFormatter(field)"
+          (override)="startEditingField(field)"
+          (setValueRequested)="startEditingField(field)"
+          (revertToInherit)="revertField(field)"
+        />
+        @if (field.hintKey) {
+          <p class="q-caption hint">{{ field.hintKey | t }}</p>
+        }
+      }
+    </div>
+  }
+</ng-template>

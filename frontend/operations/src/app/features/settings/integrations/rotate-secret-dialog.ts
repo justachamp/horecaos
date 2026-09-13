@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
 
 import { I18n } from '../../../core/i18n/i18n';
+import { SecretInput } from '../../../shared/ui/secret-input/secret-input';
 
 /** What the parent screen needs to call one of the two rotate-by-value endpoints. */
 export interface RotateSecretSubmission {
@@ -20,6 +21,7 @@ export interface RotateSecretSubmission {
 @Component({
   selector: 'app-rotate-secret-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [SecretInput],
   template: `
     <div class="backdrop" (click)="cancel.emit()">
       <div
@@ -38,16 +40,11 @@ export interface RotateSecretSubmission {
           </p>
         }
 
-        <label class="q-caption field-label" for="rotate-value">{{
-          i18n.t('settings.integrations.rotate.value')
-        }}</label>
-        <input
-          id="rotate-value"
-          class="q-body field"
-          type="password"
-          autocomplete="off"
+        <q-secret-input
+          fieldId="rotate-value"
+          [label]="i18n.t('settings.integrations.rotate.value')"
           [value]="value()"
-          (input)="onValueInput($event)"
+          (valueChange)="value.set($event)"
           [disabled]="submitting()"
         />
 

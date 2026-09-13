@@ -16,7 +16,7 @@
   align-items: center;
   justify-content: center;
   height: 96px;
-  font-size: 32px;
+  font-size: var(--q-type-headline);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   background: var(--q-surface-1);
@@ -41,7 +41,7 @@
 .vdu__denied,
 .vdu__loading {
   color: var(--q-canvas);
-  font-size: 20px;
+  font-size: var(--q-type-subhead);
   text-align: center;
   padding: 48px;
 }

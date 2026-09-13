@@ -24,7 +24,7 @@
 }
 
 .drafts__bar-label {
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .drafts__table {
@@ -35,14 +35,14 @@
 .drafts__table th {
   text-align: left;
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
   background: var(--q-surface-1);
 }
 
 .drafts__table td {
   padding: 10px 12px;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   border-top: 1px solid var(--q-hairline);
 }
 
@@ -58,13 +58,13 @@
   padding: 2px 8px;
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .drafts__open-customer {
   color: var(--q-primary);
   text-decoration: none;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .drafts__open-customer:hover {

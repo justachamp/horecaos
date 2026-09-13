@@ -13,6 +13,22 @@
   margin-bottom: 12px;
 }
 
+.zones__toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.zones__import-link {
+  font-size: var(--q-type-body-xs);
+  color: var(--q-primary);
+  text-decoration: none;
+}
+
+.zones__import-link:hover {
+  text-decoration: underline;
+}
+
 .zones__create {
   padding: 6px 14px;
   border: 1px solid var(--q-primary);
@@ -20,7 +36,7 @@
   color: #fff;
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .zones__table {
@@ -31,7 +47,7 @@
 .zones__table th {
   text-align: left;
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
   border-bottom: 1px solid var(--q-hairline);
 }
@@ -46,7 +62,7 @@
 
 .zone-row td {
   padding: 8px 12px;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   border-bottom: 1px solid var(--q-hairline);
   vertical-align: middle;
 }
@@ -72,14 +88,14 @@
   background: var(--q-canvas);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .status-badge {
   padding: 2px 8px;
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .status-badge--live {
@@ -141,7 +157,7 @@
   padding: 6px 10px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .dialog__error {
@@ -161,7 +177,7 @@
   background: var(--q-canvas);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .dialog__actions button:last-child {
@@ -213,7 +229,7 @@
   background: var(--q-canvas);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .zone-detail__section-head button:disabled,
@@ -249,13 +265,13 @@
 .zone-versions th {
   text-align: left;
   padding: 4px 8px;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
 }
 
 .zone-versions td {
   padding: 4px 8px;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
   border-top: 1px solid var(--q-hairline);
 }
 
@@ -272,7 +288,7 @@
   padding: 6px 10px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   background: var(--q-canvas);
   color: inherit;
 }

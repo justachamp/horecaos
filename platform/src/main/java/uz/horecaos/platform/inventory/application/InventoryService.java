@@ -168,7 +168,7 @@ public class InventoryService implements InventoryReservationPort {
     public UUID listVariantAtLocation(UUID tenantId, UUID brandId, UUID locationId, UUID variantId, TrackingMode mode) {
         rls.bindTenant(tenantId);
         if (mode == TrackingMode.QUANTITY) {
-            throw new UnsupportedTrackingModeException(mode);
+            throw new UnsupportedTrackingModeException(useStockLogicEnabled(tenantId));
         }
         return store.createStockItem(tenantId, brandId, locationId, variantId, mode, clock.instant());
     }
@@ -205,7 +205,7 @@ public class InventoryService implements InventoryReservationPort {
                         blocked.add(Unavailable.soldOut(variantId));
                     }
                 }
-                case QUANTITY -> throw new UnsupportedTrackingModeException(item.trackingMode());
+                case QUANTITY -> throw new UnsupportedTrackingModeException(useStockLogicEnabled(tenantId));
             }
         }
 
@@ -509,10 +509,36 @@ public class InventoryService implements InventoryReservationPort {
         return expired.size();
     }
 
-    /** Thrown rather than pretending to enforce a quantity the slice does not track. */
+    /**
+     * The {@code catalog.use_stock_logic} state at the tenant that just tried
+     * to use {@link TrackingMode#QUANTITY}, so {@link
+     * UnsupportedTrackingModeException} can tell an operator which of the two
+     * true things is going on: the tenant has not turned it on, or the
+     * tenant has and the platform still cannot honour it (gap map row
+     * {@code 4.4d}, wave P46).
+     */
+    private boolean useStockLogicEnabled(UUID tenantId) {
+        Boolean enabled =
+                configuration.value(InventoryConfigurationKeys.CATALOG_USE_STOCK_LOGIC, ResourceScope.tenant(tenantId));
+        return Boolean.TRUE.equals(enabled);
+    }
+
+    /**
+     * Thrown rather than pretending to enforce a quantity the slice does not
+     * track. The message names which of the two operator-facing states
+     * produced the refusal, per {@link #useStockLogicEnabled}'s own doc,
+     * instead of one generic sentence either way.
+     */
     public static class UnsupportedTrackingModeException extends RuntimeException {
-        public UnsupportedTrackingModeException(TrackingMode mode) {
-            super("Tracking mode " + mode + " is not implemented; the first slice is BINARY or UNTRACKED");
+        public UnsupportedTrackingModeException(boolean useStockLogicEnabled) {
+            super(
+                    useStockLogicEnabled
+                            ? "Quantity tracking (catalog.use_stock_logic) is turned on for this tenant, "
+                                    + "but counted-stock tracking is not available in this build yet. "
+                                    + "List this item as BINARY or UNTRACKED until it ships."
+                            : "Quantity tracking is off for this tenant. Turn on catalog.use_stock_logic in "
+                                    + "Settings, or list this item as BINARY or UNTRACKED — counted-stock "
+                                    + "tracking is not implemented yet either way.");
         }
     }
 }

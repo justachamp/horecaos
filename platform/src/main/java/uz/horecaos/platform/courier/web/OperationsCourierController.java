@@ -3,6 +3,7 @@ package uz.horecaos.platform.courier.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -11,18 +12,22 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -38,8 +43,12 @@ import uz.horecaos.platform.courier.application.CourierRosterQueryService.Roster
 import uz.horecaos.platform.courier.application.CourierRosterService;
 import uz.horecaos.platform.courier.application.CourierSettlementService;
 import uz.horecaos.platform.courier.application.CourierShiftService;
+import uz.horecaos.platform.courier.application.CourierTypeService;
 import uz.horecaos.platform.courier.application.DeliveryCostQueryService;
 import uz.horecaos.platform.courier.application.PartnerInvoiceService;
+import uz.horecaos.platform.courier.application.PlannedShiftService;
+import uz.horecaos.platform.courier.application.PlannedShiftService.NewPlannedShift;
+import uz.horecaos.platform.courier.application.PlannedShiftService.RosterComparison;
 import uz.horecaos.platform.courier.domain.AdjustmentOrigin;
 import uz.horecaos.platform.courier.domain.ComplianceField;
 import uz.horecaos.platform.courier.domain.CostBasis;
@@ -65,6 +74,7 @@ import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore.InvoiceLineRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore.InvoiceRow;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcPlannedShiftStore.PlannedShiftRow;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -98,11 +108,13 @@ public class OperationsCourierController {
     private final CourierRosterQueryService rosterQuery;
     private final CourierRosterService roster;
     private final JdbcCourierStore courierStore;
+    private final CourierTypeService courierTypes;
     private final CourierRateCardService rateCards;
     private final JdbcCourierRateCardStore rateCardStore;
     private final JdbcCourierShiftStore shiftStore;
     private final CourierPolicyResolver policyResolver;
     private final JdbcDeliveryCostStore deliveryCostStore;
+    private final PlannedShiftService plannedShifts;
     private final CurrentActor currentActor;
 
     public OperationsCourierController(
@@ -117,11 +129,13 @@ public class OperationsCourierController {
             CourierRosterQueryService rosterQuery,
             CourierRosterService roster,
             JdbcCourierStore courierStore,
+            CourierTypeService courierTypes,
             CourierRateCardService rateCards,
             JdbcCourierRateCardStore rateCardStore,
             JdbcCourierShiftStore shiftStore,
             CourierPolicyResolver policyResolver,
             JdbcDeliveryCostStore deliveryCostStore,
+            PlannedShiftService plannedShifts,
             CurrentActor currentActor) {
         this.engagements = engagements;
         this.shifts = shifts;
@@ -134,11 +148,13 @@ public class OperationsCourierController {
         this.rosterQuery = rosterQuery;
         this.roster = roster;
         this.courierStore = courierStore;
+        this.courierTypes = courierTypes;
         this.rateCards = rateCards;
         this.rateCardStore = rateCardStore;
         this.shiftStore = shiftStore;
         this.policyResolver = policyResolver;
         this.deliveryCostStore = deliveryCostStore;
+        this.plannedShifts = plannedShifts;
         this.currentActor = currentActor;
     }
 
@@ -329,9 +345,14 @@ public class OperationsCourierController {
 
     @GetMapping("/courier-types")
     @RequiresCapability(Capability.COURIER_READ)
-    @Operation(summary = "Vehicle classes, for the registration form's picker")
-    public ResponseEntity<List<CourierTypeResponse>> types(@PathVariable UUID tenantId) {
-        return ResponseEntity.ok(courierStore.listTypes(tenantId).stream()
+    @Operation(
+            summary = "Vehicle classes, for the registration form's picker and the IA 3.4 management screen",
+            description = "includeArchived=false (default) is the registration picker's list; "
+                    + "the management screen passes true so an archived class a past rate card "
+                    + "or courier still names does not vanish from the table.")
+    public ResponseEntity<List<CourierTypeResponse>> types(
+            @PathVariable UUID tenantId, @RequestParam(defaultValue = "false") boolean includeArchived) {
+        return ResponseEntity.ok(courierStore.listTypes(tenantId, includeArchived).stream()
                 .map(CourierTypeResponse::of)
                 .toList());
     }
@@ -340,8 +361,10 @@ public class OperationsCourierController {
     @RequiresCapability(value = Capability.COURIER_TYPE_MANAGE, mutating = true)
     @Operation(
             summary = "Define a vehicle class (IA 3.4)",
-            description = "The two dispatch numbers — minimum distance and the offer TTL — and "
-                    + "not a courier's pay, which is a rate card and a separate act.")
+            description = "The dispatch numbers — minimum/maximum distance, the offer TTL — and "
+                    + "not a courier's pay, which is a rate card and a separate act. "
+                    + "startingMinuteOffset and workMode are ADR 0108: captured and rendered, not "
+                    + "yet read by the accrual calculator or the dispatch gate.")
     public ResponseEntity<CourierTypeResponse> createType(
             @PathVariable UUID tenantId, @Valid @RequestBody CreateCourierTypeRequest body) {
 
@@ -356,10 +379,61 @@ public class OperationsCourierController {
                 body.maxDistanceMeters(),
                 body.maxConcurrentAssignments(),
                 body.offerTtlSeconds(),
-                "ACTIVE"));
+                body.startingMinuteOffset(),
+                body.workModeOrDefault(),
+                "ACTIVE",
+                1));
 
         return ResponseEntity.ok(
                 CourierTypeResponse.of(courierStore.findType(tenantId, typeId).orElseThrow()));
+    }
+
+    @PutMapping("/courier-types/{typeId}")
+    @RequiresCapability(value = Capability.COURIER_TYPE_MANAGE, mutating = true)
+    @Operation(
+            summary = "Correct a vehicle class (ADR 0108)",
+            description = "Types were create-only at every layer: no update and no archive, even "
+                    + "though status already has ARCHIVED, so a mistyped code or a wrong offer "
+                    + "TTL was permanent. expectedVersion is required and is the version this "
+                    + "controller last reported for this row; a stale one is refused with "
+                    + "STALE_VERSION.")
+    public ResponseEntity<CourierTypeResponse> updateType(
+            @PathVariable UUID tenantId, @PathVariable UUID typeId, @Valid @RequestBody UpdateCourierTypeRequest body) {
+
+        CourierTypeRow updated = courierTypes.updateType(
+                tenantId,
+                typeId,
+                new JdbcCourierStore.CourierTypeUpdate(
+                        body.code(),
+                        body.displayName(),
+                        body.vehicleClass(),
+                        body.minDistanceMeters(),
+                        body.maxDistanceMeters(),
+                        body.maxConcurrentAssignments(),
+                        body.offerTtlSeconds(),
+                        body.startingMinuteOffset(),
+                        body.workMode()),
+                body.expectedVersion(),
+                actor(),
+                body.reason());
+
+        return ResponseEntity.ok(CourierTypeResponse.of(updated));
+    }
+
+    @PostMapping("/courier-types/{typeId}/archival")
+    @RequiresCapability(value = Capability.COURIER_TYPE_MANAGE, mutating = true)
+    @Operation(
+            summary = "Archive a vehicle class",
+            description = "Archived, never deleted: a past rate card or courier still names it. "
+                    + "The registration picker stops offering it; the management screen keeps "
+                    + "showing it when includeArchived=true.")
+    public ResponseEntity<Void> archiveType(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID typeId,
+            @Valid @RequestBody ArchiveCourierTypeRequest body) {
+
+        courierTypes.archiveType(tenantId, typeId, actor(), body.reason());
+        return ResponseEntity.accepted().build();
     }
 
     // ------------------------------------------------------------ rate cards
@@ -438,16 +512,148 @@ public class OperationsCourierController {
     @Operation(
             summary = "The branch's shifts, newest first (IA 3.5, Посещаемость)",
             description = "Open, closed and everything between — including AWAITING_APPROVAL, "
-                    + "which is the manager's own worklist on this screen.")
+                    + "which is the manager's own worklist on this screen. from/to window the read "
+                    + "to a period; omitted, the read falls back to the most recent `limit` shifts "
+                    + "the way this endpoint always has.")
     public ResponseEntity<List<ShiftResponse>> courierShifts(
             @PathVariable UUID tenantId,
             @RequestParam UUID brandId,
             @RequestParam UUID locationId,
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to,
             @RequestParam(defaultValue = "200") int limit) {
 
-        return ResponseEntity.ok(shiftStore.atLocation(tenantId, brandId, locationId, Math.min(limit, 500)).stream()
-                .map(ShiftResponse::of)
+        List<ShiftRow> rows = shiftStore.atLocation(tenantId, brandId, locationId, from, to, Math.min(limit, 500));
+        Map<UUID, String> names = courierStore.displayReferencesOf(
+                tenantId, rows.stream().map(ShiftRow::courierId).collect(Collectors.toSet()));
+        return ResponseEntity.ok(rows.stream()
+                .map(row -> ShiftResponse.of(row, names.get(row.courierId())))
                 .toList());
+    }
+
+    // ------------------------------------------------------------ roster entries
+
+    @GetMapping("/courier-roster-entries")
+    @RequiresCapability(value = Capability.COURIER_SHIFT_READ, scope = ResourceScope.ScopeType.LOCATION)
+    @Operation(
+            summary = "The branch's planned shifts (IA 3.5's roster, over P02's ScheduleGrid)",
+            description = "The plan a manager authored, as distinct from what a courier actually "
+                    + "opened. from/to window the read; both default to the surrounding week when "
+                    + "omitted so the grid always has something to draw.")
+    public ResponseEntity<List<PlannedShiftResponse>> rosterEntries(
+            @PathVariable UUID tenantId,
+            @RequestParam UUID brandId,
+            @RequestParam UUID locationId,
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to,
+            @RequestParam(defaultValue = "200") int limit) {
+
+        List<PlannedShiftRow> rows =
+                plannedShifts.atLocation(tenantId, brandId, locationId, from, to, Math.min(limit, 500));
+        Map<UUID, String> names = courierStore.displayReferencesOf(
+                tenantId, rows.stream().map(PlannedShiftRow::courierId).collect(Collectors.toSet()));
+        return ResponseEntity.ok(rows.stream()
+                .map(row -> PlannedShiftResponse.of(row, names.get(row.courierId()), null))
+                .toList());
+    }
+
+    @GetMapping("/courier-roster-entries/comparison")
+    @RequiresCapability(value = Capability.COURIER_SHIFT_READ, scope = ResourceScope.ScopeType.LOCATION)
+    @Operation(
+            summary = "Planned versus actual, for one period (IA 3.5)",
+            description = "Every planned entry in the window, each carrying whichever actual shift "
+                    + "of the same courier overlapped it — COVERED, PENDING (the window has not "
+                    + "elapsed) or UNCOVERED. The comparison is computed at read time; nothing here "
+                    + "writes MISSED onto the entry itself.")
+    public ResponseEntity<List<PlannedShiftResponse>> rosterComparison(
+            @PathVariable UUID tenantId,
+            @RequestParam UUID brandId,
+            @RequestParam UUID locationId,
+            @RequestParam Instant from,
+            @RequestParam Instant to,
+            @RequestParam(defaultValue = "200") int limit) {
+
+        List<RosterComparison> rows =
+                plannedShifts.comparisonAt(tenantId, brandId, locationId, from, to, Math.min(limit, 500));
+        Map<UUID, String> names = courierStore.displayReferencesOf(
+                tenantId, rows.stream().map(row -> row.entry().courierId()).collect(Collectors.toSet()));
+        return ResponseEntity.ok(rows.stream()
+                .map(row -> PlannedShiftResponse.of(
+                        row.entry(), names.get(row.entry().courierId()), row))
+                .toList());
+    }
+
+    @PostMapping("/courier-roster-entries")
+    @RequiresCapability(
+            value = Capability.COURIER_SHIFT_APPROVE,
+            scope = ResourceScope.ScopeType.LOCATION,
+            mutating = true)
+    @Operation(
+            summary = "Plan a courier's shift ahead of time",
+            description = "Lands as DRAFT. Refused when the courier has no live engagement, the "
+                    + "same precondition a courier's own shift-open checks. brandId/locationId "
+                    + "are query parameters, the same as the GET siblings of this route, and carry "
+                    + "the scope this write is checked at.")
+    public ResponseEntity<PlannedShiftResponse> draftRosterEntry(
+            @PathVariable UUID tenantId,
+            @RequestParam UUID brandId,
+            @RequestParam UUID locationId,
+            @Valid @RequestBody DraftRosterEntryRequest body) {
+
+        PlannedShiftRow entry = plannedShifts.draft(new NewPlannedShift(
+                tenantId,
+                brandId,
+                locationId,
+                body.courierId(),
+                body.plannedStart(),
+                body.plannedEnd(),
+                actorUuid(),
+                actor(),
+                body.reason()));
+        Map<UUID, String> names = courierStore.displayReferencesOf(tenantId, Set.of(entry.courierId()));
+        return ResponseEntity.ok(PlannedShiftResponse.of(entry, names.get(entry.courierId()), null));
+    }
+
+    @PostMapping("/courier-roster-entries/{entryId}/publish")
+    @RequiresCapability(
+            value = Capability.COURIER_SHIFT_APPROVE,
+            scope = ResourceScope.ScopeType.LOCATION,
+            mutating = true)
+    @Operation(
+            summary = "Publish a planned shift, making it a visible offer",
+            description = "brandId/locationId are query parameters carrying the scope this write "
+                    + "is checked at; the entry itself is refused as not-found (never merely "
+                    + "forbidden, per ADR 0031) when it does not actually belong to that branch.")
+    public ResponseEntity<Void> publishRosterEntry(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID entryId,
+            @RequestParam UUID brandId,
+            @RequestParam UUID locationId,
+            @Valid @RequestBody RosterEntryReasonRequest body) {
+
+        plannedShifts.publish(tenantId, brandId, locationId, entryId, actor(), actorUuid(), body.reason());
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/courier-roster-entries/{entryId}/cancel")
+    @RequiresCapability(
+            value = Capability.COURIER_SHIFT_APPROVE,
+            scope = ResourceScope.ScopeType.LOCATION,
+            mutating = true)
+    @Operation(
+            summary = "Cancel a planned shift that is still DRAFT or PUBLISHED",
+            description = "brandId/locationId are query parameters carrying the scope this write "
+                    + "is checked at; the entry itself is refused as not-found (never merely "
+                    + "forbidden, per ADR 0031) when it does not actually belong to that branch.")
+    public ResponseEntity<Void> cancelRosterEntry(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID entryId,
+            @RequestParam UUID brandId,
+            @RequestParam UUID locationId,
+            @Valid @RequestBody RosterEntryReasonRequest body) {
+
+        plannedShifts.cancel(tenantId, brandId, locationId, entryId, actor(), body.reason());
+        return ResponseEntity.accepted().build();
     }
 
     // ------------------------------------------------------------------- policy
@@ -613,7 +819,14 @@ public class OperationsCourierController {
     @Operation(
             summary = "Record a bonus or a penalty",
             description = "A manual penalty is never written on this call alone: it returns the "
-                    + "approval request and writes nothing until a second person decides.")
+                    + "approval request and writes nothing until a second person decides. "
+                    + "origin stays on the request for wire compatibility but this endpoint never "
+                    + "reads it: every adjustment reaching HorecaOS over HTTP is MANUAL, "
+                    + "unconditionally, whatever the field says. Before this wave the origin the "
+                    + "caller sent controlled the stamped value, and a caller sending RULE bypassed "
+                    + "the four-eyes branch a MANUAL penalty above threshold requires (ADR 0108) — "
+                    + "RULE now exists only as a value AdjustmentRuleEvaluator's own Java call "
+                    + "constructs, never as something an HTTP request can cause.")
     public ResponseEntity<AdjustmentResponse> adjust(
             @PathVariable UUID tenantId, @PathVariable UUID courierId, @Valid @RequestBody AdjustmentRequest body) {
 
@@ -624,7 +837,7 @@ public class OperationsCourierController {
                 body.amountMinor(),
                 body.currency(),
                 body.reasonCode(),
-                AdjustmentOrigin.valueOf(body.origin()),
+                AdjustmentOrigin.MANUAL,
                 body.idempotencyKey(),
                 actor(),
                 body.reason(),
@@ -633,6 +846,58 @@ public class OperationsCourierController {
         JdbcCourierLedgerStore.LedgerEntryRow entry = outcome.entry();
         return ResponseEntity.ok(new AdjustmentResponse(
                 entry == null ? null : entry.id(), outcome.approvalRequestId(), outcome.written()));
+    }
+
+    // ------------------------------------------------------ adjustment reasons
+
+    @GetMapping("/adjustment-reasons")
+    @RequiresCapability(Capability.COURIER_READ)
+    @Operation(
+            summary = "The bonus/penalty registry (IA 3.4, ADR 0108)",
+            description = "Every reason this tenant has authored, manual-only and rule-wired "
+                    + "alike — hasRule says which. Read under courier.read: a dispatcher choosing "
+                    + "a reason on the manual-entry form needs this list and does not need "
+                    + "courier.adjustment.reason.manage to see it.")
+    public ResponseEntity<List<AdjustmentReasonResponse>> adjustmentReasons(@PathVariable UUID tenantId) {
+        return ResponseEntity.ok(courierStore.listAdjustmentReasons(tenantId).stream()
+                .map(AdjustmentReasonResponse::of)
+                .toList());
+    }
+
+    @PostMapping("/adjustment-reasons")
+    @RequiresCapability(value = Capability.COURIER_ADJUSTMENT_REASON_MANAGE, mutating = true)
+    @Operation(
+            summary = "Define a bonus/penalty reason, manual-only or rule-wired (ADR 0108)",
+            description = "outcomeBasis is closed (ADR 0042): every code names a delivery outcome, "
+                    + "never a behaviour. Omit every rule* field for a manual-only reason; supply "
+                    + "all five to wire it to AdjustmentRuleEvaluator — ruleAmountMinor's sign must "
+                    + "match kind, and ORDER_UNDELIVERED/ORDER_DAMAGED have no evaluator reader and "
+                    + "may only be authored manual-only.")
+    public ResponseEntity<AdjustmentReasonResponse> createAdjustmentReason(
+            @PathVariable UUID tenantId, @Valid @RequestBody CreateAdjustmentReasonRequest body) {
+
+        UUID reasonId = UUID.randomUUID();
+        courierStore.insertAdjustmentReason(
+                reasonId, tenantId, body.code(), body.kind(), body.outcomeBasis(), body.displayName(), body.toRule());
+
+        return ResponseEntity.ok(AdjustmentReasonResponse.of(
+                courierStore.findAdjustmentReason(tenantId, body.code()).orElseThrow()));
+    }
+
+    @PostMapping("/adjustment-reasons/{reasonId}/archival")
+    @RequiresCapability(value = Capability.COURIER_ADJUSTMENT_REASON_MANAGE, mutating = true)
+    @Operation(
+            summary = "Archive a bonus/penalty reason",
+            description = "Archived, never deleted: a ledger entry still names its code. A "
+                    + "rule-wired reason stops evaluating the moment it archives, because "
+                    + "ruleReasonsAt reads status = 'ACTIVE'.")
+    public ResponseEntity<Void> archiveAdjustmentReason(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID reasonId,
+            @Valid @RequestBody ArchiveCourierTypeRequest body) {
+
+        courierTypes.archiveAdjustmentReason(tenantId, reasonId, actor(), body.reason());
+        return ResponseEntity.accepted().build();
     }
 
     @GetMapping("/couriers/{courierId}/ledger")
@@ -830,6 +1095,16 @@ public class OperationsCourierController {
 
     private ActorRef actor() {
         return ActorRef.user(currentActor.get().subject(), null);
+    }
+
+    /**
+     * The caller's own authenticated identity as a {@code created_by}/{@code
+     * published_by} column expects it. Production Keycloak subjects are UUIDs;
+     * a service account or malformed token fails loudly here rather than
+     * writing a fabricated identity onto a roster row.
+     */
+    private UUID actorUuid() {
+        return UUID.fromString(currentActor.get().subject());
     }
 
     private String correlationId() {
@@ -1104,6 +1379,16 @@ public class OperationsCourierController {
             @Size(max = 48) String reasonCode,
             @NotBlank String reason) {}
 
+    /**
+     * A manual bonus or penalty.
+     *
+     * <p>{@code origin} stays on the wire — the OpenAPI contract test refuses
+     * to make a published required field optional or remove it, and this one
+     * has been required since before this wave — but {@link #adjust} never
+     * reads it. Whatever value a caller sends, including {@code "RULE"}, is
+     * accepted and discarded; see that method's own doc for the gap this
+     * closes.
+     */
     record AdjustmentRequest(
             UUID locationId,
             long amountMinor,
@@ -1112,6 +1397,90 @@ public class OperationsCourierController {
             @NotBlank String origin,
             @NotBlank String idempotencyKey,
             @NotBlank String reason) {}
+
+    /**
+     * One row of the bonus/penalty registry (ADR 0108). {@code hasRule} is a
+     * courier-typed convenience over "every rule* field is non-null"; the
+     * six are omitted individually here for the same reason the response
+     * carries {@code hasRule} rather than making a caller check nullness six
+     * times to answer one boolean question.
+     */
+    record AdjustmentReasonResponse(
+            UUID reasonId,
+            String code,
+            String kind,
+            String outcomeBasis,
+            String displayName,
+            String status,
+            boolean hasRule,
+            @Nullable Long ruleAmountMinor,
+            @Nullable String ruleCurrency,
+            @Nullable String ruleComparator,
+            @Nullable Long ruleThreshold,
+            @Nullable String ruleWindow,
+            @Nullable String ruleTrigger,
+            int ruleVersion) {
+
+        static AdjustmentReasonResponse of(JdbcCourierStore.AdjustmentReasonRow row) {
+            return new AdjustmentReasonResponse(
+                    row.id(),
+                    row.code(),
+                    row.kind(),
+                    row.outcomeBasis(),
+                    row.displayName(),
+                    row.status(),
+                    row.hasRule(),
+                    row.ruleAmountMinor(),
+                    row.ruleCurrency(),
+                    row.ruleComparator(),
+                    row.ruleThreshold(),
+                    row.ruleWindow(),
+                    row.ruleTrigger(),
+                    row.ruleVersion());
+        }
+    }
+
+    /**
+     * Defines a reason. Every {@code rule*} field is optional and they arrive
+     * together or not at all: supplying some but not others is refused before
+     * this ever reaches the database's own {@code
+     * ck_adjustment_reason_rule_pair}, so the caller sees ADR 0031's
+     * vocabulary rather than a constraint-violation message.
+     */
+    record CreateAdjustmentReasonRequest(
+            @NotBlank @Size(max = 48) String code,
+            @NotBlank String kind,
+            @NotBlank String outcomeBasis,
+            @NotBlank @Size(max = 160) String displayName,
+            @Nullable Long ruleAmountMinor,
+            @Nullable @Size(min = 3, max = 3) String ruleCurrency,
+            @Nullable String ruleComparator,
+            @Nullable Long ruleThreshold,
+            @Nullable String ruleWindow,
+            @Nullable String ruleTrigger) {
+
+        JdbcCourierStore.@Nullable RuleConfig toRule() {
+            List<Object> present = Arrays.asList(
+                    ruleAmountMinor, ruleCurrency, ruleComparator, ruleThreshold, ruleWindow, ruleTrigger);
+            long presentCount = present.stream().filter(Objects::nonNull).count();
+            if (presentCount == 0) {
+                return null;
+            }
+            if (presentCount < present.size()) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "A rule needs all of ruleAmountMinor, ruleCurrency, ruleComparator, "
+                                + "ruleThreshold, ruleWindow and ruleTrigger, or none of them");
+            }
+            return new JdbcCourierStore.RuleConfig(
+                    Objects.requireNonNull(ruleAmountMinor),
+                    Objects.requireNonNull(ruleCurrency),
+                    Objects.requireNonNull(ruleComparator),
+                    Objects.requireNonNull(ruleThreshold),
+                    Objects.requireNonNull(ruleWindow),
+                    Objects.requireNonNull(ruleTrigger));
+        }
+    }
 
     record CloseperiodRequest(@NotBlank String reason) {}
 
@@ -1183,7 +1552,11 @@ public class OperationsCourierController {
             int minDistanceMeters,
             @Nullable Integer maxDistanceMeters,
             int maxConcurrentAssignments,
-            int offerTtlSeconds) {
+            int offerTtlSeconds,
+            int startingMinuteOffset,
+            String workMode,
+            String status,
+            int version) {
 
         static CourierTypeResponse of(CourierTypeRow row) {
             return new CourierTypeResponse(
@@ -1194,10 +1567,22 @@ public class OperationsCourierController {
                     row.minDistanceMeters(),
                     row.maxDistanceMeters(),
                     row.maxConcurrentAssignments(),
-                    row.offerTtlSeconds());
+                    row.offerTtlSeconds(),
+                    row.startingMinuteOffset(),
+                    row.workMode(),
+                    row.status(),
+                    row.version());
         }
     }
 
+    /**
+     * @param workMode null (or blank) defaults to {@code SHIFT} — kept
+     *                 optional, unlike {@link UpdateCourierTypeRequest}'s own
+     *                 field, because the OpenAPI contract test refuses to add
+     *                 a new required field to an existing endpoint: an older
+     *                 client that has never heard of ADR 0108 still has to be
+     *                 able to create a type
+     */
     record CreateCourierTypeRequest(
             @NotBlank @Size(max = 32) String code,
             @NotBlank @Size(max = 120) String displayName,
@@ -1205,7 +1590,34 @@ public class OperationsCourierController {
             @PositiveOrZero int minDistanceMeters,
             @Nullable Integer maxDistanceMeters,
             @Positive int maxConcurrentAssignments,
-            @Positive int offerTtlSeconds) {}
+            @Positive int offerTtlSeconds,
+            @PositiveOrZero @Max(1440) int startingMinuteOffset,
+            @Nullable String workMode) {
+
+        String workModeOrDefault() {
+            return workMode == null || workMode.isBlank() ? "SHIFT" : workMode;
+        }
+    }
+
+    /**
+     * Corrects a vehicle class (ADR 0108). {@code code} is included: a
+     * mistyped one used to be permanent, which is exactly the gap this record
+     * exists to close.
+     */
+    record UpdateCourierTypeRequest(
+            @NotBlank @Size(max = 32) String code,
+            @NotBlank @Size(max = 120) String displayName,
+            @NotBlank String vehicleClass,
+            @PositiveOrZero int minDistanceMeters,
+            @Nullable Integer maxDistanceMeters,
+            @Positive int maxConcurrentAssignments,
+            @Positive int offerTtlSeconds,
+            @PositiveOrZero @Max(1440) int startingMinuteOffset,
+            @NotBlank String workMode,
+            int expectedVersion,
+            @NotBlank String reason) {}
+
+    record ArchiveCourierTypeRequest(@NotBlank String reason) {}
 
     record RateCardSummaryResponse(
             UUID cardId,
@@ -1286,9 +1698,17 @@ public class OperationsCourierController {
 
     record ActivateRateCardRequest(@NotBlank String reason) {}
 
+    /**
+     * @param courierDisplayReference the non-personal handle (ADR 0029), never
+     *                                the decrypted name — null only when the
+     *                                courier row itself has since been removed,
+     *                                which {@code fulfillment.couriers} never
+     *                                does today
+     */
     record ShiftResponse(
             UUID shiftId,
             UUID courierId,
+            @Nullable String courierDisplayReference,
             String status,
             String dutyState,
             Instant openedAt,
@@ -1297,10 +1717,11 @@ public class OperationsCourierController {
             long breakSeconds,
             @Nullable UUID approvalRequestId) {
 
-        static ShiftResponse of(ShiftRow shift) {
+        static ShiftResponse of(ShiftRow shift, @Nullable String courierDisplayReference) {
             return new ShiftResponse(
                     shift.id(),
                     shift.courierId(),
+                    courierDisplayReference,
                     shift.status().name(),
                     shift.dutyState().name(),
                     shift.openedAt(),
@@ -1310,6 +1731,60 @@ public class OperationsCourierController {
                     shift.approvalRequestId());
         }
     }
+
+    /**
+     * One planned shift on the wire (IA 3.5's roster grid). {@code comparison}
+     * is present only from {@link #rosterComparison}; the plain roster read
+     * leaves it null rather than computing a per-row match nobody asked for.
+     */
+    record PlannedShiftResponse(
+            UUID entryId,
+            UUID courierId,
+            @Nullable String courierDisplayReference,
+            String status,
+            Instant plannedStart,
+            Instant plannedEnd,
+            @Nullable Instant publishedAt,
+            @Nullable Instant respondedAt,
+            @Nullable RosterComparisonView comparison) {
+
+        static PlannedShiftResponse of(
+                PlannedShiftRow entry, @Nullable String courierDisplayReference, @Nullable RosterComparison compared) {
+            return new PlannedShiftResponse(
+                    entry.id(),
+                    entry.courierId(),
+                    courierDisplayReference,
+                    entry.status().name(),
+                    entry.plannedStart(),
+                    entry.plannedEnd(),
+                    entry.publishedAt(),
+                    entry.respondedAt(),
+                    compared == null ? null : RosterComparisonView.of(compared));
+        }
+    }
+
+    /** @param coverage {@code COVERED}, {@code PENDING} or {@code UNCOVERED} — see {@link RosterComparison}. */
+    record RosterComparisonView(
+            String coverage,
+            @Nullable UUID matchedShiftId,
+            @Nullable String matchedDutyState) {
+
+        static RosterComparisonView of(RosterComparison comparison) {
+            ShiftRow matched = comparison.matchedShift();
+            return new RosterComparisonView(
+                    comparison.coverage(),
+                    matched == null ? null : matched.id(),
+                    matched == null ? null : matched.dutyState().name());
+        }
+    }
+
+    record DraftRosterEntryRequest(
+            @NotNull UUID courierId,
+            @NotNull Instant plannedStart,
+            @NotNull Instant plannedEnd,
+            @NotBlank String reason) {}
+
+    record RosterEntryReasonRequest(@NotBlank String reason) {}
 
     record CourierPolicyResponse(
             int reverificationDays,

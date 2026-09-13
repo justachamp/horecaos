@@ -167,6 +167,11 @@ public enum PlatformRole {
                     COURIER_RATECARD_MANAGE,
                     COURIER_RATECARD_READ,
                     COURIER_TYPE_MANAGE,
+                    // ADR 0108: the bonus/penalty registry a rule evaluates against — the
+                    // same policy tempo as the rate card immediately above, held apart
+                    // from COURIER_ADJUSTMENT_CREATE, which LOCATION_MANAGER and
+                    // COURIER_DISPATCHER hold to post one instance against one courier.
+                    COURIER_ADJUSTMENT_REASON_MANAGE,
                     COURIER_PAYOUT_AUTHORISE,
                     // Finance 8.3/8.4/8.5's worklists — see TENANT_FINANCE's own comment
                     // on the same three.
@@ -267,14 +272,20 @@ public enum PlatformRole {
                     CUSTOMER_MANAGE,
                     CUSTOMER_PII_REVEAL,
                     CUSTOMER_ERASURE_EXECUTE,
+                    CUSTOMER_ERASURE_RAISE,
                     MEDIA_READ,
                     MEDIA_UPLOAD,
                     INTEGRATION_INSTALLATION_MANAGE,
+                    // ADR 0038 lines 503-513: registering the branch's own fiscal
+                    // equipment, held the same way as the integration pair above it.
+                    FISCAL_TERMINAL_READ,
+                    FISCAL_TERMINAL_MANAGE,
                     INTEGRATION_BINDING_ACTIVATE,
                     INTEGRATION_TELEGRAM_LINK_ISSUE,
                     INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE,
                     INTEGRATION_FAILURE_READ,
                     INTEGRATION_FAILURE_RETRY,
+                    PARTNER_API_CLIENT_MANAGE,
                     POS_SYNC_READ,
                     POS_SYNC_EXECUTE,
                     POS_SYNC_APPLY,
@@ -415,14 +426,20 @@ public enum PlatformRole {
                     CUSTOMER_MANAGE,
                     CUSTOMER_PII_REVEAL,
                     CUSTOMER_ERASURE_EXECUTE,
+                    CUSTOMER_ERASURE_RAISE,
                     MEDIA_READ,
                     MEDIA_UPLOAD,
                     INTEGRATION_INSTALLATION_MANAGE,
+                    // ADR 0038 lines 503-513: registering the branch's own fiscal
+                    // equipment, held the same way as the integration pair above it.
+                    FISCAL_TERMINAL_READ,
+                    FISCAL_TERMINAL_MANAGE,
                     INTEGRATION_BINDING_ACTIVATE,
                     INTEGRATION_TELEGRAM_LINK_ISSUE,
                     INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE,
                     INTEGRATION_FAILURE_READ,
                     INTEGRATION_FAILURE_RETRY,
+                    PARTNER_API_CLIENT_MANAGE,
                     POS_SYNC_READ,
                     POS_SYNC_EXECUTE,
                     POS_SYNC_APPLY,

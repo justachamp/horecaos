@@ -1,0 +1,41 @@
+.q-date-range-picker {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.q-date-range-picker__presets {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.q-date-range-picker__presets button {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.q-date-range-picker__presets button:hover {
+  border-color: var(--q-primary);
+  color: var(--q-primary);
+}
+
+.q-date-range-picker__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.q-date-range-picker__field input {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}

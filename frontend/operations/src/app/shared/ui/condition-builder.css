@@ -1,0 +1,141 @@
+:host {
+  display: block;
+}
+
+.conditions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.condition-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.condition-group--framed {
+  padding: 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+}
+
+.condition-group__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.condition-group__combinator {
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.group-joiner {
+  align-self: flex-start;
+  color: var(--q-ink-subtle);
+  font-weight: 600;
+}
+
+.predicate-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.predicate-row__type {
+  flex: 1 1 200px;
+  height: 34px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.predicate-row__operator {
+  flex: 0 0 140px;
+  height: 34px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.predicate-row__value {
+  flex: 0 0 110px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.predicate-row__value--wide {
+  flex: 1 1 220px;
+}
+
+.value-hint {
+  color: var(--q-ink-subtle);
+}
+
+.predicate-row__remove {
+  height: 34px;
+  width: 34px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  cursor: pointer;
+}
+
+.predicate-row__remove:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.add-row,
+.add-group {
+  align-self: flex-start;
+}
+
+.secondary {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.dow-chips,
+.fixed-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dow-chip {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+  font-size: var(--q-type-caption);
+}
+
+.dow-chip--active {
+  background: var(--q-primary);
+  border-color: var(--q-primary);
+  color: var(--q-inverse-ink);
+}

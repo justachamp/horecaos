@@ -77,7 +77,7 @@
   background: var(--q-canvas);
   color: var(--q-ink);
   font-family: var(--q-font-sans);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .pill {
@@ -87,7 +87,7 @@
   background: var(--q-canvas);
   color: var(--q-ink);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .pill--active {
@@ -103,7 +103,7 @@
   background: var(--q-primary);
   color: #fff;
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   white-space: nowrap;
 }
 
@@ -175,7 +175,7 @@
   margin: 0 4px 4px 0;
   border: 1px solid var(--q-hairline);
   border-radius: 999px;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .chip--muted {
@@ -192,7 +192,7 @@
   padding: 2px 8px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .status-pill--revoked {
@@ -216,7 +216,7 @@
   border: none;
   color: var(--q-primary);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
   padding: 2px 6px;
 }
 

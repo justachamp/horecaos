@@ -250,6 +250,35 @@ class CustomerControllerEndpointTests {
         assertRefused(refused, Capability.CUSTOMER_READ);
     }
 
+    /**
+     * W03 adversarial-review finding: {@code ConsentTypeController.list},
+     * {@code CustomerController.tenantErasureRequests} and {@code
+     * ApprovalRequestController.decided} were proven tenant-isolation-safe at
+     * the service layer ({@code ConsentTypeServiceTests},
+     * {@code CustomerErasureTests}, {@code ApprovalDecisionServiceTests}), but
+     * none had an HTTP-level test confirming the declared capability is what a
+     * caller is actually refused without — the service method being
+     * tenant-safe says nothing about whether {@code @RequiresCapability} on
+     * the controller method was removed, weakened, or pointed at the wrong
+     * capability.
+     */
+    @Test
+    void aCallerWithNoCustomerReadCannotListConsentTypes() throws Exception {
+        MvcResult refused = mvc.perform(
+                        get("/api/v1/tenants/" + TENANT + "/consent-types").with(tokenFor(NO_CUSTOMER_CAPABILITY)))
+                .andReturn();
+
+        assertRefused(refused, Capability.CUSTOMER_READ);
+    }
+
+    @Test
+    void aCallerWithNoErasureRaiseCannotReadTheTenantWorklist() throws Exception {
+        MvcResult refused = mvc.perform(get(CUSTOMERS + "/erasure-requests").with(tokenFor(NO_CUSTOMER_CAPABILITY)))
+                .andReturn();
+
+        assertRefused(refused, Capability.CUSTOMER_ERASURE_RAISE);
+    }
+
     private void assertRefused(MvcResult result, Capability missing) throws Exception {
         assertThat(result.getResponse().getStatus()).isEqualTo(403);
         assertThat(result.getResponse().getContentAsString())

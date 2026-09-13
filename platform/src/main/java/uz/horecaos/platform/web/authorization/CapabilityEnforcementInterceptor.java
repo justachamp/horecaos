@@ -219,20 +219,40 @@ public class CapabilityEnforcementInterceptor implements HandlerInterceptor {
 
         return switch (scopeType) {
             case PLATFORM -> ResourceScope.platform();
-            case TENANT -> ResourceScope.tenant(uuid(pathVariables, "tenantId"));
-            case BRAND -> ResourceScope.brand(uuid(pathVariables, "tenantId"), uuid(pathVariables, "brandId"));
+            case TENANT -> ResourceScope.tenant(identifier(request, pathVariables, "tenantId"));
+            case BRAND ->
+                ResourceScope.brand(
+                        identifier(request, pathVariables, "tenantId"), identifier(request, pathVariables, "brandId"));
             case LOCATION ->
                 ResourceScope.location(
-                        uuid(pathVariables, "tenantId"),
-                        uuid(pathVariables, "brandId"),
-                        uuid(pathVariables, "locationId"));
+                        identifier(request, pathVariables, "tenantId"),
+                        identifier(request, pathVariables, "brandId"),
+                        identifier(request, pathVariables, "locationId"));
         };
     }
 
-    private static UUID uuid(Map<String, String> pathVariables, String name) {
+    /**
+     * The scope identifier named {@code name}, read from the request's path
+     * variables first and its request parameters second.
+     *
+     * <p>A path variable is still the preferred shape and is what almost every
+     * endpoint uses. A handful of read-heavy or filter-driven endpoints — the
+     * courier roster surface among them — take {@code brandId}/{@code
+     * locationId} as ordinary request parameters instead, the same way they
+     * already take {@code from}/{@code to}/{@code limit}, so a {@code
+     * @RequiresCapability(scope = BRAND|LOCATION)} declaration on one of those
+     * can be satisfied without inventing a path segment the handler never
+     * uses. {@code EndpointCapabilityDeclarationTests} enforces that every such
+     * declaration is actually backed by one or the other.
+     */
+    private static UUID identifier(HttpServletRequest request, Map<String, String> pathVariables, String name) {
         String value = pathVariables.get(name);
         if (value == null) {
-            throw new IllegalStateException("Endpoint declares a scope requiring the %s path variable".formatted(name));
+            value = request.getParameter(name);
+        }
+        if (value == null) {
+            throw new IllegalStateException(
+                    "Endpoint declares a scope requiring the %s path variable or request parameter".formatted(name));
         }
         return UUID.fromString(value);
     }

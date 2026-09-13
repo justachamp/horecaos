@@ -1,0 +1,5 @@
+/* Fixture: a raw px font-size the rule must fail on. */
+.some-class {
+  font-size: 13px;
+  color: var(--q-ink);
+}

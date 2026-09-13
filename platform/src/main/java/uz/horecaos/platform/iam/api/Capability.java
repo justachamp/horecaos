@@ -48,6 +48,25 @@ public enum Capability {
      */
     LEGAL_ENTITY_MANAGE("legal-entity.manage", "legal-entity", "manage"),
 
+    /**
+     * ADR 0038 lines 503-513: seeing a tenant's registered fiscal terminals and
+     * their health.
+     */
+    FISCAL_TERMINAL_READ("fiscal-terminal.read", "fiscal-terminal", "read"),
+
+    /**
+     * ADR 0038 lines 503-513: registering a terminal, checking its connectivity,
+     * and suspending, reactivating or retiring one.
+     *
+     * <p>Held the same way {@link #INTEGRATION_INSTALLATION_MANAGE} is — the
+     * owner and the tenant administrator, never finance or a brand manager —
+     * because this is IT equipment registration, not the fiscal-identity
+     * decision {@link #LEGAL_ENTITY_MANAGE} is: an admin who pairs a POS box to
+     * a branch is not thereby deciding which company issues that branch's
+     * receipts.
+     */
+    FISCAL_TERMINAL_MANAGE("fiscal-terminal.manage", "fiscal-terminal", "manage"),
+
     /** ADR 0036: the tenant-owned sales channel registry and its three matrices. */
     CHANNEL_READ("channel.read", "channel", "read"),
     CHANNEL_MANAGE("channel.manage", "channel", "manage"),
@@ -655,6 +674,25 @@ public enum Capability {
     CUSTOMER_ERASURE_EXECUTE("customer.erasure.execute", "customer", "erasure.execute"),
 
     /**
+     * ADR 0109: the tenant-wide DSAR erasure worklist (Settings 10.11) — seeing
+     * every account with a request outstanding across the whole tenant, not
+     * just the one customer a support agent already has open.
+     *
+     * <p>{@link #CUSTOMER_MANAGE} still gates the per-customer raise and
+     * withdraw actions (Customer detail's own erasure card, P40); this
+     * capability is deliberately named to match what P40's own gap-map entry
+     * already calls for there — folding raise and withdraw onto this same
+     * capability, once that wave lands, rather than reinventing a third name.
+     * Until then it gates exactly one thing: {@code
+     * CustomerController.tenantErasureRequests}, the worklist read. Held by
+     * {@link PlatformRole#TENANT_OWNER} and {@link PlatformRole#TENANT_ADMIN},
+     * matching {@link #CUSTOMER_ERASURE_EXECUTE}'s own bundle — a support agent
+     * files a request against the one customer on the phone and has no reason
+     * to browse every other customer's outstanding request in the same list.
+     */
+    CUSTOMER_ERASURE_RAISE("customer.erasure.raise", "customer", "erasure.raise"),
+
+    /**
      * ADR 0059 stage 3: importing a SendPulse contact export — creating or
      * matching customer accounts in bulk, binding their Telegram chats, and
      * recording consent provenance for every row in one call.
@@ -673,6 +711,21 @@ public enum Capability {
 
     INTEGRATION_INSTALLATION_MANAGE("integration.installation.manage", "integration", "installation.manage"),
     INTEGRATION_BINDING_ACTIVATE("integration.binding.activate", "integration", "binding.activate"),
+
+    /**
+     * ADR 0106: issuing, listing, rotating or revoking a {@code
+     * partner.api_clients} row — the OAuth 2.0 {@code client_credentials}
+     * credential an aggregator authenticates inbound traffic with.
+     *
+     * <p>Deliberately not folded into {@link #INTEGRATION_INSTALLATION_MANAGE}:
+     * that capability configures how the platform calls *out* to a provider,
+     * while this one hands a third party the means to authenticate *in* as
+     * that tenant. A role built for "configure my POS" should not thereby be
+     * able to mint an aggregator credential — a different blast radius, the
+     * same reasoning that already keeps {@link #INTEGRATION_TELEGRAM_LINK_ISSUE}
+     * separate from it.
+     */
+    PARTNER_API_CLIENT_MANAGE("partner.api-client.manage", "partner", "api-client.manage"),
 
     /**
      * ADR 0058: issuing a short-lived {@code /link <code>} for the Telegram
@@ -1271,6 +1324,19 @@ public enum Capability {
      */
     COURIER_ADJUSTMENT_CREATE("courier.adjustment.create", "courier", "adjustment.create"),
     COURIER_ADJUSTMENT_APPROVE("courier.adjustment.approve", "courier", "adjustment.approve"),
+
+    /**
+     * ADR 0108: authoring the bonus/penalty registry — {@code
+     * courier_adjustment_reasons} and its rule columns — as opposed to {@link
+     * #COURIER_ADJUSTMENT_CREATE}, which posts one instance against one
+     * courier. Named apart from that one for the same reason {@link
+     * #COURIER_TYPE_MANAGE} sits apart from {@link #COURIER_RATECARD_MANAGE}:
+     * defining what a reason means and how it evaluates is a policy decision
+     * at a different tempo from a dispatcher recording a one-off penalty, and
+     * {@code AdjustmentRuleEvaluator}'s condition set is exactly as
+     * consequential to get wrong as a rate card's band ladder.
+     */
+    COURIER_ADJUSTMENT_REASON_MANAGE("courier.adjustment.reason.manage", "courier", "adjustment.reason.manage"),
 
     /** ADR 0042: a branch cashier confirming what cash was actually received. */
     COURIER_CASH_CONFIRM("courier.cash.confirm", "courier", "cash.confirm"),

@@ -1,0 +1,71 @@
+<q-chart-frame [ariaLabel]="ariaLabel()" data-testid="q-donut-chart">
+  <svg chart-graphic [attr.viewBox]="'0 0 ' + size + ' ' + size" role="presentation">
+    <g [attr.transform]="'rotate(-90 ' + center + ' ' + center + ')'">
+      @for (slice of slices(); track slice.key) {
+        <circle
+          class="q-chart__slice"
+          [attr.cx]="center"
+          [attr.cy]="center"
+          [attr.r]="radius"
+          fill="none"
+          [style.stroke]="slice.color"
+          [attr.stroke-width]="strokeWidth"
+          [attr.stroke-dasharray]="slice.dashArray"
+          [attr.stroke-dashoffset]="slice.dashOffset"
+          (mouseenter)="showHover(slice)"
+          (mouseleave)="clearHover()"
+        />
+      }
+    </g>
+    @if (centerLabel(); as label) {
+      <text
+        class="q-chart__center-label q-emphasis"
+        [attr.x]="center"
+        [attr.y]="center"
+        text-anchor="middle"
+        dominant-baseline="middle"
+      >
+        {{ label }}
+      </text>
+    }
+  </svg>
+
+  @if (hover(); as tip) {
+    <div chart-tooltip class="q-chart__tooltip" role="tooltip" data-testid="q-donut-chart-tooltip">
+      {{ tip.label }}: {{ tip.value }} ({{ tip.sharePercent }}%)
+    </div>
+  }
+
+  <ul chart-legend class="q-chart__legend-list" data-testid="q-donut-chart-legend">
+    @for (slice of slices(); track slice.key) {
+      <li class="q-chart__legend-item q-caption">
+        <span class="q-chart__swatch" [style.background]="slice.color"></span>
+        {{ slice.label }} · {{ slice.sharePercent }}%
+      </li>
+    }
+  </ul>
+
+  <table chart-table data-testid="q-donut-chart-table">
+    <caption class="q-visually-hidden">
+      {{
+        ariaLabel()
+      }}
+    </caption>
+    <thead>
+      <tr>
+        <th scope="col"></th>
+        <th scope="col">{{ 'ui.charts.table.count' | t }}</th>
+        <th scope="col">{{ 'ui.charts.table.share' | t }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (slice of slices(); track slice.key) {
+        <tr>
+          <th scope="row">{{ slice.label }}</th>
+          <td>{{ slice.value }}</td>
+          <td>{{ slice.sharePercent }}%</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</q-chart-frame>

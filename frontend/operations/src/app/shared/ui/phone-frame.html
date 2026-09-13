@@ -1,0 +1,11 @@
+<figure class="q-phone-frame" data-testid="q-phone-frame">
+  <div class="q-phone-frame__bezel">
+    <div class="q-phone-frame__notch" aria-hidden="true"></div>
+    <div class="q-phone-frame__screen" data-testid="q-phone-frame-screen">
+      <ng-content />
+    </div>
+  </div>
+  @if (caption(); as text) {
+    <figcaption class="q-caption q-phone-frame__caption">{{ text }}</figcaption>
+  }
+</figure>

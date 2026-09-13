@@ -3,9 +3,19 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentBrand } from '../../../core/auth/current-brand';
 import { I18n } from '../../../core/i18n/i18n';
-import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
+import { ConditionBuilder } from '../../../shared/ui/condition-builder';
+import {
+  ConditionGroup,
+  ConditionRow,
+  ConditionTypeDescriptor,
+  ConditionValueKind,
+  conditionRowIsWorkable,
+  descriptorFor,
+  emptyConditionRow,
+} from '../../../shared/ui/condition-types';
+import { nextDomId } from '../../../shared/ui/overlay';
 import {
   AudienceDetail,
   AudiencePredicate,
@@ -14,66 +24,67 @@ import {
   PredicateOperator,
   PredicateType,
   SegmentsApi,
-  allowedOperators,
 } from './segments-api';
 
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
 
-/** One predicate row in the builder, as plain editable strings — converted to {@link AudiencePredicate} on save. */
-interface PredicateRow {
-  type: PredicateType;
-  operator: PredicateOperator;
-  numericLow: string;
-  numericHigh: string;
-  dateLow: string;
-  dateHigh: string;
-  /** Comma-separated for `TEXT_SET`; the raw audience id for `AUDIENCE`. */
-  textValues: string;
-}
-
-const PREDICATE_TYPES: readonly PredicateType[] = [
-  'RECENCY_DAYS',
-  'ORDER_COUNT',
-  'COMPLETED_ORDER_COUNT',
-  'NET_SPEND_MINOR',
-  'AVERAGE_CHECK_MINOR',
-  'ACQUISITION_CHANNEL',
-  'REGISTERED_BETWEEN',
-  'BIRTHDAY_WITHIN_DAYS',
-  'PREFERRED_LOCALE',
+/**
+ * The closed predicate catalogue (ADR 0044, `PredicateType`), expressed as a
+ * `q-condition-builder` catalogue rather than hand-rolled markup. `AUDIENCE_MEMBERSHIP`
+ * stays excluded — it needs an audience picker this wave does not build, same
+ * scoping note the previous hand-rolled builder carried.
+ */
+const CATALOGUE: readonly ConditionTypeDescriptor[] = [
+  {
+    type: 'RECENCY_DAYS',
+    labelKey: 'customers.segments.predicate.type.RECENCY_DAYS',
+    valueKind: 'NUMERIC',
+  },
+  {
+    type: 'ORDER_COUNT',
+    labelKey: 'customers.segments.predicate.type.ORDER_COUNT',
+    valueKind: 'NUMERIC',
+  },
+  {
+    type: 'COMPLETED_ORDER_COUNT',
+    labelKey: 'customers.segments.predicate.type.COMPLETED_ORDER_COUNT',
+    valueKind: 'NUMERIC',
+  },
+  {
+    type: 'NET_SPEND_MINOR',
+    labelKey: 'customers.segments.predicate.type.NET_SPEND_MINOR',
+    valueKind: 'NUMERIC',
+  },
+  {
+    type: 'AVERAGE_CHECK_MINOR',
+    labelKey: 'customers.segments.predicate.type.AVERAGE_CHECK_MINOR',
+    valueKind: 'NUMERIC',
+  },
+  {
+    type: 'ACQUISITION_CHANNEL',
+    labelKey: 'customers.segments.predicate.type.ACQUISITION_CHANNEL',
+    valueKind: 'TEXT_SET',
+  },
+  {
+    type: 'REGISTERED_BETWEEN',
+    labelKey: 'customers.segments.predicate.type.REGISTERED_BETWEEN',
+    valueKind: 'DATE_RANGE',
+  },
+  {
+    type: 'BIRTHDAY_WITHIN_DAYS',
+    labelKey: 'customers.segments.predicate.type.BIRTHDAY_WITHIN_DAYS',
+    valueKind: 'NUMERIC',
+  },
+  {
+    type: 'PREFERRED_LOCALE',
+    labelKey: 'customers.segments.predicate.type.PREFERRED_LOCALE',
+    valueKind: 'TEXT_SET',
+  },
 ];
 
-const PREDICATE_TYPE_KEYS: Readonly<Record<PredicateType, MessageKey>> = {
-  RECENCY_DAYS: 'customers.segments.predicate.type.RECENCY_DAYS',
-  ORDER_COUNT: 'customers.segments.predicate.type.ORDER_COUNT',
-  COMPLETED_ORDER_COUNT: 'customers.segments.predicate.type.COMPLETED_ORDER_COUNT',
-  NET_SPEND_MINOR: 'customers.segments.predicate.type.NET_SPEND_MINOR',
-  AVERAGE_CHECK_MINOR: 'customers.segments.predicate.type.AVERAGE_CHECK_MINOR',
-  ACQUISITION_CHANNEL: 'customers.segments.predicate.type.ACQUISITION_CHANNEL',
-  REGISTERED_BETWEEN: 'customers.segments.predicate.type.REGISTERED_BETWEEN',
-  BIRTHDAY_WITHIN_DAYS: 'customers.segments.predicate.type.BIRTHDAY_WITHIN_DAYS',
-  PREFERRED_LOCALE: 'customers.segments.predicate.type.PREFERRED_LOCALE',
-  AUDIENCE_MEMBERSHIP: 'customers.segments.predicate.type.AUDIENCE_MEMBERSHIP',
-};
-
-const OPERATOR_KEYS: Readonly<Record<PredicateOperator, MessageKey>> = {
-  AT_LEAST: 'customers.segments.operator.AT_LEAST',
-  AT_MOST: 'customers.segments.operator.AT_MOST',
-  BETWEEN: 'customers.segments.operator.BETWEEN',
-  IN: 'customers.segments.operator.IN',
-  NOT_IN: 'customers.segments.operator.NOT_IN',
-};
-
-function emptyRow(): PredicateRow {
-  return {
-    type: 'RECENCY_DAYS',
-    operator: 'AT_LEAST',
-    numericLow: '',
-    numericHigh: '',
-    dateLow: '',
-    dateHigh: '',
-    textValues: '',
-  };
+/** Wraps a flat row list in the one `AND` group `AudiencePredicate`'s combinator-free shape needs — `q-condition-builder`'s model always carries at least one group. */
+function singleGroup(rows: readonly ConditionRow[]): readonly ConditionGroup[] {
+  return [{ id: nextDomId('condition-group'), combinator: 'AND', rows }];
 }
 
 /**
@@ -94,10 +105,23 @@ function emptyRow(): PredicateRow {
  * segment to a campaign is Marketing 6.4's own screen (a sibling wave); this
  * page links out to the audience id rather than duplicating campaign
  * authoring.
+ *
+ * **The predicate editor is `q-condition-builder` (ADR 0101, row `X.25`), not
+ * hand-rolled markup.** This page used to be the only place in the console
+ * that could author a rule at all, with its own copy of the predicate-row
+ * form; `campaigns-page.ts`'s "create audience" panel independently grew a
+ * second, near-identical copy over the same `PredicateType` catalogue
+ * (`audience-predicates.ts`) and was left alone here — repointing it is a
+ * separate, larger change outside this wave's named file scope; see the wave
+ * report for `T21`. This page carries exactly one flat `AND` group
+ * (`allowGroups` left at its default `false`), since `AudiencePredicate` has
+ * no combinator of its own — the grouping the shared component offers is for
+ * a future consumer whose domain actually has OR logic (a promotion's
+ * eligibility, a dispatch rule's fallback).
  */
 @Component({
   selector: 'q-segments-page',
-  imports: [TPipe],
+  imports: [TPipe, ConditionBuilder],
   templateUrl: './segments-page.html',
   styleUrl: './segments-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -111,14 +135,16 @@ export class SegmentsPage {
   protected readonly loadErrorText = signal<string | null>(null);
   protected readonly segments = signal<readonly AudienceSummary[]>([]);
 
-  protected readonly predicateTypes = PREDICATE_TYPES;
+  protected readonly catalogue = CATALOGUE;
 
   // ---------------------------------------------------------------- builder
   protected readonly builderOpen = signal(false);
   protected readonly editingAudienceId = signal<string | null>(null);
   protected readonly name = signal('');
   protected readonly description = signal('');
-  protected readonly rows = signal<readonly PredicateRow[]>([emptyRow()]);
+  protected readonly groups = signal<readonly ConditionGroup[]>(
+    singleGroup([emptyConditionRow(CATALOGUE)]),
+  );
   protected readonly saving = signal(false);
   protected readonly saveError = signal<string | null>(null);
 
@@ -127,9 +153,10 @@ export class SegmentsPage {
   protected readonly snapshotChannel = signal<MarketingChannel>('SMS');
   protected readonly snapshotBusy = signal(false);
   protected readonly snapshotError = signal<string | null>(null);
-  protected readonly snapshotResult = signal<{ readonly audienceId: string; readonly members: number } | null>(
-    null,
-  );
+  protected readonly snapshotResult = signal<{
+    readonly audienceId: string;
+    readonly members: number;
+  } | null>(null);
 
   constructor() {
     void this.load();
@@ -166,7 +193,7 @@ export class SegmentsPage {
     this.editingAudienceId.set(null);
     this.name.set('');
     this.description.set('');
-    this.rows.set([emptyRow()]);
+    this.groups.set(singleGroup([emptyConditionRow(CATALOGUE)]));
     this.saveError.set(null);
     this.builderOpen.set(true);
   }
@@ -182,8 +209,12 @@ export class SegmentsPage {
       this.editingAudienceId.set(detail.audienceId);
       this.name.set(detail.name);
       this.description.set(detail.description ?? '');
-      this.rows.set(
-        detail.predicates.length > 0 ? detail.predicates.map(toRow) : [emptyRow()],
+      this.groups.set(
+        singleGroup(
+          detail.predicates.length > 0
+            ? detail.predicates.map(toRow)
+            : [emptyConditionRow(CATALOGUE)],
+        ),
       );
       this.builderOpen.set(true);
     } catch (error) {
@@ -195,54 +226,13 @@ export class SegmentsPage {
     this.builderOpen.set(false);
   }
 
-  protected addRow(): void {
-    this.rows.update((current) => [...current, emptyRow()]);
-  }
-
-  protected removeRow(index: number): void {
-    this.rows.update((current) => current.filter((_, i) => i !== index));
-  }
-
-  protected updateRow(index: number, patch: Partial<PredicateRow>): void {
-    this.rows.update((current) =>
-      current.map((row, i) => {
-        if (i !== index) {
-          return row;
-        }
-        const next = { ...row, ...patch };
-        // Changing the type resets the operator to the first one it allows —
-        // a stale BETWEEN left over from a numeric field makes no sense once
-        // the type switches to a text-set predicate.
-        if (patch.type && patch.type !== row.type) {
-          next.operator = allowedOperators(patch.type)[0];
-        }
-        return next;
-      }),
-    );
-  }
-
-  protected operatorsFor(type: PredicateType): readonly PredicateOperator[] {
-    return allowedOperators(type);
-  }
-
-  protected valueKindOf(type: PredicateType): 'NUMERIC' | 'DATE_RANGE' | 'TEXT_SET' {
-    switch (type) {
-      case 'ACQUISITION_CHANNEL':
-      case 'PREFERRED_LOCALE':
-        return 'TEXT_SET';
-      case 'REGISTERED_BETWEEN':
-        return 'DATE_RANGE';
-      default:
-        return 'NUMERIC';
-    }
-  }
-
   protected canSave(): boolean {
+    const rows = this.groups()[0].rows;
     return (
       !this.saving() &&
       this.name().trim().length > 0 &&
-      this.rows().length > 0 &&
-      this.rows().every((row) => rowIsWorkable(row, this.valueKindOf(row.type)))
+      rows.length > 0 &&
+      rows.every((row) => conditionRowIsWorkable(row, descriptorFor(CATALOGUE, row.type).valueKind))
     );
   }
 
@@ -253,7 +243,9 @@ export class SegmentsPage {
     }
     this.saving.set(true);
     this.saveError.set(null);
-    const predicates = this.rows().map((row) => toPredicate(row, this.valueKindOf(row.type)));
+    const predicates = this.groups()[0].rows.map((row) =>
+      toPredicate(row, descriptorFor(CATALOGUE, row.type).valueKind),
+    );
     try {
       const editingId = this.editingAudienceId();
       if (editingId) {
@@ -319,17 +311,10 @@ export class SegmentsPage {
   }
 
   /** Fixed, machine-facing purpose — the same convention `CustomersPage.EXPORT_PURPOSE` uses, for the same reason. */
-  private static readonly SNAPSHOT_PURPOSE = 'Operations console: segment snapshot from Customers 5.3';
+  private static readonly SNAPSHOT_PURPOSE =
+    'Operations console: segment snapshot from Customers 5.3';
 
   // ------------------------------------------------------------------ format
-
-  protected typeLabel(type: PredicateType): string {
-    return this.i18n.t(PREDICATE_TYPE_KEYS[type]);
-  }
-
-  protected operatorLabel(operator: PredicateOperator): string {
-    return this.i18n.t(OPERATOR_KEYS[operator]);
-  }
 
   protected formatUpdatedAt(iso: string): string {
     return new Date(iso).toLocaleDateString(this.i18n.locale() === 'en' ? 'en-GB' : 'ru-RU');
@@ -343,8 +328,9 @@ export class SegmentsPage {
   }
 }
 
-function toRow(predicate: AudiencePredicate): PredicateRow {
+function toRow(predicate: AudiencePredicate): ConditionRow {
   return {
+    id: nextDomId('condition-row'),
     type: predicate.type,
     operator: predicate.operator,
     numericLow: predicate.numericLow === null ? '' : String(predicate.numericLow),
@@ -352,41 +338,53 @@ function toRow(predicate: AudiencePredicate): PredicateRow {
     dateLow: predicate.dateLow ?? '',
     dateHigh: predicate.dateHigh ?? '',
     textValues: predicate.textValues ? predicate.textValues.join(', ') : '',
+    dayOfWeekValues: [],
   };
 }
 
-function rowIsWorkable(row: PredicateRow, kind: 'NUMERIC' | 'DATE_RANGE' | 'TEXT_SET'): boolean {
+function toPredicate(row: ConditionRow, kind: ConditionValueKind): AudiencePredicate {
   switch (kind) {
     case 'NUMERIC':
-      if (row.numericLow.trim().length === 0) {
-        return false;
-      }
-      return row.operator !== 'BETWEEN' || row.numericHigh.trim().length > 0;
+      return {
+        type: row.type as PredicateType,
+        operator: row.operator as PredicateOperator,
+        numericLow: row.numericLow.trim() ? Number(row.numericLow) : null,
+        numericHigh:
+          row.operator === 'BETWEEN' && row.numericHigh.trim() ? Number(row.numericHigh) : null,
+        dateLow: null,
+        dateHigh: null,
+        textValues: null,
+        audienceId: null,
+      };
     case 'DATE_RANGE':
-      return row.dateLow.trim().length > 0 && row.dateHigh.trim().length > 0;
+      return {
+        type: row.type as PredicateType,
+        operator: row.operator as PredicateOperator,
+        numericLow: null,
+        numericHigh: null,
+        dateLow: row.dateLow || null,
+        dateHigh: row.dateHigh || null,
+        textValues: null,
+        audienceId: null,
+      };
     case 'TEXT_SET':
-      return row.textValues.trim().length > 0;
+      return {
+        type: row.type as PredicateType,
+        operator: row.operator as PredicateOperator,
+        numericLow: null,
+        numericHigh: null,
+        dateLow: null,
+        dateHigh: null,
+        textValues: row.textValues
+          .split(',')
+          .map((value) => value.trim())
+          .filter((value) => value.length > 0),
+        audienceId: null,
+      };
+    default:
+      // Segments' own catalogue never offers MONEY_MINOR, PERCENT, DATE,
+      // DAY_OF_WEEK_SET or REFERENCE — those exist for other consumers of
+      // `q-condition-builder`, not for `AudiencePredicate`'s closed shape.
+      throw new RangeError(`${kind} is not a value kind Customers 5.3's segment predicates use`);
   }
-}
-
-function toPredicate(row: PredicateRow, kind: 'NUMERIC' | 'DATE_RANGE' | 'TEXT_SET'): AudiencePredicate {
-  return {
-    type: row.type,
-    operator: row.operator,
-    numericLow: kind === 'NUMERIC' && row.numericLow.trim() ? Number(row.numericLow) : null,
-    numericHigh:
-      kind === 'NUMERIC' && row.operator === 'BETWEEN' && row.numericHigh.trim()
-        ? Number(row.numericHigh)
-        : null,
-    dateLow: kind === 'DATE_RANGE' ? row.dateLow || null : null,
-    dateHigh: kind === 'DATE_RANGE' ? row.dateHigh || null : null,
-    textValues:
-      kind === 'TEXT_SET'
-        ? row.textValues
-            .split(',')
-            .map((value) => value.trim())
-            .filter((value) => value.length > 0)
-        : null,
-    audienceId: null,
-  };
 }

@@ -32,7 +32,7 @@
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 16px;
+  font-size: var(--q-type-body);
   color: inherit;
 }
 
@@ -72,7 +72,7 @@
   padding: 2px 6px;
   background: var(--q-canvas);
   border-radius: var(--q-radius);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .chip--muted {
@@ -86,7 +86,7 @@
   color: var(--q-success-text);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
   font-weight: 600;
 }
 
@@ -99,7 +99,7 @@
   padding: 2px 8px;
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .ticket__items {
@@ -110,14 +110,14 @@
 .ticket__items th {
   text-align: left;
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
   background: var(--q-surface-1);
 }
 
 .ticket__items td {
   padding: 8px 12px;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   border-top: 1px solid var(--q-hairline);
   vertical-align: top;
 }

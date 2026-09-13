@@ -17,6 +17,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierGroup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierOption;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
@@ -325,6 +326,43 @@ public class CatalogQueryService {
         }
     }
 
+    /**
+     * The Settings 10.7 Tab 3 coverage report: how much of a brand's menu is
+     * still short of ADR 0038's four required fiscal fields, and which nodes.
+     *
+     * <p>The unclassified list is ordered the way the spec asks: the delivery
+     * fee first — "the one people forget" — then by offering breadth
+     * descending, so an operator closes the gap that actually reaches the most
+     * customers first.
+     */
+    /**
+     * Not read-only, overriding the class-level default: {@link
+     * JdbcCatalogStore#ensureFee} vivifies the brand's delivery-fee row on a
+     * brand's first visit to this report, so this one read also writes.
+     */
+    @Transactional
+    public FiscalCoverageSummary fiscalCoverage(UUID tenantId, UUID brandId) {
+        // A brand that has never opened Tab 3 has no catalog.fees row at all —
+        // JdbcCatalogStore.ensureFee is otherwise called only from classifyFee —
+        // and this is a read, so the coverage report must vivify the row itself
+        // rather than reporting a brand with an unclassified menu as though its
+        // delivery fee did not need classifying.
+        store.ensureFee(tenantId, brandId, "DELIVERY");
+        List<JdbcCatalogStore.FiscalCoverageNodeRow> rows = store.fiscalCoverageNodes(tenantId, brandId, defaultLocale);
+        List<FiscalCoverageNode> unclassified = rows.stream()
+                .filter(JdbcCatalogStore.FiscalCoverageNodeRow::unclassified)
+                .sorted(java.util.Comparator.<JdbcCatalogStore.FiscalCoverageNodeRow>comparingInt(
+                                row -> row.nodeType() == PriceableType.FEE ? 0 : 1)
+                        .thenComparing(
+                                java.util.Comparator.comparingInt(JdbcCatalogStore.FiscalCoverageNodeRow::locationCount)
+                                        .reversed())
+                        .thenComparing(row -> row.name() == null ? "" : row.name()))
+                .map(row -> new FiscalCoverageNode(
+                        row.nodeType(), row.nodeId(), row.name(), row.categoryName(), row.locationCount()))
+                .toList();
+        return new FiscalCoverageSummary(rows.size(), unclassified.size(), unclassified);
+    }
+
     public record CatalogSummary(UUID catalogId, String code, String name, String status) {}
 
     public record CategorySummary(
@@ -435,6 +473,15 @@ public class CatalogQueryService {
             boolean allowSameOptionMultipleTimes,
             Map<String, LocalizedFields> translations,
             List<ModifierOptionView> options) {}
+
+    public record FiscalCoverageSummary(int totalNodes, int unclassifiedCount, List<FiscalCoverageNode> nodes) {}
+
+    public record FiscalCoverageNode(
+            PriceableType nodeType,
+            UUID nodeId,
+            @Nullable String name,
+            @Nullable String categoryName,
+            int locationCount) {}
 
     public record ModifierOptionView(
             UUID optionId,

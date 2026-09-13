@@ -381,6 +381,37 @@ export class OrderQueue implements OnInit {
     this.openOverflowFor.update((current) => (current === orderId ? null : orderId));
   }
 
+  /**
+   * §2.9's «Открыть», from the overflow menu — the same navigation the row's
+   * own click already offers, kept here too for a keyboard or screen-reader
+   * user working the menu rather than the row.
+   */
+  protected openFromOverflow(order: OrderSummaryResponse, event: Event): void {
+    event.stopPropagation();
+    this.openOverflowFor.set(null);
+    this.openOrder(order.orderId);
+  }
+
+  /**
+   * §2.9's «Копировать номер» — a client-only read, never gated by {@code
+   * actions[]} or any capability, which is exactly why it (and «Открыть»)
+   * belong on every row's overflow menu regardless of what
+   * `OrderActionsPolicy` returned: a terminal order still gets a read-only
+   * menu, never none (1.1e).
+   */
+  protected async copyOrderNumber(order: OrderSummaryResponse, event: Event): Promise<void> {
+    event.stopPropagation();
+    this.openOverflowFor.set(null);
+    try {
+      await navigator.clipboard.writeText(order.publicOrderNumber);
+    } catch {
+      // Clipboard access can be denied or unavailable (insecure context,
+      // permissions, an older browser) — the number is still visible on the
+      // row, so failing silently here costs an operator nothing they could
+      // not already read.
+    }
+  }
+
   protected dismissNotice(): void {
     this.actionNotice.set(null);
   }

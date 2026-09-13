@@ -1,0 +1,55 @@
+/* One marker shape per principal kind, plus the word itself — the marker is
+ * `aria-hidden`, so the chip is never colour- or shape-only. Flat-square
+ * palette: no icon glyphs, no emoji, per the console's own design rule. */
+
+.q-actor-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  vertical-align: middle;
+}
+
+.q-actor-chip__label {
+  color: var(--q-ink);
+}
+
+.q-actor-chip__marker {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  background: var(--q-ink-subtle);
+}
+
+/* USER — a person, drawn as a filled circle. The common case: most audit rows
+ * name a human, and a circle is the least decorated of the four shapes. */
+.q-actor-chip__marker--user {
+  border-radius: 50%;
+  background: var(--q-primary);
+}
+
+/* SERVICE — a machine principal (a provider webhook, a partner API client):
+ * a plain square, no rounding. */
+.q-actor-chip__marker--service {
+  border-radius: 0;
+  background: var(--q-info-text);
+}
+
+/* SYSTEM_JOB — a scheduled job acting with nobody watching: a triangle, the
+ * one shape that reads as "unattended" without a caption. */
+.q-actor-chip__marker--system_job {
+  width: 0;
+  height: 0;
+  background: transparent;
+  border-inline-start: 4px solid transparent;
+  border-inline-end: 4px solid transparent;
+  border-bottom: 8px solid var(--q-warning-text);
+}
+
+/* MIGRATION — a backfill or a one-off run, never mistaken for a person during
+ * an investigation (`ActorRef`'s own doc comment): a diamond, the shape
+ * furthest from a circle. */
+.q-actor-chip__marker--migration {
+  border-radius: 0;
+  background: var(--q-ink-subtle);
+  transform: rotate(45deg);
+}

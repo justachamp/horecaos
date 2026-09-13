@@ -1,0 +1,28 @@
+@if (entries().length === 0) {
+  @if (emptyLabel(); as label) {
+    <p class="q-body-sm q-diff-viewer__empty" data-testid="q-diff-viewer-empty">{{ label }}</p>
+  }
+} @else {
+  <div class="q-diff-viewer" data-testid="q-diff-viewer">
+    @for (entry of entries(); track entry.field) {
+      <div class="q-diff-viewer__row" data-testid="q-diff-viewer-row">
+        <span class="q-caption q-mono q-diff-viewer__field">{{ entry.field }}</span>
+        @if (entry.before !== undefined) {
+          <span class="q-body-sm q-diff-viewer__value">
+            <span class="q-diff-viewer__before" data-testid="q-diff-viewer-before">{{
+              format(entry.before)
+            }}</span>
+            <span class="q-diff-viewer__arrow" aria-hidden="true">→</span>
+            <span class="q-diff-viewer__after" data-testid="q-diff-viewer-after">{{
+              format(entry.after)
+            }}</span>
+          </span>
+        } @else {
+          <span class="q-body-sm q-diff-viewer__value" data-testid="q-diff-viewer-after">{{
+            format(entry.after)
+          }}</span>
+        }
+      </div>
+    }
+  </div>
+}

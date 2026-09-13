@@ -31,7 +31,7 @@
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   color: var(--q-ink-muted);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .suspension {
@@ -101,4 +101,43 @@
   color: var(--q-ink);
   border-radius: var(--q-radius);
   cursor: pointer;
+}
+
+.secondary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.link {
+  background: none;
+  border: none;
+  color: var(--q-primary);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+}
+
+.actions {
+  text-align: right;
+}
+
+.statement-row.void {
+  opacity: 0.7;
+}
+
+.statement-lines .inner-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--q-surface-1);
+}
+
+.statement-lines .inner-table th,
+.statement-lines .inner-table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.statement-lines .inner-table thead th {
+  text-align: left;
+  color: var(--q-ink-muted);
 }

@@ -43,6 +43,8 @@ const CLICK_INSTALLATION: InstallationView = {
   lastConnectionStatus: null,
   adapterVersion: null,
   lastSecretRotatedAt: null,
+  secretLastUsedAt: null,
+  nonSensitiveConfig: null,
 };
 
 const CLICK_INSTALLATION_TWO: InstallationView = {
@@ -91,11 +93,13 @@ async function flushMicrotasks(): Promise<void> {
 describe('RegisterMerchantBindingPanel', () => {
   let fixture: ComponentFixture<RegisterMerchantBindingPanel>;
 
-  async function render(options: {
-    legalEntities?: readonly LegalEntityView[];
-    installations?: readonly InstallationView[];
-    bindings?: readonly IntegrationBindingOption[];
-  } = {}): Promise<void> {
+  async function render(
+    options: {
+      legalEntities?: readonly LegalEntityView[];
+      installations?: readonly InstallationView[];
+      bindings?: readonly IntegrationBindingOption[];
+    } = {},
+  ): Promise<void> {
     // Reset first: the outer `beforeEach` already rendered a default fixture
     // before a test's own body calls this again with different options —
     // same idiom `integrations-page.spec.ts`'s own denied-state test uses to

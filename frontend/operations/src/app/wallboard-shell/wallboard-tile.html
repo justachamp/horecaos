@@ -1,0 +1,12 @@
+<div
+  class="wallboard-tile"
+  [class.wallboard-tile--muted]="tone() === 'muted'"
+  data-testid="q-wallboard-tile"
+>
+  <div class="wallboard-tile__value q-display-tv q-tnum" data-testid="q-wallboard-tile-value">
+    {{ value() }}
+  </div>
+  <div class="wallboard-tile__label q-title" data-testid="q-wallboard-tile-label">
+    {{ label() }}
+  </div>
+</div>

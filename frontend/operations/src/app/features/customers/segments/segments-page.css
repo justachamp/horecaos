@@ -116,70 +116,6 @@
   color: var(--q-ink);
 }
 
-.predicates {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.predicate-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.predicate-row__type {
-  flex: 1 1 200px;
-  height: 34px;
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  background: var(--q-canvas);
-  color: var(--q-ink);
-}
-
-.predicate-row__operator {
-  flex: 0 0 140px;
-  height: 34px;
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  background: var(--q-canvas);
-  color: var(--q-ink);
-}
-
-.predicate-row__value {
-  flex: 0 0 110px;
-  height: 34px;
-  padding: 0 8px;
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  background: var(--q-canvas);
-  color: var(--q-ink);
-}
-
-.predicate-row__value--wide {
-  flex: 1 1 220px;
-}
-
-.predicate-row__remove {
-  height: 34px;
-  width: 34px;
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  background: var(--q-canvas);
-  color: var(--q-ink-muted);
-  cursor: pointer;
-}
-
-.predicate-row__remove:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.add-row {
-  align-self: flex-start;
-}
-
 .panel__actions {
   display: flex;
   justify-content: flex-end;
@@ -192,7 +128,7 @@
   padding: 0 16px;
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .primary {

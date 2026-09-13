@@ -1,0 +1,96 @@
+<div class="q-schedule-grid" data-testid="q-schedule-grid">
+  <section class="q-schedule-grid__weekly">
+    <h3 class="q-emphasis">{{ 'ui.scheduleGrid.weeklyTitle' | t }}</h3>
+    @for (day of days; track day) {
+      <div class="q-schedule-grid__row" [attr.data-testid]="'q-schedule-grid-row-' + day">
+        <span class="q-body-sm q-schedule-grid__day-label">{{ dayLabel(day) }}</span>
+        <div class="q-schedule-grid__windows">
+          @for (rule of rulesFor(day); track rule) {
+            <div class="q-schedule-grid__window" data-testid="q-schedule-grid-window">
+              <q-time-input
+                [value]="rule.opensAt"
+                (valueChange)="updateWindow(rule, { opensAt: $event })"
+              />
+              <span aria-hidden="true">–</span>
+              <q-time-input
+                [value]="rule.closesAt"
+                (valueChange)="updateWindow(rule, { closesAt: $event })"
+              />
+              <button
+                type="button"
+                class="q-schedule-grid__remove"
+                [attr.aria-label]="'ui.scheduleGrid.remove' | t"
+                (click)="removeWindow(rule)"
+                data-testid="q-schedule-grid-remove-window"
+              >
+                ✕
+              </button>
+            </div>
+          } @empty {
+            <span class="q-caption q-schedule-grid__empty">{{
+              'ui.scheduleGrid.noWindows' | t
+            }}</span>
+          }
+          <button
+            type="button"
+            class="q-schedule-grid__add"
+            (click)="addWindow(day)"
+            [attr.data-testid]="'q-schedule-grid-add-window-' + day"
+          >
+            + {{ 'ui.scheduleGrid.addWindow' | t }}
+          </button>
+        </div>
+      </div>
+    }
+  </section>
+
+  <section class="q-schedule-grid__exceptions">
+    <h3 class="q-emphasis">{{ 'ui.scheduleGrid.exceptionsTitle' | t }}</h3>
+    @for (exception of exceptions(); track trackException($index, exception)) {
+      <div class="q-schedule-grid__row" data-testid="q-schedule-grid-exception">
+        <span class="q-body-sm q-tnum q-schedule-grid__day-label">{{ exception.date }}</span>
+        <label class="q-schedule-grid__closed-toggle">
+          <input
+            type="checkbox"
+            [checked]="exception.closedAllDay"
+            (change)="toggleClosedAllDay(exception, $any($event.target).checked)"
+            data-testid="q-schedule-grid-exception-closed"
+          />
+          <span class="q-caption">{{ 'ui.scheduleGrid.closedAllDay' | t }}</span>
+        </label>
+        @if (!exception.closedAllDay) {
+          <div class="q-schedule-grid__window">
+            <q-time-input
+              [value]="exception.opensAt ?? '09:00'"
+              (valueChange)="updateException(exception, { opensAt: $event })"
+            />
+            <span aria-hidden="true">–</span>
+            <q-time-input
+              [value]="exception.closesAt ?? '18:00'"
+              (valueChange)="updateException(exception, { closesAt: $event })"
+            />
+          </div>
+        }
+        <button
+          type="button"
+          class="q-schedule-grid__remove"
+          [attr.aria-label]="'ui.scheduleGrid.remove' | t"
+          (click)="removeException(exception)"
+          data-testid="q-schedule-grid-remove-exception"
+        >
+          ✕
+        </button>
+      </div>
+    }
+    <div class="q-schedule-grid__add-exception">
+      <input type="date" #newExceptionDate data-testid="q-schedule-grid-new-exception-date" />
+      <button
+        type="button"
+        (click)="addException(newExceptionDate.value); newExceptionDate.value = ''"
+        data-testid="q-schedule-grid-add-exception"
+      >
+        + {{ 'ui.scheduleGrid.addException' | t }}
+      </button>
+    </div>
+  </section>
+</div>

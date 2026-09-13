@@ -1,0 +1,21 @@
+<div class="q-color-input" data-testid="q-color-input">
+  <input
+    type="color"
+    class="q-color-input__swatch"
+    [value]="isValidDraft() ? draft() : value()"
+    [attr.aria-label]="ariaLabel()"
+    (input)="onSwatchInput($any($event.target).value)"
+    data-testid="q-color-input-swatch"
+  />
+  <input
+    type="text"
+    class="q-color-input__text q-mono"
+    [class.q-color-input__text--invalid]="!isValidDraft()"
+    [value]="draft()"
+    [attr.aria-invalid]="!isValidDraft()"
+    [attr.aria-label]="ariaLabel() ? ariaLabel() + ' hex' : 'hex'"
+    (input)="onTextInput($any($event.target).value)"
+    (blur)="onTextBlur()"
+    data-testid="q-color-input-text"
+  />
+</div>

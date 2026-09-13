@@ -209,6 +209,33 @@ describe('DeliveryTariffsPage', () => {
     expect(body.bands[0].bandSet).toBeNull();
   });
 
+  it('sets the minimum fee through the shared q-money-input, grouped and in whole som', async () => {
+    const draftVersion = vi
+      .fn()
+      .mockResolvedValue({ tariffId: TARIFF.tariffId, version: 2, status: 'DRAFT' });
+    await render({
+      list: vi.fn().mockResolvedValue([TARIFF]),
+      detail: vi.fn().mockResolvedValue({ tariff: TARIFF, activeVersion: version() }),
+      draftVersion,
+    });
+
+    host().querySelector<HTMLButtonElement>('[data-testid="tariff-draft"]')!.click();
+    fixture.detectChanges();
+    const minFeeField = host()
+      .querySelector('[data-testid="tariff-min-fee"]')!
+      .querySelector('[data-testid="q-money-input-field"]') as HTMLInputElement;
+
+    minFeeField.value = '12 000';
+    minFeeField.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(minFeeField.value).toBe('12 000');
+    host().querySelector<HTMLButtonElement>('[data-testid="tariff-draft-submit"]')!.click();
+    await flushMicrotasks();
+
+    expect(draftVersion.mock.calls[0][2].minFeeMinor).toBe(12_000);
+  });
+
   it('carries the live version’s accrual into a redraft instead of resetting it', async () => {
     const draftVersion = vi
       .fn()

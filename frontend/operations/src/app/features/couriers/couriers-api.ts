@@ -39,6 +39,12 @@ export interface CourierTypeResponse {
   readonly maxDistanceMeters?: number | null;
   readonly maxConcurrentAssignments: number;
   readonly offerTtlSeconds: number;
+  /** ADR 0108: minutes after shift open before this type begins earning. Not yet enforced. */
+  readonly startingMinuteOffset: number;
+  /** ADR 0108: `SHIFT` | `ON_DEMAND`. Not yet enforced. */
+  readonly workMode: string;
+  readonly status: 'ACTIVE' | 'ARCHIVED';
+  readonly version: number;
 }
 
 /**
@@ -174,6 +180,96 @@ export interface CreateCourierTypeRequest {
   readonly maxDistanceMeters?: number | null;
   readonly maxConcurrentAssignments: number;
   readonly offerTtlSeconds: number;
+  readonly startingMinuteOffset: number;
+  readonly workMode: string;
+}
+
+/** Mirrors `OperationsCourierController.UpdateCourierTypeRequest` (ADR 0108). */
+export interface UpdateCourierTypeRequest extends CreateCourierTypeRequest {
+  readonly expectedVersion: number;
+  readonly reason: string;
+}
+
+/** Mirrors `OperationsCourierController.AdjustmentReasonResponse` (ADR 0108). */
+export interface AdjustmentReasonResponse {
+  readonly reasonId: string;
+  readonly code: string;
+  readonly kind: 'BONUS' | 'PENALTY';
+  /** `ON_TIME_RATE` | `LATE_DELIVERY` | `CASH_VARIANCE` | `GEO_UNVERIFIED_RATE` | `DELIVERED_VOLUME` | `ORDER_UNDELIVERED` | `ORDER_DAMAGED`. */
+  readonly outcomeBasis: string;
+  readonly displayName: string;
+  readonly status: 'ACTIVE' | 'ARCHIVED';
+  readonly hasRule: boolean;
+  readonly ruleAmountMinor?: number | null;
+  readonly ruleCurrency?: string | null;
+  /** `GTE` | `LTE`. */
+  readonly ruleComparator?: string | null;
+  readonly ruleThreshold?: number | null;
+  /** `SHIFT` | `SETTLEMENT_PERIOD`. */
+  readonly ruleWindow?: string | null;
+  /** `SHIFT_CLOSE` | `SETTLEMENT_PERIOD_CLOSE`. */
+  readonly ruleTrigger?: string | null;
+  readonly ruleVersion: number;
+}
+
+/**
+ * Mirrors `OperationsCourierController.CreateAdjustmentReasonRequest`.
+ * Every `rule*` field is optional and arrives together or not at all — a
+ * manual-only reason omits all six.
+ */
+export interface CreateAdjustmentReasonRequest {
+  readonly code: string;
+  readonly kind: 'BONUS' | 'PENALTY';
+  readonly outcomeBasis: string;
+  readonly displayName: string;
+  readonly ruleAmountMinor?: number | null;
+  readonly ruleCurrency?: string | null;
+  readonly ruleComparator?: string | null;
+  readonly ruleThreshold?: number | null;
+  readonly ruleWindow?: string | null;
+  readonly ruleTrigger?: string | null;
+}
+
+/**
+ * A manual bonus or penalty (ADR 0108). `origin` stays on the wire — the
+ * platform's OpenAPI contract test refuses to drop a published required
+ * field — but the server never reads it: every adjustment this console
+ * sends is stamped `MANUAL` regardless of what this call sets it to. This
+ * client always sends `'MANUAL'`, the only truthful value a console-driven
+ * request could ever carry; see `OperationsCourierController.adjust`'s own
+ * doc for why the field is otherwise inert.
+ */
+export interface RecordAdjustmentRequest {
+  readonly locationId?: string | null;
+  readonly amountMinor: number;
+  readonly currency: string;
+  readonly reasonCode: string;
+  readonly origin: 'MANUAL';
+  readonly idempotencyKey: string;
+  readonly reason: string;
+}
+
+/** Mirrors `OperationsCourierController.AdjustmentResponse`. */
+export interface AdjustmentResponse {
+  readonly entryId?: string | null;
+  readonly approvalRequestId?: string | null;
+  readonly written: boolean;
+}
+
+/** Mirrors `OperationsCourierController.LedgerLine`. */
+export interface LedgerLineView {
+  readonly entryId: string;
+  readonly entryType: string;
+  readonly amountMinor: number;
+  readonly currency: string;
+  readonly reasonCode?: string | null;
+  readonly occurredAt: string;
+}
+
+/** Mirrors `OperationsCourierController.LedgerResponse`. */
+export interface LedgerView {
+  readonly balanceMinor: number;
+  readonly entries: readonly LedgerLineView[];
 }
 
 /** Mirrors `OperationsCourierController.RateCardSummaryResponse`. */
@@ -235,6 +331,8 @@ export interface NewRateCardRequest {
 export interface ShiftView {
   readonly shiftId: string;
   readonly courierId: string;
+  /** The non-personal handle (ADR 0029) — "K-014" — never the decrypted name. Null only if the courier row is gone. */
+  readonly courierDisplayReference?: string | null;
   /** `OPEN` | `CLOSE_REQUESTED` | `RECONCILING` | `AWAITING_APPROVAL` | `CLOSED` | `AUTO_CLOSED` | `SETTLED`. */
   readonly status: string;
   readonly dutyState: string;
@@ -243,6 +341,47 @@ export interface ShiftView {
   readonly paidSeconds?: number | null;
   readonly breakSeconds: number;
   readonly approvalRequestId?: string | null;
+}
+
+/**
+ * Mirrors `OperationsCourierController.PlannedShiftResponse` — the roster a
+ * manager plans, as distinct from {@link ShiftView} (ADR 0042, IA 3.5).
+ */
+export interface PlannedShiftView {
+  readonly entryId: string;
+  readonly courierId: string;
+  readonly courierDisplayReference?: string | null;
+  /** `DRAFT` | `PUBLISHED` | `ACCEPTED` | `DECLINED` | `CONSUMED` | `MISSED` | `CANCELLED`. */
+  readonly status: string;
+  readonly plannedStart: string;
+  readonly plannedEnd: string;
+  readonly publishedAt?: string | null;
+  readonly respondedAt?: string | null;
+  /** Present only from {@link CouriersApi.rosterComparison}. */
+  readonly comparison?: RosterComparisonView | null;
+}
+
+/** Mirrors `OperationsCourierController.RosterComparisonView`. */
+export interface RosterComparisonView {
+  /** `COVERED` | `PENDING` | `UNCOVERED`. */
+  readonly coverage: string;
+  readonly matchedShiftId?: string | null;
+  readonly matchedDutyState?: string | null;
+}
+
+/**
+ * The fields a manager fills in to plan a courier's shift.
+ *
+ * `brandId`/`locationId` are not here — the backend reads them as request
+ * parameters (see `CouriersApi.draftRosterEntry`), the same way it already
+ * reads them on this route's `GET` siblings, because that is what the
+ * LOCATION-scoped capability check is evaluated against (T17).
+ */
+export interface DraftRosterEntryRequest {
+  readonly courierId: string;
+  readonly plannedStart: string;
+  readonly plannedEnd: string;
+  readonly reason: string;
 }
 
 /** Mirrors `OperationsCourierController.CourierPolicyResponse` (IA 3.9). */
@@ -275,9 +414,11 @@ export class CouriersApi {
     return result.value ?? [];
   }
 
-  async types(tenantId: string): Promise<readonly CourierTypeResponse[]> {
+  async types(tenantId: string, includeArchived = false): Promise<readonly CourierTypeResponse[]> {
     const result = await firstValueFrom(
-      this.api.get<readonly CourierTypeResponse[]>(courierPaths.courierTypes(tenantId)),
+      this.api.get<readonly CourierTypeResponse[]>(courierPaths.courierTypes(tenantId), {
+        params: { includeArchived },
+      }),
     );
     return result.value ?? [];
   }
@@ -456,6 +597,85 @@ export class CouriersApi {
     );
   }
 
+  /** Corrects a vehicle class (ADR 0108). A mistyped code or a wrong offer TTL used to be permanent. */
+  async updateType(
+    tenantId: string,
+    typeId: string,
+    request: UpdateCourierTypeRequest,
+  ): Promise<CourierTypeResponse> {
+    return firstValueFrom(
+      this.api.put<UpdateCourierTypeRequest, CourierTypeResponse>(
+        courierPaths.courierType(tenantId, typeId),
+        command(request),
+      ),
+    );
+  }
+
+  /** Archives a vehicle class. Never deleted: a past rate card or courier still names it. */
+  async archiveType(tenantId: string, typeId: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<{ reason: string }, void>(
+        courierPaths.courierTypeArchival(tenantId, typeId),
+        command({ reason }),
+      ),
+    );
+  }
+
+  // ------------------------------------------------ IA 3.4, adjustment reasons
+
+  async adjustmentReasons(tenantId: string): Promise<readonly AdjustmentReasonResponse[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly AdjustmentReasonResponse[]>(courierPaths.adjustmentReasons(tenantId)),
+    );
+    return result.value ?? [];
+  }
+
+  async createAdjustmentReason(
+    tenantId: string,
+    request: CreateAdjustmentReasonRequest,
+  ): Promise<AdjustmentReasonResponse> {
+    return firstValueFrom(
+      this.api.post<CreateAdjustmentReasonRequest, AdjustmentReasonResponse>(
+        courierPaths.adjustmentReasons(tenantId),
+        command(request),
+      ),
+    );
+  }
+
+  async archiveAdjustmentReason(tenantId: string, reasonId: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<{ reason: string }, void>(
+        courierPaths.adjustmentReasonArchival(tenantId, reasonId),
+        command({ reason }),
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------- IA 3.4, adjustments
+
+  /** Records a bonus or a penalty against one courier. Never written on this call alone for a penalty above threshold. */
+  async recordAdjustment(
+    tenantId: string,
+    courierId: string,
+    request: RecordAdjustmentRequest,
+  ): Promise<AdjustmentResponse> {
+    return firstValueFrom(
+      this.api.post<RecordAdjustmentRequest, AdjustmentResponse>(
+        courierPaths.courierAdjustments(tenantId, courierId),
+        command(request),
+      ),
+    );
+  }
+
+  async ledger(tenantId: string, courierId: string, limit = 100): Promise<LedgerView> {
+    const result = await firstValueFrom(
+      this.api.get<LedgerView>(courierPaths.courierLedger(tenantId, courierId), {
+        params: { limit },
+      }),
+    );
+    return result.value;
+  }
+
   async rateCards(tenantId: string, brandId: string): Promise<readonly RateCardSummaryResponse[]> {
     const result = await firstValueFrom(
       this.api.get<readonly RateCardSummaryResponse[]>(courierPaths.rateCards(tenantId), {
@@ -497,13 +717,97 @@ export class CouriersApi {
     brandId: string,
     locationId: string,
     limit = 200,
+    from?: string,
+    to?: string,
   ): Promise<readonly ShiftView[]> {
     const result = await firstValueFrom(
       this.api.get<readonly ShiftView[]>(courierPaths.courierShifts(tenantId), {
-        params: { brandId, locationId, limit },
+        params: { brandId, locationId, limit, from, to },
       }),
     );
     return result.value ?? [];
+  }
+
+  // ------------------------------------------------------------------ IA 3.5 roster
+
+  async rosterEntries(
+    tenantId: string,
+    brandId: string,
+    locationId: string,
+    from?: string,
+    to?: string,
+    limit = 200,
+  ): Promise<readonly PlannedShiftView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly PlannedShiftView[]>(courierPaths.courierRosterEntries(tenantId), {
+        params: { brandId, locationId, from, to, limit },
+      }),
+    );
+    return result.value ?? [];
+  }
+
+  /** Every planned entry in the period, each carrying whichever actual shift matched it. */
+  async rosterComparison(
+    tenantId: string,
+    brandId: string,
+    locationId: string,
+    from: string,
+    to: string,
+    limit = 200,
+  ): Promise<readonly PlannedShiftView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly PlannedShiftView[]>(courierPaths.courierRosterComparison(tenantId), {
+        params: { brandId, locationId, from, to, limit },
+      }),
+    );
+    return result.value ?? [];
+  }
+
+  async draftRosterEntry(
+    tenantId: string,
+    brandId: string,
+    locationId: string,
+    request: DraftRosterEntryRequest,
+  ): Promise<PlannedShiftView> {
+    return firstValueFrom(
+      this.api.post<DraftRosterEntryRequest, PlannedShiftView>(
+        courierPaths.courierRosterEntries(tenantId),
+        command(request),
+        { params: { brandId, locationId } },
+      ),
+    );
+  }
+
+  async publishRosterEntry(
+    tenantId: string,
+    brandId: string,
+    locationId: string,
+    entryId: string,
+    reason: string,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.post<{ reason: string }, void>(
+        courierPaths.courierRosterEntryPublish(tenantId, entryId),
+        command({ reason }),
+        { params: { brandId, locationId } },
+      ),
+    );
+  }
+
+  async cancelRosterEntry(
+    tenantId: string,
+    brandId: string,
+    locationId: string,
+    entryId: string,
+    reason: string,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.post<{ reason: string }, void>(
+        courierPaths.courierRosterEntryCancel(tenantId, entryId),
+        command({ reason }),
+        { params: { brandId, locationId } },
+      ),
+    );
   }
 
   async closeShift(

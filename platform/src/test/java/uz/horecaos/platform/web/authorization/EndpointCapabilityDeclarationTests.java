@@ -3,6 +3,7 @@ package uz.horecaos.platform.web.authorization;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -17,7 +18,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ValueConstants;
 import uz.horecaos.platform.courier.api.CourierSelfAuthorized;
 import uz.horecaos.platform.customers.api.CustomerOwned;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
@@ -75,16 +78,18 @@ class EndpointCapabilityDeclarationTests {
     }
 
     @Test
-    void aDeclaredScopeNamesOnlyPathVariablesTheRouteActuallyDeclares() {
+    void aDeclaredScopeNamesOnlyPathVariablesOrRequestParametersTheRouteActuallyDeclares() {
         // The mirror image of the test above. CapabilityEnforcementInterceptor.scopeOf()
-        // resolves a scope by reading tenantId/brandId/locationId path variables
-        // unconditionally for the declared scope type — a LOCATION declaration
-        // always reads brandId, a BRAND or LOCATION declaration always reads
-        // brandId, whether or not the route's own @*Mapping actually names it. A
-        // scope declared narrower than the path supports does not fail loudly at
-        // startup: it throws IllegalStateException on the first real request,
-        // which GlobalApiErrorHandler has no handler for, so it surfaces as an
-        // unmapped 500 rather than ADR 0031's structured refusal. See the P19
+        // resolves brandId/locationId from the request's path variables first
+        // and, only when a path variable is absent, from an ordinary request
+        // parameter of the same name — the shape a handful of read-heavy or
+        // filter-driven endpoints (the courier roster surface among them) already
+        // use for brandId/locationId the same way they use from/to/limit. A scope
+        // declared narrower than the route supports (neither a path segment nor a
+        // required request parameter) does not fail loudly at startup: it throws
+        // IllegalStateException on the first real request, which
+        // GlobalApiErrorHandler has no handler for, so it surfaces as an unmapped
+        // 500 rather than ADR 0031's structured refusal. See the P19
         // unbindCourierFromBranch incident this test was added to catch.
         List<String> tooNarrow = new ArrayList<>();
 
@@ -97,18 +102,22 @@ class EndpointCapabilityDeclarationTests {
             String where = handler.getDeclaringClass().getSimpleName() + "#" + handler.getName();
             ScopeType scope = declaration.scope();
 
-            if ((scope == ScopeType.BRAND || scope == ScopeType.LOCATION) && !path.contains("{brandId}")) {
-                tooNarrow.add(where + " requires " + scope + " but the path has no {brandId}");
+            if ((scope == ScopeType.BRAND || scope == ScopeType.LOCATION)
+                    && !suppliesIdentifier(handler, path, "brandId")) {
+                tooNarrow.add(where + " requires " + scope
+                        + " but neither the path nor a required brandId request parameter supplies it");
             }
-            if (scope == ScopeType.LOCATION && !path.contains("{locationId}")) {
-                tooNarrow.add(where + " requires LOCATION but the path has no {locationId}");
+            if (scope == ScopeType.LOCATION && !suppliesIdentifier(handler, path, "locationId")) {
+                tooNarrow.add(where + " requires LOCATION but neither the path nor a required "
+                        + "locationId request parameter supplies it");
             }
         }
 
         assertThat(tooNarrow)
                 .as("a BRAND or LOCATION scope reads brandId (and LOCATION also reads locationId) "
-                        + "from the path unconditionally; declaring one the route cannot supply is "
-                        + "not a stricter check, it is a 500 on every call")
+                        + "from the path, or from a required request parameter of the same name when "
+                        + "the path has none; declaring one the route cannot supply either way is not "
+                        + "a stricter check, it is a 500 on every call")
                 .isEmpty();
     }
 
@@ -571,6 +580,35 @@ class EndpointCapabilityDeclarationTests {
 
     private static String first(String[] values) {
         return values.length > 0 ? values[0] : "";
+    }
+
+    /**
+     * Whether the route supplies {@code name} to {@code
+     * CapabilityEnforcementInterceptor.scopeOf()} — as a {@code {name}} path
+     * segment, or as a required {@code @RequestParam} of the same name with no
+     * default value. Either is read; anything else (an optional parameter, or a
+     * parameter with a default) can be absent from a real request and would
+     * leave the interceptor with nothing to resolve the scope from.
+     */
+    private static boolean suppliesIdentifier(Method handler, String path, String name) {
+        if (path.contains("{" + name + "}")) {
+            return true;
+        }
+        for (Parameter parameter : handler.getParameters()) {
+            RequestParam requestParam = parameter.getAnnotation(RequestParam.class);
+            if (requestParam == null) {
+                continue;
+            }
+            String paramName = !requestParam.name().isEmpty()
+                    ? requestParam.name()
+                    : !requestParam.value().isEmpty() ? requestParam.value() : parameter.getName();
+            if (paramName.equals(name)
+                    && requestParam.required()
+                    && ValueConstants.DEFAULT_NONE.equals(requestParam.defaultValue())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static List<Class<?>> controllers() {

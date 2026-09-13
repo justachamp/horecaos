@@ -76,7 +76,17 @@ public enum CacheRegistry {
      * window in which whatever prompted it is still going on. The writer evicts,
      * so the TTL is the backstop rather than the mechanism.
      */
-    TENANT_STATUS("tenant.status", Duration.ofSeconds(30), 10_000, "TenantSuspended, TenantReactivated");
+    TENANT_STATUS("tenant.status", Duration.ofSeconds(30), 10_000, "TenantSuspended, TenantReactivated"),
+
+    /**
+     * Staff 9.3b's actor-display resolution: a name for a Keycloak subject id,
+     * read live from the admin API on a miss. Ten minutes because a name
+     * changes rarely and every miss is a network round trip to Keycloak, not a
+     * database read — this is the one cache in the registry with no domain
+     * event to invalidate it, so the TTL is the whole mechanism rather than a
+     * backstop on top of one.
+     */
+    STAFF_DISPLAY_NAMES("staff.display_names", Duration.ofMinutes(10), 20_000, "TTL only (no name-change event yet)");
 
     private static final Map<String, CacheRegistry> BY_NAME = Arrays.stream(values())
             .collect(Collectors.toUnmodifiableMap(CacheRegistry::cacheName, Function.identity()));

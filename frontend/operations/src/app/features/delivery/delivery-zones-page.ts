@@ -6,6 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
@@ -79,11 +80,13 @@ interface TariffOption {
  * **Still reduced, and honestly.** No `MapCanvas`/`PolygonEditor` exists (IA
  * Part 4's pilot blockers; ADR 0015 owes the provider decision ADR 0037
  * inherited), so this authors circles around a branch. Bulk geozone upload
- * (`3.6c`) has no backend at all.
+ * (`3.6c`) has its own page now — `geozone-batch-import-page.ts`, linked from
+ * this toolbar — with a batch endpoint and a dry-run report; it stops short
+ * of activation, which ADR 0037 gates behind the same missing map.
  */
 @Component({
   selector: 'q-delivery-zones-page',
-  imports: [TPipe],
+  imports: [TPipe, RouterLink],
   templateUrl: './delivery-zones-page.html',
   styleUrl: './delivery-zones-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

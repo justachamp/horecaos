@@ -1,0 +1,59 @@
+.q-chart__row-label {
+  fill: var(--q-viz-axis);
+}
+
+.q-chart__cell {
+  cursor: pointer;
+}
+
+.q-chart__cell--empty {
+  fill: var(--q-surface-2);
+}
+
+.q-chart__tooltip {
+  position: absolute;
+  transform: translate(-50%, -120%);
+  pointer-events: none;
+  background: var(--q-inverse);
+  color: var(--q-inverse-ink);
+  padding: 6px 10px;
+  border-radius: var(--q-radius);
+  white-space: nowrap;
+}
+
+.q-chart__scale-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--q-ink-muted);
+}
+
+.q-chart__scale-swatches {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.q-chart__swatch {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+}
+
+table[chart-table] {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table[chart-table] th,
+table[chart-table] td {
+  padding: 4px 8px;
+  text-align: right;
+  border-bottom: 1px solid var(--q-hairline);
+  font-variant-numeric: tabular-nums;
+}
+
+table[chart-table] th[scope='row'] {
+  text-align: left;
+  font-weight: 400;
+  color: var(--q-ink-muted);
+}

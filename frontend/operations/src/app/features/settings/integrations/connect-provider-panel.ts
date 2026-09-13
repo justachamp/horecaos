@@ -10,6 +10,8 @@ import {
 } from '@angular/core';
 
 import { I18n } from '../../../core/i18n/i18n';
+import { SecretInput } from '../../../shared/ui/secret-input/secret-input';
+import { StepItem, Steps } from '../../../shared/ui/steps';
 import { BrandView } from '../brand-profile/brand-profile-api';
 import { LocationView } from '../locations/locations-api';
 import { ProviderConnectDeclaration } from './integrations-api';
@@ -66,6 +68,7 @@ export interface BindSubmission {
 @Component({
   selector: 'app-connect-provider-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [SecretInput, Steps],
   template: `
     <div class="backdrop" (click)="cancel.emit()">
       <div
@@ -91,6 +94,17 @@ export interface BindSubmission {
             ✕
           </button>
         </div>
+
+        <q-steps
+          class="steps"
+          [steps]="steps()"
+          [ariaLabel]="
+            i18n.t('settings.integrations.connect.steps.progress', {
+              current: phase() === 'connect' ? 1 : 2,
+              total: 2,
+            })
+          "
+        />
 
         @if (phase() === 'connect') {
           <div class="body">
@@ -137,18 +151,28 @@ export interface BindSubmission {
             </p>
 
             @for (field of selectedDeclaration()?.fields ?? []; track field.key) {
-              <label class="q-caption field-label" [for]="'connect-field-' + field.key">{{
-                label(field.key)
-              }}</label>
-              <input
-                [id]="'connect-field-' + field.key"
-                class="q-body field"
-                [type]="field.secret ? 'password' : 'text'"
-                [autocomplete]="field.secret ? 'off' : 'on'"
-                [value]="fieldValue(field.key)"
-                (input)="onFieldInput(field.key, $event)"
-                [disabled]="submitting()"
-              />
+              @if (field.secret) {
+                <q-secret-input
+                  [fieldId]="'connect-field-' + field.key"
+                  [label]="label(field.key)"
+                  [value]="fieldValue(field.key)"
+                  (valueChange)="onSecretFieldChange(field.key, $event)"
+                  [disabled]="submitting()"
+                />
+              } @else {
+                <label class="q-caption field-label" [for]="'connect-field-' + field.key">{{
+                  label(field.key)
+                }}</label>
+                <input
+                  [id]="'connect-field-' + field.key"
+                  class="q-body field"
+                  type="text"
+                  autocomplete="on"
+                  [value]="fieldValue(field.key)"
+                  (input)="onFieldInput(field.key, $event)"
+                  [disabled]="submitting()"
+                />
+              }
             }
 
             @if (errorMessage(); as message) {
@@ -197,7 +221,9 @@ export interface BindSubmission {
               }
             </select>
             @if (brands().length === 0) {
-              <p class="q-caption hint">{{ i18n.t('settings.integrations.connect.bind.noBrands') }}</p>
+              <p class="q-caption hint">
+                {{ i18n.t('settings.integrations.connect.bind.noBrands') }}
+              </p>
             }
 
             <label class="q-caption field-label" for="connect-bind-location">{{
@@ -210,7 +236,9 @@ export interface BindSubmission {
               (change)="onBindLocationChange($event)"
               [disabled]="bindSubmitting()"
             >
-              <option value="">{{ i18n.t('settings.integrations.connect.bind.locationAny') }}</option>
+              <option value="">
+                {{ i18n.t('settings.integrations.connect.bind.locationAny') }}
+              </option>
               @for (location of bindLocationsForBrand(); track location.id) {
                 <option [value]="location.id">{{ location.displayName }}</option>
               }
@@ -282,12 +310,17 @@ export interface BindSubmission {
       margin: 0;
     }
 
+    .steps {
+      display: block;
+      padding: 16px 24px 0;
+    }
+
     .close {
       background: none;
       border: none;
       color: var(--q-ink-muted);
       cursor: pointer;
-      font-size: 16px;
+      font-size: var(--q-type-body);
     }
 
     .body {
@@ -407,6 +440,20 @@ export class ConnectProviderPanel {
     this.providers().find((declaration) => declaration.providerType === this.providerType()),
   );
 
+  /** `q-steps`'s own shape, row `X.33` — this drawer's first consumer. */
+  protected readonly steps = computed<readonly StepItem[]>(() => [
+    {
+      id: 'connect',
+      label: this.i18n.t('settings.integrations.connect.steps.connect'),
+      state: this.phase() === 'connect' ? 'current' : 'complete',
+    },
+    {
+      id: 'bind',
+      label: this.i18n.t('settings.integrations.connect.steps.bind'),
+      state: this.phase() === 'connect' ? 'upcoming' : 'current',
+    },
+  ]);
+
   protected readonly bindLocationsForBrand = computed(() =>
     this.locations().filter((location) => location.brandId === this.bindBrandId()),
   );
@@ -470,6 +517,10 @@ export class ConnectProviderPanel {
     this.fieldValues.update((current) => ({ ...current, [key]: value }));
   }
 
+  protected onSecretFieldChange(key: string, value: string): void {
+    this.fieldValues.update((current) => ({ ...current, [key]: value }));
+  }
+
   protected inputValue(event: Event): string {
     return (event.target as HTMLInputElement).value;
   }
@@ -486,10 +537,16 @@ export class ConnectProviderPanel {
     }
     const values = this.fieldValues();
     const secretField = declaration.fields.find((field) => field.secret);
+    // ADR 0106: each position is kept even when blank (an empty segment
+    // between two slashes), never dropped — the server splits this same
+    // string back apart by position against ConnectFieldCatalog's own field
+    // order. Dropping a blank field used to shift every later field left,
+    // latent for CLICK (both of its non-secret fields are normally filled)
+    // and actively wrong for a provider like analytics, where filling only
+    // one of several declared fields is the common case.
     const nonSecretValues = declaration.fields
       .filter((field) => !field.secret)
-      .map((field) => values[field.key])
-      .filter((value): value is string => value !== undefined && value.trim().length > 0);
+      .map((field) => (values[field.key] ?? '').trim());
 
     this.connect.emit({
       providerType: declaration.providerType,

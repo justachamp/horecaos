@@ -13,9 +13,13 @@ import { LocationScope } from './operations-paths';
  * several of them cross-surface: a
  * meaningful share of the tenant's own configuration (brands and their
  * locations' provisioning fields, sales channels, the order acceptance
- * policy, legal entities, cancellation/completion reasons) was built for
- * control-plane before this wave and still answers only on
- * {@link CONTROL_PLANE}. Moving any one of those paths is a breaking change —
+ * policy, legal entities) was built for control-plane before this wave and
+ * still answers only on {@link CONTROL_PLANE}. Cancellation/completion
+ * reasons left this list in wave P37: {@link orderOutcomeReasons} now calls
+ * `OperationsOrderOutcomeReasonController`, the same wave-53 shape {@link
+ * integrationInstallations} used, because this screen was the control-plane
+ * path's only caller. Moving any one of the paths still on this list is a
+ * breaking change —
  * `OpenApiContractTests` enforces that every published path stays published,
  * and refuses even a baseline refresh that would drop one — so this app calls
  * them where they already live, the same cross-surface shape ADR 0065 already
@@ -41,6 +45,7 @@ import { LocationScope } from './operations-paths';
  */
 const OPERATIONS = '/api/v1/operations';
 const CONTROL_PLANE = '/api/v1/control-plane';
+const TENANT = '/api/v1/tenants';
 
 export const settingsPaths = {
   // ---------------------------------------------------------- 10.1 Brand profile
@@ -155,9 +160,16 @@ export const settingsPaths = {
 
   // ---------------------------------------------------------- 10.7 Fiscalization
 
-  /** `LegalEntityController` (control-plane surface). */
+  /**
+   * `OperationsLegalEntityController` — wave P34 moved this off `CONTROL_PLANE`
+   * (`LegalEntityController`), which published the identical six operations and
+   * had no caller left to preserve cross-surface, the same move wave 53 made
+   * for {@link integrationInstallations}. The control-plane path stays
+   * published (`OpenApiContractTests`) but this app no longer reaches across
+   * surfaces for it.
+   */
   legalEntities(scope: LocationScope): string {
-    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/legal-entities`;
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/legal-entities`;
   },
 
   legalEntity(scope: LocationScope, entityId: string): string {
@@ -168,12 +180,77 @@ export const settingsPaths = {
     return `${this.legalEntity(scope, entityId)}/activate`;
   },
 
+  /** Wave P34: there was no HTTP surface for this on either controller before. */
+  legalEntitySuspend(scope: LocationScope, entityId: string): string {
+    return `${this.legalEntity(scope, entityId)}/suspend`;
+  },
+
+  /** Wave P34: there was no HTTP surface for this on either controller before. */
+  legalEntityArchive(scope: LocationScope, entityId: string): string {
+    return `${this.legalEntity(scope, entityId)}/archive`;
+  },
+
   legalEntityAssign(scope: LocationScope, entityId: string): string {
     return `${this.legalEntity(scope, entityId)}/assignments`;
   },
 
   legalEntityAssignmentHistory(scope: LocationScope): string {
     return `${this.legalEntities(scope)}/brands/${enc(scope.brandId)}/locations/${enc(scope.locationId)}/assignments`;
+  },
+
+  // ------------------------------------------------- 10.7 Fiscal terminals (Tab 2)
+
+  /** `OperationsFiscalTerminalController` — wave P34, new this wave. */
+  fiscalTerminals(scope: LocationScope): string {
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/fiscal-terminals`;
+  },
+
+  fiscalTerminal(scope: LocationScope, terminalId: string): string {
+    return `${this.fiscalTerminals(scope)}/${enc(terminalId)}`;
+  },
+
+  fiscalTerminalHealthCheck(scope: LocationScope, terminalId: string): string {
+    return `${this.fiscalTerminal(scope, terminalId)}/health-checks`;
+  },
+
+  fiscalTerminalSuspend(scope: LocationScope, terminalId: string): string {
+    return `${this.fiscalTerminal(scope, terminalId)}/suspend`;
+  },
+
+  fiscalTerminalReactivate(scope: LocationScope, terminalId: string): string {
+    return `${this.fiscalTerminal(scope, terminalId)}/reactivate`;
+  },
+
+  fiscalTerminalRetire(scope: LocationScope, terminalId: string): string {
+    return `${this.fiscalTerminal(scope, terminalId)}/retire`;
+  },
+
+  // ------------------------------------------------- 10.7 Fiscal coverage (Tab 3)
+
+  /**
+   * `CatalogQueryController.fiscalCoverage` — control-plane surface, wave P34.
+   * The minimum this wave builds locally in place of `P21`'s not-yet-merged
+   * fiscal workbench: a per-brand unclassified count and node list. Cross-surface
+   * for the same reason `salesChannels` and `orderOutcomeReasons` above are: the
+   * endpoint's controller has no operations-native mirror.
+   */
+  catalogFiscalCoverage(scope: LocationScope): string {
+    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/catalog/fiscal-coverage`;
+  },
+
+  /** `CatalogAuthoringController.classifyFee` — control-plane surface, pre-existing. */
+  catalogFeeFiscalClassification(scope: LocationScope, feeCode: string): string {
+    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/catalog/fees/${enc(feeCode)}/fiscal-classification`;
+  },
+
+  /** `CatalogAuthoringController.classifyVariant` — control-plane surface, pre-existing. */
+  catalogVariantFiscalClassification(scope: LocationScope, variantId: string): string {
+    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/catalog/variants/${enc(variantId)}/fiscal-classification`;
+  },
+
+  /** `CatalogAuthoringController.classifyModifierOption` — control-plane surface, pre-existing. */
+  catalogModifierOptionFiscalClassification(scope: LocationScope, optionId: string): string {
+    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/catalog/modifier-options/${enc(optionId)}/fiscal-classification`;
   },
 
   // ---------------------------------------------------------- 10.8 Integrations (moved from control-plane)
@@ -216,6 +293,98 @@ export const settingsPaths = {
    */
   integrationInstallationBindings(scope: LocationScope, installationId: string): string {
     return `${this.integrationInstallations(scope)}/${enc(installationId)}/bindings`;
+  },
+
+  /**
+   * `OperationsProviderInstallationController.activateBinding` — ADR 0106,
+   * gap-map row 10.8a. The controller's own doc says a binding is created
+   * SUSPENDED (see {@link integrationInstallationBindings}'s POST); before
+   * this wave nothing in this app ever called the one endpoint that brings
+   * it live, so a tenant could connect and bind a provider and never
+   * activate what they had just created.
+   */
+  integrationInstallationBindingActivate(
+    scope: LocationScope,
+    installationId: string,
+    bindingId: string,
+  ): string {
+    return `${this.integrationInstallationBindings(scope, installationId)}/${enc(bindingId)}/activate`;
+  },
+
+  /** `OperationsProviderInstallationController.suspendBinding` — the rollback path beside it. */
+  integrationInstallationBindingSuspend(
+    scope: LocationScope,
+    installationId: string,
+    bindingId: string,
+  ): string {
+    return `${this.integrationInstallationBindings(scope, installationId)}/${enc(bindingId)}/suspend`;
+  },
+
+  /**
+   * `OperationsProviderInstallationController.reconcileCapabilities` — ADR
+   * 0106, gap-map row 10.8a and row X.14: records a fresh preflight (the
+   * secret resolves, the wired adapter declares each capability) and, since
+   * this wave, stamps `secretLastUsedAt` on success.
+   */
+  integrationInstallationCapabilityReconciliation(
+    scope: LocationScope,
+    installationId: string,
+  ): string {
+    return `${this.integrationInstallations(scope)}/${enc(installationId)}/capability-reconciliation`;
+  },
+
+  /**
+   * `OperationsProviderInstallationController.settings`/`updateSettings` —
+   * ADR 0106, gap-map row 10.8a. Today's one field is Clopos's own
+   * order-acceptance toggle (Q7); refused for any other provider type, so
+   * the console only renders this for a `clopos` installation.
+   */
+  integrationInstallationSettings(scope: LocationScope, installationId: string): string {
+    return `${this.integrationInstallations(scope)}/${enc(installationId)}/settings`;
+  },
+
+  /**
+   * `MarketplaceOperationsController.liveness` — ADR 0106, gap-map row
+   * 10.8c: the locations-by-bindings liveness matrix, built before this wave
+   * and never rendered anywhere in this app.
+   */
+  marketplaceLiveness(scope: LocationScope): string {
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/marketplace/liveness`;
+  },
+
+  /**
+   * `OperationsIntegrationFailureController` — ADR 0106, gap-map row 10.8c: a
+   * merchant's own error taxonomy and inbox replay, tenant-checked rather
+   * than trusting an optional filter the platform-wide surface accepts.
+   */
+  integrationFailureTaxonomy(scope: LocationScope): string {
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/integrations/failures/taxonomy`;
+  },
+
+  integrationFailureInbox(scope: LocationScope): string {
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/integrations/failures/inbox`;
+  },
+
+  integrationFailureReplay(scope: LocationScope, consumerName: string, eventId: string): string {
+    return `${this.integrationFailureInbox(scope)}/${enc(consumerName)}/${enc(eventId)}/replay`;
+  },
+
+  /**
+   * `PartnerApiClientController` — ADR 0106, gap-map row 10.8d: issue, list,
+   * rotate and revoke a `partner.api_clients` credential over a real
+   * Keycloak `client_credentials` client. Only meaningful for a `MARKETPLACE`
+   * installation (the controller itself refuses any other category).
+   */
+  partnerApiClients(scope: LocationScope, installationId: string): string {
+    return `${this.integrationInstallations(scope)}/${enc(installationId)}/partner-clients`;
+  },
+
+  partnerApiClientRotate(scope: LocationScope, installationId: string, clientId: string): string {
+    return `${this.partnerApiClients(scope, installationId)}/${enc(clientId)}/secret-rotations`;
+  },
+
+  partnerApiClientRevoke(scope: LocationScope, installationId: string, clientId: string): string {
+    return `${this.partnerApiClients(scope, installationId)}/${enc(clientId)}`;
   },
 
   /** `MerchantBindingController` — already operations surface (ADR 0065's one resolved tension). */
@@ -268,9 +437,16 @@ export const settingsPaths = {
 
   // ---------------------------------------------------------- 10.10 Reference data
 
-  /** `OrderOutcomeReasonController` (control-plane surface). */
+  /**
+   * `OperationsOrderOutcomeReasonController` — moved off `CONTROL_PLANE` this
+   * wave (P37), the same wave-53 shape {@link integrationInstallations} used:
+   * `OrderOutcomeReasonController`'s original control-plane-prefixed mapping
+   * had no caller of its own to preserve cross-surface (this screen was its
+   * only caller, and it was reaching across surfaces to reach it), so this
+   * app now calls the operations-native mirror instead.
+   */
   orderOutcomeReasons(scope: LocationScope): string {
-    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/order-outcome-reasons`;
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/order-outcome-reasons`;
   },
 
   orderOutcomeReasonCategories(scope: LocationScope): string {
@@ -279,6 +455,26 @@ export const settingsPaths = {
 
   orderOutcomeReason(scope: LocationScope, reasonId: string): string {
     return `${this.orderOutcomeReasons(scope)}/${enc(reasonId)}`;
+  },
+
+  // ---------------------------------------------------------- 10.10d Branch tags
+
+  /** `BranchTagController` — the tenant-wide registry and assignment read. */
+  branchTags(scope: LocationScope): string {
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/branch-tags`;
+  },
+
+  branchTagAssignments(scope: LocationScope): string {
+    return `${this.branchTags(scope)}/assignments`;
+  },
+
+  branchTagArchive(scope: LocationScope, tagId: string): string {
+    return `${this.branchTags(scope)}/${enc(tagId)}/archive`;
+  },
+
+  /** One branch's own tags — set as a whole, per `BranchTagController.setTagsOfLocation`. */
+  locationBranchTags(scope: LocationScope): string {
+    return `${this.location(scope)}/branch-tags`;
   },
 
   // ---------------------------------------------------------- 10.12 Terms of service
@@ -343,6 +539,28 @@ export const settingsPaths = {
   /** `OnboardingController.validate` — the dry run the readiness panel reshapes. */
   onboardingValidate(tenantId: string, runId: string): string {
     return `${CONTROL_PLANE}/tenants/${enc(tenantId)}/onboarding-runs/${enc(runId)}/validate`;
+  },
+
+  // ---------------------------------------------------------- 10.11 Data & privacy (ADR 0109)
+
+  /**
+   * `CustomerController.tenantErasureRequests` — the tenant-wide DSAR
+   * worklist. Reuses `CustomerErasureService`'s existing per-account
+   * lifecycle (`V0178`); this is the only new read the worklist needed.
+   *
+   * `CustomerController`'s class-level `@RequestMapping` is `/customers`, so
+   * the real route is `/api/v1/tenants/{tenantId}/customers/erasure-requests`
+   * — every other customer-nested path in this frontend already includes
+   * that segment (see `operationsPaths.customers`); this one previously
+   * didn't, and 404'd on every load.
+   */
+  erasureRequests(tenantId: string): string {
+    return `${TENANT}/${enc(tenantId)}/customers/erasure-requests`;
+  },
+
+  /** `ConsentTypeController.list` — the tenant's own consent-purpose registry. */
+  consentTypes(tenantId: string): string {
+    return `${TENANT}/${enc(tenantId)}/consent-types`;
   },
 } as const;
 

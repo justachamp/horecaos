@@ -20,16 +20,21 @@
   --q-inverse-ink-muted: #c6c6c6;
 
   --q-success: #24a148;
-  --q-warning: #f1c21b;   /* dot only — never text on white */
+  --q-warning: #f1c21b; /* dot only — never text on white */
   --q-error: #da1e28;
 
-  --q-info-tint: #edf5ff;      --q-info-text: #0043ce;
-  --q-success-tint: #defbe6;   --q-success-text: #0e6027;
-  --q-warning-tint: #fcf4d6;   --q-warning-text: #8e6a00;
-  --q-error-tint: #fff1f1;     --q-error-text: #a2191f;
+  --q-info-tint: #edf5ff;
+  --q-info-text: #0043ce;
+  --q-success-tint: #defbe6;
+  --q-success-text: #0e6027;
+  --q-warning-tint: #fcf4d6;
+  --q-warning-text: #8e6a00;
+  --q-error-tint: #fff1f1;
+  --q-error-text: #a2191f;
 
-  --q-font-sans: 'IBM Plex Sans', system-ui, 'Helvetica Neue', Arial, sans-serif;
-  --q-font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  --q-font-sans:
+    "IBM Plex Sans", system-ui, "Helvetica Neue", Arial, sans-serif;
+  --q-font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
 
   /* Console is flat-square. This is the brand, not a preference. */
   --q-radius: 0px;
@@ -37,11 +42,69 @@
   --q-dur-fast: 110ms;
   --q-dur-base: 150ms;
   --q-ease-productive: cubic-bezier(0.2, 0, 0.38, 0.9);
+
+  /* Dataviz palette (wave T09, IA X.19) — none of this existed before: the
+   * console answered every report in numbers and tables. Categorical order is
+   * fixed and never cycled past six slots (fold a seventh series into "Other"
+   * rather than inventing a hue); sequential is one hue — this palette's own
+   * blue family — light-to-dark, for a continuous magnitude (the demand
+   * heatmap) or an ordinal tier (the SLA histogram's six ordered buckets).
+   * Every slot clears the data-viz procedure's hard gates (adjacent-pair CVD
+   * ΔE, the unsimulated-vision floor, the OKLCH lightness band, the chroma
+   * floor) computed against this console's own surfaces. Three categorical
+   * slots (teal, magenta, amber) sit under 3:1 against white by design — the
+   * relief rule applies: every chart that uses them ships a legend swatch or
+   * a direct label beside the fill, never an unlabelled one. See
+   * `chart-colors.ts` and `chart-colors.spec.ts` in frontend/operations for
+   * the numbers this checks.
+   *
+   * The "-dark" step of each slot is validated against `--q-inverse`
+   * (#161616), the console's one dark surface today (nav rail, toasts,
+   * tooltips) — no screen here paints a whole page dark, so nothing
+   * references these yet. They exist so a future dark surface (the wallboard
+   * shell, wave T23) reuses this palette instead of inventing one under time
+   * pressure. */
+  --q-viz-cat-1: #0f62fe;
+  --q-viz-cat-1-dark: #4589ff; /* blue */
+  --q-viz-cat-2: #eb6834;
+  --q-viz-cat-2-dark: #d95926; /* orange */
+  --q-viz-cat-3: #1baf7a;
+  --q-viz-cat-3-dark: #199e70; /* teal */
+  --q-viz-cat-4: #4a3aa7;
+  --q-viz-cat-4-dark: #9085e9; /* violet */
+  --q-viz-cat-5: #e87ba4;
+  --q-viz-cat-5-dark: #d55181; /* magenta */
+  --q-viz-cat-6: #eda100;
+  --q-viz-cat-6-dark: #c98500; /* amber */
+
+  /* Step 1 = lowest magnitude, step 5 = highest — same direction in both
+   * columns: on the light surface the low end is the palest blue, on the dark
+   * surface (read the "-dark" column top-to-bottom) the low end is the step
+   * still readable against near-black, brightening as the magnitude rises. */
+  --q-viz-seq-1: #78a9ff;
+  --q-viz-seq-1-dark: #0f62fe;
+  --q-viz-seq-2: #4589ff;
+  --q-viz-seq-2-dark: #4589ff;
+  --q-viz-seq-3: #0f62fe;
+  --q-viz-seq-3-dark: #78a9ff;
+  --q-viz-seq-4: #0043ce;
+  --q-viz-seq-4-dark: #a6c8ff;
+  --q-viz-seq-5: #002d9c;
+  --q-viz-seq-5-dark: #d0e2ff;
+
+  --q-viz-grid: var(--q-hairline);
+  --q-viz-axis: var(--q-ink-subtle);
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
-html, body, #root { height: 100%; }
+html,
+body,
+#root {
+  height: 100%;
+}
 
 body {
   margin: 0;
@@ -52,21 +115,111 @@ body {
 }
 
 /* Closed type scale. Never set a font-size inline. */
-.q-display  { font-size: 42px; font-weight: 300; line-height: 1.20; letter-spacing: -0.02em; }
-.q-headline { font-size: 32px; font-weight: 400; line-height: 1.25; }
-.q-title    { font-size: 24px; font-weight: 400; line-height: 1.33; }
-.q-subhead  { font-size: 20px; font-weight: 400; line-height: 1.40; }
-.q-body     { font-size: 16px; font-weight: 400; line-height: 1.50; letter-spacing: 0.16px; }
-.q-body-sm  { font-size: 14px; font-weight: 400; line-height: 1.29; letter-spacing: 0.16px; }
-.q-emphasis { font-size: 14px; font-weight: 600; line-height: 1.29; letter-spacing: 0.16px; }
-.q-caption  { font-size: 12px; font-weight: 400; line-height: 1.33; letter-spacing: 0.32px; }
-.q-data-lg  { font-size: 28px; font-weight: 300; line-height: 1.20; font-variant-numeric: tabular-nums; }
-.q-tnum     { font-variant-numeric: tabular-nums; }
+.q-display {
+  font-size: 42px;
+  font-weight: 300;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.q-headline {
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1.25;
+}
+.q-title {
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.33;
+}
+.q-subhead {
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+.q-body {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0.16px;
+}
+.q-body-sm {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.29;
+  letter-spacing: 0.16px;
+}
+.q-emphasis {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.29;
+  letter-spacing: 0.16px;
+}
+.q-caption {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.33;
+  letter-spacing: 0.32px;
+}
+.q-data-lg {
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.q-tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* T23 — the wallboard's TV-distance step. The scale above tops out at 42px
+   (.q-display) for a screen read at arm's length; a wallboard hangs above the
+   pass and is read from several metres away, so a single rung sits above the
+   scale rather than the desk-distance top being stretched with an inline
+   style. q-wallboard-tile and the wallboard's own freshness stamp are its two
+   consumers — see frontend/operations/src/app/wallboard-shell/. Appended per
+   this file's own rule (see operations-gap-map.md's build notes): a token is
+   only ever appended here, never edited in place. */
+.q-display-tv { font-size: 128px; font-weight: 600; line-height: 1.05; letter-spacing: -0.01em; }
+
+/* Type-scale corrections (T22, row X.40). Every closed-scale step's own
+   font-size as a custom property, for the CSS rule that sets font-size
+   alongside colour, weight or spacing that is genuinely the component's
+   own — a `.q-*` utility class does not fit there without moving markup
+   `var(--q-type-*)` closes the raw-px hole without moving. Filled 249 raw
+   `font-size: Npx` declarations across `frontend/operations` that a new
+   ESLint rule (P02) fails the build on. `--q-type-caption-sm` (11px),
+   `--q-type-body-xs` (13px) and `--q-type-body-lg` (18px) are new — the
+   scale had no step at any of the three sizes fixing those call sites
+   turned up; every other property below names an existing step's own
+   font-size and changes no rendered size anywhere. */
+:root {
+  --q-type-caption-sm: 11px;
+  --q-type-caption: 12px;
+  --q-type-body-xs: 13px;
+  --q-type-body-sm: 14px;
+  --q-type-body: 16px;
+  --q-type-body-lg: 18px;
+  --q-type-subhead: 20px;
+  --q-type-title: 24px;
+  --q-type-data-lg: 28px;
+  --q-type-headline: 32px;
+  --q-type-display: 42px;
+}
 
 /* Only transform and opacity animate. Console table data never animates. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
-button { font-family: inherit; }
-input, select, textarea { font-family: inherit; }
+button {
+  font-family: inherit;
+}
+input,
+select,
+textarea {
+  font-family: inherit;
+}

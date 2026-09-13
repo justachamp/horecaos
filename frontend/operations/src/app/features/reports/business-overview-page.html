@@ -32,25 +32,38 @@
       <!-- Band A: five KPI tiles -->
       <div class="tiles">
         @for (tile of tiles(); track tile.key) {
-          <div class="tile" [class.tile--provisional]="tile.provisional">
-            <div class="tile__label q-caption">{{ tile.labelKey | t }}</div>
-            <div class="tile__value q-data-lg q-tnum">{{ tile.display }}</div>
-            @if (tile.deltaText) {
-              <div class="tile__delta q-caption" [class.tile__delta--up]="tile.deltaUp">
-                {{ tile.deltaText }} {{ 'reports.overview.tile.deltaSuffix' | t }}
-              </div>
-            }
-            @if (tile.subtitle) {
-              <div class="tile__subtitle q-caption">{{ tile.subtitle }}</div>
-            }
-            @if (tile.provisional) {
-              <div class="tile__provisional-note q-caption">
-                {{ 'reports.provenance.provisional.short' | t }}
-              </div>
-            }
-          </div>
+          <q-kpi-tile
+            [label]="tile.label"
+            [value]="tile.display"
+            [deltaText]="tile.deltaText"
+            [deltaUp]="tile.deltaUp"
+            [deltaSuffix]="tile.deltaSuffix"
+            [subtitle]="tile.subtitle"
+            [provisional]="tile.provisional"
+            [provisionalNote]="tile.provisionalNote"
+            [sparklinePoints]="tile.sparklinePoints"
+          />
         }
       </div>
+
+      <!-- Band A½: the daily trend the tiles' own sparkline is drawn from — the
+           per-business-date rows Band A already fetches, never shown as a chart
+           until this wave (IA X.19). -->
+      @if (hasTrend()) {
+        <div class="band band--trend">
+          <h2 class="q-subhead">{{ 'reports.overview.trend.title' | t }}</h2>
+          <div class="trend-charts">
+            <q-line-chart
+              [series]="revenueTrend()"
+              [ariaLabel]="'reports.overview.tile.revenue' | t"
+            />
+            <q-line-chart
+              [series]="ordersTrend()"
+              [ariaLabel]="'reports.overview.tile.orders' | t"
+            />
+          </div>
+        </div>
+      }
 
       <!-- Band B: timing -->
       <div class="band band--timing">
@@ -100,38 +113,27 @@
               }}
             </button>
           </div>
-          @for (row of channelMix(); track row.key) {
-            <div class="bar-row">
-              <div class="bar-row__label q-body-sm">{{ row.label }}</div>
-              <div class="bar-row__track">
-                <div class="bar-row__fill" [style.width.%]="channelBarWidth(row)"></div>
-              </div>
-              <div class="bar-row__value q-caption q-tnum">
-                {{ channelMixByRevenue() ? row.revenueSharePercent : row.countSharePercent }}%
-              </div>
-            </div>
-          } @empty {
+          @if (channelMix().length === 0) {
             <p class="q-caption">{{ 'reports.empty.period' | t }}</p>
+          } @else {
+            <q-donut-chart
+              [segments]="channelMixSegments()"
+              [ariaLabel]="'reports.overview.mix.channels' | t"
+              [centerLabel]="channelMixTotalDisplay()"
+            />
           }
         </div>
 
         <div class="mix-card">
           <h2 class="q-subhead">{{ 'reports.overview.mix.fulfilment' | t }}</h2>
-          <div class="stacked-bar">
-            @for (row of fulfilmentMix(); track row.key) {
-              <div
-                class="stacked-bar__segment"
-                [class]="'stacked-bar__segment--' + row.key"
-                [style.width.%]="row.countSharePercent"
-                [attr.title]="row.label + ' — ' + row.countSharePercent + '%'"
-              ></div>
-            }
-          </div>
-          <div class="stacked-bar__legend">
-            @for (row of fulfilmentMix(); track row.key) {
-              <span class="q-caption">{{ row.label }} · {{ row.countSharePercent }}%</span>
-            }
-          </div>
+          @if (fulfilmentMix().length === 0) {
+            <p class="q-caption">{{ 'reports.empty.period' | t }}</p>
+          } @else {
+            <q-stacked-bar-chart
+              [segments]="fulfilmentMixSegments()"
+              [ariaLabel]="'reports.overview.mix.fulfilment' | t"
+            />
+          }
         </div>
 
         <div class="mix-card mix-card--locked">

@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
@@ -90,7 +91,9 @@ describe('CustomersPage', () => {
 
   it('re-lists on a search query, dropping the cursor', async () => {
     const host: HTMLElement = fixture.nativeElement;
-    const search = host.querySelector('[data-testid="customers-search"]') as HTMLInputElement;
+    const search = host
+      .querySelector('[data-testid="customers-search"]')!
+      .querySelector('[data-testid="q-combobox-input"]') as HTMLInputElement;
     search.value = 'Karimova';
     search.dispatchEvent(new Event('input'));
     await flushMicrotasks();
@@ -100,6 +103,49 @@ describe('CustomersPage', () => {
       { cursor: null, limit: 50 },
       { status: undefined, query: 'Karimova' },
     );
+  });
+
+  it('navigates to a customer chosen from the combobox suggestions', async () => {
+    const host: HTMLElement = fixture.nativeElement;
+    const combobox = host.querySelector('[data-testid="customers-search"]')!;
+    const search = combobox.querySelector('[data-testid="q-combobox-input"]') as HTMLInputElement;
+    search.value = 'Karimova';
+    search.dispatchEvent(new Event('input'));
+    await flushMicrotasks();
+    fixture.detectChanges();
+    search.dispatchEvent(new Event('focus'));
+    fixture.detectChanges();
+
+    (combobox.querySelector('[data-testid="q-combobox-option"]') as HTMLElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // The create button is unconditional chrome, present before and after
+    // this click regardless of whether navigation happened — asserting on it
+    // proves nothing about the selection. What `openCustomer` actually
+    // promises is a navigation to the selected customer's id.
+    expect(TestBed.inject(Location).path()).toBe('/customer-1');
+  });
+
+  it('opens the create dialog with the typed text when the combobox’s create-on-miss row is activated', async () => {
+    api.list.mockResolvedValue({ items: [], nextCursor: null } satisfies Page<CustomerSummary>);
+    const host: HTMLElement = fixture.nativeElement;
+    const combobox = host.querySelector('[data-testid="customers-search"]')!;
+    const search = combobox.querySelector('[data-testid="q-combobox-input"]') as HTMLInputElement;
+    search.value = '+998901234567';
+    search.dispatchEvent(new Event('input'));
+    await flushMicrotasks();
+    fixture.detectChanges();
+    search.dispatchEvent(new Event('focus'));
+    fixture.detectChanges();
+
+    (combobox.querySelector('[data-testid="q-combobox-create-row"]') as HTMLElement).click();
+    fixture.detectChanges();
+
+    const phoneField = host.querySelector<HTMLInputElement>(
+      '[data-testid="create-customer-phone"]',
+    );
+    expect(phoneField?.value).toBe('+998901234567');
   });
 
   it('opens the create dialog and submits a new customer', async () => {
@@ -182,9 +228,9 @@ describe('CustomersPage', () => {
 
   it('says nothing about permission when a filter simply matches nothing', async () => {
     api.list.mockResolvedValue({ items: [], nextCursor: null } satisfies Page<CustomerSummary>);
-    const search = (fixture.nativeElement as HTMLElement).querySelector(
-      '[data-testid="customers-search"]',
-    ) as HTMLInputElement;
+    const search = (fixture.nativeElement as HTMLElement)
+      .querySelector('[data-testid="customers-search"]')!
+      .querySelector('[data-testid="q-combobox-input"]') as HTMLInputElement;
     search.value = 'nobody';
     search.dispatchEvent(new Event('input'));
     await flushMicrotasks();

@@ -26,6 +26,36 @@
         },
         "type" : "object"
       },
+      "AccessCheckResponse" : {
+        "properties" : {
+          "capability" : {
+            "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PLACE", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "PLATFORM_ADMIN" ],
+            "type" : "string"
+          },
+          "entitlement" : {
+            "$ref" : "#/components/schemas/EntitlementAnswer"
+          },
+          "heldElsewhere" : {
+            "items" : {
+              "$ref" : "#/components/schemas/GrantView"
+            },
+            "type" : "array"
+          },
+          "scopeId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "scopeType" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          },
+          "verdict" : {
+            "enum" : [ "ALLOWED", "INSUFFICIENT_CAPABILITY", "ENTITLEMENT_REQUIRED" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "AccrualRuleResponse" : {
         "properties" : {
           "earnDelayHours" : {
@@ -290,6 +320,57 @@
         },
         "type" : "object"
       },
+      "AdjustmentReasonResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "hasRule" : {
+            "type" : "boolean"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "outcomeBasis" : {
+            "type" : "string"
+          },
+          "reasonId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "ruleAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "ruleComparator" : {
+            "type" : "string"
+          },
+          "ruleCurrency" : {
+            "type" : "string"
+          },
+          "ruleThreshold" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "ruleTrigger" : {
+            "type" : "string"
+          },
+          "ruleVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "ruleWindow" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "AmendRequest" : {
         "properties" : {
           "applyImmediately" : {
@@ -503,6 +584,27 @@
         "required" : [ "displayName" ],
         "type" : "object"
       },
+      "ArchiveCourierTypeRequest" : {
+        "properties" : {
+          "reason" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "ArchiveTagRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "AssetResponse" : {
         "properties" : {
           "assetId" : {
@@ -555,6 +657,23 @@
           }
         },
         "required" : [ "courierId", "expectedVersion", "reasonCode" ],
+        "type" : "object"
+      },
+      "AssignmentResponse" : {
+        "properties" : {
+          "assignedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tagId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "AttemptResponse" : {
@@ -1054,6 +1173,114 @@
         "required" : [ "bands" ],
         "type" : "object"
       },
+      "BatchImportRequest" : {
+        "properties" : {
+          "dryRun" : {
+            "type" : "boolean"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BatchImportZoneRow"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "rows" ],
+        "type" : "object"
+      },
+      "BatchImportResponse" : {
+        "properties" : {
+          "accepted" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "dryRun" : {
+            "type" : "boolean"
+          },
+          "rejected" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RowOutcomeResponse"
+            },
+            "type" : "array"
+          },
+          "totalRows" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "BatchImportZoneRow" : {
+        "properties" : {
+          "code" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "currency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "deliveryTariffId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "displayNameEn" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "displayNameRu" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "displayNameUz" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "externalRef" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "freeDeliveryFromMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "geoJson" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "minBasketMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "regionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "role" : {
+            "enum" : [ "DELIVERY", "CATCHMENT" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "currency", "displayNameEn", "displayNameRu", "displayNameUz", "externalRef", "geoJson", "role" ],
+        "type" : "object"
+      },
       "BindRequest" : {
         "properties" : {
           "brandId" : {
@@ -1241,6 +1468,18 @@
               "type" : "string"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "BoundaryChangeResponse" : {
+        "properties" : {
+          "approvalRequestId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -1462,6 +1701,39 @@
         "required" : [ "reasonCode", "supervisorName" ],
         "type" : "object"
       },
+      "CalendarResponse" : {
+        "properties" : {
+          "boundaryVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "businessDayStart" : {
+            "format" : "time-local",
+            "type" : "string"
+          },
+          "holidays" : {
+            "items" : {
+              "$ref" : "#/components/schemas/HolidayResponse"
+            },
+            "type" : "array"
+          },
+          "recutCompletedThrough" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "timezone" : {
+            "type" : "string"
+          },
+          "weekendDays" : {
+            "items" : {
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "CallHourResponse" : {
         "properties" : {
           "answeredCount" : {
@@ -1661,7 +1933,7 @@
           },
           "capabilities" : {
             "items" : {
-              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PLACE", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "PLATFORM_ADMIN" ],
+              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PLACE", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "PLATFORM_ADMIN" ],
               "type" : "string"
             },
             "type" : "array",
@@ -1796,6 +2068,21 @@
             "type" : "integer"
           }
         },
+        "type" : "object"
+      },
+      "ChangeBoundaryRequest" : {
+        "properties" : {
+          "businessDayStart" : {
+            "format" : "time-local",
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "businessDayStart", "reason" ],
         "type" : "object"
       },
       "CircleRequest" : {
@@ -2125,6 +2412,43 @@
           }
         },
         "required" : [ "decision", "policyVersion", "purpose", "source" ],
+        "type" : "object"
+      },
+      "ConsentTypeResponse" : {
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "channelSpecific" : {
+            "type" : "boolean"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "labelEn" : {
+            "type" : "string"
+          },
+          "labelRu" : {
+            "type" : "string"
+          },
+          "labelUz" : {
+            "type" : "string"
+          },
+          "policyVersion" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "ContactSummaryResponse" : {
@@ -2734,7 +3058,21 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "startingMinuteOffset" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
           "vehicleClass" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "workMode" : {
             "type" : "string"
           }
         },
@@ -2801,6 +3139,52 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "CreateAdjustmentReasonRequest" : {
+        "properties" : {
+          "code" : {
+            "maxLength" : 48,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "displayName" : {
+            "maxLength" : 160,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "kind" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "outcomeBasis" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "ruleAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "ruleComparator" : {
+            "type" : "string"
+          },
+          "ruleCurrency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "ruleThreshold" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "ruleTrigger" : {
+            "type" : "string"
+          },
+          "ruleWindow" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "displayName", "kind", "outcomeBasis" ],
         "type" : "object"
       },
       "CreateCampaignRequest" : {
@@ -2906,8 +3290,17 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "startingMinuteOffset" : {
+            "format" : "int32",
+            "maximum" : 1440,
+            "minimum" : 0,
+            "type" : "integer"
+          },
           "vehicleClass" : {
             "minLength" : 1,
+            "type" : "string"
+          },
+          "workMode" : {
             "type" : "string"
           }
         },
@@ -2932,6 +3325,27 @@
           }
         },
         "required" : [ "brandId", "phone" ],
+        "type" : "object"
+      },
+      "CreateTagRequest" : {
+        "properties" : {
+          "code" : {
+            "minLength" : 1,
+            "pattern" : "^[a-z0-9][a-z0-9_-]{0,31}$",
+            "type" : "string"
+          },
+          "displayName" : {
+            "maxLength" : 80,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "displayName", "reason" ],
         "type" : "object"
       },
       "CreateTariffRequest" : {
@@ -3275,6 +3689,68 @@
       "DateOfBirthResponse" : {
         "properties" : {
           "dateOfBirth" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "DecidedApprovalResponse" : {
+        "properties" : {
+          "actionCode" : {
+            "type" : "string"
+          },
+          "decidedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decidedBy" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "parametersHash" : {
+            "type" : "string"
+          },
+          "policyVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "requestedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "requestedBy" : {
+            "type" : "string"
+          },
+          "requiredApproverCapability" : {
+            "type" : "string"
+          },
+          "scopeId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "scopeType" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "subject" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "subjectTenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "subjectTenantName" : {
+            "type" : "string"
+          },
+          "thresholdDescription" : {
             "type" : "string"
           }
         },
@@ -3795,6 +4271,28 @@
         },
         "type" : "object"
       },
+      "DraftRosterEntryRequest" : {
+        "properties" : {
+          "courierId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "plannedEnd" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "plannedStart" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reason" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "courierId", "plannedEnd", "plannedStart", "reason" ],
+        "type" : "object"
+      },
       "DutySessionResponse" : {
         "properties" : {
           "collectionGate" : {
@@ -3869,6 +4367,17 @@
             "type" : "string"
           },
           "warningState" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "EntitlementAnswer" : {
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "upgradePath" : {
             "type" : "string"
           }
         },
@@ -4010,6 +4519,63 @@
         "required" : [ "reason" ],
         "type" : "object"
       },
+      "FiscalTerminalView" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "capabilitySnapshot" : {
+            "additionalProperties" : {
+              "type" : "boolean"
+            },
+            "type" : "object"
+          },
+          "capable" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "enum" : [ "POS", "COURIER_TERMINAL", "KIOSK", "VIRTUAL" ],
+            "type" : "string"
+          },
+          "lastHealthCheckAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "lastHealthStatus" : {
+            "enum" : [ "HEALTHY", "UNHEALTHY" ],
+            "type" : "string"
+          },
+          "legalEntityId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "providerBindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "ACTIVE", "SUSPENDED", "RETIRED" ],
+            "type" : "string"
+          },
+          "terminalReference" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "FleetResponse" : {
         "properties" : {
           "pins" : {
@@ -4099,6 +4665,97 @@
         "required" : [ "appliesTo", "benefit", "idempotencyKey", "reason", "reasonCode" ],
         "type" : "object"
       },
+      "GrantView" : {
+        "properties" : {
+          "grantedBy" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "principalSubject" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "revokedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "revokedBy" : {
+            "type" : "string"
+          },
+          "revokedReason" : {
+            "type" : "string"
+          },
+          "roleCode" : {
+            "type" : "string"
+          },
+          "scopeId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "scopeType" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "validFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "validUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "HealthCheckRequest" : {
+        "properties" : {
+          "outcome" : {
+            "enum" : [ "HEALTHY", "UNHEALTHY" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "outcome" ],
+        "type" : "object"
+      },
+      "HolidayAddedResponse" : {
+        "properties" : {
+          "holidayId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "HolidayResponse" : {
+        "properties" : {
+          "date" : {
+            "type" : "string"
+          },
+          "day" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "holidayId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "month" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "HourDemandResponse" : {
         "properties" : {
           "averageOrders" : {
@@ -4186,6 +4843,38 @@
         "required" : [ "lines", "periodEnd", "periodStart", "providerCode", "providerInvoiceRef", "reason" ],
         "type" : "object"
       },
+      "InboxFailureSummary" : {
+        "properties" : {
+          "attemptCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "consumerName" : {
+            "type" : "string"
+          },
+          "errorCode" : {
+            "type" : "string"
+          },
+          "eventType" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lastError" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "IngestResponse" : {
         "properties" : {
           "collectionGate" : {
@@ -4215,7 +4904,7 @@
       "InstallRequest" : {
         "properties" : {
           "category" : {
-            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "OTHER" ],
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "OTHER" ],
             "type" : "string"
           },
           "displayName" : {
@@ -4272,7 +4961,14 @@
             "format" : "date-time",
             "type" : "string"
           },
+          "nonSensitiveConfig" : {
+            "type" : "string"
+          },
           "providerType" : {
+            "type" : "string"
+          },
+          "secretLastUsedAt" : {
+            "format" : "date-time",
             "type" : "string"
           },
           "secretReference" : {
@@ -4344,6 +5040,45 @@
           }
         },
         "required" : [ "token" ],
+        "type" : "object"
+      },
+      "IssuePartnerClientRequest" : {
+        "properties" : {
+          "displayLabel" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "displayLabel", "reason" ],
+        "type" : "object"
+      },
+      "IssuedClientResponse" : {
+        "properties" : {
+          "clientId" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "secretExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "secretValue" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
         "type" : "object"
       },
       "ItemResponse" : {
@@ -5552,6 +6287,9 @@
             "format" : "date-time",
             "type" : "string"
           },
+          "courierDisplayReference" : {
+            "type" : "string"
+          },
           "courierId" : {
             "format" : "uuid",
             "type" : "string"
@@ -6465,6 +7203,73 @@
         },
         "type" : "object"
       },
+      "OrderOutcomeReasonControllerIdResponse" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderOutcomeReasonControllerReasonRequest" : {
+        "properties" : {
+          "allowedFulfillmentModes" : {
+            "items" : {
+              "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "customerRefund" : {
+            "enum" : [ "FULL", "NONE", "DISCRETIONARY" ],
+            "type" : "string"
+          },
+          "customerTexts" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "minProperties" : 1,
+            "type" : "object"
+          },
+          "internalName" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "kind" : {
+            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "type" : "string"
+          },
+          "liabilityParty" : {
+            "enum" : [ "TENANT", "CUSTOMER", "COURIER_PARTNER", "PLATFORM" ],
+            "type" : "string"
+          },
+          "stockDisposition" : {
+            "enum" : [ "RELEASE", "RETURN_TO_STOCK", "WRITE_OFF", "NO_EFFECT" ],
+            "type" : "string"
+          },
+          "systemCategory" : {
+            "enum" : [ "CUSTOMER_CANCELLED", "CUSTOMER_UNREACHABLE", "CUSTOMER_NO_SHOW", "RESTAURANT_REFUSED", "ITEM_UNAVAILABLE", "KITCHEN_CAPACITY", "DELIVERY_FAILED", "COURIER_UNAVAILABLE", "ADDRESS_UNSERVICEABLE", "PAYMENT_NOT_RECEIVED", "DUPLICATE_ORDER", "TEST_ORDER", "SUSPECTED_FRAUD", "PRICING_ERROR", "DELIVERED_OWN_COURIER", "DELIVERED_PARTNER_COURIER", "COLLECTED_BY_CUSTOMER", "SERVED_IN_HOUSE", "APPROVAL_DEADLINE_LAPSED", "OTHER" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "customerTexts", "internalName", "kind", "systemCategory" ],
+        "type" : "object"
+      },
+      "OrderOutcomeReasonControllerVersionResponse" : {
+        "properties" : {
+          "reasonId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "OrderPaymentResponse" : {
         "properties" : {
           "attempts" : {
@@ -6488,6 +7293,12 @@
           },
           "orderTotal" : {
             "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "payment" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TenderResponse"
+            },
+            "type" : "array"
           },
           "publicOrderNumber" : {
             "type" : "string"
@@ -6685,6 +7496,34 @@
         },
         "type" : "object"
       },
+      "PageDecidedApprovalResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DecidedApprovalResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PageInboxFailureSummary" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InboxFailureSummary"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PageInstallationView" : {
         "properties" : {
           "items" : {
@@ -6765,6 +7604,40 @@
           },
           "nextCursor" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PartnerClientResponse" : {
+        "properties" : {
+          "clientId" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lastAuthenticatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "secretConfigured" : {
+            "type" : "boolean"
+          },
+          "secretExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "secretRotatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -7198,6 +8071,44 @@
         },
         "type" : "object"
       },
+      "PlannedShiftResponse" : {
+        "properties" : {
+          "comparison" : {
+            "$ref" : "#/components/schemas/RosterComparisonView"
+          },
+          "courierDisplayReference" : {
+            "type" : "string"
+          },
+          "courierId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "entryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "plannedEnd" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "plannedStart" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "publishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "respondedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PreferenceResponse" : {
         "properties" : {
           "brandId" : {
@@ -7425,7 +8336,7 @@
       "ProviderConnectDeclaration" : {
         "properties" : {
           "category" : {
-            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "OTHER" ],
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "OTHER" ],
             "type" : "string"
           },
           "fields" : {
@@ -7749,6 +8660,56 @@
             "minLength" : 0,
             "pattern" : "^998\\d{9}$",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ReasonResponse" : {
+        "properties" : {
+          "allowedFulfillmentModes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "customerRefund" : {
+            "type" : "string"
+          },
+          "customerTexts" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "internalName" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "liabilityParty" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "stockDisposition" : {
+            "type" : "string"
+          },
+          "systemCategory" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -8375,6 +9336,39 @@
         "required" : [ "callbackPathSegment", "effectiveFrom", "installationId", "integrationBindingId", "legalEntityId", "merchantAccountReference", "providerType", "secretReference" ],
         "type" : "object"
       },
+      "RegisterTerminalRequest" : {
+        "properties" : {
+          "capabilitySnapshot" : {
+            "additionalProperties" : {
+              "type" : "boolean"
+            },
+            "type" : "object"
+          },
+          "kind" : {
+            "enum" : [ "POS", "COURIER_TERMINAL", "KIOSK", "VIRTUAL" ],
+            "type" : "string"
+          },
+          "legalEntityId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "providerBindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "terminalReference" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "kind", "legalEntityId", "locationId", "terminalReference" ],
+        "type" : "object"
+      },
       "RejectReasonResponse" : {
         "properties" : {
           "code" : {
@@ -8497,6 +9491,28 @@
             "$ref" : "#/components/schemas/ApiMoney"
           }
         },
+        "type" : "object"
+      },
+      "RemoveTenantCalendarHolidayRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "ReplayRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
         "type" : "object"
       },
       "RescheduleRequest" : {
@@ -8958,6 +9974,17 @@
         },
         "type" : "object"
       },
+      "RevokePartnerClientRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "RevokeRequest" : {
         "properties" : {
           "reason" : {
@@ -8975,6 +10002,31 @@
             "type" : "boolean"
           }
         },
+        "type" : "object"
+      },
+      "RosterComparisonView" : {
+        "properties" : {
+          "coverage" : {
+            "type" : "string"
+          },
+          "matchedDutyState" : {
+            "type" : "string"
+          },
+          "matchedShiftId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RosterEntryReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
         "type" : "object"
       },
       "RosterEntryResponse" : {
@@ -9040,6 +10092,17 @@
         "required" : [ "reason", "value" ],
         "type" : "object"
       },
+      "RotatePartnerClientRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "RotateSecretRequest" : {
         "properties" : {
           "newSecretReference" : {
@@ -9088,6 +10151,26 @@
           }
         },
         "required" : [ "reason", "value" ],
+        "type" : "object"
+      },
+      "RotatedClientResponse" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "secretExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "secretValue" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
         "type" : "object"
       },
       "RotationRequest" : {
@@ -9195,6 +10278,38 @@
         },
         "type" : "object"
       },
+      "RowOutcomeResponse" : {
+        "properties" : {
+          "accepted" : {
+            "type" : "boolean"
+          },
+          "areaSquareMeters" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "error" : {
+            "type" : "string"
+          },
+          "externalRef" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "warnings" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "zoneId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "RowResponse" : {
         "properties" : {
           "businessDate" : {
@@ -9246,7 +10361,7 @@
         "properties" : {
           "capabilities" : {
             "items" : {
-              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PLACE", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "PLATFORM_ADMIN" ],
+              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PLACE", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "PLATFORM_ADMIN" ],
               "type" : "string"
             },
             "type" : "array",
@@ -9264,7 +10379,7 @@
       "SecretIngressRequest" : {
         "properties" : {
           "category" : {
-            "enum" : [ "PROVIDER_POS", "PROVIDER_PAYMENT", "PROVIDER_DELIVERY", "PROVIDER_NOTIFICATION", "PROVIDER_VOICE", "IDENTITY_ADMIN", "DATA_ENCRYPTION", "DATABASE", "OBJECT_STORAGE" ],
+            "enum" : [ "PROVIDER_POS", "PROVIDER_PAYMENT", "PROVIDER_DELIVERY", "PROVIDER_NOTIFICATION", "PROVIDER_VOICE", "PROVIDER_MARKETPLACE", "IDENTITY_ADMIN", "DATA_ENCRYPTION", "DATABASE", "OBJECT_STORAGE" ],
             "type" : "string"
           },
           "providerType" : {
@@ -9514,6 +10629,24 @@
         },
         "type" : "object"
       },
+      "SetLocationTagsRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "tagIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "reason", "tagIds" ],
+        "type" : "object"
+      },
       "SetPreferenceRequest" : {
         "properties" : {
           "brandId" : {
@@ -9550,6 +10683,26 @@
           }
         },
         "required" : [ "state" ],
+        "type" : "object"
+      },
+      "SetWeekendRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "weekendDays" : {
+            "items" : {
+              "format" : "int32",
+              "maximum" : 7,
+              "minimum" : 1,
+              "type" : "integer"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "reason", "weekendDays" ],
         "type" : "object"
       },
       "SettingsRequest" : {
@@ -9702,6 +10855,37 @@
         },
         "type" : "object"
       },
+      "SlaBucketControllerBucket" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "fromMinutes" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "toMinutesExclusive" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "SlaBuckets" : {
+        "properties" : {
+          "buckets" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SlaBucketControllerBucket"
+            },
+            "type" : "array"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "SlaResponse" : {
         "properties" : {
           "buckets" : {
@@ -9837,6 +11021,34 @@
         "required" : [ "password", "username" ],
         "type" : "object"
       },
+      "StatementLineView" : {
+        "properties" : {
+          "amount" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "lineNumber" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "quantity" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "referenceCode" : {
+            "type" : "string"
+          },
+          "unitPrice" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          }
+        },
+        "type" : "object"
+      },
       "StatementResponse" : {
         "properties" : {
           "amountPayableMinor" : {
@@ -9851,6 +11063,57 @@
             "type" : "string"
           },
           "statementHash" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "StatementView" : {
+        "properties" : {
+          "issueReason" : {
+            "type" : "string"
+          },
+          "issuedAt" : {
+            "type" : "string"
+          },
+          "issuedBy" : {
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/StatementLineView"
+            },
+            "type" : "array"
+          },
+          "number" : {
+            "type" : "string"
+          },
+          "periodEnd" : {
+            "type" : "string"
+          },
+          "periodKey" : {
+            "type" : "string"
+          },
+          "periodStart" : {
+            "type" : "string"
+          },
+          "statementId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "total" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "voidReason" : {
+            "type" : "string"
+          },
+          "voidedAt" : {
+            "type" : "string"
+          },
+          "voidedBy" : {
             "type" : "string"
           }
         },
@@ -10299,6 +11562,33 @@
         "required" : [ "reason", "status" ],
         "type" : "object"
       },
+      "TagCreatedResponse" : {
+        "properties" : {
+          "tagId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "TagResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tagId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "TariffDetailResponse" : {
         "properties" : {
           "activeVersion" : {
@@ -10395,6 +11685,145 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "TenantCalendarHolidayRequest" : {
+        "properties" : {
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "day" : {
+            "format" : "int32",
+            "maximum" : 31,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "month" : {
+            "format" : "int32",
+            "maximum" : 12,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "name", "reason" ],
+        "type" : "object"
+      },
+      "TenantCategoryCount" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "inboxDeadLettered" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "inboxWaiting" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "outboxDeadLettered" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "outboxWaiting" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "requiresReconciliation" : {
+            "type" : "boolean"
+          },
+          "retryableByTimer" : {
+            "type" : "boolean"
+          },
+          "securityRelevant" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "TenantErasureRequestResponse" : {
+        "properties" : {
+          "cancelledAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "cancelledByActorId" : {
+            "type" : "string"
+          },
+          "completedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "completedByActorId" : {
+            "type" : "string"
+          },
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "requestedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "requestedByActorId" : {
+            "type" : "string"
+          },
+          "requestedByActorType" : {
+            "type" : "string"
+          },
+          "requestedVia" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "TenderResponse" : {
+        "properties" : {
+          "amount" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "methodCode" : {
+            "type" : "string"
+          },
+          "methodDisplayName" : {
+            "type" : "string"
+          },
+          "refunded" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "sequence" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "settlesFromBalance" : {
+            "type" : "boolean"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tenderId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -10665,6 +12094,103 @@
           }
         },
         "required" : [ "value" ],
+        "type" : "object"
+      },
+      "UpdateCourierTypeRequest" : {
+        "properties" : {
+          "code" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "displayName" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "expectedVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "maxConcurrentAssignments" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "maxDistanceMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "minDistanceMeters" : {
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "offerTtlSeconds" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reason" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "startingMinuteOffset" : {
+            "format" : "int32",
+            "maximum" : 1440,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "vehicleClass" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "workMode" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "displayName", "reason", "vehicleClass", "workMode" ],
+        "type" : "object"
+      },
+      "UpdateLegalEntityRequest" : {
+        "properties" : {
+          "contactPhone" : {
+            "example" : "+998712000000",
+            "maxLength" : 32,
+            "minLength" : 0,
+            "pattern" : "\\+[1-9][0-9]{7,14}",
+            "type" : "string"
+          },
+          "legalName" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "registeredAddress" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "shortName" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "taxProfileId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "vatCertificateReference" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "vatRegistered" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "legalName" ],
         "type" : "object"
       },
       "UploadRequest" : {
@@ -11496,6 +13022,115 @@
         "tags" : [ "Staff invitations" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/adjustment-reasons" : {
+      "get" : {
+        "description" : "Every reason this tenant has authored, manual-only and rule-wired alike — hasRule says which. Read under courier.read: a dispatcher choosing a reason on the manual-entry form needs this list and does not need courier.adjustment.reason.manage to see it.",
+        "operationId" : "adjustmentReasons",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/AdjustmentReasonResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The bonus/penalty registry (IA 3.4, ADR 0108)",
+        "tags" : [ "Courier operations" ]
+      },
+      "post" : {
+        "description" : "outcomeBasis is closed (ADR 0042): every code names a delivery outcome, never a behaviour. Omit every rule* field for a manual-only reason; supply all five to wire it to AdjustmentRuleEvaluator — ruleAmountMinor's sign must match kind, and ORDER_UNDELIVERED/ORDER_DAMAGED have no evaluator reader and may only be authored manual-only.",
+        "operationId" : "createAdjustmentReason",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateAdjustmentReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AdjustmentReasonResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Define a bonus/penalty reason, manual-only or rule-wired (ADR 0108)",
+        "tags" : [ "Courier operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/adjustment-reasons/{reasonId}/archival" : {
+      "post" : {
+        "description" : "Archived, never deleted: a ledger entry still names its code. A rule-wired reason stops evaluating the moment it archives, because ruleReasonsAt reads status = 'ACTIVE'.",
+        "operationId" : "archiveAdjustmentReason",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "reasonId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ArchiveCourierTypeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Archive a bonus/penalty reason",
+        "tags" : [ "Courier operations" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/approval-requests" : {
       "get" : {
         "description" : "The same read as the control-plane route, reachable from the operations frontend so a tenant's own manager can see what is waiting on them.",
@@ -11537,6 +13172,50 @@
           }
         },
         "summary" : "List the requests waiting for a second signature — Staff 9.4's approvals worklist",
+        "tags" : [ "Approval requests" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/approval-requests/decided" : {
+      "get" : {
+        "description" : "Filter with actionCode, or omit it for every action. The maker's free-text reason stays withheld for the same reason as the pending worklist: it is unclassified prose about a named customer (ADR 0029).",
+        "operationId" : "decided",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "actionCode",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageDecidedApprovalResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What this tenant has already approved or declined, newest first",
         "tags" : [ "Approval requests" ]
       }
     },
@@ -11589,7 +13268,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/audit-events" : {
       "get" : {
-        "description" : "The same read as the control-plane route, reachable from the operations frontend. Reading audit is itself audited.",
+        "description" : "The same read as the control-plane route, reachable from the operations frontend. Reading audit is itself audited. Cursor-paginated per ADR 0031: pass the previous page's nextCursor back as cursor.",
         "operationId" : "operationsSearch",
         "parameters" : [ {
           "in" : "path",
@@ -11681,6 +13360,15 @@
             "format" : "int32",
             "type" : "integer"
           }
+        }, {
+          "description" : "The nextCursor of the previous page",
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "description" : "The nextCursor of the previous page",
+            "type" : "string"
+          }
         } ],
         "responses" : {
           "200" : {
@@ -11734,9 +13422,156 @@
         "tags" : [ "Audit" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/branch-tags" : {
+      "get" : {
+        "operationId" : "list_15",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "activeOnly",
+          "required" : false,
+          "schema" : {
+            "default" : true,
+            "type" : "boolean"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/TagResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant's own branch tag registry",
+        "tags" : [ "Branch tags" ]
+      },
+      "post" : {
+        "operationId" : "create_6",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateTagRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TagCreatedResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register a branch tag",
+        "tags" : [ "Branch tags" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/branch-tags/assignments" : {
+      "get" : {
+        "description" : "The filter-and-group read: which branches carry a given tag, without one request per branch.",
+        "operationId" : "assignments",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/AssignmentResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every branch's tags, tenant-wide",
+        "tags" : [ "Branch tags" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/branch-tags/{tagId}/archive" : {
+      "post" : {
+        "description" : "Archived, never deleted: a branch already carrying this tag must keep resolving it, and the code is freed for reuse.",
+        "operationId" : "archive_4",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "tagId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ArchiveTagRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Retire a branch tag",
+        "tags" : [ "Branch tags" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands" : {
       "get" : {
-        "operationId" : "list_14",
+        "operationId" : "list_19",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -11767,7 +13602,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}" : {
       "get" : {
-        "operationId" : "get_3",
+        "operationId" : "get_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -11804,7 +13639,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
         "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. No message bodies here — open a conversation for its decrypted history.",
-        "operationId" : "list_16",
+        "operationId" : "list_21",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12106,7 +13941,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
       "get" : {
-        "operationId" : "list_11",
+        "operationId" : "list_14",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12144,7 +13979,7 @@
       },
       "post" : {
         "description" : "The lineage only; the numbers live on versions. At most one tariff per brand may be the default.",
-        "operationId" : "create_4",
+        "operationId" : "create_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12389,6 +14224,356 @@
         "tags" : [ "Delivery tariffs" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals" : {
+      "get" : {
+        "description" : "Sorted the way settings.md asks: failing health first, never checked next, healthy last — an operator opens this screen to find what is broken.",
+        "operationId" : "list_13",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/FiscalTerminalView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List a brand's fiscal terminals",
+        "tags" : [ "Fiscal terminals" ]
+      },
+      "post" : {
+        "description" : "Registered ACTIVE. A terminal cannot claim IssueFiscalReceipt without a provider binding — the database refuses it, and this endpoint reports the refusal as a Problem Details response rather than a 500.",
+        "operationId" : "register_3",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RegisterTerminalRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FiscalTerminalView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register a location's fiscal terminal",
+        "tags" : [ "Fiscal terminals" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals/{terminalId}" : {
+      "get" : {
+        "operationId" : "get_6",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "terminalId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FiscalTerminalView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Get a fiscal terminal",
+        "tags" : [ "Fiscal terminals" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals/{terminalId}/health-checks" : {
+      "post" : {
+        "description" : "Settings 10.7 Tab 2's «Проверить связь». Records what the operator observed; the device/hardware integration itself stays declined (ADR 0038), so this writes evidence rather than performing a live probe.",
+        "operationId" : "checkHealth",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "terminalId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/HealthCheckRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FiscalTerminalView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record the outcome of a connectivity check",
+        "tags" : [ "Fiscal terminals" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals/{terminalId}/reactivate" : {
+      "post" : {
+        "operationId" : "reactivate",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "terminalId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FiscalTerminalView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reactivate a suspended fiscal terminal",
+        "tags" : [ "Fiscal terminals" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals/{terminalId}/retire" : {
+      "post" : {
+        "description" : "Never deleted: a fiscal document already issued through this terminal must still resolve which box issued it years later.",
+        "operationId" : "retire_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "terminalId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FiscalTerminalView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Retire a fiscal terminal permanently",
+        "tags" : [ "Fiscal terminals" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals/{terminalId}/suspend" : {
+      "post" : {
+        "description" : "Settings 10.7 Tab 2's «Отключить». A suspended terminal leaves the channel matrix immediately and no longer counts toward the activation precondition for cash at its location.",
+        "operationId" : "suspend_4",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "terminalId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FiscalTerminalView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Suspend a fiscal terminal",
+        "tags" : [ "Fiscal terminals" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations" : {
       "get" : {
         "operationId" : "locations",
@@ -12470,6 +14655,100 @@
         },
         "summary" : "The location's own profile, for the Settings 10.2 detail screen",
         "tags" : [ "Location service operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/branch-tags" : {
+      "get" : {
+        "operationId" : "tagsOfLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "format" : "uuid",
+                    "type" : "string"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One branch's own tags",
+        "tags" : [ "Branch tags" ]
+      },
+      "put" : {
+        "description" : "Sets the whole tag set for this branch at once, rather than an assign/unassign pair — the screen's own checkbox grid already knows the full set it wants.",
+        "operationId" : "setTagsOfLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SetLocationTagsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace one branch's tags",
+        "tags" : [ "Branch tags" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/capacity" : {
@@ -13700,7 +15979,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes" : {
       "get" : {
         "description" : "Every lifecycle state together (a freshly drafted code's coupon row is SUSPENDED until activated; a retired one is ARCHIVED), newest first — an authoring screen needs the lineage, not only what is live. Unlike a loyalty policy, more than one code may be live at once.",
-        "operationId" : "list_10",
+        "operationId" : "list_12",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -14099,7 +16378,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews" : {
       "get" : {
         "description" : "Every filter is optional. Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end.",
-        "operationId" : "list_15",
+        "operationId" : "list_20",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -14254,7 +16533,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones" : {
       "get" : {
-        "operationId" : "list_9",
+        "operationId" : "list_11",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -14292,7 +16571,7 @@
       },
       "post" : {
         "description" : "Creates the lineage only. A zone has no geometry until a version is drafted and activated, so registering one changes nothing a customer sees.",
-        "operationId" : "create_3",
+        "operationId" : "create_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -14333,6 +16612,53 @@
           }
         },
         "summary" : "Register a zone",
+        "tags" : [ "Service zones" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/import-batch" : {
+      "post" : {
+        "description" : "Every accepted row lands as a new zone's DRAFT version, exactly like drafting one by hand — never activated by this endpoint. dryRun runs every check a real import would (geometry validity, the area ceiling, the region's bounding box) and then rolls the whole batch back, so an operator sees the outcome before committing it. A coordinate-order mistake still produces a valid polygon that ships nowhere near where it should — that is exactly why ADR 0037 gates activation behind rendering the shape on a map beside its source (X.4), which this endpoint does not attempt.",
+        "operationId" : "importBatch",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BatchImportRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BatchImportResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Bulk-import legacy zone geometry (operations gap map row 3.6c, ADR 0037)",
         "tags" : [ "Service zones" ]
       }
     },
@@ -14804,7 +17130,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/terms-documents/{version}" : {
       "get" : {
-        "operationId" : "get_4",
+        "operationId" : "get_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -15072,7 +17398,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/courier-engagements/{engagementId}/suspend" : {
       "post" : {
-        "operationId" : "suspend_2",
+        "operationId" : "suspend_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -15309,6 +17635,317 @@
         "tags" : [ "Courier operations" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/courier-roster-entries" : {
+      "get" : {
+        "description" : "The plan a manager authored, as distinct from what a courier actually opened. from/to window the read; both default to the surrounding week when omitted so the grid always has something to draw.",
+        "operationId" : "rosterEntries",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 200,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PlannedShiftResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The branch's planned shifts (IA 3.5's roster, over P02's ScheduleGrid)",
+        "tags" : [ "Courier operations" ]
+      },
+      "post" : {
+        "description" : "Lands as DRAFT. Refused when the courier has no live engagement, the same precondition a courier's own shift-open checks. brandId/locationId are query parameters, the same as the GET siblings of this route, and carry the scope this write is checked at.",
+        "operationId" : "draftRosterEntry",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DraftRosterEntryRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlannedShiftResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Plan a courier's shift ahead of time",
+        "tags" : [ "Courier operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/courier-roster-entries/comparison" : {
+      "get" : {
+        "description" : "Every planned entry in the window, each carrying whichever actual shift of the same courier overlapped it — COVERED, PENDING (the window has not elapsed) or UNCOVERED. The comparison is computed at read time; nothing here writes MISSED onto the entry itself.",
+        "operationId" : "rosterComparison",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 200,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PlannedShiftResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Planned versus actual, for one period (IA 3.5)",
+        "tags" : [ "Courier operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/courier-roster-entries/{entryId}/cancel" : {
+      "post" : {
+        "description" : "brandId/locationId are query parameters carrying the scope this write is checked at; the entry itself is refused as not-found (never merely forbidden, per ADR 0031) when it does not actually belong to that branch.",
+        "operationId" : "cancelRosterEntry",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entryId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RosterEntryReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Cancel a planned shift that is still DRAFT or PUBLISHED",
+        "tags" : [ "Courier operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/courier-roster-entries/{entryId}/publish" : {
+      "post" : {
+        "description" : "brandId/locationId are query parameters carrying the scope this write is checked at; the entry itself is refused as not-found (never merely forbidden, per ADR 0031) when it does not actually belong to that branch.",
+        "operationId" : "publishRosterEntry",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entryId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RosterEntryReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Publish a planned shift, making it a visible offer",
+        "tags" : [ "Courier operations" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/courier-settlement-periods" : {
       "get" : {
         "description" : "CLOSED periods (statement hashed, payout not yet authorised) sort first by the largest amount payable. Optionally filtered to one status.",
@@ -15491,7 +18128,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/courier-shifts" : {
       "get" : {
-        "description" : "Open, closed and everything between — including AWAITING_APPROVAL, which is the manager's own worklist on this screen.",
+        "description" : "Open, closed and everything between — including AWAITING_APPROVAL, which is the manager's own worklist on this screen. from/to window the read to a period; omitted, the read falls back to the most recent `limit` shifts the way this endpoint always has.",
         "operationId" : "courierShifts",
         "parameters" : [ {
           "in" : "path",
@@ -15515,6 +18152,22 @@
           "required" : true,
           "schema" : {
             "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
             "type" : "string"
           }
         }, {
@@ -15627,6 +18280,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/courier-types" : {
       "get" : {
+        "description" : "includeArchived=false (default) is the registration picker's list; the management screen passes true so an archived class a past rate card or courier still names does not vanish from the table.",
         "operationId" : "types",
         "parameters" : [ {
           "in" : "path",
@@ -15635,6 +18289,14 @@
           "schema" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "includeArchived",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
           }
         } ],
         "responses" : {
@@ -15652,11 +18314,11 @@
             "description" : "OK"
           }
         },
-        "summary" : "Vehicle classes, for the registration form's picker",
+        "summary" : "Vehicle classes, for the registration form's picker and the IA 3.4 management screen",
         "tags" : [ "Courier operations" ]
       },
       "post" : {
-        "description" : "The two dispatch numbers — minimum distance and the offer TTL — and not a courier's pay, which is a rate card and a separate act.",
+        "description" : "The dispatch numbers — minimum/maximum distance, the offer TTL — and not a courier's pay, which is a rate card and a separate act. startingMinuteOffset and workMode are ADR 0108: captured and rendered, not yet read by the accrual calculator or the dispatch gate.",
         "operationId" : "createType",
         "parameters" : [ {
           "in" : "path",
@@ -15690,6 +18352,93 @@
           }
         },
         "summary" : "Define a vehicle class (IA 3.4)",
+        "tags" : [ "Courier operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/courier-types/{typeId}" : {
+      "put" : {
+        "description" : "Types were create-only at every layer: no update and no archive, even though status already has ARCHIVED, so a mistyped code or a wrong offer TTL was permanent. expectedVersion is required and is the version this controller last reported for this row; a stale one is refused with STALE_VERSION.",
+        "operationId" : "updateType",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "typeId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateCourierTypeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierTypeResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Correct a vehicle class (ADR 0108)",
+        "tags" : [ "Courier operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/courier-types/{typeId}/archival" : {
+      "post" : {
+        "description" : "Archived, never deleted: a past rate card or courier still names it. The registration picker stops offering it; the management screen keeps showing it when includeArchived=true.",
+        "operationId" : "archiveType",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "typeId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ArchiveCourierTypeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Archive a vehicle class",
         "tags" : [ "Courier operations" ]
       }
     },
@@ -15801,7 +18550,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/adjustments" : {
       "post" : {
-        "description" : "A manual penalty is never written on this call alone: it returns the approval request and writes nothing until a second person decides.",
+        "description" : "A manual penalty is never written on this call alone: it returns the approval request and writes nothing until a second person decides. origin stays on the request for wire compatibility but this endpoint never reads it: every adjustment reaching HorecaOS over HTTP is MANUAL, unconditionally, whatever the field says. Before this wave the origin the caller sent controlled the stamped value, and a caller sending RULE bypassed the four-eyes branch a MANUAL penalty above threshold requires (ADR 0108) — RULE now exists only as a value AdjustmentRuleEvaluator's own Java call constructs, never as something an HTTP request can cause.",
         "operationId" : "adjust_1",
         "parameters" : [ {
           "in" : "path",
@@ -16380,7 +19129,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/integrations" : {
       "get" : {
-        "operationId" : "list_8",
+        "operationId" : "list_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -16474,6 +19223,138 @@
         },
         "summary" : "Per-adapter connect field declarations (ADR 0065)",
         "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/failures/inbox" : {
+      "get" : {
+        "description" : "The payload is never returned (ADR 0029). One row per consumer that failed the event, the same shape the platform-wide surface uses, forced to this tenant.",
+        "operationId" : "inboxFailures",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "default" : "DEAD_LETTER",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageInboxFailureSummary"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This tenant's own failed inbound messages, across every consumer",
+        "tags" : [ "Integration failures (tenant)" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/failures/inbox/{consumerName}/{eventId}/replay" : {
+      "post" : {
+        "description" : "Returns a dead-lettered inbox message to pending. A message belonging to another tenant is refused exactly like one that does not exist — ADR 0031's not-found-not-forbidden posture, so an event id is not an enumeration oracle.",
+        "operationId" : "replay",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "consumerName",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "eventId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReplayRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replay this tenant's own stuck inbound message",
+        "tags" : [ "Integration failures (tenant)" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/failures/taxonomy" : {
+      "get" : {
+        "description" : "Waiting means still being retried; dead-lettered means waiting on a person. Every count is WHERE tenant_id = this path's tenantId — never an optional filter.",
+        "operationId" : "taxonomy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/TenantCategoryCount"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This tenant's failure categories, their rules, and how many messages are in each",
+        "tags" : [ "Integration failures (tenant)" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/integrations/secrets" : {
@@ -16749,6 +19630,218 @@
         "tags" : [ "Provider integrations" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/partner-clients" : {
+      "get" : {
+        "description" : "Never the secret value — only the ADR 0028 reference, so an operator can see that a credential is configured and when it was last rotated or used.",
+        "operationId" : "list_10",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PartnerClientResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List this installation's partner API clients",
+        "tags" : [ "Partner API clients" ]
+      },
+      "post" : {
+        "description" : "Creates a Keycloak client_credentials confidential client and returns its secret exactly once — the platform never stores or returns it again. Refused when the installation is not MARKETPLACE, or already has a live (PENDING or ACTIVE) client.",
+        "operationId" : "issue_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/IssuePartnerClientRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IssuedClientResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Issue a new partner API client",
+        "tags" : [ "Partner API clients" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/partner-clients/{clientId}" : {
+      "delete" : {
+        "description" : "Disables the Keycloak client so no new token can ever be minted for it, then retires the row. There is no DELETED status (ADR 0040): the record that a credential once existed survives, only its authority does not.",
+        "operationId" : "revoke_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "clientId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RevokePartnerClientRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Revoke a partner API client",
+        "tags" : [ "Partner API clients" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/partner-clients/{clientId}/secret-rotations" : {
+      "post" : {
+        "description" : "Mints a fresh Keycloak secret and returns it exactly once. The client id and the installation stay put; only what the reference resolves to changes.",
+        "operationId" : "rotate_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "clientId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RotatePartnerClientRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RotatedClientResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rotate a partner API client's secret",
+        "tags" : [ "Partner API clients" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/secret-rotations" : {
       "post" : {
         "description" : "ADR 0028: the database stores a reference, never a value, so this only ever changes which reference is on file. Verified before it is written: the new reference must resolve through the ADR 0028 secret manager, and (Telegram bot installations only, today's one caller) the resolved token must pass a live getMe. Either failure changes nothing.",
@@ -16927,7 +20020,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/legal-entities" : {
       "get" : {
-        "operationId" : "list_7",
+        "operationId" : "list_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -17042,7 +20135,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/legal-entities/{entityId}" : {
       "get" : {
-        "operationId" : "get_2",
+        "operationId" : "get",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -17073,6 +20166,59 @@
           }
         },
         "summary" : "Get a legal entity",
+        "tags" : [ "Legal entities" ]
+      },
+      "put" : {
+        "description" : "Everything but the taxpayer number and the lifecycle status. Mirrors LegalEntityController#update exactly.",
+        "operationId" : "update_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entityId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateLegalEntityRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LegalEntityView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Correct a registered entity's own fields",
         "tags" : [ "Legal entities" ]
       }
     },
@@ -17121,6 +20267,51 @@
         "tags" : [ "Legal entities" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/legal-entities/{entityId}/archive" : {
+      "post" : {
+        "description" : "Permitted from DRAFT or SUSPENDED. The row survives. Mirrors LegalEntityController#archive exactly.",
+        "operationId" : "archive_3",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entityId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LegalEntityView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Archive a legal entity",
+        "tags" : [ "Legal entities" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/legal-entities/{entityId}/assignments" : {
       "post" : {
         "description" : "Closes the location's currently open assignment, if any, at the new one's start date. Backdating is permitted; backdating over an existing assignment is refused.",
@@ -17165,6 +20356,51 @@
           }
         },
         "summary" : "Assign a legal entity as a location's seller from a date",
+        "tags" : [ "Legal entities" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/legal-entities/{entityId}/suspend" : {
+      "post" : {
+        "description" : "Its assignments are untouched. Permitted from ACTIVE. Mirrors LegalEntityController#suspend exactly.",
+        "operationId" : "suspend_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entityId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LegalEntityView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Suspend a legal entity",
         "tags" : [ "Legal entities" ]
       }
     },
@@ -17328,7 +20564,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/merchant-bindings" : {
       "get" : {
-        "operationId" : "list_6",
+        "operationId" : "list_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -17396,7 +20632,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}" : {
       "get" : {
-        "operationId" : "get_1",
+        "operationId" : "get_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -17478,7 +20714,7 @@
     "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/archive" : {
       "post" : {
         "description" : "Ends its life on the platform; the row survives so every payment it ever settled still resolves an account reference. Permitted from DRAFT or SUSPENDED -- an ACTIVE binding is suspended first, so retiring one is never the first anyone hears that it stopped resolving.",
-        "operationId" : "archive_1",
+        "operationId" : "archive_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -17620,6 +20856,203 @@
         "tags" : [ "Merchant bindings" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons" : {
+      "get" : {
+        "operationId" : "list_6",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "kind",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "activeOnly",
+          "required" : false,
+          "schema" : {
+            "default" : true,
+            "type" : "boolean"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ReasonResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The reasons of one kind",
+        "tags" : [ "Order outcome reasons" ]
+      },
+      "post" : {
+        "operationId" : "create_3",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OrderOutcomeReasonControllerReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrderOutcomeReasonControllerIdResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register a reason",
+        "tags" : [ "Order outcome reasons" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/categories" : {
+      "get" : {
+        "operationId" : "categories",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "kind",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "type" : "string"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The platform categories a reason of this kind may carry",
+        "tags" : [ "Order outcome reasons" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/{reasonId}" : {
+      "delete" : {
+        "description" : "Archived, never deleted; see the delegate's own Javadoc for why the row must survive.",
+        "operationId" : "archive",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "reasonId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Retire a reason",
+        "tags" : [ "Order outcome reasons" ]
+      },
+      "put" : {
+        "description" : "Outcomes already recorded keep the snapshot they were recorded with; see the delegate's own Javadoc for why that duplication is deliberate.",
+        "operationId" : "update_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "reasonId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OrderOutcomeReasonControllerReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrderOutcomeReasonControllerVersionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rewrite a reason and bump its version",
+        "tags" : [ "Order outcome reasons" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/delivery-fee-reimbursements" : {
       "post" : {
         "description" : "Recorded under its own remedy type, never as a refund with a note: a tenant asking what late delivery cost them last month is asking for these rows and not for the refunds beside them. Bounded by the settled tenders and, where the platform can establish it, by the fee actually charged.",
@@ -17716,7 +21149,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/payment" : {
       "get" : {
-        "description" : "The order is read through OrderDirectory rather than the ordering module's own detail endpoint, so this stays a payments-side read: the public order number and total are enough to confirm this is the right order, without reaching into lines, notes or the encrypted fields that belong to a different capability. A null intent is not an error -- it is an order that was never checked out for payment, or one whose intent has gone terminal (cancelled, expired, failed) and is no longer the order's live obligation.",
+        "description" : "The order is read through OrderDirectory rather than the ordering module's own detail endpoint, so this stays a payments-side read: the public order number and total are enough to confirm this is the right order, without reaching into lines, notes or the encrypted fields that belong to a different capability. A null intent is not an error -- it is an order that was never checked out for payment, or one whose intent has gone terminal (cancelled, expired, failed) and is no longer the order's live obligation. `payment` is the IA's payment[] array -- every tender of the order's settlement (ADR 0046), in the sequence it settles, empty for an order with no settlement at all.",
         "operationId" : "forOrder_2",
         "parameters" : [ {
           "in" : "path",
@@ -17747,7 +21180,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "One order's payment: its live intent, every attempt, and what has settled",
+        "summary" : "One order's payment: its live intent, its settlement tenders, every attempt, and what has settled",
         "tags" : [ "Order payments" ]
       }
     },
@@ -18363,7 +21796,7 @@
     "/api/v1/operations/tenants/{tenantId}/regions/{regionId}/archive" : {
       "post" : {
         "description" : "Archived, never deleted: zone versions name this row and a months-old fee resolution's evidence must not become a dangling id. The versions that already name it keep being checked against its box.",
-        "operationId" : "archive",
+        "operationId" : "archive_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18700,6 +22133,81 @@
           }
         },
         "summary" : "Capabilities and scopes for the current principal",
+        "tags" : [ "Authorization" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/access-check" : {
+      "get" : {
+        "description" : "Three answers: ALLOWED, INSUFFICIENT_CAPABILITY (with every other scope the subject holds this capability at, so a negative answer can point at the grant that almost worked), and ENTITLEMENT_REQUIRED when entitlementKey is given and the capability answer was otherwise ALLOWED but the tenant's plan does not include that feature.",
+        "operationId" : "accessCheck",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "subject",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "capability",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PLACE", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_PII_REVEAL", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "PLATFORM_ADMIN" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "scopeType",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "entitlementKey",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AccessCheckResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Can this principal do this, on this resource, and why — for this tenant's own staff",
         "tags" : [ "Authorization" ]
       }
     },
@@ -20006,7 +23514,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices" : {
       "get" : {
         "description" : "Active and revoked alike, with who enrolled or revoked each one. Behind kitchen.station.manage rather than kitchen.ticket.read, because a revocation reason and an enrolling manager's name are administrative facts a line cook's board read does not need.",
-        "operationId" : "list_13",
+        "operationId" : "list_18",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -24167,6 +27675,184 @@
         "tags" : [ "Quotes" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/business-calendar" : {
+      "get" : {
+        "description" : "The resolved business-day boundary and timezone, whether a recut is outstanding after a previous boundary change, the declared weekend, and this tenant's own holidays.",
+        "operationId" : "get_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CalendarResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant's business calendar",
+        "tags" : [ "Business calendar" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/business-calendar/boundary" : {
+      "put" : {
+        "description" : "Warns in its own response rather than performing silently: moving the boundary changes which business date every future fact is filed under and leaves a recut outstanding until DayCloseService has caught the historical range up. Gated by the ADR 0027 approval model (ADR 0050 action reporting.business-day-boundary.change).",
+        "operationId" : "changeBoundary",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ChangeBoundaryRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BoundaryChangeResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Move the business-day boundary",
+        "tags" : [ "Business calendar" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/business-calendar/holidays" : {
+      "post" : {
+        "description" : "A month and day for one that recurs every year, or a date for a one-off or movable closure. Additional to the platform's own per-country public holidays, never a replacement for them.",
+        "operationId" : "addHoliday",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TenantCalendarHolidayRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HolidayAddedResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add a closure to this tenant's own calendar",
+        "tags" : [ "Business calendar" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/business-calendar/holidays/{holidayId}" : {
+      "delete" : {
+        "operationId" : "removeHoliday",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "holidayId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RemoveTenantCalendarHolidayRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove a closure from this tenant's own calendar",
+        "tags" : [ "Business calendar" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/business-calendar/weekend" : {
+      "put" : {
+        "description" : "ISO-8601 weekday numbers (1=Monday..7=Sunday). An empty list means the tenant trades every day, which is also today's assumed default.",
+        "operationId" : "setWeekend",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SetWeekendRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Declare the tenant's weekend",
+        "tags" : [ "Business calendar" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/commercial/entitlements" : {
       "get" : {
         "description" : "The locked-by-plan half of IA 9.1's locked-vs-denied distinction: a module absent here is not a permission gap, it is a plan that does not include it.",
@@ -24193,6 +27879,111 @@
           }
         },
         "summary" : "Every module this tenant is entitled to, and why",
+        "tags" : [ "Commercial" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/commercial/statements" : {
+      "get" : {
+        "description" : "Newest month first, void ones included. Mirrors CommercialStatementController.list (ADR 0088).",
+        "operationId" : "statements",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/StatementView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every statement this tenant has been issued",
+        "tags" : [ "Commercial" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/commercial/statements/{statementId}" : {
+      "get" : {
+        "operationId" : "oneStatement",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "statementId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StatementView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One issued statement with its lines",
+        "tags" : [ "Commercial" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/commercial/statements/{statementId}/export" : {
+      "get" : {
+        "description" : "For the accounting system an invoice is made in. Amounts are integer minor units of the statement's currency.",
+        "operationId" : "statementExport",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "statementId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "text/csv" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One issued statement as CSV",
         "tags" : [ "Commercial" ]
       }
     },
@@ -24254,6 +28045,38 @@
         },
         "summary" : "This tenant's metered usage, reconciled toward an invoice ADR 0021 does not produce yet",
         "tags" : [ "Commercial" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/consent-types" : {
+      "get" : {
+        "description" : "Bootstraps the code-owned default catalogue on this tenant's first read, so a tenant with no rows yet still sees the two purposes already in production use (MARKETING_PROMOTIONS, TERMS_OF_SERVICE) rather than an empty registry.",
+        "operationId" : "list_17",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ConsentTypeResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every consent purpose this tenant has defined",
+        "tags" : [ "Consent types" ]
       }
     },
     "/api/v1/tenants/{tenantId}/customers" : {
@@ -24380,6 +28203,53 @@
           }
         },
         "summary" : "The grid header's three counters",
+        "tags" : [ "Customers" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/erasure-requests" : {
+      "get" : {
+        "description" : "Filter with status=PENDING|COMPLETED|CANCELLED, or omit it for every status. The tenant-scoped backend behind this (raise, history, execute, cancel) has existed since V0178; only the control-plane console could read any of it before this endpoint.",
+        "operationId" : "tenantErasureRequests",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/TenantErasureRequestResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every data-subject erasure request across the tenant, newest first",
         "tags" : [ "Customers" ]
       }
     },
@@ -25515,7 +29385,7 @@
     "/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences" : {
       "get" : {
         "description" : "Only what has been set. An absent row means the default for that class, which is on rather than off: a customer who never expressed a preference has not opted out of anything.",
-        "operationId" : "list_12",
+        "operationId" : "list_16",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -25919,7 +29789,7 @@
     },
     "/api/v1/tenants/{tenantId}/media/assets/{assetId}" : {
       "get" : {
-        "operationId" : "get",
+        "operationId" : "get_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -26557,6 +30427,35 @@
         "tags" : [ "Reporting" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/reporting/sla-bucket-set" : {
+      "get" : {
+        "description" : "Half-open intervals in minutes, exhaustive and fixed per version. Read-only: ADR 0043 fixes the buckets platform-wide so a chart drawn under one version keeps its meaning; this tenant can read the definition, not edit it.",
+        "operationId" : "slaBucketSet",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SlaBuckets"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The elapsed-time buckets orders are reported in, and their version",
+        "tags" : [ "Reporting" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/reporting/sla-buckets" : {
       "get" : {
         "description" : "sla_bucket_set.v1: six half-open intervals that are exhaustive and do not overlap, so the shares sum to the whole. Not a tenant setting — an editable bucket rewrites every chart already drawn.",
@@ -26747,11 +30646,17 @@
     "url" : "http://localhost"
   } ],
   "tags" : [ {
+    "description" : "One order's payment intent, its settlement tenders and attempts, and re-presenting its checkout surface",
+    "name" : "Order payments"
+  }, {
     "description" : "A tenant's own read of its brands (Settings 10.1)",
     "name" : "Operations brand profile"
   }, {
     "description" : "A brand's promo codes: shape, value, limits, and lifecycle",
     "name" : "Promo codes"
+  }, {
+    "description" : "Why orders are cancelled and how they are completed, per tenant",
+    "name" : "Order outcome reasons"
   }, {
     "description" : "ADR 0058 stage 1: operations groups",
     "name" : "Telegram operations linking"
@@ -26774,11 +30679,11 @@
     "description" : "Engagements, shift approval, settlement, and delivery cost",
     "name" : "Courier operations"
   }, {
-    "description" : "One order's payment intent and attempts, and re-presenting its checkout surface",
-    "name" : "Order payments"
-  }, {
     "description" : "First-party staff sign-in against Keycloak (ADR 0062)",
     "name" : "Staff sign-in"
+  }, {
+    "description" : "A tenant's weekend, its own holidays, and its business-day boundary",
+    "name" : "Business calendar"
   }, {
     "description" : "Server-Sent Events for the live operations surfaces",
     "name" : "Operational streams"
@@ -26788,6 +30693,9 @@
   }, {
     "description" : "Geocoder bounding boxes and the zone-activation guard (ADR 0037)",
     "name" : "Regions"
+  }, {
+    "description" : "The tenant's own consent-purpose registry",
+    "name" : "Consent types"
   }, {
     "description" : "Publishing and reading a brand's own terms of service (ADR 0068)",
     "name" : "Terms of service authoring"
@@ -26858,6 +30766,9 @@
     "description" : "Seating, rounds, the running bill, and settlement",
     "name" : "Dine-in sessions"
   }, {
+    "description" : "A merchant's own error taxonomy and inbox replay",
+    "name" : "Integration failures (tenant)"
+  }, {
     "description" : "Referral codes and redemptions actually happening at a brand",
     "name" : "Referrals"
   }, {
@@ -26867,11 +30778,17 @@
     "description" : "A tenant's own read of ADR 0038 legal entities and their location assignments",
     "name" : "Legal entities"
   }, {
+    "description" : "ADR 0040 inbound OAuth 2.0 credentials for a MARKETPLACE installation",
+    "name" : "Partner API clients"
+  }, {
     "description" : "Balances, manual adjustments, and liability",
     "name" : "Loyalty operations"
   }, {
     "description" : "Conversation list, history, and takeover/return/close actions",
     "name" : "Operator inbox"
+  }, {
+    "description" : "ADR 0038 fiscal-capable equipment",
+    "name" : "Fiscal terminals"
   }, {
     "description" : "Versioned metrics, day-grain reports, and their provenance",
     "name" : "Reporting"
@@ -26911,6 +30828,9 @@
   }, {
     "description" : "Sections, tables, QR tokens, and branch settings",
     "name" : "Dine-in floor plan"
+  }, {
+    "description" : "A chain's own tags for its branches (24/7, has parking, airport)",
+    "name" : "Branch tags"
   }, {
     "description" : "A brand's own referral reward shape, amounts, cap, and redemption window",
     "name" : "Referral program"

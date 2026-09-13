@@ -1,0 +1,11 @@
+<figure class="q-kiosk-frame" data-testid="q-kiosk-frame">
+  <div class="q-kiosk-frame__bezel">
+    <div class="q-kiosk-frame__screen" data-testid="q-kiosk-frame-screen">
+      <ng-content />
+    </div>
+    <div class="q-kiosk-frame__stand" aria-hidden="true"></div>
+  </div>
+  @if (caption(); as text) {
+    <figcaption class="q-caption q-kiosk-frame__caption">{{ text }}</figcaption>
+  }
+</figure>

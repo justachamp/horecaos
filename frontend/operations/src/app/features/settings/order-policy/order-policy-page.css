@@ -27,6 +27,21 @@
   gap: 12px;
 }
 
+.field-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 16px;
+}
+
+.field-row:first-child {
+  margin-top: 0;
+}
+
+.hint {
+  color: var(--q-ink-muted);
+  margin: 4px 0 0;
+}
+
 .field dt {
   color: var(--q-ink-muted);
   margin-bottom: 2px;

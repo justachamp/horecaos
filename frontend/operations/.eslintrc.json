@@ -1,0 +1,20 @@
+{
+  "root": true,
+  "ignorePatterns": ["dist/**", ".angular/**", "node_modules/**", "coverage/**", "src/tokens.css"],
+  "plugins": ["horecaos"],
+  "overrides": [
+    {
+      "files": ["**/*.ts", "**/*.html", "**/*.css"],
+      "parser": "./tools/eslint-plugin-horecaos/raw-text-parser.js",
+      "rules": {
+        "horecaos/no-raw-px-font-size": "error"
+      }
+    },
+    {
+      "files": ["**/rich-text-sanitizer.spec.ts"],
+      "rules": {
+        "horecaos/no-raw-px-font-size": "off"
+      }
+    }
+  ]
+}

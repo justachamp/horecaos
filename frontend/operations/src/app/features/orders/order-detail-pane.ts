@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 import { Observable, firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
@@ -11,6 +19,8 @@ import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { StepItem, Steps } from '../../shared/ui/steps';
+import { Timeline, TimelineEntry } from '../../shared/ui/timeline';
 import {
   DecisionIdRegistry,
   OrderActionResponse,
@@ -25,6 +35,7 @@ import {
   OrderTimelineEntry,
 } from './order-detail';
 import { describeApiError, mutationErrorNotice } from './order-errors';
+import { orderLifecycleSteps } from './order-lifecycle-steps';
 import { MoneyReconciliation, reconcileMoney } from './order-money';
 import { OrderReasonDialog, OrderReasonSubmission } from './order-reason-dialog';
 import {
@@ -76,7 +87,7 @@ type DialogKind = 'reject' | 'cancel';
  */
 @Component({
   selector: 'q-order-detail-pane',
-  imports: [TPipe, OrderReasonDialog, OrderRejectReasonDialog],
+  imports: [TPipe, OrderReasonDialog, OrderRejectReasonDialog, Steps, Timeline],
   templateUrl: './order-detail-pane.html',
   styleUrl: './order-detail-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -100,6 +111,52 @@ export class OrderDetailPane {
 
   protected readonly timeline = signal<readonly OrderTimelineEntry[] | null>(null);
   protected readonly timelineError = signal(false);
+
+  /**
+   * `q-timeline`'s own shape, row `X.26` — the same idea as the staff
+   * activity log's event list, so the same component: a gap notice stays
+   * its own row (§3.10's "hiding it hides a bug"), computed exactly as
+   * before via {@link missingSequenceBefore}. No `actor` on these
+   * entries — `OrderTimelineEntry.actorType` is a bare wire tag with no
+   * resolvable name or subject behind it (unlike an audit event's
+   * `actorDisplay`/`actorSubject`), and a chip that could only ever render
+   * the fallback dash on every row would be noise, not information.
+   */
+  protected readonly commercialTimelineEntries = computed<readonly TimelineEntry[] | null>(() => {
+    const entries = this.timeline();
+    if (!entries) {
+      return null;
+    }
+    return entries.map((entry, index) => ({
+      id: String(entry.sequence),
+      timestamp: this.formatOccurredAt(entry.occurredAt),
+      title: `${this.statusLabel(entry.fromStatus)} → ${this.statusLabel(entry.toStatus)}`,
+      detail: entry.reasonCode
+        ? `${this.triggerLabel(entry.trigger)} · ${entry.reasonCode}`
+        : this.triggerLabel(entry.trigger),
+      gapBefore: this.gapLabel(entries, index),
+      selectable: false,
+    }));
+  });
+
+  /**
+   * The order lifecycle rail (row `X.33`) — over the §3.10 timeline this
+   * pane already fetches, no new endpoint. `null` while the order or the
+   * timeline has not settled; the rail simply does not render then, the same
+   * "greyed, never silently dropped" rule this section already follows for
+   * the production/delivery lanes, applied here to render nothing rather
+   * than a misleading first position.
+   */
+  protected readonly lifecycleSteps = computed<readonly StepItem[] | null>(() => {
+    const detail = this.order();
+    const entries = this.timeline();
+    if (!detail || !entries) {
+      return null;
+    }
+    return orderLifecycleSteps(detail.value.summary.status, entries, (status) =>
+      this.statusLabel(status),
+    );
+  });
 
   /** §4.1/§4.3: STALE_VERSION, a lost approval race, and a refused transition all surface here. */
   protected readonly notice = signal<string | null>(null);
@@ -581,6 +638,14 @@ export class OrderDetailPane {
     // A trigger this client does not know yet renders as its own raw value —
     // the same forward-compatibility rule as an unknown status (order-status.ts).
     return key ? this.i18n.t(key) : trigger;
+  }
+
+  /** `q-timeline`'s `TimelineEntry.gapBefore`, translated from {@link missingSequenceBefore}. */
+  private gapLabel(entries: readonly OrderTimelineEntry[], index: number): string | null {
+    const missing = this.missingSequenceBefore(entries, index);
+    return missing === null
+      ? null
+      : this.i18n.t('orders.detail.timeline.gap', { sequence: missing });
   }
 }
 

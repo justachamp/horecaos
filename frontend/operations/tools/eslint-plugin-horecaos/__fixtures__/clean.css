@@ -1,0 +1,8 @@
+/* Fixture: the closed type scale, used correctly — the rule must pass this. */
+.some-class {
+  color: var(--q-ink);
+}
+
+.other-class {
+  font-family: var(--q-font-mono);
+}

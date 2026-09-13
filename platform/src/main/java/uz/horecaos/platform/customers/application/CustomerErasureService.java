@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -166,6 +167,20 @@ public class CustomerErasureService {
             throw new AccountNotFoundException();
         }
         return store.erasureRequestHistory(tenantId, accountId);
+    }
+
+    /**
+     * Every erasure request across the whole tenant, newest first — Settings
+     * 10.11's tenant-wide worklist. The tenant-scoped backend behind it (raise,
+     * history, execute, cancel) has existed since {@code V0178}; the only
+     * screen that could show any of it before this wave was the control
+     * plane's, which a tenant's own staff cannot reach.
+     *
+     * @param status one of {@code PENDING}, {@code COMPLETED}, {@code CANCELLED},
+     *               or null for every status
+     */
+    public List<ErasureRequestRow> worklist(UUID tenantId, @Nullable String status, int limit) {
+        return store.erasureRequestsForTenant(tenantId, status, limit);
     }
 
     /**

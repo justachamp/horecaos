@@ -1,0 +1,30 @@
+.q-money-or-percent {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.q-money-or-percent__kind {
+  display: inline-flex;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  overflow: hidden;
+}
+
+.q-money-or-percent__kind-button {
+  height: 32px;
+  padding: 0 10px;
+  border: none;
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  cursor: pointer;
+}
+
+.q-money-or-percent__kind-button + .q-money-or-percent__kind-button {
+  border-left: 1px solid var(--q-hairline);
+}
+
+.q-money-or-percent__kind-button--active {
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}

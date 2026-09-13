@@ -1,0 +1,95 @@
+/* A vertical rail down the left edge, one hairline, with each row's time
+ * marker sitting on it — the visual idea both hand-rolled versions reached
+ * for independently (the order pane's `pane__timeline-entries`, the audit
+ * table's rows-in-sequence), done once. */
+
+.q-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-inline-start: 1px solid var(--q-hairline);
+}
+
+.q-timeline__row {
+  position: relative;
+}
+
+.q-timeline__gap {
+  display: block;
+  margin-inline-start: 16px;
+  padding: 4px 0;
+  color: var(--q-warning-text);
+}
+
+.q-timeline__entry {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  width: 100%;
+  margin-inline-start: -1px;
+  padding: 8px 0 8px 16px;
+  border-inline-start: 1px solid transparent;
+  background: none;
+  border-block: none;
+  border-block-start: none;
+  text-align: start;
+  color: inherit;
+  font: inherit;
+}
+
+button.q-timeline__entry--selectable {
+  cursor: pointer;
+}
+
+button.q-timeline__entry--selectable:hover {
+  background: var(--q-surface-1);
+}
+
+button.q-timeline__entry--selected {
+  background: var(--q-info-tint);
+  border-inline-start-color: var(--q-primary);
+}
+
+.q-timeline__time {
+  flex: none;
+  color: var(--q-ink-subtle);
+}
+
+.q-timeline__title {
+  color: var(--q-ink);
+}
+
+.q-timeline__detail {
+  flex-basis: 100%;
+  color: var(--q-ink-muted);
+}
+
+.q-timeline__badge {
+  padding: 1px 6px;
+  border: 1px solid var(--q-hairline);
+}
+
+.q-timeline__badge--info {
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.q-timeline__badge--success {
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.q-timeline__badge--warning {
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.q-timeline__badge--danger {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.q-timeline__empty {
+  color: var(--q-ink-muted);
+}

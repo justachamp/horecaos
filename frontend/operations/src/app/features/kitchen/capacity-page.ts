@@ -1,15 +1,22 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ApiError } from '../../core/api/problem-details';
+import { DayOfWeekToggle } from '../../shared/ui/day-of-week-toggle';
+import { TimeInput } from '../../shared/ui/time-input';
 import { describeApiError } from '../orders/order-errors';
 import { CapacityApi, CapacityWindowResponse, NewCapacityWindow } from './capacity-api';
 import { KitchenApi, StationResponse } from './kitchen-api';
-
-const WEEKDAYS: readonly number[] = [1, 2, 3, 4, 5, 6, 7];
 
 /**
  * IA §2.6 — Capacity & buffer settings. `docs/frontend-information-architecture.md`
@@ -40,7 +47,7 @@ const WEEKDAYS: readonly number[] = [1, 2, 3, 4, 5, 6, 7];
  */
 @Component({
   selector: 'q-capacity-page',
-  imports: [TPipe],
+  imports: [TPipe, DayOfWeekToggle, TimeInput],
   templateUrl: './capacity-page.html',
   styleUrl: './capacity-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -50,8 +57,6 @@ export class CapacityPage implements OnInit {
   private readonly capacityApi = inject(CapacityApi);
   private readonly kitchenApi = inject(KitchenApi);
   protected readonly i18n = inject(I18n);
-
-  protected readonly WEEKDAYS = WEEKDAYS;
 
   protected readonly firstLoadComplete = signal(false);
   protected readonly denied = signal(false);
@@ -66,6 +71,10 @@ export class CapacityPage implements OnInit {
 
   protected readonly formStationId = signal('');
   protected readonly formWeekday = signal(1);
+  /** `q-day-of-week-toggle` in single mode — always exactly the one day {@link formWeekday} holds. */
+  protected readonly formWeekdaySelection = computed<ReadonlySet<number>>(
+    () => new Set([this.formWeekday()]),
+  );
   protected readonly formFrom = signal('09:00');
   protected readonly formTo = signal('12:00');
   protected readonly formPortionsPerHour = signal(20);
@@ -74,7 +83,10 @@ export class CapacityPage implements OnInit {
   protected readonly formError = signal<string | null>(null);
 
   protected readonly formValid = computed(
-    () => this.formStationId() !== '' && this.formPortionsPerHour() > 0 && this.formTo() > this.formFrom(),
+    () =>
+      this.formStationId() !== '' &&
+      this.formPortionsPerHour() > 0 &&
+      this.formTo() > this.formFrom(),
   );
 
   async ngOnInit(): Promise<void> {
@@ -144,6 +156,14 @@ export class CapacityPage implements OnInit {
         return this.i18n.t('kitchen.capacity.weekday.7');
       default:
         return String(weekday);
+    }
+  }
+
+  /** `q-day-of-week-toggle` in single mode always emits exactly one day. */
+  protected onFormWeekdayChange(selected: ReadonlySet<number>): void {
+    const [day] = selected;
+    if (day !== undefined) {
+      this.formWeekday.set(day);
     }
   }
 

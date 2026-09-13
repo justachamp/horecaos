@@ -12,28 +12,41 @@ import { LocationScope } from '../../core/api/operations-paths';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { formatMoney } from '../../core/format/money';
-import { I18n, Locale } from '../../core/i18n/i18n';
+import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { DonutChart } from '../../shared/ui/charts/donut-chart';
+import { KpiTile, deltaOf } from '../../shared/ui/charts/kpi-tile';
+import { LineChart } from '../../shared/ui/charts/line-chart';
+import { StackedBarChart } from '../../shared/ui/charts/stacked-bar-chart';
+import { ChartCategory, ChartSeries } from '../../shared/ui/charts/chart-model';
 import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { LocationView, LocationsApi } from '../settings/locations/locations-api';
 import { orderStatusLabel } from '../orders/order-status';
 import { ProvenanceBanner } from './provenance-banner';
 import {
+  ddmm,
   formatCount,
-  formatDeltaPercent,
   formatSecondsDuration,
   formatShare,
   formatSignedMinutes,
   median,
 } from './report-formatting';
-import { deriveAverageCheck, sumAcrossDays, sumTotal } from './report-rollup';
+import {
+  DailyPoint,
+  dailyAverageCheck,
+  dailySeries,
+  deriveAverageCheck,
+  sumAcrossDays,
+  sumTotal,
+} from './report-rollup';
 import { ReportsFilterState } from './reports-filter-state';
 import {
   OrderRowResponse,
   OutcomeRowResponse,
   ProvenanceResponse,
   ReportingApi,
+  RowResponse,
 } from './reporting-api';
 
 const BAND_A_METRICS = [
@@ -48,12 +61,16 @@ const CANCELLING_STATUSES = new Set(['CANCELLED', 'REJECTED', 'EXPIRED', 'PAYMEN
 
 interface TileViewModel {
   readonly key: string;
-  readonly labelKey: MessageKey;
+  readonly label: string;
   readonly display: string;
   readonly deltaText: string | null;
   readonly deltaUp: boolean;
+  readonly deltaSuffix: string | null;
   readonly subtitle: string | null;
   readonly provisional: boolean;
+  readonly provisionalNote: string | null;
+  /** One point per business date in the tile's own period — {@link KpiTile}'s sparkline (IA X.20). */
+  readonly sparklinePoints: readonly (number | null)[];
 }
 
 interface MixRow {
@@ -108,7 +125,7 @@ type LoadState = 'loading' | 'ready' | 'denied' | 'error';
  */
 @Component({
   selector: 'q-business-overview-page',
-  imports: [TPipe, ProvenanceBanner],
+  imports: [TPipe, ProvenanceBanner, KpiTile, DonutChart, StackedBarChart, LineChart],
   templateUrl: './business-overview-page.html',
   styleUrl: './business-overview-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -136,10 +153,51 @@ export class BusinessOverviewPage implements OnInit {
   protected readonly branches = signal<readonly BranchRow[]>([]);
   protected readonly multiLocation = signal(false);
 
+  /**
+   * The per-business-date rows Band A's own metrics query returns — kept,
+   * not collapsed the way `sumTotal` collapses them for the tiles above. Feed
+   * the "Dynamics" trend band (IA X.19) and every tile's sparkline (IA X.20).
+   */
+  private readonly dailyRows = signal<readonly RowResponse[]>([]);
+
   protected readonly requestedTo = computed(() => this.filters.range().to);
   protected readonly outcomeTotalCount = computed(() =>
     this.outcomes().reduce((sum, row) => sum + row.count, 0),
   );
+
+  protected readonly revenueTrend = computed<readonly ChartSeries[]>(() => [
+    dailySeriesToChart(
+      this.dailyRows(),
+      'revenue.gross.v1',
+      this.i18n.t('reports.overview.tile.revenue'),
+    ),
+  ]);
+  protected readonly ordersTrend = computed<readonly ChartSeries[]>(() => [
+    dailySeriesToChart(
+      this.dailyRows(),
+      'orders.count.v1',
+      this.i18n.t('reports.overview.tile.orders'),
+    ),
+  ]);
+  protected readonly hasTrend = computed(() => this.dailyRows().length > 0);
+
+  protected readonly channelMixSegments = computed<readonly ChartCategory[]>(() =>
+    this.channelMix().map((row) => ({
+      key: row.key,
+      label: row.label,
+      value: this.channelMixByRevenue() ? row.revenueSom : row.count,
+    })),
+  );
+
+  protected readonly fulfilmentMixSegments = computed<readonly ChartCategory[]>(() =>
+    this.fulfilmentMix().map((row) => ({ key: row.key, label: row.label, value: row.count })),
+  );
+
+  /** The donut's own centre label — the period's whole channel-mix total, on whichever basis is selected. */
+  protected readonly channelMixTotalDisplay = computed(() => {
+    const total = this.channelMixSegments().reduce((sum, segment) => sum + segment.value, 0);
+    return this.channelMixByRevenue() ? this.formatMoneyValue(total) : this.formatCountValue(total);
+  });
 
   protected readonly formatDuration = formatSecondsDuration;
   protected readonly formatCountValue = formatCount;
@@ -154,10 +212,6 @@ export class BusinessOverviewPage implements OnInit {
 
   protected toggleChannelMixBasis(): void {
     this.channelMixByRevenue.update((current) => !current);
-  }
-
-  protected channelBarWidth(row: MixRow): number {
-    return this.channelMixByRevenue() ? row.revenueSharePercent : row.countSharePercent;
   }
 
   protected formatMoneyValue(amountSom: number): string {
@@ -243,6 +297,7 @@ export class BusinessOverviewPage implements OnInit {
       ]);
 
     this.provenance.set(currentQuery.provenance);
+    this.dailyRows.set(currentQuery.rows);
 
     const sumCodes = [
       'revenue.gross.v1',
@@ -267,50 +322,59 @@ export class BusinessOverviewPage implements OnInit {
     const lateSummary = summariseLateSample(lateSample.rows);
 
     this.tiles.set([
-      moneyTile(
-        'revenue.gross.v1',
-        'reports.overview.tile.revenue',
-        current['revenue.gross.v1'],
-        previous['revenue.gross.v1'],
-        this.i18n.locale(),
-        provisional.has('revenue.gross.v1'),
-        null,
-      ),
-      countTile(
-        'orders.count.v1',
-        'reports.overview.tile.orders',
-        current['orders.count.v1'],
-        previous['orders.count.v1'],
-        provisional.has('orders.count.v1'),
-        null,
-      ),
-      moneyTile(
-        'average_check.v1',
-        'reports.overview.tile.averageCheck',
-        avgCheck,
-        avgCheckPrevious,
-        this.i18n.locale(),
-        provisional.has('average_check.v1'),
-        null,
-      ),
-      countTile(
-        'orders.cancelled.v1',
-        'reports.overview.tile.cancelled',
-        current['orders.cancelled.v1'],
-        previous['orders.cancelled.v1'],
-        provisional.has('orders.cancelled.v1'),
-        this.i18n.t('reports.overview.tile.cancelled.subtitle', { share: cancelShare }),
-      ),
-      countTile(
-        'orders.late.v1',
-        'reports.overview.tile.late',
-        current['orders.late.v1'],
-        previous['orders.late.v1'],
-        provisional.has('orders.late.v1'),
-        lateSummary === null
-          ? null
-          : this.i18n.t('reports.overview.tile.late.subtitle', { minutes: lateSummary }),
-      ),
+      this.buildTile({
+        key: 'revenue.gross.v1',
+        labelKey: 'reports.overview.tile.revenue',
+        kind: 'money',
+        value: current['revenue.gross.v1'],
+        previous: previous['revenue.gross.v1'],
+        provisional: provisional.has('revenue.gross.v1'),
+        subtitle: null,
+        sparklinePoints: dailySeries(currentQuery.rows, 'revenue.gross.v1').map((p) => p.value),
+      }),
+      this.buildTile({
+        key: 'orders.count.v1',
+        labelKey: 'reports.overview.tile.orders',
+        kind: 'count',
+        value: current['orders.count.v1'],
+        previous: previous['orders.count.v1'],
+        provisional: provisional.has('orders.count.v1'),
+        subtitle: null,
+        sparklinePoints: dailySeries(currentQuery.rows, 'orders.count.v1').map((p) => p.value),
+      }),
+      this.buildTile({
+        key: 'average_check.v1',
+        labelKey: 'reports.overview.tile.averageCheck',
+        kind: 'money',
+        value: avgCheck,
+        previous: avgCheckPrevious,
+        provisional: provisional.has('average_check.v1'),
+        subtitle: null,
+        sparklinePoints: dailyAverageCheck(currentQuery.rows).map((p) => p.value),
+      }),
+      this.buildTile({
+        key: 'orders.cancelled.v1',
+        labelKey: 'reports.overview.tile.cancelled',
+        kind: 'count',
+        value: current['orders.cancelled.v1'],
+        previous: previous['orders.cancelled.v1'],
+        provisional: provisional.has('orders.cancelled.v1'),
+        subtitle: this.i18n.t('reports.overview.tile.cancelled.subtitle', { share: cancelShare }),
+        sparklinePoints: dailySeries(currentQuery.rows, 'orders.cancelled.v1').map((p) => p.value),
+      }),
+      this.buildTile({
+        key: 'orders.late.v1',
+        labelKey: 'reports.overview.tile.late',
+        kind: 'count',
+        value: current['orders.late.v1'],
+        previous: previous['orders.late.v1'],
+        provisional: provisional.has('orders.late.v1'),
+        subtitle:
+          lateSummary === null
+            ? null
+            : this.i18n.t('reports.overview.tile.late.subtitle', { minutes: lateSummary }),
+        sparklinePoints: dailySeries(currentQuery.rows, 'orders.late.v1').map((p) => p.value),
+      }),
     ]);
 
     const channelBuckets = sumAcrossDays(channelQuery.rows, (row) => row.channelCode ?? '', [
@@ -411,57 +475,62 @@ export class BusinessOverviewPage implements OnInit {
         .slice(0, 5),
     );
   }
-}
 
-function moneyTile(
-  key: string,
-  labelKey: MessageKey,
-  value: number | null,
-  previous: number | null,
-  locale: Locale,
-  provisional: boolean,
-  subtitle: string | null,
-): TileViewModel {
-  return {
-    key,
-    labelKey,
-    display:
-      value === null
+  /**
+   * Assembles one {@link TileViewModel} — the one place Band A's five tiles
+   * share a definition of the delta, the provisional note and the sparkline,
+   * rather than each hand-rolling its own (IA X.20). `deltaOf` and the tile
+   * component itself both live in `shared/ui/charts/kpi-tile.ts`.
+   */
+  private buildTile(config: {
+    readonly key: string;
+    readonly labelKey: MessageKey;
+    readonly kind: 'money' | 'count';
+    readonly value: number | null;
+    readonly previous: number | null;
+    readonly provisional: boolean;
+    readonly subtitle: string | null;
+    readonly sparklinePoints: readonly (number | null)[];
+  }): TileViewModel {
+    const delta = deltaOf(config.value, config.previous);
+    const display =
+      config.value === null
         ? '—'
-        : formatMoney({ amountMinor: value, currency: 'UZS' }, locale, { withUnit: true }),
-    ...deltaOf(value, previous),
-    subtitle,
-    provisional,
-  };
-}
-
-function countTile(
-  key: string,
-  labelKey: MessageKey,
-  value: number,
-  previous: number,
-  provisional: boolean,
-  subtitle: string | null,
-): TileViewModel {
-  return {
-    key,
-    labelKey,
-    display: formatCount(value),
-    ...deltaOf(value, previous),
-    subtitle,
-    provisional,
-  };
-}
-
-function deltaOf(
-  value: number | null,
-  previous: number | null,
-): { deltaText: string | null; deltaUp: boolean } {
-  if (value === null || previous === null) {
-    return { deltaText: null, deltaUp: false };
+        : config.kind === 'money'
+          ? formatMoney({ amountMinor: config.value, currency: 'UZS' }, this.i18n.locale(), {
+              withUnit: true,
+            })
+          : formatCount(config.value);
+    return {
+      key: config.key,
+      label: this.i18n.t(config.labelKey),
+      display,
+      deltaText: delta.deltaText,
+      deltaUp: delta.deltaUp,
+      deltaSuffix:
+        delta.deltaText === null ? null : this.i18n.t('reports.overview.tile.deltaSuffix'),
+      subtitle: config.subtitle,
+      provisional: config.provisional,
+      provisionalNote: config.provisional
+        ? this.i18n.t('reports.provenance.provisional.short')
+        : null,
+      sparklinePoints: config.sparklinePoints,
+    };
   }
-  const text = formatDeltaPercent(value, previous);
-  return { deltaText: text, deltaUp: text !== null && text.startsWith('+') };
+}
+
+/** One metric's day-by-day series as {@link LineChart} wants it — DD.MM labels, a translated series name. */
+function dailySeriesToChart(
+  rows: readonly RowResponse[],
+  metricCode: string,
+  label: string,
+): ChartSeries {
+  const points: readonly DailyPoint[] = dailySeries(rows, metricCode);
+  return {
+    key: metricCode,
+    label,
+    points: points.map((p) => ({ x: ddmm(p.date), y: p.value })),
+  };
 }
 
 function summariseLateSample(rows: readonly OrderRowResponse[]): string | null {

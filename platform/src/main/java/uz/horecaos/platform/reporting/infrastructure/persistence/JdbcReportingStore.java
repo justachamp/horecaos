@@ -95,7 +95,10 @@ public class JdbcReportingStore {
     }
 
     public void upsertBoundary(
-            UUID tenantId, BusinessDayBoundary boundary, LocalDate effectiveFrom, LocalDate recutCompletedThrough) {
+            UUID tenantId,
+            BusinessDayBoundary boundary,
+            LocalDate effectiveFrom,
+            @Nullable LocalDate recutCompletedThrough) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
         params.put("start", boundary.start());

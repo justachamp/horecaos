@@ -43,6 +43,58 @@ export function sumTotal(
   );
 }
 
+/** One metric's value for one business date — the shape a trend line or a sparkline plots. */
+export interface DailyPoint {
+  readonly date: string;
+  readonly value: number;
+}
+
+/** {@link DailyPoint}, but for a `RATIO` metric derived per day — see {@link dailyAverageCheck}. */
+export interface DailyRatioPoint {
+  readonly date: string;
+  readonly value: number | null;
+}
+
+/**
+ * A single metric's day-by-day series, in business-date order — the axis
+ * {@link sumAcrossDays}/{@link sumTotal} collapse away (wave T09, IA X.19/
+ * X.20). `/reporting/queries` already returns one row per business date;
+ * this keeps that date rather than folding every row into one number, which
+ * is what a trend line (`business-overview-page.ts`'s new "Dynamics" band)
+ * and a KPI tile's sparkline both need and neither `sumAcrossDays` nor
+ * `sumTotal` can give them.
+ *
+ * Built on {@link sumAcrossDays} keyed by `businessDate` rather than a
+ * second, competing grouping loop — the two functions differ only in which
+ * axis they collapse.
+ */
+export function dailySeries(
+  rows: readonly RowResponse[],
+  metricCode: string,
+): readonly DailyPoint[] {
+  const byDate = sumAcrossDays(rows, (row) => row.businessDate, [metricCode]);
+  return [...byDate.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, values]) => ({ date, value: values[metricCode] }));
+}
+
+/**
+ * {@link deriveAverageCheck} applied per business date rather than once
+ * across the whole period — the day-by-day counterpart {@link dailySeries}
+ * cannot offer a `RATIO` metric directly (summing per-day averages would be
+ * exactly the averaging-of-averages bug `average_check.v1`'s own definition
+ * exists to prevent). `value: null` on a date with no completed orders,
+ * never a zero that reads as free food — same rule as {@link deriveAverageCheck}.
+ */
+export function dailyAverageCheck(rows: readonly RowResponse[]): readonly DailyRatioPoint[] {
+  const revenue = dailySeries(rows, 'revenue.gross.v1');
+  const ordersByDate = new Map(dailySeries(rows, 'orders.count.v1').map((p) => [p.date, p.value]));
+  return revenue.map((point) => ({
+    date: point.date,
+    value: deriveAverageCheck(point.value, ordersByDate.get(point.date) ?? 0),
+  }));
+}
+
 /**
  * `average_check.v1`'s own published formula (`MetricRegistry`): gross
  * revenue over completed-order count, same filter, same date attribution.

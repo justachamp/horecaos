@@ -48,11 +48,20 @@ class PlatformIntegrationAdminControllerTests {
         var providers = controller.providers();
 
         assertThat(providers)
-                .as("today's real, honest set: three adapters, not the wider parity inventory")
+                .as("today's real, honest set: eight adapters (payment, notification, telephony, "
+                        + "analytics), not the wider parity inventory")
                 .extracting(
                         uz.horecaos.platform.integration.api.provider.ConnectFieldCatalog.ProviderConnectDeclaration
                                 ::providerType)
-                .containsExactlyInAnyOrder("CLICK", "PAYME", "TELEGRAM_BOT_API");
+                .containsExactlyInAnyOrder(
+                        "CLICK",
+                        "PAYME",
+                        "TELEGRAM_BOT_API",
+                        "HOSTED_PBX",
+                        "ASTERISK_AMI",
+                        "GOOGLE_TAG_MANAGER",
+                        "GOOGLE_ANALYTICS_4",
+                        "GOOGLE_SEARCH_CONSOLE");
     }
 
     @Test

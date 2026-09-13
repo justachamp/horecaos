@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
@@ -9,9 +16,11 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { ActorChip } from '../../shared/ui/actor-chip';
+import { LocalizedFieldGroup } from '../../shared/ui/localized-field-group';
 import { describeApiError } from '../orders/order-errors';
 import { ActivityLogApi, AuditEventView } from '../staff/activity-log-api';
-import { CatalogApi } from './catalog-api';
+import { CatalogApi, fetchAllVariantsAtLocation } from './catalog-api';
 import {
   FiscalClassification,
   ModifierGroupSummary,
@@ -50,6 +59,15 @@ const TAB_LABEL: Readonly<Record<EditorTab, MessageKey>> = {
 };
 
 const EDITING_LOCALES = ['ru', 'uz', 'en'] as const;
+
+/**
+ * The catalog's own default locale (`CatalogSnapshotLoader`'s
+ * `horecaos.catalog.default-locale`, `uz` — see `toCatalogLocale`'s doc).
+ * `q-localized-field-group`'s default marker reads this, never the viewer's
+ * own UI locale (`I18n.locale()`, `ru` by default) — the two are unrelated
+ * defaults for unrelated things.
+ */
+const CATALOG_DEFAULT_LOCALE = 'uz';
 
 /** `CatalogValidator`'s stable finding codes this console has copy for — see `messages.en.ts`'s `catalog.editor.finding.*` block. */
 const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
@@ -99,7 +117,7 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
  */
 @Component({
   selector: 'q-product-editor-page',
-  imports: [TPipe, RouterLink],
+  imports: [TPipe, RouterLink, LocalizedFieldGroup, ActorChip],
   templateUrl: './product-editor-page.html',
   styleUrl: './product-editor-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -119,8 +137,17 @@ export class ProductEditorPage implements OnInit {
   protected readonly tabs = TABS;
   protected readonly tabLabel = TAB_LABEL;
   protected readonly editingLocales = EDITING_LOCALES;
+  protected readonly catalogDefaultLocale = CATALOG_DEFAULT_LOCALE;
   protected readonly activeTab = signal<EditorTab>('BASIC');
   protected readonly editingLocale = signal<string>('ru');
+
+  /** A locale counts complete once the product has a name in it — `q-localized-field-group`'s dot. */
+  protected readonly localeCompleteness = computed<Readonly<Record<string, boolean>>>(() => {
+    const product = this.product();
+    return Object.fromEntries(
+      EDITING_LOCALES.map((locale) => [locale, Boolean(product?.translations[locale]?.name)]),
+    );
+  });
 
   protected readonly loading = signal(true);
   protected readonly notFound = signal(false);
@@ -268,9 +295,7 @@ export class ProductEditorPage implements OnInit {
       return;
     }
     try {
-      const rows = await firstValueFrom(
-        this.api.variantsAtLocation(scope, locationScope.locationId),
-      );
+      const rows = await fetchAllVariantsAtLocation(this.api, scope, locationScope.locationId);
       const variantIds = new Set(product.variants.map((v) => v.variantId));
       this.availabilityRows.set(rows.filter((row) => variantIds.has(row.variantId)));
     } catch {

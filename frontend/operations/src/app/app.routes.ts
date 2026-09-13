@@ -293,6 +293,17 @@ export const routes: Routes = [
               ),
           },
           {
+            // 4.4d (wave P46): the two tenant-wide catalog switches. Lives
+            // under Settings rather than the `catalog` shell — see
+            // `catalog-settings-page.ts`'s own doc for why it always reads
+            // and writes TENANT scope, ignoring this shell's scope bar.
+            path: 'catalog',
+            loadComponent: () =>
+              import('./features/settings/catalog-settings/catalog-settings-page').then(
+                (m) => m.CatalogSettingsPage,
+              ),
+          },
+          {
             path: 'payment-methods',
             loadComponent: () =>
               import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
@@ -387,6 +398,17 @@ export const routes: Routes = [
             path: 'approvals',
             loadComponent: () =>
               import('./features/staff/approvals-page').then((m) => m.ApprovalsPage),
+          },
+          {
+            // 9.5 Проверка доступа (ADR 0109, wave W03): a debugging tool
+            // used a handful of times a year, deliberately not a
+            // `staff-shell.html` tab — reached only from the link at the
+            // bottom of Approvals and, later, from a denied state. Declared
+            // before the empty-path Люди child for the same reason `roles`,
+            // `activity` and `approvals` are.
+            path: 'access-check',
+            loadComponent: () =>
+              import('./features/staff/access-check-page').then((m) => m.AccessCheckPage),
           },
           {
             path: '',
@@ -795,6 +817,16 @@ export const routes: Routes = [
               import('./features/delivery/delivery-zones-page').then((m) => m.DeliveryZonesPage),
           },
           {
+            // IA 3.6c — bulk geozone upload, one level under Zones rather than
+            // its own top-level tab (delivery-shell.ts's own doc names this
+            // as sharing the 3.6 shell).
+            path: 'zones/import',
+            loadComponent: () =>
+              import('./features/delivery/geozone-batch-import-page').then(
+                (m) => m.GeozoneBatchImportPage,
+              ),
+          },
+          {
             // IA §3.6b. Tenant-scoped, not brand-scoped: a region's bounding
             // box constrains the geocoder for every brand (ADR 0104).
             path: 'regions',
@@ -829,7 +861,12 @@ export const routes: Routes = [
             path: 'dispatch-rules',
             loadComponent: () =>
               import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'operations-spec/couriers.md §3.8 (Dispatch rules) — no backend exists' },
+            data: {
+              spec:
+                'operations-spec/couriers.md §3.8 (Dispatch rules) — the sourcing policy is ' +
+                'already resolved via ADR 0030 (DeliverySourcingPolicies.SOURCING); only a ' +
+                'write endpoint and this screen are missing, over q-condition-builder/q-rule-list',
+            },
           },
         ],
       },
@@ -846,6 +883,18 @@ export const routes: Routes = [
       // so a 404 would be a lie about what happened.
       { path: '**', redirectTo: 'today' },
     ],
+  },
+  // IA `0.1e` / `X/X.3` — the wallboard: a sibling of the shell's own route
+  // above, not a child of it, so it renders no rail and no top bar
+  // (`wallboard-shell.ts`'s own doc explains why). `authGuard` alone —
+  // `capabilityGuard` is declared as `canActivateChild` on the shell route
+  // and only ever runs for routes beneath it; a supervisor's wallboard has no
+  // rail entry to predict a refusal for, and the server still authorizes
+  // every `LiveBoard` call the same way it always has (ADR 0025).
+  {
+    path: 'wallboard',
+    loadComponent: () => import('./wallboard-shell/wallboard-shell').then((m) => m.WallboardShell),
+    canActivate: [authGuard],
   },
 ];
 

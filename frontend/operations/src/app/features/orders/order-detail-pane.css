@@ -30,7 +30,7 @@
   border: none;
   background: transparent;
   color: inherit;
-  font-size: 16px;
+  font-size: var(--q-type-body);
   line-height: 1;
   cursor: pointer;
 }
@@ -83,7 +83,7 @@
 }
 
 .pane__order-number {
-  font-size: 16px;
+  font-size: var(--q-type-body);
 }
 
 .pane__severity-caption {
@@ -117,7 +117,7 @@
   border-radius: var(--q-radius);
   background: var(--q-primary);
   color: #fff;
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   cursor: pointer;
 }
 
@@ -160,7 +160,7 @@
   border: none;
   background: transparent;
   color: var(--q-ink);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   text-align: left;
   cursor: pointer;
 }
@@ -192,7 +192,7 @@
 
 .pane__lines-table th {
   text-align: left;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   font-weight: 400;
   color: var(--q-ink-subtle);
   padding: 4px 6px;
@@ -203,7 +203,7 @@
   padding: 8px 6px;
   vertical-align: top;
   border-bottom: 1px solid var(--q-hairline);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
 }
 
 .pane__num-col {
@@ -232,7 +232,7 @@
   border-radius: var(--q-radius);
   background: var(--q-canvas);
   color: var(--q-primary);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   cursor: pointer;
 }
 
@@ -301,7 +301,7 @@
   margin-left: 6px;
   padding: 1px 6px;
   border: 1px solid var(--q-hairline);
-  font-size: 11px;
+  font-size: var(--q-type-caption-sm);
   color: var(--q-ink-muted);
 }
 
@@ -315,6 +315,12 @@
 }
 
 /* ---- timeline (§3.10) ---------------------------------------------------- */
+
+/* Row X.33: the lifecycle rail over this same section's own timeline read. */
+.pane__lifecycle-rail {
+  display: block;
+  margin-bottom: 20px;
+}
 
 .pane__timeline-lane {
   margin-bottom: 16px;
@@ -332,31 +338,4 @@
 
 .pane__timeline-lane--not-built .pane__timeline-lane-label {
   color: var(--q-ink-subtle);
-}
-
-.pane__timeline-entries {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.pane__timeline-entry {
-  padding: 6px 0;
-  border-bottom: 1px solid var(--q-hairline);
-}
-
-.pane__timeline-entry:last-child {
-  border-bottom: none;
-}
-
-.pane__timeline-meta {
-  display: block;
-  margin-top: 2px;
-  color: var(--q-ink-subtle);
-}
-
-.pane__timeline-gap {
-  padding: 4px 0;
-  color: var(--q-error-text);
-  font-size: 12px;
 }

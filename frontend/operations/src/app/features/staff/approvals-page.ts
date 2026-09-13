@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { CurrentTenant } from '../../core/auth/current-tenant';
 import { ApiError } from '../../core/api/problem-details';
@@ -7,9 +8,16 @@ import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
 import { approvalActionLabelKey } from './approval-action-labels';
-import { ApprovalDecision, ApprovalsApi, PendingApproval } from './approvals-api';
+import {
+  ApprovalDecision,
+  ApprovalsApi,
+  DecidedApprovalHistoryEntry,
+  PendingApproval,
+} from './approvals-api';
 
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
+type Tab = 'pending' | 'decided';
+type DecidedLoadState = 'idle' | 'loading' | 'ready' | 'error';
 
 interface ConfirmTarget {
   readonly request: PendingApproval;
@@ -48,7 +56,7 @@ const MAXIMUM_REASON_LENGTH = 1000;
  */
 @Component({
   selector: 'q-approvals-page',
-  imports: [TPipe],
+  imports: [TPipe, RouterLink],
   templateUrl: './approvals-page.html',
   styleUrl: './approvals-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -62,6 +70,11 @@ export class ApprovalsPage {
   protected readonly loadErrorText = signal<string | null>(null);
   protected readonly pending = signal<readonly PendingApproval[]>([]);
 
+  protected readonly tab = signal<Tab>('pending');
+  protected readonly decidedState = signal<DecidedLoadState>('idle');
+  protected readonly decidedErrorText = signal<string | null>(null);
+  protected readonly decided = signal<readonly DecidedApprovalHistoryEntry[]>([]);
+
   protected readonly confirmTarget = signal<ConfirmTarget | null>(null);
   protected readonly reason = signal('');
   protected readonly submitting = signal(false);
@@ -74,6 +87,37 @@ export class ApprovalsPage {
 
   protected retry(): void {
     void this.load();
+  }
+
+  /**
+   * Switches to a tab, loading the decided-history read the first time — no
+   * point calling it before anyone asks, since the pending worklist above is
+   * what a manager opens this screen for.
+   */
+  protected selectTab(tab: Tab): void {
+    this.tab.set(tab);
+    if (tab === 'decided' && this.decidedState() === 'idle') {
+      void this.loadDecided();
+    }
+  }
+
+  protected retryDecided(): void {
+    void this.loadDecided();
+  }
+
+  private async loadDecided(): Promise<void> {
+    const tenantId = this.tenant.tenantId();
+    if (!tenantId) {
+      return;
+    }
+    this.decidedState.set('loading');
+    try {
+      this.decided.set(await this.api.decided(tenantId));
+      this.decidedState.set('ready');
+    } catch (error) {
+      this.decidedErrorText.set(this.describe(error));
+      this.decidedState.set('error');
+    }
   }
 
   private async load(): Promise<void> {
@@ -102,11 +146,22 @@ export class ApprovalsPage {
     return key ? this.i18n.t(key) : request.actionCode;
   }
 
-  protected scopeLabel(request: PendingApproval): string {
+  protected scopeLabel(request: PendingApproval | DecidedApprovalHistoryEntry): string {
     if (request.scopeType === 'TENANT') {
       return this.i18n.t('staff.approvals.scope.tenant');
     }
     return `${request.scopeType} · ${request.scopeId ?? '—'}`;
+  }
+
+  protected decidedActionLabel(entry: DecidedApprovalHistoryEntry): string {
+    const key = approvalActionLabelKey(entry.actionCode);
+    return key ? this.i18n.t(key) : entry.actionCode;
+  }
+
+  protected decidedStatusLabelKey(status: DecidedApprovalHistoryEntry['status']): MessageKey {
+    return status === 'APPROVED'
+      ? 'staff.approvals.status.approved'
+      : 'staff.approvals.status.declined';
   }
 
   protected openApprove(request: PendingApproval): void {
