@@ -3576,6 +3576,53 @@ export const messagesRu: MessageCatalogue = {
   'reports.products.abcXyzNotBuilt':
     'ABC- и XYZ-классификация пока не реализованы: в reporting нет таблицы classification_run и зарегистрированной метрики (ADR 0043).',
 
+  // ---------------------------------------------------------------- reports 7.5/7.5a/7.5b staff (T12)
+  'reports.staff.title': 'Отчёты по персоналу',
+  'reports.staff.loading': 'Загрузка…',
+  'reports.staff.tab.leaderboard': 'Рейтинг',
+  'reports.staff.tab.products': 'Товары',
+  'reports.staff.tab.telephony': 'Телефония',
+
+  'reports.staff.leaderboard.empty':
+    'За этот период ни один оператор не завершил ни одного заказа.',
+  'reports.staff.leaderboard.column.operator': 'Оператор',
+  'reports.staff.leaderboard.column.orders': 'Заказы',
+  'reports.staff.leaderboard.column.revenue': 'Выручка',
+  'reports.staff.leaderboard.column.averageCheck': 'Средний чек',
+  'reports.staff.leaderboard.column.handlingTime': 'Ср. время обработки',
+  'reports.staff.leaderboard.column.delivery': 'Доставка',
+  'reports.staff.leaderboard.column.pickup': 'Самовывоз',
+  'reports.staff.leaderboard.column.dineIn': 'В зале',
+  'reports.staff.leaderboard.column.receiptDepth': 'Позиций / чек',
+  'reports.staff.leaderboard.kind.STAFF': 'Сотрудник',
+  'reports.staff.leaderboard.kind.MACHINE': 'Автоматически',
+  'reports.staff.leaderboard.viewProducts': 'Показать товары',
+
+  'reports.staff.products.title': 'Товары оператора',
+  'reports.staff.products.selectOperator':
+    'Выберите оператора на вкладке «Рейтинг», чтобы увидеть его товары.',
+  'reports.staff.products.empty':
+    'У этого оператора нет завершённых заказов с товарными позициями за этот период.',
+  'reports.staff.products.column.product': 'Товар',
+  'reports.staff.products.column.quantity': 'Кол-во',
+  'reports.staff.products.column.revenue': 'Выручка',
+
+  'reports.staff.telephony.intro':
+    'Формируется тем же конвейером закрытия дня, что и остальные отчёты, — текущая смена появится здесь после закрытия дня, а не в реальном времени.',
+  'reports.staff.telephony.empty': 'За этот период ещё не закрыто ни одного звонка.',
+  'reports.staff.telephony.column.operator': 'Оператор',
+  'reports.staff.telephony.column.offered': 'Поступило',
+  'reports.staff.telephony.column.answered': 'Отвечено',
+  'reports.staff.telephony.column.answerRate': 'Доля отвеченных',
+  'reports.staff.telephony.column.missed': 'Пропущено',
+  'reports.staff.telephony.column.transferred': 'Переведено',
+  'reports.staff.telephony.column.talkTime': 'Время разговора',
+  'reports.staff.telephony.rangeCapped': 'Показаны первые {days} дн. более длинного периода.',
+  'reports.staff.telephony.answerSpeedNotBuilt':
+    'Скорость ответа не показана: пока нет столбца времени ожидания вызова (V0149).',
+  'reports.staff.telephony.conversionNotBuilt':
+    'Конверсия звонков в заказы не показана: нужна привязка call-provenance, которую даёт 1.6 (пока не реализовано).',
+
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
   'reports.forecast.title': 'История спроса',
   'reports.forecast.intro':

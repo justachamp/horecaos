@@ -56,6 +56,21 @@ export interface CallLogEntry {
 }
 
 /**
+ * T12 (7.5b): one hour's telephony totals for one operator, written by the
+ * same day-close pipeline as every other ADR 0043 fact. Mirrors
+ * `CallStatsController.CallHourResponse`.
+ */
+export interface CallHourStat {
+  readonly hourOfDay: number;
+  readonly operatorPrincipalId: string;
+  readonly offeredCount: number;
+  readonly answeredCount: number;
+  readonly missedCount: number;
+  readonly transferredCount: number;
+  readonly talkDurationSeconds: number;
+}
+
+/**
  * IA 1.6, Call centre (ADR 0064) — operator presence, the screen-pop poll,
  * and the branch's call log. Not a softphone and not click-to-call: ADR 0064
  * deliberately keeps audio off this platform, so this API only ever carries
@@ -66,16 +81,24 @@ export class CallCentreApi {
   private readonly api = inject(ApiClient);
 
   async myPresence(scope: LocationScope): Promise<PresenceView> {
-    const result = await firstValueFrom(this.api.get<PresenceView>(operationsPaths.voicePresenceMine(scope)));
+    const result = await firstValueFrom(
+      this.api.get<PresenceView>(operationsPaths.voicePresenceMine(scope)),
+    );
     return result.value;
   }
 
   async roster(scope: LocationScope): Promise<readonly PresenceView[]> {
-    const result = await firstValueFrom(this.api.get<readonly PresenceView[]>(operationsPaths.voicePresence(scope)));
+    const result = await firstValueFrom(
+      this.api.get<readonly PresenceView[]>(operationsPaths.voicePresence(scope)),
+    );
     return result.value ?? [];
   }
 
-  async setPresence(scope: LocationScope, state: PresenceState, reason: string | null): Promise<PresenceView> {
+  async setPresence(
+    scope: LocationScope,
+    state: PresenceState,
+    reason: string | null,
+  ): Promise<PresenceView> {
     return firstValueFrom(
       this.api.put<{ state: PresenceState; reason: string | null }, PresenceView>(
         operationsPaths.voicePresence(scope),
@@ -85,7 +108,9 @@ export class CallCentreApi {
   }
 
   async currentCall(scope: LocationScope): Promise<ScreenPopCard> {
-    const result = await firstValueFrom(this.api.get<ScreenPopCard>(operationsPaths.voiceScreenPopCurrent(scope)));
+    const result = await firstValueFrom(
+      this.api.get<ScreenPopCard>(operationsPaths.voiceScreenPopCurrent(scope)),
+    );
     return result.value;
   }
 
@@ -105,13 +130,31 @@ export class CallCentreApi {
    */
   async revealCallerNumber(scope: LocationScope, callEventId: string): Promise<string> {
     const result = await firstValueFrom(
-      this.api.get<{ number: string }>(operationsPaths.voiceScreenPopCallerNumber(scope, callEventId)),
+      this.api.get<{ number: string }>(
+        operationsPaths.voiceScreenPopCallerNumber(scope, callEventId),
+      ),
     );
     return result.value.number;
   }
 
   async callLog(scope: LocationScope): Promise<readonly CallLogEntry[]> {
-    const result = await firstValueFrom(this.api.get<readonly CallLogEntry[]>(operationsPaths.voiceCallLog(scope)));
+    const result = await firstValueFrom(
+      this.api.get<readonly CallLogEntry[]>(operationsPaths.voiceCallLog(scope)),
+    );
+    return result.value ?? [];
+  }
+
+  /**
+   * T12 (7.5b): this branch's call activity for one business date, by hour
+   * and operator (`CallStatsController`). Empty until the day closes — a
+   * live shift's calls appear the next time the close runs, not in real time.
+   */
+  async callStats(scope: LocationScope, businessDate: string): Promise<readonly CallHourStat[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly CallHourStat[]>(operationsPaths.voiceCallStats(scope), {
+        params: { businessDate },
+      }),
+    );
     return result.value ?? [];
   }
 }

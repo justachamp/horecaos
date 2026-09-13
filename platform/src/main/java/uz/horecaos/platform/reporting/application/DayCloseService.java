@@ -307,6 +307,17 @@ public class DayCloseService {
 
         int itemCount = lines.stream().mapToInt(SourceLine::quantity).sum();
 
+        // T12: whoever approved the order, else whoever created it, else the
+        // channel itself as a pseudo-operator — see OperatorAttribution's own
+        // doc for why accepted_by outranks created_by and why "no human actor"
+        // is never a third null state here.
+        String operatorPrincipalId = OperatorAttribution.resolve(
+                source.createdByActorType(),
+                source.createdByActorId(),
+                source.acceptedByActorType(),
+                source.acceptedByActorId(),
+                source.channelCode());
+
         return new OrderFact(
                 tenantId,
                 source.orderId(),
@@ -321,6 +332,7 @@ public class DayCloseService {
                 source.fulfilmentMode(),
                 source.status(),
                 source.cancellationReasonCode(),
+                operatorPrincipalId,
                 pseudonym.of(tenantId, source.customerAccountId()),
                 source.customerAccountId() == null ? null : source.firstOrder(),
                 gross,

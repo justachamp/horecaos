@@ -3597,6 +3597,53 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.products.abcXyzNotBuilt':
     'ABC va XYZ tasnifi hali yaratilmagan: reportingʻda classification_run jadvali va roʻyxatga olingan metrika yoʻq (ADR 0043).',
 
+  // ---------------------------------------------------------------- reports 7.5/7.5a/7.5b staff (T12)
+  'reports.staff.title': 'Xodimlar boʻyicha hisobotlar',
+  'reports.staff.loading': 'Yuklanmoqda…',
+  'reports.staff.tab.leaderboard': 'Reyting',
+  'reports.staff.tab.products': 'Mahsulotlar',
+  'reports.staff.tab.telephony': 'Telefoniya',
+
+  'reports.staff.leaderboard.empty':
+    'Ushbu davrda hech bir operator yakunlangan buyurtmaga ega emas.',
+  'reports.staff.leaderboard.column.operator': 'Operator',
+  'reports.staff.leaderboard.column.orders': 'Buyurtmalar',
+  'reports.staff.leaderboard.column.revenue': 'Tushum',
+  'reports.staff.leaderboard.column.averageCheck': 'Oʻrtacha chek',
+  'reports.staff.leaderboard.column.handlingTime': 'Oʻrt. ishlov vaqti',
+  'reports.staff.leaderboard.column.delivery': 'Yetkazib berish',
+  'reports.staff.leaderboard.column.pickup': 'Olib ketish',
+  'reports.staff.leaderboard.column.dineIn': 'Zalda',
+  'reports.staff.leaderboard.column.receiptDepth': 'Pozitsiya / chek',
+  'reports.staff.leaderboard.kind.STAFF': 'Xodim',
+  'reports.staff.leaderboard.kind.MACHINE': 'Avtomatik',
+  'reports.staff.leaderboard.viewProducts': 'Mahsulotlarni koʻrish',
+
+  'reports.staff.products.title': 'Operatorning mahsulot tarkibi',
+  'reports.staff.products.selectOperator':
+    'Mahsulot tarkibini koʻrish uchun «Reyting» boʻlimidan operatorni tanlang.',
+  'reports.staff.products.empty':
+    'Ushbu operatorda bu davrda mahsulot qatoriga ega yakunlangan buyurtma yoʻq.',
+  'reports.staff.products.column.product': 'Mahsulot',
+  'reports.staff.products.column.quantity': 'Soni',
+  'reports.staff.products.column.revenue': 'Tushum',
+
+  'reports.staff.telephony.intro':
+    'Boshqa hisobotlar bilan bir xil kun yopish jarayoni orqali shakllanadi — joriy smena bu yerda kun yopilgandan soʻng koʻrinadi, real vaqtda emas.',
+  'reports.staff.telephony.empty': 'Ushbu davrda hali yopilgan qoʻngʻiroq yoʻq.',
+  'reports.staff.telephony.column.operator': 'Operator',
+  'reports.staff.telephony.column.offered': 'Kelgan',
+  'reports.staff.telephony.column.answered': 'Javob berilgan',
+  'reports.staff.telephony.column.answerRate': 'Javob ulushi',
+  'reports.staff.telephony.column.missed': 'Oʻtkazib yuborilgan',
+  'reports.staff.telephony.column.transferred': 'Uzatilgan',
+  'reports.staff.telephony.column.talkTime': 'Suhbat vaqti',
+  'reports.staff.telephony.rangeCapped': 'Uzunroq davrning dastlabki {days} kuni koʻrsatilmoqda.',
+  'reports.staff.telephony.answerSpeedNotBuilt':
+    'Javob tezligi koʻrsatilmaydi: hozircha qoʻngʻiroqni kutish vaqti ustuni yoʻq (V0149).',
+  'reports.staff.telephony.conversionNotBuilt':
+    'Qoʻngʻiroqdan buyurtmaga aylanish koʻrsatilmaydi: buning uchun 1.6 taʼminlaydigan call-provenance bogʻlanishi kerak (hali yaratilmagan).',
+
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
   'reports.forecast.title': 'Talab tarixi',
   'reports.forecast.intro':

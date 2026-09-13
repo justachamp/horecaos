@@ -44,6 +44,9 @@ public final class MetricRegistry {
 
     private static final LocalDate PILOT = LocalDate.of(2026, 7, 1);
 
+    /** T12 (7.5a): when {@code operator_principal_id} started being written. */
+    private static final LocalDate T12_OPERATOR_ATTRIBUTION = LocalDate.of(2026, 9, 13);
+
     private static final Map<String, MetricDefinition> BY_CODE = index(List.of(
             new MetricDefinition(
                     new MetricId("revenue.gross", 1),
@@ -306,7 +309,32 @@ public final class MetricRegistry {
                     "Read live from ordering rather than from reporting.agg_branch_day's own "
                             + "distinct_customers, so it reflects orders placed since the last "
                             + "close job ran rather than only what has already been aggregated.",
-                    null)));
+                    null),
+            // Wave T12 (7.5a): the operator leaderboard's per-operator basket-size cut.
+            new MetricDefinition(
+                    new MetricId("receipt_depth", 1),
+                    Grain.DAY_LOCATION_OPERATOR,
+                    "reporting.fact_order.item_count over orders.count.v1, grouped by operator",
+                    true,
+                    Aggregation.RATIO,
+                    "COMPLETED_ONLY",
+                    CurrencyRule.NONE,
+                    "One decimal place; the whole figure is items divided by orders, not rounded " + "to an integer",
+                    MetricUnit.COUNT,
+                    "Average item count per completed order, per operator: item_count.v1 (from "
+                            + "orders.count.v1's own inclusion rule) over orders.count.v1, at the "
+                            + "operator grain rather than the branch grain every other count metric "
+                            + "here uses. What 7.2's per-order table already renders per row, "
+                            + "aggregated — a manager reading it asks whether upsell coaching moved "
+                            + "the basket, not what one receipt looked like.",
+                    "Orders whose terminal status is COMPLETED.",
+                    "Cancelled, rejected, and expired orders — the same exclusion " + "orders.count.v1 states.",
+                    "Not applicable: a refund does not change what was ordered.",
+                    "Answered by GET .../reporting/operator-leaderboard's avgItemsPerOrder, not "
+                            + "by /queries: the registry's one-value-per-slice contract does not "
+                            + "express a per-operator breakdown, the same reason order- and "
+                            + "variant-grain reads get their own endpoint (ADR 0043).",
+                    T12_OPERATOR_ATTRIBUTION)));
 
     private MetricRegistry() {}
 

@@ -181,6 +181,74 @@ public class ReportQueryService {
     }
 
     /**
+     * 7.5's operator leaderboard and 7.5a's receipt depth, one row per
+     * operator — human or pseudo (ADR 0043; see {@code OperatorAttribution}).
+     * Orders taken, revenue, average check, average handling time (seconds to
+     * confirm — the closest fact this build has to time on the call), the
+     * delivery/pickup/dine-in split, and a per-channel breakdown so the bot
+     * and the website read beside people rather than as a footnote.
+     *
+     * <p>Not the typed {@link #run} pipeline: a per-operator breakdown is a
+     * shape the registry's one-value-per-slice contract does not express, the
+     * same reason {@link #orders} and {@link #variantSales} get their own
+     * method rather than a {@code groupBy}.
+     */
+    @Transactional(readOnly = true)
+    public OperatorLeaderboardResult operatorLeaderboard(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        List<JdbcReportingStore.OperatorChannelRow> groups =
+                store.readOperatorChannelBreakdown(tenantId, from, to, locationIds);
+
+        Map<String, OperatorAccumulator> byOperator = new LinkedHashMap<>();
+        for (JdbcReportingStore.OperatorChannelRow group : groups) {
+            byOperator
+                    .computeIfAbsent(group.operatorPrincipalId(), ignored -> new OperatorAccumulator())
+                    .add(group);
+        }
+
+        List<OperatorLeaderboardRow> rows = new ArrayList<>(byOperator.size());
+        byOperator.forEach((operatorPrincipalId, accumulator) -> rows.add(accumulator.toRow(operatorPrincipalId)));
+        // Highest revenue first — the leaderboard's own reason to exist.
+        rows.sort(
+                Comparator.comparingLong(OperatorLeaderboardRow::netRevenueSom).reversed());
+
+        return new OperatorLeaderboardResult(
+                rows,
+                provenance(
+                        tenantId,
+                        List.of(MetricRegistry.require("receipt_depth.v1")),
+                        businessDays.boundaryFor(tenantId)));
+    }
+
+    /**
+     * 7.5a: one operator's product mix — the upsell/coaching drill-down from a
+     * leaderboard row. Straight off {@code fact_order_line} on the same
+     * footing {@link #variantSales} already establishes, filtered to the one
+     * operator.
+     */
+    @Transactional(readOnly = true)
+    public OperatorProductResult operatorProducts(
+            UUID tenantId,
+            String operatorPrincipalId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            int limit) {
+
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        List<JdbcReportingStore.VariantSalesRow> rows =
+                store.readOperatorProductSales(tenantId, operatorPrincipalId, from, to, locationIds, limit);
+        return new OperatorProductResult(
+                rows, rows.size() >= limit, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    /**
      * Every terminal status in range, split by cancellation reason — the
      * funnel's drop-offs and the cancellation panel's reason breakdown from one
      * read. See {@code JdbcReportingStore#readOrderOutcomes}.
@@ -493,6 +561,101 @@ public class ReportQueryService {
             List<JdbcReportingStore.VariantSalesRow> rows, boolean maybeMore, Provenance provenance) {}
 
     public record OutcomeResult(List<JdbcReportingStore.OutcomeRow> rows, Provenance provenance) {}
+
+    /**
+     * One operator's totals across the range — human or pseudo.
+     *
+     * @param operatorPrincipalId a staff subject, or {@code "channel:<code>"}
+     *                            as a pseudo-operator — see {@code
+     *                            OperatorAttribution}
+     * @param principalKind       {@code "STAFF"} or {@code "MACHINE"} — the
+     *                            only "kind" this build can say until the
+     *                            staff-identity ADR lands, so a caller never
+     *                            renders a bare id with no explanation
+     * @param subject             the Keycloak subject for {@code STAFF}, or
+     *                            the channel code for {@code MACHINE} — what a
+     *                            surface prints beside {@code principalKind}
+     * @param averageCheckSom     null when {@code orderCount} is zero, never a
+     *                            zero-som average — the same rule {@code
+     *                            average_check.v1} follows
+     * @param avgHandlingSeconds  average {@code seconds_to_confirm} across
+     *                            orders that recorded one; null when none did
+     * @param avgItemsPerOrder    7.5a's receipt depth (registered as {@code
+     *                            receipt_depth.v1}), zero when {@code
+     *                            orderCount} is zero
+     */
+    public record OperatorLeaderboardRow(
+            String operatorPrincipalId,
+            String principalKind,
+            String subject,
+            int orderCount,
+            long grossRevenueSom,
+            long netRevenueSom,
+            @Nullable Long averageCheckSom,
+            @Nullable Integer avgHandlingSeconds,
+            int deliveryCount,
+            int pickupCount,
+            int dineInCount,
+            double avgItemsPerOrder,
+            List<ChannelCount> byChannel) {}
+
+    /** One operator's completed-order count on one channel. */
+    public record ChannelCount(String channelCode, int orderCount) {}
+
+    public record OperatorLeaderboardResult(List<OperatorLeaderboardRow> rows, Provenance provenance) {}
+
+    public record OperatorProductResult(
+            List<JdbcReportingStore.VariantSalesRow> rows, boolean maybeMore, Provenance provenance) {}
+
+    /** Folds one operator's per-channel groups into one leaderboard row. Mutable only inside {@link #operatorLeaderboard}. */
+    private static final class OperatorAccumulator {
+
+        private int orderCount;
+        private long gross;
+        private long net;
+        private long itemCountSum;
+        private long handlingSecondsSum;
+        private int handlingSecondsCount;
+        private int deliveryCount;
+        private int pickupCount;
+        private int dineInCount;
+        private final List<ChannelCount> byChannel = new ArrayList<>();
+
+        void add(JdbcReportingStore.OperatorChannelRow group) {
+            orderCount += group.orderCount();
+            gross += group.grossRevenueSom();
+            net += group.netRevenueSom();
+            itemCountSum += group.itemCountSum();
+            if (group.handlingSecondsSum() != null) {
+                handlingSecondsSum += group.handlingSecondsSum();
+                handlingSecondsCount += group.handlingSecondsCount();
+            }
+            deliveryCount += group.deliveryCount();
+            pickupCount += group.pickupCount();
+            dineInCount += group.dineInCount();
+            byChannel.add(new ChannelCount(group.channelCode(), group.orderCount()));
+        }
+
+        OperatorLeaderboardRow toRow(String operatorPrincipalId) {
+            boolean pseudo = OperatorAttribution.isPseudoOperator(operatorPrincipalId);
+            return new OperatorLeaderboardRow(
+                    operatorPrincipalId,
+                    pseudo ? "MACHINE" : "STAFF",
+                    pseudo ? OperatorAttribution.channelOf(operatorPrincipalId) : operatorPrincipalId,
+                    orderCount,
+                    gross,
+                    net,
+                    orderCount == 0 ? null : gross / orderCount,
+                    handlingSecondsCount == 0
+                            ? null
+                            : (int) Math.round((double) handlingSecondsSum / handlingSecondsCount),
+                    deliveryCount,
+                    pickupCount,
+                    dineInCount,
+                    orderCount == 0 ? 0.0 : (double) itemCountSum / orderCount,
+                    List.copyOf(byChannel));
+        }
+    }
 
     /** A definition plus its signature state, which is what the metric dictionary shows. */
     public record MetricView(

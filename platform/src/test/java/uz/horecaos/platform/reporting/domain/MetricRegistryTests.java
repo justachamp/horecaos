@@ -3,6 +3,7 @@ package uz.horecaos.platform.reporting.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +27,8 @@ class MetricRegistryTests {
                 "orders.late.v1",
                 "prep_time.median.v1",
                 "sla_bucket_set.v1",
-                "channel_mix.count.v1");
+                "channel_mix.count.v1",
+                "receipt_depth.v1");
 
         assertThat(named)
                 .allSatisfy(
@@ -63,6 +65,24 @@ class MetricRegistryTests {
         assertThat(variance.effectiveFrom())
                 .as("an unbuilt metric governs no dates, and saying otherwise implies " + "figures exist")
                 .isNull();
+    }
+
+    @Test
+    void receiptDepthIsBuiltAtTheOperatorGrainAndNotMoney() {
+        // T12 (7.5a): the registry entry backing GET .../operator-leaderboard's
+        // avgItemsPerOrder. Declared here for provenance even though it is
+        // answered by that dedicated endpoint rather than /queries — the same
+        // move prep_time.median.v1 already makes for a shape /queries cannot
+        // express.
+        MetricDefinition receiptDepth = MetricRegistry.require("receipt_depth.v1");
+
+        assertThat(receiptDepth.sourceAvailable()).isTrue();
+        assertThat(receiptDepth.grain()).isEqualTo(Grain.DAY_LOCATION_OPERATOR);
+        assertThat(receiptDepth.grain().dimensions()).contains(Grain.Dimension.OPERATOR);
+        assertThat(receiptDepth.isMoney())
+                .as("an item count is never money, so it carries no legal-entity-grain obligation")
+                .isFalse();
+        assertThat(receiptDepth.effectiveFrom()).isEqualTo(LocalDate.of(2026, 9, 13));
     }
 
     @Test

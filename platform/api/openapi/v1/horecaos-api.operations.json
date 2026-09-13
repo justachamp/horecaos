@@ -7232,6 +7232,108 @@
         },
         "type" : "object"
       },
+      "OperatorChannelCountResponse" : {
+        "properties" : {
+          "channelCode" : {
+            "type" : "string"
+          },
+          "orderCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "OperatorLeaderboardResponse" : {
+        "properties" : {
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OperatorLeaderboardRowResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "OperatorLeaderboardRowResponse" : {
+        "properties" : {
+          "averageCheckSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "avgHandlingSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "avgItemsPerOrder" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "byChannel" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OperatorChannelCountResponse"
+            },
+            "type" : "array"
+          },
+          "deliveryCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "dineInCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "grossRevenueSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "netRevenueSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "operatorPrincipalId" : {
+            "type" : "string"
+          },
+          "orderCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "pickupCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "principalKind" : {
+            "type" : "string"
+          },
+          "subject" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OperatorProductListResponse" : {
+        "properties" : {
+          "maybeMore" : {
+            "type" : "boolean"
+          },
+          "operatorPrincipalId" : {
+            "type" : "string"
+          },
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/VariantSalesRowResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "OrderActionResponse" : {
         "properties" : {
           "action" : {
@@ -31080,6 +31182,133 @@
           }
         },
         "summary" : "Every metric this build defines, with its definition and signature",
+        "tags" : [ "Reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/operator-leaderboard" : {
+      "get" : {
+        "description" : "One row per operator, human or machine: operator_principal_id is a staff Keycloak subject when a person created or accepted the order, or a pseudo-operator named after its channel (\"channel:BOT\", \"channel:WEBSITE\") otherwise, so the bot and the website compare against people rather than disappearing from the board. No name is attached until the staff-identity ADR lands — principalKind and subject say what this build can say instead of a bare id.",
+        "operationId" : "operatorLeaderboard",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OperatorLeaderboardResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "7.5: orders taken, revenue, average check and handling time, per operator",
+        "tags" : [ "Reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/operator-products" : {
+      "get" : {
+        "description" : "Straight off fact_order_line joined back to fact_order for the operator who took it, on the same footing as /variant-sales. Pass an operatorPrincipalId straight off an /operator-leaderboard row.",
+        "operationId" : "operatorProducts",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "operatorPrincipalId",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OperatorProductListResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "7.5a: one operator's product mix, drilled down from the leaderboard",
         "tags" : [ "Reporting" ]
       }
     },

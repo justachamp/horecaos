@@ -3600,6 +3600,52 @@ export const messagesEn = {
   'reports.products.abcXyzNotBuilt':
     'ABC and XYZ classification are not built yet: reporting has no classification_run table and no registered metric for either (ADR 0043).',
 
+  // ---------------------------------------------------------------- reports 7.5/7.5a/7.5b staff (T12)
+  'reports.staff.title': 'Staff reports',
+  'reports.staff.loading': 'Loading…',
+  'reports.staff.tab.leaderboard': 'Leaderboard',
+  'reports.staff.tab.products': 'Products',
+  'reports.staff.tab.telephony': 'Telephony',
+
+  'reports.staff.leaderboard.empty': 'No operator has a completed order in this period.',
+  'reports.staff.leaderboard.column.operator': 'Operator',
+  'reports.staff.leaderboard.column.orders': 'Orders',
+  'reports.staff.leaderboard.column.revenue': 'Revenue',
+  'reports.staff.leaderboard.column.averageCheck': 'Average check',
+  'reports.staff.leaderboard.column.handlingTime': 'Avg. handling time',
+  'reports.staff.leaderboard.column.delivery': 'Delivery',
+  'reports.staff.leaderboard.column.pickup': 'Pickup',
+  'reports.staff.leaderboard.column.dineIn': 'Dine-in',
+  'reports.staff.leaderboard.column.receiptDepth': 'Items / receipt',
+  'reports.staff.leaderboard.kind.STAFF': 'Staff',
+  'reports.staff.leaderboard.kind.MACHINE': 'Automated',
+  'reports.staff.leaderboard.viewProducts': 'View products',
+
+  'reports.staff.products.title': 'Operator product mix',
+  'reports.staff.products.selectOperator':
+    'Pick an operator on the Leaderboard tab to see their product mix.',
+  'reports.staff.products.empty':
+    'This operator has no completed order with a product line in this period.',
+  'reports.staff.products.column.product': 'Product',
+  'reports.staff.products.column.quantity': 'Qty',
+  'reports.staff.products.column.revenue': 'Revenue',
+
+  'reports.staff.telephony.intro':
+    'Written by the same day-close pipeline as every other report — a live shift appears here the next time the day closes, not in real time.',
+  'reports.staff.telephony.empty': 'No calls closed in this period yet.',
+  'reports.staff.telephony.column.operator': 'Operator',
+  'reports.staff.telephony.column.offered': 'Offered',
+  'reports.staff.telephony.column.answered': 'Answered',
+  'reports.staff.telephony.column.answerRate': 'Answer rate',
+  'reports.staff.telephony.column.missed': 'Missed',
+  'reports.staff.telephony.column.transferred': 'Transferred',
+  'reports.staff.telephony.column.talkTime': 'Talk time',
+  'reports.staff.telephony.rangeCapped': 'Showing the first {days} days of a longer range.',
+  'reports.staff.telephony.answerSpeedNotBuilt':
+    'Answer speed is not shown: there is no ring/wait time column yet (V0149).',
+  'reports.staff.telephony.conversionNotBuilt':
+    'Call-to-order conversion is not shown: it needs the call-provenance wiring that 1.6 supplies (not built yet).',
+
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
   'reports.forecast.title': 'Demand history',
   'reports.forecast.intro':
