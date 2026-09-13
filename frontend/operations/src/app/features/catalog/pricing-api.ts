@@ -5,11 +5,16 @@ import { ApiClient } from '../../core/api/api-client';
 import { BrandScope, pricingPaths } from '../../core/api/catalog-paths';
 import { command } from '../../core/api/idempotency';
 import {
+  BulkPriceChangeItem,
+  BulkPriceChangeReport,
+  BulkPriceChangeRequest,
   CreatePriceBookRequest,
   PriceBookAssignmentRequest,
   PriceBookSummary,
   PriceRequest,
   ResolvedPrices,
+  SetTaxProfileRequest,
+  TaxProfile,
 } from './catalog-domain';
 
 /**
@@ -125,6 +130,43 @@ export class PricingApi {
       pricingPaths.activation(scope, priceBookId),
       command(undefined),
       { expectedVersion },
+    );
+  }
+
+  /**
+   * Row 4.8b — changes many prices in one call, against one book.
+   *
+   * `dryRun: true` runs every item's write and rolls the whole batch back, so
+   * the caller can render "would-cost" before committing anything; `false`
+   * commits what it can, item by item, and reports one outcome per item —
+   * never one all-or-nothing transaction, matching `q-data-grid`'s own
+   * batched-save contract.
+   */
+  bulkApplyPrices(
+    scope: BrandScope,
+    priceBookId: string,
+    items: readonly BulkPriceChangeItem[],
+    dryRun: boolean,
+  ): Observable<BulkPriceChangeReport> {
+    return this.api.post<BulkPriceChangeRequest, BulkPriceChangeReport>(
+      pricingPaths.bulkApply(scope, priceBookId),
+      command({ dryRun, items }),
+    );
+  }
+
+  /**
+   * Sets the brand's VAT rate for a jurisdiction (IA 4.8a's tax-profile
+   * screen). Basis points: 1200 is 12%. There is no read endpoint yet — the
+   * response is the only place a caller learns what is now in force.
+   */
+  setTaxProfile(
+    scope: BrandScope,
+    jurisdictionCode: string,
+    request: SetTaxProfileRequest,
+  ): Observable<TaxProfile> {
+    return this.api.put<SetTaxProfileRequest, TaxProfile>(
+      pricingPaths.taxProfile(scope, jurisdictionCode),
+      command(request),
     );
   }
 }

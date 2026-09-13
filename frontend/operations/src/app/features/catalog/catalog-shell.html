@@ -34,7 +34,20 @@
       class="catalog-shell__tab q-body-sm"
       routerLink="/catalog/prices"
       routerLinkActive="catalog-shell__tab--active"
+      [routerLinkActiveOptions]="{ exact: true }"
       >{{ 'catalog.nav.prices' | t }}</a
+    >
+    <a
+      class="catalog-shell__tab q-body-sm"
+      routerLink="/catalog/prices/bulk"
+      routerLinkActive="catalog-shell__tab--active"
+      >{{ 'catalog.nav.priceBulk' | t }}</a
+    >
+    <a
+      class="catalog-shell__tab q-body-sm"
+      routerLink="/catalog/prices/tax-profile"
+      routerLinkActive="catalog-shell__tab--active"
+      >{{ 'catalog.nav.taxProfile' | t }}</a
     >
     <a
       class="catalog-shell__tab q-body-sm"

@@ -1,0 +1,111 @@
+.price-bulk {
+  padding: 16px;
+  overflow: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.price-bulk__skeleton {
+  height: 240px;
+  background: var(--q-surface-1);
+}
+
+.price-bulk__denied,
+.price-bulk__no-book {
+  padding: 32px;
+  text-align: center;
+}
+
+.price-bulk__error-band {
+  padding: 8px 12px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+  border-radius: var(--q-radius);
+}
+
+.price-bulk__toolbar {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.price-bulk__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--q-type-body-xs);
+  color: var(--q-ink-muted);
+}
+
+.price-bulk__field input,
+.price-bulk__field select {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-body-sm);
+}
+
+.price-bulk__calculator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.price-bulk__direction {
+  display: flex;
+  gap: 6px;
+}
+
+.price-bulk__direction-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-body-xs);
+}
+
+.price-bulk__direction-btn--active {
+  border-color: var(--q-primary);
+  color: var(--q-primary);
+}
+
+.price-bulk__report {
+  padding: 8px 12px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-body-sm);
+}
+
+.price-bulk__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.price-bulk__preview {
+  padding: 8px 16px;
+  border: 1px solid var(--q-primary);
+  background: var(--q-canvas);
+  color: var(--q-primary);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
+
+.price-bulk__apply {
+  padding: 8px 16px;
+  border: none;
+  background: var(--q-primary);
+  color: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
+
+.price-bulk__preview:disabled,
+.price-bulk__apply:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

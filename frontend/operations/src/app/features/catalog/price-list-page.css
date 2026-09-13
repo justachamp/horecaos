@@ -12,6 +12,17 @@
   margin-bottom: 12px;
 }
 
+.price-list__links {
+  display: flex;
+  gap: 12px;
+  margin-right: auto;
+  font-size: var(--q-type-body-xs);
+}
+
+.price-list__links a {
+  color: var(--q-primary);
+}
+
 .price-list__error {
   color: var(--q-error-text);
   font-size: var(--q-type-body-xs);
@@ -159,4 +170,32 @@
 .price-list__submit:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.price-list__scope-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.price-list__scope-toggle-btn {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-caption);
+}
+
+.price-list__scope-toggle-btn--active {
+  border-color: var(--q-primary);
+  background: var(--q-primary-tint, var(--q-surface-1));
+  color: var(--q-primary);
+}
+
+.price-list__field select {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-body-sm);
 }

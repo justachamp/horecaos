@@ -65,6 +65,24 @@ public class CatalogPublicationController {
         }
     }
 
+    @GetMapping("/catalogs/{catalogId}/draft-preview")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "The content hash the draft would publish as right now (IA 4.6)",
+            description = "Nothing is written. A channel card compares this against the hash of "
+                    + "its own last PUBLISHED history entry to render \"Черновик отличается от "
+                    + "опубликованного\" versus \"Актуально\" before an operator commits to "
+                    + "publishing.")
+    public ResponseEntity<DraftPreviewResponse> draftPreview(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID catalogId) {
+        try {
+            var preview = publication.previewDraft(tenantId, brandId, catalogId);
+            return ResponseEntity.ok(new DraftPreviewResponse(preview.contentHash(), preview.itemCount()));
+        } catch (IllegalArgumentException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
     @GetMapping("/publications")
     @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
     @Operation(
@@ -196,4 +214,6 @@ public class CatalogPublicationController {
 
     public record PublicationResponse(
             UUID publicationId, PublicationStatus status, String contentHash, ValidationResponse validation) {}
+
+    public record DraftPreviewResponse(String contentHash, int itemCount) {}
 }

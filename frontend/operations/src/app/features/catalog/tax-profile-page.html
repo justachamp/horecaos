@@ -1,0 +1,81 @@
+<div class="tax-profile">
+  @if (denied()) {
+    <div class="tax-profile__denied" data-testid="tax-profile-denied">
+      <p class="q-body-sm">{{ 'catalog.taxProfile.denied' | t }}</p>
+    </div>
+  } @else {
+    <h2 class="q-subhead">{{ 'catalog.taxProfile.title' | t }}</h2>
+    <p class="q-body-sm tax-profile__intro">{{ 'catalog.taxProfile.intro' | t }}</p>
+
+    @if (error(); as message) {
+      <div class="tax-profile__error-band" role="alert">
+        <span class="q-body-sm">{{ message }}</span>
+      </div>
+    }
+
+    <form class="tax-profile__form" (submit)="$event.preventDefault(); submit()">
+      <label class="tax-profile__field">
+        {{ 'catalog.taxProfile.jurisdictionCode' | t }}
+        <input
+          type="text"
+          maxlength="16"
+          [value]="jurisdictionCode()"
+          (input)="jurisdictionCode.set($any($event.target).value)"
+          data-testid="tax-profile-jurisdiction"
+        />
+      </label>
+
+      <div class="tax-profile__mode" role="radiogroup">
+        <button
+          type="button"
+          class="tax-profile__mode-btn"
+          [class.tax-profile__mode-btn--active]="mode() === 'INCLUSIVE'"
+          (click)="setMode('INCLUSIVE')"
+          data-testid="tax-profile-mode-inclusive"
+        >
+          {{ 'catalog.taxProfile.mode.inclusive' | t }}
+        </button>
+        <button
+          type="button"
+          class="tax-profile__mode-btn"
+          [class.tax-profile__mode-btn--active]="mode() === 'EXCLUSIVE'"
+          (click)="setMode('EXCLUSIVE')"
+          data-testid="tax-profile-mode-exclusive"
+        >
+          {{ 'catalog.taxProfile.mode.exclusive' | t }}
+        </button>
+      </div>
+
+      <label class="tax-profile__field">
+        {{ 'catalog.taxProfile.rate' | t }}
+        <q-percent-input
+          [basisPoints]="rateBasisPoints()"
+          (basisPointsChange)="rateBasisPoints.set($event)"
+        />
+      </label>
+
+      <button
+        type="submit"
+        class="tax-profile__submit"
+        [disabled]="!canSubmit()"
+        data-testid="tax-profile-submit"
+      >
+        {{ (submitting() ? 'catalog.taxProfile.saving' : 'catalog.taxProfile.submit') | t }}
+      </button>
+    </form>
+
+    @if (saved(); as profile) {
+      <div class="tax-profile__result" role="status" data-testid="tax-profile-result">
+        {{
+          'catalog.taxProfile.saved'
+            | t
+              : {
+                  code: profile.jurisdictionCode,
+                  mode: profile.mode,
+                  rate: profile.rateBasisPoints / 100,
+                }
+        }}
+      </div>
+    }
+  }
+</div>

@@ -21,6 +21,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
@@ -28,6 +30,9 @@ import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.pricing.application.CatalogPricingContext;
 import uz.horecaos.platform.pricing.application.PriceAuthoringService;
 import uz.horecaos.platform.pricing.application.PriceAuthoringService.AssignmentScope;
+import uz.horecaos.platform.pricing.application.PriceBulkApplyService;
+import uz.horecaos.platform.pricing.application.PriceBulkApplyService.BulkPriceChangeReport;
+import uz.horecaos.platform.pricing.application.PriceBulkApplyService.BulkPriceItem;
 import uz.horecaos.platform.pricing.application.PriceQueryService;
 import uz.horecaos.platform.pricing.application.PriceableType;
 import uz.horecaos.platform.pricing.application.PricingEngine;
@@ -70,6 +75,7 @@ class PriceAuthoringTests {
     private JdbcPricingStore pricingStore;
     private PriceAuthoringService authoring;
     private PriceQueryService query;
+    private PriceBulkApplyService bulkApply;
     private QuoteService quotes;
     private MutableClock clock;
 
@@ -126,6 +132,8 @@ class PriceAuthoringTests {
                 event -> {},
                 () -> new AuthenticatedActor("price-authoring-test", Set.of(), Map.of()));
         query = new PriceQueryService(pricingStore, channelStore, clock);
+        bulkApply = new PriceBulkApplyService(
+                authoring, pricingStore, clock, new TransactionTemplate(new DataSourceTransactionManager(dataSource)));
 
         // The real resolver, so a cart travels the production path. Never
         // consulted: every cart here is a collection, and a request with no
@@ -525,6 +533,138 @@ class PriceAuthoringTests {
 
         assertThat(resolved.priceBookId()).isNull();
         assertThat(resolved.amountsMinor()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a bulk apply changes many prices in one call and reports what each one did")
+    void bulkApplyChangesManyPricesAtOnce() {
+        UUID book = liveBrandBook(50_000L);
+        authoring.setPrice(TENANT, BRAND, book, PriceableType.MODIFIER_OPTION, cheeseOption, 7_000L);
+
+        BulkPriceChangeReport report = bulkApply.bulkApply(
+                TENANT,
+                BRAND,
+                book,
+                List.of(
+                        new BulkPriceItem(PriceableType.VARIANT, burgerVariant, 55_000L),
+                        new BulkPriceItem(PriceableType.MODIFIER_OPTION, cheeseOption, 8_000L)),
+                false);
+
+        assertThat(report.totalItems()).isEqualTo(2);
+        assertThat(report.appliedCount()).isEqualTo(2);
+        assertThat(report.failedCount()).isZero();
+        assertThat(report.dryRun()).isFalse();
+        assertThat(report.items())
+                .anySatisfy(item -> {
+                    assertThat(item.priceableId()).isEqualTo(burgerVariant);
+                    assertThat(item.previousAmountMinor()).isEqualTo(50_000L);
+                    assertThat(item.amountMinor()).isEqualTo(55_000L);
+                })
+                .anySatisfy(item -> {
+                    assertThat(item.priceableId()).isEqualTo(cheeseOption);
+                    assertThat(item.previousAmountMinor()).isEqualTo(7_000L);
+                    assertThat(item.amountMinor()).isEqualTo(8_000L);
+                });
+
+        var resolved = query.resolvePrices(TENANT, BRAND, LOCATION, null, PriceableType.VARIANT, Set.of(burgerVariant));
+        assertThat(resolved.amountsMinor()).containsEntry(burgerVariant, 55_000L);
+    }
+
+    @Test
+    @DisplayName("a dry run reports what would happen and writes nothing")
+    void bulkApplyDryRunWritesNothing() {
+        UUID book = liveBrandBook(50_000L);
+
+        BulkPriceChangeReport report = bulkApply.bulkApply(
+                TENANT, BRAND, book, List.of(new BulkPriceItem(PriceableType.VARIANT, burgerVariant, 99_000L)), true);
+
+        assertThat(report.dryRun()).isTrue();
+        assertThat(report.appliedCount()).isEqualTo(1);
+        assertThat(report.items()).singleElement().satisfies(item -> {
+            assertThat(item.previousAmountMinor()).isEqualTo(50_000L);
+            assertThat(item.amountMinor()).isEqualTo(99_000L);
+        });
+
+        // The whole point of the dry run: the book's own price is still 50,000,
+        // exactly as if bulkApply had never been called.
+        var resolved = query.resolvePrices(TENANT, BRAND, LOCATION, null, PriceableType.VARIANT, Set.of(burgerVariant));
+        assertThat(resolved.amountsMinor()).containsEntry(burgerVariant, 50_000L);
+        assertThat(jdbc.sql("SELECT count(*) FROM pricing.prices WHERE price_book_id = ?")
+                        .param(book)
+                        .query(Long.class)
+                        .single())
+                .as("no new row survived the rollback")
+                .isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("one bad item in a batch fails on its own, without taking the others down with it")
+    void bulkApplyReportsPartialFailure() {
+        UUID book = liveBrandBook(50_000L);
+
+        BulkPriceChangeReport report = bulkApply.bulkApply(
+                TENANT,
+                BRAND,
+                book,
+                List.of(
+                        new BulkPriceItem(PriceableType.VARIANT, burgerVariant, 60_000L),
+                        // Another brand's variant: real row, wrong brand — exactly the
+                        // shape UnknownPriceableException exists to catch.
+                        new BulkPriceItem(PriceableType.VARIANT, otherBrandVariant, 10_000L)),
+                false);
+
+        assertThat(report.totalItems()).isEqualTo(2);
+        assertThat(report.appliedCount()).isEqualTo(1);
+        assertThat(report.failedCount()).isEqualTo(1);
+        assertThat(report.items())
+                .anySatisfy(item -> {
+                    assertThat(item.priceableId()).isEqualTo(burgerVariant);
+                    assertThat(item.applied()).isTrue();
+                })
+                .anySatisfy(item -> {
+                    assertThat(item.priceableId()).isEqualTo(otherBrandVariant);
+                    assertThat(item.applied()).isFalse();
+                    assertThat(item.problemCode()).isEqualTo("UNKNOWN_PRICEABLE");
+                });
+
+        // The good item committed even though the batch, as a whole, had a failure.
+        var resolved = query.resolvePrices(TENANT, BRAND, LOCATION, null, PriceableType.VARIANT, Set.of(burgerVariant));
+        assertThat(resolved.amountsMinor()).containsEntry(burgerVariant, 60_000L);
+    }
+
+    @Test
+    @DisplayName("the same priceable named twice in one batch rejects the second occurrence")
+    void bulkApplyRejectsADuplicateItemInTheSameBatch() {
+        UUID book = liveBrandBook(50_000L);
+
+        BulkPriceChangeReport report = bulkApply.bulkApply(
+                TENANT,
+                BRAND,
+                book,
+                List.of(
+                        new BulkPriceItem(PriceableType.VARIANT, burgerVariant, 60_000L),
+                        new BulkPriceItem(PriceableType.VARIANT, burgerVariant, 70_000L)),
+                false);
+
+        assertThat(report.appliedCount()).isEqualTo(1);
+        assertThat(report.failedCount()).isEqualTo(1);
+        assertThat(report.items().get(1).problemCode()).isEqualTo("DUPLICATE_IN_BATCH");
+
+        // The first (and only accepted) write is the one that stuck.
+        var resolved = query.resolvePrices(TENANT, BRAND, LOCATION, null, PriceableType.VARIANT, Set.of(burgerVariant));
+        assertThat(resolved.amountsMinor()).containsEntry(burgerVariant, 60_000L);
+    }
+
+    @Test
+    @DisplayName("bulk applying against an unknown price book fails the whole call, not one item at a time")
+    void bulkApplyRefusesAnUnknownPriceBook() {
+        assertThat(catchThrowable(() -> bulkApply.bulkApply(
+                        TENANT,
+                        BRAND,
+                        UUID.randomUUID(),
+                        List.of(new BulkPriceItem(PriceableType.VARIANT, burgerVariant, 1_000L)),
+                        false)))
+                .isInstanceOf(PriceAuthoringService.UnknownPriceBookException.class);
     }
 
     // ------------------------------------------------------------------ fixtures

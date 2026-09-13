@@ -1,0 +1,126 @@
+<div class="price-bulk">
+  @if (loading()) {
+    <div class="price-bulk__skeleton" [attr.aria-label]="'catalog.priceBulk.loading' | t"></div>
+  } @else if (denied()) {
+    <div class="price-bulk__denied" data-testid="price-bulk-denied">
+      <p class="q-body-sm">{{ 'catalog.priceBulk.denied' | t }}</p>
+    </div>
+  } @else {
+    <h2 class="q-subhead">{{ 'catalog.priceBulk.title' | t }}</h2>
+
+    @if (loadError(); as error) {
+      <div class="price-bulk__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+    @if (actionError(); as error) {
+      <div class="price-bulk__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    @if (priceBookId() === null) {
+      <div class="price-bulk__no-book" data-testid="price-bulk-no-book">
+        <p class="q-body-sm">{{ 'catalog.priceBulk.noPriceBook' | t }}</p>
+      </div>
+    } @else {
+      <div class="price-bulk__toolbar">
+        <label class="price-bulk__field">
+          {{ 'catalog.priceBulk.category' | t }}
+          <select
+            [value]="categoryFilter()"
+            (change)="categoryFilter.set($any($event.target).value)"
+            data-testid="price-bulk-category"
+          >
+            <option value="">{{ 'catalog.priceBulk.allCategories' | t }}</option>
+            @for (category of categoryOptions(); track category) {
+              <option [value]="category">{{ category }}</option>
+            }
+          </select>
+        </label>
+        <label class="price-bulk__field">
+          {{ 'catalog.priceBulk.search' | t }}
+          <input
+            type="text"
+            [value]="search()"
+            (input)="search.set($any($event.target).value)"
+            data-testid="price-bulk-search"
+          />
+        </label>
+      </div>
+
+      <div class="price-bulk__calculator">
+        <div class="price-bulk__direction" role="radiogroup">
+          <button
+            type="button"
+            class="price-bulk__direction-btn"
+            [class.price-bulk__direction-btn--active]="direction() === 'INCREASE'"
+            (click)="direction.set('INCREASE')"
+            data-testid="price-bulk-direction-increase"
+          >
+            {{ 'catalog.priceBulk.direction.increase' | t }}
+          </button>
+          <button
+            type="button"
+            class="price-bulk__direction-btn"
+            [class.price-bulk__direction-btn--active]="direction() === 'DECREASE'"
+            (click)="direction.set('DECREASE')"
+            data-testid="price-bulk-direction-decrease"
+          >
+            {{ 'catalog.priceBulk.direction.decrease' | t }}
+          </button>
+        </div>
+        <q-money-or-percent
+          [kind]="calculatorKind()"
+          [amountMinor]="calculatorAmountMinor()"
+          [basisPoints]="calculatorBasisPoints()"
+          (kindChange)="calculatorKind.set($event)"
+          (amountMinorChange)="calculatorAmountMinor.set($event)"
+          (basisPointsChange)="calculatorBasisPoints.set($event)"
+        />
+      </div>
+
+      @if (lastReport(); as report) {
+        <div class="price-bulk__report" role="status" data-testid="price-bulk-report">
+          {{
+            (report.dryRun ? 'catalog.priceBulk.previewSummary' : 'catalog.priceBulk.applySummary')
+              | t
+                : {
+                    applied: report.appliedCount,
+                    total: report.totalItems,
+                    failed: report.failedCount,
+                  }
+          }}
+        </div>
+      }
+
+      <q-data-grid
+        [columns]="columns()"
+        [rows]="gridRows()"
+        [rowId]="rowIdFn"
+        data-testid="price-bulk-grid"
+      />
+
+      <div class="price-bulk__actions">
+        <button
+          type="button"
+          class="price-bulk__preview"
+          [disabled]="!canRunBulk()"
+          (click)="preview()"
+          data-testid="price-bulk-preview"
+        >
+          {{ (previewing() ? 'catalog.priceBulk.previewing' : 'catalog.priceBulk.preview') | t }}
+        </button>
+        <button
+          type="button"
+          class="price-bulk__apply"
+          [disabled]="!canRunBulk()"
+          (click)="apply()"
+          data-testid="price-bulk-apply"
+        >
+          {{ (applying() ? 'catalog.priceBulk.applying' : 'catalog.priceBulk.apply') | t }}
+        </button>
+      </div>
+    }
+  }
+</div>

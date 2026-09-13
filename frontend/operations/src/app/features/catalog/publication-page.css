@@ -52,7 +52,9 @@
 
 .publication__finding {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
+  gap: 12px;
   padding: 6px 12px;
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
@@ -63,9 +65,76 @@
   border-left-color: var(--q-error);
 }
 
+.publication__finding-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.publication__finding-code {
+  font-family: var(--q-font-mono, monospace);
+  font-size: var(--q-type-caption);
+}
+
+.publication__finding-entity {
+  color: var(--q-ink-subtle);
+  font-size: var(--q-type-caption);
+}
+
+.publication__finding-detail {
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-body-xs);
+}
+
+.publication__finding-link {
+  flex: none;
+  font-size: var(--q-type-caption);
+  color: var(--q-primary);
+  white-space: nowrap;
+}
+
 .publication__finding-empty {
   color: var(--q-ink-muted);
   padding: 6px 12px;
+}
+
+.publication__channel-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+
+.publication__channel-fact {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--q-type-caption);
+  color: var(--q-ink-subtle);
+}
+
+.publication__channel-fact dt {
+  font-weight: normal;
+}
+
+.publication__channel-fact dd {
+  margin: 0;
+}
+
+.publication__draft-status {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-caption);
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.publication__draft-status--differs {
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
 }
 
 .publication__channels {
