@@ -672,6 +672,18 @@ export interface BranchOrderCountsResponse {
   locationId?: string;
 }
 
+export interface BrandLocaleRequest {
+  description?: string;
+  isDefault?: boolean;
+  locale: string;
+}
+
+export interface BrandLocaleView {
+  description?: string;
+  isDefault?: boolean;
+  locale?: string;
+}
+
 export interface BrandOrderCountsResponse {
   locations?: Array<BranchOrderCountsResponse>;
   period?: string;
@@ -683,11 +695,16 @@ export interface BrandOrderCountsResponse {
 }
 
 export interface BrandView {
+  bannerAssetId?: string;
   code?: string;
+  contactPhone?: string;
   displayName?: string;
   id?: string;
+  locales?: Array<BrandLocaleView>;
+  logoAssetId?: string;
   slug?: string;
   status?: "DRAFT" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
+  telegramHandle?: string;
   tenantId?: string;
   version?: number;
 }
@@ -2817,6 +2834,14 @@ export interface LocationServiceOperationsControllerExceptionResponse {
   closesAt?: string;
   date?: string;
   opensAt?: string;
+}
+
+export interface LocationServiceStateResponse {
+  effectiveMode?: string;
+  effectiveUntil?: string;
+  locationId?: string;
+  mode?: string;
+  reasonCode?: string;
 }
 
 export interface LocationSetRequest {
@@ -6400,6 +6425,14 @@ export interface Unavailable {
   variantId?: string;
 }
 
+export interface UpdateBrandProfileRequest {
+  bannerAssetId?: string;
+  contactPhone?: string;
+  locales: Array<BrandLocaleRequest>;
+  logoAssetId?: string;
+  telegramHandle?: string;
+}
+
 export interface UpdateCloposSettingsRequest {
   requireClerkApproval: boolean;
 }
@@ -6782,6 +6815,7 @@ export interface Operations {
   "setModifierOptionPrice": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/modifier-option-prices/{modifierOptionId}"; request: { parameters: { path: { brandId: string; modifierOptionId: string; priceBookId: string; tenantId: string } }; body: PriceRequest }; responses: { "200": PriceBookResponse } };
   "setVariantPrice": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/variant-prices/{variantId}"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string; variantId: string } }; body: PriceRequest }; responses: { "200": PriceBookResponse } };
   "setTaxProfile": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/tax-profiles/{jurisdictionCode}"; request: { parameters: { path: { brandId: string; jurisdictionCode: string; tenantId: string } }; body: TaxProfileRequest }; responses: { "200": TaxProfileResponse } };
+  "updateBrandProfile": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/profile"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: UpdateBrandProfileRequest }; responses: { "200": BrandView } };
   "create_11": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateScheduleRequest }; responses: { "200": ScheduleView } };
   "upsertException": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules/{scheduleId}/exceptions"; request: { parameters: { path: { brandId: string; scheduleId: string; tenantId: string } }; body: ExceptionRequest }; responses: { "200": unknown } };
   "replaceRules": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules/{scheduleId}/rules"; request: { parameters: { path: { brandId: string; scheduleId: string; tenantId: string } }; body: RulesRequest }; responses: { "200": unknown } };
@@ -6923,6 +6957,7 @@ export interface Operations {
   "retire_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals/{terminalId}/retire"; request: { parameters: { path: { brandId: string; tenantId: string; terminalId: string }; query: { expectedVersion: number } } }; responses: { "200": FiscalTerminalView } };
   "suspend_5": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals/{terminalId}/suspend"; request: { parameters: { path: { brandId: string; tenantId: string; terminalId: string }; query: { expectedVersion: number } } }; responses: { "200": FiscalTerminalView } };
   "locations": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<LocationView> } };
+  "locationServiceStates": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/service-states"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<LocationServiceStateResponse> } };
   "profile_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LocationView } };
   "tagsOfLocation": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/branch-tags"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<string> } };
   "setTagsOfLocation": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/branch-tags"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: SetLocationTagsRequest }; responses: { "200": unknown } };

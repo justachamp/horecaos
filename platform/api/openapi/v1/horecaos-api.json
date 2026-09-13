@@ -2099,6 +2099,39 @@
         },
         "type" : "object"
       },
+      "BrandLocaleRequest" : {
+        "properties" : {
+          "description" : {
+            "maxLength" : 2000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "isDefault" : {
+            "type" : "boolean"
+          },
+          "locale" : {
+            "maxLength" : 16,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "locale" ],
+        "type" : "object"
+      },
+      "BrandLocaleView" : {
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "isDefault" : {
+            "type" : "boolean"
+          },
+          "locale" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "BrandOrderCountsResponse" : {
         "properties" : {
           "locations" : {
@@ -2138,7 +2171,14 @@
       },
       "BrandView" : {
         "properties" : {
+          "bannerAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "code" : {
+            "type" : "string"
+          },
+          "contactPhone" : {
             "type" : "string"
           },
           "displayName" : {
@@ -2148,11 +2188,24 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "locales" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BrandLocaleView"
+            },
+            "type" : "array"
+          },
+          "logoAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "slug" : {
             "type" : "string"
           },
           "status" : {
             "enum" : [ "DRAFT", "ACTIVE", "SUSPENDED", "ARCHIVED" ],
+            "type" : "string"
+          },
+          "telegramHandle" : {
             "type" : "string"
           },
           "tenantId" : {
@@ -8891,6 +8944,28 @@
           },
           "opensAt" : {
             "format" : "time-local",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "LocationServiceStateResponse" : {
+        "properties" : {
+          "effectiveMode" : {
+            "type" : "string"
+          },
+          "effectiveUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "reasonCode" : {
             "type" : "string"
           }
         },
@@ -20093,6 +20168,41 @@
         },
         "type" : "object"
       },
+      "UpdateBrandProfileRequest" : {
+        "properties" : {
+          "bannerAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "contactPhone" : {
+            "example" : "+998712000000",
+            "maxLength" : 32,
+            "minLength" : 0,
+            "pattern" : "\\+[1-9][0-9]{7,14}",
+            "type" : "string"
+          },
+          "locales" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BrandLocaleRequest"
+            },
+            "maxItems" : 8,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "logoAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "telegramHandle" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "pattern" : "[A-Za-z][A-Za-z0-9_]{4,31}",
+            "type" : "string"
+          }
+        },
+        "required" : [ "locales" ],
+        "type" : "object"
+      },
       "UpdateCloposSettingsRequest" : {
         "properties" : {
           "requireClerkApproval" : {
@@ -26216,6 +26326,53 @@
         "tags" : [ "Price authoring" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/profile" : {
+      "put" : {
+        "description" : "Contact phone, Telegram handle, logo and banner (as already-uploaded media asset ids), and the brand's whole supported-locale set with each locale's own description and which one is default. A whole-set write for `locales`: the screen's own checkbox grid always knows the full set it wants.",
+        "operationId" : "updateBrandProfile",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateBrandProfileRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BrandView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Correct a brand's customer-facing profile",
+        "tags" : [ "SaaS control plane" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules" : {
       "post" : {
         "description" : "Named and reusable, so thirty branches on one Ramadan timetable edit one object. That is the point, and also the accident.",
@@ -32137,6 +32294,45 @@
           }
         },
         "summary" : "The brand's locations, for the Settings 10.2 list and the scope bar's location picker",
+        "tags" : [ "Operations brand profile" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/service-states" : {
+      "get" : {
+        "operationId" : "locationServiceStates",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/LocationServiceStateResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every location's manual-override state, batched, for the branch list's state column and filter",
         "tags" : [ "Operations brand profile" ]
       }
     },
