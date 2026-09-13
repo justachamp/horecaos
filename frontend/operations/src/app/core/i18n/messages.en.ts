@@ -3553,6 +3553,52 @@ export const messagesEn = {
   'orders.callCentre.callLog.type.MISSED': 'Missed',
   'orders.callCentre.callLog.type.TRANSFERRED': 'Transferred',
 
+  // --- New order (orders.md §5, wave P13) ---------------------------------
+  'orders.newOrder.title': 'New order',
+  'orders.newOrder.locationDenied': 'No access to take orders at this location',
+  'orders.newOrder.customer.title': 'Customer',
+  'orders.newOrder.customer.phoneLabel': 'Phone',
+  'orders.newOrder.customer.searching': 'Searching…',
+  'orders.newOrder.customer.noMatches': 'No match',
+  'orders.newOrder.customer.orderCount': '{count} orders on file',
+  'orders.newOrder.customer.noOrders': 'No previous orders',
+  'orders.newOrder.customer.unnamed': 'Unnamed',
+  'orders.newOrder.customer.change': 'Change',
+  'orders.newOrder.customer.history': 'History',
+  'orders.newOrder.customer.historyLoading': 'Loading…',
+  'orders.newOrder.customer.historyEmpty': 'No previous orders',
+  'orders.newOrder.customer.createButton': 'Create customer',
+  'orders.newOrder.customer.nonContactable':
+    'This account cannot be contacted for marketing — no consent was collected on this call.',
+  'orders.newOrder.menu.title': 'Menu',
+  'orders.newOrder.menu.searchPlaceholder': 'Search items (F2)',
+  'orders.newOrder.menu.loading': 'Loading the menu…',
+  'orders.newOrder.menu.stopped': 'stop',
+  'orders.newOrder.menu.itemStopped': 'This item is no longer available',
+  'orders.newOrder.menu.unpricedResult': 'This item could not be priced — try again in a moment',
+  'orders.newOrder.modifiers.title': 'Choose options for {product}',
+  'orders.newOrder.modifiers.required': 'required',
+  'orders.newOrder.modifiers.selectAtLeast': 'Choose at least {min}',
+  'orders.newOrder.modifiers.confirm': 'Add to order',
+  'orders.newOrder.modifiers.cancel': 'Cancel',
+  'orders.newOrder.basket.title': 'Basket',
+  'orders.newOrder.basket.empty': 'No items yet',
+  'orders.newOrder.basket.remove': 'Remove',
+  'orders.newOrder.basket.notePlaceholder': 'Note for the kitchen',
+  'orders.newOrder.basket.unavailable': 'No longer available — remove it to continue',
+  'orders.newOrder.order.title': 'Order',
+  'orders.newOrder.order.fulfillmentMode': 'Type',
+  'orders.newOrder.order.deliveryComingLater': 'Delivery needs an address — coming in a later wave',
+  'orders.newOrder.order.payment': 'Payment',
+  'orders.newOrder.order.paymentCashOnly': 'Cash only, this release (ADR 0039)',
+  'orders.newOrder.order.total': 'Total',
+  'orders.newOrder.order.totalPending': 'Priced once every item has a price on file',
+  'orders.newOrder.order.submit': 'Create',
+  'orders.newOrder.order.submitting': 'Creating…',
+  'orders.newOrder.order.cancel': 'Cancel',
+  'orders.newOrder.order.created': 'Order {number} created',
+  'orders.newOrder.order.unavailableCount': '{count} item(s) in the basket are no longer available',
+
   // --- shared/ui (ADR 0101) ----------------------------------------------
   // The only keys in this catalogue owned by a component rather than by a
   // screen. `ui.*` rather than a per-component namespace because there are
@@ -3773,9 +3819,11 @@ export const messagesEn = {
   'settings.integrations.detail.bindings.column.status': 'Status',
   'settings.integrations.detail.bindings.column.actions': 'Actions',
   'settings.integrations.detail.bindings.activate': 'Activate',
-  'settings.integrations.detail.bindings.activate.reasonPrompt': 'Reason for bringing this binding live:',
+  'settings.integrations.detail.bindings.activate.reasonPrompt':
+    'Reason for bringing this binding live:',
   'settings.integrations.detail.bindings.suspend': 'Suspend',
-  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Reason for suspending this binding:',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Reason for suspending this binding:',
   'settings.integrations.detail.bindings.empty': 'No bindings yet.',
   'settings.integrations.detail.bindings.wholeTenant': 'Entire company',
   'settings.integrations.detail.cloposSettings.title': 'Order acceptance',
@@ -3787,13 +3835,15 @@ export const messagesEn = {
   'settings.integrations.detail.partnerClients.issue': 'Issue a client',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'A name for this client (for your own reference):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Reason for issuing this client:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Reason for issuing this client:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Copy this secret now — it will not be shown again:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'I have copied it',
   'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
   'settings.integrations.detail.partnerClients.revoke': 'Revoke',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Reason for revoking this client:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Reason for revoking this client:',
   'settings.integrations.detail.partnerClients.empty': 'No partner API clients issued yet.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

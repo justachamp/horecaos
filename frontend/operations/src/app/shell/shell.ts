@@ -131,7 +131,7 @@ export class Shell {
     // A route, not a modal. The draft has to survive the operator glancing at
     // the queue and coming back; losing a half-built basket because somebody
     // checked whether 4819 shipped is unforgivable, and a modal cannot offer
-    // that. The screen behind this route is not built — orders.md §5 owns it.
+    // that. orders.md §5 (wave P13) owns the screen behind this route.
     return this.router.navigateByUrl('/orders/new');
   }
 

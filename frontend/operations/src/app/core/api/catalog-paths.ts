@@ -139,6 +139,21 @@ export const catalogPaths = {
   publicationHistory(scope: BrandScope): string {
     return `${this.base(scope)}/publications`;
   },
+
+  /**
+   * The published menu for one location (`StorefrontCatalogController`,
+   * ADR 0016) — unauthenticated by design, so it is reachable with the same
+   * bearer token as everything else here without a capability check of its
+   * own. Not on {@link CONTROL_PLANE}: this is the one path in this module
+   * that lives on `/api/v1/storefront/**`, because it is the customer-facing
+   * publication, not an authoring surface. The New order screen (wave P13,
+   * orders.md §5.5) reads it for prices and modifiers a location's sellable-
+   * variants list ({@link variantsAtLocation}) does not carry. Query params
+   * `locale` and `channel` (required — the tenant's operator channel code).
+   */
+  storefrontMenu(scope: BrandScope, locationId: string): string {
+    return `/api/v1/storefront${tenantBrand(scope)}/locations/${encodeURIComponent(locationId)}/menu`;
+  },
 } as const;
 
 export const pricingPaths = {

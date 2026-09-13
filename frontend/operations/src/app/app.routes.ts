@@ -95,10 +95,16 @@ export const routes: Routes = [
           // late. Declared before `:orderId` so that "new" is a destination and
           // not an order whose id happens to be the word new.
           {
+            // orders.md §5 (wave P13): the three-pane composer, item search
+            // over the published menu, modifier selection, a running total,
+            // and Создать → `POST .../orders` with an `Idempotency-Key`,
+            // routing to the created order. The address pane (§5.4) and
+            // payment/promo/repeat/aggregator entry (§5.6-§5.8's remaining
+            // rows) are `P14`'s — see `new-order-page.ts`'s own doc for the
+            // exact line.
             path: 'new',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'operations-spec/orders.md §5 (New order)' },
+              import('./features/orders/new-order/new-order-page').then((m) => m.NewOrderPage),
           },
           // IA 1.4: carts started and never converted. Declared before
           // `:orderId` for the same reason `new` is — "drafts" must be a

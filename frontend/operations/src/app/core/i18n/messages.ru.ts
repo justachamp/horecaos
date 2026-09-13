@@ -3530,6 +3530,53 @@ export const messagesRu: MessageCatalogue = {
   'orders.callCentre.callLog.type.MISSED': 'Пропущен',
   'orders.callCentre.callLog.type.TRANSFERRED': 'Переведён',
 
+  // --- Новый заказ (orders.md §5, волна P13) ------------------------------
+  'orders.newOrder.title': 'Новый заказ',
+  'orders.newOrder.locationDenied': 'Нет доступа к оформлению заказов в этом филиале',
+  'orders.newOrder.customer.title': 'Клиент',
+  'orders.newOrder.customer.phoneLabel': 'Телефон',
+  'orders.newOrder.customer.searching': 'Поиск…',
+  'orders.newOrder.customer.noMatches': 'Совпадений нет',
+  'orders.newOrder.customer.orderCount': 'Заказов в истории: {count}',
+  'orders.newOrder.customer.noOrders': 'Заказов раньше не было',
+  'orders.newOrder.customer.unnamed': 'Без имени',
+  'orders.newOrder.customer.change': 'Сменить',
+  'orders.newOrder.customer.history': 'История',
+  'orders.newOrder.customer.historyLoading': 'Загрузка…',
+  'orders.newOrder.customer.historyEmpty': 'Заказов раньше не было',
+  'orders.newOrder.customer.createButton': 'Создать клиента',
+  'orders.newOrder.customer.nonContactable':
+    'Этот клиент недоступен для маркетинговых рассылок — согласие в этом звонке не получено.',
+  'orders.newOrder.menu.title': 'Меню',
+  'orders.newOrder.menu.searchPlaceholder': 'Поиск позиции (F2)',
+  'orders.newOrder.menu.loading': 'Загрузка меню…',
+  'orders.newOrder.menu.stopped': 'стоп',
+  'orders.newOrder.menu.itemStopped': 'Позиция больше не доступна',
+  'orders.newOrder.menu.unpricedResult': 'Не удалось узнать цену позиции — попробуйте ещё раз',
+  'orders.newOrder.modifiers.title': 'Выберите опции для «{product}»',
+  'orders.newOrder.modifiers.required': 'обязательно',
+  'orders.newOrder.modifiers.selectAtLeast': 'Выберите минимум {min}',
+  'orders.newOrder.modifiers.confirm': 'Добавить в заказ',
+  'orders.newOrder.modifiers.cancel': 'Отмена',
+  'orders.newOrder.basket.title': 'Корзина',
+  'orders.newOrder.basket.empty': 'Пока пусто',
+  'orders.newOrder.basket.remove': 'Удалить',
+  'orders.newOrder.basket.notePlaceholder': 'Комментарий кухне',
+  'orders.newOrder.basket.unavailable': 'Больше не доступно — удалите, чтобы продолжить',
+  'orders.newOrder.order.title': 'Заказ',
+  'orders.newOrder.order.fulfillmentMode': 'Тип',
+  'orders.newOrder.order.deliveryComingLater':
+    'Для доставки нужен адрес — появится в следующей волне',
+  'orders.newOrder.order.payment': 'Оплата',
+  'orders.newOrder.order.paymentCashOnly': 'Только наличные в этом релизе (ADR 0039)',
+  'orders.newOrder.order.total': 'Итого',
+  'orders.newOrder.order.totalPending': 'Итог посчитается, когда у каждой позиции будет цена',
+  'orders.newOrder.order.submit': 'Создать',
+  'orders.newOrder.order.submitting': 'Создание…',
+  'orders.newOrder.order.cancel': 'Отмена',
+  'orders.newOrder.order.created': 'Заказ {number} создан',
+  'orders.newOrder.order.unavailableCount': 'Позиций в корзине больше не доступно: {count}',
+
   // --- shared/ui (ADR 0101) ----------------------------------------------
   'ui.denied.title': 'Нет доступа к этому разделу',
   'ui.denied.capability': 'Не хватает права:',
@@ -3737,7 +3784,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.detail.bindings.activate': 'Активировать',
   'settings.integrations.detail.bindings.activate.reasonPrompt': 'Причина запуска этой привязки:',
   'settings.integrations.detail.bindings.suspend': 'Приостановить',
-  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Причина приостановки этой привязки:',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Причина приостановки этой привязки:',
   'settings.integrations.detail.bindings.empty': 'Привязок пока нет.',
   'settings.integrations.detail.bindings.wholeTenant': 'Вся компания',
   'settings.integrations.detail.cloposSettings.title': 'Приём заказов',
@@ -3749,13 +3797,15 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.detail.partnerClients.issue': 'Выпустить клиента',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'Название для этого клиента (для вашего удобства):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Причина выпуска этого клиента:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Причина выпуска этого клиента:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Скопируйте этот секрет сейчас — он больше не будет показан:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'Я скопировал(а)',
   'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
   'settings.integrations.detail.partnerClients.revoke': 'Отозвать',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Причина отзыва этого клиента:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Причина отзыва этого клиента:',
   'settings.integrations.detail.partnerClients.empty': 'Клиенты партнёрского API ещё не выпущены.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------
