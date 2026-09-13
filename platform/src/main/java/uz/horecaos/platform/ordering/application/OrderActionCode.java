@@ -89,5 +89,23 @@ public enum OrderActionCode {
      * Re-issue a payment invoice (orders.md §4.9, «Выставить счёт»). Declared,
      * not yet emitted — see the class doc.
      */
-    ISSUE_INVOICE
+    ISSUE_INVOICE,
+
+    /**
+     * {@code POST .../state-overrides}, a compensating transition that restores
+     * an earlier status under {@code Capability.ORDER_STATE_OVERRIDE} (orders.md
+     * §0.2, §11.3; ADR 0019 amendment, ADR 0110; wave {@code P41}).
+     *
+     * <p>Deliberately its own code and its own endpoint rather than a target of
+     * {@link #ADVANCE}, for the reason {@link #CANCEL} is already kept separate
+     * from {@link #ADVANCE} even though both are edges the same {@link
+     * uz.horecaos.platform.ordering.domain.OrderStateMachine} models: a
+     * different capability, a mandatory registry reason, and a console dialog
+     * that must not be reachable from the ordinary advance button. Emitted
+     * (unlike five of this enum's other declared-but-inert values) — {@code
+     * OrderActionsPolicy.availableFor} gates it on {@code
+     * ORDER_STATE_OVERRIDE} and offers it exactly where {@code
+     * OrderStateMachine.compensatingTransitionsFrom} names an edge.
+     */
+    OVERRIDE
 }

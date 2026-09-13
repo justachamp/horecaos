@@ -39,6 +39,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.ApprovalDecisionRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderRow;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort;
+import uz.horecaos.platform.tenancy.api.LocationCapacityPort.CapacityOutcome;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 /**
@@ -657,6 +658,122 @@ public class OrderStateService {
                 AuditFact.Outcome.SUCCEEDED,
                 correlationId,
                 now);
+        return new DecisionResult(true, target, version, null);
+    }
+
+    /**
+     * A compensating transition under {@code Capability.ORDER_STATE_OVERRIDE}
+     * (orders.md §0.2, §11.3; ADR 0019 amendment, ADR 0110).
+     *
+     * <p><b>Not an undo.</b> {@link OrderStateMachine#isCompensating} is the
+     * only guard consulted — never {@link OrderStateMachine#permits} — so this
+     * method can never drive an ordinary forward step, and {@link
+     * OrderStateMachine#COMPENSATING}'s own doc is why a terminal order is
+     * refused here exactly as {@link #advance} refuses one: the table simply
+     * has no entry for a terminal status, so {@code isCompensating} answers
+     * {@code false} for every one of them without a second check. The result is
+     * recorded as its own fact — {@code "ordering.order.state-override"} on the
+     * audit trail, distinct from {@code "ordering.order.state-action"} — and as
+     * an ordinary {@code order_state_history} row (the timeline), with {@link
+     * TransitionTrigger#OPERATIONS_ACTION} because a person under this
+     * capability caused it exactly as an ordinary advance would, and the pair
+     * of statuses it moved between is what marks the row a correction to any
+     * later reader: no forward edge ever produces {@code READY -> PREPARING} or
+     * {@code FULFILLING -> READY}.
+     *
+     * <p>No terminal-outcome, inventory, payment or event consequence is
+     * applied. Every compensating edge stays within {@code PREPARING},
+     * {@code READY} and {@code FULFILLING} — none terminal, none changing the
+     * inventory reservation this order already holds — with one exception
+     * {@link OrderStatus#occupiesCapacity()} states plainly: {@code FULFILLING}
+     * does not occupy the ADR 0036 kitchen slot ("a courier holding the bag is
+     * not a kitchen constraint") and {@code READY} does. Reverting {@code
+     * FULFILLING -> READY} therefore re-claims the slot the forward edge gave
+     * up, under the same {@link LocationCapacityPort} a checkout claims from —
+     * and refuses, as {@link KitchenAtCapacityException}, exactly as a checkout
+     * would, if another order has since filled it. {@code READY -> PREPARING}
+     * changes nothing here, because both ends already occupy the slot.
+     *
+     * @param reasonId the tenant's registry reason (mandatory; {@link
+     *                 uz.horecaos.platform.ordering.application.OrderOutcomeService#override}
+     *                 resolves and validates it before calling this method) —
+     *                 carried onto the audit fact so "why was this reversed" is
+     *                 answerable the same way "why was this cancelled" already is
+     * @param reasonVersion the reason's version at the moment it was cited,
+     *                      exactly as a cancellation or completion snapshots one
+     */
+    @Transactional
+    public DecisionResult override(
+            UUID tenantId,
+            UUID orderId,
+            OrderStatus target,
+            int expectedVersion,
+            String reasonCode,
+            UUID reasonId,
+            int reasonVersion,
+            String actorType,
+            String actorId,
+            @Nullable String correlationId) {
+
+        Instant now = clock.instant();
+        OrderRow order = orders.find(tenantId, orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
+
+        if (order.version() != expectedVersion) {
+            throw new StaleOrderException(expectedVersion, order.version());
+        }
+        if (!OrderStateMachine.isCompensating(order.status(), target)) {
+            throw new OrderStateMachine.IllegalTransitionException(order.status(), target);
+        }
+
+        boolean reclaimsKitchenSlot = !order.status().occupiesCapacity() && target.occupiesCapacity();
+        if (reclaimsKitchenSlot
+                && capacity.claimCapacity(tenantId, order.brandId(), order.locationId(), orderId)
+                        == CapacityOutcome.AT_CAPACITY) {
+            throw new KitchenAtCapacityException(order.locationId());
+        }
+
+        Optional<Integer> won = orders.transition(tenantId, orderId, order.status(), target, now);
+        if (won.isEmpty()) {
+            OrderRow settled = orders.find(tenantId, orderId).orElseThrow();
+            throw new StaleOrderException(expectedVersion, settled.version());
+        }
+
+        int version = requireCallersVersion(expectedVersion, won.get());
+        orders.recordTransition(
+                tenantId,
+                orderId,
+                version,
+                order.status(),
+                target,
+                TransitionTrigger.OPERATIONS_ACTION,
+                reasonCode,
+                actorType,
+                actorId,
+                correlationId,
+                now);
+
+        recordAudit(
+                order,
+                "ordering.order.state-override",
+                actorType,
+                actorId,
+                reasonCode,
+                version,
+                Map.of(
+                        "fromStatus",
+                        order.status().name(),
+                        "toStatus",
+                        target.name(),
+                        "reasonId",
+                        reasonId.toString(),
+                        "reasonVersion",
+                        reasonVersion,
+                        "compensating",
+                        true),
+                AuditFact.Outcome.SUCCEEDED,
+                correlationId,
+                now);
+
         return new DecisionResult(true, target, version, null);
     }
 
@@ -1355,6 +1472,31 @@ public class OrderStateService {
 
         public int actual() {
             return actual;
+        }
+    }
+
+    /**
+     * A {@code FULFILLING -> READY} correction found the ADR 0036 kitchen slot
+     * already given to another order.
+     *
+     * <p>{@code FULFILLING} does not occupy the slot ({@link
+     * OrderStatus#occupiesCapacity()}) and {@code READY} does, so restoring
+     * {@code READY} has to re-claim one — and, unlike the checkout path that
+     * claims it once, this claim can lose: the branch may have filled to
+     * capacity in the time this order spent with a courier. Refused rather
+     * than silently over-counting the branch's own concurrent-order ceiling.
+     */
+    public static class KitchenAtCapacityException extends RuntimeException {
+        private final UUID locationId;
+
+        public KitchenAtCapacityException(UUID locationId) {
+            super("The kitchen at location " + locationId
+                    + " is at its concurrent-order limit; this order cannot be restored to READY");
+            this.locationId = locationId;
+        }
+
+        public UUID locationId() {
+            return locationId;
         }
     }
 

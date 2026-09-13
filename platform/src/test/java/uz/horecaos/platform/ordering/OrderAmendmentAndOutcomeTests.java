@@ -71,6 +71,7 @@ import uz.horecaos.platform.ordering.domain.BulkItemStatus;
 import uz.horecaos.platform.ordering.domain.CustomerRefund;
 import uz.horecaos.platform.ordering.domain.LiabilityParty;
 import uz.horecaos.platform.ordering.domain.OrderDecisionChannel;
+import uz.horecaos.platform.ordering.domain.OrderStateMachine;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.domain.OutcomeReasonKind;
 import uz.horecaos.platform.ordering.domain.OutcomeSystemCategory;
@@ -1566,6 +1567,200 @@ class OrderAmendmentAndOutcomeTests {
         assertThat(movementCount())
                 .as("a cancellation never reopens a committed reservation")
                 .isEqualTo(movementsBefore);
+    }
+
+    // -------------------------------- compensating override (ADR 0019 amendment, ADR 0110, wave P41)
+
+    /**
+     * «Ошибка оператора» — not a real cancellation, but the registry's own
+     * catch-all category, cited by a compensating override the same way a
+     * cancellation cites a write-off reason. {@link OutcomeSystemCategory#OTHER}
+     * is valid for {@link OutcomeReasonKind#CANCELLATION}, and the consequence
+     * fields carried here (disposition, liability, refund) are never read by
+     * {@code OrderOutcomeService#override} — only the reason's identity and
+     * version are, exactly as documented on that method.
+     */
+    private UUID operatorErrorReason() {
+        return tx(() -> reasons.create(
+                TENANT,
+                new OrderOutcomeReasonService.CreateReason(
+                        OutcomeReasonKind.CANCELLATION,
+                        OutcomeSystemCategory.OTHER,
+                        "Ошибка оператора",
+                        StockDisposition.NO_EFFECT,
+                        LiabilityParty.TENANT,
+                        CustomerRefund.NONE,
+                        null,
+                        texts("Техническая корректировка статуса заказа"))));
+    }
+
+    @Test
+    @DisplayName("an override writes both the audit fact and the timeline row")
+    void overrideWritesBothTheAuditFactAndTheTimelineRow() {
+        UUID reasonId = operatorErrorReason();
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
+        advance(orderId, OrderStatus.PREPARING);
+        advance(orderId, OrderStatus.READY);
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        var result = tx(() -> outcomes.override(
+                TENANT,
+                orderId,
+                OrderStatus.PREPARING,
+                version,
+                new OrderOutcomeService.OverrideCommand(reasonId, "USER", "sharif", null)));
+
+        assertThat(result.applied()).isTrue();
+        assertThat(result.status()).isEqualTo(OrderStatus.PREPARING);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status()).isEqualTo(OrderStatus.PREPARING);
+
+        // the timeline row GET .../timeline reads (ordering.order_state_history)
+        record LastTransition(String from, String to, String trigger, String reasonCode) {}
+        LastTransition timeline = jdbc.sql("""
+                SELECT from_status, to_status, trigger, reason_code
+                FROM ordering.order_state_history
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                ORDER BY sequence_number DESC LIMIT 1
+                """)
+                .param("tenantId", TENANT)
+                .param("orderId", orderId)
+                .query((row, n) -> new LastTransition(
+                        row.getString("from_status"),
+                        row.getString("to_status"),
+                        row.getString("trigger"),
+                        row.getString("reason_code")))
+                .single();
+        assertThat(timeline.from()).isEqualTo("READY");
+        assertThat(timeline.to()).isEqualTo("PREPARING");
+        assertThat(timeline.trigger()).isEqualTo("OPERATIONS_ACTION");
+        assertThat(timeline.reasonCode()).isEqualTo("OTHER");
+
+        // the audit fact, distinct from an ordinary advance's action code
+        String actionCode =
+                jdbc.sql("""
+                SELECT action_code FROM audit.audit_events
+                WHERE target_id = :orderId AND action_code = 'ordering.order.state-override'
+                ORDER BY occurred_at DESC LIMIT 1
+                """).param("orderId", orderId).query(String.class).single();
+        assertThat(actionCode).isEqualTo("ordering.order.state-override");
+    }
+
+    @Test
+    @DisplayName("an override refuses without a valid registry reason: unknown, wrong kind, or archived")
+    void overrideRefusesWithoutAValidRegistryReason() {
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
+        advance(orderId, OrderStatus.PREPARING);
+        advance(orderId, OrderStatus.READY);
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        assertThatThrownBy(() -> tx(() -> outcomes.override(
+                        TENANT,
+                        orderId,
+                        OrderStatus.PREPARING,
+                        version,
+                        new OrderOutcomeService.OverrideCommand(UUID.randomUUID(), "USER", "sharif", null))))
+                .as("an unknown reason id is refused, not defaulted")
+                .isInstanceOf(OrderOutcomeReasonService.ReasonNotFoundException.class);
+
+        UUID completionReason = tx(() -> reasons.create(
+                TENANT,
+                new OrderOutcomeReasonService.CreateReason(
+                        OutcomeReasonKind.COMPLETION,
+                        OutcomeSystemCategory.COLLECTED_BY_CUSTOMER,
+                        "Самовывоз выполнен",
+                        null,
+                        null,
+                        null,
+                        List.of(FulfillmentMode.PICKUP),
+                        texts("Выдано"))));
+        assertThatThrownBy(() -> tx(() -> outcomes.override(
+                        TENANT,
+                        orderId,
+                        OrderStatus.PREPARING,
+                        version,
+                        new OrderOutcomeService.OverrideCommand(completionReason, "USER", "sharif", null))))
+                .as("a completion reason cannot justify a status override")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("completion reason");
+
+        UUID archived = operatorErrorReason();
+        tx(() -> reasons.archive(TENANT, archived, 1));
+        assertThatThrownBy(() -> tx(() -> outcomes.override(
+                        TENANT,
+                        orderId,
+                        OrderStatus.PREPARING,
+                        version,
+                        new OrderOutcomeService.OverrideCommand(archived, "USER", "sharif", null))))
+                .as("a retired reason cannot be cited")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("archived");
+
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status())
+                .as("none of the three refused attempts moved the order")
+                .isEqualTo(OrderStatus.READY);
+    }
+
+    @Test
+    @DisplayName("an override refuses any target that is not a declared compensating edge, "
+            + "including a terminal order — a correction never reopens one")
+    void overrideRefusesNonCompensatingTargetsAndTerminalOrders() {
+        UUID reasonId = operatorErrorReason();
+
+        // CONFIRMED -> PREPARING is a legal forward edge (ORDER_ADVANCE's job),
+        // never a compensating one; override must refuse it exactly as it
+        // would refuse a target the machine has no edge to at all.
+        UUID confirmedOrder = orderIdOf(placeOrder("idem-1"));
+        assertThat(orderStore.find(TENANT, confirmedOrder).orElseThrow().status())
+                .as("this branch auto-confirms")
+                .isEqualTo(OrderStatus.CONFIRMED);
+        int confirmedVersion =
+                orderStore.find(TENANT, confirmedOrder).orElseThrow().version();
+        assertThatThrownBy(() -> tx(() -> outcomes.override(
+                        TENANT,
+                        confirmedOrder,
+                        OrderStatus.PREPARING,
+                        confirmedVersion,
+                        new OrderOutcomeService.OverrideCommand(reasonId, "USER", "sharif", null))))
+                .isInstanceOf(OrderStateMachine.IllegalTransitionException.class);
+
+        // READY -> COMPLETED is a legal forward edge for a pickup order; still
+        // not a compensating one, so override must refuse it too.
+        UUID readyOrder = orderIdOf(placeOrder("idem-2"));
+        advance(readyOrder, OrderStatus.PREPARING);
+        advance(readyOrder, OrderStatus.READY);
+        int readyVersion = orderStore.find(TENANT, readyOrder).orElseThrow().version();
+        assertThatThrownBy(() -> tx(() -> outcomes.override(
+                        TENANT,
+                        readyOrder,
+                        OrderStatus.COMPLETED,
+                        readyVersion,
+                        new OrderOutcomeService.OverrideCommand(reasonId, "USER", "sharif", null))))
+                .isInstanceOf(OrderStateMachine.IllegalTransitionException.class);
+
+        // A cancelled order stays terminal: no compensating edge is declared
+        // from CANCELLED at all, so this is refused by omission, not by a
+        // separate terminal-order guard somebody could forget to add.
+        UUID cancelledOrder = orderIdOf(placeOrder("idem-3"));
+        UUID writeOff = writeOffReason();
+        int cancelledVersion =
+                orderStore.find(TENANT, cancelledOrder).orElseThrow().version();
+        tx(() -> outcomes.cancel(
+                TENANT,
+                cancelledOrder,
+                cancelledVersion,
+                new OrderOutcomeService.CancelCommand(writeOff, null, "USER", "sharif", null)));
+        int afterCancelVersion =
+                orderStore.find(TENANT, cancelledOrder).orElseThrow().version();
+        assertThatThrownBy(() -> tx(() -> outcomes.override(
+                        TENANT,
+                        cancelledOrder,
+                        OrderStatus.PREPARING,
+                        afterCancelVersion,
+                        new OrderOutcomeService.OverrideCommand(reasonId, "USER", "sharif", null))))
+                .isInstanceOf(OrderStateMachine.IllegalTransitionException.class);
+        assertThat(orderStore.find(TENANT, cancelledOrder).orElseThrow().status())
+                .as("the override never reopened the cancelled order")
+                .isEqualTo(OrderStatus.CANCELLED);
     }
 
     @Test
