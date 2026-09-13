@@ -243,6 +243,69 @@ public final class MetricRegistry {
                             + "the external-delivery reconciliation do not exist as data. Every "
                             + "surface naming this metric must render it unbuilt rather than "
                             + "zero.",
+                    null),
+            // Wave P26: the Customers grid header counters (frontend information
+            // architecture §5.1) used to be a second, unregistered code path
+            // computed at UTC midnight — CustomerListQueryService#counts's own
+            // former doc named this as a known simplification. Registering them
+            // here is what row 5.1a asks for: "the same metric layer as the
+            // dashboard". Provisional (no effectiveFrom) until finance signs
+            // them, exactly like every other metric here before its PILOT date.
+            new MetricDefinition(
+                    new MetricId("customers.total", 1),
+                    Grain.DAY,
+                    "customer.customer_accounts",
+                    true,
+                    Aggregation.COUNT,
+                    "ALL_NON_MERGED",
+                    CurrencyRule.NONE,
+                    "Integer",
+                    MetricUnit.COUNT,
+                    "Count of this tenant's customer accounts whose status is not MERGED.",
+                    "ACTIVE, SUSPENDED, CLOSED and ANONYMIZED accounts.",
+                    "MERGED accounts — a merge redirects one account onto another, and the "
+                            + "merged-away row is never a second customer.",
+                    "Not applicable.",
+                    null,
+                    null),
+            new MetricDefinition(
+                    new MetricId("customers.registered_today", 1),
+                    Grain.DAY,
+                    "customer.customer_accounts.created_at",
+                    true,
+                    Aggregation.COUNT,
+                    "CREATED_ON_BUSINESS_DATE",
+                    CurrencyRule.NONE,
+                    "Integer",
+                    MetricUnit.COUNT,
+                    "Count of customer accounts created inside the tenant's own business day "
+                            + "(BusinessDayBoundary), not the UTC calendar day.",
+                    "Accounts created inside [businessDayStart, businessDayEnd) in the "
+                            + "tenant's own zone and boundary.",
+                    "Accounts created on any other business date.",
+                    "Not applicable.",
+                    "Before this version, the same figure was computed against UTC midnight, "
+                            + "which excluded a Tashkent row dated \"today\" between 00:00 and "
+                            + "05:00 local time. See MetricDefinitionDriftException's own "
+                            + "reasoning for why that is a new version rather than a silent fix.",
+                    null),
+            new MetricDefinition(
+                    new MetricId("customers.ordered_today", 1),
+                    Grain.DAY,
+                    "ordering.orders, via CustomerOrderActivityPort",
+                    true,
+                    Aggregation.COUNT_DISTINCT,
+                    "AT_LEAST_ONE_ORDER_ON_BUSINESS_DATE",
+                    CurrencyRule.NONE,
+                    "Integer",
+                    MetricUnit.COUNT,
+                    "Distinct customer accounts with at least one order inside the tenant's own " + "business day.",
+                    "Accounts naming an order placed inside [businessDayStart, businessDayEnd).",
+                    "Guest orders, which carry no customer account to count.",
+                    "Not applicable.",
+                    "Read live from ordering rather than from reporting.agg_branch_day's own "
+                            + "distinct_customers, so it reflects orders placed since the last "
+                            + "close job ran rather than only what has already been aggregated.",
                     null)));
 
     private MetricRegistry() {}

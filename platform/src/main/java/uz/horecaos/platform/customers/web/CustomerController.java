@@ -352,9 +352,11 @@ public class CustomerController {
     @RequiresCapability(Capability.CUSTOMER_READ)
     @Operation(
             summary = "The grid header's three counters",
-            description = "Total, registered today, and ordered today — computed for UTC midnight "
-                    + "(CustomerListQueryService#counts explains why). 'Ordered today' asks the "
-                    + "ordering module's own OrderDirectory rather than this module's own tables.")
+            description = "Total, registered today, and ordered today — 'today' scoped to the "
+                    + "tenant's own ADR 0043 business-day boundary, the same one Reports and the "
+                    + "live board use (CustomerListQueryService#counts explains why this no longer "
+                    + "means UTC midnight). 'Ordered today' asks the ordering module's own "
+                    + "OrderDirectory rather than this module's own tables.")
     public ResponseEntity<CountsResponse> counts(@PathVariable UUID tenantId) {
         HeaderCounts counts = lists.counts(tenantId);
         return ResponseEntity.ok(new CountsResponse(counts.total(), counts.registeredToday(), counts.orderedToday()));
@@ -367,16 +369,18 @@ public class CustomerController {
             description = "One audited PII egress event for the whole filtered set (frontend "
                     + "information architecture §5.1), never one reveal per row. Requires a "
                     + "stated purpose, exactly like every other reveal on this controller. Bounded "
-                    + "at 2000 rows.")
-    public ResponseEntity<List<CustomerExportResponse>> export(
+                    + "at 2000 rows; `truncated` is true when the filter actually matched more than "
+                    + "that, so a marketer can tell a complete export from a silently cut one.")
+    public ResponseEntity<CustomerExportResultResponse> export(
             @PathVariable UUID tenantId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String query,
             @RequestParam @NotBlank String purpose) {
         requireKnownStatus(status);
-        return ResponseEntity.ok(lists.exportFiltered(tenantId, status, query, purpose, staffActor()).stream()
-                .map(CustomerExportResponse::of)
-                .toList());
+        CustomerListQueryService.ExportResult result =
+                lists.exportFiltered(tenantId, status, query, purpose, staffActor());
+        return ResponseEntity.ok(new CustomerExportResultResponse(
+                result.rows().stream().map(CustomerExportResponse::of).toList(), result.truncated()));
     }
 
     @PostMapping
@@ -821,6 +825,12 @@ public class CustomerController {
             return new CustomerExportResponse(row.accountId(), row.status(), row.displayName(), row.phone());
         }
     }
+
+    /**
+     * {@code GET .../customers/export}'s whole body: the decrypted rows plus
+     * whether the filter matched more than {@code EXPORT_LIMIT} and was cut.
+     */
+    public record CustomerExportResultResponse(List<CustomerExportResponse> rows, boolean truncated) {}
 
     /** A manually created customer. {@code brandId} decides the identity partition, same as {@code resolve}. */
     public record CreateCustomerRequest(
