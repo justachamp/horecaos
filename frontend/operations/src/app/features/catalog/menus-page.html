@@ -14,43 +14,155 @@
     <p class="q-body-sm menus__status" data-testid="menus-denied">
       {{ 'catalog.menus.denied' | t }}
     </p>
-  } @else if (rows().length === 0) {
-    <p class="q-body-sm menus__status">{{ 'catalog.menus.empty' | t }}</p>
   } @else {
-    <table class="menus__table">
-      <thead>
-        <tr>
-          <th>{{ 'catalog.menus.column.product' | t }}</th>
-          <th class="menus__num-col">{{ 'catalog.menus.column.price' | t }}</th>
-          <th>{{ 'catalog.menus.column.status' | t }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (row of rows(); track row.variantId) {
-          <tr>
-            <td>
-              <div>{{ row.productName }}</div>
-              @if (row.category) {
-                <div class="q-caption">{{ row.category }}</div>
-              }
-            </td>
-            <td class="menus__num-col q-mono q-tnum">{{ priceLabel(row.variantId) }}</td>
-            <td>
-              <button
-                type="button"
-                class="menus__cell"
-                [class.menus__cell--available]="row.available"
-                [class.menus__cell--stopped]="!row.available"
-                [disabled]="isBusy(row.variantId)"
-                (click)="toggle(row)"
-                data-testid="menus-cell"
-              >
-                {{ statusLabel(row) }}
-              </button>
-            </td>
-          </tr>
+    <div class="menus__toolbar">
+      <input
+        type="search"
+        class="menus__search"
+        [value]="search()"
+        (input)="onSearchInput($any($event.target).value)"
+        [placeholder]="'catalog.menus.search.placeholder' | t"
+        data-testid="menus-search"
+      />
+
+      <div class="menus__filter-tabs" role="tablist">
+        @for (option of statusFilterOptions; track option) {
+          <button
+            type="button"
+            role="tab"
+            class="menus__filter-tab"
+            [class.menus__filter-tab--active]="statusFilter() === option"
+            [attr.aria-selected]="statusFilter() === option"
+            (click)="setStatusFilter(option)"
+            [attr.data-testid]="'menus-filter-' + option"
+          >
+            {{ filterTabLabel(option) }}
+          </button>
         }
-      </tbody>
-    </table>
+      </div>
+
+      @if (selectedCount() > 0) {
+        <div class="menus__bulk-bar" data-testid="menus-bulk-bar">
+          <span class="q-caption">{{ selectedCount() }}</span>
+          <button
+            type="button"
+            class="menus__bulk-button"
+            (click)="requestBulk('AVAILABLE')"
+            data-testid="menus-bulk-available"
+          >
+            {{ 'catalog.menus.bulk.setAvailable' | t }}
+          </button>
+          <button
+            type="button"
+            class="menus__bulk-button"
+            (click)="requestBulk('UNAVAILABLE')"
+            data-testid="menus-bulk-unavailable"
+          >
+            {{ 'catalog.menus.bulk.setStopped' | t }}
+          </button>
+        </div>
+      }
+    </div>
+
+    @if (reloading()) {
+      <p class="q-caption menus__reloading">{{ 'catalog.menus.loading' | t }}</p>
+    }
+
+    @if (rows().length === 0) {
+      <p class="q-body-sm menus__status">{{ 'catalog.menus.empty' | t }}</p>
+    } @else {
+      <table class="menus__table">
+        <thead>
+          <tr>
+            <th class="menus__checkbox-col">
+              <input
+                type="checkbox"
+                [checked]="allSelected()"
+                (change)="toggleSelectAll()"
+                [attr.aria-label]="'catalog.menus.selectAll' | t"
+                data-testid="menus-select-all"
+              />
+            </th>
+            <th>{{ 'catalog.menus.column.product' | t }}</th>
+            <th class="menus__num-col">{{ 'catalog.menus.column.price' | t }}</th>
+            <th>{{ 'catalog.menus.column.offering' | t }}</th>
+            <th>{{ 'catalog.menus.column.fulfillment' | t }}</th>
+            <th>{{ 'catalog.menus.column.status' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.variantId) {
+            <tr>
+              <td class="menus__checkbox-col">
+                <input
+                  type="checkbox"
+                  [checked]="isSelected(row.variantId)"
+                  (change)="toggleSelected(row.variantId)"
+                  data-testid="menus-row-checkbox"
+                />
+              </td>
+              <td>
+                <div>{{ row.productName }}</div>
+                @if (row.category) {
+                  <div class="q-caption">{{ row.category }}</div>
+                }
+              </td>
+              <td class="menus__num-col q-mono q-tnum">{{ priceLabel(row.variantId) }}</td>
+              <td>
+                <span
+                  class="menus__offering"
+                  [class]="offeringStatusClass(row)"
+                  data-testid="menus-offering-status"
+                >
+                  {{ offeringStatusLabel(row) }}
+                </span>
+              </td>
+              <td>
+                <span class="menus__fulfillment" data-testid="menus-fulfillment">
+                  @for (mode of fulfillmentModes; track mode) {
+                    <span
+                      class="menus__fulfillment-badge"
+                      [class.menus__fulfillment-badge--on]="hasFulfillmentMode(row, mode)"
+                      [title]="fulfillmentModeLabel(mode)"
+                    >
+                      {{ fulfillmentModeLabel(mode) }}
+                    </span>
+                  }
+                </span>
+              </td>
+              <td>
+                <button
+                  type="button"
+                  class="menus__cell"
+                  [class.menus__cell--available]="row.available"
+                  [class.menus__cell--stopped]="!row.available"
+                  [disabled]="isBusy(row.variantId)"
+                  (click)="toggle(row)"
+                  data-testid="menus-cell"
+                >
+                  {{ statusLabel(row) }}
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+
+  @if (bulkTarget(); as status) {
+    <q-confirm-dialog
+      [title]="'catalog.menus.bulk.confirmTitle' | t"
+      [body]="'catalog.menus.bulk.confirmBody' | t: { count: selectedCount() }"
+      [confirmLabel]="
+        status === 'AVAILABLE'
+          ? ('catalog.menus.bulk.setAvailable' | t)
+          : ('catalog.menus.bulk.setStopped' | t)
+      "
+      [cancelLabel]="'catalog.dialog.cancel' | t"
+      [busy]="bulkBusy()"
+      (confirm)="confirmBulk()"
+      (cancel)="cancelBulk()"
+    />
   }
 </div>
