@@ -90,7 +90,9 @@ def rewrite_references(moves: dict[str, str]) -> list[Path]:
     for path in REPO.rglob("*"):
         if not path.is_file() or path.suffix not in TEXT_SUFFIXES:
             continue
-        if any(part in SKIP_DIRS for part in path.parts):
+        # Relative to the repository root: a checkout that itself lives under a
+        # "worktrees" or "build" directory must not skip every file it holds.
+        if any(part in SKIP_DIRS for part in path.relative_to(REPO).parts):
             continue
 
         original = text = path.read_text(encoding="utf-8", errors="ignore")
