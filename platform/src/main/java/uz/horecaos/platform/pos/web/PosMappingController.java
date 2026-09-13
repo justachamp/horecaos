@@ -31,10 +31,10 @@ import uz.horecaos.platform.pos.application.PosMappingService.BulkAutoMatchResul
 import uz.horecaos.platform.pos.application.PosMappingService.CreateOutcome;
 import uz.horecaos.platform.pos.application.PosMappingService.MatchConflict;
 import uz.horecaos.platform.pos.application.PosMappingService.RetireOutcome;
-import uz.horecaos.platform.pos.application.PosMappingService.UnmappedResult;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosMappingStore;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosMappingStore.ExternalCandidate;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosMappingStore.MappingRow;
+import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosMappingStore.NamedCandidate;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.api.Page;
@@ -100,19 +100,23 @@ public class PosMappingController {
     @GetMapping("/unmapped")
     @RequiresCapability(Capability.POS_SYNC_READ)
     @Operation(
-            summary = "The provider's own candidates for this type, not yet mapped",
-            description = "sourced=false means this build has no way to read the provider's list for "
-                    + "this entity type yet (gap-map row 10.8b) — creating a mapping by typing the "
-                    + "provider's own code still works.")
-    UnmappedExternalResponse unmapped(
+            summary = "Both unmapped sides of the pane's dual list",
+            description = "sourced=false on the external side means this build has no way to read the "
+                    + "provider's list for this entity type yet (gap-map row 10.8b) — creating a "
+                    + "mapping by typing the provider's own code still works. The HorecaOS side is "
+                    + "always readable: a merchant's own records are never a discovery problem.")
+    UnmappedResponse unmapped(
             @PathVariable UUID tenantId, @RequestParam UUID bindingId, @RequestParam MappingEntityType entityType) {
 
-        UnmappedResult result = service.listUnmappedExternal(tenantId, bindingId, entityType);
-        return new UnmappedExternalResponse(
-                result.sourced(),
-                result.detail(),
-                result.entities().stream()
+        PosMappingService.UnmappedBothSides result = service.listUnmapped(tenantId, bindingId, entityType);
+        return new UnmappedResponse(
+                result.external().sourced(),
+                result.external().detail(),
+                result.external().entities().stream()
                         .map(PosMappingController::toUnmappedView)
+                        .toList(),
+                result.horecaos().stream()
+                        .map(PosMappingController::toHorecaosCandidateView)
                         .toList());
     }
 
@@ -246,6 +250,10 @@ public class PosMappingController {
         return new UnmappedExternalView(candidate.externalId(), candidate.name(), candidate.externalParentId());
     }
 
+    private static HorecaosCandidateView toHorecaosCandidateView(NamedCandidate candidate) {
+        return new HorecaosCandidateView(candidate.id(), candidate.name());
+    }
+
     private static MappingConflictView toConflictView(MatchConflict conflict) {
         return new MappingConflictView(conflict.name(), conflict.externalIds(), conflict.horecaosEntityIds());
     }
@@ -286,8 +294,14 @@ public class PosMappingController {
             @Nullable String name,
             @Nullable String externalParentId) {}
 
-    public record UnmappedExternalResponse(
-            boolean sourced, @Nullable String detail, List<UnmappedExternalView> entities) {}
+    /** One HorecaOS-side candidate not yet mapped — the dual list's left column. Never PII: a courier's own {@code display_reference}, never its protected name. */
+    public record HorecaosCandidateView(UUID id, @Nullable String name) {}
+
+    public record UnmappedResponse(
+            boolean sourced,
+            @Nullable String detail,
+            List<UnmappedExternalView> entities,
+            List<HorecaosCandidateView> horecaosCandidates) {}
 
     /** The two-sided conflict card's own data: a shared name and every candidate id on each side. */
     public record MappingConflictView(String name, List<String> externalIds, List<UUID> horecaosEntityIds) {}

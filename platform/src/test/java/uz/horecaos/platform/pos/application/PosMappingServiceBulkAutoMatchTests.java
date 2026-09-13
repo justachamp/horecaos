@@ -193,4 +193,33 @@ class PosMappingServiceBulkAutoMatchTests {
         assertThat(result.matchedCount()).isZero();
         assertThat(result.conflicts()).isEmpty();
     }
+
+    @Test
+    @DisplayName(
+            "listUnmapped answers both sides of the dual list: the HorecaOS side even when the external side is unsourced")
+    void listUnmappedAnswersBothSides() {
+        UUID cash = insertPaymentMethod("CASH", "Cash");
+        adapter.scriptPaymentTypes(List.of(new PosAdapter.ExternalReference("ext-cash", "Cash")));
+
+        PosMappingService.UnmappedBothSides both =
+                service.listUnmapped(TENANT, BINDING, MappingEntityType.PAYMENT_TYPE);
+
+        assertThat(both.external().sourced()).isTrue();
+        assertThat(both.external().entities()).extracting(e -> e.externalId()).containsExactly("ext-cash");
+        assertThat(both.horecaos())
+                .extracting(JdbcPosMappingStore.NamedCandidate::id)
+                .containsExactly(cash);
+
+        adapter.failPaymentTypesWith(ProviderOutcome.rejected("NOT_SUPPORTED", "no such list"));
+        PosMappingService.UnmappedBothSides unsourced =
+                service.listUnmapped(TENANT, BINDING, MappingEntityType.PAYMENT_TYPE);
+
+        assertThat(unsourced.external().sourced())
+                .as("the external side is honestly unsourced")
+                .isFalse();
+        assertThat(unsourced.horecaos())
+                .as("the HorecaOS side is never a discovery problem, so it still answers")
+                .extracting(JdbcPosMappingStore.NamedCandidate::id)
+                .containsExactly(cash);
+    }
 }

@@ -27,7 +27,7 @@ import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosMappingStore.N
  * side, creating and retiring a mapping by hand, and bulk auto-match (ADR
  * 0012/0026, gap-map row 10.8b).
  *
- * <p>{@link #listUnmappedExternal} and {@link #bulkAutoMatch} are honest about
+ * <p>{@link #listUnmapped} and {@link #bulkAutoMatch} are honest about
  * a real gap: no adapter in this build discovers a vendor's couriers,
  * cancellation reasons, or channel codes, and Clopos — the one real adapter —
  * discovers no payment types or discounts either (its {@link
@@ -56,13 +56,22 @@ public class PosMappingService {
         this.clock = clock;
     }
 
-    /** The provider's own candidates for this type, not yet mapped for this binding. */
-    public UnmappedResult listUnmappedExternal(UUID tenantId, UUID bindingId, MappingEntityType type) {
+    /**
+     * Both unmapped sides for the pane's dual list: the provider's own
+     * candidates ({@link UnmappedResult#sourced()} says whether this build can
+     * read them at all) and HorecaOS's own unmapped records for this type,
+     * which can always be read regardless — a merchant's own catalogue,
+     * payment methods, promotions, couriers, cancellation reasons and sales
+     * channels are never a discovery problem.
+     */
+    public UnmappedBothSides listUnmapped(UUID tenantId, UUID bindingId, MappingEntityType type) {
         Optional<BindingRef> binding = configuration.bindingRef(tenantId, bindingId);
         if (binding.isEmpty()) {
-            return new UnmappedResult(false, "No such binding", List.of());
+            return new UnmappedBothSides(new UnmappedResult(false, "No such binding", List.of()), List.of());
         }
-        return externalCandidates(tenantId, binding.get(), type);
+        UnmappedResult external = externalCandidates(tenantId, binding.get(), type);
+        List<NamedCandidate> horecaos = horecaosCandidates(tenantId, binding.get(), type);
+        return new UnmappedBothSides(external, horecaos);
     }
 
     /**
@@ -294,6 +303,9 @@ public class PosMappingService {
 
     /** @param sourced false when no provider or HorecaOS source exists for this type in this build */
     public record UnmappedResult(boolean sourced, @Nullable String detail, List<ExternalCandidate> entities) {}
+
+    /** Both sides of the mapping pane's dual list for one binding and entity type. */
+    public record UnmappedBothSides(UnmappedResult external, List<NamedCandidate> horecaos) {}
 
     public record CreateOutcome(
             Kind kind, @Nullable UUID mappingId, @Nullable String detail) {
