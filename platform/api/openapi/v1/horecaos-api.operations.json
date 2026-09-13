@@ -1281,6 +1281,44 @@
         "required" : [ "code", "currency", "displayNameEn", "displayNameRu", "displayNameUz", "externalRef", "geoJson", "role" ],
         "type" : "object"
       },
+      "BenefitGrantResponse" : {
+        "properties" : {
+          "benefitType" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "grantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "maximumDiscountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "minBasketMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "validFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "value" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "BindRequest" : {
         "properties" : {
           "brandId" : {
@@ -5837,6 +5875,73 @@
         },
         "type" : "object"
       },
+      "MintBenefitGrantRequest" : {
+        "properties" : {
+          "currency" : {
+            "pattern" : "^[A-Z]{3}$",
+            "type" : "string"
+          },
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "maximumDiscountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "minBasketMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "shape" : {
+            "enum" : [ "PERCENTAGE_OFF_ORDER", "FIXED_AMOUNT_OFF_ORDER", "FREE_DELIVERY" ],
+            "type" : "string"
+          },
+          "sourceId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sourceType" : {
+            "minLength" : 1,
+            "pattern" : "^(OPERATOR_MANUAL|RECOVERY_CASE|CAMPAIGN|TRIGGER)$",
+            "type" : "string"
+          },
+          "validFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "value" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "customerAccountId", "shape", "sourceType" ],
+        "type" : "object"
+      },
+      "MintBenefitGrantResponse" : {
+        "properties" : {
+          "codeHint" : {
+            "type" : "string"
+          },
+          "grantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "plaintextCode" : {
+            "type" : "string"
+          },
+          "validFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ModeBindingResponse" : {
         "properties" : {
           "acceptsScheduledOrders" : {
@@ -8210,6 +8315,45 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "PromoCodeRedemptionResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "redeemedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "redemptionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "releasedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reservedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -10929,6 +11073,13 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "refusalBreakdown" : {
+            "additionalProperties" : {
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
           "snapshotId" : {
             "format" : "uuid",
             "type" : "string"
@@ -13636,6 +13787,99 @@
         "tags" : [ "Operations brand profile" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/benefit-grants" : {
+      "get" : {
+        "description" : "Status and terms only, newest first — never the code: a later read shows codeHint on the equivalent promo-code screen, and this endpoint carries no hint field at all because a grant is never presented as a word to recognise in a list, only redeemed once by the one account it was minted for.",
+        "operationId" : "forCustomer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "customerAccountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/BenefitGrantResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every grant minted for one named customer",
+        "tags" : [ "Benefit grants" ]
+      },
+      "post" : {
+        "description" : "The plaintext code is returned exactly once, in this response — pricing.benefit_grants stores only its hash, the same convention pricing.coupon_codes already uses. A grant is bound to customerAccountId at this instant and single-use: nobody else can ever redeem it, and this one customer can redeem it at most once.",
+        "operationId" : "mint",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MintBenefitGrantRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MintBenefitGrantResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Mint a one-off code redeemable by exactly one named customer",
+        "tags" : [ "Benefit grants" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
         "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. No message bodies here — open a conversation for its decrypted history.",
@@ -16096,6 +16340,54 @@
           }
         },
         "summary" : "Make a drafted promo code live",
+        "tags" : [ "Promo codes" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes/{couponId}/redemptions" : {
+      "get" : {
+        "description" : "Reservation, redemption and release rows, newest first — the drill-down a bare redeemedCount cannot answer: which customer redeemed it, on which order, when. Account and order ids only; no contact value crosses this endpoint and none can.",
+        "operationId" : "redemptions_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "couponId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PromoCodeRedemptionResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every redemption recorded against one promo code",
         "tags" : [ "Promo codes" ]
       }
     },
@@ -30756,6 +31048,9 @@
   }, {
     "description" : "A brand's own accrual rate and redemption cap",
     "name" : "Loyalty policy"
+  }, {
+    "description" : "Per-recipient coded grants: a one-off code redeemable by exactly one customer",
+    "name" : "Benefit grants"
   }, {
     "description" : "The delivery queue, and manual assign/unassign",
     "name" : "Dispatch board"
