@@ -248,9 +248,19 @@ class CatalogAvailabilityReadModelTests {
                 });
     }
 
+    /**
+     * catalog.md §4.5's own problem statement, fixed by this wave: before it, a
+     * {@code HIDDEN} offering and a variant never offered here at all answered
+     * this read identically — both absent. {@code AVAILABLE}-only join plus
+     * filter meant an operator staring at the matrix could not tell "I hid
+     * this on purpose" from "I forgot to add this at all". This is the test
+     * that used to assert the bug ({@code anUnofferedVariantIsAbsent}, both
+     * rows silently dropped) and now asserts the fix: both appear, and {@code
+     * offeringStatus} is what tells them apart.
+     */
     @Test
-    @DisplayName("a variant hidden at this location, or offered nowhere, does not appear")
-    void anUnofferedVariantIsAbsent() {
+    @DisplayName("a HIDDEN variant and a never-added one both appear, distinguished by offeringStatus")
+    void aHiddenVariantIsDistinctFromANeverAddedOne() {
         UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
         var hidden = authoring.createProduct(
                 TENANT,
@@ -281,10 +291,197 @@ class CatalogAvailabilityReadModelTests {
                 UNCLASSIFIED,
                 ACTOR);
 
-        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, 50))
-                .as("neither the hidden offering nor the un-offered variant sells here")
-                .isEmpty();
-        assertThat(neverOffered.defaultVariantId()).isNotNull();
+        var rows = store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, 50);
+
+        assertThat(rows)
+                .as("both the hidden offering and the never-added variant now appear")
+                .hasSize(2);
+        assertThat(rows)
+                .filteredOn(row -> row.variantId().equals(hidden.defaultVariantId()))
+                .singleElement()
+                .satisfies(row -> assertThat(row.offeringStatus()).isEqualTo("HIDDEN"));
+        assertThat(rows)
+                .filteredOn(row -> row.variantId().equals(neverOffered.defaultVariantId()))
+                .singleElement()
+                .satisfies(row -> assertThat(row.offeringStatus())
+                        .as("never having a location_offerings row here reads as null, not a status")
+                        .isNull());
+    }
+
+    /**
+     * Protects {@code StopListPortAdapter}'s Telegram 86 command, which calls
+     * {@code offeringStatusFilter = "AVAILABLE"} explicitly and must keep
+     * seeing exactly what it always saw — nothing hidden, nothing never
+     * offered — now that the unfiltered read above includes both.
+     */
+    @Test
+    @DisplayName("filtering to AVAILABLE reproduces the pre-widening rows exactly")
+    void filteringToAvailableExcludesHiddenAndNeverAdded() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var visible = authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "VISIBLE",
+                "Visible dish",
+                null,
+                LOCALE,
+                "SKU-VIS",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, visible.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        var hidden = authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "HIDDEN",
+                "Hidden dish",
+                null,
+                LOCALE,
+                "SKU-HID",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, hidden.defaultVariantId(), OfferingStatus.HIDDEN, List.of("DELIVERY"));
+        authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "NEVER",
+                "Never offered",
+                null,
+                LOCALE,
+                "SKU-NEV",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
+
+        var rows = store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, 50, null, "AVAILABLE");
+
+        assertThat(rows)
+                .extracting(JdbcCatalogStore.VariantAvailabilityRow::variantId)
+                .containsExactly(visible.defaultVariantId());
+    }
+
+    @Test
+    @DisplayName("the NOT_ADDED filter finds only what is missing from this branch's menu")
+    void notAddedFilterFindsOnlyWhatIsMissingFromTheMenu() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var offered = authoring.createProduct(
+                TENANT, BRAND, catalogId, "OFFERED", "Offered", null, LOCALE, "SKU-OFF", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, offered.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        var missing = authoring.createProduct(
+                TENANT, BRAND, catalogId, "MISSING", "Missing", null, LOCALE, "SKU-MIS", "PIECE", UNCLASSIFIED, ACTOR);
+
+        var rows = store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, 50, null, "NOT_ADDED");
+
+        assertThat(rows)
+                .extracting(JdbcCatalogStore.VariantAvailabilityRow::variantId)
+                .containsExactly(missing.defaultVariantId());
+    }
+
+    @Test
+    @DisplayName("search matches the product name or the SKU, case-insensitively")
+    void searchMatchesProductNameOrSku() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV-1", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, plov.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        var lagman = authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "LAGMAN",
+                "Lagman",
+                null,
+                LOCALE,
+                "SKU-LAGMAN-1",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, lagman.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, 50, "osh", null))
+                .as("matches the product name, case-insensitively")
+                .extracting(JdbcCatalogStore.VariantAvailabilityRow::variantId)
+                .containsExactly(plov.defaultVariantId());
+
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, 50, "SKU-LAGMAN", null))
+                .as("matches the SKU")
+                .extracting(JdbcCatalogStore.VariantAvailabilityRow::variantId)
+                .containsExactly(lagman.defaultVariantId());
+    }
+
+    @Test
+    @DisplayName("fulfillmentModes are surfaced, empty for a never-added variant")
+    void fulfillmentModesAreSurfaced() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT,
+                BRAND,
+                LOCATION,
+                plov.defaultVariantId(),
+                OfferingStatus.AVAILABLE,
+                List.of("DELIVERY", "PICKUP"));
+        var never = authoring.createProduct(
+                TENANT, BRAND, catalogId, "NEVER", "Never", null, LOCALE, "SKU-NEVER", "PIECE", UNCLASSIFIED, ACTOR);
+
+        var rows = store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, 50);
+
+        assertThat(rows)
+                .filteredOn(row -> row.variantId().equals(plov.defaultVariantId()))
+                .singleElement()
+                .satisfies(row -> assertThat(row.fulfillmentModes()).containsExactly("DELIVERY", "PICKUP"));
+        assertThat(rows)
+                .filteredOn(row -> row.variantId().equals(never.defaultVariantId()))
+                .singleElement()
+                .satisfies(row -> assertThat(row.fulfillmentModes()).isEmpty());
+    }
+
+    @Test
+    @DisplayName("bulk-setting offering status updates every variant and leaves fulfillmentModes alone")
+    void bulkSetOfferingStatusUpdatesEveryVariantAndLeavesFulfillmentModesAlone() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, plov.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("PICKUP"));
+        var lagman = authoring.createProduct(
+                TENANT, BRAND, catalogId, "LAGMAN", "Lagman", null, LOCALE, "SKU-LAGMAN", "PIECE", UNCLASSIFIED, ACTOR);
+        // Never offered before the bulk call — the bulk gesture must be able
+        // to add it to the menu, not merely toggle rows that already exist.
+
+        int updated = authoring.bulkSetOfferingStatus(
+                TENANT,
+                BRAND,
+                LOCATION,
+                List.of(plov.defaultVariantId(), lagman.defaultVariantId()),
+                OfferingStatus.UNAVAILABLE,
+                ACTOR.toString());
+
+        assertThat(updated).isEqualTo(2);
+        var rows = store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, 50);
+        assertThat(rows)
+                .filteredOn(row -> row.variantId().equals(plov.defaultVariantId()))
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.offeringStatus()).isEqualTo("UNAVAILABLE");
+                    // Untouched by the bulk write — PICKUP survives, not the
+                    // upsertOffering default this row never asked for.
+                    assertThat(row.fulfillmentModes()).containsExactly("PICKUP");
+                });
+        assertThat(rows)
+                .filteredOn(row -> row.variantId().equals(lagman.defaultVariantId()))
+                .singleElement()
+                .satisfies(row -> assertThat(row.offeringStatus()).isEqualTo("UNAVAILABLE"));
     }
 
     /**
