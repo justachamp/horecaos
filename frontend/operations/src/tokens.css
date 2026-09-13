@@ -161,3 +161,20 @@ body {
 
 button { font-family: inherit; }
 input, select, textarea { font-family: inherit; }
+
+/* P06 — mirrors the SLA colour ramp added to the canonical
+   frontend/design-tokens/tokens.css (gap map rows 1.1g/X.39, orders.md
+   §2.7), landed here by hand for the reason the T23 comment above already
+   gives this file. A named ramp rather than components reaching for
+   --q-warning/--q-error directly: BLOCKED and LATE share one step (orders.md
+   pairs them), AT_RISK is the one warning step, NORMAL is a transparent
+   rail. Aliased to the existing tokens — same values, a separate name. */
+:root {
+  --q-sla-late: var(--q-error);
+  --q-sla-late-tint: var(--q-error-tint);
+  --q-sla-late-text: var(--q-error-text);
+  --q-sla-at-risk: var(--q-warning);
+  --q-sla-at-risk-tint: var(--q-warning-tint);
+  --q-sla-at-risk-text: var(--q-warning-text);
+  --q-sla-normal: transparent;
+}
