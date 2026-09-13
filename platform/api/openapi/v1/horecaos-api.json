@@ -8035,6 +8035,18 @@
         },
         "type" : "object"
       },
+      "HorecaosCandidateView" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "HourDemandResponse" : {
         "properties" : {
           "averageOrders" : {
@@ -20478,23 +20490,6 @@
         },
         "type" : "object"
       },
-      "UnmappedExternalResponse" : {
-        "properties" : {
-          "detail" : {
-            "type" : "string"
-          },
-          "entities" : {
-            "items" : {
-              "$ref" : "#/components/schemas/UnmappedExternalView"
-            },
-            "type" : "array"
-          },
-          "sourced" : {
-            "type" : "boolean"
-          }
-        },
-        "type" : "object"
-      },
       "UnmappedExternalView" : {
         "properties" : {
           "externalId" : {
@@ -20505,6 +20500,29 @@
           },
           "name" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "UnmappedResponse" : {
+        "properties" : {
+          "detail" : {
+            "type" : "string"
+          },
+          "entities" : {
+            "items" : {
+              "$ref" : "#/components/schemas/UnmappedExternalView"
+            },
+            "type" : "array"
+          },
+          "horecaosCandidates" : {
+            "items" : {
+              "$ref" : "#/components/schemas/HorecaosCandidateView"
+            },
+            "type" : "array"
+          },
+          "sourced" : {
+            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -29292,7 +29310,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/pos-mappings/unmapped" : {
       "get" : {
-        "description" : "sourced=false means this build has no way to read the provider's list for this entity type yet (gap-map row 10.8b) — creating a mapping by typing the provider's own code still works.",
+        "description" : "sourced=false on the external side means this build has no way to read the provider's list for this entity type yet (gap-map row 10.8b) — creating a mapping by typing the provider's own code still works. The HorecaOS side is always readable: a merchant's own records are never a discovery problem.",
         "operationId" : "unmapped",
         "parameters" : [ {
           "in" : "path",
@@ -29324,14 +29342,14 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/UnmappedExternalResponse"
+                  "$ref" : "#/components/schemas/UnmappedResponse"
                 }
               }
             },
             "description" : "OK"
           }
         },
-        "summary" : "The provider's own candidates for this type, not yet mapped",
+        "summary" : "Both unmapped sides of the pane's dual list",
         "tags" : [ "POS entity mappings" ]
       }
     },

@@ -1142,6 +1142,11 @@ export interface HolidayRequest {
   reason: string;
 }
 
+export interface HorecaosCandidateView {
+  id?: string;
+  name?: string;
+}
+
 export interface ImportRequest {
   content: string;
   fileName: string;
@@ -2779,16 +2784,17 @@ export interface TranslateRequest {
   name: string;
 }
 
-export interface UnmappedExternalResponse {
-  detail?: string;
-  entities?: Array<UnmappedExternalView>;
-  sourced?: boolean;
-}
-
 export interface UnmappedExternalView {
   externalId?: string;
   externalParentId?: string;
   name?: string;
+}
+
+export interface UnmappedResponse {
+  detail?: string;
+  entities?: Array<UnmappedExternalView>;
+  horecaosCandidates?: Array<HorecaosCandidateView>;
+  sourced?: boolean;
 }
 
 export interface UpdateCloposSettingsRequest {
@@ -3145,7 +3151,7 @@ export interface Operations {
   "list_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-mappings"; request: { parameters: { path: { tenantId: string }; query: { bindingId: string; cursor?: string; entityType: "PRODUCT" | "PAYMENT_TYPE" | "DISCOUNT" | "COURIER" | "CANCELLATION_REASON" | "CHANNEL_POS_CODE"; limit?: number; status?: string } } }; responses: { "200": PageMappingView } };
   "create_2": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-mappings"; request: { parameters: { path: { tenantId: string } }; body: CreateMappingRequest }; responses: { "200": MappingCreated } };
   "bulkAutoMatch": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-mappings/bulk-auto-match"; request: { parameters: { path: { tenantId: string } }; body: BulkAutoMatchRequest }; responses: { "200": BulkAutoMatchResponse } };
-  "unmapped": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-mappings/unmapped"; request: { parameters: { path: { tenantId: string }; query: { bindingId: string; entityType: "PRODUCT" | "PAYMENT_TYPE" | "DISCOUNT" | "COURIER" | "CANCELLATION_REASON" | "CHANNEL_POS_CODE" } } }; responses: { "200": UnmappedExternalResponse } };
+  "unmapped": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-mappings/unmapped"; request: { parameters: { path: { tenantId: string }; query: { bindingId: string; entityType: "PRODUCT" | "PAYMENT_TYPE" | "DISCOUNT" | "COURIER" | "CANCELLATION_REASON" | "CHANNEL_POS_CODE" } } }; responses: { "200": UnmappedResponse } };
   "retire_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-mappings/{mappingId}/retire"; request: { parameters: { path: { mappingId: string; tenantId: string } }; body: RetireMappingRequest }; responses: { "200": MappingRetired } };
   "listRuns": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs"; request: { parameters: { path: { tenantId: string }; query: { bindingId: string; cursor?: string; limit?: number } } }; responses: { "200": PageRunSummaryView } };
   "start_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs"; request: { parameters: { path: { tenantId: string }; query: { dryRun?: boolean } }; body: PosSyncRunControllerStartRequest }; responses: { "200": {  } } };
