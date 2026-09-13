@@ -80,6 +80,11 @@ public class ServiceScheduleService {
         return store.serviceState(tenantId, locationId);
     }
 
+    /** Every location's own {@link #currentState}, batched for a whole brand (Settings 10.2a). */
+    public Map<UUID, JdbcServiceabilityStore.ServiceState> statesForBrand(UUID tenantId, UUID brandId) {
+        return store.serviceStatesForBrand(tenantId, brandId);
+    }
+
     public Optional<JdbcServiceabilityStore.BoundSchedule> scheduleFor(
             UUID tenantId, UUID locationId, FulfillmentMode mode) {
         return store.scheduleFor(tenantId, locationId, mode);

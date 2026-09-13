@@ -121,6 +121,44 @@ public class JdbcServiceabilityStore {
                 .orElse(ServiceState.followingSchedule());
     }
 
+    /**
+     * Every location's own {@link #serviceState}, batched for a whole brand
+     * (Settings 10.2a).
+     *
+     * <p>The branch list used to read this one location at a time — the N+1
+     * {@code locations-page.ts}'s own comment named as the reason it shipped
+     * without a state column, a state filter, or a close/open row action.
+     * One left join answers the whole list; a location with no override row
+     * comes back {@link ServiceState#followingSchedule()}, exactly what
+     * {@link #serviceState} answers for it individually.
+     */
+    public Map<UUID, ServiceState> serviceStatesForBrand(UUID tenantId, UUID brandId) {
+        Map<UUID, ServiceState> states = new HashMap<>();
+        jdbc.sql("""
+                        SELECT l.id AS location_id, s.mode, s.reason_code, s.effective_until,
+                               s.max_concurrent_orders, s.version
+                        FROM tenant.locations l
+                        LEFT JOIN tenant.location_service_state s
+                          ON s.tenant_id = l.tenant_id AND s.location_id = l.id
+                        WHERE l.tenant_id = :tenantId AND l.brand_id = :brandId
+                        """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> Map.entry(
+                        row.getObject("location_id", UUID.class),
+                        row.getString("mode") == null
+                                ? ServiceState.followingSchedule()
+                                : new ServiceState(
+                                        ServiceMode.valueOf(row.getString("mode")),
+                                        row.getString("reason_code"),
+                                        instant(row.getObject("effective_until", OffsetDateTime.class)),
+                                        (Integer) row.getObject("max_concurrent_orders"),
+                                        row.getInt("version"))))
+                .list()
+                .forEach(entry -> states.put(entry.getKey(), entry.getValue()));
+        return states;
+    }
+
     /** The timetable bound to one fulfilment mode at one location, if any. */
     public Optional<BoundSchedule> scheduleFor(UUID tenantId, UUID locationId, FulfillmentMode mode) {
         Optional<ScheduleHeader> header = jdbc.sql("""

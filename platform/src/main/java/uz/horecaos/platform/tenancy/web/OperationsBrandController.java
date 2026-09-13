@@ -2,8 +2,10 @@ package uz.horecaos.platform.tenancy.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -12,9 +14,11 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.TenantId;
+import uz.horecaos.platform.tenancy.application.ServiceScheduleService;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.BrandView;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.LocationView;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcServiceabilityStore.ServiceState;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -40,9 +44,11 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class OperationsBrandController {
 
     private final TenantControlPlaneService service;
+    private final ServiceScheduleService schedules;
 
-    public OperationsBrandController(TenantControlPlaneService service) {
+    public OperationsBrandController(TenantControlPlaneService service, ServiceScheduleService schedules) {
         this.service = service;
+        this.schedules = schedules;
     }
 
     @GetMapping
@@ -65,4 +71,40 @@ public class OperationsBrandController {
     List<LocationView> locations(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         return service.getLocations(new TenantId(tenantId), new BrandId(brandId));
     }
+
+    /**
+     * Every location's own manual-override state, batched (Settings 10.2a
+     * branch list).
+     *
+     * <p>Before this wave the branch list had no way to answer "which
+     * branches are shut and why" without one request per row — the N+1
+     * {@code locations-page.ts}'s own comment named. One join
+     * ({@link ServiceScheduleService#statesForBrand}) answers the whole list.
+     */
+    @GetMapping("/{brandId}/locations/service-states")
+    @RequiresCapability(value = Capability.LOCATION_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Every location's manual-override state, batched, for the branch list's state column and filter")
+    List<LocationServiceStateResponse> locationServiceStates(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        Instant now = Instant.now();
+        return schedules.statesForBrand(tenantId, brandId).entrySet().stream()
+                .map(entry -> toResponse(entry.getKey(), entry.getValue(), now))
+                .toList();
+    }
+
+    private static LocationServiceStateResponse toResponse(UUID locationId, ServiceState state, Instant now) {
+        return new LocationServiceStateResponse(
+                locationId,
+                state.mode().name(),
+                state.effectiveMode(now).name(),
+                state.reasonCode(),
+                state.effectiveUntil());
+    }
+
+    public record LocationServiceStateResponse(
+            UUID locationId,
+            String mode,
+            String effectiveMode,
+            @Nullable String reasonCode,
+            @Nullable Instant effectiveUntil) {}
 }
