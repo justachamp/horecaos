@@ -24,6 +24,12 @@ const BRAND: BrandView = {
   slug: 'main',
   displayName: 'Rayhon Chilonzor',
   status: 'ACTIVE',
+  contactPhone: null,
+  telegramHandle: null,
+  logoAssetId: null,
+  bannerAssetId: null,
+  locales: [],
+  version: 0,
 };
 
 const LOCATION: LocationView = {

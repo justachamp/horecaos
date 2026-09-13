@@ -17,6 +17,12 @@ const BRAND: BrandView = {
   slug: 'rayhon',
   displayName: 'Rayhon',
   status: 'ACTIVE',
+  contactPhone: null,
+  telegramHandle: null,
+  logoAssetId: null,
+  bannerAssetId: null,
+  locales: [],
+  version: 0,
 };
 
 const BRAND_2: BrandView = {
@@ -26,6 +32,12 @@ const BRAND_2: BrandView = {
   slug: 'oshxona',
   displayName: 'Oshxona',
   status: 'ACTIVE',
+  contactPhone: null,
+  telegramHandle: null,
+  logoAssetId: null,
+  bannerAssetId: null,
+  locales: [],
+  version: 0,
 };
 
 const NEVER_PUBLISHED: TermsVersionView = {

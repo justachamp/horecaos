@@ -568,10 +568,12 @@ export const messagesRu: MessageCatalogue = {
     'Привязка продавца зарегистрирована как черновик. Активируйте её, когда всё верно.',
   'settings.integrations.registerBinding.cancel': 'Отмена',
 
-  // 10.1 Профиль бренда
+  // 10.1 Профиль бренда, 10.12 языки и региональные форматы
   'settings.brandProfile.title': 'Профиль бренда',
   'settings.brandProfile.lead':
     'Как называется бренд и как он выглядит везде, где его видит клиент.',
+  'settings.brandProfile.section.identity': 'Идентификация',
+  'settings.brandProfile.section.profile': 'Профиль',
   'settings.brandProfile.field.displayName': 'Название бренда',
   'settings.brandProfile.field.code': 'Код',
   'settings.brandProfile.field.slug': 'Слаг',
@@ -580,16 +582,30 @@ export const messagesRu: MessageCatalogue = {
   'settings.brandProfile.status.ACTIVE': 'Активен',
   'settings.brandProfile.status.SUSPENDED': 'Приостановлен',
   'settings.brandProfile.status.ARCHIVED': 'В архиве',
-  'settings.brandProfile.readOnlyNote':
-    'Редактирование этих полей пока недоступно — изменения пока проводятся через онбординг в control-plane.',
-  'settings.brandProfile.gap.title': 'Пока не показано здесь',
-  'settings.brandProfile.gap.legalName':
-    'Юридическое название компании (уровень тенанта, появится как поле только для чтения)',
-  'settings.brandProfile.gap.logoBanner':
-    'Логотип и баннер для агрегаторов/QR — у медиа ещё нет отметки «это логотип»',
-  'settings.brandProfile.gap.description': 'Описание на каждом языке — для него пока нет хранилища',
-  'settings.brandProfile.gap.contact':
-    'Основной телефон и Telegram-канал — для них пока нет колонок',
+  'settings.brandProfile.rename': 'Переименовать',
+  'settings.brandProfile.edit': 'Изменить',
+  'settings.brandProfile.cancel': 'Отмена',
+  'settings.brandProfile.save': 'Сохранить',
+  'settings.brandProfile.saving': 'Сохранение…',
+  'settings.brandProfile.error.nameRequired': 'Название бренда обязательно.',
+  'settings.brandProfile.field.contactPhone': 'Контактный телефон',
+  'settings.brandProfile.field.telegramHandle': 'Аккаунт в Telegram',
+  'settings.brandProfile.field.logoAssetId': 'Логотип (ID медиафайла)',
+  'settings.brandProfile.field.bannerAssetId': 'Баннер для агрегаторов/QR (ID медиафайла)',
+  'settings.brandProfile.mediaNote':
+    'Вставьте ID уже загруженного где-то медиафайла — выбора файла здесь пока нет.',
+  'settings.brandProfile.locales.title': 'Поддерживаемые языки',
+  'settings.brandProfile.locales.hint':
+    'На каких языках доступна витрина этого бренда и какой из них по умолчанию.',
+  'settings.brandProfile.locales.unconfigured':
+    'Пока не настроено — консоль использует набор по умолчанию: русский, узбекский (латиница) и английский.',
+  'settings.brandProfile.locales.default': 'По умолчанию',
+  'settings.brandProfile.locales.include': 'Предлагать',
+  'settings.brandProfile.locales.language': 'Язык',
+  'settings.brandProfile.locales.description': 'Описание',
+  'settings.brandProfile.locale.ru': 'Русский',
+  'settings.brandProfile.locale.uzLatn': 'Узбекский (латиница)',
+  'settings.brandProfile.locale.en': 'Английский',
 
   // 10.4 Каналы продаж
   'settings.salesChannels.title': 'Каналы продаж',
@@ -914,7 +930,16 @@ export const messagesRu: MessageCatalogue = {
   'settings.locations.field.address': 'Адрес',
   'settings.locations.field.district': 'Район',
   'settings.locations.field.phone': 'Телефон',
+  'settings.locations.field.landmark': 'Ориентир',
   'settings.locations.empty': 'Филиалов пока нет.',
+  'settings.locations.list.column.state': 'Состояние',
+  'settings.locations.list.filterState': 'Состояние',
+  'settings.locations.list.state.all': 'Все',
+  'settings.locations.list.state.open': 'Открыт',
+  'settings.locations.list.state.forceOpen': 'Принудительно открыт',
+  'settings.locations.list.state.closed': 'Закрыт',
+  'settings.locations.list.close': 'Закрыть',
+  'settings.locations.list.reopen': 'Открыть снова',
   'settings.locations.tab.basics': 'Основное',
   'settings.locations.tab.hours': 'Часы',
   'settings.locations.tab.load': 'Загрузка и приготовление',
@@ -3737,7 +3762,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.detail.bindings.activate': 'Активировать',
   'settings.integrations.detail.bindings.activate.reasonPrompt': 'Причина запуска этой привязки:',
   'settings.integrations.detail.bindings.suspend': 'Приостановить',
-  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Причина приостановки этой привязки:',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Причина приостановки этой привязки:',
   'settings.integrations.detail.bindings.empty': 'Привязок пока нет.',
   'settings.integrations.detail.bindings.wholeTenant': 'Вся компания',
   'settings.integrations.detail.cloposSettings.title': 'Приём заказов',
@@ -3749,13 +3775,15 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.detail.partnerClients.issue': 'Выпустить клиента',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'Название для этого клиента (для вашего удобства):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Причина выпуска этого клиента:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Причина выпуска этого клиента:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Скопируйте этот секрет сейчас — он больше не будет показан:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'Я скопировал(а)',
   'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
   'settings.integrations.detail.partnerClients.revoke': 'Отозвать',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Причина отзыва этого клиента:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Причина отзыва этого клиента:',
   'settings.integrations.detail.partnerClients.empty': 'Клиенты партнёрского API ещё не выпущены.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

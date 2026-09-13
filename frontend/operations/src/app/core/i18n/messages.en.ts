@@ -596,10 +596,12 @@ export const messagesEn = {
     'Merchant binding registered as draft. Activate it once it is correct.',
   'settings.integrations.registerBinding.cancel': 'Cancel',
 
-  // 10.1 Brand profile
+  // 10.1 Brand profile, 10.12 languages and regional formats
   'settings.brandProfile.title': 'Brand profile',
   'settings.brandProfile.lead':
     'What the brand is called and what it looks like everywhere a customer sees it.',
+  'settings.brandProfile.section.identity': 'Identity',
+  'settings.brandProfile.section.profile': 'Profile',
   'settings.brandProfile.field.displayName': 'Brand name',
   'settings.brandProfile.field.code': 'Code',
   'settings.brandProfile.field.slug': 'Slug',
@@ -608,17 +610,30 @@ export const messagesEn = {
   'settings.brandProfile.status.ACTIVE': 'Active',
   'settings.brandProfile.status.SUSPENDED': 'Suspended',
   'settings.brandProfile.status.ARCHIVED': 'Archived',
-  'settings.brandProfile.readOnlyNote':
-    'Editing these fields is not available yet — changes go through control-plane onboarding for now.',
-  'settings.brandProfile.gap.title': 'Not shown here yet',
-  'settings.brandProfile.gap.legalName':
-    'Legal company name (tenant-level, read-only when it lands)',
-  'settings.brandProfile.gap.logoBanner':
-    'Logo and aggregator/QR banner — media has no "this is the logo" marker yet',
-  'settings.brandProfile.gap.description':
-    'Description in each language — no storage exists for it yet',
-  'settings.brandProfile.gap.contact':
-    'Main phone and Telegram channel — no columns exist for them yet',
+  'settings.brandProfile.rename': 'Rename',
+  'settings.brandProfile.edit': 'Edit',
+  'settings.brandProfile.cancel': 'Cancel',
+  'settings.brandProfile.save': 'Save',
+  'settings.brandProfile.saving': 'Saving…',
+  'settings.brandProfile.error.nameRequired': 'A brand name is required.',
+  'settings.brandProfile.field.contactPhone': 'Contact phone',
+  'settings.brandProfile.field.telegramHandle': 'Telegram handle',
+  'settings.brandProfile.field.logoAssetId': 'Logo (media asset ID)',
+  'settings.brandProfile.field.bannerAssetId': 'Aggregator/QR banner (media asset ID)',
+  'settings.brandProfile.mediaNote':
+    'Paste the ID of a media asset already uploaded elsewhere — a picker is not built yet.',
+  'settings.brandProfile.locales.title': 'Supported languages',
+  'settings.brandProfile.locales.hint':
+    'Which languages this brand’s storefront offers, and which one is default.',
+  'settings.brandProfile.locales.unconfigured':
+    'Not configured yet — the console falls back to Russian, Uzbek (Latin) and English.',
+  'settings.brandProfile.locales.default': 'Default',
+  'settings.brandProfile.locales.include': 'Offer',
+  'settings.brandProfile.locales.language': 'Language',
+  'settings.brandProfile.locales.description': 'Description',
+  'settings.brandProfile.locale.ru': 'Russian',
+  'settings.brandProfile.locale.uzLatn': 'Uzbek (Latin)',
+  'settings.brandProfile.locale.en': 'English',
 
   // 10.4 Sales channels
   'settings.salesChannels.title': 'Sales channels',
@@ -943,7 +958,16 @@ export const messagesEn = {
   'settings.locations.field.address': 'Address',
   'settings.locations.field.district': 'District',
   'settings.locations.field.phone': 'Phone',
+  'settings.locations.field.landmark': 'Landmark',
   'settings.locations.empty': 'No locations yet.',
+  'settings.locations.list.column.state': 'State',
+  'settings.locations.list.filterState': 'State',
+  'settings.locations.list.state.all': 'All',
+  'settings.locations.list.state.open': 'Open',
+  'settings.locations.list.state.forceOpen': 'Forced open',
+  'settings.locations.list.state.closed': 'Closed',
+  'settings.locations.list.close': 'Close',
+  'settings.locations.list.reopen': 'Reopen',
   'settings.locations.tab.basics': 'Basics',
   'settings.locations.tab.hours': 'Hours',
   'settings.locations.tab.load': 'Load & prep',
@@ -3773,9 +3797,11 @@ export const messagesEn = {
   'settings.integrations.detail.bindings.column.status': 'Status',
   'settings.integrations.detail.bindings.column.actions': 'Actions',
   'settings.integrations.detail.bindings.activate': 'Activate',
-  'settings.integrations.detail.bindings.activate.reasonPrompt': 'Reason for bringing this binding live:',
+  'settings.integrations.detail.bindings.activate.reasonPrompt':
+    'Reason for bringing this binding live:',
   'settings.integrations.detail.bindings.suspend': 'Suspend',
-  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Reason for suspending this binding:',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Reason for suspending this binding:',
   'settings.integrations.detail.bindings.empty': 'No bindings yet.',
   'settings.integrations.detail.bindings.wholeTenant': 'Entire company',
   'settings.integrations.detail.cloposSettings.title': 'Order acceptance',
@@ -3787,13 +3813,15 @@ export const messagesEn = {
   'settings.integrations.detail.partnerClients.issue': 'Issue a client',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'A name for this client (for your own reference):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Reason for issuing this client:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Reason for issuing this client:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Copy this secret now — it will not be shown again:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'I have copied it',
   'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
   'settings.integrations.detail.partnerClients.revoke': 'Revoke',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Reason for revoking this client:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Reason for revoking this client:',
   'settings.integrations.detail.partnerClients.empty': 'No partner API clients issued yet.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

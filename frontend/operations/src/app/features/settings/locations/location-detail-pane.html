@@ -85,6 +85,10 @@
           <dt class="q-caption">{{ 'settings.locations.field.phone' | t }}</dt>
           <dd class="q-body">{{ location.contactPhone ?? '—' }}</dd>
         </div>
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.locations.field.landmark' | t }}</dt>
+          <dd class="q-body">{{ location.landmark ?? '—' }}</dd>
+        </div>
       </dl>
 
       @if (!editingPlace()) {
@@ -140,6 +144,18 @@
             (input)="draftContactPhone.set($any($event.target).value)"
             [disabled]="placeSaving()"
             placeholder="+998712000000"
+          />
+
+          <label class="q-caption" for="place-landmark">{{
+            'settings.locations.field.landmark' | t
+          }}</label>
+          <input
+            id="place-landmark"
+            class="q-body field"
+            type="text"
+            [value]="draftLandmark()"
+            (input)="draftLandmark.set($any($event.target).value)"
+            [disabled]="placeSaving()"
           />
 
           @if (placeError(); as message) {

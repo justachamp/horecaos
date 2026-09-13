@@ -31,6 +31,14 @@ import { LocationScope } from './operations-paths';
  * {@link locationServiceSummary} and the four write endpoints it summarises,
  * plus the pre-existing {@link notificationTemplates} tree.
  *
+ * Wave P32 fixed the place write's data-loss bug (see `locationPlace`'s own
+ * doc) and added the brand's writable profile ({@link brandRevise}, {@link
+ * brandProfileWrite}, both cross-surface for the reason `locationPlace` above
+ * already is) and the branch list's batched state read ({@link
+ * locationsServiceStates}, operations-native, closing the N+1 `locations`
+ * alone used to leave the list without a state column, a state filter, or a
+ * close/open row action).
+ *
  * Wave 53 added a second, different kind of move for {@link
  * integrationInstallations}, {@link integrationSecrets}, {@link
  * integrationConnectFields} and {@link integrationInstallationRotate}: unlike
@@ -55,9 +63,31 @@ export const settingsPaths = {
     return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/brands`;
   },
 
-  /** `OperationsBrandController.get` — read-only until a profile-write endpoint exists. */
+  /** `OperationsBrandController.get`. */
   brand(scope: LocationScope): string {
     return `${this.brands(scope)}/${enc(scope.brandId)}`;
+  },
+
+  /**
+   * `TenantControlPlaneController.reviseBrand` (control-plane surface),
+   * cross-surface — already built and shipped for the control-plane console
+   * before wave P32, which gave this app the operations route and form to
+   * reach it. Requires `If-Match`.
+   */
+  brandRevise(scope: LocationScope): string {
+    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}`;
+  },
+
+  /**
+   * `TenantControlPlaneController.updateBrandProfile` (control-plane
+   * surface), wave P32 — contact phone, Telegram handle, logo, banner and
+   * the 10.12 supported-locale set. Cross-surface for the same reason {@link
+   * locationPlace} is: the write belongs beside the brand's other
+   * provisioning-era fields, and this app calls it the same way {@link
+   * brandRevise} calls its neighbour.
+   */
+  brandProfileWrite(scope: LocationScope): string {
+    return `${this.brandRevise(scope)}/profile`;
   },
 
   // ---------------------------------------------------------- 10.2 Locations
@@ -65,6 +95,18 @@ export const settingsPaths = {
   /** `OperationsBrandController.locations` — the branch list and the scope bar's location picker. */
   locations(scope: LocationScope): string {
     return `${this.brand(scope)}/locations`;
+  },
+
+  /**
+   * `OperationsBrandController.locationServiceStates`, wave P32 — every
+   * location's own manual-override state, batched. Before this wave the
+   * branch list had no state column, no state filter and no close/open row
+   * action, because answering any of them one location at a time was the N+1
+   * this app's own comment on `locations-page.ts` named as the reason it
+   * shipped without them.
+   */
+  locationsServiceStates(scope: LocationScope): string {
+    return `${this.locations(scope)}/service-states`;
   },
 
   /** `LocationServiceOperationsController.profile` — one branch's own fields. */

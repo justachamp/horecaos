@@ -83,11 +83,26 @@ export interface ServiceSummaryResponse {
   readonly preparationBands: readonly BandView[];
 }
 
+export type ServiceMode = 'FOLLOW_SCHEDULE' | 'FORCE_OPEN' | 'FORCE_CLOSED';
+
 export interface ChangeServiceStateRequest {
-  readonly mode: 'FOLLOW_SCHEDULE' | 'FORCE_OPEN' | 'FORCE_CLOSED';
+  readonly mode: ServiceMode;
   readonly reasonCode?: string;
   readonly note?: string;
   readonly effectiveUntil?: string;
+}
+
+/**
+ * Mirrors uz.horecaos.platform.tenancy.web.OperationsBrandController
+ * .LocationServiceStateResponse — one row of the branch list's batched state
+ * read (10.2a, wave P32).
+ */
+export interface LocationServiceStateView {
+  readonly locationId: string;
+  readonly mode: ServiceMode;
+  readonly effectiveMode: ServiceMode;
+  readonly reasonCode: string | null;
+  readonly effectiveUntil: string | null;
 }
 
 /**
@@ -95,6 +110,11 @@ export interface ChangeServiceStateRequest {
  * plus the service-state and capacity writes) is on the operations surface —
  * new in wave 26. `describePlace` reuses `TenantControlPlaneController`'s
  * existing `place` write, cross-surface — see `settings-paths.ts`.
+ *
+ * `serviceStates` is new in wave P32: before it, the branch list's only way
+ * to know which branches were shut was one {@link serviceSummary}-shaped call
+ * per row — the N+1 `locations-page.ts`'s own comment named as the reason it
+ * shipped without a state column, a state filter, or a close/open row action.
  */
 @Injectable({ providedIn: 'root' })
 export class LocationsApi {
@@ -103,6 +123,16 @@ export class LocationsApi {
   async list(scope: LocationScope): Promise<readonly LocationView[]> {
     const result = await firstValueFrom(
       this.api.get<readonly LocationView[]>(settingsPaths.locations(scope)),
+    );
+    return result.value ?? [];
+  }
+
+  /** Every location's own manual-override state, batched — the branch list's state column and filter. */
+  async serviceStates(scope: LocationScope): Promise<readonly LocationServiceStateView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly LocationServiceStateView[]>(
+        settingsPaths.locationsServiceStates(scope),
+      ),
     );
     return result.value ?? [];
   }

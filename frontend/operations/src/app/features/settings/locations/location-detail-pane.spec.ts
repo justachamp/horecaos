@@ -22,7 +22,7 @@ const LOCATION: LocationView = {
   addressLine: 'Bunyodkor 12',
   district: 'Chilanzar',
   city: 'Tashkent',
-  landmark: null,
+  landmark: 'Chilanzar metro yonida',
   contactPhone: '+998712000000',
   latitude: 41.3,
   longitude: 69.2,
@@ -149,6 +149,47 @@ describe('LocationDetailPane', () => {
     expect(api.describePlace).toHaveBeenCalledWith(
       SCOPE,
       expect.objectContaining({ addressLine: 'New address' }),
+    );
+  });
+
+  it('sends the existing landmark along with an untouched edit, and a new one when it is changed', async () => {
+    const editButton = () =>
+      fixture.nativeElement.querySelector('.primary') as HTMLButtonElement;
+    const saveButton = () =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+      ).find((button) => button.textContent?.includes('Save')) as HTMLButtonElement;
+
+    editButton().click();
+    fixture.detectChanges();
+
+    // Untouched: the field the form opened with is what P32's fix relies on
+    // being sent, since only what this form sends is carried through.
+    saveButton().click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    expect(api.describePlace).toHaveBeenCalledWith(
+      SCOPE,
+      expect.objectContaining({ landmark: 'Chilanzar metro yonida' }),
+    );
+
+    // Save swaps the edit form back out for the read-only view and a fresh
+    // "Edit" button, so this has to be re-queried rather than reusing the
+    // detached one above.
+    editButton().click();
+    fixture.detectChanges();
+    const landmarkInput = fixture.nativeElement.querySelector(
+      '#place-landmark',
+    ) as HTMLInputElement;
+    landmarkInput.value = 'Next to the blue mosque';
+    landmarkInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    saveButton().click();
+    await flushMicrotasks();
+    expect(api.describePlace).toHaveBeenLastCalledWith(
+      SCOPE,
+      expect.objectContaining({ landmark: 'Next to the blue mosque' }),
     );
   });
 
