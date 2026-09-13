@@ -590,7 +590,40 @@
 
 	encode zstd gzip
 
-	reverse_proxy operations-web:80
+	# The operations console is built with `apiBaseUrl: ''` (its environment.ts
+	# has no runtime configuration layer, unlike the control plane), so every
+	# call it makes is same-origin at /api/v1 -- and without this block those
+	# calls landed on the static file server and came back 405. Proxy the whole
+	# API prefix to the platform: authorization is the platform's job per
+	# endpoint, exactly as it is on the API origin, and being first-party keeps
+	# the ADR 0062 session cookie on this origin. Found on pre-production on
+	# 2026-09-13, when an owner's invitation link opened /invite and its inspect
+	# call never reached the platform.
+	@operations_signin {
+		method POST
+		path /api/v1/operations/auth/sessions
+	}
+	handle @operations_signin {
+		rate_limit {
+			zone operations_signin_by_ip {
+				key {client_ip}
+				events 10
+				window 1m
+			}
+		}
+		import platform_app_upstream
+	}
+
+	handle /api/* {
+		request_body {
+			max_size 2097152
+		}
+		import platform_app_upstream
+	}
+
+	handle {
+		reverse_proxy operations-web:80
+	}
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
