@@ -1341,6 +1341,7 @@ export interface MappingView {
   externalEntityId?: string;
   externalParentId?: string;
   horecaosEntityId?: string;
+  horecaosName?: string;
   lastSeenAt?: string;
   mappingId?: string;
   mappingSource?: string;

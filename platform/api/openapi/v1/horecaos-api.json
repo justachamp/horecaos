@@ -9306,6 +9306,9 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "horecaosName" : {
+            "type" : "string"
+          },
           "lastSeenAt" : {
             "format" : "date-time",
             "type" : "string"
