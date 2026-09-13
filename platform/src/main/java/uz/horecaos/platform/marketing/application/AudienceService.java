@@ -276,12 +276,27 @@ public class AudienceService {
      */
     @Transactional
     public List<UUID> export(
-            UUID tenantId, UUID snapshotId, ActorRef actor, String statedPurpose, String correlationId, int limit) {
+            UUID tenantId,
+            UUID brandId,
+            UUID snapshotId,
+            ActorRef actor,
+            String statedPurpose,
+            String correlationId,
+            int limit) {
 
         var snapshot = audiences
                 .findSnapshot(tenantId, snapshotId)
                 .orElseThrow(() ->
                         new IllegalArgumentException("No snapshot %s belongs to this tenant".formatted(snapshotId)));
+
+        // The endpoint declares a BRAND-scoped capability, so the caller was only
+        // ever authorised for the brand in the URL. Without this check, holding
+        // AUDIENCE_EXPORT for one brand would be enough to export a sibling
+        // brand's customer list by snapshot id alone -- the same isolation gap
+        // buildSnapshot and requireOwnedByBrand already guard against above.
+        if (!snapshot.brandId().equals(brandId)) {
+            throw new IllegalArgumentException("No snapshot %s belongs to this brand".formatted(snapshotId));
+        }
 
         List<UUID> ids = audiences.includedMembersAfter(tenantId, snapshotId, null, limit).stream()
                 .map(JdbcAudienceStore.SnapshotMemberRow::customerAccountId)

@@ -516,6 +516,57 @@ class MarketingCampaignTests {
                 .isEmpty();
     }
 
+    @Test
+    @DisplayName("exporting a snapshot through a sibling brand is refused, not just the source brand's own export")
+    void exportRefusesASiblingBrand() {
+        UUID account = customer("+998909999991", "ru", true);
+        grantConsent(account);
+        projection.backfill(TENANT, BRAND);
+
+        UUID audience = everybodyRegistered();
+        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE, author, "corr");
+
+        // The capability check alone would pass here: OTHER_BRAND is a real brand
+        // under TENANT, so this is exactly the gap a BRAND-scoped AUDIENCE_EXPORT
+        // grant on OTHER_BRAND, paired with BRAND's snapshotId, would otherwise
+        // exploit.
+        assertThatThrownBy(() ->
+                        audiences.export(TENANT, OTHER_BRAND, snapshot.snapshotId(), author, PURPOSE, "corr", 100))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("belongs to this brand");
+    }
+
+    @Test
+    @DisplayName("exporting a snapshot through another tenant is refused")
+    void exportRefusesAnotherTenant() {
+        UUID account = customer("+998909999992", "ru", true);
+        grantConsent(account);
+        projection.backfill(TENANT, BRAND);
+
+        UUID audience = everybodyRegistered();
+        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE, author, "corr");
+
+        assertThatThrownBy(() ->
+                        audiences.export(OTHER_TENANT, BRAND, snapshot.snapshotId(), author, PURPOSE, "corr", 100))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("belongs to this tenant");
+    }
+
+    @Test
+    @DisplayName("exporting a snapshot through its own brand returns the pseudonymous member ids")
+    void exportSucceedsForTheOwningBrand() {
+        UUID account = customer("+998909999993", "ru", true);
+        grantConsent(account);
+        projection.backfill(TENANT, BRAND);
+
+        UUID audience = everybodyRegistered();
+        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE, author, "corr");
+
+        List<UUID> exported = audiences.export(TENANT, BRAND, snapshot.snapshotId(), author, PURPOSE, "corr", 100);
+
+        assertThat(exported).containsExactly(account);
+    }
+
     // ------------------------------------------------- retention and erasure
 
     @Test

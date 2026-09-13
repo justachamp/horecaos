@@ -263,6 +263,7 @@ public class OperationsMarketingController {
 
         return ResponseEntity.ok(audiences.export(
                 tenantId,
+                brandId,
                 snapshotId,
                 actor(),
                 body.purpose(),

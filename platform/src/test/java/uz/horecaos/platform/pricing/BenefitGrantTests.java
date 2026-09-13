@@ -47,6 +47,8 @@ class BenefitGrantTests {
 
     private static final UUID TENANT = UUID.randomUUID();
     private static final UUID BRAND = UUID.randomUUID();
+    private static final UUID OTHER_TENANT = UUID.randomUUID();
+    private static final UUID OTHER_BRAND = UUID.randomUUID();
     private static final Instant NOW = Instant.parse("2026-09-12T09:00:00Z");
 
     private static TestDatabase.Handle db;
@@ -214,6 +216,46 @@ class BenefitGrantTests {
                         actor,
                         "corr-bad-2"))
                 .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    @DisplayName("a customer's grant under one brand does not appear when read through a sibling brand")
+    void forCustomerExcludesASiblingBrand() {
+        UUID customer = UUID.randomUUID();
+        mint(customer);
+
+        assertThat(grants.forCustomer(TENANT, BRAND, customer)).hasSize(1);
+        assertThat(grants.forCustomer(TENANT, OTHER_BRAND, customer))
+                .as("brand scoping happens in the query, not merely by convention -- pin it with a test")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a customer's grant is invisible through another tenant even with the same brand id")
+    void forCustomerExcludesAnotherTenant() {
+        UUID customer = UUID.randomUUID();
+        mint(customer);
+
+        assertThat(grants.forCustomer(OTHER_TENANT, BRAND, customer))
+                .as("brand ids are not guaranteed globally unique to one tenant")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a code minted under one tenant cannot be redeemed by naming another tenant")
+    void redeemRefusesAnotherTenantWithTheSameCodeHash() {
+        UUID customer = UUID.randomUUID();
+        MintedGrant minted = mint(customer);
+
+        RedemptionOutcome outcome = grants.redeem(OTHER_TENANT, minted.plaintextCode(), customer, UUID.randomUUID());
+
+        assertThat(outcome.redeemed()).isFalse();
+        assertThat(outcome.reason()).isEqualTo(RedemptionOutcome.Reason.CODE_NOT_FOUND);
+
+        // The real owner can still redeem it -- the cross-tenant attempt above
+        // must not have consumed or otherwise disturbed the grant.
+        RedemptionOutcome ownerAttempt = grants.redeem(TENANT, minted.plaintextCode(), customer, UUID.randomUUID());
+        assertThat(ownerAttempt.redeemed()).isTrue();
     }
 
     private MintedGrant mint(UUID customer) {
