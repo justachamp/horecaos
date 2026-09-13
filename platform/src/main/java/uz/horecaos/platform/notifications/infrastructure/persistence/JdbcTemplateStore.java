@@ -102,7 +102,8 @@ public class JdbcTemplateStore {
         return jdbc.sql("""
                 SELECT id, tenant_id, template_id, version_number, locale, subject_template,
                        body_template, variables_schema::text AS variables_schema, content_hash,
-                       status, approved_by, activated_at, provider_review
+                       status, approved_by, activated_at, provider_review,
+                       provider_review_reference, provider_review_note, provider_review_updated_at
                 FROM notifications.template_versions
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                   AND version_number = :versionNumber AND locale = :locale
@@ -119,7 +120,8 @@ public class JdbcTemplateStore {
         return jdbc.sql("""
                 SELECT id, tenant_id, template_id, version_number, locale, subject_template,
                        body_template, variables_schema::text AS variables_schema, content_hash,
-                       status, approved_by, activated_at, provider_review
+                       status, approved_by, activated_at, provider_review,
+                       provider_review_reference, provider_review_note, provider_review_updated_at
                 FROM notifications.template_versions
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                   AND version_number = :versionNumber
@@ -128,6 +130,28 @@ public class JdbcTemplateStore {
                 .param("tenantId", tenantId)
                 .param("templateId", templateId)
                 .param("versionNumber", versionNumber)
+                .query(JdbcTemplateStore::versionRow)
+                .list();
+    }
+
+    /**
+     * Every locale row of every version of a template, newest version first —
+     * the version list a create-only editor never had a caller for. The
+     * caller groups rows by {@code versionNumber}, exactly as {@link #versions}
+     * already returns one version's own set.
+     */
+    public List<VersionRow> allVersionsOfTemplate(UUID tenantId, UUID templateId) {
+        return jdbc.sql("""
+                SELECT id, tenant_id, template_id, version_number, locale, subject_template,
+                       body_template, variables_schema::text AS variables_schema, content_hash,
+                       status, approved_by, activated_at, provider_review,
+                       provider_review_reference, provider_review_note, provider_review_updated_at
+                FROM notifications.template_versions
+                WHERE tenant_id = :tenantId AND template_id = :templateId
+                ORDER BY version_number DESC, locale
+                """)
+                .param("tenantId", tenantId)
+                .param("templateId", templateId)
                 .query(JdbcTemplateStore::versionRow)
                 .list();
     }
@@ -376,6 +400,7 @@ public class JdbcTemplateStore {
 
     private static VersionRow versionRow(java.sql.ResultSet row, int number) throws java.sql.SQLException {
         OffsetDateTime activatedAt = row.getObject("activated_at", OffsetDateTime.class);
+        OffsetDateTime providerReviewUpdatedAt = row.getObject("provider_review_updated_at", OffsetDateTime.class);
         return new VersionRow(
                 row.getObject("id", UUID.class),
                 row.getObject("template_id", UUID.class),
@@ -388,7 +413,10 @@ public class JdbcTemplateStore {
                 row.getString("status"),
                 row.getString("approved_by"),
                 activatedAt == null ? null : activatedAt.toInstant(),
-                row.getString("provider_review"));
+                row.getString("provider_review"),
+                row.getString("provider_review_reference"),
+                row.getString("provider_review_note"),
+                providerReviewUpdatedAt == null ? null : providerReviewUpdatedAt.toInstant());
     }
 
     private static OffsetDateTime utc(Instant instant) {
@@ -418,6 +446,18 @@ public class JdbcTemplateStore {
         }
     }
 
+    /**
+     * @param providerReview ADR 0091: {@code NOT_REQUIRED}, {@code PENDING},
+     *                        {@code APPROVED} or {@code REJECTED}
+     * @param providerReviewReference the provider's own reference for an
+     *                                {@code APPROVED} review; null otherwise
+     * @param providerReviewNote why a {@code REJECTED} review was refused, or
+     *                           the platform's own note for a
+     *                           platform-attributed {@code PENDING}; null for
+     *                           {@code NOT_REQUIRED}
+     * @param providerReviewUpdatedAt when the review state above was last
+     *                                recorded; null for {@code NOT_REQUIRED}
+     */
     public record VersionRow(
             UUID id,
             UUID templateId,
@@ -430,5 +470,8 @@ public class JdbcTemplateStore {
             String status,
             @Nullable String approvedBy,
             @Nullable Instant activatedAt,
-            String providerReview) {}
+            String providerReview,
+            @Nullable String providerReviewReference,
+            @Nullable String providerReviewNote,
+            @Nullable Instant providerReviewUpdatedAt) {}
 }

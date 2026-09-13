@@ -24,9 +24,14 @@ import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.notifications.application.NotificationTemplateService;
 import uz.horecaos.platform.notifications.application.NotificationTemplateService.Wording;
+import uz.horecaos.platform.notifications.application.TemplateProviderReviewService;
+import uz.horecaos.platform.notifications.application.TemplateTestSendService;
+import uz.horecaos.platform.notifications.application.TemplateTestSendService.TestSendOutcome;
 import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
+import uz.horecaos.platform.notifications.domain.NotificationVariableCatalog;
+import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore.VersionRow;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -50,11 +55,31 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class NotificationTemplateController {
 
     private final NotificationTemplateService templates;
+    private final TemplateTestSendService testSend;
     private final CurrentActor currentActor;
 
-    public NotificationTemplateController(NotificationTemplateService templates, CurrentActor currentActor) {
+    public NotificationTemplateController(
+            NotificationTemplateService templates, TemplateTestSendService testSend, CurrentActor currentActor) {
         this.templates = templates;
+        this.testSend = testSend;
         this.currentActor = currentActor;
+    }
+
+    @GetMapping("/variable-catalogue")
+    @RequiresCapability(value = Capability.NOTIFICATION_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Which merge variables an author may declare, per notification class",
+            description = "Fixes the defect that made the editor create-only in practice: the console used "
+                    + "to save every version with an empty schema, and the renderer correctly refuses any "
+                    + "placeholder that schema does not declare. This is what an author now picks from.")
+    public ResponseEntity<List<VariableCatalogueEntry>> variableCatalogue() {
+        return ResponseEntity.ok(NotificationVariableCatalog.all().entrySet().stream()
+                .map(entry -> new VariableCatalogueEntry(
+                        entry.getKey().name(),
+                        entry.getValue().stream()
+                                .map(variable -> new VariableCatalogueVariable(variable.name(), variable.description()))
+                                .toList()))
+                .toList());
     }
 
     @GetMapping
@@ -133,7 +158,15 @@ public class NotificationTemplateController {
 
         try {
             int versionNumber = templates.addVersion(tenantId, templateId, wordings, request.variablesSchema());
-            return ResponseEntity.ok(new VersionResponse(templateId, versionNumber));
+            // ADR 0091: told here, immediately, rather than left for the author
+            // to discover after activating — the exact silent failure this
+            // wave's row exists to close. Read back rather than threaded through
+            // addVersion's own return type, so every other caller of that
+            // service method (several pre-existing tests among them) is
+            // untouched by this wave.
+            boolean awaitsProviderReview = templates.versions(tenantId, templateId, versionNumber).stream()
+                    .anyMatch(row -> TemplateProviderReviewService.withheld(row.providerReview()));
+            return ResponseEntity.ok(new VersionResponse(templateId, versionNumber, awaitsProviderReview));
         } catch (NotificationTemplateService.IncompleteTranslationException incomplete) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, incomplete.getMessage());
         } catch (uz.horecaos.platform.notifications.domain.TemplateRenderer.TemplateContractException undeclared) {
@@ -172,6 +205,25 @@ public class NotificationTemplateController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/{templateId}/versions")
+    @RequiresCapability(value = Capability.NOTIFICATION_TEMPLATE_AUTHOR, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Every version of this template, every locale",
+            description = "The read a create-only editor never had a caller for: without this, an "
+                    + "author could not read back the wording of a template that already exists. "
+                    + "Newest version first; the caller groups rows by versionNumber.")
+    public ResponseEntity<List<WordingResponse>> versions(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID templateId) {
+
+        try {
+            return ResponseEntity.ok(templates.allVersions(tenantId, templateId).stream()
+                    .map(this::toWordingResponse)
+                    .toList());
+        } catch (IllegalArgumentException refused) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, refused.getMessage());
+        }
+    }
+
     @GetMapping("/{templateId}/versions/{versionNumber}")
     @RequiresCapability(value = Capability.NOTIFICATION_TEMPLATE_AUTHOR, scope = ScopeType.BRAND)
     @Operation(summary = "One version, locale by locale")
@@ -182,21 +234,52 @@ public class NotificationTemplateController {
             @PathVariable int versionNumber) {
 
         return ResponseEntity.ok(templates.versions(tenantId, templateId, versionNumber).stream()
-                .map(row -> new WordingResponse(
-                        row.locale(),
-                        row.subjectTemplate(),
-                        row.bodyTemplate(),
-                        row.contentHash(),
-                        row.status(),
-                        row.approvedBy()))
+                .map(this::toWordingResponse)
                 .toList());
+    }
+
+    @PostMapping("/{templateId}/versions/{versionNumber}/test-send")
+    @RequiresCapability(value = Capability.NOTIFICATION_TEMPLATE_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Send this locale to a test destination, for real",
+            description = "SMS only today. Refused, with the reason named, for a wording still awaiting "
+                    + "or refused by its SMS gateway (ADR 0091) — the exact case that used to send silently "
+                    + "into nothing once the version was activated. The destination is never stored.")
+    public ResponseEntity<TestSendResponse> testSend(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID templateId,
+            @PathVariable int versionNumber,
+            @Valid @RequestBody TestSendRequest request) {
+
+        TestSendOutcome outcome = testSend.testSend(
+                tenantId, brandId, templateId, versionNumber, request.locale(), request.destination());
+        return ResponseEntity.ok(new TestSendResponse(outcome.status(), outcome.providerStatus(), outcome.errorCode()));
+    }
+
+    private WordingResponse toWordingResponse(VersionRow row) {
+        return new WordingResponse(
+                row.versionNumber(),
+                row.locale(),
+                row.subjectTemplate(),
+                row.bodyTemplate(),
+                row.contentHash(),
+                row.status(),
+                row.approvedBy(),
+                templates.declaredVariablesSchema(row),
+                row.providerReview(),
+                row.providerReviewReference(),
+                row.providerReviewNote(),
+                row.providerReviewUpdatedAt() == null
+                        ? null
+                        : row.providerReviewUpdatedAt().toString());
     }
 
     public record CreateTemplateRequest(
             @NotBlank @Size(max = 64) String templateKey,
             @NotNull NotificationClass notificationClass,
             @NotNull NotificationChannel channel,
-            @Size(max = 64) String consentPurpose) {}
+            @Nullable @Size(max = 64) String consentPurpose) {}
 
     /**
      * One version's draft wording, submitted in every locale at once.
@@ -210,20 +293,46 @@ public class NotificationTemplateController {
             @NotNull Map<String, String> variablesSchema) {}
 
     public record WordingRequest(
-            @Size(max = 200) String subject,
+            @Nullable @Size(max = 200) String subject,
             @NotBlank @Size(max = 4000) String body) {}
 
     public record IdResponse(UUID id) {}
 
-    public record VersionResponse(UUID templateId, int versionNumber) {}
+    /**
+     * @param awaitsProviderReview ADR 0091: true when at least one locale of
+     *                             this version is PENDING or REJECTED with its
+     *                             SMS gateway — told here, at save time, rather
+     *                             than left for the author to find out after
+     *                             activating a wording nothing will ever send.
+     */
+    public record VersionResponse(UUID templateId, int versionNumber, boolean awaitsProviderReview) {}
 
+    /**
+     * @param providerReview ADR 0091: NOT_REQUIRED, PENDING, APPROVED or
+     *                        REJECTED. PENDING and REJECTED are withheld from
+     *                        sending by {@code NotificationEligibilityService}
+     *                        — the state this wave's row exists to surface.
+     * @param providerReviewReference the SMS gateway's own reference for an
+     *                                 APPROVED review; null otherwise
+     * @param providerReviewNote why a REJECTED review was refused, or the
+     *                           platform's own note for a PENDING one it
+     *                           marked automatically; null for NOT_REQUIRED
+     * @param providerReviewUpdatedAt when the review state was last recorded,
+     *                                ISO-8601; null for NOT_REQUIRED
+     */
     public record WordingResponse(
+            int versionNumber,
             String locale,
             @Nullable String subject,
             String body,
             String contentHash,
             String status,
-            @Nullable String approvedBy) {}
+            @Nullable String approvedBy,
+            Map<String, String> variablesSchema,
+            String providerReview,
+            @Nullable String providerReviewReference,
+            @Nullable String providerReviewNote,
+            @Nullable String providerReviewUpdatedAt) {}
 
     public record TemplateResponse(
             UUID id,
@@ -235,4 +344,22 @@ public class NotificationTemplateController {
             String status,
             @Nullable Integer activeVersion,
             int version) {}
+
+    /** One class's merge variables, for the editor's VariableChip picker. */
+    public record VariableCatalogueEntry(String notificationClass, List<VariableCatalogueVariable> variables) {}
+
+    public record VariableCatalogueVariable(String name, String description) {}
+
+    public record TestSendRequest(
+            @NotBlank String locale,
+            @NotBlank @Size(max = 32) String destination) {}
+
+    /**
+     * What the real send answered. Never the destination — see {@link
+     * TemplateTestSendService}'s own doc for why nothing here is stored.
+     */
+    public record TestSendResponse(
+            String status,
+            @Nullable String providerStatus,
+            @Nullable String errorCode) {}
 }
