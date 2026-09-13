@@ -398,7 +398,8 @@ class CloposAdapterTests {
                 "UZS",
                 "DELIVERY",
                 true,
-                NOW);
+                NOW,
+                null);
     }
 
     private static ExportProbe probe() {

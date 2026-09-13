@@ -2477,6 +2477,10 @@ export const messagesEn = {
 
   'staff.telegram.linked': 'Telegram linked',
   'staff.telegram.notLinked': 'Telegram not linked',
+  'staff.telegram.linked.withId': 'Telegram linked (id {id})',
+  'staff.telegram.unlink': 'Unlink',
+  'staff.telegram.unlink.confirm':
+    'Unlink this Telegram account? They can link a new one with a fresh code — their access is unaffected.',
 
   'staff.scope.company': 'Whole company',
   'staff.scope.brand': 'Brand',
@@ -2543,6 +2547,19 @@ export const messagesEn = {
   'staff.detail.field.telegram': 'Telegram',
   'staff.detail.security.notBuilt':
     'Sign-in method, last sign-in and terminal PIN are not tracked yet',
+
+  'staff.myProfile.title': 'My profile',
+  'staff.myProfile.personalData.title': 'Personal details',
+  'staff.myProfile.personalData.notBuilt': 'Name, phone and email are not editable here yet',
+  'staff.myProfile.telegram.title': 'Telegram',
+  'staff.myProfile.telegram.body': 'Link your own Telegram account to receive alerts from the bot.',
+  'staff.myProfile.telegram.issue': 'Get a code',
+  'staff.myProfile.telegram.sendThis': 'Send this to the bot in a private chat:',
+  'staff.myProfile.security.title': 'Security',
+  'staff.myProfile.security.notBuilt':
+    'Changing your password, your terminal PIN, and ending other sessions are not built yet',
+  'staff.myProfile.myJobs.title': 'My jobs',
+  'staff.myProfile.myJobs.empty': 'You have no job assigned yet.',
 
   'staff.role.tenant-owner': 'Owner',
   'staff.role.tenant-owner.description': 'Full access to the whole company.',

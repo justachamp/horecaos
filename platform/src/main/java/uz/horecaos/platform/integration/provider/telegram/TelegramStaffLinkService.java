@@ -123,6 +123,36 @@ public class TelegramStaffLinkService {
         return linkId;
     }
 
+    /**
+     * «Unlink Aziza» — an administrator severing an identity fact, not a grant.
+     * Deletes the row outright rather than marking it revoked: the table
+     * carries no {@code revoked_at} of its own (see the migration's own
+     * header — revocation of *authority* is check-at-tap against
+     * {@code iam.grants} and was never this table's job), and a physical
+     * delete is also what makes {@link #principalFor}'s "oldest link wins"
+     * tie-break safe when a shared device changes hands — an old link left
+     * standing would keep outranking a new one.
+     *
+     * <p>Idempotent under retry, the same shape {@code GrantManagementService
+     * .revoke} already gives: deleting a link that is already gone (a second
+     * click, a duplicate request) changes nothing and is not an error.
+     *
+     * @return true if a row was actually removed, false if none matched —
+     *         the caller renders both as success, but the audit fact and
+     *         the idempotent-response contract need to tell them apart
+     */
+    @Transactional
+    public boolean revoke(UUID tenantId, UUID linkId) {
+        int deleted = jdbc.sql("""
+                DELETE FROM integration.telegram_staff_links
+                WHERE tenant_id = :tenantId AND id = :linkId
+                """)
+                .param("tenantId", tenantId)
+                .param("linkId", linkId)
+                .update();
+        return deleted > 0;
+    }
+
     /** The principal a Telegram account acts as in exactly one tenant, if it is linked there at all. */
     public Optional<String> principalFor(UUID tenantId, long telegramUserId) {
         return jdbc.sql("""
@@ -152,13 +182,14 @@ public class TelegramStaffLinkService {
      */
     public List<StaffLinkView> listForTenant(UUID tenantId) {
         return jdbc.sql("""
-                SELECT principal_subject, telegram_user_id, created_at
+                SELECT id, principal_subject, telegram_user_id, created_at
                 FROM integration.telegram_staff_links
                 WHERE tenant_id = :tenantId
                 ORDER BY created_at
                 """)
                 .param("tenantId", tenantId)
                 .query((row, number) -> new StaffLinkView(
+                        row.getObject("id", UUID.class),
                         row.getString("principal_subject"),
                         row.getLong("telegram_user_id"),
                         row.getObject("created_at", OffsetDateTime.class).toInstant()))
@@ -186,6 +217,13 @@ public class TelegramStaffLinkService {
 
     public record TenantLink(UUID tenantId, String principalSubject) {}
 
-    /** One Telegram account bound to one principal, for the staff administration read. */
-    public record StaffLinkView(String principalSubject, long telegramUserId, Instant linkedAt) {}
+    /**
+     * One Telegram account bound to one principal, for the staff administration
+     * read.
+     *
+     * @param id the link's own row id — carried so an administrator's «Отвязать»
+     *           action has something to call {@link #revoke} with, without
+     *           re-deriving it from the (principal, account) pair
+     */
+    public record StaffLinkView(UUID id, String principalSubject, long telegramUserId, Instant linkedAt) {}
 }

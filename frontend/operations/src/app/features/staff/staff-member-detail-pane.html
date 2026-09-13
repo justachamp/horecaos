@@ -160,10 +160,69 @@
           <div>
             <dt class="q-caption">{{ 'staff.detail.field.telegram' | t }}</dt>
             <dd class="q-body-sm">
-              {{ (telegramLink() ? 'staff.telegram.linked' : 'staff.telegram.notLinked') | t }}
+              @if (telegramLink(); as link) {
+                {{ 'staff.telegram.linked.withId' | t: { id: link.telegramUserId } }}
+              } @else {
+                {{ 'staff.telegram.notLinked' | t }}
+              }
             </dd>
           </div>
         </dl>
+
+        @if (telegramLink(); as link) {
+          @if (!telegramUnlinkOpen()) {
+            <button
+              type="button"
+              class="text-button text-button--destructive"
+              (click)="openTelegramUnlink()"
+              data-testid="telegram-unlink"
+            >
+              {{ 'staff.telegram.unlink' | t }}
+            </button>
+          } @else {
+            <div class="card">
+              <p class="q-body-sm">{{ 'staff.telegram.unlink.confirm' | t }}</p>
+              <label class="q-caption">
+                <span class="q-body-sm">{{ 'staff.accessDialog.reason.label' | t }}</span>
+                <input
+                  type="text"
+                  [value]="telegramUnlinkReason()"
+                  (input)="setTelegramUnlinkReason($any($event.target).value)"
+                  [placeholder]="'staff.accessDialog.reason.placeholder' | t"
+                  [attr.aria-invalid]="telegramUnlinkReasonMissing() ? 'true' : null"
+                  maxlength="1000"
+                  data-testid="telegram-unlink-reason"
+                />
+              </label>
+              @if (telegramUnlinkReasonMissing()) {
+                <p class="q-caption error">{{ 'staff.accessDialog.reason.required' | t }}</p>
+              }
+              @if (telegramUnlinkError(); as message) {
+                <p class="q-body-sm error" role="alert">{{ message }}</p>
+              }
+              <div class="card__fields">
+                <button
+                  type="button"
+                  class="text-button"
+                  (click)="cancelTelegramUnlink()"
+                  [disabled]="telegramUnlinkBusy()"
+                >
+                  {{ 'staff.dialog.cancel' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="text-button text-button--destructive"
+                  (click)="confirmTelegramUnlink()"
+                  [disabled]="telegramUnlinkBusy()"
+                  data-testid="telegram-unlink-confirm"
+                >
+                  {{ 'staff.telegram.unlink' | t }}
+                </button>
+              </div>
+            </div>
+          }
+        }
+
         <p class="q-caption not-built-note">{{ 'staff.detail.security.notBuilt' | t }}</p>
       </div>
     }

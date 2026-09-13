@@ -3561,6 +3561,7 @@ export interface SseEmitter {
 }
 
 export interface StaffLinkView {
+  id?: string;
   linkedAt?: string;
   principalSubject?: string;
   telegramUserId?: number;
@@ -3800,6 +3801,10 @@ export interface TariffView {
   tariffId?: string;
 }
 
+export interface TelegramStaffLinkCodeControllerReasonRequest {
+  reason: string;
+}
+
 export interface TemplateResponse {
   activeVersion?: number;
   brandId?: string;
@@ -3930,6 +3935,11 @@ export interface UnassignRequest {
 export interface Unavailable {
   reason?: string;
   variantId?: string;
+}
+
+export interface UnlinkResponse {
+  changed?: boolean;
+  outcome?: string;
 }
 
 export interface UpdateCloposSettingsRequest {
@@ -4462,6 +4472,7 @@ export interface Operations {
   "variantSales": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/variant-sales"; request: { parameters: { path: { tenantId: string }; query: { from: string; limit?: number; locationId?: Array<string>; to: string } } }; responses: { "200": VariantSalesListResponse } };
   "issue": { method: "POST"; path: "/api/v1/tenants/{tenantId}/staff/telegram/link-codes"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": LinkCodeResponse } };
   "listLinks": { method: "GET"; path: "/api/v1/tenants/{tenantId}/staff/telegram/links"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<StaffLinkView> } };
+  "unlink": { method: "DELETE"; path: "/api/v1/tenants/{tenantId}/staff/telegram/links/{linkId}"; request: { parameters: { path: { linkId: string; tenantId: string } }; body: TelegramStaffLinkCodeControllerReasonRequest }; responses: { "200": UnlinkResponse } };
 }
 
 export type OperationName = keyof Operations;

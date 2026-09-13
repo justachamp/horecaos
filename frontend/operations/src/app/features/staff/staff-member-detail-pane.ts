@@ -85,6 +85,25 @@ export class StaffMemberDetailPane {
   protected readonly removeBusy = signal(false);
   protected readonly removeError = signal<string | null>(null);
 
+  /**
+   * «Отвязать» — an administrator's unlink (operations-gap-map.md `9/X.1`):
+   * `TelegramStaffLinkService` had no revoke until this wave, so this whole
+   * block is new. An inline reveal rather than `q-staff-access-dialog`: that
+   * dialog's copy is written for suspending an *assignment* ("N jobs will
+   * stop working") and has no sentence that is honest about severing a
+   * Telegram identity fact instead — see `TelegramStaffLinkService#revoke`'s
+   * own doc for why this never touches a grant at all.
+   */
+  protected readonly telegramUnlinkOpen = signal(false);
+  protected readonly telegramUnlinkReason = signal('');
+  protected readonly telegramUnlinkTouched = signal(false);
+  protected readonly telegramUnlinkBusy = signal(false);
+  protected readonly telegramUnlinkError = signal<string | null>(null);
+
+  protected readonly telegramUnlinkReasonMissing = computed(
+    () => this.telegramUnlinkTouched() && this.telegramUnlinkReason().trim() === '',
+  );
+
   protected readonly myGrants = computed(() =>
     this.allGrants().filter((grant) => grant.principalSubject === this.subjectId()),
   );
@@ -241,6 +260,44 @@ export class StaffMemberDetailPane {
       this.removeError.set(this.describe(error));
     } finally {
       this.removeBusy.set(false);
+    }
+  }
+
+  // ----------------------------------------------------------- telegram unlink
+
+  protected openTelegramUnlink(): void {
+    this.telegramUnlinkError.set(null);
+    this.telegramUnlinkReason.set('');
+    this.telegramUnlinkTouched.set(false);
+    this.telegramUnlinkOpen.set(true);
+  }
+
+  protected cancelTelegramUnlink(): void {
+    this.telegramUnlinkOpen.set(false);
+  }
+
+  protected setTelegramUnlinkReason(value: string): void {
+    this.telegramUnlinkReason.set(value);
+  }
+
+  protected async confirmTelegramUnlink(): Promise<void> {
+    this.telegramUnlinkTouched.set(true);
+    const reason = this.telegramUnlinkReason().trim();
+    const tenantId = this.tenant.tenantId();
+    const link = this.telegramLink();
+    if (!reason || !tenantId || !link) {
+      return;
+    }
+    this.telegramUnlinkBusy.set(true);
+    this.telegramUnlinkError.set(null);
+    try {
+      await this.api.revokeTelegramLink(tenantId, link.id, reason);
+      this.telegramUnlinkOpen.set(false);
+      this.telegramLinks.set(await this.api.telegramLinks(tenantId).catch(() => []));
+    } catch (error) {
+      this.telegramUnlinkError.set(this.describe(error));
+    } finally {
+      this.telegramUnlinkBusy.set(false);
     }
   }
 

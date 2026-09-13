@@ -50,7 +50,7 @@
 
     <div class="rail__foot">
       @if (auth.displayName(); as name) {
-        <div class="q-body-sm rail__account">{{ name }}</div>
+        <a class="q-body-sm rail__account" routerLink="/my-profile">{{ name }}</a>
       }
       <button type="button" class="rail__signout q-caption" (click)="signOut()">
         {{ 'shell.account.signOut' | t }}

@@ -238,6 +238,24 @@ public interface PosAdapter {
      *                                least one vendor has no currency field
      *                                anywhere in its API, so it cannot be read
      *                                from the wire and must not be guessed
+     * @param operatorExternalId      the till-side identifier of the HorecaOS
+     *                                operator who accepted this order, resolved
+     *                                through the ADR 0026 mapping (entity type
+     *                                {@code OPERATOR}) from {@code
+     *                                ordering.orders.accepted_by_actor_id} —
+     *                                null whenever the order was not accepted by
+     *                                a signed-in user, or no such mapping has
+     *                                been recorded yet (operations-gap-map.md
+     *                                {@code 9.2c}: the mapping is provider-neutral
+     *                                and this field is that contract's whole
+     *                                shape, but no console screen writes a
+     *                                mapping row of this entity type yet — see
+     *                                that row's own note). An adapter whose
+     *                                vendor has no documented field for this
+     *                                (Clopos: {@code docs/providers/clopos-api.md}
+     *                                §6.5's {@code CreateOrderRequest} names
+     *                                none) must not invent one; it simply never
+     *                                reads this field
      */
     record OrderExport(
             UUID orderId,
@@ -249,7 +267,8 @@ public interface PosAdapter {
             String currency,
             String fulfillmentMode,
             boolean requireProviderApproval,
-            @Nullable Instant placedAt) {
+            @Nullable Instant placedAt,
+            @Nullable String operatorExternalId) {
 
         public OrderExport {
             lines = List.copyOf(lines == null ? List.of() : lines);

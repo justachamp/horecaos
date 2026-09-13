@@ -11298,6 +11298,10 @@
       },
       "StaffLinkView" : {
         "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "linkedAt" : {
             "format" : "date-time",
             "type" : "string"
@@ -12018,6 +12022,17 @@
         },
         "type" : "object"
       },
+      "TelegramStaffLinkCodeControllerReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "TemplateResponse" : {
         "properties" : {
           "activeVersion" : {
@@ -12436,6 +12451,17 @@
           },
           "variantId" : {
             "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "UnlinkResponse" : {
+        "properties" : {
+          "changed" : {
+            "type" : "boolean"
+          },
+          "outcome" : {
             "type" : "string"
           }
         },
@@ -31490,6 +31516,53 @@
           }
         },
         "summary" : "List staff Telegram links in the tenant",
+        "tags" : [ "Telegram staff linking" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/staff/telegram/links/{linkId}" : {
+      "delete" : {
+        "description" : "Removes the binding between a Telegram account and the principal it acts as in this tenant. Does not touch iam.grants — a staff member's authority is unaffected; she may link again with a fresh code.",
+        "operationId" : "unlink",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "linkId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TelegramStaffLinkCodeControllerReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UnlinkResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Unlink a staff Telegram identity link",
         "tags" : [ "Telegram staff linking" ]
       }
     }

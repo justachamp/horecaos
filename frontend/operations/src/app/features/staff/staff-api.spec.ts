@@ -122,15 +122,42 @@ describe('StaffApi', () => {
 
   it('reads staff Telegram links', async () => {
     const promise = api.telegramLinks('t1');
-    http
-      .expectOne(url('/api/v1/tenants/t1/staff/telegram/links'))
-      .flush([
-        { principalSubject: 'subject-1', telegramUserId: 555, linkedAt: '2026-09-01T00:00:00Z' },
-      ]);
+    http.expectOne(url('/api/v1/tenants/t1/staff/telegram/links')).flush([
+      {
+        id: 'link-1',
+        principalSubject: 'subject-1',
+        telegramUserId: 555,
+        linkedAt: '2026-09-01T00:00:00Z',
+      },
+    ]);
 
     expect(await promise).toEqual([
-      { principalSubject: 'subject-1', telegramUserId: 555, linkedAt: '2026-09-01T00:00:00Z' },
+      {
+        id: 'link-1',
+        principalSubject: 'subject-1',
+        telegramUserId: 555,
+        linkedAt: '2026-09-01T00:00:00Z',
+      },
     ]);
+  });
+
+  it('issues a staff Telegram link code', async () => {
+    const promise = api.issueTelegramLinkCode('t1');
+    http
+      .expectOne(url('/api/v1/tenants/t1/staff/telegram/link-codes'))
+      .flush({ code: 'ABC123', command: '/link ABC123' });
+
+    expect(await promise).toEqual({ code: 'ABC123', command: '/link ABC123' });
+  });
+
+  it('revokes a staff Telegram link', async () => {
+    const promise = api.revokeTelegramLink('t1', 'link-1', 'left the company');
+    const req = http.expectOne(url('/api/v1/tenants/t1/staff/telegram/links/link-1'));
+    expect(req.request.method).toBe('DELETE');
+    expect(req.request.body).toEqual({ reason: 'left the company' });
+    req.flush({ changed: true, outcome: 'revoked' });
+
+    expect(await promise).toEqual({ changed: true, outcome: 'revoked' });
   });
 
   it('resolves the scope directory by fanning out one locations call per brand', async () => {

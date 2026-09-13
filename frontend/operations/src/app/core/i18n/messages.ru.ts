@@ -2448,6 +2448,10 @@ export const messagesRu: MessageCatalogue = {
 
   'staff.telegram.linked': 'Telegram привязан',
   'staff.telegram.notLinked': 'Telegram не привязан',
+  'staff.telegram.linked.withId': 'Telegram привязан (id {id})',
+  'staff.telegram.unlink': 'Отвязать',
+  'staff.telegram.unlink.confirm':
+    'Отвязать этот Telegram-аккаунт? Сотрудник сможет привязать новый по свежему коду — доступ не изменится.',
 
   'staff.scope.company': 'Вся компания',
   'staff.scope.brand': 'Бренд',
@@ -2514,6 +2518,20 @@ export const messagesRu: MessageCatalogue = {
   'staff.detail.field.telegram': 'Telegram',
   'staff.detail.security.notBuilt':
     'Способ входа, последний вход и PIN на терминале пока не отслеживаются',
+
+  'staff.myProfile.title': 'Мой профиль',
+  'staff.myProfile.personalData.title': 'Личные данные',
+  'staff.myProfile.personalData.notBuilt': 'Имя, телефон и email пока нельзя изменить здесь',
+  'staff.myProfile.telegram.title': 'Telegram',
+  'staff.myProfile.telegram.body':
+    'Привяжите свой Telegram-аккаунт, чтобы получать уведомления от бота.',
+  'staff.myProfile.telegram.issue': 'Получить код',
+  'staff.myProfile.telegram.sendThis': 'Отправьте это боту в личном чате:',
+  'staff.myProfile.security.title': 'Безопасность',
+  'staff.myProfile.security.notBuilt':
+    'Смена пароля, PIN на терминале и завершение других сеансов пока не построены',
+  'staff.myProfile.myJobs.title': 'Мои должности',
+  'staff.myProfile.myJobs.empty': 'Пока нет ни одной должности.',
 
   'staff.role.tenant-owner': 'Владелец',
   'staff.role.tenant-owner.description': 'Полный доступ ко всей компании.',
