@@ -89,11 +89,122 @@ public class SalesChannelService {
         return store.listForTenant(tenantId);
     }
 
+    /**
+     * The registry list enriched with the three counts row 10.4a's own table
+     * names and {@link uz.horecaos.platform.tenancy.web.SalesChannelController.ChannelView}
+     * did not carry until now: how many branches sell here, how many payment
+     * methods are enabled, and which fulfilment modes are enabled. Four
+     * queries total regardless of how many channels the tenant has — never one
+     * per channel.
+     */
+    @Transactional(readOnly = true)
+    public List<ChannelRegistrySummary> listSummaries(UUID tenantId) {
+        List<SalesChannel> channels = store.listForTenant(tenantId);
+        Map<UUID, Integer> locationCounts = store.locationCounts(tenantId);
+        Map<UUID, Integer> paymentMethodCounts = store.enabledPaymentMethodCounts(tenantId);
+        Map<UUID, List<FulfillmentMode>> fulfillmentModes = store.enabledFulfillmentModesByChannel(tenantId);
+        return channels.stream()
+                .map(channel -> new ChannelRegistrySummary(
+                        channel,
+                        locationCounts.getOrDefault(channel.id(), 0),
+                        paymentMethodCounts.getOrDefault(channel.id(), 0),
+                        fulfillmentModes.getOrDefault(channel.id(), List.of())))
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public SalesChannel require(UUID tenantId, UUID channelId) {
         return store.byId(tenantId, channelId)
                 .orElseThrow(() -> new TenantResourceNotFoundException(
                         "No sales channel %s for this tenant".formatted(channelId)));
+    }
+
+    /**
+     * Corrects a channel's own editable fields — everything but the code and the
+     * system type, which ADR 0036 fixes at creation because behaviour keys on
+     * the type. Row 10.4a's own edit action: before this method nothing on the
+     * registry could be changed once created.
+     */
+    @Transactional
+    public SalesChannel update(UUID tenantId, UUID channelId, UpdateChannelCommand command, int expectedVersion) {
+        SalesChannel channel = require(tenantId, channelId);
+        if (command.pricePlaneChannelId() != null
+                && command.pricePlaneChannelId().equals(channelId)) {
+            throw new IllegalArgumentException("A channel cannot take its prices from itself");
+        }
+        UUID pricePlaneChannelId = validatedPricePlane(tenantId, command.pricePlaneChannelId());
+        try {
+            if (!store.update(
+                    tenantId,
+                    channelId,
+                    command.displayName(),
+                    pricePlaneChannelId,
+                    command.externallyPriced(),
+                    command.guestOrdersAllowed(),
+                    command.providerInstallationId(),
+                    expectedVersion,
+                    clock.instant())) {
+                throw new TenantResourceConflictException("The channel changed since it was read");
+            }
+        } catch (DataIntegrityViolationException violation) {
+            throw JdbcSalesChannelStore.explain(violation);
+        }
+        return new SalesChannel(
+                channel.id(),
+                channel.tenantId(),
+                channel.code(),
+                channel.systemType(),
+                command.displayName(),
+                channel.status(),
+                pricePlaneChannelId,
+                command.externallyPriced(),
+                command.guestOrdersAllowed(),
+                command.providerInstallationId(),
+                expectedVersion + 1);
+    }
+
+    /**
+     * Suspends sales on an active channel without archiving it — row 10.4a's
+     * {@code ACTIVE→INACTIVE} transition, declared on {@link SalesChannel.Status}
+     * since ADR 0036 and unreachable until now. Reversible, unlike
+     * {@link #archive}: an operator pausing a channel for the season reopens it
+     * with {@link #reactivate} rather than re-registering it under a new code.
+     */
+    @Transactional
+    public SalesChannel deactivate(UUID tenantId, UUID channelId, int expectedVersion) {
+        return transitionActiveStatus(
+                tenantId, channelId, SalesChannel.Status.ACTIVE, SalesChannel.Status.INACTIVE, expectedVersion);
+    }
+
+    /** The reverse of {@link #deactivate}. */
+    @Transactional
+    public SalesChannel reactivate(UUID tenantId, UUID channelId, int expectedVersion) {
+        return transitionActiveStatus(
+                tenantId, channelId, SalesChannel.Status.INACTIVE, SalesChannel.Status.ACTIVE, expectedVersion);
+    }
+
+    private SalesChannel transitionActiveStatus(
+            UUID tenantId, UUID channelId, SalesChannel.Status from, SalesChannel.Status to, int expectedVersion) {
+        SalesChannel channel = require(tenantId, channelId);
+        if (channel.status() != from) {
+            throw new TenantResourceConflictException(
+                    "Channel %s is %s, not %s".formatted(channelId, channel.status(), from));
+        }
+        if (!store.updateStatus(tenantId, channelId, to, expectedVersion, clock.instant())) {
+            throw new TenantResourceConflictException("The channel changed since it was read");
+        }
+        return new SalesChannel(
+                channel.id(),
+                channel.tenantId(),
+                channel.code(),
+                channel.systemType(),
+                channel.displayName(),
+                to,
+                channel.pricePlaneChannelId(),
+                channel.externallyPriced(),
+                channel.guestOrdersAllowed(),
+                channel.providerInstallationId(),
+                expectedVersion + 1);
     }
 
     /**
@@ -140,8 +251,19 @@ public class SalesChannelService {
     @Transactional
     public void replacePaymentMethods(UUID tenantId, UUID channelId, Map<String, Boolean> matrix, int expectedVersion) {
         require(tenantId, channelId);
-        if (!store.replacePaymentMethods(tenantId, channelId, matrix, expectedVersion, clock.instant())) {
-            throw new TenantResourceConflictException("The channel changed since it was read");
+        try {
+            if (!store.replacePaymentMethods(tenantId, channelId, matrix, expectedVersion, clock.instant())) {
+                throw new TenantResourceConflictException("The channel changed since it was read");
+            }
+        } catch (DataIntegrityViolationException violation) {
+            // Since V0175 payment_method_code is a foreign key onto the tenant's own
+            // payments.payment_methods registry: a code the tenant has not
+            // registered — or the frontend's own stale hard-coded set once named —
+            // used to reach the database uncaught and come back as an untranslated
+            // 500, the live defect row 10.4a/10.4b of the operations gap map names.
+            // replaceLocations below already catches its own FK violation; this is
+            // the same treatment for the matrix that did not have it.
+            throw JdbcSalesChannelStore.explain(violation);
         }
         publishAvailabilityChanged(
                 tenantId, channelId, ChannelAvailabilityChanged.MatrixKind.PAYMENT_METHODS, expectedVersion);
@@ -228,8 +350,23 @@ public class SalesChannelService {
             boolean guestOrdersAllowed,
             @Nullable UUID providerInstallationId) {}
 
+    /** {@code code} and {@code systemType} are absent: see {@link #update}'s own doc for why. */
+    public record UpdateChannelCommand(
+            String displayName,
+            @Nullable UUID pricePlaneChannelId,
+            boolean externallyPriced,
+            boolean guestOrdersAllowed,
+            @Nullable UUID providerInstallationId) {}
+
     public record ChannelMatrices(
             Map<String, Boolean> paymentMethods,
             Map<FulfillmentMode, Boolean> fulfillmentModes,
             List<UUID> locationIds) {}
+
+    /** {@link #listSummaries}'s row: the channel plus the three counts 10.4a's table needs. */
+    public record ChannelRegistrySummary(
+            SalesChannel channel,
+            int locationCount,
+            int enabledPaymentMethodCount,
+            List<FulfillmentMode> enabledFulfillmentModes) {}
 }

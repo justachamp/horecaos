@@ -1,6 +1,7 @@
 package uz.horecaos.platform.tenancy.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.networknt.schema.JsonSchema;
@@ -30,6 +31,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -199,6 +201,42 @@ class ChannelAndServiceabilityEventOutboxTests {
 
         assertPayloadValidatesAgainstSchema("ChannelAvailabilityChanged", payloadOf(events.get(1)));
         assertThat((String) events.get(1).get("payload")).contains("PAYMENT_METHODS");
+    }
+
+    /**
+     * The operations gap map's live 500: since V0175 the FK is enforced and a
+     * frontend that still sends a hard-coded method the tenant never registered
+     * used to raise an untranslated {@code DataIntegrityViolationException}
+     * straight through {@code SalesChannelService.replacePaymentMethods}.
+     * {@code replaceLocations} already caught and explained its own FK
+     * violation; this proves the payment-method path now does too, and that
+     * nothing about the refusal reaches the outbox — a rejected write commits
+     * no {@code ChannelAvailabilityChanged} for a matrix that never changed.
+     */
+    @Test
+    @DisplayName(
+            "replacePaymentMethods refuses an unregistered code with an operator-legible error, not a raw FK violation")
+    void replacePaymentMethodsRefusesAnUnregisteredCodeWithAFriendlyError() throws Exception {
+        SalesChannelService channels = context.getBean(SalesChannelService.class);
+        var channel = channels.create(
+                TENANT,
+                new SalesChannelService.CreateChannelCommand(
+                        "KIOSK4", "KIOSK", "Unregistered", null, false, true, null));
+
+        // PAYME is never inserted into payments.payment_methods for this tenant --
+        // exactly the frontend's old hard-coded PROVISIONAL_PAYMENT_METHODS on a
+        // tenant that only ever registered CASH.
+        assertThatThrownBy(() ->
+                        channels.replacePaymentMethods(TENANT, channel.id(), Map.of("PAYME", true), channel.version()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .isNotInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("not registered");
+
+        List<Map<String, Object>> events = outboxEventsFor(channel.id());
+        assertThat(events)
+                .as("a refused matrix write must not commit an availability-changed event for it")
+                .extracting(row -> row.get("eventType"))
+                .containsExactly("SalesChannelActivated");
     }
 
     @Test
