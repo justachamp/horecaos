@@ -14,7 +14,9 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
@@ -238,7 +240,9 @@ public class OperationsMarketingController {
                 result.snapshotId(),
                 result.candidateCount(),
                 result.memberCount(),
-                result.candidateCount() - result.memberCount()));
+                result.candidateCount() - result.memberCount(),
+                result.refusalBreakdown().entrySet().stream()
+                        .collect(Collectors.toMap(entry -> entry.getKey().name(), Map.Entry::getValue))));
     }
 
     @PostMapping("/audiences/snapshots/{snapshotId}/exports")
@@ -589,7 +593,14 @@ public class OperationsMarketingController {
      *                 beside the reach because a marketer who sees only the reach
      *                 concludes the audience is broken
      */
-    public record SnapshotResponse(UUID snapshotId, int candidates, int members, int excluded) {}
+    /**
+     * @param refusalBreakdown every reachable {@code RefusalReason}, by name, mapped to how
+     *                         many candidates were excluded under it — zero included. Sums to
+     *                         {@code excluded}: this is that count broken down, not a second
+     *                         figure that could disagree with it.
+     */
+    public record SnapshotResponse(
+            UUID snapshotId, int candidates, int members, int excluded, Map<String, Integer> refusalBreakdown) {}
 
     public record ExportRequest(@NotBlank @Size(max = 512) String purpose, Integer limit) {}
 

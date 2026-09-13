@@ -81,7 +81,45 @@ describe('SegmentsApi', () => {
       url('/api/v1/tenants/t1/brands/b1/marketing/audiences/audience-1/snapshots'),
     );
     expect(request.request.body).toEqual({ channel: 'SMS', consentPurpose: 'test purpose' });
-    request.flush({ snapshotId: 's1', candidates: 10, members: 8, excluded: 2 });
-    expect(await promise).toEqual({ snapshotId: 's1', candidates: 10, members: 8, excluded: 2 });
+    const breakdown = { CONSENT_WITHHELD: 2 };
+    request.flush({
+      snapshotId: 's1',
+      candidates: 10,
+      members: 8,
+      excluded: 2,
+      refusalBreakdown: breakdown,
+    });
+    expect(await promise).toEqual({
+      snapshotId: 's1',
+      candidates: 10,
+      members: 8,
+      excluded: 2,
+      refusalBreakdown: breakdown,
+    });
+  });
+
+  // The controller's own mapping is `/audiences/snapshots/{snapshotId}/exports`,
+  // not nested under one audience's own path — a snapshot id is already
+  // globally unique, so the endpoint this client calls must match that shape
+  // exactly rather than guessing a nested one that would 404.
+  it('exports a snapshot at the flat /audiences/snapshots/{id}/exports path, not nested under an audience', async () => {
+    const promise = api.exportSnapshot(SCOPE, 'snapshot-1', 'a stated purpose');
+    const request = http.expectOne(
+      url('/api/v1/tenants/t1/brands/b1/marketing/audiences/snapshots/snapshot-1/exports'),
+    );
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ purpose: 'a stated purpose', limit: null });
+    request.flush(['acct-1', 'acct-2']);
+    expect(await promise).toEqual(['acct-1', 'acct-2']);
+  });
+
+  it('defaults a null export envelope to an empty array rather than throwing', async () => {
+    const promise = api.exportSnapshot(SCOPE, 'snapshot-1', 'a stated purpose');
+    http
+      .expectOne(
+        url('/api/v1/tenants/t1/brands/b1/marketing/audiences/snapshots/snapshot-1/exports'),
+      )
+      .flush(null);
+    expect(await promise).toEqual([]);
   });
 });

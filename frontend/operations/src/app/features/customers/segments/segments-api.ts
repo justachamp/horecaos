@@ -97,12 +97,22 @@ export interface DefineAudienceInput {
 
 export type MarketingChannel = 'SMS' | 'EMAIL' | 'PUSH' | 'MESSAGING_APP';
 
+/**
+ * Every `RefusalReason` ADR 0044 can reach at snapshot build, by name, mapped
+ * to how many candidates were excluded under it — zero included. Mirrors
+ * `RefusalReason.java`; kept as a loose `Record<string, number>` rather than a
+ * closed union so an unrecognised key (a reason this page's catalogue has not
+ * caught up to yet) still renders instead of being dropped.
+ */
+export type RefusalBreakdown = Readonly<Record<string, number>>;
+
 /** Mirrors `OperationsMarketingController.SnapshotResponse`. */
 export interface SnapshotResult {
   readonly snapshotId: string;
   readonly candidates: number;
   readonly members: number;
   readonly excluded: number;
+  readonly refusalBreakdown: RefusalBreakdown;
 }
 
 /**
@@ -145,10 +155,10 @@ export class SegmentsApi {
     predicates: readonly AudiencePredicate[],
   ): Promise<number> {
     const result = await firstValueFrom(
-      this.api.put<{ readonly predicates: readonly AudiencePredicate[] }, { readonly definitionVersion: number }>(
-        marketingPaths.audiencePredicates(scope, audienceId),
-        command({ predicates }),
-      ),
+      this.api.put<
+        { readonly predicates: readonly AudiencePredicate[] },
+        { readonly definitionVersion: number }
+      >(marketingPaths.audiencePredicates(scope, audienceId), command({ predicates })),
     );
     return result.definitionVersion;
   }
@@ -165,5 +175,25 @@ export class SegmentsApi {
         command({ channel, consentPurpose }),
       ),
     );
+  }
+
+  /**
+   * Every member of a snapshot, as pseudonymous account ids — metrics and ids
+   * only, never a phone number or a name. `OperationsMarketingController.export`
+   * itself is the audited fact; this call carries the stated purpose it
+   * records against.
+   */
+  async exportSnapshot(
+    scope: BrandScope,
+    snapshotId: string,
+    purpose: string,
+  ): Promise<readonly string[]> {
+    const result = await firstValueFrom(
+      this.api.post<{ readonly purpose: string; readonly limit: number | null }, readonly string[]>(
+        marketingPaths.audienceSnapshotExports(scope, snapshotId),
+        command({ purpose, limit: null }),
+      ),
+    );
+    return result ?? [];
   }
 }

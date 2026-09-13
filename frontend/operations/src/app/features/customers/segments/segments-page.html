@@ -79,9 +79,63 @@
         <p class="q-body-sm error-text" role="alert">{{ message }}</p>
       }
       @if (snapshotResult(); as result) {
-        <p class="q-body-sm result-text">
-          {{ 'customers.segments.snapshot.result' | t: { count: result.members } }}
-        </p>
+        <div class="snapshot-result">
+          <p class="q-body-sm result-text">
+            {{ 'customers.segments.snapshot.result' | t: { count: result.members } }}
+          </p>
+          <dl class="snapshot-result__counts">
+            <div class="snapshot-result__count">
+              <dt class="q-caption">{{ 'customers.segments.snapshot.count.candidates' | t }}</dt>
+              <dd class="q-body-sm q-tnum">{{ result.candidates }}</dd>
+            </div>
+            <div class="snapshot-result__count">
+              <dt class="q-caption">{{ 'customers.segments.snapshot.count.members' | t }}</dt>
+              <dd class="q-body-sm q-tnum">{{ result.members }}</dd>
+            </div>
+            <div class="snapshot-result__count">
+              <dt class="q-caption">{{ 'customers.segments.snapshot.count.excluded' | t }}</dt>
+              <dd class="q-body-sm q-tnum">{{ result.excluded }}</dd>
+            </div>
+          </dl>
+
+          @if (result.excluded > 0) {
+            <div class="snapshot-result__breakdown" data-testid="refusal-breakdown">
+              <span class="q-caption">{{ 'customers.segments.snapshot.refusal.heading' | t }}</span>
+              <ul>
+                @for (row of refusalRows(result.refusalBreakdown); track row.reason) {
+                  @if (row.count > 0) {
+                    <li class="q-body-sm">
+                      <span class="q-tnum">{{ row.count }}</span>
+                      {{ refusalReasonLabelKey(row.reason) | t }}
+                    </li>
+                  }
+                }
+              </ul>
+            </div>
+          }
+
+          @if (exportError(); as message) {
+            <p class="q-body-sm error-text" role="alert">{{ message }}</p>
+          }
+          @if (exportedCount(); as count) {
+            <p class="q-body-sm result-text" data-testid="export-result">
+              {{ 'customers.segments.snapshot.export.done' | t: { count } }}
+            </p>
+          } @else {
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="exportBusy() || result.members === 0"
+              (click)="exportCurrentSnapshot()"
+            >
+              {{
+                exportBusy()
+                  ? ('customers.segments.snapshot.export.busy' | t)
+                  : ('customers.segments.snapshot.export.action' | t)
+              }}
+            </button>
+          }
+        </div>
       }
       <div class="panel__actions">
         @if (snapshotResult()) {

@@ -402,6 +402,18 @@ export interface BatchImportZoneRow {
   role: "DELIVERY" | "CATCHMENT";
 }
 
+export interface BenefitGrantResponse {
+  benefitType?: string;
+  currency?: string;
+  expiresAt?: string;
+  grantId?: string;
+  maximumDiscountMinor?: number;
+  minBasketMinor?: number;
+  status?: string;
+  validFrom?: string;
+  value?: number;
+}
+
 export interface BindRequest {
   brandId?: string;
   capabilities: Array<string>;
@@ -1910,6 +1922,26 @@ export interface MetricResponse {
   version?: number;
 }
 
+export interface MintBenefitGrantRequest {
+  currency?: string;
+  customerAccountId: string;
+  expiresAt?: string;
+  maximumDiscountMinor?: number;
+  minBasketMinor?: number;
+  shape: "PERCENTAGE_OFF_ORDER" | "FIXED_AMOUNT_OFF_ORDER" | "FREE_DELIVERY";
+  sourceId?: string;
+  sourceType: string;
+  validFrom?: string;
+  value?: number;
+}
+
+export interface MintBenefitGrantResponse {
+  codeHint?: string;
+  grantId?: string;
+  plaintextCode?: string;
+  validFrom?: string;
+}
+
 export interface ModeBindingResponse {
   acceptsScheduledOrders?: boolean;
   exceptions?: Array<LocationServiceOperationsControllerExceptionResponse>;
@@ -2665,6 +2697,18 @@ export interface ProgramResponse {
   validFrom?: string;
   validUntil?: string;
   version?: number;
+}
+
+export interface PromoCodeRedemptionResponse {
+  amountMinor?: number;
+  currency?: string;
+  customerAccountId?: string;
+  orderId?: string;
+  redeemedAt?: string;
+  redemptionId?: string;
+  releasedAt?: string;
+  reservedAt?: string;
+  status?: string;
 }
 
 export interface PromoCodeResponse {
@@ -3508,6 +3552,7 @@ export interface SnapshotResponse {
   candidates?: number;
   excluded?: number;
   members?: number;
+  refusalBreakdown?: { [key: string]: number };
   snapshotId?: string;
 }
 
@@ -4049,6 +4094,8 @@ export interface Operations {
   "archive_4": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/branch-tags/{tagId}/archive"; request: { parameters: { path: { tagId: string; tenantId: string } }; body: ArchiveTagRequest }; responses: { "200": unknown } };
   "list_19": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<BrandView> } };
   "get_4": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": BrandView } };
+  "forCustomer": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/benefit-grants"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { customerAccountId: string } } }; responses: { "200": Array<BenefitGrantResponse> } };
+  "mint": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/benefit-grants"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: MintBenefitGrantRequest }; responses: { "200": MintBenefitGrantResponse } };
   "list_21": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": Array<ConversationSummaryResponse> } };
   "detail_4": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string } } }; responses: { "200": ConversationDetailResponse } };
   "close_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/close"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string }; query: { reason?: string } } }; responses: { "200": ConversationResponse } };
@@ -4104,6 +4151,7 @@ export interface Operations {
   "list_12": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<PromoCodeResponse> } };
   "draft": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: DraftPromoCodeRequest }; responses: { "200": PromoCodeResponse } };
   "activate_4": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes/{couponId}/activate"; request: { parameters: { path: { brandId: string; couponId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "redemptions_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes/{couponId}/redemptions"; request: { parameters: { path: { brandId: string; couponId: string; tenantId: string } } }; responses: { "200": Array<PromoCodeRedemptionResponse> } };
   "retire": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes/{couponId}/retire"; request: { parameters: { path: { brandId: string; couponId: string; tenantId: string } } }; responses: { "200": unknown } };
   "programs": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/referrals/programs"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<ProgramResponse> } };
   "draftProgram": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/referrals/programs"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: DraftProgramRequest }; responses: { "200": ProgramResponse } };

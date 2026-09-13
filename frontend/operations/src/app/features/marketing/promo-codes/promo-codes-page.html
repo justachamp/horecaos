@@ -55,6 +55,7 @@
           <th>{{ 'marketing.promoCodes.column.value' | t }}</th>
           <th>{{ 'marketing.promoCodes.column.minBasket' | t }}</th>
           <th>{{ 'marketing.promoCodes.column.redeemed' | t }}</th>
+          <th>{{ 'marketing.promoCodes.column.expiry' | t }}</th>
           <th>{{ 'marketing.promoCodes.column.status' | t }}</th>
           <th></th>
         </tr>
@@ -70,7 +71,23 @@
               {{ code.minBasketMinor === 0 ? '—' : formatWhole(code.minBasketMinor) }}
             </td>
             <td class="q-tnum">
-              {{ code.redeemedCount }}{{ code.totalLimit === null ? '' : ' / ' + code.totalLimit }}
+              <button
+                type="button"
+                class="promo-codes__redeemed-link"
+                [disabled]="code.redeemedCount === 0"
+                (click)="openRedemptions(code)"
+                data-testid="promo-codes-redeemed-count"
+              >
+                {{ code.redeemedCount
+                }}{{ code.totalLimit === null ? '' : ' / ' + code.totalLimit }}
+              </button>
+            </td>
+            <td
+              class="q-tnum"
+              [class.promo-codes__expiry--expired]="isExpired(code)"
+              data-testid="promo-codes-expiry"
+            >
+              {{ expiryLabel(code) }}
             </td>
             <td>
               <span class="status-badge" [class.status-badge--live]="isLive(code.status)">
@@ -100,7 +117,7 @@
           </tr>
         } @empty {
           <tr>
-            <td colspan="8">
+            <td colspan="9">
               <p class="q-body-sm" data-testid="promo-codes-empty">
                 {{ 'marketing.promoCodes.empty' | t }}
               </p>
@@ -229,6 +246,81 @@
           }}</span>
         </label>
 
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.promoCodes.form.validFrom' | t }}</span>
+          <input
+            type="date"
+            [value]="formValidFrom()"
+            (input)="formValidFrom.set($any($event.target).value)"
+            data-testid="promo-codes-valid-from"
+          />
+          <span class="q-caption promo-codes__field-hint">{{
+            'marketing.promoCodes.form.validFrom.hint' | t
+          }}</span>
+        </label>
+
+        <label class="field field--checkbox">
+          <input
+            type="checkbox"
+            [checked]="formHasValidUntil()"
+            (change)="formHasValidUntil.set($any($event.target).checked)"
+          />
+          <span class="q-caption">{{ 'marketing.promoCodes.form.hasValidUntil' | t }}</span>
+        </label>
+        @if (formHasValidUntil()) {
+          <label class="field">
+            <span class="q-caption">{{ 'marketing.promoCodes.form.validUntil' | t }}</span>
+            <input
+              type="date"
+              [value]="formValidUntil()"
+              (input)="formValidUntil.set($any($event.target).value)"
+              data-testid="promo-codes-valid-until"
+            />
+          </label>
+        }
+
+        @if (channels().length > 0) {
+          <fieldset class="field field--group">
+            <legend class="q-caption">{{ 'marketing.promoCodes.form.channels' | t }}</legend>
+            <span class="q-caption promo-codes__field-hint">{{
+              'marketing.promoCodes.form.channels.hint' | t
+            }}</span>
+            <div class="promo-codes__checkbox-list">
+              @for (channel of channels(); track channel.id) {
+                <label class="field--checkbox">
+                  <input
+                    type="checkbox"
+                    [checked]="isChannelSelected(channel.code)"
+                    (change)="toggleChannel(channel.code)"
+                  />
+                  <span class="q-body-sm">{{ channel.displayName }}</span>
+                </label>
+              }
+            </div>
+          </fieldset>
+        }
+
+        @if (locations().length > 0) {
+          <fieldset class="field field--group">
+            <legend class="q-caption">{{ 'marketing.promoCodes.form.locations' | t }}</legend>
+            <span class="q-caption promo-codes__field-hint">{{
+              'marketing.promoCodes.form.locations.hint' | t
+            }}</span>
+            <div class="promo-codes__checkbox-list">
+              @for (location of locations(); track location.id) {
+                <label class="field--checkbox">
+                  <input
+                    type="checkbox"
+                    [checked]="isLocationSelected(location.id)"
+                    (change)="toggleLocation(location.id)"
+                  />
+                  <span class="q-body-sm">{{ location.displayName }}</span>
+                </label>
+              }
+            </div>
+          </fieldset>
+        }
+
         @if (formError(); as error) {
           <p class="dialog__error q-body-sm">{{ error }}</p>
         }
@@ -238,6 +330,61 @@
           </button>
           <button type="button" [disabled]="!canSubmit()" (click)="submit()">
             {{ 'marketing.promoCodes.create.submit' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (redemptionsForCode(); as code) {
+    <div class="dialog-backdrop" (click)="closeRedemptions()">
+      <div
+        class="dialog dialog--wide"
+        (click)="$event.stopPropagation()"
+        data-testid="promo-codes-redemptions"
+      >
+        <h2 class="q-subhead">
+          {{ 'marketing.promoCodes.redemptions.title' | t: { hint: code.codeHint } }}
+        </h2>
+
+        @if (redemptionsLoading()) {
+          <p class="q-body-sm">{{ 'marketing.promoCodes.redemptions.loading' | t }}</p>
+        } @else if (redemptionsError(); as message) {
+          <p class="dialog__error q-body-sm" role="alert">{{ message }}</p>
+        } @else if (redemptions().length === 0) {
+          <p class="q-body-sm" data-testid="promo-codes-redemptions-empty">
+            {{ 'marketing.promoCodes.redemptions.empty' | t }}
+          </p>
+        } @else {
+          <table class="promo-codes__redemptions-table">
+            <thead>
+              <tr>
+                <th>{{ 'marketing.promoCodes.redemptions.column.customer' | t }}</th>
+                <th>{{ 'marketing.promoCodes.redemptions.column.order' | t }}</th>
+                <th>{{ 'marketing.promoCodes.redemptions.column.amount' | t }}</th>
+                <th>{{ 'marketing.promoCodes.redemptions.column.status' | t }}</th>
+                <th>{{ 'marketing.promoCodes.redemptions.column.when' | t }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of redemptions(); track row.redemptionId) {
+                <tr data-testid="promo-codes-redemption-row">
+                  <td class="q-tnum">{{ row.customerAccountId ?? '—' }}</td>
+                  <td class="q-tnum">{{ row.orderId ?? '—' }}</td>
+                  <td class="q-tnum">{{ formatRedemptionAmount(row) }}</td>
+                  <td>{{ redemptionStatusLabelKey(row.status) | t }}</td>
+                  <td class="q-tnum">
+                    {{ formatRedemptionMoment(row.redeemedAt ?? row.reservedAt) }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+
+        <div class="dialog__actions">
+          <button type="button" (click)="closeRedemptions()">
+            {{ 'marketing.promoCodes.redemptions.close' | t }}
           </button>
         </div>
       </div>

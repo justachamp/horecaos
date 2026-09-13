@@ -39,6 +39,17 @@ export const marketingPaths = {
     return `${this.audience(scope, audienceId)}/snapshots`;
   },
 
+  /**
+   * `OperationsMarketingController.export` — deliberately not nested under
+   * one audience's own snapshot path, mirroring the controller's own
+   * `/audiences/snapshots/{snapshotId}/exports` mapping: a snapshot id is
+   * already globally unique, so the audience id in the URL would be
+   * redundant rather than a scoping check.
+   */
+  audienceSnapshotExports(scope: BrandScope, snapshotId: string): string {
+    return `${base(scope)}/audiences/snapshots/${enc(snapshotId)}/exports`;
+  },
+
   campaigns(scope: BrandScope): string {
     return `${base(scope)}/campaigns`;
   },

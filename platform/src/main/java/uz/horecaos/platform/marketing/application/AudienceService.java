@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZonedDateTime;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -196,6 +197,17 @@ public class AudienceService {
 
         List<CandidateRow> candidates = audiences.candidates(tenantId, audience.brandId(), predicates, brandToday);
 
+        // Every reachable reason starts at zero rather than being absent, so the
+        // breakdown a marketer reads always lists the full catalogue — "0
+        // suppressed" is a stated fact, not a missing key a template has to guess
+        // the meaning of.
+        Map<RefusalReason, Integer> refusalBreakdown = new EnumMap<>(RefusalReason.class);
+        for (RefusalReason reason : RefusalReason.values()) {
+            if (reason.appliesAtSnapshotBuild()) {
+                refusalBreakdown.put(reason, 0);
+            }
+        }
+
         int included = 0;
         for (CandidateRow candidate : candidates) {
             Optional<RefusalReason> refusal = eligibility.refusalFor(
@@ -212,6 +224,8 @@ public class AudienceService {
                     snapshotId, tenantId, candidate.customerAccountId(), refusal.orElse(null), candidate);
             if (refusal.isEmpty()) {
                 included++;
+            } else {
+                refusalBreakdown.merge(refusal.get(), 1, Integer::sum);
             }
         }
 
@@ -243,7 +257,7 @@ public class AudienceService {
                 candidates.size(),
                 included);
 
-        return new SnapshotResult(snapshotId, candidates.size(), included, watermark);
+        return new SnapshotResult(snapshotId, candidates.size(), included, watermark, Map.copyOf(refusalBreakdown));
     }
 
     /**
@@ -343,12 +357,25 @@ public class AudienceService {
         }
     }
 
-    /** What a build produced, before any campaign is attached to it. */
+    /**
+     * What a build produced, before any campaign is attached to it.
+     *
+     * @param refusalBreakdown every {@link RefusalReason} that can be reached at
+     *                         snapshot build, mapped to how many candidates were
+     *                         excluded under it — zero included. This is the
+     *                         diagnostic {@code buildSnapshot} already computed
+     *                         and used to throw away: a marketer who sees only
+     *                         {@code memberCount} cannot tell "nobody consented"
+     *                         from "everybody is suppressed" from "the audience
+     *                         is broken", and the three read identically as a
+     *                         reach of zero
+     */
     public record SnapshotResult(
             UUID snapshotId,
             int candidateCount,
             int memberCount,
-            @Nullable Instant metricWatermarkAt) {}
+            @Nullable Instant metricWatermarkAt,
+            Map<RefusalReason, Integer> refusalBreakdown) {}
 
     /** An audience together with the predicates its current definition version holds. */
     public record AudienceDetail(AudienceRow audience, List<AudiencePredicate> predicates) {}
