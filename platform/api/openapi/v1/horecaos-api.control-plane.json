@@ -968,6 +968,63 @@
         },
         "type" : "object"
       },
+      "BulkClassifyItemRequest" : {
+        "properties" : {
+          "fiscal" : {
+            "$ref" : "#/components/schemas/FiscalClassificationRequest"
+          },
+          "nodeId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "nodeType" : {
+            "enum" : [ "VARIANT", "MODIFIER_OPTION", "FEE" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "nodeId", "nodeType" ],
+        "type" : "object"
+      },
+      "BulkClassifyOutcomeResponse" : {
+        "properties" : {
+          "nodeId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "nodeType" : {
+            "enum" : [ "VARIANT", "MODIFIER_OPTION", "FEE" ],
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "BulkClassifyRequest" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BulkClassifyItemRequest"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "items" ],
+        "type" : "object"
+      },
+      "BulkClassifyResponse" : {
+        "properties" : {
+          "outcomes" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BulkClassifyOutcomeResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "BusinessTypeRequest" : {
         "properties" : {
           "businessType" : {
@@ -5844,6 +5901,16 @@
         },
         "type" : "object"
       },
+      "ProductStatusRequest" : {
+        "properties" : {
+          "status" : {
+            "enum" : [ "DRAFT", "ACTIVE", "ARCHIVED" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "status" ],
+        "type" : "object"
+      },
       "ProductSummaryResponse" : {
         "properties" : {
           "categoryNames" : {
@@ -5863,6 +5930,9 @@
           },
           "productId" : {
             "format" : "uuid",
+            "type" : "string"
+          },
+          "shareSlug" : {
             "type" : "string"
           },
           "status" : {
@@ -7501,6 +7571,15 @@
           },
           "stepKey" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "StopInAllBranchesResponse" : {
+        "properties" : {
+          "locationsChanged" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -11548,7 +11627,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/products" : {
       "get" : {
-        "description" : "Same Page and keyset-cursor shape variantsAtLocation uses: a short page is the end of the collection, a full one may or may not be.",
+        "description" : "Same Page and keyset-cursor shape variantsAtLocation uses: a short page is the end of the collection, a full one may or may not be. `query` matches a product's code or its name in any locale; both are applied in SQL so a dish past the loaded pages of a 1000+ item catalogue is still found. `status` narrows to one status tab — `NO_MXIK` is product-level (none of the product's variants carry an ИКПУ/MXIK code) and is not the node-level count `fiscalCoverage` answers.",
         "operationId" : "products",
         "parameters" : [ {
           "in" : "path",
@@ -11590,6 +11669,21 @@
             "format" : "int32",
             "type" : "integer"
           }
+        }, {
+          "in" : "query",
+          "name" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "ACTIVE", "DRAFT", "ARCHIVED", "NO_MXIK" ],
+            "type" : "string"
+          }
         } ],
         "responses" : {
           "200" : {
@@ -11603,7 +11697,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "One catalog's products, cursor-paginated",
+        "summary" : "One catalog's products, cursor-paginated, with optional server-side search and status",
         "tags" : [ "Catalog reads" ]
       },
       "post" : {
@@ -11864,6 +11958,53 @@
           }
         },
         "summary" : "Classify a brand's delivery charge",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fiscal-classifications/bulk" : {
+      "put" : {
+        "description" : "The fiscal workbench's bulk fill: ИКПУ and package code filled down a q-data-grid column across hundreds of rows in one call, rather than one variant at a time through the single-node classification endpoints. Idempotent, and one bad node id does not fail the rest of the batch — every item gets its own outcome.",
+        "operationId" : "bulkClassify",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BulkClassifyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BulkClassifyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Classify many priceable nodes at once",
         "tags" : [ "Catalog authoring" ]
       }
     },
@@ -12313,6 +12454,51 @@
         "tags" : [ "Catalog reads" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/duplicate" : {
+      "post" : {
+        "description" : "Copies every variant with its own fiscal classification and every locale's translation, its catalog and category placements, its attached modifier groups, and its media. catalog.md §4.1's row action.",
+        "operationId" : "duplicateProduct",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProductResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Duplicate a product",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/modifier-groups/{groupId}" : {
       "put" : {
         "operationId" : "attachModifierGroup",
@@ -12365,6 +12551,99 @@
           }
         },
         "summary" : "Attach a modifier group to a product",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/status" : {
+      "put" : {
+        "description" : "Черновик/Активен/Архивирован. catalog.md §4.1's archive/restore row action.",
+        "operationId" : "setProductStatus",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProductStatusRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change a product's status",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/stop-in-all-branches" : {
+      "post" : {
+        "description" : "A product-level fan-out over the per-variant, per-location offering write — every AVAILABLE location offering across every variant of this product moves to UNAVAILABLE. catalog.md §4.1's row action.",
+        "operationId" : "stopInAllBranches",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StopInAllBranchesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Stop a product in every branch that currently offers it",
         "tags" : [ "Catalog authoring" ]
       }
     },
