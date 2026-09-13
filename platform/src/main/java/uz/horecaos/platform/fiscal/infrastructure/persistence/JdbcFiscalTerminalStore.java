@@ -101,9 +101,21 @@ public class JdbcFiscalTerminalStore implements FiscalTerminalDirectory {
                 .update();
     }
 
-    public Optional<FiscalTerminal> find(UUID tenantId, UUID terminalId) {
-        return jdbc.sql("SELECT " + COLUMNS + " FROM fiscal.fiscal_terminals WHERE tenant_id = :tenantId AND id = :id")
+    /**
+     * A terminal by tenant, brand and id — brand is a real predicate, not
+     * decoration, because {@code OperationsFiscalTerminalController}'s
+     * {@code @RequiresCapability} is checked against the {@code brandId} named
+     * in the URL, never against the terminal actually found. Without this
+     * predicate, a caller who genuinely manages one brand could name any
+     * terminal id and act on another brand's equipment merely by knowing it —
+     * see the P34 adversarial-review finding this closes.
+     */
+    public Optional<FiscalTerminal> find(UUID tenantId, UUID brandId, UUID terminalId) {
+        return jdbc.sql(
+                        "SELECT " + COLUMNS
+                                + " FROM fiscal.fiscal_terminals WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id")
                 .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("id", terminalId)
                 .query(this::toTerminal)
                 .optional();
@@ -134,6 +146,11 @@ public class JdbcFiscalTerminalStore implements FiscalTerminalDirectory {
     /**
      * Writes back a status or health-check change under its expected version.
      *
+     * <p>{@code brand_id} is part of the {@code WHERE} clause, not just
+     * {@code tenant_id} + {@code id}, for the same reason {@link #find} added
+     * it: the row updated must be the one the caller's capability was actually
+     * checked against.
+     *
      * @return false when somebody else moved the row first
      */
     public boolean update(FiscalTerminal terminal, int expectedVersion, Instant now) {
@@ -145,10 +162,11 @@ public class JdbcFiscalTerminalStore implements FiscalTerminalDirectory {
                        last_health_status = :health,
                        version = version + 1,
                        updated_at = :now
-                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id AND version = :expectedVersion
                 """)
                         .param("id", terminal.id())
                         .param("tenantId", terminal.tenantId())
+                        .param("brandId", terminal.brandId())
                         .param("status", terminal.status().name())
                         .param("snapshot", objectMapper.writeValueAsString(terminal.capabilitySnapshot()))
                         .param("checkedAt", offset(terminal.lastHealthCheckAt()))

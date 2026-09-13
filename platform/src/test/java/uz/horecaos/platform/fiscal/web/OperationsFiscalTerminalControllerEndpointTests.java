@@ -58,11 +58,22 @@ class OperationsFiscalTerminalControllerEndpointTests {
     private static final UUID INSTALLATION = UUID.fromString("018f9a10-3000-7000-8000-0000000000e1");
     private static final UUID BINDING = UUID.fromString("018f9a10-3000-7000-8000-0000000000f1");
 
+    // P34: a second brand under the same tenant, used only to prove a
+    // BRAND-scoped grant on one brand cannot reach a terminal that actually
+    // belongs to the other.
+    private static final UUID SECOND_BRAND = UUID.fromString("018f9a10-3000-7000-8000-0000000000b2");
+    private static final UUID SECOND_BRAND_ROLE = UUID.fromString("018f9a10-3000-7000-8000-0000000000a9");
+
     private static final String OWNER = "terminal-owner";
     private static final String BRAND_MANAGER = "terminal-brand-manager";
+    private static final String SECOND_BRAND_MANAGER = "terminal-second-brand-manager";
 
     private static final String TERMINALS =
             "/api/v1/operations/tenants/" + TENANT + "/brands/" + BRAND + "/fiscal-terminals";
+
+    private static String terminalsUnder(UUID brandId) {
+        return "/api/v1/operations/tenants/" + TENANT + "/brands/" + brandId + "/fiscal-terminals";
+    }
 
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
@@ -105,6 +116,31 @@ class OperationsFiscalTerminalControllerEndpointTests {
         insertFixtures();
         grant(OWNER, PlatformRole.TENANT_OWNER);
         grant(BRAND_MANAGER, PlatformRole.BRAND_MANAGER);
+
+        // P34: a custom, tenant-defined role — FISCAL_TERMINAL_MANAGE is only
+        // ever bundled at TENANT scope (TENANT_OWNER/TENANT_ADMIN) in
+        // PlatformRole.java, so a real least-privilege "manage this brand's
+        // terminals only" grant, exactly as the finding describes, has to be
+        // hand-authored the same way REVEALER/ADJUSTER are in the courier
+        // endpoint tests.
+        jdbc.sql("""
+                INSERT INTO iam.roles (id, tenant_id, code, name, scope_type, status, is_platform_defined)
+                VALUES (:id, :tenantId, 'fiscal-terminal-brand-admin', 'Fiscal terminal brand admin',
+                        'BRAND', 'ACTIVE', false)
+                """).param("id", SECOND_BRAND_ROLE).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO iam.role_capabilities (role_id, capability_code) VALUES (:roleId, :capability)
+                """)
+                .param("roleId", SECOND_BRAND_ROLE)
+                .param("capability", Capability.FISCAL_TERMINAL_MANAGE.code())
+                .update();
+        jdbc.sql("""
+                INSERT INTO iam.role_capabilities (role_id, capability_code) VALUES (:roleId, :capability)
+                """)
+                .param("roleId", SECOND_BRAND_ROLE)
+                .param("capability", Capability.FISCAL_TERMINAL_READ.code())
+                .update();
+        grantAtBrand(SECOND_BRAND_MANAGER, SECOND_BRAND_ROLE, SECOND_BRAND);
     }
 
     @Test
@@ -200,6 +236,82 @@ class OperationsFiscalTerminalControllerEndpointTests {
         assertThat(registered.getResponse().getStatus()).isEqualTo(201);
     }
 
+    /**
+     * The P34 adversarial-review finding: {@code get}/{@code checkHealth}/
+     * {@code suspend}/{@code reactivate}/{@code retire} all declare {@code
+     * scope = BRAND}, so the capability check only ever proves the caller
+     * manages the brand named in the URL — never that the terminal named in
+     * the URL actually belongs to that brand. Before the fix, {@code
+     * FiscalTerminalService.require}/{@code transition} resolved the terminal
+     * by {@code (tenantId, terminalId)} alone, so a caller who genuinely holds
+     * {@code FISCAL_TERMINAL_MANAGE} on {@link #SECOND_BRAND} only could
+     * still reach — and mutate — a terminal registered under {@link #BRAND}
+     * simply by naming {@link #SECOND_BRAND} in the path. Every one of the
+     * five actions below must now refuse as not-found (ADR 0031), and none of
+     * them may have taken effect.
+     */
+    @Test
+    void aBrandScopedManagerCannotReachAnotherBrandsTerminal() throws Exception {
+        mvc.perform(post(TERMINALS)
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "register-cross-brand")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(registerBody("KASSA-X", BINDING, true)));
+        UUID terminalId = terminalId("KASSA-X");
+        String crossBrandTerminal = terminalsUnder(SECOND_BRAND) + "/" + terminalId;
+
+        MvcResult got = mvc.perform(get(crossBrandTerminal).with(tokenFor(SECOND_BRAND_MANAGER)))
+                .andReturn();
+        assertThat(got.getResponse().getStatus())
+                .as("the terminal exists, but not under SECOND_BRAND — not-found, not forbidden")
+                .isEqualTo(404);
+
+        MvcResult healthChecked = mvc.perform(post(crossBrandTerminal + "/health-checks")
+                        .with(tokenFor(SECOND_BRAND_MANAGER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "cross-brand-health")
+                        .queryParam("expectedVersion", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"outcome":"HEALTHY"}
+                                """))
+                .andReturn();
+        assertThat(healthChecked.getResponse().getStatus()).isEqualTo(404);
+
+        MvcResult suspended = mvc.perform(post(crossBrandTerminal + "/suspend")
+                        .with(tokenFor(SECOND_BRAND_MANAGER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "cross-brand-suspend")
+                        .queryParam("expectedVersion", "1"))
+                .andReturn();
+        assertThat(suspended.getResponse().getStatus()).isEqualTo(404);
+
+        MvcResult reactivated = mvc.perform(post(crossBrandTerminal + "/reactivate")
+                        .with(tokenFor(SECOND_BRAND_MANAGER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "cross-brand-reactivate")
+                        .queryParam("expectedVersion", "1"))
+                .andReturn();
+        assertThat(reactivated.getResponse().getStatus()).isEqualTo(404);
+
+        MvcResult retired = mvc.perform(post(crossBrandTerminal + "/retire")
+                        .with(tokenFor(SECOND_BRAND_MANAGER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "cross-brand-retire")
+                        .queryParam("expectedVersion", "1"))
+                .andReturn();
+        assertThat(retired.getResponse().getStatus()).isEqualTo(404);
+
+        assertThat(jdbc.sql("SELECT status, version FROM fiscal.fiscal_terminals WHERE id = :id")
+                        .param("id", terminalId)
+                        .query((row, n) -> row.getString("status") + ":" + row.getInt("version"))
+                        .single())
+                .as("none of the cross-brand attempts may have taken effect")
+                .isEqualTo("ACTIVE:1");
+
+        // The terminal's rightful brand can still reach it, proving the 404s
+        // above are about brand ownership and not a broken lookup.
+        MvcResult ownBrand = mvc.perform(get(TERMINALS + "/" + terminalId).with(tokenFor(OWNER)))
+                .andReturn();
+        assertThat(ownBrand.getResponse().getStatus()).isEqualTo(200);
+    }
+
     @Test
     void listOrdersFailingHealthFirst() throws Exception {
         mvc.perform(post(TERMINALS)
@@ -260,6 +372,10 @@ class OperationsFiscalTerminalControllerEndpointTests {
                 VALUES (:id, :tenantId, 'MAIN', 'main', 'Brand', 'ACTIVE', 0)
                 """).param("id", BRAND).param("tenantId", TENANT).update();
         jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'SECOND', 'second', 'Second Brand', 'ACTIVE', 0)
+                """).param("id", SECOND_BRAND).param("tenantId", TENANT).update();
+        jdbc.sql("""
                 INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
                     timezone, status, version)
                 VALUES (:id, :tenantId, :brandId, 'CHI', 'chilonzor', 'Chilonzor', 'Asia/Tashkent', 'ACTIVE', 0)
@@ -309,6 +425,25 @@ class OperationsFiscalTerminalControllerEndpointTests {
                 .param("tenantId", TENANT)
                 .param("subject", subject)
                 .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
+                .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    /** A real BRAND-scoped grant of a tenant-defined custom role. */
+    private void grantAtBrand(String subject, UUID roleId, UUID brandId) {
+        jdbc.sql("""
+                INSERT INTO iam.grants
+                    (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
+                     status, granted_by, reason, valid_from)
+                VALUES (:id, :tenantId, :subject, :roleId, false, 'BRAND', :brandId,
+                        'ACTIVE', 'test-fixture', 'fiscal terminal endpoint test', :validFrom)
+                ON CONFLICT DO NOTHING
+                """)
+                .param("id", UUID.nameUUIDFromBytes((subject + roleId + brandId).getBytes(UTF_8)))
+                .param("tenantId", TENANT)
+                .param("subject", subject)
+                .param("roleId", roleId)
+                .param("brandId", brandId)
                 .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
                 .update();
     }

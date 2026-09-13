@@ -90,9 +90,23 @@ public class FiscalTerminalService {
         return store.listForBrand(tenantId, brandId);
     }
 
+    /**
+     * A terminal by tenant, brand and id.
+     *
+     * <p>{@code brandId} is not decoration: {@code
+     * OperationsFiscalTerminalController}'s {@code @RequiresCapability} is
+     * {@code BRAND}-scoped and checked against the {@code brandId} named in
+     * the URL — never against the terminal this method returns. Without this
+     * predicate, a caller who genuinely holds {@code FISCAL_TERMINAL_MANAGE}
+     * on their own brand could name any terminal id and act on a different
+     * brand's equipment purely by knowing it. A mismatch is reported
+     * identically to "does not exist" (ADR 0031's not-found-not-forbidden),
+     * so the response gives no signal that the terminal exists under a
+     * different brand.
+     */
     @Transactional(readOnly = true)
-    public FiscalTerminal require(UUID tenantId, UUID terminalId) {
-        return store.find(tenantId, terminalId)
+    public FiscalTerminal require(UUID tenantId, UUID brandId, UUID terminalId) {
+        return store.find(tenantId, brandId, terminalId)
                 .orElseThrow(() -> new ApiException(
                         ErrorCode.RESOURCE_NOT_FOUND, "No fiscal terminal " + terminalId + " for this tenant"));
     }
@@ -100,10 +114,10 @@ public class FiscalTerminalService {
     /** Settings 10.7 Tab 2's "Проверить связь". Never scheduled; always an operator action. */
     @Transactional
     public FiscalTerminal checkHealth(
-            UUID tenantId, UUID terminalId, int expectedVersion, FiscalTerminalHealth outcome) {
+            UUID tenantId, UUID brandId, UUID terminalId, int expectedVersion, FiscalTerminalHealth outcome) {
         Instant now = clock.instant();
         FiscalTerminal terminal =
-                transition(tenantId, terminalId, expectedVersion, t -> t.recordHealthCheck(outcome, now));
+                transition(tenantId, brandId, terminalId, expectedVersion, t -> t.recordHealthCheck(outcome, now));
         audit.record(AuditFact.of("fiscal-terminal.health-checked", AuditClass.BUSINESS)
                 .by(actor())
                 .at(ResourceScope.location(tenantId, terminal.brandId(), terminal.locationId()))
@@ -119,27 +133,37 @@ public class FiscalTerminalService {
 
     /** Settings 10.7 Tab 2's "Отключить". */
     @Transactional
-    public FiscalTerminal suspend(UUID tenantId, UUID terminalId, int expectedVersion) {
+    public FiscalTerminal suspend(UUID tenantId, UUID brandId, UUID terminalId, int expectedVersion) {
         return transitionAudited(
-                tenantId, terminalId, expectedVersion, FiscalTerminal::suspend, "fiscal-terminal.suspended");
+                tenantId, brandId, terminalId, expectedVersion, FiscalTerminal::suspend, "fiscal-terminal.suspended");
     }
 
     @Transactional
-    public FiscalTerminal reactivate(UUID tenantId, UUID terminalId, int expectedVersion) {
+    public FiscalTerminal reactivate(UUID tenantId, UUID brandId, UUID terminalId, int expectedVersion) {
         return transitionAudited(
-                tenantId, terminalId, expectedVersion, FiscalTerminal::reactivate, "fiscal-terminal.reactivated");
+                tenantId,
+                brandId,
+                terminalId,
+                expectedVersion,
+                FiscalTerminal::reactivate,
+                "fiscal-terminal.reactivated");
     }
 
     @Transactional
-    public FiscalTerminal retire(UUID tenantId, UUID terminalId, int expectedVersion) {
+    public FiscalTerminal retire(UUID tenantId, UUID brandId, UUID terminalId, int expectedVersion) {
         return transitionAudited(
-                tenantId, terminalId, expectedVersion, FiscalTerminal::retire, "fiscal-terminal.retired");
+                tenantId, brandId, terminalId, expectedVersion, FiscalTerminal::retire, "fiscal-terminal.retired");
     }
 
     private FiscalTerminal transitionAudited(
-            UUID tenantId, UUID terminalId, int expectedVersion, Consumer<FiscalTerminal> change, String actionCode) {
+            UUID tenantId,
+            UUID brandId,
+            UUID terminalId,
+            int expectedVersion,
+            Consumer<FiscalTerminal> change,
+            String actionCode) {
         Instant now = clock.instant();
-        FiscalTerminal terminal = transition(tenantId, terminalId, expectedVersion, change);
+        FiscalTerminal terminal = transition(tenantId, brandId, terminalId, expectedVersion, change);
         audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
                 .by(actor())
                 .at(ResourceScope.location(tenantId, terminal.brandId(), terminal.locationId()))
@@ -154,8 +178,8 @@ public class FiscalTerminalService {
     }
 
     private FiscalTerminal transition(
-            UUID tenantId, UUID terminalId, int expectedVersion, Consumer<FiscalTerminal> change) {
-        FiscalTerminal terminal = require(tenantId, terminalId);
+            UUID tenantId, UUID brandId, UUID terminalId, int expectedVersion, Consumer<FiscalTerminal> change) {
+        FiscalTerminal terminal = require(tenantId, brandId, terminalId);
         change.accept(terminal);
         if (!store.update(terminal, expectedVersion, clock.instant())) {
             throw ApiException.staleVersion(expectedVersion, terminal.version());

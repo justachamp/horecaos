@@ -103,7 +103,7 @@ public class OperationsFiscalTerminalController {
     @RequiresCapability(value = Capability.FISCAL_TERMINAL_READ, scope = ScopeType.BRAND)
     @Operation(summary = "Get a fiscal terminal")
     FiscalTerminalView get(@PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID terminalId) {
-        return FiscalTerminalView.of(terminals.require(tenantId, terminalId));
+        return FiscalTerminalView.of(terminals.require(tenantId, brandId, terminalId));
     }
 
     @PostMapping("/{terminalId}/health-checks")
@@ -119,7 +119,8 @@ public class OperationsFiscalTerminalController {
             @PathVariable UUID terminalId,
             @RequestParam int expectedVersion,
             @Valid @RequestBody HealthCheckRequest request) {
-        return FiscalTerminalView.of(terminals.checkHealth(tenantId, terminalId, expectedVersion, request.outcome()));
+        return FiscalTerminalView.of(
+                terminals.checkHealth(tenantId, brandId, terminalId, expectedVersion, request.outcome()));
     }
 
     @PostMapping("/{terminalId}/suspend")
@@ -134,7 +135,7 @@ public class OperationsFiscalTerminalController {
             @PathVariable UUID brandId,
             @PathVariable UUID terminalId,
             @RequestParam int expectedVersion) {
-        return FiscalTerminalView.of(terminals.suspend(tenantId, terminalId, expectedVersion));
+        return FiscalTerminalView.of(terminals.suspend(tenantId, brandId, terminalId, expectedVersion));
     }
 
     @PostMapping("/{terminalId}/reactivate")
@@ -145,7 +146,7 @@ public class OperationsFiscalTerminalController {
             @PathVariable UUID brandId,
             @PathVariable UUID terminalId,
             @RequestParam int expectedVersion) {
-        return FiscalTerminalView.of(terminals.reactivate(tenantId, terminalId, expectedVersion));
+        return FiscalTerminalView.of(terminals.reactivate(tenantId, brandId, terminalId, expectedVersion));
     }
 
     @PostMapping("/{terminalId}/retire")
@@ -159,7 +160,7 @@ public class OperationsFiscalTerminalController {
             @PathVariable UUID brandId,
             @PathVariable UUID terminalId,
             @RequestParam int expectedVersion) {
-        return FiscalTerminalView.of(terminals.retire(tenantId, terminalId, expectedVersion));
+        return FiscalTerminalView.of(terminals.retire(tenantId, brandId, terminalId, expectedVersion));
     }
 
     record RegisterTerminalRequest(
