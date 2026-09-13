@@ -2250,6 +2250,20 @@ export const messagesUzLatn: MessageCatalogue = {
   'customers.export.action': 'Eksport',
   'customers.export.exporting': 'Eksport qilinmoqda…',
   'customers.export.done': '{count} ta mijoz eksport qilindi.',
+  'customers.export.doneTruncated':
+    'Dastlabki {count} ta mijoz eksport qilindi — filtr koʻproq topdi, roʻyxat qisqartirildi.',
+  'customers.import.action': 'Import',
+  'customers.import.pageTitle': 'Mijozlarni CSV fayldan import qilish',
+  'customers.import.close': 'Mijozlarga qaytish',
+  'customers.import.noLocation': 'Filial biriktirilmagan. Menejerdan filial biriktirishni soʻrang.',
+  'customers.import.outcome.CREATED_CUSTOMER': 'Yaratildi',
+  'customers.import.outcome.MATCHED_CUSTOMER': 'Moslashtirildi',
+  'customers.import.outcome.REJECTED': 'Rad etildi',
+  'customers.import.reject.MISSING_PHONE': 'Bu qatorda telefon raqami yoʻq',
+  'customers.import.reject.MALFORMED_PHONE': 'Bu telefon raqami emas',
+  'customers.import.reject.AMBIGUOUS_PHONE_MATCH':
+    'Bu telefon raqami bir nechta mijozga mos keladi',
+  'customers.import.reject.OTHER': 'Import qilib boʻlmadi',
   'customers.export.dismiss': 'Yopish',
 
   'customers.detail.unnamed': 'Ismi koʻrsatilmagan mijoz',
@@ -3662,6 +3676,28 @@ export const messagesUzLatn: MessageCatalogue = {
   'ui.charts.table.share': 'Ulushi',
   'ui.charts.table.value': 'Qiymat',
 
+  'ui.importWizard.dropzone.instructions': 'Faylni shu yerga tashlang yoki',
+  'ui.importWizard.dropzone.browse': 'fayl tanlang',
+  'ui.importWizard.dropzone.reading': 'Fayl oʻqilmoqda…',
+  'ui.importWizard.preview.summary': '{file} faylida {count} ta qator topildi.',
+  'ui.importWizard.preview.moreRows': 'va yana {count} ta qator koʻrsatilmadi',
+  'ui.importWizard.action.startOver': 'Qaytadan boshlash',
+  'ui.importWizard.action.checkForProblems': 'Xatolarni tekshirish',
+  'ui.importWizard.action.confirmImport': 'Import qilish',
+  'ui.importWizard.progress.dryRun': 'Fayl xatolarga tekshirilmoqda…',
+  'ui.importWizard.progress.real': 'Import qilinmoqda…',
+  'ui.importWizard.progress.count': '{total} tadan {done} ta qator',
+  'ui.importWizard.result.dryRunTitle': 'Tekshiruv natijalari — hali hech narsa yozilmadi',
+  'ui.importWizard.result.realTitle': 'Import yakunlandi',
+  'ui.importWizard.result.failed': 'Import bajarilmadi. Qayta urining yoki faylni tekshiring.',
+  'ui.importWizard.result.created': 'Yaratildi',
+  'ui.importWizard.result.matched': 'Moslashtirildi',
+  'ui.importWizard.result.rejected': 'Rad etildi',
+  'ui.importWizard.result.column.outcome': 'Natija',
+  'ui.importWizard.result.column.detail': 'Tafsilot',
+  'ui.importWizard.result.noRows': 'Koʻrsatiladigan qator yoʻq.',
+  'ui.importWizard.error.generic': 'Xatolik yuz berdi. Qayta urining.',
+
   'orders.action.applied': 'Buyurtma yangilandi',
   'customers.create.done': 'Mijoz yaratildi',
 
@@ -3778,13 +3814,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.detail.partnerClients.issue': 'Mijoz chiqarish',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'Ushbu mijoz uchun nom (oʻzingiz uchun):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Ushbu mijozni chiqarish sababi:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Ushbu mijozni chiqarish sababi:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Ushbu maxfiy kalitni hozir nusxalang — u qayta koʻrsatilmaydi:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'Nusxaladim',
   'settings.integrations.detail.partnerClients.column.clientId': 'Mijoz ID',
   'settings.integrations.detail.partnerClients.revoke': 'Bekor qilish',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Ushbu mijozni bekor qilish sababi:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Ushbu mijozni bekor qilish sababi:',
   'settings.integrations.detail.partnerClients.empty': 'Hali hamkor API mijozlari chiqarilmagan.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

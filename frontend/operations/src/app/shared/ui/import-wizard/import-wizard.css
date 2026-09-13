@@ -1,0 +1,101 @@
+.q-import-wizard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.q-import-wizard__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.q-import-wizard__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------------------ dropzone */
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  border: 1px dashed var(--q-hairline);
+  border-radius: var(--q-radius);
+  text-align: center;
+}
+
+.dropzone--over {
+  border-color: var(--q-primary);
+  background: var(--q-canvas-sunken, var(--q-canvas));
+}
+
+.q-import-wizard__file-label {
+  cursor: pointer;
+}
+
+.q-import-wizard__file-label input[type='file'] {
+  /* Visually hidden, never display:none -- a hidden-by-display input drops out
+     of the tab order and a screen reader announces nothing to activate. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------- table */
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.q-import-wizard__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.q-import-wizard__table th,
+.q-import-wizard__table td {
+  padding: 6px 8px;
+  text-align: start;
+  border-block-end: 1px solid var(--q-hairline);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ progress */
+
+.progress-bar {
+  block-size: 8px;
+  border-radius: 999px;
+  background: var(--q-hairline);
+  overflow: hidden;
+}
+
+.progress-bar__fill {
+  block-size: 100%;
+  background: var(--q-primary);
+  transition: inline-size 0.2s ease-out;
+}
+
+/* -------------------------------------------------------------------- result */
+
+.result-heading {
+  margin: 0;
+}
+
+.counters {
+  display: flex;
+  gap: 24px;
+}
+
+.counter {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

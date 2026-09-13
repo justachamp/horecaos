@@ -2264,6 +2264,20 @@ export const messagesEn = {
   'customers.export.action': 'Export',
   'customers.export.exporting': 'Exporting…',
   'customers.export.done': 'Exported {count} customer(s).',
+  'customers.export.doneTruncated':
+    'Exported the first {count} customer(s) — the filter matched more than that and was cut.',
+  'customers.import.action': 'Import',
+  'customers.import.pageTitle': 'Import customers from a CSV file',
+  'customers.import.close': 'Back to customers',
+  'customers.import.noLocation': 'No location is assigned. Ask a manager to assign you one.',
+  'customers.import.outcome.CREATED_CUSTOMER': 'Created',
+  'customers.import.outcome.MATCHED_CUSTOMER': 'Matched',
+  'customers.import.outcome.REJECTED': 'Rejected',
+  'customers.import.reject.MISSING_PHONE': 'No phone number in this row',
+  'customers.import.reject.MALFORMED_PHONE': 'Not a phone number',
+  'customers.import.reject.AMBIGUOUS_PHONE_MATCH':
+    'This phone number matches more than one customer',
+  'customers.import.reject.OTHER': 'Could not be imported',
   'customers.export.dismiss': 'Dismiss',
 
   'customers.detail.unnamed': 'Unnamed customer',
@@ -3665,6 +3679,31 @@ export const messagesEn = {
   'ui.charts.table.share': 'Share',
   'ui.charts.table.value': 'Value',
 
+  // q-import-wizard (row X.13): FileDropzone + row-level preview + dry-run
+  // diff + JobProgress + ResultSummary, shared by the customer CSV import
+  // (5.1b), the catalog import (4.5) and the geozone upload (3.6c).
+  'ui.importWizard.dropzone.instructions': 'Drag a file here, or',
+  'ui.importWizard.dropzone.browse': 'choose a file',
+  'ui.importWizard.dropzone.reading': 'Reading the file…',
+  'ui.importWizard.preview.summary': '{count} row(s) found in {file}.',
+  'ui.importWizard.preview.moreRows': 'and {count} more row(s), not shown',
+  'ui.importWizard.action.startOver': 'Start over',
+  'ui.importWizard.action.checkForProblems': 'Check for problems',
+  'ui.importWizard.action.confirmImport': 'Import for real',
+  'ui.importWizard.progress.dryRun': 'Checking the file for problems…',
+  'ui.importWizard.progress.real': 'Importing…',
+  'ui.importWizard.progress.count': '{done} of {total} row(s)',
+  'ui.importWizard.result.dryRunTitle': 'Dry-run results — nothing has been written yet',
+  'ui.importWizard.result.realTitle': 'Import complete',
+  'ui.importWizard.result.failed': 'The import could not run. Try again, or check the file.',
+  'ui.importWizard.result.created': 'Created',
+  'ui.importWizard.result.matched': 'Matched',
+  'ui.importWizard.result.rejected': 'Rejected',
+  'ui.importWizard.result.column.outcome': 'Outcome',
+  'ui.importWizard.result.column.detail': 'Detail',
+  'ui.importWizard.result.noRows': 'No rows to show.',
+  'ui.importWizard.error.generic': 'Something went wrong. Try again.',
+
   // Announced after a mutation settles, by the toast host in the shell. No
   // order number and no customer data: a toast is transient text on a shared
   // terminal (ADR 0029).
@@ -3773,9 +3812,11 @@ export const messagesEn = {
   'settings.integrations.detail.bindings.column.status': 'Status',
   'settings.integrations.detail.bindings.column.actions': 'Actions',
   'settings.integrations.detail.bindings.activate': 'Activate',
-  'settings.integrations.detail.bindings.activate.reasonPrompt': 'Reason for bringing this binding live:',
+  'settings.integrations.detail.bindings.activate.reasonPrompt':
+    'Reason for bringing this binding live:',
   'settings.integrations.detail.bindings.suspend': 'Suspend',
-  'settings.integrations.detail.bindings.suspend.reasonPrompt': 'Reason for suspending this binding:',
+  'settings.integrations.detail.bindings.suspend.reasonPrompt':
+    'Reason for suspending this binding:',
   'settings.integrations.detail.bindings.empty': 'No bindings yet.',
   'settings.integrations.detail.bindings.wholeTenant': 'Entire company',
   'settings.integrations.detail.cloposSettings.title': 'Order acceptance',
@@ -3787,13 +3828,15 @@ export const messagesEn = {
   'settings.integrations.detail.partnerClients.issue': 'Issue a client',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'A name for this client (for your own reference):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Reason for issuing this client:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Reason for issuing this client:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Copy this secret now — it will not be shown again:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'I have copied it',
   'settings.integrations.detail.partnerClients.column.clientId': 'Client ID',
   'settings.integrations.detail.partnerClients.revoke': 'Revoke',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Reason for revoking this client:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Reason for revoking this client:',
   'settings.integrations.detail.partnerClients.empty': 'No partner API clients issued yet.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

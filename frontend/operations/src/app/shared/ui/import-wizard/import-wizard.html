@@ -1,0 +1,196 @@
+<div class="q-import-wizard">
+  <h2 class="q-title">{{ title() }}</h2>
+
+  @if (stage() === 'select') {
+    <div
+      class="dropzone"
+      [class.dropzone--over]="dragOver()"
+      (dragover)="onDragOver($event)"
+      (dragleave)="onDragLeave()"
+      (drop)="onDrop($event)"
+      data-testid="import-wizard-dropzone"
+    >
+      <p class="q-body-sm">{{ 'ui.importWizard.dropzone.instructions' | t }}</p>
+      <label class="q-import-wizard__file-label">
+        <span class="secondary">{{ 'ui.importWizard.dropzone.browse' | t }}</span>
+        <input
+          type="file"
+          [accept]="accept()"
+          (change)="onFileInputChange($event)"
+          data-testid="import-wizard-file-input"
+        />
+      </label>
+      @if (previewing()) {
+        <p class="q-body-sm q-ink-muted">{{ 'ui.importWizard.dropzone.reading' | t }}</p>
+      }
+      @if (previewError(); as message) {
+        <q-inline-alert severity="error" [text]="message" />
+      }
+    </div>
+  }
+
+  @if (stage() === 'preview') {
+    <div class="q-import-wizard__section">
+      <p class="q-body-sm">
+        {{
+          'ui.importWizard.preview.summary'
+            | t: { count: preview().length, file: selectedFile()?.name ?? '' }
+        }}
+      </p>
+
+      @if (submitError(); as message) {
+        <q-inline-alert severity="error" [text]="message" />
+      }
+
+      <div class="table-scroll">
+        <table class="q-import-wizard__table">
+          <thead>
+            <tr>
+              <th class="q-caption">#</th>
+              @for (column of adapter().previewColumns; track column) {
+                <th class="q-caption">{{ column }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of visiblePreview(); track row.rowNumber) {
+              <tr>
+                <td class="q-body-sm q-tnum">{{ row.rowNumber }}</td>
+                @for (cell of row.cells; track $index) {
+                  <td class="q-body-sm">{{ cell }}</td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (hiddenPreviewCount() > 0) {
+        <p class="q-caption q-ink-subtle">
+          {{ 'ui.importWizard.preview.moreRows' | t: { count: hiddenPreviewCount() } }}
+        </p>
+      }
+
+      <div class="q-import-wizard__actions">
+        <button type="button" class="secondary" (click)="startOver()">
+          {{ 'ui.importWizard.action.startOver' | t }}
+        </button>
+        <button
+          type="button"
+          class="primary"
+          (click)="checkForProblems()"
+          [disabled]="submitting()"
+          data-testid="import-wizard-check"
+        >
+          {{ 'ui.importWizard.action.checkForProblems' | t }}
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (stage() === 'running') {
+    <div class="q-import-wizard__section" data-testid="import-wizard-progress">
+      <p class="q-body-sm">
+        {{
+          (mode() === 'dryRun'
+            ? 'ui.importWizard.progress.dryRun'
+            : 'ui.importWizard.progress.real'
+          ) | t
+        }}
+      </p>
+      <div
+        class="progress-bar"
+        role="progressbar"
+        [attr.aria-valuenow]="snapshot().counts.rowsProcessed"
+        [attr.aria-valuemin]="0"
+        [attr.aria-valuemax]="snapshot().counts.rowsTotal"
+      >
+        <div class="progress-bar__fill" [style.inline-size.%]="progressRatio() * 100"></div>
+      </div>
+      <p class="q-caption q-tnum">
+        {{
+          'ui.importWizard.progress.count'
+            | t: { done: snapshot().counts.rowsProcessed, total: snapshot().counts.rowsTotal }
+        }}
+      </p>
+    </div>
+  }
+
+  @if (stage() === 'result') {
+    <div class="q-import-wizard__section" data-testid="import-wizard-result">
+      <h3 class="q-body-sm result-heading">
+        {{
+          (mode() === 'dryRun'
+            ? 'ui.importWizard.result.dryRunTitle'
+            : 'ui.importWizard.result.realTitle'
+          ) | t
+        }}
+      </h3>
+
+      @if (snapshot().status === 'FAILED') {
+        <q-inline-alert
+          severity="error"
+          [text]="snapshot().failureReason ?? ('ui.importWizard.result.failed' | t)"
+        />
+      } @else {
+        <div class="counters">
+          <div class="counter">
+            <span class="q-caption">{{ 'ui.importWizard.result.created' | t }}</span>
+            <span class="q-data-lg q-tnum">{{ snapshot().counts.created }}</span>
+          </div>
+          <div class="counter">
+            <span class="q-caption">{{ 'ui.importWizard.result.matched' | t }}</span>
+            <span class="q-data-lg q-tnum">{{ snapshot().counts.matched }}</span>
+          </div>
+          <div class="counter">
+            <span class="q-caption">{{ 'ui.importWizard.result.rejected' | t }}</span>
+            <span class="q-data-lg q-tnum">{{ snapshot().counts.rejected }}</span>
+          </div>
+        </div>
+      }
+
+      <div class="table-scroll">
+        <table class="q-import-wizard__table">
+          <thead>
+            <tr>
+              <th class="q-caption">#</th>
+              <th class="q-caption">{{ 'ui.importWizard.result.column.outcome' | t }}</th>
+              <th class="q-caption">{{ 'ui.importWizard.result.column.detail' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.rowNumber) {
+              <tr>
+                <td class="q-body-sm q-tnum">{{ row.rowNumber }}</td>
+                <td class="q-body-sm">
+                  <q-status-pill [label]="row.outcome" [tone]="row.tone" />
+                </td>
+                <td class="q-body-sm">{{ row.detail ?? '—' }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td class="q-body-sm" colspan="3">{{ 'ui.importWizard.result.noRows' | t }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="q-import-wizard__actions">
+        <button type="button" class="secondary" (click)="startOver()">
+          {{ 'ui.importWizard.action.startOver' | t }}
+        </button>
+        @if (mode() === 'dryRun' && snapshot().status !== 'FAILED') {
+          <button
+            type="button"
+            class="primary"
+            (click)="confirmImport()"
+            [disabled]="submitting()"
+            data-testid="import-wizard-confirm"
+          >
+            {{ 'ui.importWizard.action.confirmImport' | t }}
+          </button>
+        }
+      </div>
+    </div>
+  }
+</div>
