@@ -18,12 +18,14 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAssetStatus;
 import uz.horecaos.platform.media.application.MediaAssetService;
+import uz.horecaos.platform.media.domain.DerivativeVariant;
 import uz.horecaos.platform.media.domain.MediaOwner;
 import uz.horecaos.platform.media.domain.MediaVisibility;
 import uz.horecaos.platform.web.api.ApiException;
@@ -111,12 +113,23 @@ public class MediaController {
     @RequiresCapability(Capability.MEDIA_READ)
     @Operation(
             summary = "Return a short-lived signed URL for a private asset",
-            description = "Only an AVAILABLE asset yields a URL; an unverified object is never served.")
-    public ResponseEntity<DownloadResponse> downloadUrl(@PathVariable UUID tenantId, @PathVariable UUID assetId) {
-        return media.downloadUrl(tenantId, new MediaAssetId(assetId))
+            description = "Only an AVAILABLE asset yields a URL; an unverified object is never "
+                    + "served. Pass `variant` (THUMBNAIL/CARD/DETAIL) for a rendition rather than "
+                    + "the original — a grid rendering dozens of images has no business fetching "
+                    + "full-size originals for every one of them, and until this parameter existed "
+                    + "there was no way to ask for anything else: every derivative ADR 0010's "
+                    + "pipeline renders was stored and never served.")
+    public ResponseEntity<DownloadResponse> downloadUrl(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID assetId,
+            @RequestParam(required = false) @Nullable DerivativeVariant variant) {
+        return media.downloadUrl(tenantId, new MediaAssetId(assetId), variant)
                 .map(url -> ResponseEntity.ok(new DownloadResponse(url)))
-                .orElseThrow(() ->
-                        new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such media asset, or it is not available"));
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND,
+                        variant == null
+                                ? "No such media asset, or it is not available"
+                                : "No such media asset, it is not available, or that rendition has not rendered yet"));
     }
 
     /**

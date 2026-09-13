@@ -56,6 +56,7 @@ import uz.horecaos.platform.media.domain.MediaOwner;
 import uz.horecaos.platform.media.domain.MediaVisibility;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcDerivativeJobStore;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaAssetStore;
+import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaDerivativeStore;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcVerificationJobStore;
 import uz.horecaos.platform.payments.application.CapturedMoneyPort;
 import uz.horecaos.platform.payments.application.PaymentAttemptService;
@@ -480,6 +481,7 @@ class ExternalCallTransactionBoundaryTests {
                     new JdbcMediaAssetStore(client),
                     new JdbcDerivativeJobStore(client),
                     new JdbcVerificationJobStore(client),
+                    new JdbcMediaDerivativeStore(client),
                     storage,
                     transactions,
                     events,
