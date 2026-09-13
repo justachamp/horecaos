@@ -236,6 +236,11 @@ public enum PlatformRole {
                     PAYMENT_INITIATE,
                     PAYMENT_ATTEMPT_RESOLVE,
                     PAYMENT_MERCHANT_BINDING_MANAGE,
+                    // ADR 0038: the payment-method registry itself — held the same way
+                    // as the channel pair above it, since a channel's payment matrix
+                    // columns come from this registry.
+                    PAYMENT_METHOD_READ,
+                    PAYMENT_METHOD_MANAGE,
                     FISCAL_DOCUMENT_READ,
                     FISCAL_DOCUMENT_RESOLVE,
                     DELIVERY_PLAN_READ,
@@ -393,6 +398,12 @@ public enum PlatformRole {
                     // registering one or moving an assignment: legal-entity.manage
                     // stays with the owner alone.
                     LEGAL_ENTITY_READ,
+                    // ADR 0038: the registry itself, held the same way as the channel
+                    // pair and fiscal-terminal pair above and below — equipment and
+                    // catalogue-shaped configuration, not the fiscal-identity or
+                    // money-movement decisions that stay with the owner alone.
+                    PAYMENT_METHOD_READ,
+                    PAYMENT_METHOD_MANAGE,
                     DELIVERY_PLAN_READ,
                     DELIVERY_MANUAL_ASSIGN,
                     SHIPMENT_CANCEL,
@@ -509,6 +520,9 @@ public enum PlatformRole {
                     // same reason it reads those, and registering one stays with the
                     // owner.
                     LEGAL_ENTITY_READ,
+                    // The registry behind every tender finance reconciles; registering
+                    // or disabling a method stays with the owner and the administrator.
+                    PAYMENT_METHOD_READ,
                     // Activating a rate table is money; drawing one is not, which is why
                     // finance activates tariffs without being able to author them.
                     DELIVERY_TARIFF_READ,
