@@ -1,0 +1,79 @@
+<q-modal
+  [title]="'orders.newOrder.modifiers.title' | t: { product: productName() }"
+  [dismissible]="true"
+  (dismiss)="close()"
+  data-testid="item-modifier-dialog"
+>
+  @for (group of groups(); track group.modifierGroupId) {
+    <fieldset class="modifier-dialog__group">
+      <legend class="q-body-sm modifier-dialog__legend">
+        {{ group.name }}
+        @if (group.required) {
+          <span class="q-caption modifier-dialog__required">{{
+            'orders.newOrder.modifiers.required' | t
+          }}</span>
+        }
+      </legend>
+
+      @for (option of group.options; track option.optionId) {
+        <div class="modifier-dialog__option">
+          @if (isSingleChoice(group)) {
+            <label class="modifier-dialog__option-label">
+              <input
+                type="radio"
+                [attr.name]="'group-' + group.modifierGroupId"
+                [checked]="quantityOf(option.optionId) > 0"
+                (change)="chooseSingle(group, option)"
+                data-testid="item-modifier-radio"
+              />
+              <span class="q-body-sm">{{ option.code }}</span>
+            </label>
+          } @else if (isStepper(group, option)) {
+            <div class="modifier-dialog__stepper-row">
+              <span class="q-body-sm">{{ option.code }}</span>
+              <q-number-stepper
+                [value]="quantityOf(option.optionId)"
+                [min]="0"
+                [max]="optionCeiling(group, option)"
+                (valueChange)="setStepperQuantity(option, $event)"
+              />
+            </div>
+          } @else {
+            <label class="modifier-dialog__option-label">
+              <input
+                type="checkbox"
+                [checked]="quantityOf(option.optionId) > 0"
+                (change)="toggleCheckbox(group, option)"
+                data-testid="item-modifier-checkbox"
+              />
+              <span class="q-body-sm">{{ option.code }}</span>
+            </label>
+          }
+          @if (formattedPrice(option.amountMinor); as price) {
+            <span class="q-caption modifier-dialog__price">{{ price }}</span>
+          }
+        </div>
+      }
+
+      @if (touchedValue() && unmetGroups().includes(group)) {
+        <p class="q-caption modifier-dialog__error" data-testid="item-modifier-group-error">
+          {{ 'orders.newOrder.modifiers.selectAtLeast' | t: { min: groupMinimum(group) } }}
+        </p>
+      }
+    </fieldset>
+  }
+
+  <ng-container qModalActions>
+    <button type="button" class="modifier-dialog__dismiss q-body-sm" (click)="close()">
+      {{ 'orders.newOrder.modifiers.cancel' | t }}
+    </button>
+    <button
+      type="button"
+      class="modifier-dialog__confirm q-body-sm"
+      (click)="submit()"
+      data-testid="item-modifier-confirm"
+    >
+      {{ 'orders.newOrder.modifiers.confirm' | t }}
+    </button>
+  </ng-container>
+</q-modal>

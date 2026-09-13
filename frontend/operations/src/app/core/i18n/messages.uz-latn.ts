@@ -3550,6 +3550,54 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.callCentre.callLog.type.MISSED': 'Oʻtkazib yuborilgan',
   'orders.callCentre.callLog.type.TRANSFERRED': 'Uzatilgan',
 
+  // --- Yangi buyurtma (orders.md §5, P13 to'lqini) ------------------------
+  'orders.newOrder.title': 'Yangi buyurtma',
+  'orders.newOrder.locationDenied': 'Bu filialda buyurtma qabul qilishga ruxsat yoʻq',
+  'orders.newOrder.customer.title': 'Mijoz',
+  'orders.newOrder.customer.phoneLabel': 'Telefon',
+  'orders.newOrder.customer.searching': 'Qidirilmoqda…',
+  'orders.newOrder.customer.noMatches': 'Mos keluvchi topilmadi',
+  'orders.newOrder.customer.orderCount': 'Buyurtmalar tarixida: {count}',
+  'orders.newOrder.customer.noOrders': 'Ilgari buyurtma boʻlmagan',
+  'orders.newOrder.customer.unnamed': 'Ismsiz',
+  'orders.newOrder.customer.change': 'Almashtirish',
+  'orders.newOrder.customer.history': 'Tarix',
+  'orders.newOrder.customer.historyLoading': 'Yuklanmoqda…',
+  'orders.newOrder.customer.historyEmpty': 'Ilgari buyurtma boʻlmagan',
+  'orders.newOrder.customer.createButton': 'Mijoz yaratish',
+  'orders.newOrder.customer.nonContactable':
+    'Bu mijozga marketing xabarlarini yuborib boʻlmaydi — bu qoʻngʻiroqda rozilik olinmagan.',
+  'orders.newOrder.menu.title': 'Menyu',
+  'orders.newOrder.menu.searchPlaceholder': 'Taom qidirish (F2)',
+  'orders.newOrder.menu.loading': 'Menyu yuklanmoqda…',
+  'orders.newOrder.menu.stopped': 'stop',
+  'orders.newOrder.menu.itemStopped': 'Bu taom endi mavjud emas',
+  'orders.newOrder.menu.unpricedResult':
+    'Taom narxini aniqlab boʻlmadi — birozdan keyin qayta urinib koʻring',
+  'orders.newOrder.modifiers.title': '«{product}» uchun variantlarni tanlang',
+  'orders.newOrder.modifiers.required': 'majburiy',
+  'orders.newOrder.modifiers.selectAtLeast': 'Kamida {min} tani tanlang',
+  'orders.newOrder.modifiers.confirm': 'Buyurtmaga qoʻshish',
+  'orders.newOrder.modifiers.cancel': 'Bekor qilish',
+  'orders.newOrder.basket.title': 'Savat',
+  'orders.newOrder.basket.empty': 'Hozircha boʻsh',
+  'orders.newOrder.basket.remove': 'Olib tashlash',
+  'orders.newOrder.basket.notePlaceholder': 'Oshxona uchun izoh',
+  'orders.newOrder.basket.unavailable': 'Endi mavjud emas — davom etish uchun olib tashlang',
+  'orders.newOrder.order.title': 'Buyurtma',
+  'orders.newOrder.order.fulfillmentMode': 'Turi',
+  'orders.newOrder.order.deliveryComingLater':
+    'Yetkazib berish uchun manzil kerak — keyingi toʻlqinda',
+  'orders.newOrder.order.payment': 'Toʻlov',
+  'orders.newOrder.order.paymentCashOnly': 'Hozircha faqat naqd (ADR 0039)',
+  'orders.newOrder.order.total': 'Jami',
+  'orders.newOrder.order.totalPending': 'Har bir taom narxi aniqlangach hisoblanadi',
+  'orders.newOrder.order.submit': 'Yaratish',
+  'orders.newOrder.order.submitting': 'Yaratilmoqda…',
+  'orders.newOrder.order.cancel': 'Bekor qilish',
+  'orders.newOrder.order.created': '{number}-buyurtma yaratildi',
+  'orders.newOrder.order.unavailableCount': 'Savatdagi {count} ta taom endi mavjud emas',
+
   // --- shared/ui (ADR 0101) ----------------------------------------------
   'ui.denied.title': 'Bu boʻlimga kirish huquqingiz yoʻq',
   'ui.denied.capability': 'Yetishmayotgan huquq:',
@@ -3777,13 +3825,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.detail.partnerClients.issue': 'Mijoz chiqarish',
   'settings.integrations.detail.partnerClients.issue.labelPrompt':
     'Ushbu mijoz uchun nom (oʻzingiz uchun):',
-  'settings.integrations.detail.partnerClients.issue.reasonPrompt': 'Ushbu mijozni chiqarish sababi:',
+  'settings.integrations.detail.partnerClients.issue.reasonPrompt':
+    'Ushbu mijozni chiqarish sababi:',
   'settings.integrations.detail.partnerClients.issuedOnce':
     'Ushbu maxfiy kalitni hozir nusxalang — u qayta koʻrsatilmaydi:',
   'settings.integrations.detail.partnerClients.issuedDismiss': 'Nusxaladim',
   'settings.integrations.detail.partnerClients.column.clientId': 'Mijoz ID',
   'settings.integrations.detail.partnerClients.revoke': 'Bekor qilish',
-  'settings.integrations.detail.partnerClients.revoke.reasonPrompt': 'Ushbu mijozni bekor qilish sababi:',
+  'settings.integrations.detail.partnerClients.revoke.reasonPrompt':
+    'Ushbu mijozni bekor qilish sababi:',
   'settings.integrations.detail.partnerClients.empty': 'Hali hamkor API mijozlari chiqarilmagan.',
 
   // --- settings/integrations liveness (ADR 0106, gap-map row 10.8c) -------

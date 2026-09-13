@@ -71,6 +71,16 @@ export const operationsPaths = {
     return `${this.orders(scope)}/drafts`;
   },
 
+  /**
+   * IA 1.3a's phone lookup (orders.md §5.3) — a returning caller, by phone,
+   * in the body, never a query string. `Idempotent` server-side, but a fresh
+   * `Idempotency-Key` is minted per keystroke-settle regardless, since each
+   * lookup is its own audited read.
+   */
+  orderCustomerLookups(scope: LocationScope): string {
+    return `${this.orders(scope)}/customer-lookups`;
+  },
+
   /** One order with its snapshotted lines. Returns an `ETag`. */
   order(scope: LocationScope, orderId: string): string {
     return `${this.orders(scope)}/${encodeURIComponent(orderId)}`;

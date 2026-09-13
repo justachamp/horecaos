@@ -1,0 +1,316 @@
+@if (locationDenied()) {
+  <div class="new-order__state" data-testid="new-order-location-denied">
+    <p class="q-body-sm">{{ 'orders.newOrder.locationDenied' | t }}</p>
+  </div>
+} @else if (submitDenied()) {
+  <q-denied-state [capability]="'ORDER_PLACE'" data-testid="new-order-denied" />
+} @else {
+  <div class="new-order" data-testid="new-order-page">
+    <header class="new-order__header">
+      <h1 class="q-subhead new-order__title">{{ 'orders.newOrder.title' | t }}</h1>
+      <div class="new-order__header-actions">
+        <button type="button" class="new-order__cancel q-body-sm" (click)="cancel()">
+          {{ 'orders.newOrder.order.cancel' | t }}
+        </button>
+        <button
+          type="button"
+          class="new-order__submit q-body-sm"
+          [disabled]="!canSubmit()"
+          (click)="submit()"
+          data-testid="new-order-submit"
+        >
+          {{
+            submitting()
+              ? ('orders.newOrder.order.submitting' | t)
+              : ('orders.newOrder.order.submit' | t)
+          }}
+        </button>
+      </div>
+    </header>
+
+    @if (submitError(); as message) {
+      <p class="q-caption new-order__error" role="alert" data-testid="new-order-submit-error">
+        {{ message }}
+      </p>
+      @if (unavailableItemIds().length > 0) {
+        <p class="q-caption new-order__error" data-testid="new-order-unavailable-count">
+          {{ 'orders.newOrder.order.unavailableCount' | t: { count: unavailableItemIds().length } }}
+        </p>
+      }
+    }
+
+    <div class="new-order__panes">
+      <!-- ================================================== КЛИЕНТ -->
+      <section
+        class="new-order__pane new-order__pane--customer"
+        aria-label="{{ 'orders.newOrder.customer.title' | t }}"
+      >
+        <h2 class="q-body-sm new-order__pane-title">{{ 'orders.newOrder.customer.title' | t }}</h2>
+
+        @if (selectedCustomer(); as customer) {
+          <div class="new-order__selected-customer" data-testid="new-order-selected-customer">
+            <span class="q-body-sm">{{ customer.label }}</span>
+            <div class="new-order__selected-customer-actions">
+              <button type="button" class="q-caption new-order__link" (click)="toggleHistory()">
+                {{ 'orders.newOrder.customer.history' | t }}
+              </button>
+              <button type="button" class="q-caption new-order__link" (click)="changeCustomer()">
+                {{ 'orders.newOrder.customer.change' | t }}
+              </button>
+            </div>
+          </div>
+
+          @if (nonContactableNotice()) {
+            <p class="q-caption new-order__notice" data-testid="new-order-non-contactable">
+              {{ 'orders.newOrder.customer.nonContactable' | t }}
+            </p>
+          }
+
+          @if (historyOpen()) {
+            <div class="new-order__history" data-testid="new-order-history">
+              @if (historyLoading()) {
+                <p class="q-caption">{{ 'orders.newOrder.customer.historyLoading' | t }}</p>
+              } @else if (historyOrders().length === 0) {
+                <p class="q-caption">{{ 'orders.newOrder.customer.historyEmpty' | t }}</p>
+              } @else {
+                <ul class="new-order__history-list">
+                  @for (order of historyOrders(); track order.orderId) {
+                    <li class="new-order__history-row">
+                      <span class="q-caption">{{ order.publicOrderNumber }}</span>
+                      <span class="q-caption">{{ formatHistoryTotal(order) }}</span>
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          }
+        } @else {
+          <label class="new-order__field">
+            <span class="q-caption">{{ 'orders.newOrder.customer.phoneLabel' | t }}</span>
+            <input
+              #phoneInput
+              type="tel"
+              class="new-order__input q-body-sm"
+              [value]="phone()"
+              (input)="onPhoneInput($any($event.target).value)"
+              placeholder="+998901112233"
+              data-testid="new-order-phone-input"
+            />
+          </label>
+
+          @if (customerLookupBusy()) {
+            <p class="q-caption">{{ 'orders.newOrder.customer.searching' | t }}</p>
+          } @else if (customerLookupError(); as message) {
+            <p class="q-caption new-order__error">{{ message }}</p>
+          } @else if (customerSearched()) {
+            @if (customerCandidates().length === 0) {
+              <div class="new-order__no-match" data-testid="new-order-no-match">
+                <p class="q-caption">{{ 'orders.newOrder.customer.noMatches' | t }}</p>
+                <button
+                  type="button"
+                  class="new-order__create-button q-body-sm"
+                  (click)="openCreateDialog()"
+                  data-testid="new-order-create-customer"
+                >
+                  {{ 'orders.newOrder.customer.createButton' | t }}
+                </button>
+              </div>
+            } @else {
+              <ul class="new-order__candidates" data-testid="new-order-candidates">
+                @for (candidate of customerCandidates(); track candidate.accountId) {
+                  <li>
+                    <button
+                      type="button"
+                      class="new-order__candidate q-body-sm"
+                      (click)="selectCandidate(candidate)"
+                      data-testid="new-order-candidate"
+                    >
+                      <span>{{
+                        candidate.maskedDisplayName ?? ('orders.newOrder.customer.unnamed' | t)
+                      }}</span>
+                      <span class="q-caption">
+                        {{
+                          candidate.lastOrderAt
+                            ? ('orders.newOrder.customer.orderCount'
+                              | t: { count: candidate.recentOrderCount })
+                            : ('orders.newOrder.customer.noOrders' | t)
+                        }}
+                      </span>
+                    </button>
+                  </li>
+                }
+              </ul>
+              <button
+                type="button"
+                class="new-order__create-button q-body-sm"
+                (click)="openCreateDialog()"
+                data-testid="new-order-create-customer-alt"
+              >
+                {{ 'orders.newOrder.customer.createButton' | t }}
+              </button>
+            }
+          }
+        }
+      </section>
+
+      <!-- ==================================================== МЕНЮ -->
+      <section
+        class="new-order__pane new-order__pane--menu"
+        aria-label="{{ 'orders.newOrder.menu.title' | t }}"
+      >
+        <h2 class="q-body-sm new-order__pane-title">{{ 'orders.newOrder.menu.title' | t }}</h2>
+
+        <q-combobox
+          [query]="itemQuery()"
+          [options]="itemOptions()"
+          [loading]="itemSearching()"
+          [placeholder]="'orders.newOrder.menu.searchPlaceholder' | t"
+          [ariaLabel]="'orders.newOrder.menu.searchPlaceholder' | t"
+          (queryChange)="onItemQueryChange($event)"
+          (search)="onItemSearch($event)"
+          (optionSelected)="onItemSelected($event)"
+          data-testid="new-order-item-search"
+        />
+
+        @if (itemSearchError(); as message) {
+          <p class="q-caption new-order__error">{{ message }}</p>
+        }
+
+        @if (menuLoading()) {
+          <p class="q-caption">{{ 'orders.newOrder.menu.loading' | t }}</p>
+        } @else if (menuError(); as message) {
+          <p class="q-caption new-order__error" data-testid="new-order-menu-error">{{ message }}</p>
+        } @else if (menu(); as loadedMenu) {
+          <div class="new-order__categories" data-testid="new-order-categories">
+            @for (category of loadedMenu.categories; track category.categoryId) {
+              <div class="new-order__category">
+                <h3 class="q-caption new-order__category-title">{{ category.name }}</h3>
+                <div class="new-order__category-items">
+                  @for (product of productsIn(category, loadedMenu); track product.productId) {
+                    <button
+                      type="button"
+                      class="new-order__product q-body-sm"
+                      [class.new-order__product--stopped]="!isAnyVariantOrderable(product)"
+                      (click)="selectProductFromGrid(product)"
+                      data-testid="new-order-product"
+                    >
+                      <span>{{ product.name }}</span>
+                      @if (!isAnyVariantOrderable(product)) {
+                        <span class="q-caption new-order__stop-chip">{{
+                          'orders.newOrder.menu.stopped' | t
+                        }}</span>
+                      }
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+
+        <h2 class="q-body-sm new-order__pane-title new-order__basket-title">
+          {{ 'orders.newOrder.basket.title' | t }}
+        </h2>
+        @if (basket().length === 0) {
+          <p class="q-caption">{{ 'orders.newOrder.basket.empty' | t }}</p>
+        } @else {
+          <ul class="new-order__basket" data-testid="new-order-basket">
+            @for (line of basket(); track line.lineKey) {
+              <li
+                class="new-order__basket-line"
+                [class.new-order__basket-line--unavailable]="!line.orderable"
+              >
+                <div class="new-order__basket-line-head">
+                  <span class="q-body-sm">{{ line.productName }}</span>
+                  <q-number-stepper
+                    [value]="line.quantity"
+                    [min]="1"
+                    [max]="99"
+                    (valueChange)="setLineQuantity(line.lineKey, $event)"
+                  />
+                  <button
+                    type="button"
+                    class="new-order__remove q-caption"
+                    (click)="removeLine(line.lineKey)"
+                    data-testid="new-order-remove-line"
+                  >
+                    {{ 'orders.newOrder.basket.remove' | t }}
+                  </button>
+                </div>
+                @if (line.modifiers.length > 0) {
+                  <p class="q-caption new-order__modifiers">{{ modifierSummary(line) }}</p>
+                }
+                @if (!line.orderable) {
+                  <p class="q-caption new-order__error">
+                    {{ 'orders.newOrder.basket.unavailable' | t }}
+                  </p>
+                }
+                <input
+                  type="text"
+                  class="new-order__note q-caption"
+                  [value]="line.customerNote ?? ''"
+                  (input)="setLineNote(line.lineKey, $any($event.target).value)"
+                  [placeholder]="'orders.newOrder.basket.notePlaceholder' | t"
+                />
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      <!-- =================================================== ЗАКАЗ -->
+      <section
+        class="new-order__pane new-order__pane--order"
+        aria-label="{{ 'orders.newOrder.order.title' | t }}"
+      >
+        <h2 class="q-body-sm new-order__pane-title">{{ 'orders.newOrder.order.title' | t }}</h2>
+
+        <p class="q-caption new-order__order-row">
+          <span>{{ 'orders.newOrder.order.fulfillmentMode' | t }}</span>
+          <span>{{ 'orders.fulfillmentMode.PICKUP' | t }}</span>
+        </p>
+        <p class="q-caption new-order__hint">
+          {{ 'orders.newOrder.order.deliveryComingLater' | t }}
+        </p>
+
+        <p class="q-caption new-order__order-row">
+          <span>{{ 'orders.newOrder.order.payment' | t }}</span>
+          <span>{{ 'orders.newOrder.order.paymentCashOnly' | t }}</span>
+        </p>
+
+        <div class="new-order__total-row">
+          <span class="q-body-sm">{{ 'orders.newOrder.order.total' | t }}</span>
+          <span class="q-body new-order__total-amount" data-testid="new-order-total">{{
+            formattedTotal()
+          }}</span>
+        </div>
+        @if (!total().fullyPriced) {
+          <p class="q-caption new-order__hint">{{ 'orders.newOrder.order.totalPending' | t }}</p>
+        }
+        @if (!total().allAvailable) {
+          <p class="q-caption new-order__error">{{ 'orders.newOrder.basket.unavailable' | t }}</p>
+        }
+      </section>
+    </div>
+  </div>
+
+  @if (createDialogOpen()) {
+    <q-create-customer-dialog
+      [busy]="createBusy()"
+      [errorMessage]="createError()"
+      [initialPhone]="phone()"
+      (confirm)="onCreateSubmit($event)"
+      (dismiss)="onCreateDismiss()"
+    />
+  }
+
+  @if (pendingModifiers(); as pending) {
+    <q-item-modifier-dialog
+      [productName]="pending.product.name"
+      [groups]="pending.groups"
+      [currency]="menu()?.currency ?? null"
+      (confirm)="onModifierConfirm($event)"
+      (dismiss)="onModifierDismiss()"
+    />
+  }
+}

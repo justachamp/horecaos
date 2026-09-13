@@ -119,7 +119,7 @@ class CatalogAvailabilityReadModelTests {
                 TENANT, BRAND, LOCATION, plov.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
         inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, plov.defaultVariantId(), TrackingMode.BINARY);
 
-        var page = store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, 50);
+        var page = store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, null, 50);
 
         assertThat(page).singleElement().satisfies(row -> {
             assertThat(row.variantId()).isEqualTo(plov.defaultVariantId());
@@ -142,14 +142,14 @@ class CatalogAvailabilityReadModelTests {
                 TENANT, BRAND, LOCATION, plov.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
         inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, plov.defaultVariantId(), TrackingMode.BINARY);
 
-        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, 50))
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, null, 50))
                 .as("starts available")
                 .singleElement()
                 .satisfies(row -> assertThat(row.available()).isTrue());
 
         inventory.setAvailability(TENANT, LOCATION, plov.defaultVariantId(), false, "SOLD_OUT", ACTOR);
 
-        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, 50))
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, null, 50))
                 .singleElement()
                 .satisfies(row -> {
                     assertThat(row.available()).as("stopped").isFalse();
@@ -240,7 +240,7 @@ class CatalogAvailabilityReadModelTests {
         // unlisted variant is unavailable, not simply unknown, mirroring
         // InventoryService.checkAvailability's own default.
 
-        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, 50))
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, null, 50))
                 .singleElement()
                 .satisfies(row -> {
                     assertThat(row.available()).isFalse();
@@ -281,7 +281,7 @@ class CatalogAvailabilityReadModelTests {
                 UNCLASSIFIED,
                 ACTOR);
 
-        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, 50))
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, null, 50))
                 .as("neither the hidden offering nor the un-offered variant sells here")
                 .isEmpty();
         assertThat(neverOffered.defaultVariantId()).isNotNull();
@@ -326,13 +326,112 @@ class CatalogAvailabilityReadModelTests {
         inventory.listVariantAtLocation(
                 OTHER_TENANT, OTHER_BRAND, OTHER_LOCATION, theirs.defaultVariantId(), TrackingMode.BINARY);
 
-        var oursOnly = store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, 50);
+        var oursOnly = store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, null, 50);
         assertThat(oursOnly)
                 .extracting(JdbcCatalogStore.VariantAvailabilityRow::variantId)
                 .containsExactly(ours.defaultVariantId());
 
-        var theirsOnly = store.variantsAtLocation(OTHER_TENANT, OTHER_BRAND, OTHER_LOCATION, LOCALE, null, 50);
+        var theirsOnly = store.variantsAtLocation(OTHER_TENANT, OTHER_BRAND, OTHER_LOCATION, LOCALE, null, null, 50);
         assertThat(theirsOnly)
+                .extracting(JdbcCatalogStore.VariantAvailabilityRow::variantId)
+                .containsExactly(theirs.defaultVariantId());
+    }
+
+    /**
+     * The New order screen's item search (orders.md §5.5, wave P13): a
+     * case-insensitive substring match on the product's own translated name,
+     * so the picker can search a catalog of thousands rather than paging
+     * through it.
+     */
+    @Test
+    @DisplayName("query narrows the list by product name, case-insensitively")
+    void queryNarrowsByProductName() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh palov", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        var somsa = authoring.createProduct(
+                TENANT, BRAND, catalogId, "SOMSA", "Somsa", null, LOCALE, "SKU-SOMSA", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, plov.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, somsa.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, "palov", null, 50))
+                .as("a lower-case, partial query still matches the mixed-case stored name")
+                .extracting(JdbcCatalogStore.VariantAvailabilityRow::variantId)
+                .containsExactly(plov.defaultVariantId());
+
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, "SOM", null, 50))
+                .as("upper-case query, lower-case stored name")
+                .extracting(JdbcCatalogStore.VariantAvailabilityRow::variantId)
+                .containsExactly(somsa.defaultVariantId());
+
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, "no such dish", null, 50))
+                .as("a query matching nothing returns nothing, not everything")
+                .isEmpty();
+
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, null, 50))
+                .as("no query is still the unfiltered page every other caller relies on")
+                .hasSize(2);
+
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, "   ", null, 50))
+                .as("a blank query is the same as no query, never an everything-excluded empty pattern")
+                .hasSize(2);
+    }
+
+    /**
+     * The same property {@link #anotherTenantsVariantsNeverAppear} proves for
+     * an unfiltered read, but for the searched read: a query is a narrower
+     * WHERE clause over the same tenant- and location-scoped rows, never a
+     * back door around the scope those other predicates enforce.
+     */
+    @Test
+    @DisplayName("a matching query never crosses the location boundary")
+    void queryStaysLocationScoped() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var ours = authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "BURGER",
+                "Cheeseburger",
+                null,
+                LOCALE,
+                "SKU-BURGER",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, ours.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+
+        UUID otherCatalogId = authoring.createCatalog(OTHER_TENANT, OTHER_BRAND, "MAIN", "Their menu", LOCALE);
+        var theirs = authoring.createProduct(
+                OTHER_TENANT,
+                OTHER_BRAND,
+                otherCatalogId,
+                "BURGER2",
+                "Cheeseburger deluxe",
+                null,
+                LOCALE,
+                "SKU-BURGER2",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
+        authoring.setOffering(
+                OTHER_TENANT,
+                OTHER_BRAND,
+                OTHER_LOCATION,
+                theirs.defaultVariantId(),
+                OfferingStatus.AVAILABLE,
+                List.of("DELIVERY"));
+
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, "cheeseburger", null, 50))
+                .as("the same query at the other tenant's location must not surface this tenant's match")
+                .extracting(JdbcCatalogStore.VariantAvailabilityRow::variantId)
+                .containsExactly(ours.defaultVariantId());
+
+        assertThat(store.variantsAtLocation(
+                        OTHER_TENANT, OTHER_BRAND, OTHER_LOCATION, LOCALE, "cheeseburger", null, 50))
                 .extracting(JdbcCatalogStore.VariantAvailabilityRow::variantId)
                 .containsExactly(theirs.defaultVariantId());
     }
@@ -358,7 +457,7 @@ class CatalogAvailabilityReadModelTests {
                     TENANT, BRAND, LOCATION, product.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
         }
 
-        var firstPage = store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, 2);
+        var firstPage = store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, null, 2);
         assertThat(firstPage).hasSize(2);
 
         var secondPage = store.variantsAtLocation(
@@ -366,6 +465,7 @@ class CatalogAvailabilityReadModelTests {
                 BRAND,
                 LOCATION,
                 LOCALE,
+                null,
                 firstPage.get(firstPage.size() - 1).variantId(),
                 2);
         assertThat(secondPage).hasSize(1);
