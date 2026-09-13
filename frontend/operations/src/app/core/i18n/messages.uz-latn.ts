@@ -577,10 +577,12 @@ export const messagesUzLatn: MessageCatalogue = {
     'Sotuvchi bogʻlanishi qoralama sifatida roʻyxatdan oʻtkazildi. Hammasi toʻgʻri boʻlsa, faollashtiring.',
   'settings.integrations.registerBinding.cancel': 'Bekor qilish',
 
-  // 10.1 Brend profili
+  // 10.1 Brend profili, 10.12 tillar va mintaqaviy formatlar
   'settings.brandProfile.title': 'Brend profili',
   'settings.brandProfile.lead':
     'Brend qanday nomlanadi va mijoz uni koʻradigan har joyda qanday koʻrinadi.',
+  'settings.brandProfile.section.identity': 'Identifikatsiya',
+  'settings.brandProfile.section.profile': 'Profil',
   'settings.brandProfile.field.displayName': 'Brend nomi',
   'settings.brandProfile.field.code': 'Kod',
   'settings.brandProfile.field.slug': 'Slag',
@@ -589,17 +591,30 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.brandProfile.status.ACTIVE': 'Faol',
   'settings.brandProfile.status.SUSPENDED': 'Toʻxtatilgan',
   'settings.brandProfile.status.ARCHIVED': 'Arxivlangan',
-  'settings.brandProfile.readOnlyNote':
-    'Bu maydonlarni tahrirlash hali mavjud emas — oʻzgarishlar hozircha control-plane onboarding orqali amalga oshiriladi.',
-  'settings.brandProfile.gap.title': 'Bu yerda hali koʻrsatilmagan',
-  'settings.brandProfile.gap.legalName':
-    'Kompaniyaning yuridik nomi (tenant darajasi, qoʻshilganda faqat oʻqish uchun maydon boʻladi)',
-  'settings.brandProfile.gap.logoBanner':
-    'Logotip va agregator/QR banneri — media hali "bu logotip" belgisiga ega emas',
-  'settings.brandProfile.gap.description':
-    'Har bir tildagi tavsif — u uchun hali saqlash joyi yoʻq',
-  'settings.brandProfile.gap.contact':
-    'Asosiy telefon va Telegram kanali — ular uchun hali ustunlar yoʻq',
+  'settings.brandProfile.rename': 'Nomini oʻzgartirish',
+  'settings.brandProfile.edit': 'Tahrirlash',
+  'settings.brandProfile.cancel': 'Bekor qilish',
+  'settings.brandProfile.save': 'Saqlash',
+  'settings.brandProfile.saving': 'Saqlanmoqda…',
+  'settings.brandProfile.error.nameRequired': 'Brend nomi kiritilishi shart.',
+  'settings.brandProfile.field.contactPhone': 'Aloqa telefoni',
+  'settings.brandProfile.field.telegramHandle': 'Telegram nomi',
+  'settings.brandProfile.field.logoAssetId': 'Logotip (media ID)',
+  'settings.brandProfile.field.bannerAssetId': 'Agregator/QR banneri (media ID)',
+  'settings.brandProfile.mediaNote':
+    'Boshqa joyda yuklangan media faylning ID sini kiriting — bu yerda tanlagich hali yoʻq.',
+  'settings.brandProfile.locales.title': 'Qoʻllab-quvvatlanadigan tillar',
+  'settings.brandProfile.locales.hint':
+    'Ushbu brend doʻkoni qaysi tillarda ishlaydi va qaysi biri asosiy til.',
+  'settings.brandProfile.locales.unconfigured':
+    'Hali sozlanmagan — konsol standart toʻplamdan foydalanadi: rus, oʻzbek (lotin) va ingliz.',
+  'settings.brandProfile.locales.default': 'Asosiy',
+  'settings.brandProfile.locales.include': 'Taklif qilish',
+  'settings.brandProfile.locales.language': 'Til',
+  'settings.brandProfile.locales.description': 'Tavsif',
+  'settings.brandProfile.locale.ru': 'Rus tili',
+  'settings.brandProfile.locale.uzLatn': 'Oʻzbek (lotin)',
+  'settings.brandProfile.locale.en': 'Ingliz tili',
 
   // 10.4 Sotuv kanallari
   'settings.salesChannels.title': 'Sotuv kanallari',
@@ -930,7 +945,16 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.locations.field.address': 'Manzil',
   'settings.locations.field.district': 'Tuman',
   'settings.locations.field.phone': 'Telefon',
+  'settings.locations.field.landmark': 'Moʻljal',
   'settings.locations.empty': 'Hali filiallar yoʻq.',
+  'settings.locations.list.column.state': 'Holat',
+  'settings.locations.list.filterState': 'Holat',
+  'settings.locations.list.state.all': 'Barchasi',
+  'settings.locations.list.state.open': 'Ochiq',
+  'settings.locations.list.state.forceOpen': 'Majburan ochiq',
+  'settings.locations.list.state.closed': 'Yopiq',
+  'settings.locations.list.close': 'Yopish',
+  'settings.locations.list.reopen': 'Qayta ochish',
   'settings.locations.tab.basics': 'Asosiy',
   'settings.locations.tab.hours': 'Ish vaqti',
   'settings.locations.tab.load': 'Yuklama va tayyorlash',

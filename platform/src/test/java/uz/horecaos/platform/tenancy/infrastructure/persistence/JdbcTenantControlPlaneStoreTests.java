@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Currency;
+import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
@@ -568,6 +569,66 @@ class JdbcTenantControlPlaneStoreTests {
                 .isTrue();
 
         assertThat(store.findBrand(tenant.id(), brand.id())).isEmpty();
+    }
+
+    /**
+     * The new columns and the media relation V0241-V0243 add (10.1, 10.12): a
+     * brand starts with an empty profile, a whole-profile write persists
+     * contact, media and its locale set together, and a second brand's own
+     * profile stays independent of the first's — the tenant isolation a
+     * shared {@code tenant.brand_locales}/{@code tenant.brand_media} table
+     * depends on.
+     */
+    @Test
+    void aBrandProfileIsPersistedWithItsMediaAndItsLocaleSet() {
+        Tenant tenant = tenant("018f6f4e-899d-7b1c-a8cf-0242ac120500", "tenant-profile");
+        store.insertTenant(tenant);
+        Brand brand = Brand.draft(
+                new BrandId(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120501")),
+                tenant.id(),
+                "BRAND_PR",
+                new Slug("brand-pr"),
+                "Brand PR");
+        store.insertBrand(brand);
+        Brand other = Brand.draft(
+                new BrandId(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120502")),
+                tenant.id(),
+                "BRAND_PR2",
+                new Slug("brand-pr2"),
+                "Brand PR2");
+        store.insertBrand(other);
+
+        assertThat(store.findBrandProfile(tenant.id(), brand.id()))
+                .as("a brand starts with an empty profile, not an absent row")
+                .isEqualTo(uz.horecaos.platform.tenancy.domain.BrandProfile.empty());
+
+        UUID logoAssetId = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120503");
+        var profile = new uz.horecaos.platform.tenancy.domain.BrandProfile(
+                "+998712000000",
+                "brand_pr_bot",
+                logoAssetId,
+                null,
+                List.of(
+                        new uz.horecaos.platform.tenancy.domain.BrandProfile.BrandLocale("ru", "Бренд ПР", true),
+                        new uz.horecaos.platform.tenancy.domain.BrandProfile.BrandLocale(
+                                "uz-Latn", "Brend PR", false)));
+        store.updateBrandProfile(tenant.id(), brand.id(), profile);
+
+        assertThat(store.findBrandProfile(tenant.id(), brand.id())).isEqualTo(profile);
+        assertThat(store.findBrandProfile(tenant.id(), other.id()))
+                .as("the other brand's profile is untouched")
+                .isEqualTo(uz.horecaos.platform.tenancy.domain.BrandProfile.empty());
+        assertThat(store.findBrandProfiles(tenant.id()))
+                .containsEntry(brand.id(), profile)
+                .containsEntry(other.id(), uz.horecaos.platform.tenancy.domain.BrandProfile.empty());
+
+        // A whole-set write replaces what was there, the same "whole place"
+        // shape `updateLocationPlace` already establishes: the logo is
+        // dropped by being left out of the next write, not carried forward.
+        var replaced =
+                new uz.horecaos.platform.tenancy.domain.BrandProfile("+998712009999", null, null, null, List.of());
+        store.updateBrandProfile(tenant.id(), brand.id(), replaced);
+        assertThat(store.findBrandProfile(tenant.id(), brand.id())).isEqualTo(replaced);
     }
 
     private static Tenant tenant(String id, String slug) {

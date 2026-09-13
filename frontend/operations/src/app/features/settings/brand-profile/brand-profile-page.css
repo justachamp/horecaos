@@ -29,11 +29,20 @@
   max-width: 640px;
 }
 
+.block {
+  margin-top: 28px;
+  max-width: 640px;
+}
+
+.block h2 {
+  margin: 0 0 12px;
+}
+
 .fields {
-  margin: 24px 0 0;
+  margin: 0 0 16px;
   max-width: 480px;
   display: grid;
-  gap: 16px;
+  gap: 12px;
 }
 
 .field dt {
@@ -45,30 +54,119 @@
   margin: 0;
 }
 
-.readonly-note {
-  margin: 16px 0 0;
-  color: var(--q-ink-subtle);
-  max-width: 480px;
+.locales-title {
+  margin: 20px 0 4px;
 }
 
-.gap-panel {
-  margin-top: 32px;
-  padding: 16px 20px;
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  max-width: 560px;
+.locale-list {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
 }
 
-.gap-panel h2 {
-  margin: 0 0 8px;
+.default-badge {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--q-surface-1);
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-caption);
 }
 
-.gap-list {
-  margin: 12px 0 0;
-  padding-left: 18px;
+.locale-description {
   color: var(--q-ink-muted);
 }
 
-.gap-list li {
-  margin-bottom: 4px;
+.form {
+  margin-top: 12px;
+  max-width: 480px;
+}
+
+.form label {
+  display: block;
+  color: var(--q-ink-muted);
+  margin-top: 12px;
+}
+
+.form label:first-child {
+  margin-top: 0;
+}
+
+.field {
+  display: block;
+  width: 100%;
+}
+
+input.field {
+  margin-top: 4px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--q-surface-2);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  box-sizing: border-box;
+}
+
+.media-note {
+  margin: 8px 0 0;
+  color: var(--q-ink-subtle);
+}
+
+.locale-grid {
+  width: 100%;
+  max-width: 560px;
+  border-collapse: collapse;
+  margin: 8px 0 4px;
+}
+
+.locale-grid th {
+  text-align: left;
+  padding: 4px 8px;
+  color: var(--q-ink-muted);
+}
+
+.locale-grid td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.locale-grid input.field {
+  height: 32px;
+  margin-top: 0;
+}
+
+.form__actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.primary {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.primary:disabled {
+  background: var(--q-surface-2);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.secondary {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
 }

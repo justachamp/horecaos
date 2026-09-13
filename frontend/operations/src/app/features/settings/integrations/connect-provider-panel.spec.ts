@@ -34,6 +34,12 @@ const BRAND_ONE: BrandView = {
   slug: 'main',
   displayName: 'Rayhon Chilonzor',
   status: 'ACTIVE',
+  contactPhone: null,
+  telegramHandle: null,
+  logoAssetId: null,
+  bannerAssetId: null,
+  locales: [],
+  version: 0,
 };
 
 const BRAND_TWO: BrandView = {
@@ -43,6 +49,12 @@ const BRAND_TWO: BrandView = {
   slug: 'second',
   displayName: 'Rayhon Yunusobod',
   status: 'ACTIVE',
+  contactPhone: null,
+  telegramHandle: null,
+  logoAssetId: null,
+  bannerAssetId: null,
+  locales: [],
+  version: 0,
 };
 
 const LOCATION_ONE: LocationView = {

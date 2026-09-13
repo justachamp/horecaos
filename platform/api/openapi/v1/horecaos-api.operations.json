@@ -1496,6 +1496,20 @@
         },
         "type" : "object"
       },
+      "BrandLocaleView" : {
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "isDefault" : {
+            "type" : "boolean"
+          },
+          "locale" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "BrandOrderCountsResponse" : {
         "properties" : {
           "locations" : {
@@ -1535,7 +1549,14 @@
       },
       "BrandView" : {
         "properties" : {
+          "bannerAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "code" : {
+            "type" : "string"
+          },
+          "contactPhone" : {
             "type" : "string"
           },
           "displayName" : {
@@ -1545,11 +1566,24 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "locales" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BrandLocaleView"
+            },
+            "type" : "array"
+          },
+          "logoAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "slug" : {
             "type" : "string"
           },
           "status" : {
             "enum" : [ "DRAFT", "ACTIVE", "SUSPENDED", "ARCHIVED" ],
+            "type" : "string"
+          },
+          "telegramHandle" : {
             "type" : "string"
           },
           "tenantId" : {
@@ -5577,6 +5611,28 @@
           },
           "opensAt" : {
             "format" : "time-local",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "LocationServiceStateResponse" : {
+        "properties" : {
+          "effectiveMode" : {
+            "type" : "string"
+          },
+          "effectiveUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "reasonCode" : {
             "type" : "string"
           }
         },
@@ -14768,6 +14824,45 @@
           }
         },
         "summary" : "The brand's locations, for the Settings 10.2 list and the scope bar's location picker",
+        "tags" : [ "Operations brand profile" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/service-states" : {
+      "get" : {
+        "operationId" : "locationServiceStates",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/LocationServiceStateResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every location's manual-override state, batched, for the branch list's state column and filter",
         "tags" : [ "Operations brand profile" ]
       }
     },

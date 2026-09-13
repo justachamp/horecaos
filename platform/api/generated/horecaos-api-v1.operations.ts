@@ -472,6 +472,12 @@ export interface BranchOrderCountsResponse {
   locationId?: string;
 }
 
+export interface BrandLocaleView {
+  description?: string;
+  isDefault?: boolean;
+  locale?: string;
+}
+
 export interface BrandOrderCountsResponse {
   locations?: Array<BranchOrderCountsResponse>;
   period?: string;
@@ -483,11 +489,16 @@ export interface BrandOrderCountsResponse {
 }
 
 export interface BrandView {
+  bannerAssetId?: string;
   code?: string;
+  contactPhone?: string;
   displayName?: string;
   id?: string;
+  locales?: Array<BrandLocaleView>;
+  logoAssetId?: string;
   slug?: string;
   status?: "DRAFT" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
+  telegramHandle?: string;
   tenantId?: string;
   version?: number;
 }
@@ -1763,6 +1774,14 @@ export interface LocationServiceOperationsControllerExceptionResponse {
   closesAt?: string;
   date?: string;
   opensAt?: string;
+}
+
+export interface LocationServiceStateResponse {
+  effectiveMode?: string;
+  effectiveUntil?: string;
+  locationId?: string;
+  mode?: string;
+  reasonCode?: string;
 }
 
 export interface LocationView {
@@ -4050,6 +4069,7 @@ export interface Operations {
   "retire_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals/{terminalId}/retire"; request: { parameters: { path: { brandId: string; tenantId: string; terminalId: string }; query: { expectedVersion: number } } }; responses: { "200": FiscalTerminalView } };
   "suspend_4": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals/{terminalId}/suspend"; request: { parameters: { path: { brandId: string; tenantId: string; terminalId: string }; query: { expectedVersion: number } } }; responses: { "200": FiscalTerminalView } };
   "locations": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<LocationView> } };
+  "locationServiceStates": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/service-states"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<LocationServiceStateResponse> } };
   "profile_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LocationView } };
   "tagsOfLocation": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/branch-tags"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<string> } };
   "setTagsOfLocation": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/branch-tags"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: SetLocationTagsRequest }; responses: { "200": unknown } };

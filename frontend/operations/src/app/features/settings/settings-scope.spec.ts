@@ -21,6 +21,12 @@ const BRANDS: readonly BrandView[] = [
     slug: 'rayhon',
     displayName: 'Rayhon',
     status: 'ACTIVE',
+    contactPhone: null,
+    telegramHandle: null,
+    logoAssetId: null,
+    bannerAssetId: null,
+    locales: [],
+    version: 0,
   },
   {
     id: 'brand-2',
@@ -29,6 +35,12 @@ const BRANDS: readonly BrandView[] = [
     slug: 'yunusabad',
     displayName: 'Rayhon Yunusabad',
     status: 'ACTIVE',
+    contactPhone: null,
+    telegramHandle: null,
+    logoAssetId: null,
+    bannerAssetId: null,
+    locales: [],
+    version: 0,
   },
 ];
 
