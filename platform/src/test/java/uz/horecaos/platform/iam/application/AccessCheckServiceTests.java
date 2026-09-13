@@ -110,7 +110,7 @@ class AccessCheckServiceTests {
                     }
                 },
                 clock);
-        service = new AccessCheckService(authorization, grants, List.of());
+        service = new AccessCheckService(authorization, grants, List.of(), jdbc);
 
         new RoleRegistrySynchronizer(jdbc).synchronize();
         insertHierarchy();
@@ -189,6 +189,38 @@ class AccessCheckServiceTests {
     }
 
     @Test
+    @DisplayName("heldElsewhere is filtered to scopes the caller's own iam.grant.manage authority covers")
+    void heldElsewhereNeverLeaksAGrantTheCallerCannotSee() {
+        // W03 adversarial-review finding: GrantManagementService.grantsCarrying
+        // is scoped only by tenant, so before this filter existed, a brand
+        // manager legitimately asking about her own brand (the "within her
+        // brand" question passes requireScopeContainment, exactly like
+        // scopeContainmentRefusesACrossBrandProbe's own within-brand case)
+        // still received the subject's grants at every OTHER brand in the
+        // tenant too -- a leak that test never exercised, because it never
+        // gave the subject a second grant somewhere the caller cannot see.
+        insertCustomRole(UUID.randomUUID(), TENANT, "brand-a-grant-manager", Capability.IAM_GRANT_MANAGE);
+        insertGrant("brand-manager-1", "brand-a-grant-manager", "BRAND", BRAND);
+
+        // aziza holds ORDER_APPROVE at both brands: one the caller manages,
+        // one she does not.
+        insertGrant("aziza", PlatformRole.LOCATION_STAFF, "BRAND", BRAND);
+        insertGrant("aziza", PlatformRole.LOCATION_STAFF, "BRAND", OTHER_BRAND);
+
+        AccessCheckAnswer answer = service.check(
+                "brand-manager-1", "aziza", Capability.ORDER_APPROVE, ResourceScope.brand(TENANT, BRAND), null);
+
+        assertThat(answer.verdict()).isEqualTo(Verdict.ALLOWED);
+        assertThat(answer.heldElsewhere())
+                .as("the OTHER_BRAND grant must never reach a caller who cannot manage OTHER_BRAND")
+                .extracting(GrantManagementService.GrantView::scopeType)
+                .containsExactly("BRAND");
+        assertThat(answer.heldElsewhere().getFirst().scopeId())
+                .as("the one row surfaced must be the caller's own brand, not the sibling one")
+                .isEqualTo(BRAND);
+    }
+
+    @Test
     @DisplayName("a caller with no iam.grant.manage grant at all is refused outright")
     void aCallerWithNoGrantManageIsRefused() {
         insertGrant("aziza", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION);
@@ -204,7 +236,7 @@ class AccessCheckServiceTests {
         insertGrant("owner-1", PlatformRole.TENANT_OWNER, "TENANT", TENANT);
         insertGrant("aziza", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION);
         AccessCheckService gatedService =
-                new AccessCheckService(authorization, grants, List.of(new StubEntitlementGate(false)));
+                new AccessCheckService(authorization, grants, List.of(new StubEntitlementGate(false)), jdbc);
 
         AccessCheckAnswer allowedButNotEntitled = gatedService.check(
                 "owner-1",

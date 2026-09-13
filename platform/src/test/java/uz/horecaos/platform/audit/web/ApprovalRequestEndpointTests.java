@@ -282,6 +282,26 @@ class ApprovalRequestEndpointTests {
                 .doesNotContain("Customer reported a missing item");
     }
 
+    /**
+     * W03 adversarial-review finding: no test anywhere exercised {@code
+     * /api/v1/operations/tenants/{tenantId}/approval-requests/decided} at
+     * all — {@code ApprovalDecisionServiceTests.decidedHistoryNeverCrossesATenantBoundary}
+     * proves the service is tenant-safe, but a caller reaches the service
+     * only through this route's own {@code @RequiresCapability}, which no
+     * test had ever driven a real request against.
+     */
+    @Test
+    void theDecidedHistoryIsRefusedWithoutApprovalDecide() throws Exception {
+        MvcResult refused = mvc.perform(get("/api/v1/operations/tenants/" + TENANT + "/approval-requests/decided")
+                        .with(tokenFor(STAFF)))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.APPROVAL_DECIDE.code());
+    }
+
     // --- the same two rules, reached through the operations-surface mirror
     // (Staff IA 9.4's approvals worklist) rather than control-plane. The
     // service underneath is identical; what is under test here is that the

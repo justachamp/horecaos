@@ -4,12 +4,14 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.EntitlementGate;
 import uz.horecaos.platform.iam.api.EntitlementGate.Answer;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.iam.application.GrantManagementService.GrantView;
 
 /**
@@ -43,6 +45,16 @@ import uz.horecaos.platform.iam.application.GrantManagementService.GrantView;
  * worked (staff-and-access.md §6's own worked example — "she has this job,
  * but only at Chilonzor branch") instead of a bare no.
  *
+ * <p>{@code heldElsewhere} is filtered to scopes the <em>caller's own</em>
+ * {@code iam.grant.manage} authority covers, for the same reason {@link
+ * #requireScopeContainment} exists: {@link GrantManagementService#grantsCarrying}
+ * itself is scoped only by tenant, not by the caller's authority within it, so
+ * without this filter a brand manager asking about a colleague would see that
+ * colleague's grants at every other brand and location in the tenant too —
+ * including who granted each one and its free-text reason — not merely at the
+ * brand she was allowed to ask about in the first place.
+ *
+ *
  * <p>Three answers, never two: {@link Verdict#ALLOWED}, {@link
  * Verdict#INSUFFICIENT_CAPABILITY}, and {@link Verdict#ENTITLEMENT_REQUIRED} —
  * the distinction {@code GrantController.debugAccess} does not draw, because
@@ -59,12 +71,17 @@ public class AccessCheckService {
     private final AuthorizationService authorization;
     private final GrantManagementService grants;
     private final List<EntitlementGate> entitlementGates;
+    private final JdbcClient jdbc;
 
     public AccessCheckService(
-            AuthorizationService authorization, GrantManagementService grants, List<EntitlementGate> entitlementGates) {
+            AuthorizationService authorization,
+            GrantManagementService grants,
+            List<EntitlementGate> entitlementGates,
+            JdbcClient jdbc) {
         this.authorization = authorization;
         this.grants = grants;
         this.entitlementGates = entitlementGates;
+        this.jdbc = jdbc;
     }
 
     /**
@@ -101,7 +118,10 @@ public class AccessCheckService {
         UUID tenantId = Objects.requireNonNull(
                 scope.tenantId(), "An access-check scope must name a tenant; PLATFORM is refused upstream");
 
-        List<GrantView> heldElsewhere = grants.grantsCarrying(tenantId, subject, capability);
+        List<GrantView> heldElsewhere = grants.grantsCarrying(tenantId, subject, capability).stream()
+                .filter(grant ->
+                        authorization.has(callerSubject, Capability.IAM_GRANT_MANAGE, scopeOf(tenantId, grant)))
+                .toList();
         boolean covered = authorization.has(subject, capability, scope);
 
         if (!covered) {
@@ -132,6 +152,36 @@ public class AccessCheckService {
         if (!authorization.has(callerSubject, Capability.IAM_GRANT_MANAGE, target)) {
             throw new AuthorizationService.AccessDeniedException(Capability.IAM_GRANT_MANAGE, target);
         }
+    }
+
+    /**
+     * Rehydrates a {@link GrantView} row's own scope from its {@code
+     * scopeType}/{@code scopeId} pair, the same ancestry lookup {@code
+     * JdbcAuthorizationService.toScope}/{@code locationScope} use to resolve a
+     * grant for the capability check itself. A LOCATION row carries only its
+     * own id, not its brand ancestor, so that ancestor is looked up rather
+     * than left absent — {@link ResourceScope#covers} compares scopes level by
+     * level, and a LOCATION scope built with the wrong (or no) brand would
+     * never match a caller's real BRAND-scoped grant on that location's actual
+     * brand.
+     */
+    private ResourceScope scopeOf(UUID tenantId, GrantView grant) {
+        return switch (ScopeType.valueOf(grant.scopeType())) {
+            case PLATFORM -> ResourceScope.platform();
+            case TENANT -> ResourceScope.tenant(tenantId);
+            case BRAND -> ResourceScope.brand(tenantId, grant.scopeId());
+            case LOCATION -> ResourceScope.location(tenantId, brandOf(tenantId, grant.scopeId()), grant.scopeId());
+        };
+    }
+
+    private UUID brandOf(UUID tenantId, UUID locationId) {
+        return jdbc.sql("SELECT brand_id FROM tenant.locations WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("id", locationId)
+                .query(UUID.class)
+                .optional()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Grant references location %s outside tenant %s".formatted(locationId, tenantId)));
     }
 
     /** Which of the three answers this is. */
