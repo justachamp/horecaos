@@ -114,7 +114,7 @@
   background: var(--q-canvas);
   color: var(--q-ink);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .roster {
@@ -140,5 +140,5 @@
   background: var(--q-primary);
   color: var(--q-inverse-ink);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }

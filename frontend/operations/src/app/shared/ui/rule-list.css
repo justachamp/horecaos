@@ -51,7 +51,7 @@
   background: transparent;
   color: var(--q-ink-muted);
   cursor: pointer;
-  font-size: 9px;
+  font-size: var(--q-type-caption-sm);
 }
 
 .rule-list__move:disabled {

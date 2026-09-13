@@ -20,7 +20,7 @@
 }
 
 .zones__import-link {
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
   color: var(--q-primary);
   text-decoration: none;
 }

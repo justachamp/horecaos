@@ -60,6 +60,13 @@ describe('sanitizeRichHtml', () => {
   });
 
   it('drops a disallowed tag but keeps its text, so a Delever <div style="..."> still reads as a paragraph', () => {
+    // Not a stylesheet declaration this codebase authored — it is the exact
+    // shape of untrusted legacy markup the sanitizer must strip, and the
+    // assertions below prove `style` never survives at all. Rewriting it to
+    // a token would test a string the sanitizer would never actually see.
+    // `no-raw-px-font-size`'s raw-text-parser reports no comments (see its
+    // own doc), so an inline eslint-disable is silently ignored here — this
+    // file is exempted by path in .eslintrc.json's own override instead.
     const output = sanitizeRichHtml(
       '<div class="delever-block" style="font-size:40px">Условия оказания услуг</div>',
     );

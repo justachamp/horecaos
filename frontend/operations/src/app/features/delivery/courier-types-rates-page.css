@@ -175,7 +175,7 @@
   color: var(--q-ink);
   border-radius: var(--q-radius);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   margin-left: 6px;
 }
 
@@ -184,7 +184,7 @@
   background: none;
   color: var(--q-primary);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   padding: 4px 0;
   text-align: left;
 }
@@ -203,7 +203,7 @@
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .rates__component-row-fields {
@@ -218,7 +218,7 @@
   padding: 4px 6px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .rates__component-label {
@@ -236,12 +236,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
   color: var(--q-ink-muted);
 }
 
 .rates__hint {
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
   margin: 0;
 }
@@ -258,7 +258,7 @@
   padding: 4px 8px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
-  font-size: 13px;
+  font-size: var(--q-type-body-xs);
 }
 
 .rates__detail-panel {

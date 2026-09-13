@@ -349,7 +349,7 @@ import {
       border: none;
       color: var(--q-ink-muted);
       cursor: pointer;
-      font-size: 16px;
+      font-size: var(--q-type-body);
     }
 
     .body {
