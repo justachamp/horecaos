@@ -56,8 +56,12 @@ CREATE TABLE tenant.staff_invitations (
     CONSTRAINT fk_staff_invitation_tenant FOREIGN KEY (tenant_id) REFERENCES tenant.tenants (id),
     -- The grant this invitation was created for. One invitation per grant,
     -- and it is looked up the same direction on revoke: cancel the
-    -- invitation, revoke the grant it names, one audit fact each.
-    CONSTRAINT fk_staff_invitation_grant FOREIGN KEY (grant_id) REFERENCES iam.grants (id),
+    -- invitation, revoke the grant it names, one audit fact each. Carries
+    -- tenant_id in the key itself (iam.grants' own uq_grant_tenant_id,
+    -- V0192) so one tenant's invitation can never name another tenant's
+    -- grant -- the same shape iam.support_sessions' fk_support_session_grant
+    -- already uses for the identical reason.
+    CONSTRAINT fk_staff_invitation_grant FOREIGN KEY (tenant_id, grant_id) REFERENCES iam.grants (tenant_id, id),
     CONSTRAINT uq_staff_invitation_grant UNIQUE (grant_id),
     CONSTRAINT uq_staff_invitation_token UNIQUE (token_hash),
     CONSTRAINT ck_staff_invitation_status CHECK (
