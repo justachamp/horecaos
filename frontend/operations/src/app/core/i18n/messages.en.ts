@@ -3870,6 +3870,46 @@ export const messagesEn = {
   'reports.staff.telephony.conversionNotBuilt':
     'Call-to-order conversion is not shown: it needs the call-provenance wiring that 1.6 supplies (not built yet).',
 
+  // ---------------------------------------------------------------- reports 7.9 marketing (T15)
+  'reports.marketing.title': 'Marketing reports',
+  'reports.marketing.tab.discounts': 'Customer discounts',
+  'reports.marketing.tab.campaigns': 'Campaigns',
+  'reports.marketing.promoSummaryNotBuilt':
+    'Promo-code summary and per-code redemption detail are not shown: they need reporting.fact_promotion_redemption, which needs a promotions ADR that does not exist yet (ADR 0023).',
+
+  'reports.marketing.discounts.intro':
+    'How much a customer has been discounted, across every brand — the check to run before granting another goodwill code.',
+  'reports.marketing.discounts.searchPlaceholder': 'Search by name or phone',
+  'reports.marketing.discounts.searchEmpty': 'No customer matches this search.',
+  'reports.marketing.discounts.selectedFor': 'Discount history for {name}',
+  'reports.marketing.discounts.loading': 'Loading…',
+  'reports.marketing.discounts.empty': 'This customer has never redeemed a coupon.',
+  'reports.marketing.discounts.totalsTitle': 'Total redeemed',
+  'reports.marketing.discounts.column.promotion': 'Promotion',
+  'reports.marketing.discounts.column.code': 'Code',
+  'reports.marketing.discounts.column.status': 'Status',
+  'reports.marketing.discounts.column.amount': 'Amount',
+  'reports.marketing.discounts.column.when': 'Reserved',
+  'reports.marketing.discounts.column.order': 'Order',
+  'reports.marketing.discounts.status.RESERVED': 'Held for checkout',
+  'reports.marketing.discounts.status.REDEEMED': 'Redeemed',
+  'reports.marketing.discounts.status.RELEASED': 'Released, never spent',
+
+  'reports.marketing.campaigns.loading': 'Loading…',
+  'reports.marketing.campaigns.empty': 'No campaigns yet.',
+  'reports.marketing.campaigns.column.name': 'Name',
+  'reports.marketing.campaigns.column.channel': 'Channel',
+  'reports.marketing.campaigns.column.status': 'Status',
+  'reports.marketing.campaigns.selectPrompt': 'Select a campaign to see its delivery counts.',
+  'reports.marketing.campaigns.countsTitle': 'Delivery counts',
+  'reports.marketing.campaigns.count.pending': 'Pending',
+  'reports.marketing.campaigns.count.queued': 'Sent for delivery',
+  'reports.marketing.campaigns.count.deferred': 'Deferred (quiet hours)',
+  'reports.marketing.campaigns.count.refused': 'Refused',
+  'reports.marketing.campaigns.count.total': 'Total recipients',
+  'reports.marketing.campaigns.readReceiptsNotBuilt':
+    'Read receipts are not shown: there is no read status or read_at column recorded yet — this is unmeasured, not zero.',
+
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
   'reports.forecast.title': 'Demand history',
   'reports.forecast.intro':

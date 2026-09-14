@@ -458,6 +458,37 @@ public class OperationsMarketingController {
                         .toList());
     }
 
+    @GetMapping("/campaigns/{campaignId}/recipients/counts")
+    @RequiresCapability(value = Capability.CAMPAIGN_AUTHOR, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "How many recipients ended each way (row 7.9b)",
+            description = "The aggregate `recipients` itself makes a caller build by paging: "
+                    + "pending, queued (handed to ADR 0020 for delivery), deferred (held past a "
+                    + "quiet-hours boundary) and refused, plus the total attempted. Grouped by "
+                    + "the same status `recipients` returns per row, not by the ADR 0020 terminal "
+                    + "outcome — `terminal_status` is written by a projection this wave does not "
+                    + "add, so 'delivered' vs 'failed' is not answerable from here yet. Read "
+                    + "receipts have no data source at all: NotificationStatus has no READ and "
+                    + "V0043 has no read_at, so the campaign tab that reads this says so rather "
+                    + "than rendering a zero.")
+    public ResponseEntity<RecipientCountsResponse> recipientCounts(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID campaignId) {
+
+        var campaign = campaigns.require(tenantId, campaignId);
+        if (!campaign.brandId().equals(brandId)) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_NOT_FOUND, "No campaign " + campaignId + " belongs to this brand");
+        }
+
+        Map<String, Integer> counts = campaignStore.recipientCounts(tenantId, campaignId);
+        int pending = counts.getOrDefault("PENDING", 0);
+        int queued = counts.getOrDefault("QUEUED", 0);
+        int deferred = counts.getOrDefault("DEFERRED", 0);
+        int refused = counts.getOrDefault("REFUSED", 0);
+        return ResponseEntity.ok(
+                new RecipientCountsResponse(pending, queued, deferred, refused, pending + queued + deferred + refused));
+    }
+
     @PostMapping("/suppressions")
     @RequiresCapability(value = Capability.SUPPRESSION_MANAGE, scope = ScopeType.BRAND, mutating = true)
     @Operation(
@@ -658,6 +689,13 @@ public class OperationsMarketingController {
             String refusalReason,
             @Nullable String deferredUntil,
             String terminalStatus) {}
+
+    /**
+     * Row 7.9b. {@code campaignRecipients.status} (V0043) has exactly these four
+     * values; {@code total} sums them and is never a fifth independent count
+     * that could disagree with its own parts.
+     */
+    public record RecipientCountsResponse(int pending, int queued, int deferred, int refused, int total) {}
 
     public record SuppressionRequest(
             @NotNull UUID customerAccountId,

@@ -1,0 +1,182 @@
+.marketing-report {
+  padding: 24px;
+}
+
+.marketing-report__header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.marketing-report__tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.tab {
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: var(--q-ink-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tab--active {
+  color: var(--q-ink);
+  border-bottom-color: var(--q-accent, var(--q-ink));
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.intro {
+  color: var(--q-ink-muted);
+  max-width: 60ch;
+}
+
+.search {
+  max-width: 420px;
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.denied {
+  color: var(--q-ink-muted);
+}
+
+.error-band {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--q-error-tint);
+  border-radius: var(--q-radius);
+}
+
+.selected-customer {
+  margin-top: 8px;
+  color: var(--q-ink);
+}
+
+.totals {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 12px;
+  background: var(--q-surface-raised, var(--q-canvas));
+  border-radius: var(--q-radius);
+}
+
+.total-chip {
+  color: var(--q-accent, var(--q-ink));
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4px;
+}
+
+.table thead th {
+  text-align: left;
+  color: var(--q-ink-muted);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.num {
+  text-align: right;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--q-ink-tint, color-mix(in srgb, var(--q-ink) 10%, transparent));
+  color: var(--q-ink-muted);
+}
+
+.status-badge--redeemed {
+  background: color-mix(in srgb, var(--q-success, #16a34a) 16%, transparent);
+  color: var(--q-success, #16a34a);
+}
+
+.status-badge--released {
+  background: color-mix(in srgb, var(--q-warning) 16%, transparent);
+  color: var(--q-warning);
+}
+
+.campaigns-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(240px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.campaigns-list {
+  margin-top: 0;
+}
+
+.campaign-row {
+  cursor: pointer;
+}
+
+.campaign-row:hover {
+  background: var(--q-surface-raised, color-mix(in srgb, var(--q-ink) 4%, transparent));
+}
+
+.campaign-row--selected {
+  background: color-mix(in srgb, var(--q-accent, #2563eb) 10%, transparent);
+}
+
+.campaign-counts {
+  padding: 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.counts-grid {
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 16px;
+  row-gap: 4px;
+  margin: 8px 0;
+}
+
+.counts-grid dt {
+  color: var(--q-ink-muted);
+}
+
+.counts-grid dd {
+  margin: 0;
+  text-align: right;
+}
+
+.not-built-note {
+  margin-top: 8px;
+  color: var(--q-ink-muted);
+}
+
+.secondary {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}

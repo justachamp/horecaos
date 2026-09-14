@@ -26,8 +26,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.pricing.api.CustomerDiscountHistoryPort;
 import uz.horecaos.platform.pricing.api.PromoCodeQueryPort;
 import uz.horecaos.platform.pricing.api.PromoCodeRedemptionPort;
+import uz.horecaos.platform.pricing.application.CustomerDiscountHistoryService;
 import uz.horecaos.platform.pricing.application.PricingEngine;
 import uz.horecaos.platform.pricing.application.PromoCodeAuthoringService;
 import uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.DiscountShape;
@@ -407,6 +409,93 @@ class PromoCodeTests {
                 .isInstanceOf(ApiException.class);
     }
 
+    // ------------------------------------------------- row 7.9a: discount history
+
+    @Test
+    @DisplayName(
+            "row 7.9a: a customer's discount history spans every coupon they have redeemed against this tenant, newest first")
+    void customerDiscountHistorySpansEveryCoupon() {
+        var first = activate(percentageDraft("HISTORY1", 1_000, null));
+        Quote quoteOne = quotes.quote(cartWithCode(Map.of(burgerVariant, 1), "HISTORY1", "k-hist-1"));
+        UUID orderOne = UUID.randomUUID();
+        assertThat(redemptions
+                        .reserveForQuote(TENANT, BRAND, quoteOne.quoteId(), orderOne, CUSTOMER, clock.instant())
+                        .result())
+                .isEqualTo(PromoCodeRedemptionPort.RedemptionResult.Result.REDEEMED);
+
+        clock.advanceBy(Duration.ofMinutes(5));
+        var second = activate(fixedDraft("HISTORY2", 3_000L, null));
+        Quote quoteTwo = quotes.quote(cartWithCode(Map.of(burgerVariant, 1), "HISTORY2", "k-hist-2"));
+        UUID orderTwo = UUID.randomUUID();
+        assertThat(redemptions
+                        .reserveForQuote(TENANT, BRAND, quoteTwo.quoteId(), orderTwo, CUSTOMER, clock.instant())
+                        .result())
+                .isEqualTo(PromoCodeRedemptionPort.RedemptionResult.Result.REDEEMED);
+
+        var promoCodeStore = new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build());
+        var history = new CustomerDiscountHistoryService(promoCodeStore).history(TENANT, CUSTOMER);
+
+        assertThat(history).hasSize(2);
+        assertThat(history.get(0).couponId()).as("newest reservation first").isEqualTo(second.couponId());
+        assertThat(history.get(0).codeHint()).isEqualTo(second.codeHint());
+        assertThat(history.get(0).promotionName()).isNotBlank();
+        assertThat(history.get(0).brandId()).isEqualTo(BRAND);
+        assertThat(history.get(0).status()).isEqualTo(CustomerDiscountHistoryPort.Redemption.Status.REDEEMED);
+        assertThat(history.get(0).orderId()).isEqualTo(orderTwo);
+        assertThat(history.get(0).amountMinor()).isPositive();
+        assertThat(history.get(0).currency()).isEqualTo("UZS");
+        assertThat(history.get(1).couponId()).isEqualTo(first.couponId());
+        assertThat(history.get(1).orderId()).isEqualTo(orderOne);
+    }
+
+    @Test
+    @DisplayName(
+            "row 7.9a: a released reservation stays in the history, distinguishable from what was actually redeemed")
+    void customerDiscountHistoryKeepsReleasedReservations() {
+        var code = activate(percentageDraft("HISTORYRELEASE", 1_000, null));
+        Quote quote = quotes.quote(cartWithCode(Map.of(burgerVariant, 1), "HISTORYRELEASE", "k-hist-release"));
+        UUID orderId = UUID.randomUUID();
+        assertThat(redemptions
+                        .reserveForQuote(TENANT, BRAND, quote.quoteId(), orderId, CUSTOMER, NOW)
+                        .result())
+                .isEqualTo(PromoCodeRedemptionPort.RedemptionResult.Result.REDEEMED);
+        assertThat(redemptions.release(TENANT, quote.quoteId()))
+                .as("compensating the reservation, the same way a failed later checkout step would")
+                .isTrue();
+
+        var promoCodeStore = new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build());
+        var history = new CustomerDiscountHistoryService(promoCodeStore).history(TENANT, CUSTOMER);
+
+        assertThat(history).singleElement().satisfies(row -> {
+            assertThat(row.couponId()).isEqualTo(code.couponId());
+            assertThat(row.status())
+                    .as("kept, not dropped -- a released reservation is still part of what this "
+                            + "customer was offered even though it never actually paid out")
+                    .isEqualTo(CustomerDiscountHistoryPort.Redemption.Status.RELEASED);
+        });
+    }
+
+    @Test
+    @DisplayName("row 7.9a: a redemption is scoped to the customer who holds it, not any customer of this tenant")
+    void customerDiscountHistoryIsScopedToTheCustomer() {
+        var code = activate(percentageDraft("HISTORYSCOPE", 1_000, null));
+        Quote quote = quotes.quote(cartWithCode(Map.of(burgerVariant, 1), "HISTORYSCOPE", "k-hist-scope"));
+        UUID otherCustomer = UUID.randomUUID();
+        assertThat(redemptions
+                        .reserveForQuote(TENANT, BRAND, quote.quoteId(), UUID.randomUUID(), CUSTOMER, NOW)
+                        .result())
+                .isEqualTo(PromoCodeRedemptionPort.RedemptionResult.Result.REDEEMED);
+
+        var promoCodeStore = new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build());
+        assertThat(new CustomerDiscountHistoryService(promoCodeStore).history(TENANT, otherCustomer))
+                .as("a redemption held by one account never appears under a different account id, "
+                        + "even in the same tenant -- this is the abuse check the report exists for, "
+                        + "and it would be worthless if it leaked across customers")
+                .isEmpty();
+        assertThat(new CustomerDiscountHistoryService(promoCodeStore).history(TENANT, CUSTOMER))
+                .hasSize(1);
+    }
+
     @Test
     @DisplayName("a quote with no applied coupon has nothing to reserve")
     void aQuoteWithNoCouponHasNothingToReserve() {
@@ -679,6 +768,10 @@ class PromoCodeTests {
         @Override
         public Instant instant() {
             return now;
+        }
+
+        void advanceBy(Duration duration) {
+            now = now.plus(duration);
         }
     }
 }

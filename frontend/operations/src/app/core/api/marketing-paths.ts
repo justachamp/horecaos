@@ -86,6 +86,11 @@ export const marketingPaths = {
     return `${this.campaign(scope, campaignId)}/recipients`;
   },
 
+  /** Row 7.9b: the store-level `recipientCounts` rollup, exposed for the first time this wave. */
+  campaignRecipientCounts(scope: BrandScope, campaignId: string): string {
+    return `${this.campaignRecipients(scope, campaignId)}/counts`;
+  },
+
   suppressions(scope: BrandScope): string {
     return `${base(scope)}/suppressions`;
   },

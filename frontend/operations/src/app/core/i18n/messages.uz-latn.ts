@@ -3872,6 +3872,47 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.staff.telephony.conversionNotBuilt':
     'Qoʻngʻiroqdan buyurtmaga aylanish koʻrsatilmaydi: buning uchun 1.6 taʻminlaydigan call-provenance bogʻlanishi kerak (hali yaratilmagan).',
 
+  // ---------------------------------------------------------------- reports 7.9 marketing (T15)
+  'reports.marketing.title': 'Marketing hisobotlari',
+  'reports.marketing.tab.discounts': 'Mijoz chegirmalari',
+  'reports.marketing.tab.campaigns': 'Kampaniyalar',
+  'reports.marketing.promoSummaryNotBuilt':
+    'Promokod boʻyicha umumiy hisobot va har bir kod boʻyicha tafsilot koʻrsatilmaydi: buning uchun reporting.fact_promotion_redemption va u uchun hali mavjud boʻlmagan aksiyalar ADR kerak (ADR 0023).',
+
+  'reports.marketing.discounts.intro':
+    'Mijoz barcha brendlar boʻyicha qancha chegirma olganini koʻrsatadi — yana bir izzat-hurmat promokodi berishdan oldin oʻtkaziladigan tekshiruv.',
+  'reports.marketing.discounts.searchPlaceholder': 'Ism yoki telefon boʻyicha qidirish',
+  'reports.marketing.discounts.searchEmpty': 'Bu soʻrov boʻyicha mijoz topilmadi.',
+  'reports.marketing.discounts.selectedFor': 'Chegirmalar tarixi: {name}',
+  'reports.marketing.discounts.loading': 'Yuklanmoqda…',
+  'reports.marketing.discounts.empty': 'Bu mijoz hech qachon promokod ishlatmagan.',
+  'reports.marketing.discounts.totalsTitle': 'Jami ishlatilgan',
+  'reports.marketing.discounts.column.promotion': 'Aksiya',
+  'reports.marketing.discounts.column.code': 'Kod',
+  'reports.marketing.discounts.column.status': 'Holat',
+  'reports.marketing.discounts.column.amount': 'Summa',
+  'reports.marketing.discounts.column.when': 'Band qilingan',
+  'reports.marketing.discounts.column.order': 'Buyurtma',
+  'reports.marketing.discounts.status.RESERVED': 'Buyurtma uchun band qilingan',
+  'reports.marketing.discounts.status.REDEEMED': 'Ishlatilgan',
+  'reports.marketing.discounts.status.RELEASED': 'Qaytarilgan, ishlatilmagan',
+
+  'reports.marketing.campaigns.loading': 'Yuklanmoqda…',
+  'reports.marketing.campaigns.empty': 'Hozircha kampaniyalar yoʻq.',
+  'reports.marketing.campaigns.column.name': 'Nomi',
+  'reports.marketing.campaigns.column.channel': 'Kanal',
+  'reports.marketing.campaigns.column.status': 'Holat',
+  'reports.marketing.campaigns.selectPrompt':
+    'Yetkazib berish statistikasini koʻrish uchun kampaniyani tanlang.',
+  'reports.marketing.campaigns.countsTitle': 'Yetkazib berish statistikasi',
+  'reports.marketing.campaigns.count.pending': 'Navbatda',
+  'reports.marketing.campaigns.count.queued': 'Yetkazishga yuborilgan',
+  'reports.marketing.campaigns.count.deferred': 'Kechiktirilgan (tinch soatlar)',
+  'reports.marketing.campaigns.count.refused': 'Rad etilgan',
+  'reports.marketing.campaigns.count.total': 'Jami qabul qiluvchilar',
+  'reports.marketing.campaigns.readReceiptsNotBuilt':
+    'Oʻqilganlik belgilari koʻrsatilmaydi: hozircha na oʻqilgan holat, na oʻqilgan vaqt yozib borilmaydi — bu oʻlchanmagan, nolga teng emas.',
+
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
   'reports.forecast.title': 'Talab tarixi',
   'reports.forecast.intro':

@@ -3848,6 +3848,47 @@ export const messagesRu: MessageCatalogue = {
   'reports.staff.telephony.conversionNotBuilt':
     'Конверсия звонков в заказы не показана: нужна привязка call-provenance, которую даёт 1.6 (пока не реализовано).',
 
+  // ---------------------------------------------------------------- reports 7.9 marketing (T15)
+  'reports.marketing.title': 'Маркетинговые отчёты',
+  'reports.marketing.tab.discounts': 'Скидки клиента',
+  'reports.marketing.tab.campaigns': 'Рассылки',
+  'reports.marketing.promoSummaryNotBuilt':
+    'Сводка по промокодам и детализация по кодам не показаны: нужна reporting.fact_promotion_redemption, а для неё — ADR по промоакциям, которого пока нет (ADR 0023).',
+
+  'reports.marketing.discounts.intro':
+    'На сколько клиент уже был проскидкован, по всем брендам сразу — проверка, которую стоит выполнить перед выдачей ещё одного компенсационного промокода.',
+  'reports.marketing.discounts.searchPlaceholder': 'Поиск по имени или телефону',
+  'reports.marketing.discounts.searchEmpty': 'Ни один клиент не найден по этому запросу.',
+  'reports.marketing.discounts.selectedFor': 'История скидок: {name}',
+  'reports.marketing.discounts.loading': 'Загрузка…',
+  'reports.marketing.discounts.empty': 'Этот клиент ни разу не использовал промокод.',
+  'reports.marketing.discounts.totalsTitle': 'Итого погашено',
+  'reports.marketing.discounts.column.promotion': 'Акция',
+  'reports.marketing.discounts.column.code': 'Код',
+  'reports.marketing.discounts.column.status': 'Статус',
+  'reports.marketing.discounts.column.amount': 'Сумма',
+  'reports.marketing.discounts.column.when': 'Зарезервировано',
+  'reports.marketing.discounts.column.order': 'Заказ',
+  'reports.marketing.discounts.status.RESERVED': 'Удержано под заказ',
+  'reports.marketing.discounts.status.REDEEMED': 'Погашено',
+  'reports.marketing.discounts.status.RELEASED': 'Возвращено, не потрачено',
+
+  'reports.marketing.campaigns.loading': 'Загрузка…',
+  'reports.marketing.campaigns.empty': 'Рассылок пока нет.',
+  'reports.marketing.campaigns.column.name': 'Название',
+  'reports.marketing.campaigns.column.channel': 'Канал',
+  'reports.marketing.campaigns.column.status': 'Статус',
+  'reports.marketing.campaigns.selectPrompt':
+    'Выберите рассылку, чтобы увидеть статистику доставки.',
+  'reports.marketing.campaigns.countsTitle': 'Статистика доставки',
+  'reports.marketing.campaigns.count.pending': 'В очереди',
+  'reports.marketing.campaigns.count.queued': 'Отправлено в доставку',
+  'reports.marketing.campaigns.count.deferred': 'Отложено (тихие часы)',
+  'reports.marketing.campaigns.count.refused': 'Отказано',
+  'reports.marketing.campaigns.count.total': 'Всего получателей',
+  'reports.marketing.campaigns.readReceiptsNotBuilt':
+    'Отметки о прочтении не показаны: пока не фиксируется ни статус прочтения, ни дата прочтения — это не измерено, а не равно нулю.',
+
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
   'reports.forecast.title': 'История спроса',
   'reports.forecast.intro':
