@@ -8,6 +8,12 @@
   ADR 0030 policy, the campaign state machine with four-eyes approval and a
   reserved-cost ceiling, segment-aware cost estimation, and batched idempotent
   expansion, covered by `MarketingCampaignTests` and `EngagementPolicyTests`.
+  T18 (2026-09-14) closed four more read/write gaps: the channel picker now
+  reads `isWired` per channel instead of offering SMS/EMAIL/PUSH beside a
+  Telegram-only delivery path; `SCHEDULED` now writes and reads
+  (`CampaignScheduledSendScheduler`); the console now calls `POST
+  /suppressions` and `getAudience`/`redefineAudience`, which it always had
+  and never used; and `marketing.attribution_links` (below) now exists.
   A campaign can now send over TELEGRAM (wave 12): `notifications`'s
   `CampaignTelegramDeliveryService` implements `marketing.api.CampaignMessagePort`,
   expansion runs on the new `CampaignExpansionScheduler` (this module's first
@@ -785,10 +791,19 @@ payments, for the same reason.
       minting, verification, and expiry. **Not built.** The coded grant needs
       columns on a `pricing.benefit_grants` table that does not exist yet, and a
       trigger firing table with no producer would read as a broken projection.
-- [ ] Implement slots with the link-target allowlist, attribution links and
-      referral edges, and reviews with the ADR 0013 handoff. **Not built.** All
-      three are independent of the send path and can ship in parallel, as the
-      rollout section says.
+- [~] Implement slots with the link-target allowlist, attribution links and
+      referral edges, and reviews with the ADR 0013 handoff. **Attribution
+      links now built (T18, 2026-09-14):** `marketing.attribution_links`
+      (V0309), `AttributionLinkService`/`AttributionLinkController` — a
+      marketer mints a website `?ref={token}` link or a Telegram `startapp`
+      deep link for a campaign or an influencer, and a click count is
+      recorded against it. **Still not built:** recording which link brought
+      a given account or order (needs columns on a customer account and an
+      order, other modules' tables, deliberately left for whichever surface
+      serves the redirect or deep link), merchandising slots with the
+      link-target allowlist, referral edges, and reviews. All remain
+      independent of the send path and can ship in parallel, as the rollout
+      section says.
 - [~] Implement the retention jobs and the ADR 0029 erasure path that preserves
       campaign aggregates. Snapshot-membership retention is now scheduled
       (`MarketingRetentionSweeper`, wave 68): the header, its counts, and the
