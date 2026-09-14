@@ -157,10 +157,6 @@
   color: var(--q-info-text);
 }
 
-.ticket__has-note {
-  color: var(--q-info-text);
-}
-
 .chip {
   display: inline-block;
   padding: 2px 6px;
@@ -241,4 +237,104 @@
 .kitchen__skeleton-card {
   height: 48px;
   background: var(--q-surface-1);
+}
+
+/* wave P16 */
+
+.kitchen__toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kitchen__counter-sale {
+  padding: 6px 14px;
+  border: 1px solid var(--q-primary);
+  background: var(--q-canvas);
+  color: var(--q-primary);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.chip--aggregator {
+  color: var(--q-info-text);
+  background: var(--q-info-tint);
+}
+
+.ticket__reveal-note,
+.ticket__note-revealed {
+  margin-top: 2px;
+}
+
+.ticket__reveal-note {
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-caption);
+}
+
+.ticket__reveal-note:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ticket__note-revealed {
+  color: var(--q-info-text);
+}
+
+.ticket__assign {
+  position: relative;
+  padding: 0 12px 8px;
+}
+
+.ticket__assign-toggle {
+  padding: 4px 10px;
+  border: 1px solid var(--q-primary);
+  background: var(--q-canvas);
+  color: var(--q-primary);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-caption);
+}
+
+.ticket__assign-toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ticket__assign-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-surface-1);
+}
+
+.ticket__assign-courier,
+.ticket__assign-cancel {
+  width: 100%;
+  text-align: left;
+  padding: 4px 8px;
+  border: none;
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.ticket__assign-courier:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ticket__assign-cancel {
+  color: var(--q-ink-muted);
 }

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
+import uz.horecaos.platform.ordering.application.ReorderPlanService;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -42,9 +43,11 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class CustomerOrderHistoryController {
 
     private final OrderQueryService orderQuery;
+    private final ReorderPlanService reorderPlans;
 
-    public CustomerOrderHistoryController(OrderQueryService orderQuery) {
+    public CustomerOrderHistoryController(OrderQueryService orderQuery, ReorderPlanService reorderPlans) {
         this.orderQuery = orderQuery;
+        this.reorderPlans = reorderPlans;
     }
 
     @GetMapping
@@ -79,6 +82,29 @@ public class CustomerOrderHistoryController {
                 : rows.get(rows.size() - 1).orderId().toString();
 
         return new Page<>(rows.stream().map(OrderSummaryResponse::of).toList(), nextCursor);
+    }
+
+    @GetMapping("/{orderId}/reorder")
+    @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Whether one of this customer's own orders can be ordered again, and with what",
+            description = "The staff-capability twin of the storefront's own "
+                    + "GET .../orders/{orderId}/reorder (ADR 0074) — identical read, identical "
+                    + "answer shape, reached by a staff token instead of @CustomerOwned. Built for "
+                    + "orders.md §5.3's «Повторить» on the New order screen's phone-lookup "
+                    + "history peek (wave P14) and for this same section's own order-history tab "
+                    + "(§5.2d) to point at once it renders one. `accountId` scopes the read: an "
+                    + "orderId that is not this account's own answers 404, identically to an order "
+                    + "that does not exist at all, the same way `ReorderPlanService#planFor` "
+                    + "already answers a customer asking about somebody else's order.")
+    public StorefrontOrderingController.ReorderPlanResponse reorderPlan(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID accountId,
+            @PathVariable UUID orderId) {
+        return StorefrontOrderingController.ReorderPlanResponse.of(reorderPlans
+                .planFor(tenantId, orderId, accountId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order")));
     }
 
     /** One order as this list renders it — the same shape {@code StorefrontOrderingController.OrderSummaryResponse} uses. */

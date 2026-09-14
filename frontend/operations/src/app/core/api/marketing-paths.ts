@@ -86,11 +86,39 @@ export const marketingPaths = {
     return `${this.campaign(scope, campaignId)}/recipients`;
   },
 
+  /** Row 7.9b: the store-level `recipientCounts` rollup, exposed for the first time this wave. */
+  campaignRecipientCounts(scope: BrandScope, campaignId: string): string {
+    return `${this.campaignRecipients(scope, campaignId)}/counts`;
+  },
+
   suppressions(scope: BrandScope): string {
     return `${base(scope)}/suppressions`;
   },
 
   suppressionLifts(scope: BrandScope, suppressionId: string): string {
     return `${this.suppressions(scope)}/${enc(suppressionId)}/lifts`;
+  },
+
+  /** `OperationsMarketingController.listChannels` — every channel, and whether it is actually wired (T18). */
+  channels(scope: BrandScope): string {
+    return `${base(scope)}/channels`;
+  },
+
+  /** `CourierBroadcastController` — a dispatcher's own operational SMS blast (T18, operations 6.4b). */
+  courierBroadcasts(scope: BrandScope): string {
+    return `${base(scope)}/courier-broadcasts`;
+  },
+
+  courierBroadcastSends(scope: BrandScope, broadcastId: string): string {
+    return `${this.courierBroadcasts(scope)}/${enc(broadcastId)}/sends`;
+  },
+
+  /** `AttributionLinkController` — trackable acquisition links (T18, ADR 0044, operations 6.6a). */
+  attributionLinks(scope: BrandScope): string {
+    return `${base(scope)}/attribution-links`;
+  },
+
+  attributionLinkArchives(scope: BrandScope, linkId: string): string {
+    return `${this.attributionLinks(scope)}/${enc(linkId)}/archives`;
   },
 } as const;

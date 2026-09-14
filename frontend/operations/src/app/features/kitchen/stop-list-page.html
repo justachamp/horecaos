@@ -30,19 +30,31 @@
       </button>
     </div>
 
+    <input
+      type="search"
+      class="stop-list__search"
+      [value]="searchInputValue()"
+      (input)="onSearchInput($any($event.target).value)"
+      [placeholder]="'kitchen.stopList.searchPlaceholder' | t"
+      data-testid="stop-list-search"
+    />
+
     @if (selectedIds().size > 0) {
       <div class="stop-list__bulk">
         <span class="q-caption">{{
           'kitchen.stopList.bulk.selected' | t: { count: selectedIds().size }
         }}</span>
-        <input
-          type="text"
+        <select
           class="stop-list__bulk-reason"
           [value]="bulkReason()"
-          (input)="onBulkReasonInput($any($event.target).value)"
-          [placeholder]="'kitchen.stopList.bulk.reasonPlaceholder' | t"
+          (change)="onBulkReasonInput($any($event.target).value)"
           data-testid="stop-list-bulk-reason"
-        />
+        >
+          <option value="" disabled>{{ 'kitchen.stopList.bulk.reasonPlaceholder' | t }}</option>
+          @for (code of bulkReasonCodes; track code) {
+            <option [value]="code">{{ bulkReasonLabel(code) }}</option>
+          }
+        </select>
       </div>
     }
   </div>
@@ -98,6 +110,18 @@
             <span class="status-badge status-badge--onStop">{{
               'kitchen.stopList.status.onStop' | t
             }}</span>
+          }
+        </ng-template>
+        <ng-template qCell="source" let-item>
+          @if (stopSourceLabel(item); as label) {
+            <span
+              class="q-caption stop-list__source"
+              [attr.title]="stopSourceDetail(item)"
+              data-testid="stop-list-source"
+              >{{ label }}</span
+            >
+          } @else {
+            <span class="q-caption stop-list__source-none">—</span>
           }
         </ng-template>
         <ng-template qCell="toggle" let-item>

@@ -1,0 +1,39 @@
+<q-modal
+  [title]="titleKey() | t"
+  [dismissible]="!busy()"
+  (dismiss)="dismiss.emit()"
+  data-testid="order-note-dialog"
+>
+  <label class="note-dialog__field">
+    <span class="q-body-sm">{{ titleKey() | t }}</span>
+    <textarea
+      class="note-dialog__textarea q-body-sm"
+      rows="4"
+      maxlength="1000"
+      [value]="note()"
+      (input)="setNote($any($event.target).value)"
+      data-testid="order-note-dialog-textarea"
+    ></textarea>
+    <span class="q-caption note-dialog__count">{{ charCount() }}/1000</span>
+  </label>
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="note-dialog__dismiss q-body-sm"
+      (click)="dismiss.emit()"
+      [disabled]="busy()"
+    >
+      {{ 'orders.dialog.dismiss' | t }}
+    </button>
+    <button
+      type="button"
+      class="note-dialog__confirm q-body-sm"
+      (click)="submit()"
+      [disabled]="busy()"
+      data-testid="order-note-dialog-confirm"
+    >
+      {{ 'orders.dialog.note.save' | t }}
+    </button>
+  </ng-container>
+</q-modal>

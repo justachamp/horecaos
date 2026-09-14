@@ -1,6 +1,14 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
+import { formatTime, zonedTimeToInstant, type TimeZone } from '../../core/format/datetime';
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
@@ -8,6 +16,7 @@ import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ApiError } from '../../core/api/problem-details';
 import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
+import { LocationsApi, ModeBindingView } from '../settings/locations/locations-api';
 import { describeApiError } from './order-errors';
 import { OrderReasonDialog, OrderReasonSubmission } from './order-reason-dialog';
 import {
@@ -17,18 +26,61 @@ import {
   ReservationsApi,
   TableAvailability,
 } from './reservations-api';
+import { TableSessionsApi } from './table-sessions-api';
 
-/** 08:00 to 23:00 local — a placeholder service window; no location carries opening hours this screen can read yet. */
-const FIRST_HOUR = 8;
-const LAST_HOUR = 23;
-const HOURS: readonly number[] = Array.from({ length: LAST_HOUR - FIRST_HOUR + 1 }, (_, i) => FIRST_HOUR + i);
-
-/** A booking status this screen can move to (`DineInStateMachine`, minus `SEATED`, which this screen never targets). */
-type ActionTarget = 'CONFIRMED' | 'REJECTED' | 'CANCELLED' | 'NO_SHOW';
+/** A booking status this screen can move to via a plain state-action (`DineInStateMachine`, minus `SEATED`, which opens a session instead). */
+type ActionTarget = 'CONFIRMED' | 'REJECTED' | 'CANCELLED' | 'NO_SHOW' | 'COMPLETED';
 
 interface PendingAction {
   readonly reservation: ReservationResponse;
   readonly target: ActionTarget;
+}
+
+/** A branch's own service hours for the day, in local wall-clock hours; `endHour` may run past 24 when the window closes after midnight. */
+interface ServiceWindow {
+  readonly startHour: number;
+  readonly endHour: number;
+}
+
+/**
+ * Used only while the location's own schedule has not loaded yet, or when no
+ * `DINE_IN` schedule is bound to it at all — the same 08:00-23:00 guess this
+ * screen always rendered, now a documented fallback rather than the only
+ * answer. A location whose schedule genuinely says "closed today" renders an
+ * empty grid instead of this — see {@link resolveDayWindow}.
+ */
+const FALLBACK_WINDOW: ServiceWindow = { startHour: 8, endHour: 23 };
+
+/**
+ * No location this screen can reach carries a resolved timezone until
+ * `ngOnInit`'s own fetch returns — `Asia/Tashkent` is the least-wrong guess
+ * for the one instant before that, the same call `reports-filter-state.ts`'s
+ * `REPORTS_PLACEHOLDER_TIME_ZONE` makes and for the same reason (ADR 0055:
+ * HorecaOS operates in Uzbekistan today).
+ */
+const FALLBACK_TIME_ZONE: TimeZone = 'Asia/Tashkent';
+
+/**
+ * A table session names a currency (`TableSessionController.OpenRequest`)
+ * that this screen has no clean operations-level read for: the tenant's own
+ * `defaultCurrency` is control-plane-only today, and the only read that
+ * carries one at this screen's scope is the catalog/menu fetch the new-order
+ * screen makes for an unrelated reason — pulling that in here to seat a
+ * booking would be a real cross-feature coupling for one string. ADR 0055
+ * keeps the platform single-currency per tenant for the pilot, so a fixed
+ * constant is the least-wrong value available; replace it with a real read
+ * the moment one exists at this scope.
+ */
+const SESSION_CURRENCY = 'UZS';
+
+/** Fixed, English, machine-facing — read by whoever reviews the audit log, not the operator, same as `customer-detail-pane.ts`'s own `REVEAL_PURPOSE`. */
+const GUEST_REVEAL_PURPOSE = 'Operations console: match a walk-in to a booking';
+
+interface RevealedGuest {
+  readonly reservationId: string;
+  readonly guestName: string;
+  readonly guestPhone: string;
+  readonly note: string | null;
 }
 
 /**
@@ -40,28 +92,29 @@ interface PendingAction {
  * from any screen. This is that screen.
  *
  * **Built**: the day plan (a table × hour grid, Togora §2g's "slots grid" read
- * against `GET .../reservations` — new this wave); creating a multi-table
- * booking; confirm / reject / cancel / no-show, each with a reason; editing a
- * booking's party size, time or tables before it is seated (`amendments` —
- * new this wave, see `ReservationService.amend`'s own doc for the deliberate
- * scope cut: the guest's name, phone and note are not editable here, which is
- * why the edit form hides those three fields rather than disabling them).
+ * against `GET .../reservations`); creating a multi-table booking; confirm /
+ * reject / cancel / no-show / mark-completed, each with a reason; editing a
+ * booking's party size, time, tables or guest details before it is seated
+ * (`amendments`); seating a confirmed booking by opening a table session
+ * (`TableSessionController`, W01 — this screen's one caller of a controller
+ * that had zero before); revealing a booking's guest name, phone and note
+ * one at a time, behind a stated purpose and an ADR 0027 audit fact, so a
+ * host can actually match a walk-in to a booking; and the day window itself,
+ * bound to the location's own `DINE_IN` service schedule (`LocationsApi`)
+ * rather than a fixed 08:00-23:00 guessed in the browser's timezone.
  *
- * **Not built, honestly**: seating and completing a booking. `SEATED` is
- * reached only by opening a table session (`TableSessionController`, ADR
- * 0047's own session lifecycle — a currency, rounds, and a running bill), which
- * is a different, unbuilt screen surface with no IA row of its own; a
- * "Seat" button here that guessed a currency would be exactly the mocked
- * affordance the console's own rules warn against. `COMPLETED` is reachable
- * only from `SEATED`, so it is unreachable from this screen for the same
- * reason. **Auto-create a customer account on an unknown phone**, named by
- * the IA as an owned feature, is not what the built `ReservationService`
- * does — it stores the guest's name and phone on the booking itself and
- * creates no customer record at all, a considered ADR 0047 decision (see
- * `ReservationService`'s own doc) that supersedes the IA line rather than a
- * gap this screen leaves open. **The displayed identifier is the booking's
- * own id**, not an "external reservation id" — no reservation channel or
- * aggregator integration exists yet to mint one.
+ * **Not built, honestly**: closing out a table's bill and the running-total
+ * settlement screen — `TableSessionController`'s rounds, state-actions and
+ * force-closures stay uncalled, because that is a different, unbuilt screen
+ * surface with no IA row of its own. **Auto-create a customer account on an
+ * unknown phone**, named by the IA as an owned feature, is not what the built
+ * `ReservationService` does — it stores the guest's name and phone on the
+ * booking itself and creates no customer record at all, a considered ADR 0047
+ * decision (see `ReservationService`'s own doc) that supersedes the IA line
+ * rather than a gap this screen leaves open (both struck from IA §1 row `1.5`
+ * on 2026-09-11). **The displayed identifier is the booking's own id**, not
+ * an "external reservation id" — no reservation channel or aggregator
+ * integration exists yet to mint one.
  */
 @Component({
   selector: 'q-reservations-page',
@@ -74,9 +127,9 @@ export class ReservationsPage implements OnInit {
   private readonly location = inject(CurrentLocation);
   private readonly api = inject(ReservationsApi);
   private readonly channelsApi = inject(SalesChannelsApi);
+  private readonly locationsApi = inject(LocationsApi);
+  private readonly sessionsApi = inject(TableSessionsApi);
   protected readonly i18n = inject(I18n);
-
-  protected readonly HOURS = HOURS;
 
   protected readonly selectedDate = signal(todayIso());
   protected readonly firstLoadComplete = signal(false);
@@ -88,6 +141,23 @@ export class ReservationsPage implements OnInit {
   protected readonly reservations = signal<readonly ReservationResponse[]>([]);
   protected readonly channel = signal<ChannelView | null>(null);
 
+  /** The branch's own timezone (`LocationsApi.profile`) — every wall-clock reading on this screen goes through it, never the browser's. */
+  protected readonly locationTimeZone = signal<TimeZone>(FALLBACK_TIME_ZONE);
+  /** The `DINE_IN` binding from `LocationsApi.serviceSummary`, or null when none is bound yet. */
+  protected readonly dineInBinding = signal<ModeBindingView | null>(null);
+
+  /** The resolved service window for {@link selectedDate}: a range, or null when the branch's own schedule says closed. */
+  protected readonly serviceWindow = computed<ServiceWindow | null>(() =>
+    resolveDayWindow(this.dineInBinding(), this.selectedDate()),
+  );
+
+  /** True only once a real schedule is loaded and it says today is closed — not merely "nothing loaded yet". */
+  protected readonly closedToday = computed(
+    () => this.dineInBinding() !== null && this.serviceWindow() === null,
+  );
+
+  protected readonly HOURS = computed<readonly number[]>(() => hourLabels(this.serviceWindow()));
+
   protected readonly selectedReservationId = signal<string | null>(null);
   protected readonly showCreateForm = signal(false);
   /** The booking this form is amending, or null while it is creating a new one. */
@@ -95,6 +165,14 @@ export class ReservationsPage implements OnInit {
   protected readonly pendingAction = signal<PendingAction | null>(null);
   protected readonly actionBusy = signal(false);
   protected readonly actionNotice = signal<string | null>(null);
+
+  /** A confirmed booking pending "seat this booking" — a session-open, not a state-action. */
+  protected readonly pendingSeat = signal<ReservationResponse | null>(null);
+  protected readonly seatBusy = signal(false);
+
+  protected readonly revealedGuest = signal<RevealedGuest | null>(null);
+  protected readonly revealingGuest = signal(false);
+  protected readonly revealGuestError = signal<string | null>(null);
 
   protected readonly selectedReservation = computed(() => {
     const id = this.selectedReservationId();
@@ -104,8 +182,8 @@ export class ReservationsPage implements OnInit {
   // -------------------------------------------------------------- create/edit form
 
   protected readonly formPartySize = signal(2);
-  protected readonly formFrom = signal(defaultFromTime());
-  protected readonly formTo = signal(defaultToTime());
+  protected readonly formFrom = signal('12:00');
+  protected readonly formTo = signal('14:00');
   protected readonly formGuestName = signal('');
   protected readonly formGuestPhone = signal('');
   protected readonly formSecondaryPhone = signal('');
@@ -118,7 +196,8 @@ export class ReservationsPage implements OnInit {
   protected readonly formError = signal<string | null>(null);
 
   protected readonly formValid = computed(() => {
-    const timingValid = this.formPartySize() > 0 && this.formTableIds().size > 0 && this.formTo() > this.formFrom();
+    const timingValid =
+      this.formPartySize() > 0 && this.formTableIds().size > 0 && this.formTo() > this.formFrom();
     if (this.editTarget()) {
       return timingValid && this.formReason().trim() !== '';
     }
@@ -145,6 +224,23 @@ export class ReservationsPage implements OnInit {
       // operator picks (IA 1.5 names no channel selector); a booking still
       // works end to end without a resolved channel — see submit()'s guard.
     }
+    try {
+      const [profile, summary] = await Promise.all([
+        this.locationsApi.profile(scope),
+        this.locationsApi.serviceSummary(scope),
+      ]);
+      this.locationTimeZone.set(profile.timezone);
+      this.dineInBinding.set(
+        summary.bindings.find((binding) => binding.fulfillmentMode === 'DINE_IN') ?? null,
+      );
+    } catch {
+      // Without a resolved schedule the grid falls back to FALLBACK_WINDOW
+      // in FALLBACK_TIME_ZONE — the same graceful-degradation stance the
+      // channel fetch above already takes, and the honest fallback this
+      // screen always rendered before it could ask for anything better.
+    }
+    this.formFrom.set(this.defaultFromTime());
+    this.formTo.set(this.defaultToTime());
     await this.refresh();
   }
 
@@ -162,7 +258,9 @@ export class ReservationsPage implements OnInit {
     }
     this.loading.set(true);
     try {
-      const [from, to] = dayWindow(this.selectedDate());
+      const zone = this.locationTimeZone();
+      const from = zonedTimeToInstant(this.selectedDate(), 0, zone).toISOString();
+      const to = zonedTimeToInstant(this.selectedDate(), 24, zone).toISOString();
       const [tables, reservations] = await Promise.all([
         this.api.availability(scope, from, to),
         this.api.listForDay(scope, from, to),
@@ -190,8 +288,8 @@ export class ReservationsPage implements OnInit {
 
   /** The booking covering this table at this local hour, if any — the grid's one cell rule. */
   protected cellReservation(tableId: string, hour: number): ReservationResponse | null {
-    const slotStart = hourOnSelectedDate(this.selectedDate(), hour);
-    const slotEnd = hourOnSelectedDate(this.selectedDate(), hour + 1);
+    const slotStart = this.hourOnSelectedDate(hour);
+    const slotEnd = this.hourOnSelectedDate(hour + 1);
     return (
       this.reservations().find((row) => {
         if (!row.tableIds.includes(tableId) || isDropped(row.status)) {
@@ -204,13 +302,22 @@ export class ReservationsPage implements OnInit {
     );
   }
 
-  /** Whether this cell is the first hour a booking occupies, so its label renders once, not once per hour. */
+  /** Whether this cell is the row a booking's label should render on — its own start hour, or the grid's first row if it started earlier. */
   protected isCellStart(reservation: ReservationResponse, hour: number): boolean {
-    return new Date(reservation.requestedFrom).getHours() === hour || hour === FIRST_HOUR;
+    const cellStart = this.hourOnSelectedDate(hour).getTime();
+    const cellEnd = this.hourOnSelectedDate(hour + 1).getTime();
+    const from = new Date(reservation.requestedFrom).getTime();
+    if (from >= cellStart && from < cellEnd) {
+      return true;
+    }
+    const firstHour = this.HOURS()[0];
+    return hour === firstHour && from < cellStart;
   }
 
   protected occupancyFor(tableId: string): number {
-    return this.reservations().filter((row) => row.tableIds.includes(tableId) && !isDropped(row.status)).length;
+    return this.reservations().filter(
+      (row) => row.tableIds.includes(tableId) && !isDropped(row.status),
+    ).length;
   }
 
   protected statusLabel(status: string): string {
@@ -236,7 +343,14 @@ export class ReservationsPage implements OnInit {
   }
 
   protected timeRange(reservation: ReservationResponse): string {
-    return `${formatClock(reservation.requestedFrom)}–${formatClock(reservation.requestedTo)}`;
+    const zone = this.locationTimeZone();
+    return `${formatTime(new Date(reservation.requestedFrom), zone)}–${formatTime(new Date(reservation.requestedTo), zone)}`;
+  }
+
+  /** The grid's own codes for a booking's tables, not the raw ids `ReservationResponse.tableIds` carries. */
+  protected tableCodesFor(reservation: ReservationResponse): string {
+    const codeById = new Map(this.tables().map((table) => [table.tableId, table.code] as const));
+    return reservation.tableIds.map((id) => codeById.get(id) ?? id).join(', ');
   }
 
   // ----------------------------------------------------------------- detail
@@ -244,10 +358,14 @@ export class ReservationsPage implements OnInit {
   protected openDetail(reservation: ReservationResponse): void {
     this.showCreateForm.set(false);
     this.selectedReservationId.set(reservation.reservationId);
+    this.revealedGuest.set(null);
+    this.revealGuestError.set(null);
   }
 
   protected closeDetail(): void {
     this.selectedReservationId.set(null);
+    this.revealedGuest.set(null);
+    this.revealGuestError.set(null);
   }
 
   protected availableActions(reservation: ReservationResponse): readonly ActionTarget[] {
@@ -256,6 +374,11 @@ export class ReservationsPage implements OnInit {
         return ['CONFIRMED', 'REJECTED', 'CANCELLED'];
       case 'CONFIRMED':
         return ['CANCELLED', 'NO_SHOW'];
+      case 'SEATED':
+        // Reachable now that this screen can seat a booking in the first
+        // place — see the class doc. Closing out the table's own bill stays
+        // a different, unbuilt surface; this only marks the booking itself done.
+        return ['COMPLETED'];
       default:
         return [];
     }
@@ -263,6 +386,10 @@ export class ReservationsPage implements OnInit {
 
   protected canEdit(reservation: ReservationResponse): boolean {
     return reservation.status === 'REQUESTED' || reservation.status === 'CONFIRMED';
+  }
+
+  protected canSeat(reservation: ReservationResponse): boolean {
+    return reservation.status === 'CONFIRMED';
   }
 
   protected actionLabel(target: ActionTarget): MessageKey {
@@ -275,6 +402,8 @@ export class ReservationsPage implements OnInit {
         return 'reservations.action.cancel';
       case 'NO_SHOW':
         return 'reservations.action.noShow';
+      case 'COMPLETED':
+        return 'reservations.action.complete';
     }
   }
 
@@ -319,6 +448,57 @@ export class ReservationsPage implements OnInit {
     }
   }
 
+  // ------------------------------------------------------------------ seating
+
+  protected requestSeat(reservation: ReservationResponse): void {
+    this.pendingSeat.set(reservation);
+  }
+
+  protected dismissSeat(): void {
+    this.pendingSeat.set(null);
+  }
+
+  /**
+   * Opens a table session against a confirmed booking — the seat-this-booking
+   * action (1.5a). `TableSessionController.open` moves the reservation
+   * CONFIRMED -> SEATED in the same transaction (`TableSessionService.open`'s
+   * own doc), so the booking is re-read afterward rather than guessed at
+   * locally.
+   */
+  protected async submitSeat(submission: OrderReasonSubmission): Promise<void> {
+    const pending = this.pendingSeat();
+    const scope = this.location.scope();
+    if (!pending || !scope) {
+      return;
+    }
+    this.seatBusy.set(true);
+    try {
+      await firstValueFrom(
+        this.sessionsApi.open(scope, {
+          reservationId: pending.reservationId,
+          tableIds: pending.tableIds,
+          partySize: pending.partySize,
+          currency: SESSION_CURRENCY,
+          reason: submission.reasonCode,
+        }),
+      );
+      const refreshed = await this.api.find(scope, pending.reservationId);
+      this.applyUpdate(refreshed);
+      this.pendingSeat.set(null);
+    } catch (error) {
+      this.actionNotice.set(
+        error instanceof ApiError
+          ? describeApiError(error, (key, values) => this.i18n.t(key, values))
+          : this.i18n.t('error.unknown.noReference'),
+      );
+      if (error instanceof ApiError && error.status !== 409) {
+        this.pendingSeat.set(null);
+      }
+    } finally {
+      this.seatBusy.set(false);
+    }
+  }
+
   protected dismissNotice(): void {
     this.actionNotice.set(null);
   }
@@ -329,14 +509,48 @@ export class ReservationsPage implements OnInit {
     );
   }
 
+  // ------------------------------------------------------------------- guest reveal
+
+  /**
+   * Decrypts a booking's guest name, phone and note behind a stated purpose
+   * — `ReservationsApi.find`'s own doc. Never fetched as a side effect of
+   * anything else on this screen: a host asks for it, once, per booking.
+   */
+  protected async revealGuest(reservation: ReservationResponse): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope || this.revealingGuest()) {
+      return;
+    }
+    this.revealingGuest.set(true);
+    this.revealGuestError.set(null);
+    try {
+      const revealed = await this.api.find(scope, reservation.reservationId, GUEST_REVEAL_PURPOSE);
+      this.revealedGuest.set({
+        reservationId: reservation.reservationId,
+        guestName: revealed.guestName ?? '',
+        guestPhone: revealed.guestPhone ?? '',
+        note: revealed.note,
+      });
+    } catch {
+      this.revealGuestError.set(this.i18n.t('reservations.detail.guestRevealError'));
+    } finally {
+      this.revealingGuest.set(false);
+    }
+  }
+
+  protected revealedGuestFor(reservationId: string): RevealedGuest | null {
+    const revealed = this.revealedGuest();
+    return revealed && revealed.reservationId === reservationId ? revealed : null;
+  }
+
   // ------------------------------------------------------------ create/edit form
 
   protected openCreateForm(): void {
     this.closeDetail();
     this.editTarget.set(null);
     this.formPartySize.set(2);
-    this.formFrom.set(defaultFromTime());
-    this.formTo.set(defaultToTime());
+    this.formFrom.set(this.defaultFromTime());
+    this.formTo.set(this.defaultToTime());
     this.formGuestName.set('');
     this.formGuestPhone.set('');
     this.formSecondaryPhone.set('');
@@ -348,13 +562,23 @@ export class ReservationsPage implements OnInit {
     this.showCreateForm.set(true);
   }
 
-  /** Amend a booking still in `REQUESTED` or `CONFIRMED` — see `canEdit`. Guest name, phone and note are not editable (`ReservationService.amend`'s own doc). */
+  /**
+   * Amend a booking still in `REQUESTED` or `CONFIRMED` — see `canEdit`.
+   * Guest name, phone and note are shown blank: blank means "unchanged" on
+   * submit (`ReservationService.amend`'s own doc), not "this booking has no
+   * guest" — re-revealing the guest just to prefill this form would be an
+   * audited reveal on every edit, not only the ones that correct a name.
+   */
   protected openEditForm(reservation: ReservationResponse): void {
     this.closeDetail();
     this.editTarget.set(reservation);
     this.formPartySize.set(reservation.partySize);
-    this.formFrom.set(formatClock(reservation.requestedFrom));
-    this.formTo.set(formatClock(reservation.requestedTo));
+    const zone = this.locationTimeZone();
+    this.formFrom.set(formatTime(new Date(reservation.requestedFrom), zone));
+    this.formTo.set(formatTime(new Date(reservation.requestedTo), zone));
+    this.formGuestName.set('');
+    this.formGuestPhone.set('');
+    this.formNote.set('');
     this.formTableIds.set(new Set(reservation.tableIds));
     this.formReason.set('');
     this.formTouched.set(false);
@@ -417,8 +641,8 @@ export class ReservationsPage implements OnInit {
       secondaryPhone: this.formSecondaryPhone().trim() || null,
       note: this.formNote().trim() || null,
       partySize: this.formPartySize(),
-      requestedFrom: onSelectedDate(this.selectedDate(), this.formFrom()).toISOString(),
-      requestedTo: onSelectedDate(this.selectedDate(), this.formTo()).toISOString(),
+      requestedFrom: this.zonedFormInstant(this.formFrom()).toISOString(),
+      requestedTo: this.zonedFormInstant(this.formTo()).toISOString(),
       tableIds: [...this.formTableIds()],
       sourceChannelId: channel.id,
     };
@@ -430,15 +654,48 @@ export class ReservationsPage implements OnInit {
   private async submitAmend(scope: LocationScope, target: ReservationResponse): Promise<void> {
     const body: ReservationAmendment = {
       partySize: this.formPartySize(),
-      requestedFrom: onSelectedDate(this.selectedDate(), this.formFrom()).toISOString(),
-      requestedTo: onSelectedDate(this.selectedDate(), this.formTo()).toISOString(),
+      requestedFrom: this.zonedFormInstant(this.formFrom()).toISOString(),
+      requestedTo: this.zonedFormInstant(this.formTo()).toISOString(),
       tableIds: [...this.formTableIds()],
+      guestName: this.formGuestName().trim() || undefined,
+      guestPhone: this.formGuestPhone().trim() || undefined,
+      note: this.formNote().trim() || undefined,
       reason: this.formReason().trim(),
     };
-    const amended = await firstValueFrom(this.api.amend(scope, target.reservationId, body, target.version));
+    const amended = await firstValueFrom(
+      this.api.amend(scope, target.reservationId, body, target.version),
+    );
     this.applyUpdate(amended);
     this.showCreateForm.set(false);
     this.editTarget.set(null);
+  }
+
+  /** `formFrom`/`formTo` are `HH:mm` from a plain `<input type="time">`, resolved in the branch's own zone for {@link selectedDate}. */
+  private zonedFormInstant(hhmm: string): Date {
+    return zonedTimeToInstant(this.selectedDate(), hhmmToHours(hhmm), this.locationTimeZone());
+  }
+
+  /** An hour after "now" in the branch's own zone, clamped to today's service window — the create form's suggested start time. */
+  private defaultFromTime(): string {
+    const window = this.serviceWindow() ?? FALLBACK_WINDOW;
+    const now = currentHourIn(this.locationTimeZone());
+    const hour = Math.min(
+      Math.max(now + 1, window.startHour),
+      Math.max(window.endHour - 1, window.startHour),
+    );
+    return hoursToHHMM(hour);
+  }
+
+  private defaultToTime(): string {
+    const window = this.serviceWindow() ?? FALLBACK_WINDOW;
+    const now = currentHourIn(this.locationTimeZone());
+    const hour = Math.min(Math.max(now + 3, window.startHour + 2), window.endHour);
+    return hoursToHHMM(hour);
+  }
+
+  /** The grid's first local hour, for the cell boundary math above. */
+  private hourOnSelectedDate(hour: number): Date {
+    return zonedTimeToInstant(this.selectedDate(), hour, this.locationTimeZone());
   }
 }
 
@@ -446,35 +703,91 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function onSelectedDate(dateIso: string, hhmm: string): Date {
-  return new Date(`${dateIso}T${hhmm}:00`);
+/** `HH:mm` -> hours since midnight, e.g. `19:30` -> 19.5. */
+function hhmmToHours(hhmm: string): number {
+  const [hour, minute] = hhmm.split(':').map(Number);
+  return hour + (minute ?? 0) / 60;
 }
 
-function hourOnSelectedDate(dateIso: string, hour: number): Date {
-  const wrapped = ((hour % 24) + 24) % 24;
-  return onSelectedDate(dateIso, `${String(wrapped).padStart(2, '0')}:00`);
+/** Hours since midnight -> `HH:mm`, wrapped into a single calendar day for a plain `<input type="time">`. */
+function hoursToHHMM(hours: number): string {
+  const wrapped = ((Math.round(hours) % 24) + 24) % 24;
+  return `${String(wrapped).padStart(2, '0')}:00`;
 }
 
-/** The day's window in the browser's own timezone — see the class doc's placeholder-window note. */
-function dayWindow(dateIso: string): readonly [string, string] {
-  return [onSelectedDate(dateIso, '00:00').toISOString(), onSelectedDate(dateIso, '23:59').toISOString()];
+/** The current wall-clock hour in a zone, fractional. */
+function currentHourIn(zone: TimeZone): number {
+  const [hour, minute] = formatTime(new Date(), zone).split(':').map(Number);
+  return hour + minute / 60;
 }
 
-function defaultFromTime(): string {
-  const now = new Date();
-  const hour = Math.min(Math.max(now.getHours() + 1, FIRST_HOUR), LAST_HOUR - 1);
-  return `${String(hour).padStart(2, '0')}:00`;
+/**
+ * The service window a `DINE_IN` binding gives for one calendar date — a
+ * dated exception first, then the weekly rule for that date's day of week,
+ * mirroring `WeeklySchedule`'s own precedence server-side. `null` means the
+ * branch's own schedule says closed that day; a missing binding altogether
+ * (nothing configured yet) answers {@link FALLBACK_WINDOW} instead, because
+ * "no schedule" and "closed today" are different facts and only one of them
+ * should render an empty grid.
+ */
+function resolveDayWindow(binding: ModeBindingView | null, dateIso: string): ServiceWindow | null {
+  if (!binding) {
+    return FALLBACK_WINDOW;
+  }
+  const exception = binding.exceptions.find((row) => row.date === dateIso);
+  if (exception) {
+    if (exception.closedAllDay || exception.opensAt === null || exception.closesAt === null) {
+      return null;
+    }
+    return windowFromTimes(exception.opensAt, exception.closesAt);
+  }
+  const dayOfWeek = isoDayOfWeek(dateIso);
+  const rules = binding.rules.filter((rule) => rule.dayOfWeek === dayOfWeek);
+  if (rules.length === 0) {
+    return null;
+  }
+  let start = Number.POSITIVE_INFINITY;
+  let end = Number.NEGATIVE_INFINITY;
+  for (const rule of rules) {
+    const window = windowFromTimes(rule.opensAt, rule.closesAt);
+    start = Math.min(start, window.startHour);
+    end = Math.max(end, window.endHour);
+  }
+  return { startHour: start, endHour: end };
 }
 
-function defaultToTime(): string {
-  const now = new Date();
-  const hour = Math.min(Math.max(now.getHours() + 3, FIRST_HOUR + 2), LAST_HOUR);
-  return `${String(hour).padStart(2, '0')}:00`;
+/** A `LocalTime`-shaped `HH:mm:ss` pair -> a window, wrapping past midnight exactly as `WeeklySchedule.window` does server-side. */
+function windowFromTimes(opensAt: string, closesAt: string): ServiceWindow {
+  const start = hourFraction(opensAt);
+  let end = hourFraction(closesAt);
+  if (end <= start) {
+    end += 24;
+  }
+  return { startHour: start, endHour: end };
 }
 
-function formatClock(iso: string): string {
-  const date = new Date(iso);
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+/** `HH:mm:ss` or `HH:mm` -> hours since midnight. */
+function hourFraction(clock: string): number {
+  const [hour, minute] = clock.split(':').map(Number);
+  return hour + (minute ?? 0) / 60;
+}
+
+/** ISO day of week, 1 (Monday) to 7 (Sunday) — matches `WeeklySchedule.Rule.dayOfWeek` server-side. Zone-independent: `dateIso` is already a calendar date. */
+function isoDayOfWeek(dateIso: string): number {
+  const [year, month, day] = dateIso.split('-').map(Number);
+  const sundayZero = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  return sundayZero === 0 ? 7 : sundayZero;
+}
+
+/** The grid's row labels for a window — whole hours only; a fractional open/close still gets a labelled row for the hour it falls in. Empty when closed. */
+function hourLabels(window: ServiceWindow | null): readonly number[] {
+  if (!window) {
+    return [];
+  }
+  const start = Math.floor(window.startHour);
+  const end = Math.ceil(window.endHour) - 1;
+  const length = Math.max(0, end - start + 1);
+  return Array.from({ length }, (_, i) => start + i);
 }
 
 /** A booking that holds nothing and shows nothing on the grid. */

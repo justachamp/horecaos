@@ -11,10 +11,14 @@ package uz.horecaos.platform.ordering.domain;
  * declared consequence in the quote, the inventory hold, the payment, the fiscal
  * receipt and the POS export.
  *
- * <p>The set being closed is the price of that. A request fitting none of the ten
- * needs an ADR entry rather than a configuration change.
+ * <p>The set being closed is the price of that. A request fitting none of the
+ * twelve needs an ADR entry rather than a configuration change — which is
+ * exactly how {@link #SET_COURIER_NOTE} and {@link #SET_INTERNAL_NOTE} got
+ * here: ADR 0039 declared ten, and ADR 0113 (wave P10) amended it to twelve
+ * for the two note channels the legacy dashboard had and this platform did
+ * not.
  *
- * <p>Three are built. The other seven are declared — the set is code-owned like
+ * <p>Five are built. The other seven are declared — the set is code-owned like
  * {@link OrderStatus}, and a set that is open at the edges cannot express
  * "closed" — and {@code built()} is false for them, so the application refuses
  * each by name rather than accepting a command it would carry out in the quote
@@ -48,7 +52,28 @@ public enum AmendmentCommandType {
      */
     SET_CALLBACK_REQUESTED(false, true),
 
-    SET_CASH_TENDERED(false, true);
+    SET_CASH_TENDERED(false, true),
+
+    /**
+     * Operator to courier: never rendered to the customer.
+     *
+     * <p>Added by ADR 0113 (wave P10), amending ADR 0039's closed set from ten
+     * commands to twelve — see that ADR's own dated status addition rather
+     * than a rewritten Decision/Alternatives/Consequences. Unlike {@link
+     * #SET_KITCHEN_NOTE} this wave carries no migration number, so the note
+     * has no column on {@code ordering.orders} to land in; {@code
+     * OrderAmendmentService#patchOf} folds it into no order field, and it is
+     * read back only through the amendment history, {@code GET .../amendments}
+     * (orders.md §3.6).
+     */
+    SET_COURIER_NOTE(false, true),
+
+    /**
+     * Operator to operator: the same shape as {@link #SET_COURIER_NOTE}, for
+     * the one channel with no customer, kitchen or courier recipient at all —
+     * the legacy dashboard's {@code internal_note}.
+     */
+    SET_INTERNAL_NOTE(false, true);
 
     private final boolean financial;
     private final boolean built;

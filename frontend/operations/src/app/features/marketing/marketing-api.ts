@@ -88,6 +88,15 @@ export interface CreateCampaignRequest {
   readonly currency: string;
   readonly benefitOfferId?: string | null;
   readonly loyaltyAccrualRuleId?: string | null;
+  /** When `launch` should arm SCHEDULED instead of sending immediately (T18). */
+  readonly scheduledAt?: string | null;
+}
+
+/** Mirrors `OperationsMarketingController.ChannelResponse` — the isWired fix row 6.4 asked for (T18). */
+export interface ChannelView {
+  readonly channel: string;
+  readonly carriesMarginalCost: boolean;
+  readonly isWired: boolean;
 }
 
 /** Mirrors `OperationsMarketingController.CampaignResponse` — the whole lifecycle state. */
@@ -117,6 +126,10 @@ export interface CampaignView {
   readonly approvedBy: string | null;
   readonly blockedCount: number;
   readonly pausedAt: string | null;
+  /** When a launch call arms SENDING for, or null for "immediately" (T18). */
+  readonly scheduledAt: string | null;
+  /** Whether `channel` has a real ADR 0020 delivery path today (T18). */
+  readonly isWired: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly version: number;
@@ -148,6 +161,15 @@ export interface RecipientView {
   readonly terminalStatus: string | null;
 }
 
+/** Row 7.9b. Mirrors `OperationsMarketingController.RecipientCountsResponse`. */
+export interface RecipientCountsView {
+  readonly pending: number;
+  readonly queued: number;
+  readonly deferred: number;
+  readonly refused: number;
+  readonly total: number;
+}
+
 /** Mirrors `OperationsMarketingController.SuppressionListItemResponse`. */
 export interface SuppressionView {
   readonly suppressionId: string;
@@ -167,6 +189,53 @@ export interface SuppressionRequest {
   readonly channel?: string | null;
   readonly reason: string;
   readonly statedReason?: string | null;
+}
+
+/** Mirrors `CourierBroadcastController.CourierBroadcastResponse` (T18, operations 6.4b). */
+export interface CourierBroadcastView {
+  readonly broadcastId: string;
+  readonly channel: string;
+  readonly targetKind: string;
+  readonly targetGroupId: string | null;
+  readonly message: string;
+  readonly status: string;
+  readonly recipientCount: number;
+  readonly refusalReason: string | null;
+  readonly createdBy: string;
+  readonly createdAt: string;
+  readonly sentAt: string | null;
+}
+
+export interface DraftCourierBroadcastRequest {
+  readonly targetKind: string;
+  readonly targetGroupId?: string | null;
+  readonly message: string;
+}
+
+/** Mirrors `AttributionLinkController.AttributionLinkResponse` (T18, ADR 0044, operations 6.6a). */
+export interface AttributionLinkView {
+  readonly linkId: string;
+  readonly label: string;
+  readonly token: string;
+  readonly ownerNote: string | null;
+  readonly channel: string;
+  readonly destinationType: string;
+  readonly destinationId: string | null;
+  readonly status: string;
+  readonly validFrom: string;
+  readonly validUntil: string | null;
+  readonly clickCount: number;
+  readonly createdBy: string;
+  readonly createdAt: string;
+}
+
+export interface MintAttributionLinkRequest {
+  readonly label: string;
+  readonly ownerNote?: string | null;
+  readonly channel: string;
+  readonly destinationType: string;
+  readonly destinationId?: string | null;
+  readonly validUntil?: string | null;
 }
 
 /**
@@ -235,6 +304,19 @@ export class MarketingApi {
         command(request),
       ),
     );
+  }
+
+  /**
+   * Every channel a campaign may target, and whether it can actually
+   * deliver (T18). The create form disables an unwired option instead of
+   * letting an operator spend a four-eyes approval on a campaign that dies
+   * inside the expansion scheduler with an exception nobody sees.
+   */
+  async listChannels(scope: BrandScope): Promise<readonly ChannelView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly ChannelView[]>(marketingPaths.channels(scope)),
+    );
+    return result.value ?? [];
   }
 
   // -------------------------------------------------------------- campaigns
@@ -327,6 +409,17 @@ export class MarketingApi {
     return result.value ?? [];
   }
 
+  /** Row 7.9b: how many recipients ended each way, without paging the full list. */
+  async recipientCounts(scope: BrandScope, campaignId: string): Promise<RecipientCountsView> {
+    return (
+      await firstValueFrom(
+        this.api.get<RecipientCountsView>(
+          marketingPaths.campaignRecipientCounts(scope, campaignId),
+        ),
+      )
+    ).value;
+  }
+
   // ----------------------------------------------------------- suppression
 
   async listSuppressions(
@@ -356,6 +449,69 @@ export class MarketingApi {
       this.api.post<{ reason: string }, { lifted: boolean }>(
         marketingPaths.suppressionLifts(scope, suppressionId),
         command({ reason }),
+      ),
+    );
+  }
+
+  // ------------------------------------------------------- courier broadcasts
+
+  async listCourierBroadcasts(scope: BrandScope): Promise<readonly CourierBroadcastView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly CourierBroadcastView[]>(marketingPaths.courierBroadcasts(scope)),
+    );
+    return result.value ?? [];
+  }
+
+  async draftCourierBroadcast(
+    scope: BrandScope,
+    request: DraftCourierBroadcastRequest,
+  ): Promise<CourierBroadcastView> {
+    return firstValueFrom(
+      this.api.post<DraftCourierBroadcastRequest, CourierBroadcastView>(
+        marketingPaths.courierBroadcasts(scope),
+        command(request),
+      ),
+    );
+  }
+
+  async sendCourierBroadcast(
+    scope: BrandScope,
+    broadcastId: string,
+  ): Promise<CourierBroadcastView> {
+    return firstValueFrom(
+      this.api.post<null, CourierBroadcastView>(
+        marketingPaths.courierBroadcastSends(scope, broadcastId),
+        command(null),
+      ),
+    );
+  }
+
+  // -------------------------------------------------------- attribution links
+
+  async listAttributionLinks(scope: BrandScope): Promise<readonly AttributionLinkView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly AttributionLinkView[]>(marketingPaths.attributionLinks(scope)),
+    );
+    return result.value ?? [];
+  }
+
+  async mintAttributionLink(
+    scope: BrandScope,
+    request: MintAttributionLinkRequest,
+  ): Promise<AttributionLinkView> {
+    return firstValueFrom(
+      this.api.post<MintAttributionLinkRequest, AttributionLinkView>(
+        marketingPaths.attributionLinks(scope),
+        command(request),
+      ),
+    );
+  }
+
+  async archiveAttributionLink(scope: BrandScope, linkId: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<null, void>(
+        marketingPaths.attributionLinkArchives(scope, linkId),
+        command(null),
       ),
     );
   }

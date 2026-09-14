@@ -12,12 +12,21 @@ export interface ScheduleRule {
   readonly closesAt: string;
 }
 
-/** `LocationServiceOperationsController.ExceptionResponse`: one calendar date's override. */
+/**
+ * `LocationServiceOperationsController.ExceptionResponse`: one calendar
+ * date's override, plus the `label`/`reason` `ServiceScheduleController`'s
+ * write side requires (`ExceptionRequest`) but the read side does not carry
+ * (`ExceptionResponse` has neither) — optional here so a consumer reading
+ * only the response shape still satisfies this type; a caller writing back
+ * through `PUT .../exceptions` fills both before saving (wave P43).
+ */
 export interface ScheduleException {
   readonly date: string;
   readonly closedAllDay: boolean;
   readonly opensAt: string | null;
   readonly closesAt: string | null;
+  readonly label?: string;
+  readonly reason?: string;
 }
 
 const DAYS: readonly number[] = [1, 2, 3, 4, 5, 6, 7];
@@ -48,6 +57,8 @@ export class ScheduleGrid {
 
   readonly rules = input<readonly ScheduleRule[]>([]);
   readonly exceptions = input<readonly ScheduleException[]>([]);
+  /** Hides the dated-exceptions section for a caller with no calendar to offer — e.g. row 4.2g's per-item schedule, which is weekly-only. */
+  readonly showExceptions = input<boolean>(true);
 
   readonly rulesChange = output<readonly ScheduleRule[]>();
   readonly exceptionsChange = output<readonly ScheduleException[]>();

@@ -26,6 +26,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
+import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -201,13 +202,14 @@ public class ReservationService {
     @Transactional
     public ReservationRow move(
             UUID tenantId,
+            UUID locationId,
             UUID reservationId,
             ReservationStatus to,
             int expectedVersion,
             String actorSubject,
             String reason) {
 
-        ReservationRow reservation = store.findReservation(tenantId, reservationId)
+        ReservationRow reservation = store.findReservationAtLocation(tenantId, locationId, reservationId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such booking"));
 
         if (!DineInStateMachine.permits(reservation.status(), to)) {
@@ -288,15 +290,16 @@ public class ReservationService {
     }
 
     /**
-     * Changes the party size, the requested interval, or the table set of a
-     * booking that has not yet been seated.
+     * Changes the party size, the requested interval, the table set, or the
+     * guest's own details of a booking that has not yet been seated.
      *
-     * <p>Deliberately narrower than {@link #request}: the guest's name, phone and
-     * note are not touched here, because that is a corridor from a plaintext
-     * request body to a PII column this method's caller would need to justify
-     * with the same purpose {@link #request} already states, and a host
-     * correcting a table or a time has no such need. Re-typing the guest's
-     * number is what a cancel-and-rebook is for.
+     * <p>The guest's name, phone and note are optional corrections, not a
+     * required re-submission: {@code guestName}/{@code guestPhone}/{@code note}
+     * are null or blank on the ordinary amendment — a host moving a table or a
+     * time has no need to re-type a number — and only encrypted and written
+     * when the host actually typed a replacement, matching the same purpose
+     * {@link #request} states for the original. A wrong guest name is now a
+     * correction here rather than only a cancel-and-rebook.
      *
      * <p>The table set is replaced wholesale — every existing hold is dropped
      * and the submitted set is re-attached — rather than diffed, so an amendment
@@ -306,11 +309,15 @@ public class ReservationService {
     @Transactional
     public ReservationRow amend(
             UUID tenantId,
+            UUID locationId,
             UUID reservationId,
             int partySize,
             Instant requestedFrom,
             Instant requestedTo,
             List<UUID> tableIds,
+            @Nullable String guestName,
+            @Nullable String guestPhone,
+            @Nullable String note,
             int expectedVersion,
             String actorSubject,
             String reason) {
@@ -322,7 +329,7 @@ public class ReservationService {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "A booking's end is after its start");
         }
 
-        ReservationRow reservation = store.findReservation(tenantId, reservationId)
+        ReservationRow reservation = store.findReservationAtLocation(tenantId, locationId, reservationId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such booking"));
 
         if (reservation.status() != ReservationStatus.REQUESTED
@@ -337,9 +344,33 @@ public class ReservationService {
         SettingsRow settings = floorPlan.settings(tenantId, reservation.brandId(), reservation.locationId());
         int turnaround = settings.turnaroundMinutes();
 
+        String trimmedName = blankToNull(guestName);
+        String trimmedPhone = blankToNull(guestPhone);
+        String trimmedNote = blankToNull(note);
+        String guestNameEncrypted =
+                trimmedName == null ? null : protect(tenantId, reservationId, "guest_name_encrypted", trimmedName);
+        String guestPhoneEncrypted =
+                trimmedPhone == null ? null : protect(tenantId, reservationId, "guest_phone_encrypted", trimmedPhone);
+        String guestPhoneLookupHash = trimmedPhone == null
+                ? null
+                : protection.lookupHash(tenantId, PHONE_LOOKUP_DOMAIN, normalizePhone(trimmedPhone));
+        String noteEncrypted =
+                trimmedNote == null ? null : protect(tenantId, reservationId, "note_encrypted", trimmedNote);
+
         try {
             boolean moved = store.updateReservationCore(
-                    tenantId, reservationId, partySize, requestedFrom, requestedTo, turnaround, expectedVersion, now);
+                    tenantId,
+                    reservationId,
+                    partySize,
+                    requestedFrom,
+                    requestedTo,
+                    turnaround,
+                    guestNameEncrypted,
+                    guestPhoneEncrypted,
+                    guestPhoneLookupHash,
+                    noteEncrypted,
+                    expectedVersion,
+                    now);
             if (!moved) {
                 throw ApiException.staleVersion(expectedVersion, reservation.version());
             }
@@ -387,16 +418,94 @@ public class ReservationService {
                 .targetVersion((long) expectedVersion + 1)
                 .because(reason)
                 .changed(Map.of(
-                        "partySize", partySize,
-                        "tables", tableIds.size(),
-                        "requestedFrom", requestedFrom.toString(),
-                        "requestedTo", requestedTo.toString()))
+                        "partySize",
+                        partySize,
+                        "tables",
+                        tableIds.size(),
+                        "requestedFrom",
+                        requestedFrom.toString(),
+                        "requestedTo",
+                        requestedTo.toString(),
+                        // Booleans, never the corrected values — ADR 0029 keeps a
+                        // guest's real name and number out of every audit `changed`
+                        // document, this one included.
+                        "guestNameCorrected",
+                        guestNameEncrypted != null,
+                        "guestPhoneCorrected",
+                        guestPhoneEncrypted != null,
+                        "noteCorrected",
+                        noteEncrypted != null))
                 .usingCapability("reservation.manage")
                 .correlatedBy(reservationId.toString())
                 .occurredAt(now)
                 .build());
 
         return store.findReservation(tenantId, reservationId).orElseThrow();
+    }
+
+    /**
+     * Decrypts a booking's guest name, phone and note for a host who names a
+     * reason — the same reveal Customers §5 keeps behind {@code
+     * CUSTOMER_PII_REVEAL}: a purpose, and an ADR 0027 audit fact, every time.
+     *
+     * <p>Gated by {@code RESERVATION_READ} rather than {@code
+     * CUSTOMER_PII_REVEAL} at the controller, and deliberately so — {@code
+     * location-staff} (the host stand, ADR 0047's own persona) holds {@code
+     * RESERVATION_MANAGE}/{@code RESERVATION_READ} and not {@code
+     * CUSTOMER_PII_REVEAL} (see {@code PlatformRole.LOCATION_STAFF}'s own
+     * comment on why phone-order lookups stay masked for that role). Reusing
+     * the customer capability here would lock the host stand out of the one
+     * screen this reveal exists for.
+     */
+    @Transactional
+    public GuestDetails revealGuest(
+            UUID tenantId, UUID locationId, UUID reservationId, String purpose, String actorSubject) {
+        ReservationRow reservation = store.findReservationAtLocation(tenantId, locationId, reservationId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such booking"));
+
+        String guestName = protection.reveal(
+                tenantId,
+                ProtectedValue.deserialize(reservation.guestNameEncrypted()),
+                new RecordRef("dinein.reservations", "guest_name_encrypted", reservationId),
+                purpose);
+        String guestPhone = protection.reveal(
+                tenantId,
+                ProtectedValue.deserialize(reservation.guestPhoneEncrypted()),
+                new RecordRef("dinein.reservations", "guest_phone_encrypted", reservationId),
+                purpose);
+        String note = reservation.noteEncrypted() == null
+                ? null
+                : protection.reveal(
+                        tenantId,
+                        ProtectedValue.deserialize(reservation.noteEncrypted()),
+                        new RecordRef("dinein.reservations", "note_encrypted", reservationId),
+                        purpose);
+
+        audit.record(AuditFact.of("dinein.reservation.guest_revealed", AuditClass.SECURITY)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.location(tenantId, reservation.brandId(), reservation.locationId()))
+                .target("dinein.reservation", reservationId)
+                .targetVersion((long) reservation.version())
+                .because(purpose)
+                .changed(Map.of(
+                        "guestName", true,
+                        "guestPhone", true,
+                        "note", note != null))
+                .usingCapability("reservation.read")
+                .correlatedBy(reservationId.toString())
+                .occurredAt(clock.instant())
+                .build());
+
+        return new GuestDetails(guestName, guestPhone, note);
+    }
+
+    /** A booking's guest details, decrypted — only ever returned by {@link #revealGuest}. */
+    public record GuestDetails(
+            String guestName, String guestPhone, @Nullable String note) {}
+
+    /** Empty or all-whitespace input means "leave this field alone" on an amendment. */
+    private static @Nullable String blankToNull(@Nullable String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     /**
@@ -415,8 +524,8 @@ public class ReservationService {
         return store.tableAvailability(tenantId, locationId, from, to);
     }
 
-    public ReservationRow find(UUID tenantId, UUID reservationId) {
-        return store.findReservation(tenantId, reservationId)
+    public ReservationRow find(UUID tenantId, UUID locationId, UUID reservationId) {
+        return store.findReservationAtLocation(tenantId, locationId, reservationId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such booking"));
     }
 

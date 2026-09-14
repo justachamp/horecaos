@@ -1,17 +1,40 @@
 # ADR 0072: Promo codes as a coupon-gated pricing input
 
 - Decision status: Accepted
-- Implementation status: Built — the model, the pricing integration, the
-  atomic redemption, and Operations authoring (Marketing > Promo codes) all
-  exist, and a customer can apply and remove a code end to end today:
+- Implementation status: Partial (downgraded from `Built`, wave P14 — see
+  below) — the model, the pricing integration, the atomic redemption, and
+  Operations authoring (Marketing > Promo codes) all exist, and a customer
+  can apply and remove a code on the cart end to end today:
   `frontend/storefront-milliy`'s `CartService.applyPromoCode`/
   `removePromoCode` call `POST`/`DELETE .../carts/{cartId}/promo-code`, and
   its checkout screen shows per-error-code messages (`CODE_NOT_FOUND`,
   `CODE_EXPIRED`, `REDEMPTION_LIMIT_REACHED`, ...). `frontend/storefront` —
   the original app, whose `ui-cart.service.ts` comment motivated this
   record — still hardcodes `promo_code: null` and has no promo-code UI of
-  its own. See the implementation checklist for what each covers and what
-  remains (all deliberately out of this record's scope, per Open inputs).
+  its own. **Completing a checkout with a nonzero discount currently fails**,
+  for every caller — the storefront, the Telegram bot, and wave P14's new
+  operator wiring alike — discovered while wiring `CartService#applyPromoCode`
+  into `OperatorOrderingService.place` (gap map row `1.3e`), the first test
+  anywhere in the suite to carry an activated coupon through an actual
+  checkout write (`grep applyPromoCode` across `src/test/java` before this
+  wave: one caller, `CartCheckoutAndOrderTests`, none of it reaching a real
+  order row). `PricingEngine` (stage 7) subtracts the discount from
+  `grossTotal` before `subtotal`/`total` are derived from it, by design, so
+  both are already net of the discount when reported; `ordering.orders`'s
+  `ck_order_total_reconciles` (V0022, written before this ADR existed)
+  instead assumes `subtotal_minor` is gross and demands `total = subtotal +
+  tax + fee - discount`, so `CheckoutOrderWriter`'s insert — which merely
+  copies the quote's own fields — is refused by the database whenever
+  `discountMinor > 0`. See
+  `CartCheckoutAndOrderTests#anOperatorPlacedOrderAppliesAPromoCode`'s own
+  doc for the full reproduction and stack. Not fixed by wave P14: the fix is
+  a pricing-schema decision (which side's convention is wrong — `subtotal_minor`'s
+  own meaning, or the constraint's formula) outside a P14 wiring change, and
+  the constraint is shared by every checkout path in the platform. See the
+  implementation checklist for what each covers and what remains (all
+  deliberately out of this record's scope, per Open inputs, except the
+  discount-checkout defect above, which is newly in scope for whoever picks
+  it up next).
 - Date proposed: 2026-09-05
 - Date decided: 2026-09-05
 - Deciders: Ayubkhon Abbosov (platform architecture), product, finance

@@ -103,6 +103,26 @@ export const staffPaths = {
   accessCheck(tenantId: string): string {
     return `${OPERATIONS}/tenants/${enc(tenantId)}/access-check`;
   },
+
+  /**
+   * `StaffInvitationController.invite`/`.outstanding` — staff-and-access.md
+   * §4, ADR 0116. `/api/v1/operations/**`, not `/control-plane/**`: this is
+   * a tenant's own manager inviting a colleague, the same surface
+   * `auditEvents`/`approvalRequests` above already use for that reason.
+   */
+  staffInvitations(tenantId: string): string {
+    return `${OPERATIONS}/operations/tenants/${enc(tenantId)}/staff/invitations`;
+  },
+
+  /** `StaffInvitationController.resend` — staff-access-dialog's «Отправить повторно». */
+  staffInvitationResend(tenantId: string, invitationId: string): string {
+    return `${this.staffInvitations(tenantId)}/${enc(invitationId)}/resend`;
+  },
+
+  /** `StaffInvitationController.revoke` — staff-access-dialog's revoke. */
+  staffInvitation(tenantId: string, invitationId: string): string {
+    return `${this.staffInvitations(tenantId)}/${enc(invitationId)}`;
+  },
 } as const;
 
 function enc(value: string): string {

@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -24,6 +25,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.application.ServiceScheduleService;
 import uz.horecaos.platform.tenancy.domain.channel.WeeklySchedule;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcServiceabilityStore;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -46,6 +48,38 @@ public class ServiceScheduleController {
 
     public ServiceScheduleController(ServiceScheduleService schedules) {
         this.schedules = schedules;
+    }
+
+    /**
+     * Every timetable this brand owns, named and with how many locations
+     * currently bind it — wave P43 (gap map row {@code 10.2c}).
+     *
+     * <p>Before this wave the controller had a {@code POST} and two {@code PUT}s
+     * and no {@code GET} at all: a location's Hours tab could show the
+     * schedule it already had bound (via {@code
+     * LocationServiceOperationsController.serviceSummary}), but rebinding a
+     * fulfilment mode to a <em>different</em> timetable had nothing to pick
+     * from except a raw schedule id typed in blind. {@link
+     * ServiceScheduleService#schedulesForBrand} already existed as a
+     * passthrough to {@link JdbcServiceabilityStore#schedulesForBrand} — that
+     * store method's own doc names exactly this screen and this banner — it
+     * simply had no HTTP caller.
+     *
+     * <p>{@code boundLocationCount} is the same count the shared-schedule
+     * warning needs before a save: editing a schedule bound to more than one
+     * location changes every one of them silently unless the editor says so
+     * first.
+     */
+    @GetMapping
+    @RequiresCapability(value = Capability.LOCATION_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Every named timetable this brand owns",
+            description = "The Hours tab's rebind picker and the shared-schedule warning's source: "
+                    + "each schedule's name and how many locations currently bind it.")
+    public List<ScheduleSummaryResponse> list(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return schedules.schedulesForBrand(tenantId, brandId).stream()
+                .map(ScheduleSummaryResponse::of)
+                .toList();
     }
 
     @PostMapping
@@ -147,4 +181,14 @@ public class ServiceScheduleController {
             @NotBlank @Size(max = 400) String reason) {}
 
     public record ScheduleView(UUID id, String name, boolean acceptsScheduledOrders) {}
+
+    /** One brand-owned timetable, named, for the rebind picker — {@link #list}. */
+    public record ScheduleSummaryResponse(
+            UUID id, String name, boolean acceptsScheduledOrders, long boundLocationCount) {
+
+        static ScheduleSummaryResponse of(JdbcServiceabilityStore.ScheduleSummary summary) {
+            return new ScheduleSummaryResponse(
+                    summary.id(), summary.name(), summary.acceptsScheduledOrders(), summary.boundLocationCount());
+        }
+    }
 }

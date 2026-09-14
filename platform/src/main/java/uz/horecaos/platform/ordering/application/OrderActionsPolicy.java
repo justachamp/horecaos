@@ -58,14 +58,19 @@ public final class OrderActionsPolicy {
      * {@code ORDER_AMEND} would see a permanently dead, out-of-language button
      * on every open order.
      *
-     * <p>This constant is the fix: the gate stays built and tested exactly as
-     * wave P10 (the amendment client) will need it, but emission is held back
-     * behind one named switch rather than deleted and rewritten later. Wave
-     * P10 flips this to {@code true} once {@code order-actions.ts} has a real
-     * {@code AMEND} case and {@code order-queue.ts} has a real handler; ADR
-     * 0105 documents the same decision.
+     * <p>This constant was the fix: the gate stayed built and tested exactly
+     * as wave P10 (the amendment client) needed it, with emission held back
+     * behind one named switch rather than deleted and rewritten later.
+     *
+     * <p><b>Wave P10.</b> {@code order-actions.ts} now has a real {@code
+     * AMEND} case ("Изменить", the same label in all three locales that
+     * `q-order-amend-menu` uses), {@code order-detail-pane.ts}'s {@code
+     * onActionClick} opens that menu, and {@code order-queue.ts}'s opens the
+     * order itself — the menu's five dialogs live on the detail pane, not the
+     * row. Flipped to {@code true}; ADR 0105 and ADR 0113 both record the
+     * decision.
      */
-    private static final boolean AMEND_EMISSION_ENABLED = false;
+    private static final boolean AMEND_EMISSION_ENABLED = true;
 
     /**
      * Every action legal on an order at this status and fulfilment mode, for a

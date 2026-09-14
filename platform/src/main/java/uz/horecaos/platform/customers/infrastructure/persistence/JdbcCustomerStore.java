@@ -160,6 +160,40 @@ public class JdbcCustomerStore {
                 .update();
     }
 
+    /**
+     * Writes a new account with an explicit origin (V0295, ADR 0015/0039) —
+     * the overload for the two writers that create an account with no
+     * principal behind it and need to say which one they were: an operator's
+     * own "Создать клиента" (origin {@code OPERATOR}, {@code createdByActorId}
+     * the staff subject) and the CSV import (origin {@code IMPORT}, no actor
+     * to name). {@link #insertAccount(UUID, UUID, UUID, Integer, Instant)}
+     * stays the sign-in path's own call, unmodified, and relies on the
+     * column's {@code SELF_SERVICE} default rather than repeating it here.
+     */
+    public void insertAccount(
+            UUID accountId,
+            UUID tenantId,
+            @Nullable UUID partitionBrandId,
+            @Nullable Integer policyVersion,
+            String origin,
+            @Nullable String createdByActorId,
+            Instant now) {
+        jdbc.sql("""
+                INSERT INTO customer.customer_accounts (
+                    id, tenant_id, identity_partition_brand_id, status,
+                    identity_policy_version, origin, created_by_actor_id, created_at, updated_at)
+                VALUES (:id, :tenantId, :partition, 'ACTIVE', :policyVersion, :origin, :createdByActorId, :now, :now)
+                """)
+                .param("id", accountId)
+                .param("tenantId", tenantId)
+                .param("partition", partitionBrandId)
+                .param("policyVersion", policyVersion, Types.INTEGER)
+                .param("origin", origin)
+                .param("createdByActorId", createdByActorId)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+    }
+
     public void insertPrincipalLink(
             UUID linkId,
             UUID tenantId,

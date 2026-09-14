@@ -8,6 +8,9 @@ import {
   AddModifierOptionRequest,
   AddVariantRequest,
   AttachMediaRequest,
+  AttachRecommendationRequest,
+  BulkChannelOfferingRequest,
+  BulkChannelOfferingResult,
   BulkClassifyItem,
   BulkClassifyResult,
   BulkOfferingStatusRequest,
@@ -16,6 +19,7 @@ import {
   CatalogStatus,
   CatalogSummary,
   CategorySummary,
+  ChannelExclusionsResult,
   CreateCatalogRequest,
   CreateCategoryRequest,
   CreateModifierGroupRequest,
@@ -24,6 +28,7 @@ import {
   FiscalClassification,
   FiscalCoverageSummary,
   IdResponse,
+  ItemSaleScheduleBody,
   ModifierGroupDetail,
   ModifierGroupSummary,
   MxikReferenceRow,
@@ -33,6 +38,9 @@ import {
   ProductSummary,
   PublicationHistoryEntry,
   PublicationResult,
+  RecommendationItem,
+  RecommendationList,
+  SetChannelOfferingRequest,
   SetOfferingRequest,
   SortOrderRequest,
   StopInAllBranchesResult,
@@ -173,6 +181,58 @@ export class CatalogApi {
   ): Observable<BulkOfferingStatusResult> {
     return this.api.post<BulkOfferingStatusRequest, BulkOfferingStatusResult>(
       catalogPaths.bulkOfferingStatus(scope, locationId),
+      command(request),
+    );
+  }
+
+  /**
+   * Which variants are currently hidden from one channel at one location —
+   * ADR 0036 Layer B's read (wave P45, gap map row 4.4b). A brand-wide
+   * exclusion (no location named on the row) is folded in here too, exactly
+   * as the storefront's own live menu already reads it.
+   */
+  channelExclusions(
+    scope: BrandScope,
+    channelId: string,
+    locationId: string,
+  ): Observable<ChannelExclusionsResult> {
+    return unwrap(
+      this.api.get<ChannelExclusionsResult>(catalogPaths.channelExclusions(scope, channelId), {
+        params: { locationId },
+      }),
+    );
+  }
+
+  /**
+   * Sets whether one variant is offered on one channel — separate from
+   * price (`PricingApi.setVariantPrice`), the `offered_on_channel` half of
+   * catalog.md §4.5 Layer B this wave adds a writer for.
+   */
+  setChannelOffering(
+    scope: BrandScope,
+    channelId: string,
+    variantId: string,
+    request: SetChannelOfferingRequest,
+  ): Observable<void> {
+    return this.api.put<SetChannelOfferingRequest, void>(
+      catalogPaths.channelOffering(scope, channelId, variantId),
+      command(request),
+    );
+  }
+
+  /**
+   * The mass-enable/mass-disable gesture an aggregator onboarding needs
+   * (gap map row 4.4b): enabling 600 items one at a time is what makes an
+   * aggregator launch take a week. Same 200-item cap as {@link
+   * bulkSetOfferingStatus}.
+   */
+  bulkSetChannelOffering(
+    scope: BrandScope,
+    channelId: string,
+    request: BulkChannelOfferingRequest,
+  ): Observable<BulkChannelOfferingResult> {
+    return this.api.post<BulkChannelOfferingRequest, BulkChannelOfferingResult>(
+      catalogPaths.bulkChannelOffering(scope, channelId),
       command(request),
     );
   }
@@ -505,6 +565,84 @@ export class CatalogApi {
    */
   draftPreview(scope: BrandScope, catalogId: string): Observable<DraftPreview> {
     return unwrap(this.api.get<DraftPreview>(catalogPaths.draftPreview(scope, catalogId)));
+  }
+
+  // ---------------------------------------------------------- P47: per-item sale schedule (4.2g)
+
+  itemSaleSchedule(
+    scope: BrandScope,
+    variantId: string,
+    locationId: string,
+  ): Observable<ItemSaleScheduleBody> {
+    return unwrap(
+      this.api.get<ItemSaleScheduleBody>(
+        catalogPaths.itemSaleSchedule(scope, variantId, locationId),
+      ),
+    );
+  }
+
+  /** Whole-set replace, matching `q-schedule-grid`'s own output — a save is always exactly what the grid shows. */
+  replaceItemSaleSchedule(
+    scope: BrandScope,
+    variantId: string,
+    locationId: string,
+    body: ItemSaleScheduleBody,
+  ): Observable<ItemSaleScheduleBody> {
+    return this.api.put<ItemSaleScheduleBody, ItemSaleScheduleBody>(
+      catalogPaths.itemSaleSchedule(scope, variantId, locationId),
+      command(body),
+    );
+  }
+
+  // ---------------------------------------------------------- P47: cross-sell / recommendations (4.2h)
+
+  /** Every recommendation attached to this product, unfiltered — the editor's own management list. */
+  listRecommendations(scope: BrandScope, productId: string): Observable<RecommendationList> {
+    return unwrap(this.api.get<RecommendationList>(catalogPaths.recommendations(scope, productId)));
+  }
+
+  /**
+   * IA 4.2's own filter — active + in-menu + not-stopped — resolved server-side
+   * at one location. A target stopped today and un-stopped tomorrow reappears
+   * here on its own; nothing is pruned from {@link listRecommendations}'s set.
+   */
+  effectiveRecommendations(
+    scope: BrandScope,
+    productId: string,
+    locationId: string,
+  ): Observable<RecommendationList> {
+    return unwrap(
+      this.api.get<RecommendationList>(catalogPaths.effectiveRecommendations(scope, productId), {
+        params: { locationId },
+      }),
+    );
+  }
+
+  /** Attaches a target variant, or re-sorts it if already attached — the same call. */
+  attachRecommendation(
+    scope: BrandScope,
+    productId: string,
+    request: AttachRecommendationRequest,
+  ): Observable<RecommendationItem> {
+    return this.api.post<AttachRecommendationRequest, RecommendationItem>(
+      catalogPaths.recommendations(scope, productId),
+      command(request),
+    );
+  }
+
+  /** Idempotent — detaching a target that is already gone still resolves. */
+  detachRecommendation(
+    scope: BrandScope,
+    productId: string,
+    targetVariantId: string,
+  ): Observable<void> {
+    return this.api
+      .send<null, void>(
+        'DELETE',
+        catalogPaths.recommendation(scope, productId, targetVariantId),
+        command(null),
+      )
+      .pipe(map(() => undefined));
   }
 }
 

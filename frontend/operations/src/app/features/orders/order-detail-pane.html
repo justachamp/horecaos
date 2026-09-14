@@ -274,7 +274,7 @@
       </section>
     }
 
-    <!-- ================================================================ Детали (interim: kitchen note, callback, cash — §3.6/§3.9 own their real panels later) -->
+    <!-- ================================================================ Детали -->
     <section class="pane__section" [attr.aria-label]="'orders.detail.section.details' | t">
       <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.details' | t }}</h2>
       <dl class="pane__fields" data-testid="order-detail-details">
@@ -282,44 +282,138 @@
           <dt class="q-caption">{{ 'orders.detail.details.acceptanceMode' | t }}</dt>
           <dd class="q-body-sm">{{ detail.value.acceptanceMode ?? '—' }}</dd>
         </div>
+      </dl>
+    </section>
+
+    <!-- ================================================================ Комментарии (§3.6, ADR 0039, wave P10) -->
+    <section class="pane__section" [attr.aria-label]="'orders.detail.section.comments' | t">
+      <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.comments' | t }}</h2>
+      <p class="q-caption pane__comments-note">{{ 'orders.detail.comments.privacyNotice' | t }}</p>
+      <dl class="pane__fields" data-testid="order-detail-comments">
+        <!-- The customer's own words — never rendered here unrevealed (§3.6, ADR 0029). -->
+        <div class="pane__field">
+          <dt class="q-caption">{{ 'orders.detail.comments.customerToOrder' | t }}</dt>
+          <dd class="q-body-sm">
+            {{
+              detail.value.customer.hasDeliveryInstructions
+                ? ('orders.detail.comments.customerToOrder.seeAddress' | t)
+                : '—'
+            }}
+          </dd>
+        </div>
+        <div class="pane__field">
+          <dt class="q-caption">{{ 'orders.detail.comments.customerToLine' | t }}</dt>
+          <dd class="q-body-sm">
+            {{ hasAnyLineNote() ? ('orders.detail.comments.customerToLine.seeLines' | t) : '—' }}
+          </dd>
+        </div>
+
+        <!-- Ours, in full (§3.6: never personal data). -->
         <div class="pane__field">
           <dt class="q-caption">{{ 'orders.detail.details.kitchenNote' | t }}</dt>
-          <dd class="q-body-sm" data-testid="order-detail-kitchen-note">
-            {{ detail.value.kitchenNote ?? ('orders.detail.details.kitchenNote.none' | t) }}
+          <dd class="q-body-sm pane__comments-row" data-testid="order-detail-kitchen-note">
+            <span>{{
+              detail.value.kitchenNote ?? ('orders.detail.details.kitchenNote.none' | t)
+            }}</span>
+            <button
+              type="button"
+              class="pane__reveal-link"
+              (click)="openKitchenNoteDialog()"
+              data-testid="order-detail-kitchen-note-edit"
+            >
+              {{ 'orders.detail.comments.edit' | t }}
+            </button>
+          </dd>
+        </div>
+        <div class="pane__field">
+          <dt class="q-caption">{{ 'orders.detail.comments.courier' | t }}</dt>
+          <dd class="q-body-sm pane__comments-row" data-testid="order-detail-courier-note">
+            <span>{{ 'orders.detail.comments.courier.none' | t }}</span>
+            <button
+              type="button"
+              class="pane__reveal-link"
+              (click)="openCourierNoteDialog()"
+              data-testid="order-detail-courier-note-add"
+            >
+              {{ 'orders.detail.comments.add' | t }}
+            </button>
+          </dd>
+        </div>
+        <div class="pane__field">
+          <dt class="q-caption">{{ 'orders.detail.comments.internal' | t }}</dt>
+          <dd class="q-body-sm pane__comments-row" data-testid="order-detail-internal-note">
+            <span>{{ 'orders.detail.comments.internal.none' | t }}</span>
+            <button
+              type="button"
+              class="pane__reveal-link"
+              (click)="openInternalNoteDialog()"
+              data-testid="order-detail-internal-note-add"
+            >
+              {{ 'orders.detail.comments.add' | t }}
+            </button>
           </dd>
         </div>
         <div class="pane__field">
           <dt class="q-caption">{{ 'orders.detail.details.callback' | t }}</dt>
-          <dd class="q-body-sm" data-testid="order-detail-callback">
-            @if (detail.value.callbackRequested) {
-              @if (detail.value.callbackResolvedAt) {
-                {{
-                  'orders.detail.details.callback.resolved'
-                    | t: { at: formatOccurredAt(detail.value.callbackResolvedAt) }
-                }}
+          <dd class="q-body-sm pane__comments-row" data-testid="order-detail-callback">
+            <span>
+              @if (detail.value.callbackRequested) {
+                @if (detail.value.callbackResolvedAt) {
+                  {{
+                    'orders.detail.details.callback.resolved'
+                      | t: { at: formatOccurredAt(detail.value.callbackResolvedAt) }
+                  }}
+                } @else {
+                  {{ 'orders.detail.details.callback.outstanding' | t }}
+                }
               } @else {
-                {{ 'orders.detail.details.callback.outstanding' | t }}
+                {{ 'orders.detail.details.callback.none' | t }}
               }
-            } @else {
-              {{ 'orders.detail.details.callback.none' | t }}
-            }
+            </span>
+            <button
+              type="button"
+              class="pane__reveal-link"
+              (click)="toggleCallback()"
+              [disabled]="busy()"
+              data-testid="order-detail-callback-toggle"
+            >
+              {{
+                (detail.value.callbackRequested
+                  ? 'orders.detail.comments.callback.clear'
+                  : 'orders.detail.comments.callback.request'
+                ) | t
+              }}
+            </button>
+          </dd>
+        </div>
+        <div class="pane__field">
+          <dt class="q-caption">{{ 'orders.detail.details.cashTendered' | t }}</dt>
+          <dd class="q-body-sm pane__comments-row">
+            <span class="q-mono q-tnum" data-testid="order-detail-cash-tendered">
+              {{
+                detail.value.cashTenderedExpectedMinor === null ||
+                detail.value.cashTenderedExpectedMinor === undefined
+                  ? '—'
+                  : formatMoneyMinor(
+                      detail.value.cashTenderedExpectedMinor,
+                      detail.value.summary.currency
+                    )
+              }}
+            </span>
+            <button
+              type="button"
+              class="pane__reveal-link"
+              (click)="openCashTenderedDialog()"
+              data-testid="order-detail-cash-tendered-edit"
+            >
+              {{ 'orders.detail.comments.edit' | t }}
+            </button>
           </dd>
         </div>
         @if (
           detail.value.cashTenderedExpectedMinor !== null &&
           detail.value.cashTenderedExpectedMinor !== undefined
         ) {
-          <div class="pane__field">
-            <dt class="q-caption">{{ 'orders.detail.details.cashTendered' | t }}</dt>
-            <dd class="q-body-sm q-mono q-tnum" data-testid="order-detail-cash-tendered">
-              {{
-                formatMoneyMinor(
-                  detail.value.cashTenderedExpectedMinor,
-                  detail.value.summary.currency
-                )
-              }}
-            </dd>
-          </div>
           <div class="pane__field">
             <dt class="q-caption">{{ 'orders.detail.details.changeDue' | t }}</dt>
             <dd class="q-body-sm q-mono q-tnum" data-testid="order-detail-change-due">
@@ -330,6 +424,75 @@
           </div>
         }
       </dl>
+
+      @if (cashTenderedWarning()) {
+        <p class="q-body-sm pane__warning" data-testid="order-detail-cash-tendered-warning">
+          {{ 'orders.amendment.warning.CASH_TENDERED_INSUFFICIENT' | t }}
+          <button
+            type="button"
+            class="pane__reveal-link"
+            (click)="dismissCashTenderedWarning()"
+            data-testid="order-detail-cash-tendered-warning-ack"
+          >
+            {{ 'orders.amendment.warning.acknowledge' | t }}
+          </button>
+        </p>
+      }
+
+      <!-- Amendment history (§3.6/§3.10, GET .../amendments) -->
+      <button
+        type="button"
+        class="pane__reveal-link"
+        (click)="toggleAmendmentHistory()"
+        data-testid="order-detail-amendment-history-toggle"
+      >
+        {{
+          (amendmentHistoryOpen()
+            ? 'orders.detail.comments.history.hide'
+            : 'orders.detail.comments.history.open'
+          ) | t
+        }}
+      </button>
+
+      @if (amendmentHistoryOpen()) {
+        @if (amendmentHistoryLoading()) {
+          <p class="q-body-sm pane__state-inline">{{ 'orders.detail.loading' | t }}</p>
+        } @else if (amendmentHistoryError()) {
+          <p
+            class="q-body-sm pane__state-inline"
+            data-testid="order-detail-amendment-history-error"
+          >
+            {{ 'orders.detail.comments.history.error' | t }}
+          </p>
+        } @else if (amendmentHistory(); as history) {
+          @if (history.length === 0) {
+            <p class="q-body-sm pane__state-inline">
+              {{ 'orders.detail.comments.history.empty' | t }}
+            </p>
+          } @else {
+            <table class="pane__lines-table" data-testid="order-detail-amendment-history-table">
+              <thead>
+                <tr>
+                  <th>{{ 'orders.detail.revisions.column.createdAt' | t }}</th>
+                  <th>{{ 'orders.detail.revisions.column.source' | t }}</th>
+                  <th>{{ 'orders.detail.comments.history.open' | t }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (entry of history; track entry.amendmentId) {
+                  @for (cmd of entry.commandDetails; track $index) {
+                    <tr data-testid="order-detail-amendment-history-row">
+                      <td class="q-tnum">{{ formatOccurredAt(entry.createdAt) }}</td>
+                      <td>{{ amendmentCommandLabel(cmd.type) }}</td>
+                      <td class="q-body-sm">{{ cmd.text ?? '—' }}</td>
+                    </tr>
+                  }
+                }
+              </tbody>
+            </table>
+          }
+        }
+      }
     </section>
 
     <!-- ================================================================ Ревизии (§3.9, row 1.2p) -->
@@ -633,6 +796,43 @@
       [reasons]="rejectReasons()"
       [busy]="busy()"
       (confirm)="onRejectDialogConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'amendMenu') {
+    <q-order-amend-menu (select)="onAmendMenuSelect($event)" (dismiss)="onDialogDismiss()" />
+  }
+  @if (dialog() === 'kitchenNote') {
+    <q-order-note-dialog
+      titleKey="orders.detail.details.kitchenNote"
+      [initialValue]="order()?.value.kitchenNote ?? ''"
+      [busy]="busy()"
+      (confirm)="onKitchenNoteConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'courierNote') {
+    <q-order-note-dialog
+      titleKey="orders.detail.comments.courier"
+      [busy]="busy()"
+      (confirm)="onCourierNoteConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'internalNote') {
+    <q-order-note-dialog
+      titleKey="orders.detail.comments.internal"
+      [busy]="busy()"
+      (confirm)="onInternalNoteConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'cashTendered') {
+    <q-order-cash-tendered-dialog
+      [initialValueMinor]="order()?.value.cashTenderedExpectedMinor ?? 0"
+      [currency]="order()?.value.summary?.currency ?? 'UZS'"
+      [busy]="busy()"
+      (confirm)="onCashTenderedConfirm($event)"
       (dismiss)="onDialogDismiss()"
     />
   }

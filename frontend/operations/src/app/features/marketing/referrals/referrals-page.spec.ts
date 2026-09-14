@@ -5,10 +5,36 @@ import { describe, expect, it, vi } from 'vitest';
 import { BrandScope } from '../../../core/api/catalog-paths';
 import { CurrentBrand } from '../../../core/auth/current-brand';
 import { I18n } from '../../../core/i18n/i18n';
+import { AttributionLinkView, MarketingApi } from '../marketing-api';
 import { ReferralProgramView, ReferralRedemptionView, ReferralsApi } from './referrals-api';
 import { ReferralsPage } from './referrals-page';
 
 const BRAND_SCOPE: BrandScope = { tenantId: 't1', brandId: 'b1' };
+
+const LINK: AttributionLinkView = {
+  linkId: 'link-1',
+  label: 'Instagram bio',
+  token: 'aB3dE7fGhJ',
+  ownerNote: null,
+  channel: 'WEB',
+  destinationType: 'STOREFRONT_HOME',
+  destinationId: null,
+  status: 'ACTIVE',
+  validFrom: '2026-09-14T00:00:00Z',
+  validUntil: null,
+  clickCount: 0,
+  createdBy: 'actor-1',
+  createdAt: '2026-09-14T00:00:00Z',
+};
+
+function fakeMarketingApi(overrides: Partial<MarketingApi> = {}): Partial<MarketingApi> {
+  return {
+    listAttributionLinks: vi.fn().mockResolvedValue([]),
+    mintAttributionLink: vi.fn(),
+    archiveAttributionLink: vi.fn(),
+    ...overrides,
+  };
+}
 
 const DRAFT_PROGRAM: ReferralProgramView = {
   id: 'program-1',
@@ -61,7 +87,10 @@ function fakeApi(overrides: Partial<ReferralsApi> = {}): Partial<ReferralsApi> {
 describe('ReferralsPage', () => {
   let fixture: ComponentFixture<ReferralsPage>;
 
-  async function render(api: Partial<ReferralsApi>): Promise<void> {
+  async function render(
+    api: Partial<ReferralsApi>,
+    marketingApi: Partial<MarketingApi> = fakeMarketingApi(),
+  ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [ReferralsPage],
       providers: [
@@ -74,6 +103,7 @@ describe('ReferralsPage', () => {
           },
         },
         { provide: ReferralsApi, useValue: api },
+        { provide: MarketingApi, useValue: marketingApi },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -114,13 +144,12 @@ describe('ReferralsPage', () => {
     );
   });
 
-  it('always renders the honest not-built panel for acquisition links', async () => {
+  it('T18: acquisition links are a real section now, not the honest not-built panel', async () => {
     await render(fakeApi());
     const host = fixture.nativeElement as HTMLElement;
 
-    expect(host.querySelector('[data-testid="referrals-links-not-built"]')).not.toBeNull();
-    // ADR 0044's own checklist item is named, not just "not built".
-    expect(host.textContent).toContain('ADR 0044');
+    expect(host.querySelector('[data-testid="referrals-links-not-built"]')).toBeNull();
+    expect(host.querySelector('[data-testid="attribution-links-section"]')).not.toBeNull();
   });
 
   it('shows the denied state when the brand grant is missing', async () => {
@@ -214,5 +243,80 @@ describe('ReferralsPage', () => {
     page['formRefereeRewardMinor'].set(0);
 
     expect(page['canSubmit']()).toBe(false);
+  });
+
+  // ------------------------------------------------------- T18 attribution links
+
+  it('lists a minted acquisition link and renders it as a website ?ref= URL', async () => {
+    await render(
+      fakeApi(),
+      fakeMarketingApi({ listAttributionLinks: vi.fn().mockResolvedValue([LINK]) }),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelectorAll('[data-testid="attribution-link-row"]')).toHaveLength(1);
+    expect(host.textContent).toContain(LINK.token);
+    expect(host.textContent).toContain('?ref=');
+  });
+
+  it('mints a link with the form fields, reloads the list, and closes the dialog', async () => {
+    const mintAttributionLink = vi.fn().mockResolvedValue(LINK);
+    const listAttributionLinks = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([LINK]);
+    await render(fakeApi(), fakeMarketingApi({ mintAttributionLink, listAttributionLinks }));
+    const page = fixture.componentInstance as unknown as {
+      openLinkForm(): void;
+      linkFormLabel: { set(v: string): void };
+      submitLinkForm(): Promise<void>;
+      showLinkForm: { (): boolean };
+    };
+
+    page.openLinkForm();
+    page.linkFormLabel.set('Summer campaign');
+    await page.submitLinkForm();
+
+    expect(mintAttributionLink).toHaveBeenCalledWith(
+      BRAND_SCOPE,
+      expect.objectContaining({
+        label: 'Summer campaign',
+        channel: 'WEB',
+        destinationType: 'STOREFRONT_HOME',
+        destinationId: null,
+      }),
+    );
+    expect(listAttributionLinks).toHaveBeenCalledTimes(2);
+    expect(page.showLinkForm()).toBe(false);
+  });
+
+  it('a CAMPAIGN destination cannot be submitted without a destinationId', async () => {
+    await render(fakeApi());
+    const page = fixture.componentInstance as unknown as {
+      openLinkForm(): void;
+      linkFormLabel: { set(v: string): void };
+      linkFormDestinationType: { set(v: string): void };
+      canSubmitLinkForm(): boolean;
+    };
+    page.openLinkForm();
+    page.linkFormLabel.set('x');
+    page.linkFormDestinationType.set('CAMPAIGN');
+
+    expect(page.canSubmitLinkForm()).toBe(false);
+  });
+
+  it('archives a link and reloads the list', async () => {
+    const archiveAttributionLink = vi.fn().mockResolvedValue(undefined);
+    const listAttributionLinks = vi
+      .fn()
+      .mockResolvedValueOnce([LINK])
+      .mockResolvedValueOnce([{ ...LINK, status: 'ARCHIVED' }]);
+    await render(fakeApi(), fakeMarketingApi({ archiveAttributionLink, listAttributionLinks }));
+
+    await (
+      fixture.componentInstance as unknown as {
+        archiveLink(link: AttributionLinkView): Promise<void>;
+      }
+    ).archiveLink(LINK);
+
+    expect(archiveAttributionLink).toHaveBeenCalledWith(BRAND_SCOPE, 'link-1');
+    expect(listAttributionLinks).toHaveBeenCalledTimes(2);
   });
 });

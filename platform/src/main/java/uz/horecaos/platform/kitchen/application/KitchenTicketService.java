@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -987,6 +988,17 @@ public class KitchenTicketService {
                 locationId,
                 statuses.isEmpty() ? List.of("FIRED", "IN_PRODUCTION", "READY") : statuses,
                 limit);
+    }
+
+    /** The board's exact tab badges (gap map row 2.1) — every matching ticket, not just the page {@link #board} returned. */
+    public JdbcKitchenStore.TicketCountsRow counts(UUID tenantId, UUID locationId, List<String> statuses) {
+        return kitchen.counts(
+                tenantId, locationId, statuses.isEmpty() ? List.of("FIRED", "IN_PRODUCTION", "READY") : statuses);
+    }
+
+    /** {@code channelCode} typed against {@code sales_channels.system_type} (gap map row 2.1). */
+    public Map<String, String> channelSystemTypes(UUID tenantId, Set<String> channelCodes) {
+        return kitchen.channelSystemTypes(tenantId, channelCodes);
     }
 
     public List<TicketItemRow> items(UUID tenantId, UUID ticketId) {

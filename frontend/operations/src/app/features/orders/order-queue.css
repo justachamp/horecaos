@@ -385,3 +385,134 @@
   text-align: center;
   color: var(--q-ink-muted);
 }
+
+/* ---- toolbar filters (orders.md §2.4, wave P07) ------------------------ */
+
+.order-queue__search {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-size: var(--q-type-body-sm);
+  min-width: 200px;
+}
+
+.order-queue__select {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-size: var(--q-type-body-sm);
+}
+
+.order-queue__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--q-type-body-sm);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+/* ---- selection column and bulk-action bar (orders.md §2.10, wave P07) -- */
+
+.order-queue__select-col {
+  width: 32px;
+  text-align: center;
+}
+
+.order-queue__bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  background: var(--q-surface-1);
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.order-queue__bulk-action {
+  padding: 6px 12px;
+  border: 1px solid var(--q-ink);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-size: var(--q-type-body-sm);
+  cursor: pointer;
+}
+
+.order-queue__bulk-action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.order-queue__bulk-action--danger {
+  border-color: var(--q-error-text);
+  color: var(--q-error-text);
+}
+
+.order-queue__bulk-unavailable {
+  color: var(--q-ink-subtle);
+}
+
+.order-queue__bulk-note {
+  color: var(--q-ink-subtle);
+  margin-left: auto;
+}
+
+.order-queue__bulk-clear {
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-body-sm);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ---- bulk result panel (§2.10) ----------------------------------------- */
+
+.order-queue__bulk-result {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 40px 12px 16px;
+  background: var(--q-surface-1);
+  border-top: 1px solid var(--q-hairline);
+  flex-shrink: 0;
+}
+
+.order-queue__bulk-result-items {
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--q-type-body-sm);
+  color: var(--q-ink-muted);
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.order-queue__bulk-retry {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border: 1px solid var(--q-ink);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-size: var(--q-type-body-sm);
+  cursor: pointer;
+}
+
+.order-queue__bulk-result-dismiss {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  border: none;
+  background: none;
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-body);
+  line-height: 1;
+  cursor: pointer;
+}

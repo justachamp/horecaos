@@ -60,7 +60,11 @@ type Stage = 'loading' | 'invalid' | 'expired' | 'form' | 'done';
               <form (submit)="submit($event)">
                 <h1 class="q-title heading">{{ 'invite.title' | t }}</h1>
                 <p class="q-body lead">
-                  {{ 'invite.lead' | t: { tenant: invitation.tenantName } }}
+                  @if (invitation.jobName; as jobName) {
+                    {{ 'invite.leadStaff' | t: { tenant: invitation.tenantName, job: jobName } }}
+                  } @else {
+                    {{ 'invite.lead' | t: { tenant: invitation.tenantName } }}
+                  }
                 </p>
                 @if (invitation.emailMasked; as email) {
                   <p class="q-caption muted">{{ 'invite.sentTo' | t: { email } }}</p>

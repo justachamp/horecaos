@@ -136,11 +136,6 @@
   border: 1px solid var(--q-hairline);
 }
 
-.mix-card--locked {
-  background: var(--q-surface-1);
-  color: var(--q-ink-subtle);
-}
-
 .mix-card__header {
   display: flex;
   align-items: center;

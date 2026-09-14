@@ -65,9 +65,16 @@ public class ReportQueryService {
                 case MEDIAN ->
                     throw new ReportingRefusals.NonScalarMetricException(
                             metric.id().code(), "GET .../reporting/preparation-time");
+                // Two DISTRIBUTION metrics, two endpoints: a share-per-bucket and a
+                // share-per-payment-method breakdown are both several rows per
+                // slice, but not the same rows, so each is refused by name toward
+                // the endpoint that actually answers it (P39).
                 case DISTRIBUTION ->
                     throw new ReportingRefusals.NonScalarMetricException(
-                            metric.id().code(), "GET .../reporting/sla-buckets");
+                            metric.id().code(),
+                            metric.id().code().startsWith("payment_mix")
+                                    ? "GET .../reporting/payment-mix"
+                                    : "GET .../reporting/sla-buckets");
                 default -> {}
             }
         }
@@ -118,7 +125,62 @@ public class ReportQueryService {
     }
 
     /**
-     * The median preparation time.
+     * P39 (7.1c/7.3b): takings split by payment method — the cash-collection
+     * control figure. Its own method rather than the typed {@link #run}: a
+     * share-per-method breakdown is several rows per slice, the same reason
+     * {@link #slaBuckets} above is not folded into {@code /queries}.
+     *
+     * <p>{@code overview} folds every branch into one row per (legal entity,
+     * payment method) — never across legal entities, since this is money and
+     * ADR 0038 forbids summing two taxpayers into one figure; {@code
+     * byLocation} keeps the branch split so a manager can answer «7.3b»'s cash
+     * reconciliation from the same read. Both come from the one grouped SQL
+     * read in {@link JdbcReportingStore#readPaymentMix}, never a second query.
+     *
+     * <p>{@code paymentMethodCodes} narrows both {@code overview} and {@code
+     * byLocation} to those methods only — empty means every method, the same
+     * convention {@code locationIds} already uses.
+     */
+    @Transactional(readOnly = true)
+    public PaymentMixResult paymentMix(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<String> paymentMethodCodes) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        List<JdbcReportingStore.PaymentMixRow> rows =
+                store.readPaymentMix(tenantId, from, to, locationIds, paymentMethodCodes);
+
+        Map<OverviewKey, PaymentMixAccumulator> overview = new LinkedHashMap<>();
+        for (JdbcReportingStore.PaymentMixRow row : rows) {
+            overview.computeIfAbsent(
+                            new OverviewKey(row.legalEntityId(), row.paymentMethodCode()),
+                            key -> new PaymentMixAccumulator(row.paymentMethodCode(), row.settlesFromBalance()))
+                    .add(row.tenderCount(), row.amountSom());
+        }
+        List<PaymentMixRow> overviewRows = new ArrayList<>(overview.size());
+        overview.forEach((key, accumulator) -> overviewRows.add(accumulator.toRow(null, key.legalEntityId())));
+        overviewRows.sort(Comparator.comparing(PaymentMixRow::paymentMethodCode));
+
+        List<PaymentMixRow> byLocationRows = rows.stream()
+                .map(row -> new PaymentMixRow(
+                        row.locationId(),
+                        row.legalEntityId(),
+                        row.paymentMethodCode(),
+                        row.settlesFromBalance(),
+                        row.tenderCount(),
+                        row.amountSom()))
+                .toList();
+
+        return new PaymentMixResult(
+                overviewRows,
+                byLocationRows,
+                provenance(
+                        tenantId,
+                        List.of(MetricRegistry.require("payment_mix.amount.v1")),
+                        businessDays.boundaryFor(tenantId)));
+    }
+
+    /** The median preparation time.
      *
      * @return a result whose median is null when nothing reached READY in the
      *         range, which is not a zero-second kitchen
@@ -548,6 +610,50 @@ public class ReportQueryService {
     public record ReportResult(List<ReportRow> rows, Provenance provenance) {}
 
     public record SlaResult(List<SlaBucketAggregate> buckets, Provenance provenance) {}
+
+    /**
+     * One payment-mix row: either an {@code overview} row ({@code locationId}
+     * null, folded across every branch in range) or a {@code byLocation} row
+     * (branch-specific) — see {@link #paymentMix}. Never across two legal
+     * entities either way.
+     */
+    public record PaymentMixRow(
+            @Nullable UUID locationId,
+            @Nullable UUID legalEntityId,
+            String paymentMethodCode,
+            boolean settlesFromBalance,
+            int tenderCount,
+            long amountSom) {}
+
+    public record PaymentMixResult(
+            List<PaymentMixRow> overview, List<PaymentMixRow> byLocation, Provenance provenance) {}
+
+    /** {@link #paymentMix}'s overview folding key — never across legal entities (ADR 0038). */
+    private record OverviewKey(@Nullable UUID legalEntityId, String paymentMethodCode) {}
+
+    /** Accumulates one overview slice. Mutable only inside {@link #paymentMix}. */
+    private static final class PaymentMixAccumulator {
+
+        private final String paymentMethodCode;
+        private final boolean settlesFromBalance;
+        private int tenderCount;
+        private long amountSom;
+
+        PaymentMixAccumulator(String paymentMethodCode, boolean settlesFromBalance) {
+            this.paymentMethodCode = paymentMethodCode;
+            this.settlesFromBalance = settlesFromBalance;
+        }
+
+        void add(int tenderCount, long amountSom) {
+            this.tenderCount += tenderCount;
+            this.amountSom += amountSom;
+        }
+
+        PaymentMixRow toRow(@Nullable UUID locationId, @Nullable UUID legalEntityId) {
+            return new PaymentMixRow(
+                    locationId, legalEntityId, paymentMethodCode, settlesFromBalance, tenderCount, amountSom);
+        }
+    }
 
     public record MedianResult(@Nullable Integer medianSeconds, Provenance provenance) {}
 

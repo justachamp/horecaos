@@ -207,6 +207,12 @@
   background: var(--q-warning-tint);
 }
 
+.status-pill--invited {
+  border-color: var(--q-primary);
+  color: var(--q-primary);
+  background: var(--q-surface-1);
+}
+
 .row-actions {
   white-space: nowrap;
 }

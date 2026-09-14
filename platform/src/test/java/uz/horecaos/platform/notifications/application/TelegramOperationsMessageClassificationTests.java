@@ -28,7 +28,10 @@ import uz.horecaos.platform.tenancy.api.OnboardingHealth;
  * {@link uz.horecaos.platform.iam.api.protection.ClassificationScanner}'s own
  * name heuristic, applied directly to the variable maps
  * {@link OrderNotificationTrigger}, {@link ApprovalDeadlineWarningSweeper},
- * {@link FiscalOperationsAlertTrigger} and {@link InventoryOperationsAlertTrigger}
+ * {@link FiscalOperationsAlertTrigger} and {@link InventoryStopDigestSweeper}
+ * (wave P16: {@link InventoryOperationsAlertTrigger} itself now only enqueues
+ * — see that class's own doc — so the digest sweeper is what actually hands
+ * variables to a template)
  * actually hand to a template — the entire allowlisted vocabulary an operations
  * message may render with, which is exactly what ADR 0020's "only allowlisted
  * typed variables from a versioned schema can render" makes closed enough to
@@ -141,18 +144,20 @@ class TelegramOperationsMessageClassificationTests {
     }
 
     @Test
-    void theItem86dVariablesCarryNoProtectedField() {
-        Map<String, String> variables = InventoryOperationsAlertTrigger.itemVariables("Lagman", "MANUAL");
-        assertClean(variables, "InventoryOperationsAlertTrigger.itemVariables");
+    void theInventoryStopDigestVariablesCarryNoProtectedField() {
+        Map<String, String> variables =
+                InventoryStopDigestSweeper.digestVariables(java.util.List.of("Lagman"), java.util.List.of("Osh"));
+        assertClean(variables, "InventoryStopDigestSweeper.digestVariables");
 
-        // An item name is a product's own proper noun, the same PII-neutral
+        // Item names are a product's own proper nouns, the same PII-neutral
         // category an order number already is — but named explicitly rather
         // than only scanned, the same discipline
         // theApprovalDeadlineWarningVariablesCarryNoProtectedField above
-        // applies: a third key appearing here is exactly the drift this
-        // test exists to catch even when the scanner's own name heuristic
-        // happens not to trigger on it.
-        assertThat(variables.keySet()).containsExactlyInAnyOrder("itemName", "reasonCode");
+        // applies: a fifth key appearing here is exactly the drift this test
+        // exists to catch even when the scanner's own name heuristic happens
+        // not to trigger on it.
+        assertThat(variables.keySet())
+                .containsExactlyInAnyOrder("stoppedCount", "stoppedItems", "restoredCount", "restoredItems");
     }
 
     @Test

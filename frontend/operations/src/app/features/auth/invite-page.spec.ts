@@ -14,6 +14,7 @@ const TOKEN = 'k8Qm2v1Xo9-pL3sW7yZ0aB4cD6eF8gH1iJ2kL3mN4oP';
 const INVITATION: InvitationInspection = {
   tenantName: 'Qoida',
   emailMasked: 'd***a@example.uz',
+  jobName: null,
   expiresAt: '2026-09-14T09:00:00Z',
   locale: 'en',
 };
@@ -102,6 +103,20 @@ describe('InvitePage', () => {
     expect(TestBed.inject(I18n).locale()).toBe('en');
     expect(text()).toContain('Qoida uses HorecaOS');
     expect(text()).toContain('d***a@example.uz');
+  });
+
+  it('shows the job name and never the email for a staff invitation (ADR 0116)', async () => {
+    invitations.inspect.mockResolvedValue({
+      tenantName: 'Qoida',
+      emailMasked: null,
+      jobName: 'Location manager',
+      expiresAt: '2026-09-14T09:00:00Z',
+      locale: 'en',
+    });
+    await open(`token=${TOKEN}`);
+
+    expect(text()).toContain('Qoida invited you to work as Location manager');
+    expect(text()).not.toContain('***');
   });
 
   it('will not submit a short password or two that differ', async () => {

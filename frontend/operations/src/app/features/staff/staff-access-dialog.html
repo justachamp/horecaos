@@ -1,32 +1,8 @@
 <div class="access-dialog__backdrop" data-testid="staff-access-dialog">
-  <div
-    class="access-dialog"
-    role="dialog"
-    aria-modal="true"
-    [attr.aria-label]="
-      (mode() === 'suspend'
-        ? 'staff.accessDialog.suspend.title'
-        : 'staff.accessDialog.restore.title'
-      ) | t
-    "
-  >
-    <h2 class="q-emphasis access-dialog__title">
-      {{
-        (mode() === 'suspend'
-          ? 'staff.accessDialog.suspend.title'
-          : 'staff.accessDialog.restore.title'
-        ) | t
-      }}
-    </h2>
+  <div class="access-dialog" role="dialog" aria-modal="true" [attr.aria-label]="titleKey() | t">
+    <h2 class="q-emphasis access-dialog__title">{{ titleKey() | t }}</h2>
 
-    <p class="q-body-sm">
-      {{
-        (mode() === 'suspend'
-          ? 'staff.accessDialog.suspend.body'
-          : 'staff.accessDialog.restore.body'
-        ) | t: { count: affectedJobCount() }
-      }}
-    </p>
+    <p class="q-body-sm">{{ bodyKey() | t: { count: affectedJobCount() } }}</p>
 
     @if (mode() === 'suspend') {
       <p class="q-caption access-dialog__warning">{{ 'staff.accessDialog.suspend.caveat' | t }}</p>
@@ -62,12 +38,12 @@
       <button
         type="button"
         class="access-dialog__confirm"
-        [class.access-dialog__confirm--destructive]="mode() === 'suspend'"
+        [class.access-dialog__confirm--destructive]="destructive()"
         (click)="confirm()"
         [disabled]="busy()"
         data-testid="staff-access-dialog-confirm"
       >
-        {{ (mode() === 'suspend' ? 'staff.action.suspend' : 'staff.action.restore') | t }}
+        {{ actionKey() | t }}
       </button>
     </div>
   </div>

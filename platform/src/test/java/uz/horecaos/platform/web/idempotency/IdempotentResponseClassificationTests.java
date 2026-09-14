@@ -137,7 +137,14 @@ class IdempotentResponseClassificationTests {
             // revoked. The client's secret never reaches this response —
             // revoke only ever answers changed/outcome, matching issue's and
             // rotate's own records for the secret-bearing calls beside it.
-            "PartnerApiClientController#revoke");
+            "PartnerApiClientController#revoke",
+            // ADR 0116, wave S01: whether a staff invitation was revoked — the
+            // same "changed" shape as GrantController#revoke above (here with
+            // no "outcome" at all, since revoke has exactly one outcome). No
+            // invitee name, phone, email or token reaches this response; those
+            // stay behind the audited reveal StaffInvitationService itself
+            // gates.
+            "StaffInvitationController#revoke");
 
     @Test
     @DisplayName("every idempotent handler's response is either scannable or reviewed")

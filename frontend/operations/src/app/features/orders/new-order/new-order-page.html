@@ -9,22 +9,47 @@
     <header class="new-order__header">
       <h1 class="q-subhead new-order__title">{{ 'orders.newOrder.title' | t }}</h1>
       <div class="new-order__header-actions">
+        <label class="new-order__aggregator-toggle q-caption">
+          <input
+            type="checkbox"
+            [checked]="aggregatorMode()"
+            (change)="toggleAggregatorMode()"
+            data-testid="new-order-aggregator-toggle"
+          />
+          {{ 'orders.newOrder.aggregator.toggle' | t }}
+        </label>
         <button type="button" class="new-order__cancel q-body-sm" (click)="cancel()">
           {{ 'orders.newOrder.order.cancel' | t }}
         </button>
-        <button
-          type="button"
-          class="new-order__submit q-body-sm"
-          [disabled]="!canSubmit()"
-          (click)="submit()"
-          data-testid="new-order-submit"
-        >
-          {{
-            submitting()
-              ? ('orders.newOrder.order.submitting' | t)
-              : ('orders.newOrder.order.submit' | t)
-          }}
-        </button>
+        @if (aggregatorMode()) {
+          <button
+            type="button"
+            class="new-order__submit q-body-sm"
+            [disabled]="!canSubmitAggregator()"
+            (click)="submitAggregator()"
+            data-testid="new-order-submit-aggregator"
+          >
+            {{
+              aggregatorSubmitting()
+                ? ('orders.newOrder.order.submitting' | t)
+                : ('orders.newOrder.order.submit' | t)
+            }}
+          </button>
+        } @else {
+          <button
+            type="button"
+            class="new-order__submit q-body-sm"
+            [disabled]="!canSubmit()"
+            (click)="submit()"
+            data-testid="new-order-submit"
+          >
+            {{
+              submitting()
+                ? ('orders.newOrder.order.submitting' | t)
+                : ('orders.newOrder.order.submit' | t)
+            }}
+          </button>
+        }
       </div>
     </header>
 
@@ -38,116 +63,426 @@
         </p>
       }
     }
+    @if (aggregatorMode() && aggregatorError(); as message) {
+      <p class="q-caption new-order__error" role="alert" data-testid="new-order-aggregator-error">
+        {{ message }}
+      </p>
+    }
 
     <div class="new-order__panes">
-      <!-- ================================================== КЛИЕНТ -->
+      <!-- ================================================== КЛИЕНТ / АГРЕГАТОР -->
       <section
         class="new-order__pane new-order__pane--customer"
         aria-label="{{ 'orders.newOrder.customer.title' | t }}"
       >
-        <h2 class="q-body-sm new-order__pane-title">{{ 'orders.newOrder.customer.title' | t }}</h2>
+        @if (aggregatorMode()) {
+          <h2 class="q-body-sm new-order__pane-title">
+            {{ 'orders.newOrder.aggregator.title' | t }}
+          </h2>
 
-        @if (selectedCustomer(); as customer) {
-          <div class="new-order__selected-customer" data-testid="new-order-selected-customer">
-            <span class="q-body-sm">{{ customer.label }}</span>
-            <div class="new-order__selected-customer-actions">
-              <button type="button" class="q-caption new-order__link" (click)="toggleHistory()">
-                {{ 'orders.newOrder.customer.history' | t }}
-              </button>
-              <button type="button" class="q-caption new-order__link" (click)="changeCustomer()">
-                {{ 'orders.newOrder.customer.change' | t }}
-              </button>
-            </div>
-          </div>
-
-          @if (nonContactableNotice()) {
-            <p class="q-caption new-order__notice" data-testid="new-order-non-contactable">
-              {{ 'orders.newOrder.customer.nonContactable' | t }}
-            </p>
-          }
-
-          @if (historyOpen()) {
-            <div class="new-order__history" data-testid="new-order-history">
-              @if (historyLoading()) {
-                <p class="q-caption">{{ 'orders.newOrder.customer.historyLoading' | t }}</p>
-              } @else if (historyOrders().length === 0) {
-                <p class="q-caption">{{ 'orders.newOrder.customer.historyEmpty' | t }}</p>
-              } @else {
-                <ul class="new-order__history-list">
-                  @for (order of historyOrders(); track order.orderId) {
-                    <li class="new-order__history-row">
-                      <span class="q-caption">{{ order.publicOrderNumber }}</span>
-                      <span class="q-caption">{{ formatHistoryTotal(order) }}</span>
-                    </li>
-                  }
-                </ul>
-              }
-            </div>
-          }
-        } @else {
           <label class="new-order__field">
-            <span class="q-caption">{{ 'orders.newOrder.customer.phoneLabel' | t }}</span>
-            <input
-              #phoneInput
-              type="tel"
+            <span class="q-caption">{{ 'orders.newOrder.aggregator.channel' | t }}</span>
+            <select
               class="new-order__input q-body-sm"
-              [value]="phone()"
-              (input)="onPhoneInput($any($event.target).value)"
-              placeholder="+998901112233"
-              data-testid="new-order-phone-input"
+              [value]="aggregatorChannelCode() ?? ''"
+              (change)="aggregatorChannelCode.set($any($event.target).value)"
+              data-testid="new-order-aggregator-channel"
+            >
+              @if (aggregatorChannels().length === 0) {
+                <option value="" disabled>{{ 'orders.newOrder.aggregator.noChannels' | t }}</option>
+              }
+              @for (channel of aggregatorChannels(); track channel.id) {
+                <option [value]="channel.code">{{ channel.displayName }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="new-order__field">
+            <span class="q-caption">{{ 'orders.newOrder.aggregator.externalOrderId' | t }}</span>
+            <input
+              type="text"
+              class="new-order__input q-body-sm"
+              [value]="aggregatorExternalOrderId()"
+              (input)="aggregatorExternalOrderId.set($any($event.target).value)"
+              data-testid="new-order-aggregator-external-id"
             />
           </label>
 
-          @if (customerLookupBusy()) {
-            <p class="q-caption">{{ 'orders.newOrder.customer.searching' | t }}</p>
-          } @else if (customerLookupError(); as message) {
-            <p class="q-caption new-order__error">{{ message }}</p>
-          } @else if (customerSearched()) {
-            @if (customerCandidates().length === 0) {
-              <div class="new-order__no-match" data-testid="new-order-no-match">
-                <p class="q-caption">{{ 'orders.newOrder.customer.noMatches' | t }}</p>
+          <label class="new-order__field">
+            <span class="q-caption">{{ 'orders.newOrder.aggregator.subtotal' | t }}</span>
+            <q-money-input
+              [valueMinor]="aggregatorSubtotalMinor()"
+              (valueMinorChange)="aggregatorSubtotalMinor.set($event)"
+              [ariaLabel]="'orders.newOrder.aggregator.subtotal' | t"
+            />
+          </label>
+          <label class="new-order__field">
+            <span class="q-caption">{{ 'orders.newOrder.aggregator.discount' | t }}</span>
+            <q-money-input
+              [valueMinor]="aggregatorDiscountMinor()"
+              (valueMinorChange)="aggregatorDiscountMinor.set($event)"
+              [ariaLabel]="'orders.newOrder.aggregator.discount' | t"
+            />
+          </label>
+          <label class="new-order__field">
+            <span class="q-caption">{{ 'orders.newOrder.aggregator.fee' | t }}</span>
+            <q-money-input
+              [valueMinor]="aggregatorFeeMinor()"
+              (valueMinorChange)="aggregatorFeeMinor.set($event)"
+              [ariaLabel]="'orders.newOrder.aggregator.fee' | t"
+            />
+          </label>
+          <label class="new-order__field">
+            <span class="q-caption">{{ 'orders.newOrder.aggregator.total' | t }}</span>
+            <q-money-input
+              [valueMinor]="aggregatorTotalMinor()"
+              (valueMinorChange)="aggregatorTotalMinor.set($event)"
+              [ariaLabel]="'orders.newOrder.aggregator.total' | t"
+              data-testid="new-order-aggregator-total"
+            />
+          </label>
+          <p class="q-caption new-order__hint">{{ 'orders.newOrder.aggregator.hint' | t }}</p>
+        } @else {
+          <h2 class="q-body-sm new-order__pane-title">
+            {{ 'orders.newOrder.customer.title' | t }}
+          </h2>
+
+          @if (selectedCustomer(); as customer) {
+            <div class="new-order__selected-customer" data-testid="new-order-selected-customer">
+              <span class="q-body-sm">{{ customer.label }}</span>
+              <div class="new-order__selected-customer-actions">
+                <button type="button" class="q-caption new-order__link" (click)="toggleHistory()">
+                  {{ 'orders.newOrder.customer.history' | t }}
+                </button>
+                <button type="button" class="q-caption new-order__link" (click)="changeCustomer()">
+                  {{ 'orders.newOrder.customer.change' | t }}
+                </button>
+              </div>
+            </div>
+
+            @if (nonContactableNotice()) {
+              <p class="q-caption new-order__notice" data-testid="new-order-non-contactable">
+                {{ 'orders.newOrder.customer.nonContactable' | t }}
+              </p>
+            }
+
+            @if (historyOpen()) {
+              <div class="new-order__history" data-testid="new-order-history">
+                @if (historyLoading()) {
+                  <p class="q-caption">{{ 'orders.newOrder.customer.historyLoading' | t }}</p>
+                } @else if (historyOrders().length === 0) {
+                  <p class="q-caption">{{ 'orders.newOrder.customer.historyEmpty' | t }}</p>
+                } @else {
+                  <ul class="new-order__history-list">
+                    @for (order of historyOrders(); track order.orderId) {
+                      <li class="new-order__history-row">
+                        <span class="q-caption">{{ order.publicOrderNumber }}</span>
+                        <span class="q-caption">{{ formatHistoryTotal(order) }}</span>
+                        <button
+                          type="button"
+                          class="q-caption new-order__link"
+                          [disabled]="reorderBusy() !== null"
+                          (click)="reorder(order)"
+                          data-testid="new-order-reorder"
+                        >
+                          {{
+                            reorderBusy() === order.orderId
+                              ? ('orders.newOrder.reorder.busy' | t)
+                              : ('orders.newOrder.reorder.action' | t)
+                          }}
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                }
+                @if (reorderError(); as message) {
+                  <p class="q-caption new-order__notice" data-testid="new-order-reorder-error">
+                    {{ message }}
+                  </p>
+                }
+              </div>
+            }
+
+            <!-- ------------------------------------------------- §5.4 ТИП / АДРЕС -->
+            <div class="new-order__fulfillment-toggle" role="radiogroup">
+              <button
+                type="button"
+                class="q-caption new-order__mode-button"
+                [class.new-order__mode-button--active]="fulfillmentMode() === 'PICKUP'"
+                (click)="setFulfillmentMode('PICKUP')"
+                data-testid="new-order-mode-pickup"
+              >
+                {{ 'orders.fulfillmentMode.PICKUP' | t }}
+              </button>
+              <button
+                type="button"
+                class="q-caption new-order__mode-button"
+                [class.new-order__mode-button--active]="fulfillmentMode() === 'DELIVERY'"
+                (click)="setFulfillmentMode('DELIVERY')"
+                data-testid="new-order-mode-delivery"
+              >
+                {{ 'orders.fulfillmentMode.DELIVERY' | t }}
+              </button>
+            </div>
+
+            @if (fulfillmentMode() === 'DELIVERY') {
+              <div class="new-order__address" data-testid="new-order-address">
+                <h3 class="q-caption new-order__pane-title">
+                  {{ 'orders.newOrder.address.title' | t }}
+                </h3>
+
+                @if (addressesLoading()) {
+                  <p class="q-caption">{{ 'orders.newOrder.address.loading' | t }}</p>
+                } @else if (addressesDenied()) {
+                  <p class="q-caption new-order__notice" data-testid="new-order-address-denied">
+                    {{ 'orders.newOrder.address.denied' | t }}
+                  </p>
+                } @else {
+                  @if (addressesError(); as message) {
+                    <p class="q-caption new-order__error">{{ message }}</p>
+                  }
+                  @if (addresses().length === 0 && !addingAddress()) {
+                    <p class="q-caption">{{ 'orders.newOrder.address.empty' | t }}</p>
+                  }
+                  <ul class="new-order__address-list">
+                    @for (address of addresses(); track address.id) {
+                      <li>
+                        <button
+                          type="button"
+                          class="new-order__address-option q-caption"
+                          [class.new-order__address-option--selected]="
+                            selectedAddressId() === address.id
+                          "
+                          (click)="selectAddress(address.id)"
+                          data-testid="new-order-address-option"
+                        >
+                          <span>{{ address.label || address.fields.line1 }}</span>
+                          <span class="q-caption">{{
+                            coordinateSourceLabel(address.coordinateSource)
+                          }}</span>
+                        </button>
+                      </li>
+                    }
+                  </ul>
+
+                  @if (selectedAddressUnlocated()) {
+                    <p
+                      class="q-caption new-order__notice"
+                      data-testid="new-order-address-unlocated"
+                    >
+                      {{ 'orders.newOrder.address.notLocated' | t }}
+                    </p>
+                  }
+
+                  @if (!addingAddress()) {
+                    <button
+                      type="button"
+                      class="new-order__create-button q-caption"
+                      (click)="startAddingAddress()"
+                      data-testid="new-order-address-add"
+                    >
+                      {{ 'orders.newOrder.address.add' | t }}
+                    </button>
+                  } @else {
+                    <div class="new-order__address-form">
+                      <label class="new-order__field">
+                        <span class="q-caption">{{ 'customers.address.label' | t }}</span>
+                        <input
+                          type="text"
+                          class="new-order__input q-body-sm"
+                          [value]="addressLabel()"
+                          (input)="addressLabel.set($any($event.target).value)"
+                        />
+                      </label>
+                      <label class="new-order__field">
+                        <span class="q-caption">{{ 'customers.address.line1' | t }}</span>
+                        <input
+                          type="text"
+                          class="new-order__input q-body-sm"
+                          [value]="addressDraft().line1"
+                          (input)="setAddressField('line1', $any($event.target).value)"
+                          data-testid="new-order-address-line1"
+                        />
+                      </label>
+                      <label class="new-order__field">
+                        <span class="q-caption">{{ 'customers.address.city' | t }}</span>
+                        <input
+                          type="text"
+                          class="new-order__input q-body-sm"
+                          [value]="addressDraft().city"
+                          (input)="setAddressField('city', $any($event.target).value)"
+                        />
+                      </label>
+                      <label class="new-order__field">
+                        <span class="q-caption">{{ 'customers.address.district' | t }}</span>
+                        <input
+                          type="text"
+                          class="new-order__input q-body-sm"
+                          [value]="addressDraft().district"
+                          (input)="setAddressField('district', $any($event.target).value)"
+                        />
+                      </label>
+                      <label class="new-order__field">
+                        <span class="q-caption">{{ 'customers.address.entrance' | t }}</span>
+                        <input
+                          type="text"
+                          class="new-order__input q-body-sm"
+                          [value]="addressDraft().entrance"
+                          (input)="setAddressField('entrance', $any($event.target).value)"
+                        />
+                      </label>
+                      <label class="new-order__field">
+                        <span class="q-caption">{{ 'customers.address.floor' | t }}</span>
+                        <input
+                          type="text"
+                          class="new-order__input q-body-sm"
+                          [value]="addressDraft().floor"
+                          (input)="setAddressField('floor', $any($event.target).value)"
+                        />
+                      </label>
+                      <label class="new-order__field">
+                        <span class="q-caption">{{ 'customers.address.apartment' | t }}</span>
+                        <input
+                          type="text"
+                          class="new-order__input q-body-sm"
+                          [value]="addressDraft().apartment"
+                          (input)="setAddressField('apartment', $any($event.target).value)"
+                        />
+                      </label>
+                      <label class="new-order__field">
+                        <span class="q-caption">{{ 'customers.address.landmark' | t }}</span>
+                        <input
+                          type="text"
+                          class="new-order__input q-body-sm"
+                          [value]="addressDraft().landmark"
+                          (input)="setAddressField('landmark', $any($event.target).value)"
+                          data-testid="new-order-address-landmark"
+                        />
+                      </label>
+                      @if (addressError(); as message) {
+                        <p class="q-caption new-order__error">{{ message }}</p>
+                      }
+                      <div class="new-order__form-actions">
+                        <button
+                          type="button"
+                          class="q-caption new-order__link"
+                          [disabled]="addressSaving()"
+                          (click)="cancelAddingAddress()"
+                        >
+                          {{ 'customers.cancel' | t }}
+                        </button>
+                        <button
+                          type="button"
+                          class="new-order__create-button q-caption"
+                          [disabled]="addressSaving()"
+                          (click)="saveNewAddress()"
+                          data-testid="new-order-address-save"
+                        >
+                          {{ addressSaving() ? ('customers.saving' | t) : ('customers.save' | t) }}
+                        </button>
+                      </div>
+                    </div>
+                  }
+                }
+
+                @if (selectedAddressId()) {
+                  <label class="new-order__field">
+                    <span class="q-caption">{{ 'orders.newOrder.address.recipientName' | t }}</span>
+                    <input
+                      type="text"
+                      class="new-order__input q-body-sm"
+                      [value]="recipientName()"
+                      (input)="recipientName.set($any($event.target).value)"
+                    />
+                  </label>
+                  <label class="new-order__field">
+                    <span class="q-caption">{{
+                      'orders.newOrder.address.recipientPhone' | t
+                    }}</span>
+                    <input
+                      type="tel"
+                      class="new-order__input q-body-sm"
+                      [value]="recipientPhone()"
+                      (input)="recipientPhone.set($any($event.target).value)"
+                    />
+                  </label>
+                  <label class="new-order__field">
+                    <span class="q-caption">{{ 'orders.newOrder.address.deliveryNote' | t }}</span>
+                    <input
+                      type="text"
+                      class="new-order__input q-body-sm"
+                      [value]="deliveryNote()"
+                      (input)="deliveryNote.set($any($event.target).value)"
+                    />
+                  </label>
+                }
+              </div>
+            }
+          } @else {
+            <label class="new-order__field">
+              <span class="q-caption">{{ 'orders.newOrder.customer.phoneLabel' | t }}</span>
+              <input
+                #phoneInput
+                type="tel"
+                class="new-order__input q-body-sm"
+                [value]="phone()"
+                (input)="onPhoneInput($any($event.target).value)"
+                placeholder="+998901112233"
+                data-testid="new-order-phone-input"
+              />
+            </label>
+
+            @if (customerLookupBusy()) {
+              <p class="q-caption">{{ 'orders.newOrder.customer.searching' | t }}</p>
+            } @else if (customerLookupError(); as message) {
+              <p class="q-caption new-order__error">{{ message }}</p>
+            } @else if (customerSearched()) {
+              @if (customerCandidates().length === 0) {
+                <div class="new-order__no-match" data-testid="new-order-no-match">
+                  <p class="q-caption">{{ 'orders.newOrder.customer.noMatches' | t }}</p>
+                  <button
+                    type="button"
+                    class="new-order__create-button q-body-sm"
+                    (click)="openCreateDialog()"
+                    data-testid="new-order-create-customer"
+                  >
+                    {{ 'orders.newOrder.customer.createButton' | t }}
+                  </button>
+                </div>
+              } @else {
+                <ul class="new-order__candidates" data-testid="new-order-candidates">
+                  @for (candidate of customerCandidates(); track candidate.accountId) {
+                    <li>
+                      <button
+                        type="button"
+                        class="new-order__candidate q-body-sm"
+                        (click)="selectCandidate(candidate)"
+                        data-testid="new-order-candidate"
+                      >
+                        <span>{{
+                          candidate.maskedDisplayName ?? ('orders.newOrder.customer.unnamed' | t)
+                        }}</span>
+                        <span class="q-caption">
+                          {{
+                            candidate.lastOrderAt
+                              ? ('orders.newOrder.customer.orderCount'
+                                | t: { count: candidate.recentOrderCount })
+                              : ('orders.newOrder.customer.noOrders' | t)
+                          }}
+                        </span>
+                      </button>
+                    </li>
+                  }
+                </ul>
                 <button
                   type="button"
                   class="new-order__create-button q-body-sm"
                   (click)="openCreateDialog()"
-                  data-testid="new-order-create-customer"
+                  data-testid="new-order-create-customer-alt"
                 >
                   {{ 'orders.newOrder.customer.createButton' | t }}
                 </button>
-              </div>
-            } @else {
-              <ul class="new-order__candidates" data-testid="new-order-candidates">
-                @for (candidate of customerCandidates(); track candidate.accountId) {
-                  <li>
-                    <button
-                      type="button"
-                      class="new-order__candidate q-body-sm"
-                      (click)="selectCandidate(candidate)"
-                      data-testid="new-order-candidate"
-                    >
-                      <span>{{
-                        candidate.maskedDisplayName ?? ('orders.newOrder.customer.unnamed' | t)
-                      }}</span>
-                      <span class="q-caption">
-                        {{
-                          candidate.lastOrderAt
-                            ? ('orders.newOrder.customer.orderCount'
-                              | t: { count: candidate.recentOrderCount })
-                            : ('orders.newOrder.customer.noOrders' | t)
-                        }}
-                      </span>
-                    </button>
-                  </li>
-                }
-              </ul>
-              <button
-                type="button"
-                class="new-order__create-button q-body-sm"
-                (click)="openCreateDialog()"
-                data-testid="new-order-create-customer-alt"
-              >
-                {{ 'orders.newOrder.customer.createButton' | t }}
-              </button>
+              }
             }
           }
         }
@@ -265,18 +600,65 @@
       >
         <h2 class="q-body-sm new-order__pane-title">{{ 'orders.newOrder.order.title' | t }}</h2>
 
-        <p class="q-caption new-order__order-row">
-          <span>{{ 'orders.newOrder.order.fulfillmentMode' | t }}</span>
-          <span>{{ 'orders.fulfillmentMode.PICKUP' | t }}</span>
-        </p>
-        <p class="q-caption new-order__hint">
-          {{ 'orders.newOrder.order.deliveryComingLater' | t }}
-        </p>
+        @if (!aggregatorMode()) {
+          <p class="q-caption new-order__order-row">
+            <span>{{ 'orders.newOrder.order.fulfillmentMode' | t }}</span>
+            <span>{{ fulfillmentModeLabel(fulfillmentMode()) }}</span>
+          </p>
 
-        <p class="q-caption new-order__order-row">
-          <span>{{ 'orders.newOrder.order.payment' | t }}</span>
-          <span>{{ 'orders.newOrder.order.paymentCashOnly' | t }}</span>
-        </p>
+          <p class="q-caption new-order__order-row" data-testid="new-order-branch-row">
+            <span>{{ 'orders.newOrder.order.branch' | t }}</span>
+            <span>
+              {{ currentLocationName() }}
+              @if (fulfillmentMode() === 'DELIVERY') {
+                <span class="new-order__branch-zone">{{ 'orders.newOrder.order.byZone' | t }}</span>
+              }
+            </span>
+          </p>
+
+          <label class="new-order__field">
+            <span class="q-caption">{{ 'orders.newOrder.order.payment' | t }}</span>
+            <select
+              class="new-order__input q-body-sm"
+              [value]="paymentMethodCode()"
+              (change)="paymentMethodCode.set($any($event.target).value)"
+              data-testid="new-order-payment-method"
+            >
+              @for (code of paymentMethods(); track code) {
+                <option [value]="code">{{ paymentMethodLabel(code) }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="new-order__field">
+            <span class="q-caption">{{ 'orders.newOrder.order.promoCode' | t }}</span>
+            <input
+              type="text"
+              class="new-order__input q-body-sm"
+              [value]="promoCode()"
+              (input)="promoCode.set($any($event.target).value)"
+              data-testid="new-order-promo-code"
+            />
+          </label>
+
+          @if (paymentMethodCode() === 'CASH') {
+            <label class="new-order__field">
+              <span class="q-caption">{{ 'orders.newOrder.order.cashTendered' | t }}</span>
+              <q-money-input
+                [valueMinor]="cashTenderedMinor()"
+                (valueMinorChange)="cashTenderedMinor.set($event)"
+                [ariaLabel]="'orders.newOrder.order.cashTendered' | t"
+                data-testid="new-order-cash-tendered"
+              />
+            </label>
+            @if (formattedChangeDue(); as change) {
+              <p class="q-caption new-order__order-row" data-testid="new-order-change-due">
+                <span>{{ 'orders.newOrder.order.changeDue' | t }}</span>
+                <span>{{ change }}</span>
+              </p>
+            }
+          }
+        }
 
         <div class="new-order__total-row">
           <span class="q-body-sm">{{ 'orders.newOrder.order.total' | t }}</span>

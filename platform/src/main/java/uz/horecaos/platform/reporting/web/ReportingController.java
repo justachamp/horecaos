@@ -120,6 +120,29 @@ public class ReportingController {
                 ProvenanceResponse.of(result.provenance())));
     }
 
+    @GetMapping("/payment-mix")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "Takings split by payment method — the cash-collection control figure (7.1c/7.3b)",
+            description = "payment_mix.amount.v1, over reporting.fact_order_tender: net tendered "
+                    + "amount per payment method, from tenders that reached SETTLED or REVERSED. "
+                    + "\"overview\" folds every branch into one row per method and legal entity "
+                    + "(ADR 0038: never across two, since this is money); \"byLocation\" keeps the "
+                    + "branch split so 7.3b's cash reconciliation can answer from the same read.")
+    public ResponseEntity<PaymentMixResponse> paymentMix(
+            @PathVariable UUID tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId,
+            @RequestParam(required = false) List<String> paymentMethodCode) {
+
+        var result = queries.paymentMix(tenantId, from, to, orEmpty(locationId), orEmpty(paymentMethodCode));
+        return ResponseEntity.ok(new PaymentMixResponse(
+                result.overview().stream().map(PaymentMixRowResponse::of).toList(),
+                result.byLocation().stream().map(PaymentMixRowResponse::of).toList(),
+                ProvenanceResponse.of(result.provenance())));
+    }
+
     /**
      * 10.10c: the version card settings.md 10.10 promises and never had. This
      * mirrors {@link SlaBucketController}'s platform-admin read exactly —
@@ -478,6 +501,36 @@ public class ReportingController {
     public record SlaResponse(List<BucketResponse> buckets, ProvenanceResponse provenance) {}
 
     public record MedianResponse(@Nullable Integer medianSeconds, ProvenanceResponse provenance) {}
+
+    /**
+     * One payment-mix row — see {@code ReportQueryService.PaymentMixRow}.
+     *
+     * @param locationId null on an {@code overview} row (folded across every
+     *                   branch in range), set on a {@code byLocation} row
+     */
+    public record PaymentMixRowResponse(
+            @Nullable UUID locationId,
+            @Nullable UUID legalEntityId,
+            String paymentMethodCode,
+            boolean settlesFromBalance,
+            int tenderCount,
+            long amountSom) {
+
+        static PaymentMixRowResponse of(ReportQueryService.PaymentMixRow row) {
+            return new PaymentMixRowResponse(
+                    row.locationId(),
+                    row.legalEntityId(),
+                    row.paymentMethodCode(),
+                    row.settlesFromBalance(),
+                    row.tenderCount(),
+                    row.amountSom());
+        }
+    }
+
+    public record PaymentMixResponse(
+            List<PaymentMixRowResponse> overview,
+            List<PaymentMixRowResponse> byLocation,
+            ProvenanceResponse provenance) {}
 
     /** One order-grain row. See {@code JdbcReportingStore.OrderRow} for what each field means. */
     public record OrderRowResponse(

@@ -42,6 +42,30 @@ export const operationsPaths = {
   },
 
   /**
+   * The order board (orders.md §2.4, ADR 0102, wave P07) — the branch's
+   * orders, filtered in the database and cursor-paged, superseding {@link
+   * orders} for any caller that needs a filter this console's toolbar offers
+   * (period, channel, fulfilment type, courier, payment method,
+   * `createdByActorId`, and the exact-match `reference` search). Same
+   * response shape as {@link orders}; a caller that has not moved yet gains
+   * nothing by switching path alone.
+   */
+  orderBoard(scope: LocationScope): string {
+    return `${this.orders(scope)}/board`;
+  },
+
+  /**
+   * N independent `ADVANCE`/`CANCEL` commands under one bulk operation id
+   * (ADR 0039, orders.md §2.10, wave P07) — `OrderBulkActionService`, capped
+   * at 200 orders, always `202` with a per-item outcome list. Bulk courier
+   * assignment is explicitly out of scope (`BulkActionType` has no such
+   * member); do not add a caller for it against this path.
+   */
+  orderBulkActions(scope: LocationScope): string {
+    return `${this.orders(scope)}/bulk-actions`;
+  },
+
+  /**
    * The board's seven tab badges in one call (§2.3), and the live board's two
    * mixes beside them. Falls back to client derivation on error.
    *
@@ -81,6 +105,11 @@ export const operationsPaths = {
     return `${this.orders(scope)}/customer-lookups`;
   },
 
+  /** Row 1.3g (ADR 0040): record an aggregator's own order by hand. */
+  orderAggregatorEntries(scope: LocationScope): string {
+    return `${this.orders(scope)}/aggregator-entries`;
+  },
+
   /** One order with its snapshotted lines. Returns an `ETag`. */
   order(scope: LocationScope, orderId: string): string {
     return `${this.orders(scope)}/${encodeURIComponent(orderId)}`;
@@ -113,6 +142,32 @@ export const operationsPaths = {
    * append-only chain `orderQuery.revisions` already serves and no screen has
    * read before now.
    */
+  /**
+   * ADR 0039 amendment (wave P10, gap map `1.2h`): `POST` proposes and, with
+   * `applyImmediately`, applies in the same call; `GET` is the history view
+   * over every amendment the order has ever had. Mutation: `Idempotency-Key`
+   * and `If-Match` required.
+   */
+  orderAmendments(scope: LocationScope, orderId: string): string {
+    return `${this.order(scope, orderId)}/amendments`;
+  },
+
+  /**
+   * Records the customer's recorded agreement to an amendment that raises the
+   * total (orders.md §4.4). None of wave P10's five built commands reach this
+   * — all five take `PRICED -> APPLIED` directly — but the path is real:
+   * `OperationsOrderController.confirmAmendment` already serves it for the
+   * day a financial command needs it. Mutation: `If-Match` required.
+   */
+  orderAmendmentConfirmation(scope: LocationScope, orderId: string, amendmentId: string): string {
+    return `${this.orderAmendments(scope, orderId)}/${encodeURIComponent(amendmentId)}/confirmation`;
+  },
+
+  /**
+   * Every revision of this order (ADR 0039, wave P09/gap map `1.2p`) — the
+   * append-only chain `orderQuery.revisions` already serves and no screen has
+   * read before now.
+   */
   orderRevisions(scope: LocationScope, orderId: string): string {
     return `${this.order(scope, orderId)}/revisions`;
   },
@@ -124,6 +179,17 @@ export const operationsPaths = {
    */
   orderCompletion(scope: LocationScope, orderId: string): string {
     return `${this.order(scope, orderId)}/completion`;
+  },
+
+  /**
+   * Links an order to the call it originated from (ADR 0064,
+   * `OperationsOrderController.recordCallProvenance`). Write-once on the
+   * server; called once, from the new-order screen, when the operator
+   * started the order from a claimed screen-pop card. Mutation: key
+   * required.
+   */
+  orderCallProvenance(scope: LocationScope, orderId: string): string {
+    return `${this.order(scope, orderId)}/call-provenance`;
   },
 
   /** Approve or reject an order awaiting a decision. Mutation: key required. */
@@ -232,6 +298,16 @@ export const operationsPaths = {
     return `${OPERATIONS}${tenantBrandLocation(scope)}/inventory/variants/${encodeURIComponent(variantId)}/availability`;
   },
 
+  /**
+   * The stop list's own batch stop/unstop (gap map row 2.5, wave P16),
+   * modelled on ADR 0039's bulk contract — replaces the sequential loop of
+   * one {@link inventoryVariantAvailability} `PUT` per row `stop-list-page.ts`
+   * used to run. Mutation: key required, capped at 200 variants.
+   */
+  inventoryBulkAvailability(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/inventory/variants/bulk-availability`;
+  },
+
   /** Current binary availability for a set of variants at this location (query param `variantIds`, max 100). */
   inventoryAvailability(scope: LocationScope): string {
     return `${OPERATIONS}${tenantBrandLocation(scope)}/inventory/availability`;
@@ -288,6 +364,17 @@ export const operationsPaths = {
   },
 
   /**
+   * Routes a catalogue node to a station role (the brand layer) or a station
+   * (the location layer) -- `KitchenStationController.route`, row 4.2g's
+   * kitchen department. `POST`-only; naming `stationRole` and leaving
+   * `stationId` null writes the brand layer, which is what the product
+   * editor's picker always does.
+   */
+  kitchenRoutingRules(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/routing-rules`;
+  },
+
+  /**
    * Table availability for a window (ADR 0047, `ReservationController`, IA
    * §1.5) — on {@link LEGACY_TENANT_PREFIX} directly under the location, not
    * under `/dine-in`: the controller's own `@RequestMapping` has no such
@@ -312,9 +399,20 @@ export const operationsPaths = {
     return `${this.reservation(scope, reservationId)}/state-actions`;
   },
 
-  /** Change the party size, the time, or the tables of a booking not yet seated. Mutation: key and `If-Match`. */
+  /** Change the party size, the time, the tables, or the guest's own details of a booking not yet seated. Mutation: key and `If-Match`. */
   reservationAmendments(scope: LocationScope, reservationId: string): string {
     return `${this.reservation(scope, reservationId)}/amendments`;
+  },
+
+  /**
+   * Dine-in sessions (ADR 0047, `TableSessionController`) — on
+   * {@link LEGACY_TENANT_PREFIX} under the location, not under
+   * `/reservations`: the controller's own `@RequestMapping` has no such
+   * segment. `POST` here with a `reservationId` is what seats a booking
+   * (IA 1.5a) — the reservation moves to `SEATED` in the same transaction.
+   */
+  dineInSessions(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/dine-in/sessions`;
   },
 
   /**
@@ -519,6 +617,15 @@ export const operationsPaths = {
    */
   customerOrders(scope: LocationScope, accountId: string): string {
     return `${LEGACY_TENANT_PREFIX}${tenantBrand(scope)}/customers/${encodeURIComponent(accountId)}/orders`;
+  },
+
+  /**
+   * Row 1.3f: the staff-capability twin of the storefront's own reorder
+   * plan (`CustomerOrderHistoryController`, `ORDER_READ` at `BRAND` scope) —
+   * never `@CustomerOwned`, unlike the storefront's identical read.
+   */
+  customerOrderReorder(scope: LocationScope, accountId: string, orderId: string): string {
+    return `${this.customerOrders(scope, accountId)}/${encodeURIComponent(orderId)}/reorder`;
   },
 
   /**

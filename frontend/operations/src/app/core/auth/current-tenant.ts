@@ -36,6 +36,15 @@ export class CurrentTenant {
   /** The operator's tenant id, or null before load and when the token names none (a platform-scope session). */
   readonly tenantId: Signal<string | null> = computed(() => this.context()?.activeTenantId ?? null);
 
+  /**
+   * The signed-in operator's own subject — «Мои заказы» (orders.md §2.4, wave
+   * P07)'s `createdByActorId`, and any future "mine" filter. Read this rather
+   * than re-deriving it: `created_by_actor_id` is written from the platform's
+   * own `currentActor.get().subject()` at order-creation time (ADR 0039), and
+   * `SessionContext.subject` is that same identity on this side of the wire.
+   */
+  readonly subject: Signal<string | null> = computed(() => this.context()?.subject ?? null);
+
   /** Every scope the operator holds, for {@link ../../features/staff/scope-coverage.ts}'s coverage checks. */
   readonly scopes: Signal<readonly ScopeGrant[]> = computed(() => this.context()?.scopes ?? []);
 

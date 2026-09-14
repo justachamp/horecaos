@@ -1,6 +1,7 @@
 package uz.horecaos.platform.iam.api.accounts;
 
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A staff member's own account at the identity provider (ADR 0097): what an
@@ -99,14 +100,76 @@ public interface StaffAccounts {
         return Optional.empty();
     }
 
-    /** An account as far as an invitation cares. */
-    record StaffAccount(String subjectId, String email, boolean emailVerified, boolean hasPassword) {
+    /**
+     * Creates a new staff account directly (staff-and-access.md §4, ADR
+     * 0116) -- not through {@link
+     * uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner#ensureMembership},
+     * which only ever links an existing subject or invites one by email.
+     * This is the phone-first half that method does not have: a colleague
+     * with no work email gets an account all the same, because the identifier
+     * this market actually uses is the phone number.
+     *
+     * <p>The account has no password until the invitation this creates it for
+     * is accepted; {@link #completeSetup} sets one exactly as it does for an
+     * owner.
+     *
+     * @param email optional and never required (staff-and-access.md §4);
+     *              when null, the account is reached only by phone
+     * @return the new account, {@link StaffAccount#hasPassword()} false
+     */
+    default StaffAccount create(String firstName, String lastName, String phone, @Nullable String email) {
+        throw new UnsupportedOperationException("this StaffAccounts implementation does not create accounts");
+    }
+
+    /**
+     * The account already registered under this phone number, if any -- so a
+     * duplicate invitation can name who already holds it (staff-and-access.md
+     * §4: "У Азизы Каримовой уже есть доступ") instead of creating a second
+     * account for one person.
+     *
+     * <p>Default empty for an implementation that does not support phone
+     * lookup, the same shape {@link #displayName} uses for the same reason: a
+     * test double should not have to answer a question only the real
+     * identity provider can.
+     */
+    default Optional<StaffAccount> findByPhone(String phone) {
+        return Optional.empty();
+    }
+
+    /**
+     * An account as far as an invitation cares.
+     *
+     * @param email null for a staff account created with no address
+     *              (staff-and-access.md §4) -- {@link #find} no longer treats
+     *              that as "no account"; only a missing subject does
+     * @param username what the account signs in with: an owner's own email
+     *                 ({@link
+     *                 uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner}
+     *                 sets it that way), or a staff account's phone number
+     *                 ({@link #create} sets it that way, always, since a
+     *                 phone is required and an email is not)
+     */
+    record StaffAccount(
+            String subjectId, @Nullable String email, boolean emailVerified, boolean hasPassword, String username) {
+
+        /**
+         * The shape every caller before ADR 0116 already builds. Kept rather
+         * than widened in place so the several existing test doubles across
+         * {@code OwnerInvitationFlowTests}, {@code
+         * OwnerInvitationOverviewTests}, {@code PasswordResetFlowTests} and
+         * {@code OwnerInvitationControllerEndpointTests} do not all need
+         * editing for a field none of their scenarios reads -- every one of
+         * them is an owner account, whose username is already its email.
+         */
+        public StaffAccount(String subjectId, @Nullable String email, boolean emailVerified, boolean hasPassword) {
+            this(subjectId, email, emailVerified, hasPassword, email != null ? email : subjectId);
+        }
 
         /** A record's generated {@code toString} would print the address. */
         @Override
         public String toString() {
             return "StaffAccount[subjectId=" + subjectId + ", email=<redacted>, emailVerified=" + emailVerified
-                    + ", hasPassword=" + hasPassword + "]";
+                    + ", hasPassword=" + hasPassword + ", username=<redacted>]";
         }
     }
 

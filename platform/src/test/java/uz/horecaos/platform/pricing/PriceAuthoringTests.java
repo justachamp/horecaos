@@ -535,6 +535,47 @@ class PriceAuthoringTests {
         assertThat(resolved.amountsMinor()).isEmpty();
     }
 
+    /**
+     * The frontend half of gap map row 4.4b (wave P45) reuses exactly this
+     * mechanism — {@code assignToChannel} plus a channel-scoped {@code
+     * resolvedVariantPrices} call — to let a hall price and an aggregator
+     * price coexist on one variant; this is the server-side evidence that
+     * the precedence it relies on actually holds, which until this wave had
+     * no test naming a real channel id.
+     */
+    @Test
+    @DisplayName("a book assigned to a channel outranks the brand's own book when a cart carries that channel")
+    void channelAssignedBookOutranksTheBrandBook() {
+        UUID hallBook = liveBrandBook(50_000L);
+
+        UUID channelId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name, status)
+                VALUES (:id, :tenantId, 'UZUM_TEZKOR', 'AGGREGATOR', 'Uzum Tezkor', 'ACTIVE')
+                """).param("id", channelId).param("tenantId", TENANT).update();
+
+        var aggregatorBook = authoring.create(TENANT, BRAND, newBook("Aggregator", 0));
+        authoring.assign(TENANT, BRAND, aggregatorBook.id(), AssignmentScope.CHANNEL, channelId, assignment(0));
+        var priced =
+                authoring.setPrice(TENANT, BRAND, aggregatorBook.id(), PriceableType.VARIANT, burgerVariant, 60_000L);
+        authoring.activate(TENANT, BRAND, aggregatorBook.id(), priced.version());
+
+        // Without a channel, the hall book still resolves and still prices
+        // the burger at 50,000 — the aggregator price never leaks into it.
+        var hallResolved =
+                query.resolvePrices(TENANT, BRAND, LOCATION, null, PriceableType.VARIANT, Set.of(burgerVariant));
+        assertThat(hallResolved.priceBookId()).isEqualTo(hallBook);
+        assertThat(hallResolved.amountsMinor()).containsEntry(burgerVariant, 50_000L);
+
+        // With the channel, the channel-scoped book outranks it — CHANNEL
+        // beats LOCATION and BRAND unconditionally in JdbcPricingStore's own
+        // ORDER BY, regardless of either book's priority.
+        var channelResolved =
+                query.resolvePrices(TENANT, BRAND, LOCATION, channelId, PriceableType.VARIANT, Set.of(burgerVariant));
+        assertThat(channelResolved.priceBookId()).isEqualTo(aggregatorBook.id());
+        assertThat(channelResolved.amountsMinor()).containsEntry(burgerVariant, 60_000L);
+    }
+
     @Test
     @DisplayName("a bulk apply changes many prices in one call and reports what each one did")
     void bulkApplyChangesManyPricesAtOnce() {

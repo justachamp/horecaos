@@ -47,6 +47,9 @@ public final class MetricRegistry {
     /** T12 (7.5a): when {@code operator_principal_id} started being written. */
     private static final LocalDate T12_OPERATOR_ATTRIBUTION = LocalDate.of(2026, 9, 13);
 
+    /** P39 (7.1c/7.3b): when {@code reporting.fact_order_tender} started being written. */
+    private static final LocalDate P39_TENDER_FACT = LocalDate.of(2026, 9, 14);
+
     private static final Map<String, MetricDefinition> BY_CODE = index(List.of(
             new MetricDefinition(
                     new MetricId("revenue.gross", 1),
@@ -334,7 +337,45 @@ public final class MetricRegistry {
                             + "by /queries: the registry's one-value-per-slice contract does not "
                             + "express a per-operator breakdown, the same reason order- and "
                             + "variant-grain reads get their own endpoint (ADR 0043).",
-                    T12_OPERATOR_ATTRIBUTION)));
+                    T12_OPERATOR_ATTRIBUTION),
+            // P39 (7.1c/7.3b): the payment-mix card and its per-branch split, over
+            // reporting.fact_order_tender (ADR 0043/0115). Payment is a grain, not
+            // a column — this sums the tender fact, never revenue.*.v1's own
+            // fact_order, which is exactly the doubling ADR 0043's physical model
+            // warns against.
+            new MetricDefinition(
+                    new MetricId("payment_mix.amount", 1),
+                    Grain.DAY_LOCATION_LEGAL_ENTITY_PAYMENT_METHOD,
+                    "reporting.fact_order_tender.amount_som",
+                    true,
+                    Aggregation.DISTRIBUTION,
+                    "SETTLED_OR_REVERSED_TENDERS",
+                    CurrencyRule.UZS_SOM,
+                    "Whole som; no sub-unit exists and nothing divides by a hundred",
+                    MetricUnit.MONEY_SOM,
+                    "Sum of the net amount tendered per payment method — a tender's planned "
+                            + "amount less any refund already recorded against it (V0048) — over "
+                            + "tenders that reached SETTLED or REVERSED, on the order's own "
+                            + "business date. The one figure a restaurant uses for cash-collection "
+                            + "control: what share of takings came in as cash, card, or online.",
+                    "Tenders whose status is SETTLED or REVERSED, on orders of any terminal "
+                            + "status — cash collected against an order later cancelled was still "
+                            + "collected and still has to be reconciled.",
+                    "Tenders that never moved money — PLANNED, RESERVED, RELEASED, FAILED — "
+                            + "which would overstate takings with an amount nobody actually paid "
+                            + "or received.",
+                    "A partial refund reduces the tender's own row in place, because amount_som "
+                            + "is already net; a full refund reduces it to zero and the tender's "
+                            + "own status reads REVERSED. Never a second row, unlike "
+                            + "revenue.net.v1's refund grain (fact_refund) — this figure answers "
+                            + "\"what is currently in the till, by method\", not a ledger of every "
+                            + "movement against it.",
+                    "Counted at the amount the tenant's own registry recorded as tendered. A "
+                            + "provider-settled method (CLICK, Payme, ...) is not reconciled here "
+                            + "against what the provider actually remits after its own commission "
+                            + "or fee — that is a payments-module concern this figure does not "
+                            + "answer.",
+                    P39_TENDER_FACT)));
 
     private MetricRegistry() {}
 

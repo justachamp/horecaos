@@ -329,6 +329,31 @@
   color: var(--q-ink-muted);
 }
 
+/* ---- comments (§3.6, ADR 0039, wave P10) --------------------------------- */
+
+.pane__comments-note {
+  margin: 0 0 10px;
+  color: var(--q-ink-muted);
+}
+
+.pane__comments-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pane__warning {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
 /* ---- timeline (§3.10) ---------------------------------------------------- */
 
 /* Row X.33: the lifecycle rail over this same section's own timeline read. */

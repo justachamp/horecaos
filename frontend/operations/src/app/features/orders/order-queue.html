@@ -1,4 +1,156 @@
 <div class="order-queue">
+  @if (canSelectOrders() && selectionCount() > 0) {
+    <!-- §2.10: "A selection bar replaces the filter row while anything is
+         selected" — never stacked above it, so the operator's attention is
+         on exactly one toolbar at a time. -->
+    <div class="order-queue__bulk-bar" data-testid="order-queue-bulk-bar">
+      <span class="q-body-sm" data-testid="order-queue-bulk-count">{{
+        'orders.queue.selection.selected' | t: { count: selectionCount() }
+      }}</span>
+
+      @if (bulkAdvanceTargetStatus(); as target) {
+        <button
+          type="button"
+          class="order-queue__bulk-action"
+          [disabled]="bulkBusy()"
+          (click)="onBulkAdvanceClick()"
+          data-testid="order-queue-bulk-advance"
+        >
+          {{ bulkAdvanceLabel() }}
+        </button>
+      } @else if (selectionCount() > 1) {
+        <span class="q-caption order-queue__bulk-unavailable">{{
+          'orders.queue.bulk.advanceUnavailable' | t
+        }}</span>
+      }
+
+      @if (canBulkCancel()) {
+        <button
+          type="button"
+          class="order-queue__bulk-action order-queue__bulk-action--danger"
+          [disabled]="bulkBusy()"
+          (click)="onBulkCancelClick()"
+          data-testid="order-queue-bulk-cancel"
+        >
+          {{ 'orders.queue.bulk.cancel' | t }}
+        </button>
+      } @else if (bulkCancelUnavailableMessage(); as message) {
+        <span
+          class="q-caption order-queue__bulk-unavailable"
+          data-testid="order-queue-bulk-cancel-unavailable"
+          >{{ message }}</span
+        >
+      }
+
+      <!-- §2.10: bulk courier assignment is explicitly out of scope — said
+           here rather than offered as a button that would 400. -->
+      <span class="q-caption order-queue__bulk-note" data-testid="order-queue-bulk-courier-note">{{
+        'orders.queue.bulk.courierNote' | t
+      }}</span>
+
+      <button
+        type="button"
+        class="order-queue__bulk-clear"
+        (click)="clearSelection()"
+        data-testid="order-queue-bulk-clear"
+      >
+        {{ 'orders.queue.selection.clear' | t }}
+      </button>
+    </div>
+  } @else {
+    <q-filter-bar
+      [hasSecondary]="true"
+      [chips]="filterChips()"
+      [canReset]="filterState.hasActive()"
+      (chipRemoved)="onChipRemoved($event)"
+      (resetFilters)="onResetFilters()"
+      data-testid="order-queue-filter-bar"
+    >
+      <ng-container primary>
+        <input
+          type="search"
+          class="order-queue__search"
+          [value]="filters().reference"
+          (input)="onSearchInput($any($event.target).value)"
+          [attr.placeholder]="'orders.queue.filter.search.placeholder' | t"
+          [attr.aria-label]="'orders.queue.filter.search.ariaLabel' | t"
+          data-testid="order-queue-filter-search"
+        />
+
+        <q-date-range-picker
+          [start]="filters().dateRange?.start ?? null"
+          [end]="filters().dateRange?.end ?? null"
+          (rangeChange)="onDateRangeChange($event)"
+        />
+
+        <select
+          class="order-queue__select"
+          [value]="filters().channelCode ?? ''"
+          (change)="onChannelChange($any($event.target).value)"
+          [attr.aria-label]="'orders.queue.filter.channel.label' | t"
+          data-testid="order-queue-filter-channel"
+        >
+          <option value="">{{ 'orders.queue.filter.channel.all' | t }}</option>
+          @for (code of channelOptions(); track code) {
+            <option [value]="code">{{ code }}</option>
+          }
+        </select>
+
+        <select
+          class="order-queue__select"
+          [value]="filters().fulfillmentMode ?? ''"
+          (change)="onFulfillmentModeChange($any($event.target).value)"
+          [attr.aria-label]="'orders.queue.filter.fulfillmentMode.label' | t"
+          data-testid="order-queue-filter-fulfillmentMode"
+        >
+          <option value="">{{ 'orders.queue.filter.fulfillmentMode.all' | t }}</option>
+          <option value="DELIVERY">{{ 'orders.fulfillmentMode.DELIVERY' | t }}</option>
+          <option value="PICKUP">{{ 'orders.fulfillmentMode.PICKUP' | t }}</option>
+          <option value="DINE_IN">{{ 'orders.fulfillmentMode.DINE_IN' | t }}</option>
+        </select>
+
+        <select
+          class="order-queue__select"
+          [value]="filters().courierId ?? ''"
+          (focus)="ensureCourierRosterLoaded()"
+          (change)="onCourierChange($any($event.target).value)"
+          [attr.aria-label]="'orders.queue.filter.courier.label' | t"
+          data-testid="order-queue-filter-courier"
+        >
+          <option value="">{{ 'orders.queue.filter.courier.all' | t }}</option>
+          @for (courier of courierRoster(); track courier.courierId) {
+            <option [value]="courier.courierId">{{ courier.displayReference }}</option>
+          }
+        </select>
+      </ng-container>
+
+      <ng-container secondary>
+        <label class="order-queue__toggle">
+          <input
+            type="checkbox"
+            [checked]="filters().mineOnly"
+            (change)="onMineOnlyToggle()"
+            data-testid="order-queue-filter-mine"
+          />
+          {{ 'orders.queue.filter.mine.label' | t }}
+        </label>
+
+        <select
+          class="order-queue__select"
+          [value]="filters().paymentMethodCode ?? ''"
+          (change)="onPaymentMethodChange($any($event.target).value)"
+          [attr.aria-label]="'orders.queue.filter.paymentMethod.label' | t"
+          data-testid="order-queue-filter-paymentMethod"
+        >
+          <option value="">{{ 'orders.queue.filter.paymentMethod.all' | t }}</option>
+          @for (code of paymentMethodCodes; track code) {
+            <option [value]="code">{{ paymentMethodLabel(code) }}</option>
+          }
+        </select>
+      </ng-container>
+    </q-filter-bar>
+  }
+
   <div class="order-queue__toolbar">
     <div class="order-queue__tabs" role="tablist">
       @for (tab of tabs; track tab.id) {
@@ -87,6 +239,19 @@
       <table class="order-queue__table">
         <thead>
           <tr>
+            @if (canSelectOrders()) {
+              <th class="order-queue__select-col">
+                <input
+                  type="checkbox"
+                  [checked]="isAllPageSelected()"
+                  (click)="toggleSelectPage()"
+                  [attr.aria-label]="
+                    'orders.queue.selection.selectPage' | t: { count: pageOrderIds().length }
+                  "
+                  data-testid="order-queue-select-page"
+                />
+              </th>
+            }
             <th class="order-queue__rail-col" aria-hidden="true"></th>
             <th>{{ 'orders.column.number' | t }}</th>
             <th>{{ 'orders.column.time' | t }}</th>
@@ -109,6 +274,20 @@
               (click)="openOrder(row.order.orderId)"
               (keydown.enter)="openOrder(row.order.orderId)"
             >
+              @if (canSelectOrders()) {
+                <td class="order-queue__select-col" (click)="$event.stopPropagation()">
+                  <input
+                    type="checkbox"
+                    [checked]="isRowSelected(row.order.orderId)"
+                    (click)="toggleRowSelection(row.order.orderId, $event)"
+                    [attr.aria-label]="
+                      'orders.queue.selection.rowAriaLabel'
+                        | t: { number: row.order.publicOrderNumber }
+                    "
+                    data-testid="order-row-select"
+                  />
+                </td>
+              }
               <td
                 class="order-queue__rail-col"
                 [class.order-queue__rail--danger]="row.severity.tone === 'danger'"
@@ -214,7 +393,7 @@
             </tr>
           } @empty {
             <tr class="order-queue__empty-row">
-              <td colspan="7">
+              <td [attr.colspan]="canSelectOrders() ? 8 : 7">
                 <p class="q-body-sm" data-testid="order-queue-empty">{{ emptyMessage() }}</p>
               </td>
             </tr>
@@ -241,5 +420,67 @@
       (confirm)="onRejectDialogConfirm($event)"
       (dismiss)="onDialogDismiss()"
     />
+  }
+
+  @if (bulkCancelDialogOpen()) {
+    <q-order-outcome-reason-dialog
+      titleKey="orders.queue.bulk.cancelDialog.title"
+      confirmLabelKey="orders.queue.bulk.cancelDialog.confirm"
+      [reasons]="bulkCancelReasons()"
+      [showConsequences]="true"
+      [noteEnabled]="true"
+      [busy]="bulkBusy()"
+      (confirm)="onBulkCancelDialogConfirm($event)"
+      (dismiss)="onBulkCancelDialogDismiss()"
+      data-testid="order-queue-bulk-cancel-dialog"
+    />
+  }
+
+  <!-- §2.10's result panel: never a toast, because "197 назначено · 3
+       проблемы" plus a named-item list plus Повторить проблемные does not
+       fit one. -->
+  @if (bulkResult(); as result) {
+    <div class="order-queue__bulk-result" role="status" data-testid="order-queue-bulk-result">
+      @if (result.failedCount === 0) {
+        <p class="q-body-sm">
+          {{ 'orders.queue.bulk.result.allApplied' | t: { count: result.appliedCount } }}
+        </p>
+      } @else {
+        <p class="q-body-sm">
+          {{
+            'orders.queue.bulk.result.summary'
+              | t: { applied: result.appliedCount, failed: result.failedCount }
+          }}
+        </p>
+        <ul class="order-queue__bulk-result-items">
+          @for (item of result.items; track item.orderId) {
+            @if (item.itemStatus === 'FAILED') {
+              <li data-testid="order-queue-bulk-result-item">
+                <span class="q-mono">{{ bulkResultItemLabel(item.orderId) }}</span>
+                — {{ bulkProblemLabel(item.itemProblemCode) }}
+              </li>
+            }
+          }
+        </ul>
+        <button
+          type="button"
+          class="order-queue__bulk-retry"
+          [disabled]="bulkBusy()"
+          (click)="retryFailedBulkItems()"
+          data-testid="order-queue-bulk-retry"
+        >
+          {{ 'orders.queue.bulk.result.retry' | t }}
+        </button>
+      }
+      <button
+        type="button"
+        class="order-queue__bulk-result-dismiss"
+        (click)="dismissBulkResult()"
+        [attr.aria-label]="'orders.queue.bulk.result.dismiss' | t"
+        data-testid="order-queue-bulk-result-dismiss"
+      >
+        ×
+      </button>
+    </div>
   }
 </div>

@@ -31,6 +31,14 @@ import {
   decisionOutcomeLabel,
 } from './order-actions';
 import { DecisionResponse, OrderActionsApi } from './order-actions-api';
+import { OrderAmendMenu } from './order-amend-menu';
+import {
+  AmendmentResponse,
+  BuiltAmendmentCommandType,
+  amendmentCommandLabel,
+} from './order-amendments';
+import { OrderAmendmentsApi } from './order-amendments-api';
+import { OrderCashTenderedDialog } from './order-cash-tendered-dialog';
 import {
   OrderAddressReveal,
   OrderDetailResponse,
@@ -42,6 +50,7 @@ import { describeApiError, mutationErrorNotice } from './order-errors';
 import { OrderHandoverPanel } from './order-handover-panel';
 import { orderLifecycleSteps } from './order-lifecycle-steps';
 import { MoneyReconciliation, reconcileMoney } from './order-money';
+import { OrderNoteDialog } from './order-note-dialog';
 import {
   outcomeKindLabel,
   outcomeSystemCategoryLabel,
@@ -78,7 +87,15 @@ const REVEAL_PURPOSE = {
 } as const;
 
 /** Which reason dialog is open, if any. */
-type DialogKind = 'reject' | 'cancel' | 'complete';
+type DialogKind =
+  | 'reject'
+  | 'cancel'
+  | 'complete'
+  | 'amendMenu'
+  | 'kitchenNote'
+  | 'courierNote'
+  | 'internalNote'
+  | 'cashTendered';
 
 /**
  * The order detail — `docs/operations-spec/orders.md` §3, docked beside the
@@ -89,19 +106,23 @@ type DialogKind = 'reject' | 'cancel' | 'complete';
  * detail in a fixed-width column beside the queue instead (`orders-page.css`),
  * so every section here stacks in one column rather than two. Content-wise:
  * the lines table, the money panel with its §1.3 reconciliation guard, the
- * customer and address panels behind their ADR 0029 reveal calls, and the
- * commercial timeline lane are built. Комментарии (§3.6), Оплата,
- * Фискализация, Ревизии and Интеграции (§3.9-§3.11) all need tables that do
- * not exist yet (§11) and are not here. The production and delivery timeline
- * lanes render, greyed, naming the ADRs that own them (ADR 0041, ADR 0014) —
- * never silently dropped, the same rule `not-built-page.ts` follows for a
- * whole screen, applied here to two lanes of one.
+ * customer and address panels behind their ADR 0029 reveal calls, the
+ * commercial timeline lane, and — as of wave P10 — the §3.6 «Комментарии»
+ * block and its amendment history are built. Оплата, Фискализация and
+ * Интеграции (§3.9/§3.11) still need tables that do not exist yet (§11) and
+ * are not here. The production and delivery timeline lanes render, greyed,
+ * naming the ADRs that own them (ADR 0041, ADR 0014) — never silently
+ * dropped, the same rule `not-built-page.ts` follows for a whole screen,
+ * applied here to two lanes of one.
  */
 @Component({
   selector: 'q-order-detail-pane',
   imports: [
     TPipe,
     OrderOutcomeReasonDialog,
+    OrderAmendMenu,
+    OrderNoteDialog,
+    OrderCashTenderedDialog,
     OrderRejectReasonDialog,
     OrderHandoverPanel,
     Steps,
@@ -115,6 +136,7 @@ export class OrderDetailPane {
   private readonly api = inject(ApiClient);
   private readonly location = inject(CurrentLocation);
   private readonly actionsApi = inject(OrderActionsApi);
+  private readonly amendmentsApi = inject(OrderAmendmentsApi);
   private readonly rejectReasonsApi = inject(RejectReasonsApi);
   private readonly referenceDataApi = inject(ReferenceDataApi);
   private readonly revealApi = inject(OrderRevealApi);
@@ -212,6 +234,27 @@ export class OrderDetailPane {
   protected readonly revisionsLoading = signal(false);
   protected readonly revisionsError = signal(false);
 
+  /**
+   * `GET .../amendments` (§3.6/§3.10, ADR 0039 wave P10, `:713`) — the
+   * amendment history view. Fetched on demand for the same reason revisions
+   * are: an order nobody has amended has an empty history nobody needs to
+   * see. It is also the only read path for a courier or internal note's own
+   * text (ADR 0113: neither has an `ordering.orders` column the way
+   * `kitchenNote` does).
+   */
+  protected readonly amendmentHistory = signal<readonly AmendmentResponse[] | null>(null);
+  protected readonly amendmentHistoryOpen = signal(false);
+  protected readonly amendmentHistoryLoading = signal(false);
+  protected readonly amendmentHistoryError = signal(false);
+
+  /**
+   * ADR 0039: change-due short of the total after a later amendment is an
+   * acknowledgeable notice, never a refusal — the customer can hand over
+   * more. Cleared by the operator, not by the next order load, so it survives
+   * exactly as long as it takes to be read.
+   */
+  protected readonly cashTenderedWarning = signal(false);
+
   protected readonly revealedPhone = signal<string | null>(null);
   protected readonly revealingPhone = signal(false);
   protected readonly revealedAddress = signal<OrderAddressReveal | null>(null);
@@ -246,6 +289,9 @@ export class OrderDetailPane {
     this.revisions.set(null);
     this.revisionsOpen.set(false);
     this.revisionsError.set(false);
+    this.amendmentHistory.set(null);
+    this.amendmentHistoryOpen.set(false);
+    this.amendmentHistoryError.set(false);
 
     await this.location.ensureLoaded();
     const scope = this.location.scope();
@@ -445,9 +491,215 @@ export class OrderDetailPane {
           );
         }
         return;
+      case 'AMEND':
+        // orders.md §4.4: opens the amendment submenu. Wave P10 is the console
+        // that can finally render and click this — see
+        // `OrderActionsPolicy.AMEND_EMISSION_ENABLED`'s own doc (ADR 0105).
+        this.dialog.set('amendMenu');
+        return;
       default:
       // An action code this client does not recognise yet (§4.2: still rendered, nothing to invoke).
     }
+  }
+
+  // ------------------------------------------------------------ §3.6 Комментарии (ADR 0039, wave P10)
+
+  /**
+   * Routes an `OrderAmendMenu` selection to the specific dialog each of the
+   * five built commands needs — or, for the callback flag, straight to
+   * {@link toggleCallback}, which has no dialog because §4.4's own table
+   * marks its "Consequences the dialog must state before confirm" column
+   * "none".
+   */
+  protected onAmendMenuSelect(type: BuiltAmendmentCommandType): void {
+    switch (type) {
+      case 'SET_KITCHEN_NOTE':
+        this.openKitchenNoteDialog();
+        return;
+      case 'SET_COURIER_NOTE':
+        this.openCourierNoteDialog();
+        return;
+      case 'SET_INTERNAL_NOTE':
+        this.openInternalNoteDialog();
+        return;
+      case 'SET_CASH_TENDERED':
+        this.openCashTenderedDialog();
+        return;
+      case 'SET_CALLBACK_REQUESTED':
+        this.dialog.set(null);
+        this.toggleCallback();
+        return;
+    }
+  }
+
+  protected openKitchenNoteDialog(): void {
+    this.dialog.set('kitchenNote');
+  }
+
+  protected openCourierNoteDialog(): void {
+    this.dialog.set('courierNote');
+  }
+
+  protected openInternalNoteDialog(): void {
+    this.dialog.set('internalNote');
+  }
+
+  protected openCashTenderedDialog(): void {
+    this.dialog.set('cashTendered');
+  }
+
+  protected onKitchenNoteConfirm(note: string): void {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    void this.submitAmendment(
+      this.amendmentsApi.setKitchenNote(
+        scope,
+        detail.value.summary.orderId,
+        detail.value.summary.version ?? 0,
+        note,
+      ),
+    ).finally(() => this.dialog.set(null));
+  }
+
+  protected onCourierNoteConfirm(note: string): void {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    void this.submitAmendment(
+      this.amendmentsApi.setCourierNote(
+        scope,
+        detail.value.summary.orderId,
+        detail.value.summary.version ?? 0,
+        note,
+      ),
+    ).finally(() => this.dialog.set(null));
+  }
+
+  protected onInternalNoteConfirm(note: string): void {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    void this.submitAmendment(
+      this.amendmentsApi.setInternalNote(
+        scope,
+        detail.value.summary.orderId,
+        detail.value.summary.version ?? 0,
+        note,
+      ),
+    ).finally(() => this.dialog.set(null));
+  }
+
+  protected onCashTenderedConfirm(amountMinor: number): void {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    void this.submitAmendment(
+      this.amendmentsApi.setCashTendered(
+        scope,
+        detail.value.summary.orderId,
+        detail.value.summary.version ?? 0,
+        amountMinor,
+      ),
+    ).finally(() => this.dialog.set(null));
+  }
+
+  /**
+   * `Требуется звонок` toggles rather than opening a dialog — §4.4's own
+   * table has no "confirm" for this command. Raising it and clearing it are
+   * the same command, `requested` flipped, exactly as ADR 0039 states.
+   */
+  protected toggleCallback(): void {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    void this.submitAmendment(
+      this.amendmentsApi.setCallbackRequested(
+        scope,
+        detail.value.summary.orderId,
+        detail.value.summary.version ?? 0,
+        !detail.value.callbackRequested,
+      ),
+    );
+  }
+
+  protected dismissCashTenderedWarning(): void {
+    this.cashTenderedWarning.set(false);
+  }
+
+  /**
+   * Every built amendment command's own submit path: apply, reload the order
+   * so the field that just changed (or, for the two ADR 0113 notes, nothing —
+   * see {@link amendmentHistory}) renders its new value, and surface
+   * `CASH_TENDERED_INSUFFICIENT` as the acknowledgeable notice §3.5/§4.4
+   * describe rather than a refusal.
+   */
+  private async submitAmendment(request: Observable<AmendmentResponse>): Promise<void> {
+    const orderId = this.order()?.value.summary.orderId;
+    if (!orderId) {
+      return;
+    }
+    this.busy.set(true);
+    try {
+      const result = await firstValueFrom(request);
+      if (result.warnings.includes('CASH_TENDERED_INSUFFICIENT')) {
+        this.cashTenderedWarning.set(true);
+      }
+      await this.load(orderId);
+    } catch (error) {
+      this.handleMutationError(orderId, error, false);
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  // ------------------------------------------------------------ §3.6/§3.10 amendment history
+
+  /**
+   * Toggles the amendment history, fetching on first open only — mirrors
+   * {@link toggleRevisions} exactly, including resetting on every
+   * {@link load} (a fresh amendment just applied makes the cached list
+   * stale).
+   */
+  protected async toggleAmendmentHistory(): Promise<void> {
+    const opening = !this.amendmentHistoryOpen();
+    this.amendmentHistoryOpen.set(opening);
+    if (!opening || this.amendmentHistory() !== null) {
+      return;
+    }
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    this.amendmentHistoryLoading.set(true);
+    this.amendmentHistoryError.set(false);
+    try {
+      const result = await this.amendmentsApi.history(scope, detail.value.summary.orderId);
+      this.amendmentHistory.set(result);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.amendmentHistoryError.set(true);
+      } else {
+        throw error;
+      }
+    } finally {
+      this.amendmentHistoryLoading.set(false);
+    }
+  }
+
+  protected amendmentCommandLabel(type: string): string {
+    return amendmentCommandLabel(type, (key) => this.i18n.t(key));
   }
 
   /**
@@ -663,6 +915,11 @@ export class OrderDetailPane {
 
   protected lineName(line: OrderLine): string {
     return line.productName;
+  }
+
+  /** §3.6's «Комментарий клиента к позиции» pointer: whether any line has one to reveal, above. */
+  protected hasAnyLineNote(): boolean {
+    return (this.order()?.value.lines ?? []).some((line) => line.hasNote);
   }
 
   protected revealedNote(lineId: string): string | null | undefined {

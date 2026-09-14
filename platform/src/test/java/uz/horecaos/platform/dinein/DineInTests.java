@@ -264,7 +264,7 @@ class DineInTests {
 
         ReservationRow confirmed = store.findReservation(TENANT, booking).orElseThrow();
         transactions.executeWithoutResult(status -> reservations.move(
-                TENANT, booking, ReservationStatus.CANCELLED, confirmed.version(), "host", "Guest rang back"));
+                TENANT, branch, booking, ReservationStatus.CANCELLED, confirmed.version(), "host", "Guest rang back"));
 
         assertThat(heldTables()).isEmpty();
 
@@ -295,7 +295,13 @@ class DineInTests {
         UUID cancelled = book(tableTwo, DINNER.plus(Duration.ofMinutes(30)), DINNER.plus(Duration.ofHours(2)));
         ReservationRow requested = store.findReservation(TENANT, cancelled).orElseThrow();
         transactions.executeWithoutResult(status -> reservations.move(
-                TENANT, cancelled, ReservationStatus.CANCELLED, requested.version(), "host", "Guest rang back"));
+                TENANT,
+                branch,
+                cancelled,
+                ReservationStatus.CANCELLED,
+                requested.version(),
+                "host",
+                "Guest rang back"));
 
         List<ReservationRow> day = transactions.execute(status -> reservations.listForDay(
                 TENANT, branch, DINNER.minus(Duration.ofHours(1)), DINNER.plus(Duration.ofHours(4))));
@@ -337,7 +343,19 @@ class DineInTests {
         Instant newFrom = DINNER.plus(Duration.ofHours(1));
         Instant newTo = DINNER.plus(Duration.ofHours(3));
         transactions.executeWithoutResult(status -> reservations.amend(
-                TENANT, booking, 6, newFrom, newTo, List.of(tableTwo), before.version(), "host", "Guest moved seats"));
+                TENANT,
+                branch,
+                booking,
+                6,
+                newFrom,
+                newTo,
+                List.of(tableTwo),
+                null,
+                null,
+                null,
+                before.version(),
+                "host",
+                "Guest moved seats"));
 
         ReservationRow after = store.findReservation(TENANT, booking).orElseThrow();
         assertThat(after.partySize()).isEqualTo(6);
@@ -369,11 +387,15 @@ class DineInTests {
 
         Throwable failure = catchThrowable(() -> transactions.executeWithoutResult(status -> reservations.amend(
                 TENANT,
+                branch,
                 second,
                 4,
                 DINNER,
                 DINNER.plus(Duration.ofHours(2)),
                 List.of(tableOne),
+                null,
+                null,
+                null,
                 confirmedSecond.version(),
                 "host",
                 "Wrong table")));
@@ -400,17 +422,115 @@ class DineInTests {
         ReservationRow seated = store.findReservation(TENANT, booking).orElseThrow();
         Throwable failure = catchThrowable(() -> transactions.executeWithoutResult(status -> reservations.amend(
                 TENANT,
+                branch,
                 booking,
                 4,
                 DINNER,
                 DINNER.plus(Duration.ofHours(2)),
                 List.of(tableOne),
+                null,
+                null,
+                null,
                 seated.version(),
                 "host",
                 "Too late")));
 
         assertThat(failure).isInstanceOf(ApiException.class);
         assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.INVALID_REQUEST);
+    }
+
+    // ------------------------------------------------------------------- guest reveal
+
+    @Test
+    @DisplayName("a fresh booking's guest name, phone and note stay encrypted until revealGuest "
+            + "decrypts them, and every field is what the host actually typed")
+    void revealGuestDecryptsWhatWasTyped() {
+        UUID booking = book(tableOne, DINNER, DINNER.plus(Duration.ofHours(2)));
+
+        ReservationRow row = store.findReservation(TENANT, booking).orElseThrow();
+        assertThat(row.guestNameEncrypted()).isNotEqualTo("Dilnoza");
+        assertThat(row.guestPhoneEncrypted()).isNotEqualTo("998901234567");
+
+        ReservationService.GuestDetails guest =
+                reservations.revealGuest(TENANT, branch, booking, "walk-in match", "host");
+        assertThat(guest.guestName()).isEqualTo("Dilnoza");
+        assertThat(guest.guestPhone()).isEqualTo("998901234567");
+        assertThat(guest.note()).isEqualTo("Window if possible");
+    }
+
+    @Test
+    @DisplayName("revealing a booking's guest details writes one audit fact naming the purpose, "
+            + "with no guest value in its changed document")
+    void revealGuestAudits() {
+        UUID booking = book(tableOne, DINNER, DINNER.plus(Duration.ofHours(2)));
+        audit.facts.clear();
+
+        reservations.revealGuest(TENANT, branch, booking, "walk-in match", "host");
+
+        assertThat(audit.facts).hasSize(1);
+        AuditFact fact = audit.facts.get(0);
+        assertThat(fact.actionCode()).isEqualTo("dinein.reservation.guest_revealed");
+        assertThat(fact.reason()).isEqualTo("walk-in match");
+        assertThat(fact.changeDocument().values()).doesNotContain("Dilnoza", "998901234567", "Window if possible");
+    }
+
+    @Test
+    @DisplayName("amending a booking's guest name and phone corrects them, leaving a note the "
+            + "host did not retype exactly as it was")
+    void amendingCorrectsGuestDetails() {
+        UUID booking = book(tableOne, DINNER, DINNER.plus(Duration.ofHours(2)));
+        ReservationRow before = store.findReservation(TENANT, booking).orElseThrow();
+
+        transactions.executeWithoutResult(status -> reservations.amend(
+                TENANT,
+                branch,
+                booking,
+                4,
+                DINNER,
+                DINNER.plus(Duration.ofHours(2)),
+                List.of(tableOne),
+                "Dilnoza Karimova",
+                "998907654321",
+                null,
+                before.version(),
+                "host",
+                "Guest corrected the spelling and gave a better number"));
+
+        ReservationService.GuestDetails guest =
+                reservations.revealGuest(TENANT, branch, booking, "audit check", "host");
+        assertThat(guest.guestName()).isEqualTo("Dilnoza Karimova");
+        assertThat(guest.guestPhone()).isEqualTo("998907654321");
+        // The note was left blank on the amendment, so it survives untouched.
+        assertThat(guest.note()).isEqualTo("Window if possible");
+    }
+
+    @Test
+    @DisplayName("amending a booking with every guest field blank leaves its stored name, phone "
+            + "and note exactly as they were — the ordinary table-or-time correction")
+    void amendingWithBlankGuestFieldsChangesNothingAboutTheGuest() {
+        UUID booking = book(tableOne, DINNER, DINNER.plus(Duration.ofHours(2)));
+        ReservationRow before = store.findReservation(TENANT, booking).orElseThrow();
+
+        transactions.executeWithoutResult(status -> reservations.amend(
+                TENANT,
+                branch,
+                booking,
+                6,
+                DINNER.plus(Duration.ofHours(1)),
+                DINNER.plus(Duration.ofHours(3)),
+                List.of(tableTwo),
+                "",
+                "   ",
+                null,
+                before.version(),
+                "host",
+                "Party grew, moved to a bigger table"));
+
+        ReservationService.GuestDetails guest =
+                reservations.revealGuest(TENANT, branch, booking, "audit check", "host");
+        assertThat(guest.guestName()).isEqualTo("Dilnoza");
+        assertThat(guest.guestPhone()).isEqualTo("998901234567");
+        assertThat(guest.note()).isEqualTo("Window if possible");
     }
 
     // ---------------------------------------------------------------- sessions
@@ -818,7 +938,7 @@ class DineInTests {
     private void confirm(UUID reservationId) {
         ReservationRow row = store.findReservation(TENANT, reservationId).orElseThrow();
         transactions.executeWithoutResult(status -> reservations.move(
-                TENANT, reservationId, ReservationStatus.CONFIRMED, row.version(), "host", "Table available"));
+                TENANT, branch, reservationId, ReservationStatus.CONFIRMED, row.version(), "host", "Table available"));
     }
 
     /** Confirms on one specific connection, so two can be raced against each other. */

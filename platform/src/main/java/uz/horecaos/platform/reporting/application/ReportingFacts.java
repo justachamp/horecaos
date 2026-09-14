@@ -133,6 +133,48 @@ public final class ReportingFacts {
         }
     }
 
+    /**
+     * One tender, on the ORDER's business date (ADR 0043/0115) — never a
+     * separate date the way {@link RefundFact} uses its own, because "what is
+     * currently in the till for this order, by method" is the figure a cash
+     * reconciliation needs, not a ledger of every movement against it.
+     *
+     * @param amountSom net of any refund already recorded against the tender
+     *                  (V0048's {@code payments.tenders.refunded_minor}). A
+     *                  fully refunded tender is zero, never a negative row
+     * @param tenderStatus every status {@code payments.tenders} can hold, not
+     *                     only {@code SETTLED}/{@code REVERSED} — a
+     *                     {@code PLANNED} or {@code FAILED} tender never
+     *                     collected money and the metric layer's inclusion
+     *                     rule, not this fact, is what excludes it
+     */
+    public record TenderFact(
+            UUID tenantId,
+            LocalDate businessDate,
+            UUID orderId,
+            int tenderSequence,
+            int boundaryVersion,
+            UUID locationId,
+            @Nullable UUID legalEntityId,
+            String paymentMethodCode,
+            boolean settlesFromBalance,
+            String tenderStatus,
+            long amountSom,
+            int metricCalculationVersion) {
+
+        public TenderFact {
+            Objects.requireNonNull(tenantId, "A fact is tenant-owned");
+            Objects.requireNonNull(orderId, "A fact names its order");
+            Objects.requireNonNull(businessDate, "A fact is dated");
+            if (amountSom < 0) {
+                throw new IllegalArgumentException("A tender's net amount cannot be negative");
+            }
+            if (tenderSequence < 1) {
+                throw new IllegalArgumentException("Tender sequence is 1-based, matching payments.tenders.sequence");
+            }
+        }
+    }
+
     /** One order line, for the product cuts. */
     public record OrderLineFact(
             UUID tenantId,

@@ -547,7 +547,10 @@ public class OwnerInvitationService implements OwnerInvitations {
                     .occurredAt(now)
                     .build());
         });
-        return new InvitationAccepted(account.email());
+        // An owner account always carries an email: ensureMembership (ADR
+        // 0009) creates it with one as the username, and StaffAccounts#email
+        // is nullable only for a staff account ADR 0116 creates without one.
+        return new InvitationAccepted(Objects.requireNonNull(account.email(), "An owner account always has an email"));
     }
 
     /** SHA-256 of a token, hex; what the relay stores and what a presented token is compared by. */
@@ -651,8 +654,12 @@ public class OwnerInvitationService implements OwnerInvitations {
      */
     private Recipient recipientOf(String subjectId, boolean reveal) {
         try {
+            // Same assumption as accept(): every account this method reads is
+            // an owner's, and an owner account always has an email.
             return accounts.find(subjectId)
-                    .map(account -> new Recipient(reveal ? account.email() : null, mask(account.email())))
+                    .map(account -> new Recipient(
+                            reveal ? account.email() : null,
+                            mask(Objects.requireNonNull(account.email(), "An owner account always has an email"))))
                     .orElse(Recipient.UNKNOWN);
         } catch (RuntimeException unavailable) {
             return Recipient.UNKNOWN;

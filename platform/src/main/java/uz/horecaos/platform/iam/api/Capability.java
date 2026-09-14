@@ -93,6 +93,15 @@ public enum Capability {
     INVENTORY_READ("inventory.read", "inventory", "read"),
     INVENTORY_ADJUST("inventory.adjust", "inventory", "adjust"),
 
+    /**
+     * Wave P16: the stop list's batch stop/unstop (`InventoryController
+     * #bulkSetAvailability`), named separately from {@link #INVENTORY_ADJUST}
+     * because a bulk toggle's blast radius is a whole selection rather than
+     * one dish — the same reasoning that keeps {@code ORDER_BULK_ACTION} apart
+     * from a single order's own state-action capability.
+     */
+    INVENTORY_AVAILABILITY_MANAGE("inventory.availability.manage", "inventory", "availability.manage"),
+
     PRICING_READ("pricing.read", "pricing", "read"),
     PRICING_AUTHOR("pricing.author", "pricing", "author"),
     PRICING_ACTIVATE("pricing.activate", "pricing", "activate"),
@@ -449,6 +458,19 @@ public enum Capability {
      * a valid one no matter who asks.
      */
     COURIER_DUTY_MANAGE("courier.duty.manage", "courier", "duty.manage"),
+
+    /**
+     * T18: a dispatcher's own operational SMS blast to couriers -- shift
+     * change, weather, a route closure -- never a customer marketing send.
+     *
+     * <p>Separate from {@link #CAMPAIGN_AUTHOR} because it targets a
+     * different population under a different rule entirely: a courier is not
+     * a customer, carries no marketing consent purpose, and is reached
+     * tenant-wide through {@code fulfillment.courier_groups} rather than
+     * through a brand's own ADR 0044 audience. Held by the same role that
+     * already runs the dispatch board.
+     */
+    COURIER_BROADCAST_MANAGE("courier.broadcast.manage", "courier", "broadcast.manage"),
 
     /**
      * ADR 0041: configuring a branch's production stations and the rules that
@@ -948,6 +970,20 @@ public enum Capability {
      * marketers will not hold this.
      */
     SUPPRESSION_MANAGE("suppression.manage", "suppression", "manage"),
+
+    /**
+     * T18: minting a trackable acquisition link (ADR 0044's own
+     * {@code marketing.attribution_links}) and reading the ones already
+     * minted -- a website {@code ?ref=} link or a Telegram {@code startapp}
+     * deep link for a campaign or an influencer.
+     *
+     * <p>Separate from {@link #CAMPAIGN_AUTHOR} rather than folded into it,
+     * because a link outlives any one campaign (an influencer's own link is
+     * never attached to one) and because minting one changes no send, no
+     * spend, and no four-eyes state -- it is closer in shape to authoring
+     * catalogue content than to touching a campaign's budget.
+     */
+    MARKETING_LINK_MANAGE("marketing-link.manage", "marketing-link", "manage"),
 
     COMMERCIAL_SUBSCRIPTION_MANAGE("commercial.subscription.manage", "commercial", "subscription.manage"),
     COMMERCIAL_OVERRIDE_APPROVE("commercial.override.approve", "commercial", "override.approve"),

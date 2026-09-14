@@ -184,7 +184,8 @@ class CustomerCsvImportTests {
     @Test
     @DisplayName("an existing phone matches instead of creating a duplicate")
     void matchesAnExistingAccount() {
-        CustomerAccountRef existing = identity.createAccountWithoutPrincipal(TENANT, BRAND);
+        CustomerAccountRef existing =
+                identity.createAccountWithoutPrincipal(TENANT, BRAND, CustomerIdentityService.ORIGIN_IMPORT, null);
         profiles.addContactPoint(TENANT, existing.accountId(), ContactType.PHONE, "+998901110003", true);
 
         CustomerCsvImportRowOutcome outcome = rowService.process(TENANT, BRAND, row(1, "+998901110003"), false);
@@ -197,8 +198,10 @@ class CustomerCsvImportTests {
     @Test
     @DisplayName("a phone shared by two accounts is ambiguous, never guessed")
     void ambiguousPhoneIsRejected() {
-        CustomerAccountRef first = identity.createAccountWithoutPrincipal(TENANT, BRAND);
-        CustomerAccountRef second = identity.createAccountWithoutPrincipal(TENANT, BRAND);
+        CustomerAccountRef first =
+                identity.createAccountWithoutPrincipal(TENANT, BRAND, CustomerIdentityService.ORIGIN_IMPORT, null);
+        CustomerAccountRef second =
+                identity.createAccountWithoutPrincipal(TENANT, BRAND, CustomerIdentityService.ORIGIN_IMPORT, null);
         profiles.addContactPoint(TENANT, first.accountId(), ContactType.PHONE, "+998901110004", true);
         profiles.addContactPoint(TENANT, second.accountId(), ContactType.PHONE, "+998901110004", true);
 

@@ -86,3 +86,15 @@
   color: var(--q-ink);
   cursor: pointer;
 }
+
+.q-schedule-grid__exception-text {
+  height: 32px;
+  padding: 0 8px;
+  min-width: 120px;
+  flex: 1 1 140px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font: inherit;
+}

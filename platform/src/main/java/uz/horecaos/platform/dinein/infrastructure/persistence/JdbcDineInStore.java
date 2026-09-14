@@ -437,6 +437,26 @@ public class JdbcDineInStore {
                 .optional();
     }
 
+    /**
+     * The same lookup, additionally scoped to one branch.
+     *
+     * <p>A reservation id is a UUID a client supplies on a path already scoped to
+     * {@code tenantId}/{@code locationId}; a lookup that ignored the path's own
+     * {@code locationId} would serve — and let a location-scoped operator read or
+     * amend — a booking belonging to a branch they hold no grant over. Callers
+     * that already know they are inside the right branch (an internal re-read
+     * after a write this same request already validated) may still use the
+     * two-argument overload above.
+     */
+    public Optional<ReservationRow> findReservationAtLocation(UUID tenantId, UUID locationId, UUID reservationId) {
+        return jdbc.sql(SELECT_RESERVATION + " WHERE tenant_id = :tenantId AND location_id = :locationId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("id", reservationId)
+                .query(JdbcDineInStore::mapReservation)
+                .optional();
+    }
+
     public List<UUID> tablesForReservation(UUID tenantId, UUID reservationId) {
         return jdbc.sql("""
                 SELECT table_id FROM dinein.reservation_tables
@@ -515,6 +535,15 @@ public class JdbcDineInStore {
      * exclusively so the exclusion constraint's trigger always sees a status
      * change come through one statement shape.
      *
+     * <p>The four guest columns are optional corrections, not a whole-object
+     * write: a null {@code guestNameEncrypted}/{@code guestPhoneEncrypted}/
+     * {@code guestPhoneLookupHash}/{@code noteEncrypted} means "the host did
+     * not re-type this field", and {@code COALESCE} keeps whatever the booking
+     * already had rather than blanking it. A non-null value replaces it in the
+     * same statement {@link #moveReservation} keeps status confined to, so an
+     * amendment that also corrects the guest's number is still one version
+     * bump, not two racing against the caller's {@code If-Match}.
+     *
      * @return whether the row moved
      */
     public boolean updateReservationCore(
@@ -524,6 +553,10 @@ public class JdbcDineInStore {
             Instant requestedFrom,
             Instant requestedTo,
             int turnaroundMinutesSnapshot,
+            @Nullable String guestNameEncrypted,
+            @Nullable String guestPhoneEncrypted,
+            @Nullable String guestPhoneLookupHash,
+            @Nullable String noteEncrypted,
             int expectedVersion,
             Instant now) {
 
@@ -533,6 +566,10 @@ public class JdbcDineInStore {
                        requested_from = :from,
                        requested_to = :to,
                        turnaround_minutes_snapshot = :turnaround,
+                       guest_name_encrypted = COALESCE(:guestName, guest_name_encrypted),
+                       guest_phone_encrypted = COALESCE(:guestPhone, guest_phone_encrypted),
+                       guest_phone_lookup_hash = COALESCE(:guestPhoneHash, guest_phone_lookup_hash),
+                       note_encrypted = COALESCE(:note, note_encrypted),
                        version = version + 1,
                        updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
@@ -541,6 +578,10 @@ public class JdbcDineInStore {
                         .param("from", utc(requestedFrom))
                         .param("to", utc(requestedTo))
                         .param("turnaround", turnaroundMinutesSnapshot)
+                        .param("guestName", guestNameEncrypted)
+                        .param("guestPhone", guestPhoneEncrypted)
+                        .param("guestPhoneHash", guestPhoneLookupHash)
+                        .param("note", noteEncrypted)
                         .param("now", utc(now))
                         .param("tenantId", tenantId)
                         .param("id", reservationId)

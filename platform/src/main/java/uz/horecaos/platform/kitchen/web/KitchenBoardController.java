@@ -9,7 +9,11 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,6 +32,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.kitchen.application.KitchenTicketService;
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
+import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketItemRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketRow;
 import uz.horecaos.platform.web.api.AggregateVersion;
@@ -90,8 +95,21 @@ public class KitchenBoardController {
                         throw new ApiException(ErrorCode.VALIDATION_FAILED, "stream is one of live, buffer, pass");
                 };
 
-        List<TicketResponse> board = tickets.board(tenantId, locationId, statuses, limit).stream()
-                .map(ticket -> TicketResponse.of(ticket, tickets.items(tenantId, ticket.id())))
+        List<TicketRow> ticketRows = tickets.board(tenantId, locationId, statuses, limit);
+
+        // One batch read over every distinct channel code this page carries,
+        // not one lookup per ticket (gap map row 2.1: channelCode is typed
+        // against sales_channels.system_type here, once, rather than left for
+        // the client to guess at from a free string).
+        Set<String> channelCodes = ticketRows.stream()
+                .map(TicketRow::channelCode)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<String, String> channelSystemTypes = tickets.channelSystemTypes(tenantId, channelCodes);
+
+        List<TicketResponse> board = ticketRows.stream()
+                .map(ticket -> TicketResponse.of(
+                        ticket, tickets.items(tenantId, ticket.id()), channelSystemTypes.get(ticket.channelCode())))
                 .toList();
 
         // The gap travels on every response rather than in a startup log. A branch
@@ -99,7 +117,13 @@ public class KitchenBoardController {
         // orders by hand, and the screen is the only place anybody will read that.
         List<String> warnings = tickets.orderProgressWired() ? List.of() : List.of(OrderProgressPort.NOT_WIRED_WARNING);
 
-        return ResponseEntity.ok(new BoardResponse(board, warnings));
+        // The tab badges, exact over every matching ticket rather than over
+        // just this page — gap map row 2.1's own finding: the client used to
+        // count fulfilmentMode over the same <=200-row page the board itself
+        // paginates, silently undercounting past that page.
+        JdbcKitchenStore.TicketCountsRow counts = tickets.counts(tenantId, locationId, statuses);
+
+        return ResponseEntity.ok(new BoardResponse(board, warnings, CountsResponse.of(counts)));
     }
 
     @GetMapping("/tickets/{ticketId}")
@@ -291,7 +315,19 @@ public class KitchenBoardController {
 
     // ------------------------------------------------------------------ payloads
 
-    record BoardResponse(List<TicketResponse> tickets, List<String> warnings) {}
+    /**
+     * {@code counts} is the board's own tab badges (gap map row 2.1), exact
+     * over every ticket the query matched rather than only over {@code
+     * tickets} — which {@code limit} may have cut.
+     */
+    record BoardResponse(List<TicketResponse> tickets, List<String> warnings, CountsResponse counts) {}
+
+    /** Mirrors {@link JdbcKitchenStore.TicketCountsRow}. */
+    record CountsResponse(long total, long delivery, long pickup, long dineIn, long aggregator) {
+        static CountsResponse of(JdbcKitchenStore.TicketCountsRow row) {
+            return new CountsResponse(row.total(), row.delivery(), row.pickup(), row.dineIn(), row.aggregator());
+        }
+    }
 
     /**
      * {@code fulfilmentMode} and {@code channelCode} were on {@code TicketRow}
@@ -303,6 +339,16 @@ public class KitchenBoardController {
      * exists, and otherwise needs an elapsed-time fallback the way the order
      * board's own severity model does (orders.md's "45 minutes, no promise"
      * rule) — impossible without knowing when the ticket was opened.
+     *
+     * <p>{@code channelSystemType} (wave P16) is {@code
+     * tenant.sales_channels.system_type} resolved off {@code channelCode} —
+     * {@code AGGREGATOR} lets the client render a real aggregator tab instead
+     * of the raw channel code as an unclassified chip (gap map row 2.1). Only
+     * {@link #board} resolves it, at the cost of one batch read over the
+     * page's distinct codes; the single-ticket read and every mutation
+     * response below keep the cheaper two-argument {@link #of(TicketRow,
+     * List)} overload; a client that already holds the chip from its last
+     * board read loses nothing by a mutation response not repeating it.
      */
     record TicketResponse(
             UUID ticketId,
@@ -310,6 +356,7 @@ public class KitchenBoardController {
             String sequenceLabel,
             String fulfilmentMode,
             @Nullable String channelCode,
+            @Nullable String channelSystemType,
             String status,
             String releaseMode,
             @Nullable Instant releaseAt,
@@ -323,12 +370,17 @@ public class KitchenBoardController {
             List<ItemView> items) {
 
         static TicketResponse of(TicketRow ticket, List<TicketItemRow> items) {
+            return of(ticket, items, null);
+        }
+
+        static TicketResponse of(TicketRow ticket, List<TicketItemRow> items, @Nullable String channelSystemType) {
             return new TicketResponse(
                     ticket.id(),
                     ticket.orderId(),
                     ticket.sequenceLabel(),
                     ticket.fulfilmentMode(),
                     ticket.channelCode(),
+                    channelSystemType,
                     ticket.status().name(),
                     ticket.releaseMode().name(),
                     ticket.releaseAt(),

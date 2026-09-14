@@ -35,6 +35,10 @@
       <div class="reservations__grid-wrap">
         @if (tables().length === 0) {
           <p class="q-body-sm reservations__state">{{ 'reservations.noTables' | t }}</p>
+        } @else if (closedToday()) {
+          <p class="q-body-sm reservations__state" data-testid="reservations-closed">
+            {{ 'reservations.closedToday' | t }}
+          </p>
         } @else {
           <table class="reservations__grid" data-testid="reservations-grid">
             <thead>
@@ -45,16 +49,18 @@
                     <div class="reservations__table-header">
                       <span class="q-body-sm">{{ table.code }}</span>
                       <span class="q-caption reservations__seats">{{ table.seats }}</span>
-                      <span class="q-caption reservations__occupancy">{{ occupancyFor(table.tableId) }}</span>
+                      <span class="q-caption reservations__occupancy">{{
+                        occupancyFor(table.tableId)
+                      }}</span>
                     </div>
                   </th>
                 }
               </tr>
             </thead>
             <tbody>
-              @for (hour of HOURS; track hour) {
+              @for (hour of HOURS(); track hour) {
                 <tr>
-                  <th class="reservations__hour-header q-caption">{{ hour }}:00</th>
+                  <th class="reservations__hour-header q-caption">{{ hour % 24 }}:00</th>
                   @for (table of tables(); track table.tableId) {
                     @let cell = cellReservation(table.tableId, hour);
                     <td
@@ -64,7 +70,9 @@
                       [attr.data-testid]="cell ? 'reservations-cell-booked' : null"
                     >
                       @if (cell && isCellStart(cell, hour)) {
-                        <span class="q-caption reservations__cell-label">{{ cell.partySize }}·{{ statusLabel(cell.status) }}</span>
+                        <span class="q-caption reservations__cell-label"
+                          >{{ cell.partySize }}·{{ statusLabel(cell.status) }}</span
+                        >
                       }
                     </td>
                   }
@@ -87,12 +95,49 @@
             <dt class="q-caption">{{ 'reservations.detail.party' | t }}</dt>
             <dd class="q-body-sm">{{ reservation.partySize }}</dd>
             <dt class="q-caption">{{ 'reservations.detail.tables' | t }}</dt>
-            <dd class="q-body-sm">{{ reservation.tableIds.join(', ') }}</dd>
+            <dd class="q-body-sm" data-testid="reservations-detail-tables">
+              {{ tableCodesFor(reservation) }}
+            </dd>
             <dt class="q-caption">{{ 'reservations.detail.status' | t }}</dt>
             <dd class="q-body-sm">{{ statusLabel(reservation.status) }}</dd>
             <dt class="q-caption">{{ 'reservations.detail.id' | t }}</dt>
             <dd class="q-body-sm reservations__id">{{ reservation.reservationId }}</dd>
           </dl>
+
+          <div class="reservations__guest" data-testid="reservations-guest">
+            @let guest = revealedGuestFor(reservation.reservationId);
+            @if (guest) {
+              <dl class="reservations__facts">
+                <dt class="q-caption">{{ 'reservations.detail.guestName' | t }}</dt>
+                <dd class="q-body-sm">{{ guest.guestName }}</dd>
+                <dt class="q-caption">{{ 'reservations.detail.guestPhone' | t }}</dt>
+                <dd class="q-body-sm">{{ guest.guestPhone }}</dd>
+                @if (guest.note) {
+                  <dt class="q-caption">{{ 'reservations.detail.guestNote' | t }}</dt>
+                  <dd class="q-body-sm">{{ guest.note }}</dd>
+                }
+              </dl>
+            } @else {
+              <button
+                type="button"
+                class="q-body-sm"
+                (click)="revealGuest(reservation)"
+                [disabled]="revealingGuest()"
+                data-testid="reservations-reveal-guest"
+              >
+                {{
+                  revealingGuest()
+                    ? ('reservations.detail.revealing' | t)
+                    : ('reservations.detail.revealGuest' | t)
+                }}
+              </button>
+              @if (revealGuestError()) {
+                <p class="q-caption reservations__error" data-testid="reservations-reveal-error">
+                  {{ revealGuestError() }}
+                </p>
+              }
+            }
+          </div>
 
           @if (availableActions(reservation).length > 0) {
             <div class="reservations__actions">
@@ -108,6 +153,16 @@
               }
             </div>
           }
+          @if (canSeat(reservation)) {
+            <button
+              type="button"
+              class="q-body-sm"
+              (click)="requestSeat(reservation)"
+              data-testid="reservations-seat"
+            >
+              {{ 'reservations.action.seat' | t }}
+            </button>
+          }
           @if (canEdit(reservation)) {
             <button
               type="button"
@@ -118,11 +173,6 @@
               {{ 'reservations.detail.edit' | t }}
             </button>
           }
-          @if (reservation.status === 'CONFIRMED' || reservation.status === 'SEATED') {
-            <p class="q-caption reservations__hint" data-testid="reservations-seat-note">
-              {{ 'reservations.detail.seatNotBuilt' | t }}
-            </p>
-          }
         </aside>
       }
 
@@ -130,32 +180,35 @@
         <aside class="reservations__panel" data-testid="reservations-form">
           <div class="reservations__panel-header">
             <h2 class="q-emphasis">
-              {{ editTarget() ? ('reservations.form.editTitle' | t) : ('reservations.form.title' | t) }}
+              {{
+                editTarget() ? ('reservations.form.editTitle' | t) : ('reservations.form.title' | t)
+              }}
             </h2>
             <button type="button" class="reservations__close" (click)="closeCreateForm()">×</button>
           </div>
 
           @if (editTarget()) {
             <p class="q-caption reservations__hint">{{ 'reservations.form.editHint' | t }}</p>
-          } @else {
-            <label class="reservations__field">
-              <span class="q-caption">{{ 'reservations.form.guestName' | t }}</span>
-              <input
-                type="text"
-                [value]="formGuestName()"
-                (input)="formGuestName.set($any($event.target).value)"
-                data-testid="reservations-form-name"
-              />
-            </label>
-            <label class="reservations__field">
-              <span class="q-caption">{{ 'reservations.form.guestPhone' | t }}</span>
-              <input
-                type="text"
-                [value]="formGuestPhone()"
-                (input)="formGuestPhone.set($any($event.target).value)"
-                data-testid="reservations-form-phone"
-              />
-            </label>
+          }
+          <label class="reservations__field">
+            <span class="q-caption">{{ 'reservations.form.guestName' | t }}</span>
+            <input
+              type="text"
+              [value]="formGuestName()"
+              (input)="formGuestName.set($any($event.target).value)"
+              data-testid="reservations-form-name"
+            />
+          </label>
+          <label class="reservations__field">
+            <span class="q-caption">{{ 'reservations.form.guestPhone' | t }}</span>
+            <input
+              type="text"
+              [value]="formGuestPhone()"
+              (input)="formGuestPhone.set($any($event.target).value)"
+              data-testid="reservations-form-phone"
+            />
+          </label>
+          @if (!editTarget()) {
             <label class="reservations__field">
               <span class="q-caption">{{ 'reservations.form.secondaryPhone' | t }}</span>
               <input
@@ -187,9 +240,21 @@
             </label>
             <label class="reservations__field">
               <span class="q-caption">{{ 'reservations.form.to' | t }}</span>
-              <input type="time" [value]="formTo()" (input)="formTo.set($any($event.target).value)" />
+              <input
+                type="time"
+                [value]="formTo()"
+                (input)="formTo.set($any($event.target).value)"
+              />
             </label>
           </div>
+          <label class="reservations__field">
+            <span class="q-caption">{{ 'reservations.form.note' | t }}</span>
+            <textarea
+              rows="2"
+              [value]="formNote()"
+              (input)="formNote.set($any($event.target).value)"
+            ></textarea>
+          </label>
           @if (editTarget()) {
             <label class="reservations__field">
               <span class="q-caption">{{ 'reservations.form.reason' | t }}</span>
@@ -199,15 +264,6 @@
                 (input)="formReason.set($any($event.target).value)"
                 data-testid="reservations-form-reason"
               />
-            </label>
-          } @else {
-            <label class="reservations__field">
-              <span class="q-caption">{{ 'reservations.form.note' | t }}</span>
-              <textarea
-                rows="2"
-                [value]="formNote()"
-                (input)="formNote.set($any($event.target).value)"
-              ></textarea>
             </label>
           }
 
@@ -231,7 +287,9 @@
             <p class="q-caption reservations__error">{{ formIncompleteKey() | t }}</p>
           }
           @if (formError()) {
-            <p class="q-caption reservations__error" data-testid="reservations-form-error">{{ formError() }}</p>
+            <p class="q-caption reservations__error" data-testid="reservations-form-error">
+              {{ formError() }}
+            </p>
           }
 
           <button
@@ -268,6 +326,16 @@
       [busy]="actionBusy()"
       (confirm)="submitAction($event)"
       (dismiss)="dismissAction()"
+    />
+  }
+
+  @if (pendingSeat()) {
+    <q-order-reason-dialog
+      titleKey="reservations.seat.title"
+      confirmLabelKey="reservations.seat.confirm"
+      [busy]="seatBusy()"
+      (confirm)="submitSeat($event)"
+      (dismiss)="dismissSeat()"
     />
   }
 </div>

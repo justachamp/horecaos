@@ -6,6 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiError } from '../../core/api/problem-details';
@@ -14,6 +15,7 @@ import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ConfirmDialog } from '../../shared/ui/confirm-dialog';
+import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { CatalogApi, fetchAllVariantsAtLocation } from './catalog-api';
 import { VariantAvailabilityRow } from './catalog-domain';
 import { InventoryApi } from './inventory-api';
@@ -21,6 +23,17 @@ import { PricingApi } from './pricing-api';
 
 /** The five ways an operator can narrow the matrix — catalog.md §4.5's status tabs. */
 export type MenuStatusFilter = 'ALL' | 'AVAILABLE' | 'UNAVAILABLE' | 'HIDDEN' | 'NOT_ADDED';
+
+/**
+ * What the bulk bar's confirm dialog is about to do — the existing menu-
+ * status gesture (`OFFERING`), or the channel plane's own mass-enable/
+ * mass-disable (`CHANNEL`, wave P45, gap map row 4.4b). Kept as one
+ * discriminated union rather than two dialogs so the confirm flow — select,
+ * request, confirm, reload — stays the single path both share.
+ */
+export type BulkTarget =
+  | { readonly kind: 'OFFERING'; readonly status: 'AVAILABLE' | 'UNAVAILABLE' }
+  | { readonly kind: 'CHANNEL'; readonly offered: boolean };
 
 const FULFILLMENT_MODES = ['DELIVERY', 'PICKUP', 'DINE_IN'] as const;
 
@@ -47,12 +60,36 @@ const SELECTION_CAP = 200;
  * page renders it as its own badge (`offeringStatusLabel`/`offeringStatusClass`),
  * separate from the existing `menus__cell` toggle below.
  *
- * **Locations only: Layer B (the per-channel plane) is still not built.**
- * `catalog.channel_offering_exclusions` (`V0020`) exists with a reader and no
- * writer — see the class doc this file used to carry, corrected in
- * catalog.md, and wave P45's own scope — so this screen still shows no
- * `Каналы` toggle and says so once, in `catalog.menus.channelsNote`, rather
- * than rendering a control that would be a lie.
+ * **Layer B (the per-channel plane) is wave P45's own scope, built here.**
+ * `catalog.channel_offering_exclusions` (`V0020`) had a reader
+ * (`JdbcCatalogStore.channelExcludedVariantIds`) and no writer anywhere — see
+ * `CatalogAuthoringService.setChannelOffering`/`bulkSetChannelOffering` for
+ * the write path this wave adds. The channel `<select>` in the toolbar
+ * switches the whole matrix's price column and adds a `Канал` column: `Зал`
+ * (the default) shows the hall price exactly as before; picking a real
+ * channel re-resolves `prices` against it (`PricingApi.resolvedVariantPrices`
+ * with a `channelId`) and loads which rows are currently excluded from it.
+ * `offered_on_channel` and `price_on_channel` stay two separate controls in
+ * the channel column and the price cell respectively — the Delever
+ * conflation of availability and price behind one toggle this row exists to
+ * avoid.
+ *
+ * **The price cell is only ever editable when a channel-scoped price book
+ * genuinely resolves for that channel** (`canEditChannelPrice` compares the
+ * channel-context `priceBookId` against the hall-context one) — never when
+ * the channel is simply falling back to the hall's own book, which would
+ * silently rewrite the hall price under the guise of a channel one. With no
+ * channel-scoped book yet, the cell shows a hint linking to `/catalog/prices`
+ * (`PriceListPage`, already built) to assign one, rather than a control that
+ * would be a lie.
+ *
+ * **Mass-enable/mass-disable reuses the existing bulk-selection bar and
+ * confirm dialog** rather than a second flow: two more buttons appear next to
+ * Stop/Unstop once a channel is selected, sharing `selectedIds`,
+ * `SELECTION_CAP` and `q-confirm-dialog` — the gap map's own reason this row
+ * exists ("enabling 600 items one at a time is what makes an aggregator
+ * launch take a week") is solved by making the channel gesture as cheap as
+ * the offering one already was, not by inventing a parallel mechanism.
  *
  * **The cell toggle keeps writing through the audited inventory endpoint,
  * not `CatalogApi.setOffering`, and that is still deliberate — see the
@@ -72,7 +109,7 @@ const SELECTION_CAP = 200;
  */
 @Component({
   selector: 'q-menus-page',
-  imports: [TPipe, ConfirmDialog],
+  imports: [TPipe, ConfirmDialog, RouterLink],
   templateUrl: './menus-page.html',
   styleUrl: './menus-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -81,6 +118,7 @@ export class MenusPage implements OnInit {
   private readonly catalogApi = inject(CatalogApi);
   private readonly pricingApi = inject(PricingApi);
   private readonly inventoryApi = inject(InventoryApi);
+  private readonly channelsApi = inject(SalesChannelsApi);
   private readonly location = inject(CurrentLocation);
   private readonly i18n = inject(I18n);
 
@@ -98,8 +136,31 @@ export class MenusPage implements OnInit {
   protected readonly search = signal('');
   protected readonly statusFilter = signal<MenuStatusFilter>('ALL');
   protected readonly selectedIds = signal<ReadonlySet<string>>(new Set());
-  protected readonly bulkTarget = signal<'AVAILABLE' | 'UNAVAILABLE' | null>(null);
+  protected readonly bulkTarget = signal<BulkTarget | null>(null);
   protected readonly bulkBusy = signal(false);
+
+  // ------------------------------------------------------------ channel plane (wave P45)
+  protected readonly channels = signal<readonly ChannelView[]>([]);
+  protected readonly selectedChannelId = signal<string | null>(null);
+  /** The book resolving with no channel — the comparison `canEditChannelPrice` needs. */
+  protected readonly hallPriceBookId = signal<string | null>(null);
+  /** The book resolving for the *current* context (hall when no channel is selected). */
+  protected readonly priceBookId = signal<string | null>(null);
+  protected readonly channelExclusions = signal<ReadonlySet<string>>(new Set());
+  protected readonly channelBusyVariantIds = signal<ReadonlySet<string>>(new Set());
+
+  /**
+   * A channel-scoped book genuinely applies — never true for a channel that
+   * is silently falling back to the hall's own book, which is what makes
+   * editing "the channel price" safe: writing through {@link priceBookId}
+   * can never land in the hall's book by accident.
+   */
+  protected readonly canEditChannelPrice = computed(
+    () =>
+      this.selectedChannelId() !== null &&
+      this.priceBookId() !== null &&
+      this.priceBookId() !== this.hallPriceBookId(),
+  );
 
   protected readonly fulfillmentModes = FULFILLMENT_MODES;
   protected readonly statusFilterOptions: readonly MenuStatusFilter[] = [
@@ -139,6 +200,12 @@ export class MenusPage implements OnInit {
       this.firstLoadComplete.set(true);
       return;
     }
+    try {
+      this.channels.set(await this.channelsApi.list(scope));
+    } catch {
+      // Non-fatal, matching PriceListPage's own load(): the matrix still
+      // renders the hall context with no channel selector populated.
+    }
     await this.load();
     this.firstLoadComplete.set(true);
   }
@@ -165,19 +232,7 @@ export class MenusPage implements OnInit {
       // a bulk action silently act on variants no longer even visible.
       this.selectedIds.set(new Set());
 
-      if (rows.length > 0) {
-        const resolved = await firstValueFrom(
-          this.pricingApi.resolvedVariantPrices(
-            scope,
-            scope.locationId,
-            rows.map((row) => row.variantId),
-          ),
-        );
-        this.prices.set(resolved.amountsMinor);
-        this.currency.set(resolved.currency ?? null);
-      } else {
-        this.prices.set({});
-      }
+      await this.refreshPricingAndExclusions();
       this.denied.set(false);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
@@ -190,6 +245,55 @@ export class MenusPage implements OnInit {
     } finally {
       this.reloading.set(false);
     }
+  }
+
+  /**
+   * Prices (and, in channel context, which of the current rows are excluded
+   * from it) for whatever context is active — see the class doc. Always
+   * resolves the hall context too, even under a channel, because {@link
+   * canEditChannelPrice} needs it to tell a real channel-scoped book apart
+   * from the channel quietly falling back to the hall's.
+   */
+  private async refreshPricingAndExclusions(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    const rows = this.rows();
+    if (rows.length === 0) {
+      this.prices.set({});
+      this.currency.set(null);
+      this.priceBookId.set(null);
+      this.hallPriceBookId.set(null);
+      this.channelExclusions.set(new Set());
+      return;
+    }
+    const variantIds = rows.map((row) => row.variantId);
+    const channelId = this.selectedChannelId();
+
+    const hall = await firstValueFrom(
+      this.pricingApi.resolvedVariantPrices(scope, scope.locationId, variantIds),
+    );
+    this.hallPriceBookId.set(hall.priceBookId ?? null);
+
+    if (channelId === null) {
+      this.prices.set(hall.amountsMinor);
+      this.currency.set(hall.currency ?? null);
+      this.priceBookId.set(hall.priceBookId ?? null);
+      this.channelExclusions.set(new Set());
+      return;
+    }
+
+    const [channelPrices, exclusions] = await Promise.all([
+      firstValueFrom(
+        this.pricingApi.resolvedVariantPrices(scope, scope.locationId, variantIds, channelId),
+      ),
+      firstValueFrom(this.catalogApi.channelExclusions(scope, channelId, scope.locationId)),
+    ]);
+    this.prices.set(channelPrices.amountsMinor);
+    this.currency.set(channelPrices.currency ?? null);
+    this.priceBookId.set(channelPrices.priceBookId ?? null);
+    this.channelExclusions.set(new Set(exclusions.excludedVariantIds));
   }
 
   // ------------------------------------------------------------ filter / search
@@ -288,6 +392,127 @@ export class MenusPage implements OnInit {
     });
   }
 
+  // ------------------------------------------------------------ channel plane (wave P45)
+
+  protected async onChannelChange(value: string): Promise<void> {
+    const channelId = value === '' ? null : value;
+    if (channelId === this.selectedChannelId()) {
+      return;
+    }
+    this.selectedChannelId.set(channelId);
+    // A selection made under one channel's context should not silently act
+    // under another's once the picker changes.
+    this.selectedIds.set(new Set());
+    this.reloading.set(true);
+    try {
+      await this.refreshPricingAndExclusions();
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.lastError.set(error);
+      } else {
+        throw error;
+      }
+    } finally {
+      this.reloading.set(false);
+    }
+  }
+
+  protected channelLabel(channelId: string): string {
+    return this.channels().find((channel) => channel.id === channelId)?.displayName ?? channelId;
+  }
+
+  protected channelOffered(variantId: string): boolean {
+    return !this.channelExclusions().has(variantId);
+  }
+
+  protected channelStatusLabel(variantId: string): string {
+    return this.channelOffered(variantId)
+      ? this.i18n.t('catalog.menus.channel.included')
+      : this.i18n.t('catalog.menus.channel.excluded');
+  }
+
+  protected isChannelBusy(variantId: string): boolean {
+    return this.channelBusyVariantIds().has(variantId);
+  }
+
+  private setChannelBusy(variantId: string, busy: boolean): void {
+    this.channelBusyVariantIds.update((current) => {
+      const next = new Set(current);
+      if (busy) {
+        next.add(variantId);
+      } else {
+        next.delete(variantId);
+      }
+      return next;
+    });
+  }
+
+  /**
+   * Location-scoped, deliberately — every other write on this page (the 86
+   * toggle, bulk stop/unstop) acts at `scope.locationId`, and the pilot this
+   * screen serves is single-location (catalog.md's own framing). Brand-wide
+   * exclusion stays reachable at the API level for later multi-location work.
+   */
+  protected async toggleChannelOffering(row: VariantAvailabilityRow): Promise<void> {
+    const scope = this.location.scope();
+    const channelId = this.selectedChannelId();
+    if (!scope || channelId === null || this.isChannelBusy(row.variantId)) {
+      return;
+    }
+    const nextOffered = !this.channelOffered(row.variantId);
+    this.setChannelBusy(row.variantId, true);
+    try {
+      await firstValueFrom(
+        this.catalogApi.setChannelOffering(scope, channelId, row.variantId, {
+          offered: nextOffered,
+          locationId: scope.locationId,
+        }),
+      );
+      this.channelExclusions.update((current) => {
+        const next = new Set(current);
+        if (nextOffered) {
+          next.delete(row.variantId);
+        } else {
+          next.add(row.variantId);
+        }
+        return next;
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.lastError.set(error);
+      } else {
+        throw error;
+      }
+    } finally {
+      this.setChannelBusy(row.variantId, false);
+    }
+  }
+
+  /** Only reachable when {@link canEditChannelPrice} holds — see its own doc for why. */
+  protected async setChannelPrice(row: VariantAvailabilityRow, amountSom: string): Promise<void> {
+    const scope = this.location.scope();
+    const bookId = this.priceBookId();
+    const amountMinor = Number.parseInt(amountSom.replace(/\D/g, ''), 10);
+    if (!scope || !bookId || !this.canEditChannelPrice() || !Number.isFinite(amountMinor)) {
+      return;
+    }
+    this.setBusy(row.variantId, true);
+    try {
+      await firstValueFrom(
+        this.pricingApi.setVariantPrice(scope, bookId, row.variantId, amountMinor),
+      );
+      this.prices.set({ ...this.prices(), [row.variantId]: amountMinor });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.lastError.set(error);
+      } else {
+        throw error;
+      }
+    } finally {
+      this.setBusy(row.variantId, false);
+    }
+  }
+
   // ------------------------------------------------------------ offering status / fulfilment modes
 
   protected offeringStatusLabel(row: VariantAvailabilityRow): string {
@@ -361,7 +586,11 @@ export class MenusPage implements OnInit {
     this.selectedIds.set(
       this.selectAllChecked()
         ? new Set()
-        : new Set(this.rows().slice(0, SELECTION_CAP).map((row) => row.variantId)),
+        : new Set(
+            this.rows()
+              .slice(0, SELECTION_CAP)
+              .map((row) => row.variantId),
+          ),
     );
   }
 
@@ -369,7 +598,19 @@ export class MenusPage implements OnInit {
     if (this.selectedCount() === 0) {
       return;
     }
-    this.bulkTarget.set(status);
+    this.bulkTarget.set({ kind: 'OFFERING', status });
+  }
+
+  /**
+   * The mass-enable/mass-disable gesture (wave P45, gap map row 4.4b) —
+   * reachable only once a channel is selected, and only over the same
+   * capped selection Stop/Unstop already uses.
+   */
+  protected requestChannelBulk(offered: boolean): void {
+    if (this.selectedCount() === 0 || this.selectedChannelId() === null) {
+      return;
+    }
+    this.bulkTarget.set({ kind: 'CHANNEL', offered });
   }
 
   protected cancelBulk(): void {
@@ -378,18 +619,32 @@ export class MenusPage implements OnInit {
 
   protected async confirmBulk(): Promise<void> {
     const scope = this.location.scope();
-    const status = this.bulkTarget();
-    if (!scope || !status) {
+    const target = this.bulkTarget();
+    if (!scope || !target) {
       return;
     }
     this.bulkBusy.set(true);
     try {
-      await firstValueFrom(
-        this.catalogApi.bulkSetOfferingStatus(scope, scope.locationId, {
-          variantIds: [...this.selectedIds()],
-          status,
-        }),
-      );
+      if (target.kind === 'OFFERING') {
+        await firstValueFrom(
+          this.catalogApi.bulkSetOfferingStatus(scope, scope.locationId, {
+            variantIds: [...this.selectedIds()],
+            status: target.status,
+          }),
+        );
+      } else {
+        const channelId = this.selectedChannelId();
+        if (!channelId) {
+          return;
+        }
+        await firstValueFrom(
+          this.catalogApi.bulkSetChannelOffering(scope, channelId, {
+            variantIds: [...this.selectedIds()],
+            offered: target.offered,
+            locationId: scope.locationId,
+          }),
+        );
+      }
       this.bulkTarget.set(null);
       await this.load();
     } catch (error) {

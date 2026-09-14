@@ -1,13 +1,14 @@
 /* Two rows with deliberately different visual weight (statistics.md §1.1,
    Togora §2c): the period axis is primary and dark-filled, the slice axis is
-   secondary and outlined. */
-.filter-bar {
+   secondary and outlined. The outer padding/background/border is now
+   `q-filter-bar`'s own chrome (wave P07); this file keeps only what is
+   specific to Reports' own two rows and their controls. */
+.reports-filter-bar__rows {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 16px;
-  background: var(--q-canvas);
-  border-bottom: 1px solid var(--q-hairline);
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .filter-bar__row {
@@ -69,36 +70,4 @@
 .segment:focus-visible {
   outline: 2px solid var(--q-primary);
   outline-offset: -2px;
-}
-
-/* Локed, not hidden (§1.1): a manager who cannot find the payment filter must
-   see that it exists and why, not conclude it was never built. */
-.filter-bar__locked {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border: 1px dashed var(--q-ink-subtle);
-  color: var(--q-ink-subtle);
-  cursor: help;
-}
-
-.filter-bar__locked-glyph {
-  display: inline-block;
-  width: 8px;
-  height: 6px;
-  border: 1px solid var(--q-ink-subtle);
-  border-bottom: none;
-  border-radius: 4px 4px 0 0;
-  position: relative;
-  top: 3px;
-}
-
-.filter-bar__locked-glyph span {
-  display: block;
-  width: 12px;
-  height: 8px;
-  margin-left: -2.5px;
-  margin-top: 5px;
-  background: var(--q-ink-subtle);
 }

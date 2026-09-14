@@ -143,6 +143,11 @@ public class LoyaltyAccrualService {
                 earnsAt,
                 expiresAt,
                 earnsAt.isAfter(now) ? LotStatus.PENDING : LotStatus.ACTIVE,
+                // Snapshotted at grant time, the same reasoning every other policy
+                // value on this lot is snapshotted under (see this class's own
+                // doc): raising tomorrow's warning window must not restate a
+                // promise already made about a lot granted under yesterday's rule.
+                rule.expiryWarningDays(),
                 now);
 
         // The balance rises now and the lot is not spendable until earns_at. The

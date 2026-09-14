@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -47,6 +48,7 @@ import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver
 import uz.horecaos.platform.marketing.application.AudienceService;
 import uz.horecaos.platform.marketing.application.CampaignCostEstimator;
 import uz.horecaos.platform.marketing.application.CampaignExpansionScheduler;
+import uz.horecaos.platform.marketing.application.CampaignScheduledSendScheduler;
 import uz.horecaos.platform.marketing.application.CampaignSendService;
 import uz.horecaos.platform.marketing.application.CampaignService;
 import uz.horecaos.platform.marketing.application.CustomerMetricProjectionService;
@@ -880,6 +882,102 @@ class MarketingCampaignTests {
         assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status()).isEqualTo(CampaignStatus.SENDING);
     }
 
+    /**
+     * T18: before this wave, an unwired channel's only refusal was three
+     * frames deep inside {@code CampaignSendService#expandNextBatch}, caught
+     * and logged by {@code CampaignExpansionScheduler}'s own {@code catch
+     * (RuntimeException)} — an approver's second signature spent on a
+     * campaign that could never send, with nothing telling them so. This is
+     * that refusal moved to the moment an operator actually presses launch.
+     */
+    @Test
+    @DisplayName("launch is refused, visibly, when the channel has no wired delivery path")
+    void launchIsRefusedForAnUnwiredChannel() {
+        UUID campaign = readyToLaunch(draftCampaign(10_000_000L));
+        port().unwire();
+
+        ApiException failure = catchThrowableOfType(() -> campaigns.start(TENANT, campaign), ApiException.class);
+        assertThat(failure.errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
+        assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status())
+                .as("a refused launch leaves the campaign exactly where it was, ready to try again "
+                        + "once the channel is wired")
+                .isEqualTo(CampaignStatus.APPROVED);
+    }
+
+    /**
+     * T18: {@code CampaignStatus} has declared {@code SCHEDULED} and the
+     * {@code APPROVED -> SCHEDULED -> SENDING} edges since ADR 0044, and
+     * nothing ever wrote the status or read {@code scheduledAt} — the create
+     * request had no field for it. This is the whole round trip: a future
+     * {@code scheduledAt} arms {@code SCHEDULED} rather than sending
+     * immediately, and {@code CampaignScheduledSendScheduler} is the only
+     * thing that ever promotes it from there.
+     */
+    @Test
+    @DisplayName("a future scheduledAt arms SCHEDULED, and the scheduler alone promotes it once its moment arrives")
+    void scheduledSendArmsAndTheSchedulerPromotesIt() {
+        Instant scheduledAt = NOW.plus(Duration.ofHours(2));
+        UUID audience = everybodyRegistered();
+        UUID campaign = campaigns.create(
+                TENANT,
+                BRAND,
+                "Scheduled send " + UUID.randomUUID(),
+                MarketingChannel.SMS,
+                PURPOSE,
+                audience,
+                "MARKETING_PROMOTION",
+                100,
+                10_000_000L,
+                "UZS",
+                null,
+                null,
+                scheduledAt,
+                UUID.fromString(author.subject()));
+        campaigns.prepare(TENANT, campaign, author, "corr");
+        campaigns.submitForReview(TENANT, campaign);
+        campaigns.approve(
+                TENANT,
+                campaign,
+                UUID.fromString(approver.subject()),
+                UUID.randomUUID(),
+                approver,
+                "Reviewed the copy and the reach",
+                "corr");
+
+        // Launching before the moment arrives arms SCHEDULED rather than sending.
+        assertThat(campaigns.start(TENANT, campaign)).isTrue();
+        assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status()).isEqualTo(CampaignStatus.SCHEDULED);
+
+        // A sweep before the moment arrives finds nothing due.
+        var scheduler =
+                new CampaignScheduledSendScheduler(campaignStore, campaigns, Clock.fixed(NOW, ZoneOffset.UTC), 50);
+        assertThat(scheduler.runOnce()).isZero();
+        assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status()).isEqualTo(CampaignStatus.SCHEDULED);
+
+        // Once the moment arrives, only the scheduler's own sweep promotes it —
+        // nothing else in this test called start() again.
+        wire(scheduledAt.plusSeconds(1));
+        var dueScheduler = new CampaignScheduledSendScheduler(
+                campaignStore, campaigns, Clock.fixed(scheduledAt.plusSeconds(1), ZoneOffset.UTC), 50);
+        assertThat(dueScheduler.runOnce()).isEqualTo(1);
+        assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status()).isEqualTo(CampaignStatus.SENDING);
+    }
+
+    /** Draft, estimate, submit, approve — everything short of the launch call itself. */
+    private UUID readyToLaunch(UUID campaign) {
+        campaigns.prepare(TENANT, campaign, author, "corr");
+        campaigns.submitForReview(TENANT, campaign);
+        campaigns.approve(
+                TENANT,
+                campaign,
+                UUID.fromString(approver.subject()),
+                UUID.randomUUID(),
+                approver,
+                "Reviewed the copy and the reach",
+                "corr");
+        return campaign;
+    }
+
     @Test
     @DisplayName("resume is refused from anything but PAUSED, and changes nothing")
     void resumeIsRefusedFromANonPausedState() {
@@ -1057,6 +1155,7 @@ class MarketingCampaignTests {
                 100,
                 100_000L,
                 "UZS",
+                null,
                 null,
                 null,
                 UUID.fromString(author.subject()));
@@ -1246,6 +1345,7 @@ class MarketingCampaignTests {
                 "UZS",
                 null,
                 null,
+                null,
                 UUID.fromString(author.subject()));
     }
 
@@ -1263,6 +1363,7 @@ class MarketingCampaignTests {
                 100,
                 null,
                 "UZS",
+                null,
                 null,
                 null,
                 UUID.fromString(author.subject()));

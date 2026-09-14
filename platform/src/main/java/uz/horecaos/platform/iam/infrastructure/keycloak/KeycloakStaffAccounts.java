@@ -63,7 +63,12 @@ class KeycloakStaffAccounts implements StaffAccounts {
         } catch (HttpClientErrorException.NotFound missing) {
             return Optional.empty();
         }
-        if (user == null || user.get("email") == null) {
+        // Before ADR 0116, "no email" and "no account" were the same answer,
+        // because every account this class had ever seen was an owner's and
+        // every owner has one. A staff account created by #create may not
+        // (staff-and-access.md §4's Email is optional), so only a genuinely
+        // missing user -- the 404 above -- means "no account" now.
+        if (user == null) {
             return Optional.empty();
         }
         List<Map<String, Object>> credentials = client.get()
@@ -72,11 +77,91 @@ class KeycloakStaffAccounts implements StaffAccounts {
                 .body(LIST);
         boolean hasPassword = credentials != null
                 && credentials.stream().anyMatch(credential -> "password".equals(credential.get("type")));
+        Object email = user.get("email");
+        Object username = user.get("username");
         return Optional.of(new StaffAccount(
                 subjectId,
-                String.valueOf(user.get("email")),
+                email == null ? null : String.valueOf(email),
                 Boolean.TRUE.equals(user.get("emailVerified")),
-                hasPassword));
+                hasPassword,
+                username == null ? subjectId : String.valueOf(username)));
+    }
+
+    /**
+     * Creates a phone-first staff account (staff-and-access.md §4, ADR 0116).
+     *
+     * <p>The username is always the normalised phone number, never the email
+     * -- unlike an owner account, whose username is its email ({@link
+     * uz.horecaos.platform.iam.infrastructure.keycloak.KeycloakOrganizationProvisioner}).
+     * A phone is required on every staff invitation and an email is not, so
+     * the phone is the one identifier every staff account is guaranteed to
+     * have; picking it always, rather than "email when given, phone
+     * otherwise", keeps one account's login identifier from depending on
+     * which fields happened to be filled in.
+     *
+     * <p>{@code firstName}/{@code lastName} are supplied at invite time here
+     * -- unlike {@code ensureMembership}'s {@code PENDING_FIRST_NAME}/{@code
+     * PENDING_LAST_NAME} placeholders, which exist only because Keycloak 26's
+     * declarative User Profile refuses a name-less account (see that class's
+     * own doc on keycloak/keycloak#36108); staff-and-access.md §4 already
+     * collects a real name before this is ever called, so there is no
+     * placeholder to write.
+     *
+     * <p>The new account's id comes off the {@code Location} response header,
+     * not a follow-up search: unlike {@code ensureMembership}, which has only
+     * an email to search back by, this account may have none, and a phone
+     * search would depend on a Keycloak custom-attribute query syntax nothing
+     * here has verified against a live realm.
+     */
+    @Override
+    public StaffAccount create(String firstName, String lastName, String phone, @Nullable String email) {
+        String username = normalizePhone(phone);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("username", username);
+        body.put("enabled", true);
+        body.put("firstName", firstName);
+        body.put("lastName", lastName);
+        body.put("attributes", Map.of("phone", List.of(phone)));
+        if (email != null) {
+            body.put("email", email);
+            body.put("emailVerified", false);
+        }
+
+        java.net.URI location = client.post()
+                .uri("/admin/realms/{realm}/users", realm)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, (request, response) -> {
+                    throw new IllegalStateException(
+                            "Keycloak refused to create the staff account with " + response.getStatusCode());
+                })
+                .toBodilessEntity()
+                .getHeaders()
+                .getLocation();
+        if (location == null) {
+            throw new IllegalStateException("The staff account was created but Keycloak named no Location for it");
+        }
+        String path = location.getPath();
+        String subjectId = path.substring(path.lastIndexOf('/') + 1);
+        return new StaffAccount(subjectId, email, false, false, username);
+    }
+
+    /**
+     * An exact username search -- {@link #exactlyOne}, the same safe pattern
+     * {@link #findSubjectIdByLogin} already relies on -- rather than a
+     * custom-attribute {@code q=phone:...} query: {@link #create} always sets
+     * the username to the normalised phone, so this needs no attribute search
+     * whose syntax nothing here has proven against a live realm.
+     */
+    @Override
+    public Optional<StaffAccount> findByPhone(String phone) {
+        return exactlyOne("username", normalizePhone(phone)).flatMap(this::find);
+    }
+
+    /** Digits only, so "+998 90 123 45 67" and "998901234567" name the same account. */
+    static String normalizePhone(String phone) {
+        return phone.replaceAll("[^0-9]", "");
     }
 
     /** The account a login resolves to: {@link #findSubjectIdByLogin}, then read. */

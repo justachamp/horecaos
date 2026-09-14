@@ -8,6 +8,8 @@ import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
 import { OrderActionsApi } from './order-actions-api';
+import { AmendmentResponse } from './order-amendments';
+import { OrderAmendmentsApi } from './order-amendments-api';
 import { OrderDetailPane } from './order-detail-pane';
 import { OrderDetailResponse, OrderTimelineEntry, RevisionResponse } from './order-detail';
 import { OrderHandoverApi } from './order-handover-api';
@@ -83,6 +85,29 @@ function detail(overrides: Partial<OrderDetailResponse> = {}): OrderDetailRespon
   };
 }
 
+/** `AmendmentResponse`, minimally filled — the shape every built-command test below settles as. */
+function amendmentResult(overrides: Partial<AmendmentResponse> = {}): AmendmentResponse {
+  return {
+    amendmentId: 'amendment-1',
+    orderId: 'order-1',
+    status: 'APPLIED',
+    baseRevision: 1,
+    appliedRevision: 2,
+    deltaTotalMinor: 0,
+    requiresApproval: false,
+    expiresAt: '2026-08-30T09:15:00Z',
+    amendmentVersion: 1,
+    orderVersion: 4,
+    commands: [],
+    warnings: [],
+    replayed: false,
+    commandDetails: [],
+    createdAt: '2026-08-30T09:00:00Z',
+    createdByActorType: 'USER',
+    ...overrides,
+  };
+}
+
 /** A path-aware `ApiClient.get` stub, since the pane fetches both the order and its timeline. */
 function apiGet(
   orderResult: unknown,
@@ -102,6 +127,7 @@ function apiGet(
 function configure(options: {
   get?: ReturnType<typeof vi.fn>;
   actionsApi?: Partial<OrderActionsApi>;
+  amendmentsApi?: Partial<OrderAmendmentsApi>;
   revealApi?: Partial<OrderRevealApi>;
   rejectReasonsApi?: Partial<RejectReasonsApi>;
   referenceDataApi?: Partial<ReferenceDataApi>;
@@ -123,6 +149,7 @@ function configure(options: {
         useValue: { get: options.get ?? apiGet({ value: detail(), version: 3 }) },
       },
       { provide: OrderActionsApi, useValue: options.actionsApi ?? {} },
+      { provide: OrderAmendmentsApi, useValue: options.amendmentsApi ?? {} },
       { provide: OrderRevealApi, useValue: options.revealApi ?? {} },
       {
         provide: RejectReasonsApi,
@@ -950,18 +977,16 @@ describe('OrderDetailPane: cancel past CONFIRMED uses a registry reason, never f
   });
 
   it('shows the reason’s consequences and submits reasonId/reasonCode, not free text', async () => {
-    const cancel = vi
-      .fn()
-      .mockReturnValue(
-        of({
-          orderId: 'order-1',
-          status: 'CANCELLED',
-          version: 4,
-          applied: true,
-          effectiveDecisionId: null,
-          effectiveAction: null,
-        }),
-      );
+    const cancel = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'CANCELLED',
+        version: 4,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
     configure({
       get: apiGet({ value: confirmedWithCancel(), version: 3 }),
       actionsApi: { cancelWithReason: cancel },
@@ -1001,18 +1026,16 @@ describe('OrderDetailPane: cancel past CONFIRMED uses a registry reason, never f
 
 describe('OrderDetailPane: completion names the fulfilment mode’s own reason (§4.6, row 1.2j)', () => {
   it('completes without a dialog when exactly one reason is valid for the mode', async () => {
-    const complete = vi
-      .fn()
-      .mockReturnValue(
-        of({
-          orderId: 'order-1',
-          status: 'COMPLETED',
-          version: 4,
-          applied: true,
-          effectiveDecisionId: null,
-          effectiveAction: null,
-        }),
-      );
+    const complete = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'COMPLETED',
+        version: 4,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
     const pickup = detail({
       summary: {
         ...detail().summary,
@@ -1051,18 +1074,16 @@ describe('OrderDetailPane: completion names the fulfilment mode’s own reason (
   });
 
   it('opens a picker naming DELIVERED_OWN_COURIER and DELIVERED_PARTNER_COURIER separately when both are valid', async () => {
-    const complete = vi
-      .fn()
-      .mockReturnValue(
-        of({
-          orderId: 'order-1',
-          status: 'COMPLETED',
-          version: 4,
-          applied: true,
-          effectiveDecisionId: null,
-          effectiveAction: null,
-        }),
-      );
+    const complete = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'COMPLETED',
+        version: 4,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
     const delivery = detail({
       summary: {
         ...detail().summary,
@@ -1139,5 +1160,195 @@ describe('OrderDetailPane: completion names the fulfilment mode’s own reason (
         .querySelector('[data-testid="order-detail-primary-action"]')
         ?.textContent?.trim(),
     ).toBe('Handed over');
+  });
+});
+
+describe('OrderDetailPane: §3.6 Комментарии — the amendment client (ADR 0039, wave P10)', () => {
+  it('wires SET_KITCHEN_NOTE from the row’s own edit affordance', async () => {
+    const setKitchenNote = vi.fn().mockReturnValue(of(amendmentResult()));
+    configure({
+      get: apiGet({
+        value: detail({
+          kitchenNote: 'Без лука',
+          summary: { ...detail().summary, status: 'CONFIRMED' },
+        }),
+        version: 3,
+      }),
+      amendmentsApi: { setKitchenNote },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-kitchen-note-edit"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    const textarea = host.querySelector(
+      '[data-testid="order-note-dialog-textarea"]',
+    ) as HTMLTextAreaElement;
+    expect(textarea.value).toBe('Без лука');
+    textarea.value = 'Острее, без лука';
+    textarea.dispatchEvent(new Event('input'));
+    (host.querySelector('[data-testid="order-note-dialog-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(setKitchenNote).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 3, 'Острее, без лука');
+  });
+
+  it('wires SET_CALLBACK_REQUESTED as an instant toggle, with no dialog', async () => {
+    const setCallbackRequested = vi.fn().mockReturnValue(of(amendmentResult()));
+    configure({
+      get: apiGet({ value: detail({ callbackRequested: false }), version: 3 }),
+      amendmentsApi: { setCallbackRequested },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-callback-toggle"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(setCallbackRequested).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 3, true);
+    expect(host.querySelector('[data-testid="order-note-dialog"]')).toBeNull();
+  });
+
+  it('wires SET_CASH_TENDERED from the row’s own edit affordance', async () => {
+    const setCashTendered = vi.fn().mockReturnValue(of(amendmentResult()));
+    configure({
+      get: apiGet({ value: detail({ cashTenderedExpectedMinor: 200_000 }), version: 3 }),
+      amendmentsApi: { setCashTendered },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-cash-tendered-edit"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    const input = host.querySelector(
+      '[data-testid="order-cash-tendered-dialog-amount"] input',
+    ) as HTMLInputElement;
+    input.value = '250 000';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (
+      host.querySelector('[data-testid="order-cash-tendered-dialog-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(setCashTendered).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 3, 250_000);
+  });
+
+  it('wires SET_COURIER_NOTE from the row’s own add affordance (ADR 0113)', async () => {
+    const setCourierNote = vi.fn().mockReturnValue(of(amendmentResult()));
+    configure({ get: apiGet({ value: detail(), version: 3 }), amendmentsApi: { setCourierNote } });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-courier-note-add"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    const textarea = host.querySelector(
+      '[data-testid="order-note-dialog-textarea"]',
+    ) as HTMLTextAreaElement;
+    textarea.value = 'Позвонить у ворот';
+    textarea.dispatchEvent(new Event('input'));
+    (host.querySelector('[data-testid="order-note-dialog-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(setCourierNote).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 3, 'Позвонить у ворот');
+  });
+
+  it('wires SET_INTERNAL_NOTE from the row’s own add affordance (ADR 0113)', async () => {
+    const setInternalNote = vi.fn().mockReturnValue(of(amendmentResult()));
+    configure({ get: apiGet({ value: detail(), version: 3 }), amendmentsApi: { setInternalNote } });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-internal-note-add"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    const textarea = host.querySelector(
+      '[data-testid="order-note-dialog-textarea"]',
+    ) as HTMLTextAreaElement;
+    textarea.value = 'VIP клиент';
+    textarea.dispatchEvent(new Event('input'));
+    (host.querySelector('[data-testid="order-note-dialog-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(setInternalNote).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 3, 'VIP клиент');
+  });
+
+  it('shows the acknowledgeable CASH_TENDERED_INSUFFICIENT notice when a later amendment raises the total', async () => {
+    const setCashTendered = vi
+      .fn()
+      .mockReturnValue(of(amendmentResult({ warnings: ['CASH_TENDERED_INSUFFICIENT'] })));
+    configure({
+      get: apiGet({ value: detail({ cashTenderedExpectedMinor: 100_000 }), version: 3 }),
+      amendmentsApi: { setCashTendered },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="order-detail-cash-tendered-warning"]')).toBeNull();
+
+    (
+      host.querySelector('[data-testid="order-detail-cash-tendered-edit"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    (
+      host.querySelector('[data-testid="order-cash-tendered-dialog-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // Acknowledgeable, never a refusal (ADR 0039): the customer can hand over more.
+    const notice = host.querySelector('[data-testid="order-detail-cash-tendered-warning"]');
+    expect(notice?.textContent).toContain('short of the total');
+
+    (
+      host.querySelector(
+        '[data-testid="order-detail-cash-tendered-warning-ack"]',
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="order-detail-cash-tendered-warning"]')).toBeNull();
+  });
+
+  it('AMEND opens the same five-command menu the row’s own edit affordances use', async () => {
+    configure({
+      get: apiGet({
+        value: detail({
+          summary: { ...detail().summary, status: 'CONFIRMED', actions: [{ action: 'AMEND' }] },
+        }),
+        version: 3,
+      }),
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(
+      host.querySelector('[data-testid="order-detail-primary-action"]')?.textContent?.trim(),
+    ).toBe('Amend');
+    (
+      host.querySelector('[data-testid="order-detail-primary-action"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="order-amend-menu"]')).not.toBeNull();
+    // The seven financial commands ADR 0039 declares and refuses by name never
+    // reach this menu — see `order-amend-menu.spec.ts` for the exhaustive check.
+    expect(host.querySelector('[data-testid="order-amend-menu-ADD_LINES"]')).toBeNull();
+
+    (
+      host.querySelector('[data-testid="order-amend-menu-SET_KITCHEN_NOTE"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="order-note-dialog"]')).not.toBeNull();
   });
 });

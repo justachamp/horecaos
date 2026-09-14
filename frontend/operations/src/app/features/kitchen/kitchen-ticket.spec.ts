@@ -21,7 +21,9 @@ describe('kitchen tabs', () => {
     for (const tab of KITCHEN_TABS) {
       expect(isKitchenTabId(tab)).toBe(true);
     }
-    expect(isKitchenTabId('aggregator')).toBe(false);
+    // 'aggregator' became a real tab id in wave P16 — see the fifth tab
+    // below rather than this once-rejected string.
+    expect(isKitchenTabId('mishmash')).toBe(false);
     expect(isKitchenTabId(null)).toBe(false);
   });
 
@@ -32,6 +34,18 @@ describe('kitchen tabs', () => {
     expect(isKitchenTabMember('dineIn', 'DINE_IN')).toBe(true);
     expect(isKitchenTabMember('all', 'PICKUP')).toBe(true);
     expect(isKitchenTabMember('all', 'SOMETHING_UNKNOWN')).toBe(true);
+  });
+
+  it('maps the aggregator tab onto channelSystemType, typed rather than a raw channel code', () => {
+    expect(isKitchenTabMember('aggregator', 'DELIVERY', 'AGGREGATOR')).toBe(true);
+    expect(isKitchenTabMember('aggregator', 'DELIVERY', 'WEB')).toBe(false);
+    // Undefined/null — a mutation response that did not repeat the board's
+    // own resolved chip (TicketResponse's own doc) — never false-positives
+    // into the aggregator tab.
+    expect(isKitchenTabMember('aggregator', 'DELIVERY', undefined)).toBe(false);
+    expect(isKitchenTabMember('aggregator', 'DELIVERY', null)).toBe(false);
+    // Every other tab is indifferent to the channel.
+    expect(isKitchenTabMember('all', 'DELIVERY', 'AGGREGATOR')).toBe(true);
   });
 });
 

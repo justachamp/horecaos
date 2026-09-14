@@ -136,9 +136,17 @@
           }
         </div>
 
-        <div class="mix-card mix-card--locked">
+        <div class="mix-card">
           <h2 class="q-subhead">{{ 'reports.overview.mix.payment' | t }}</h2>
-          <p class="q-caption">{{ 'reports.overview.mix.payment.locked' | t }}</p>
+          @if (paymentMix().length === 0) {
+            <p class="q-caption">{{ 'reports.empty.period' | t }}</p>
+          } @else {
+            <q-donut-chart
+              [segments]="paymentMixSegments()"
+              [ariaLabel]="'reports.overview.mix.payment' | t"
+              [centerLabel]="paymentMixTotalDisplay()"
+            />
+          }
         </div>
       </div>
 

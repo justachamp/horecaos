@@ -42,6 +42,13 @@ export class ReportsFilterState {
   readonly channelCodes = signal<readonly string[]>([]);
   readonly fulfilmentType = signal<'ALL' | 'DELIVERY' | 'PICKUP' | 'DINE_IN'>('ALL');
 
+  /**
+   * P39: `payments.payment_methods.code` values to filter by — empty means
+   * every method. Unlike `channelCodes`, a real control sets this one (the
+   * filter bar's own doc explains why the chip was locked until this wave).
+   */
+  readonly paymentMethodCodes = signal<readonly string[]>([]);
+
   /** The resolved [from, to] business-date range for the active period, in the placeholder zone. */
   readonly range = computed<DateRange>(() =>
     rangeFor(this.period(), todayIn(REPORTS_PLACEHOLDER_TIME_ZONE)),
@@ -71,6 +78,10 @@ export class ReportsFilterState {
 
   setFulfilmentType(type: 'ALL' | 'DELIVERY' | 'PICKUP' | 'DINE_IN'): void {
     this.fulfilmentType.set(type);
+  }
+
+  setPaymentMethodCodes(codes: readonly string[]): void {
+    this.paymentMethodCodes.set(codes);
   }
 }
 

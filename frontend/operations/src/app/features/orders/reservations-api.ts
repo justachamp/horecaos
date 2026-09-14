@@ -16,9 +16,10 @@ export interface TableAvailability {
 }
 
 /**
- * Mirrors `ReservationController.ReservationResponse`. No guest name, phone or
- * note — `ReservationController`'s own doc explains why a booking list is not
- * where that PII is revealed.
+ * Mirrors `ReservationController.ReservationResponse`. `guestName`/
+ * `guestPhone`/`note` are null everywhere except a {@link ReservationsApi.find}
+ * called with a `purpose` — see that method's own doc for why a booking list
+ * is not where that PII is revealed.
  */
 export interface ReservationResponse {
   readonly reservationId: string;
@@ -30,6 +31,9 @@ export interface ReservationResponse {
   readonly status: string;
   readonly tableIds: readonly string[];
   readonly version: number;
+  readonly guestName: string | null;
+  readonly guestPhone: string | null;
+  readonly note: string | null;
 }
 
 export interface NewReservation {
@@ -50,6 +54,12 @@ export interface ReservationAmendment {
   readonly requestedFrom: string;
   readonly requestedTo: string;
   readonly tableIds: readonly string[];
+  /** Optional — blank or omitted leaves the booking's stored name unchanged. */
+  readonly guestName?: string | null;
+  /** Optional — blank or omitted leaves the booking's stored phone unchanged. */
+  readonly guestPhone?: string | null;
+  /** Optional — blank or omitted leaves the booking's stored note unchanged. */
+  readonly note?: string | null;
   readonly reason: string;
 }
 
@@ -57,27 +67,38 @@ export interface ReservationAmendment {
  * The host stand (ADR 0047, IA 1.5) — `ReservationController` and the
  * table-availability read on `FloorPlanController`'s sibling path.
  *
- * Every table in this module is the built backend from a previous wave;
- * `list` and the `amendments` endpoint are new this wave — see the
- * `ReservationService` doc for why an amendment cannot touch the guest's
- * name, phone or note.
+ * `list` and the `amendments` endpoint were new in a previous wave; `find`'s
+ * `purpose` parameter and `amendments`' guest fields are new in W01 — see
+ * `ReservationService.revealGuest` and `ReservationService.amend`'s own
+ * docs for the ADR 0029 reveal both now go through.
  */
 @Injectable({ providedIn: 'root' })
 export class ReservationsApi {
   private readonly api = inject(ApiClient);
 
   /** Advisory, per `ReservationController`'s own doc: a race is settled by the database, not by this read. */
-  async availability(scope: LocationScope, from: string, to: string): Promise<readonly TableAvailability[]> {
+  async availability(
+    scope: LocationScope,
+    from: string,
+    to: string,
+  ): Promise<readonly TableAvailability[]> {
     const result = await firstValueFrom(
-      this.api.get<readonly TableAvailability[]>(operationsPaths.reservationTableAvailability(scope), {
-        params: { from, to },
-      }),
+      this.api.get<readonly TableAvailability[]>(
+        operationsPaths.reservationTableAvailability(scope),
+        {
+          params: { from, to },
+        },
+      ),
     );
     return result.value ?? [];
   }
 
   /** A branch's bookings overlapping the window, every status, oldest first. */
-  async listForDay(scope: LocationScope, from: string, to: string): Promise<readonly ReservationResponse[]> {
+  async listForDay(
+    scope: LocationScope,
+    from: string,
+    to: string,
+  ): Promise<readonly ReservationResponse[]> {
     const result = await firstValueFrom(
       this.api.get<readonly ReservationResponse[]>(operationsPaths.reservations(scope), {
         params: { from, to },
@@ -86,9 +107,24 @@ export class ReservationsApi {
     return result.value ?? [];
   }
 
-  async find(scope: LocationScope, reservationId: string): Promise<ReservationResponse> {
+  /**
+   * One booking. Omit `purpose` for the plain read — no guest name, phone or
+   * note. Name one and the three decrypt, recorded server-side as an ADR
+   * 0027 audit fact against that purpose — the same reveal-with-a-reason
+   * shape the customers feature already uses (see that feature's fixed,
+   * English `REVEAL_PURPOSE` constants for why: read by whoever reviews the
+   * audit log, not the operator). `reservations-page.ts`'s own
+   * `GUEST_REVEAL_PURPOSE` is this screen's one.
+   */
+  async find(
+    scope: LocationScope,
+    reservationId: string,
+    purpose?: string,
+  ): Promise<ReservationResponse> {
     const result = await firstValueFrom(
-      this.api.get<ReservationResponse>(operationsPaths.reservation(scope, reservationId)),
+      this.api.get<ReservationResponse>(operationsPaths.reservation(scope, reservationId), {
+        params: purpose ? { purpose } : undefined,
+      }),
     );
     return result.value;
   }
@@ -100,7 +136,7 @@ export class ReservationsApi {
     );
   }
 
-  /** `targetStatus` one of `CONFIRMED` | `REJECTED` | `CANCELLED` | `NO_SHOW` — never `SEATED`, which the server refuses (open a session instead). */
+  /** `targetStatus` one of `CONFIRMED` | `REJECTED` | `CANCELLED` | `NO_SHOW` | `COMPLETED` — never `SEATED`, which the server refuses (open a session instead — see {@link TableSessionsApi.open}). */
   stateAction(
     scope: LocationScope,
     reservationId: string,
@@ -115,7 +151,12 @@ export class ReservationsApi {
     );
   }
 
-  /** Refused once the booking is SEATED or terminal — see `ReservationService.amend`'s own doc. */
+  /**
+   * Refused once the booking is SEATED or terminal — see
+   * `ReservationService.amend`'s own doc. `guestName`/`guestPhone`/`note` in
+   * `body` are optional corrections, not a re-submission: blank or omitted
+   * leaves the booking's stored value unchanged.
+   */
   amend(
     scope: LocationScope,
     reservationId: string,

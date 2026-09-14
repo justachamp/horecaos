@@ -135,13 +135,26 @@ public class PasswordResetRelay {
             store.markFailed(row.id(), row.attempts(), "STAFF_ACCOUNT_MISSING");
             return false;
         }
+        String email = account.get().email();
+        if (email == null) {
+            // A staff account created with no address (ADR 0116) can still
+            // resolve a login here -- StaffAccounts#findSubjectIdByLogin also
+            // matches the username, and a staff account's username is its
+            // phone number. There is nowhere to email a reset link to, and
+            // there is no other delivery channel this relay has (staff
+            // self-service security beyond a name and a Telegram link is
+            // gap-map row X.5, not built). Failing the request rather than
+            // crashing the relay leaves every other queued reset unaffected.
+            store.markFailed(row.id(), row.attempts(), "STAFF_ACCOUNT_NO_EMAIL");
+            return false;
+        }
 
         String token = newToken();
         Instant expiresAt = now.plus(PasswordResetService.LINK_LIFETIME);
         StaffConsole console = StaffConsole.valueOf(row.console());
         String origin = java.util.Objects.requireNonNull(origins.get(console), "every console has an origin");
         Delivery delivery = mailer.send(PasswordResetEmail.render(
-                account.get().email(),
+                email,
                 row.locale(),
                 origin + "/reset-password#token=" + token,
                 PasswordResetService.LINK_LIFETIME.toMinutes()));

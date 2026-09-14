@@ -13,6 +13,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -33,6 +34,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.marketing.api.CampaignMessagePort;
 import uz.horecaos.platform.marketing.application.AudienceService;
 import uz.horecaos.platform.marketing.application.AudienceService.AudienceDetail;
 import uz.horecaos.platform.marketing.application.CampaignService;
@@ -77,6 +79,7 @@ public class OperationsMarketingController {
     private final CampaignService campaigns;
     private final MarketingSuppressionService suppressions;
     private final JdbcCampaignStore campaignStore;
+    private final CampaignMessagePort messages;
     private final CurrentActor currentActor;
 
     public OperationsMarketingController(
@@ -84,12 +87,31 @@ public class OperationsMarketingController {
             CampaignService campaigns,
             MarketingSuppressionService suppressions,
             JdbcCampaignStore campaignStore,
+            CampaignMessagePort messages,
             CurrentActor currentActor) {
         this.audiences = audiences;
         this.campaigns = campaigns;
         this.suppressions = suppressions;
         this.campaignStore = campaignStore;
+        this.messages = messages;
         this.currentActor = currentActor;
+    }
+
+    @GetMapping("/channels")
+    @RequiresCapability(value = Capability.CAMPAIGN_AUTHOR, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Every channel a campaign may target, and whether it can actually deliver",
+            description = "The create-campaign read model row 6.4 was missing: before this, the "
+                    + "form offered SMS, EMAIL and PUSH beside MESSAGING_APP with no way to tell "
+                    + "that only Telegram (MESSAGING_APP) has an ADR 0020 delivery path wired in "
+                    + "this build. An operator could spend a four-eyes approval on a campaign that "
+                    + "dies inside the expansion scheduler with an exception nobody sees; the "
+                    + "create form disables an unwired channel instead.")
+    public ResponseEntity<List<ChannelResponse>> listChannels(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return ResponseEntity.ok(Arrays.stream(MarketingChannel.values())
+                .map(channel -> new ChannelResponse(
+                        channel.name(), channel.carriesMarginalCost(), messages.isWired(channel.name())))
+                .toList());
     }
 
     @PostMapping("/audiences")
@@ -179,9 +201,11 @@ public class OperationsMarketingController {
                 body.currency(),
                 body.benefitOfferId(),
                 body.loyaltyAccrualRuleId(),
+                body.scheduledAt(),
                 actorId());
+        CampaignRow created = campaigns.require(tenantId, campaignId);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(CampaignResponse.of(campaigns.require(tenantId, campaignId)));
+                .body(CampaignResponse.of(created, messages.isWired(created.channel())));
     }
 
     @GetMapping("/campaigns")
@@ -191,7 +215,7 @@ public class OperationsMarketingController {
             @PathVariable UUID tenantId, @PathVariable UUID brandId) {
 
         return ResponseEntity.ok(campaigns.list(tenantId, brandId).stream()
-                .map(CampaignResponse::of)
+                .map(row -> CampaignResponse.of(row, messages.isWired(row.channel())))
                 .toList());
     }
 
@@ -210,7 +234,7 @@ public class OperationsMarketingController {
             throw new ApiException(
                     ErrorCode.RESOURCE_NOT_FOUND, "No campaign " + campaignId + " belongs to this brand");
         }
-        return ResponseEntity.ok(CampaignResponse.of(campaign));
+        return ResponseEntity.ok(CampaignResponse.of(campaign, messages.isWired(campaign.channel())));
     }
 
     @PostMapping("/audiences/{audienceId}/snapshots")
@@ -434,6 +458,37 @@ public class OperationsMarketingController {
                         .toList());
     }
 
+    @GetMapping("/campaigns/{campaignId}/recipients/counts")
+    @RequiresCapability(value = Capability.CAMPAIGN_AUTHOR, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "How many recipients ended each way (row 7.9b)",
+            description = "The aggregate `recipients` itself makes a caller build by paging: "
+                    + "pending, queued (handed to ADR 0020 for delivery), deferred (held past a "
+                    + "quiet-hours boundary) and refused, plus the total attempted. Grouped by "
+                    + "the same status `recipients` returns per row, not by the ADR 0020 terminal "
+                    + "outcome — `terminal_status` is written by a projection this wave does not "
+                    + "add, so 'delivered' vs 'failed' is not answerable from here yet. Read "
+                    + "receipts have no data source at all: NotificationStatus has no READ and "
+                    + "V0043 has no read_at, so the campaign tab that reads this says so rather "
+                    + "than rendering a zero.")
+    public ResponseEntity<RecipientCountsResponse> recipientCounts(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID campaignId) {
+
+        var campaign = campaigns.require(tenantId, campaignId);
+        if (!campaign.brandId().equals(brandId)) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_NOT_FOUND, "No campaign " + campaignId + " belongs to this brand");
+        }
+
+        Map<String, Integer> counts = campaignStore.recipientCounts(tenantId, campaignId);
+        int pending = counts.getOrDefault("PENDING", 0);
+        int queued = counts.getOrDefault("QUEUED", 0);
+        int deferred = counts.getOrDefault("DEFERRED", 0);
+        int refused = counts.getOrDefault("REFUSED", 0);
+        return ResponseEntity.ok(
+                new RecipientCountsResponse(pending, queued, deferred, refused, pending + queued + deferred + refused));
+    }
+
     @PostMapping("/suppressions")
     @RequiresCapability(value = Capability.SUPPRESSION_MANAGE, scope = ScopeType.BRAND, mutating = true)
     @Operation(
@@ -603,6 +658,14 @@ public class OperationsMarketingController {
     public record SnapshotResponse(
             UUID snapshotId, int candidates, int members, int excluded, Map<String, Integer> refusalBreakdown) {}
 
+    /**
+     * One {@link MarketingChannel} as the create-campaign form's picker
+     * reads it. {@code isWired} is the fix row 6.4 asks for: before it, the
+     * form offered every channel with no way to tell that only Telegram
+     * ({@code MESSAGING_APP}) has an ADR 0020 delivery path in this build.
+     */
+    public record ChannelResponse(String channel, boolean carriesMarginalCost, boolean isWired) {}
+
     public record ExportRequest(@NotBlank @Size(max = 512) String purpose, Integer limit) {}
 
     public record ReasonRequest(@NotBlank @Size(max = 512) String reason) {}
@@ -626,6 +689,13 @@ public class OperationsMarketingController {
             String refusalReason,
             @Nullable String deferredUntil,
             String terminalStatus) {}
+
+    /**
+     * Row 7.9b. {@code campaignRecipients.status} (V0043) has exactly these four
+     * values; {@code total} sums them and is never a fifth independent count
+     * that could disagree with its own parts.
+     */
+    public record RecipientCountsResponse(int pending, int queued, int deferred, int refused, int total) {}
 
     public record SuppressionRequest(
             @NotNull UUID customerAccountId,
@@ -762,6 +832,7 @@ public class OperationsMarketingController {
      *                         CampaignService#create}, not by this validator,
      *                         because the rule depends on the channel
      */
+    /** @param scheduledAt when {@code launches} should arm SCHEDULED rather than send immediately, or null */
     public record CreateCampaignRequest(
             @NotBlank @Size(max = 120) String name,
             @NotBlank String channel,
@@ -772,7 +843,8 @@ public class OperationsMarketingController {
             @Nullable @PositiveOrZero Long costCeilingMinor,
             @NotBlank @Pattern(regexp = "^[A-Za-z]{3}$") String currency,
             @Nullable UUID benefitOfferId,
-            @Nullable UUID loyaltyAccrualRuleId) {}
+            @Nullable UUID loyaltyAccrualRuleId,
+            @Nullable Instant scheduledAt) {}
 
     /**
      * A campaign's full lifecycle state — what the detail screen renders the
@@ -781,6 +853,12 @@ public class OperationsMarketingController {
      * @param pausedAt when the block-rate guard (or an operator's own pause)
      *                 stopped this campaign, or null; the campaign's own
      *                 blockedCount is what a resume reports the cost of
+     * @param scheduledAt when a launch call arms SENDING for, or null for
+     *                    "immediately, on an operator's word"
+     * @param isWired whether {@code channel} has a real ADR 0020 delivery
+     *                path today — the read model row 6.4 asked for, so the
+     *                detail pane can explain a launch refusal before it
+     *                happens rather than after
      */
     public record CampaignResponse(
             UUID campaignId,
@@ -808,11 +886,13 @@ public class OperationsMarketingController {
             @Nullable UUID approvedBy,
             int blockedCount,
             @Nullable Instant pausedAt,
+            @Nullable Instant scheduledAt,
+            boolean isWired,
             Instant createdAt,
             Instant updatedAt,
             int version) {
 
-        static CampaignResponse of(CampaignRow row) {
+        static CampaignResponse of(CampaignRow row, boolean isWired) {
             return new CampaignResponse(
                     row.id(),
                     row.name(),
@@ -839,6 +919,8 @@ public class OperationsMarketingController {
                     row.approvedBy(),
                     row.blockedCount(),
                     row.pausedAt(),
+                    row.scheduledAt(),
+                    isWired,
                     row.createdAt(),
                     row.updatedAt(),
                     row.version());

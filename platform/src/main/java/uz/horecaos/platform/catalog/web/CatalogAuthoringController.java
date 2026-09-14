@@ -4,12 +4,16 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -31,6 +35,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableNode;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
+import uz.horecaos.platform.catalog.domain.ItemSaleSchedule;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
@@ -58,6 +63,15 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 @RequestMapping("/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog")
 @Tag(name = "Catalog authoring", description = "Draft menu authoring; never visible to customers")
 public class CatalogAuthoringController {
+
+    /**
+     * The exclusion reason a caller did not name one for — {@code
+     * reason_code} is {@code NOT NULL varchar(48)} and every write here
+     * accepts an enumerated code (uppercase and underscores, never free
+     * text an operator typed, per ADR 0029), so a client that only wants
+     * "hide this" needs something to send.
+     */
+    private static final String DEFAULT_EXCLUSION_REASON = "OPERATOR_DISABLED";
 
     private final CatalogAuthoringService authoring;
     private final CurrentActor currentActor;
@@ -614,6 +628,23 @@ public class CatalogAuthoringController {
         return new Page<>(items, nextCursor);
     }
 
+    @GetMapping("/locations/{locationId}/variants/availability-counts")
+    @RequiresCapability(value = Capability.INVENTORY_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "The stop list's tab badges: all / available / on stop",
+            description = "gap map row 2.5: exact over the whole catalog rather than the one page "
+                    + "the stop list has loaded, and following the same search box (`search`, "
+                    + "matches product name or SKU) so the badges track a typed search.")
+    public ResponseEntity<VariantAvailabilityCountsResponse> variantAvailabilityCounts(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestParam(defaultValue = "uz") String locale,
+            @RequestParam(required = false) @Nullable String search) {
+        return ResponseEntity.ok(VariantAvailabilityCountsResponse.of(
+                authoring.variantAvailabilityCounts(tenantId, brandId, locationId, locale, search)));
+    }
+
     @PostMapping("/locations/{locationId}/variants/bulk-offering-status")
     @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
@@ -635,6 +666,224 @@ public class CatalogAuthoringController {
                 request.status(),
                 currentActor.get().subject());
         return ResponseEntity.ok(new BulkOfferingStatusResponse(updated));
+    }
+
+    // --------------------------------------------------- row 4.2g: per-item sale schedule
+
+    @GetMapping("/variants/{variantId}/location-offerings/{locationId}/sale-schedule")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "One variant's weekly sale windows at one location",
+            description = "Row 4.2g. Empty means unrestricted -- today's unchanged default for "
+                    + "every variant nobody has scoped yet.")
+    public ResponseEntity<ItemSaleScheduleResponse> itemSaleSchedule(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID variantId,
+            @PathVariable UUID locationId) {
+        List<ItemSaleSchedule.Window> windows = authoring.itemSaleWindows(tenantId, locationId, variantId);
+        return ResponseEntity.ok(new ItemSaleScheduleResponse(
+                windows.stream().map(ItemSaleWindowResponse::of).toList()));
+    }
+
+    @PutMapping("/variants/{variantId}/location-offerings/{locationId}/sale-schedule")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Replaces one variant's weekly sale windows at one location",
+            description = "The whole set every time, matching q-schedule-grid's own whole-set "
+                    + "output -- a save is always exactly what the grid shows, never a delta. "
+                    + "Resolved at order time against the location's own timezone, never the "
+                    + "operator's. An empty list clears every restriction -- the variant is sold "
+                    + "whenever it otherwise would be.")
+    public ResponseEntity<ItemSaleScheduleResponse> replaceItemSaleSchedule(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID variantId,
+            @PathVariable UUID locationId,
+            @Valid @RequestBody ItemSaleScheduleRequest request) {
+        try {
+            List<ItemSaleSchedule.Window> windows = request.windows().stream()
+                    .map(ItemSaleWindowRequest::toWindow)
+                    .toList();
+            authoring.replaceItemSaleWindows(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    variantId,
+                    windows,
+                    currentActor.get().subject());
+            return ResponseEntity.ok(new ItemSaleScheduleResponse(
+                    windows.stream().map(ItemSaleWindowResponse::of).toList()));
+        } catch (CatalogAuthoringService.UnknownCatalogEntityException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
+    // --------------------------------------------------- row 4.2h: cross-sell / recommendations
+
+    @GetMapping("/products/{productId}/recommendations")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Every recommendation attached to one product, unfiltered",
+            description = "Row 4.2h's own management list -- an operator must be able to see and "
+                    + "detach a target even while it is stopped or hidden, which {@code effective} "
+                    + "below deliberately will not show.")
+    public ResponseEntity<RecommendationListResponse> recommendations(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID productId,
+            @RequestParam(defaultValue = "uz") String locale) {
+        List<JdbcCatalogStore.RecommendationRow> rows =
+                authoring.listRecommendations(tenantId, brandId, productId, locale);
+        return ResponseEntity.ok(new RecommendationListResponse(
+                rows.stream().map(RecommendationResponse::of).toList()));
+    }
+
+    @GetMapping("/products/{productId}/recommendations/effective")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "This product's recommendations, filtered to what is safe to render",
+            description = "IA 4.2's own filter -- active + in-menu + not-stopped -- resolved here, "
+                    + "at read time, against one location's catalog.location_offerings. Nothing is "
+                    + "pruned from the stored set to get here: a target that is stopped today and "
+                    + "un-stopped tomorrow reappears in this read on its own.")
+    public ResponseEntity<RecommendationListResponse> effectiveRecommendations(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID productId,
+            @RequestParam UUID locationId,
+            @RequestParam(defaultValue = "uz") String locale) {
+        List<JdbcCatalogStore.RecommendationRow> rows =
+                authoring.resolvedRecommendations(tenantId, brandId, productId, locationId, locale);
+        return ResponseEntity.ok(new RecommendationListResponse(
+                rows.stream().map(RecommendationResponse::of).toList()));
+    }
+
+    @PostMapping("/products/{productId}/recommendations")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Attach a variant as a recommendation, or re-sort it if already attached",
+            description = "Directional: this product recommends the named variant, never the "
+                    + "reverse. Refused (VALIDATION_FAILED) when the target variant belongs to "
+                    + "this same product -- a product cannot recommend itself.")
+    public ResponseEntity<RecommendationResponse> attachRecommendation(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID productId,
+            @Valid @RequestBody AttachRecommendationRequest request) {
+        try {
+            UUID id = authoring.attachRecommendation(
+                    tenantId,
+                    brandId,
+                    productId,
+                    request.targetVariantId(),
+                    request.sortOrder(),
+                    currentActor.get().subject());
+            return ResponseEntity.ok(
+                    new RecommendationResponse(id, request.targetVariantId(), null, request.sortOrder()));
+        } catch (CatalogAuthoringService.UnknownProductException
+                | CatalogAuthoringService.UnknownCatalogEntityException notFound) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, notFound.getMessage());
+        } catch (CatalogAuthoringService.SelfRecommendationException self) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, self.getMessage());
+        }
+    }
+
+    @DeleteMapping("/products/{productId}/recommendations/{variantId}")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Detach a recommendation",
+            description = "Idempotent: detaching a pair that is already gone still resolves.")
+    public ResponseEntity<Void> detachRecommendation(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID productId,
+            @PathVariable UUID variantId) {
+        authoring.detachRecommendation(
+                tenantId, brandId, productId, variantId, currentActor.get().subject());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/channels/{channelId}/exclusions/variants/{variantId}")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Sets whether a variant is offered on one sales channel",
+            description = "ADR 0036 Layer B (gap map row 4.4b): catalog.channel_offering_exclusions "
+                    + "had a reader and no writer until this wave, so an operator could not say "
+                    + "\"this dish is not on Uzum Tezkor\" from any screen. offered=false inserts a "
+                    + "sparse exclusion row (idempotent — hiding an already-hidden variant changes "
+                    + "nothing); offered=true deletes it. request.locationId narrows the exclusion to "
+                    + "one branch; omitted, it applies brand-wide across every location on this "
+                    + "channel. Deliberately separate from price_on_channel "
+                    + "(PriceAuthoringController.assignToChannel) — catalog.md's own warning against "
+                    + "the Delever conflation of availability and price behind one toggle.")
+    public ResponseEntity<Void> setChannelOffering(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID channelId,
+            @PathVariable UUID variantId,
+            @Valid @RequestBody SetChannelOfferingRequest request) {
+        try {
+            authoring.setChannelOffering(
+                    tenantId,
+                    brandId,
+                    channelId,
+                    variantId,
+                    request.locationId(),
+                    request.offered(),
+                    request.reasonCode() == null ? DEFAULT_EXCLUSION_REASON : request.reasonCode(),
+                    currentActor.get().subject());
+            return ResponseEntity.noContent().build();
+        } catch (CatalogAuthoringService.UnknownCatalogEntityException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
+    @PostMapping("/channels/{channelId}/exclusions/bulk")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Sets many variants' channel offering in one gesture",
+            description = "The mass-enable an aggregator onboarding needs (gap map row 4.4b): "
+                    + "enabling 600 items one at a time is what makes an aggregator launch take a "
+                    + "week. Same shape as bulk-offering-status: capped at 200 items per call, and "
+                    + "one changed count rather than one outcome per item, because every item in the "
+                    + "batch shares the same target state.")
+    public ResponseEntity<BulkChannelOfferingResponse> bulkSetChannelOffering(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID channelId,
+            @Valid @RequestBody BulkChannelOfferingRequest request) {
+        try {
+            int changed = authoring.bulkSetChannelOffering(
+                    tenantId,
+                    brandId,
+                    channelId,
+                    request.variantIds(),
+                    request.locationId(),
+                    request.offered(),
+                    request.reasonCode() == null ? DEFAULT_EXCLUSION_REASON : request.reasonCode(),
+                    currentActor.get().subject());
+            return ResponseEntity.ok(new BulkChannelOfferingResponse(changed));
+        } catch (CatalogAuthoringService.UnknownCatalogEntityException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
+    @GetMapping("/channels/{channelId}/exclusions")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "The variants currently hidden from one channel at one location",
+            description = "ADR 0036 Layer B's read (gap map row 4.4b): catalog.channel_offering_exclusions, "
+                    + "joined the same way the live storefront path already reads it "
+                    + "(JdbcCatalogStore.channelExcludedVariantIds) — a brand-wide exclusion (no "
+                    + "locationId on the row) applies here too, not only a row naming this location.")
+    public ChannelExclusionsResponse channelExclusions(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID channelId,
+            @RequestParam UUID locationId) {
+        return new ChannelExclusionsResponse(
+                List.copyOf(authoring.channelExclusionsAtLocation(tenantId, brandId, channelId, locationId)));
     }
 
     /**
@@ -902,6 +1151,30 @@ public class CatalogAuthoringController {
     /** How many offerings a {@link BulkOfferingStatusRequest} actually changed. */
     public record BulkOfferingStatusResponse(int updatedCount) {}
 
+    /**
+     * ADR 0036 Layer B's single-item write (wave P45). {@code locationId} null
+     * means brand-wide; {@code reasonCode} is a short enumerated code — never
+     * free text an operator typed, per ADR 0029 — and defaults server-side
+     * when the caller omits it.
+     */
+    public record SetChannelOfferingRequest(
+            boolean offered,
+            @Nullable UUID locationId,
+            @Pattern(regexp = "^[A-Z_]{1,48}$") @Nullable String reasonCode) {}
+
+    /** The mass-enable/mass-disable gesture (gap map row 4.4b) — at least one variant, at most one page of the matrix. */
+    public record BulkChannelOfferingRequest(
+            @NotEmpty @Size(max = 200) List<UUID> variantIds,
+            boolean offered,
+            @Nullable UUID locationId,
+            @Pattern(regexp = "^[A-Z_]{1,48}$") @Nullable String reasonCode) {}
+
+    /** How many rows {@link #bulkSetChannelOffering} actually changed. */
+    public record BulkChannelOfferingResponse(int changedCount) {}
+
+    /** ADR 0036 Layer B's read: which variants are currently hidden from one channel at one location. */
+    public record ChannelExclusionsResponse(List<UUID> excludedVariantIds) {}
+
     public record IdResponse(UUID id) {}
 
     public record ProductResponse(UUID productId, UUID defaultVariantId) {}
@@ -924,6 +1197,14 @@ public class CatalogAuthoringController {
      *                        question
      * @param fulfillmentModes empty when {@code offeringStatus} is null
      */
+    /**
+     * @param stopSource     gap map row 2.5b's explainer: {@code MANUAL} |
+     *                       {@code POS} | {@code UNKNOWN} — see {@link
+     *                       JdbcCatalogStore.VariantAvailabilityRow}'s own doc
+     * @param stopReasonCode the raw reason behind {@code stopSource}, from
+     *                       the same latest {@code inventory.movements} row
+     * @param stopChangedAt  when that movement happened
+     */
     public record VariantAvailabilityResponse(
             UUID variantId,
             String productName,
@@ -931,7 +1212,10 @@ public class CatalogAuthoringController {
             boolean available,
             @Nullable String trackingMode,
             @Nullable String offeringStatus,
-            List<String> fulfillmentModes) {
+            List<String> fulfillmentModes,
+            String stopSource,
+            @Nullable String stopReasonCode,
+            @Nullable Instant stopChangedAt) {
 
         static VariantAvailabilityResponse of(JdbcCatalogStore.VariantAvailabilityRow row) {
             return new VariantAvailabilityResponse(
@@ -941,7 +1225,67 @@ public class CatalogAuthoringController {
                     row.available(),
                     row.trackingMode(),
                     row.offeringStatus(),
-                    row.fulfillmentModes());
+                    row.fulfillmentModes(),
+                    row.stopSource(),
+                    row.stopReasonCode(),
+                    row.stopChangedAt());
         }
     }
+
+    /** {@link #variantAvailabilityCounts}'s own response — gap map row 2.5's tab badges. */
+    public record VariantAvailabilityCountsResponse(long total, long available, long onStop) {
+        static VariantAvailabilityCountsResponse of(JdbcCatalogStore.VariantAvailabilityCountsRow row) {
+            return new VariantAvailabilityCountsResponse(row.total(), row.available(), row.onStop());
+        }
+    }
+
+    // --------------------------------------------------- row 4.2g: per-item sale schedule
+
+    /** One weekly window, ISO-8601 numbered: 1 = Monday through 7 = Sunday. */
+    public record ItemSaleWindowRequest(
+            @Min(1) @Max(7) int dayOfWeek,
+            @NotNull LocalTime opensAt,
+            @NotNull LocalTime closesAt) {
+
+        ItemSaleSchedule.Window toWindow() {
+            return new ItemSaleSchedule.Window(dayOfWeek, opensAt, closesAt);
+        }
+    }
+
+    /** {@code q-schedule-grid}'s whole-set save: the complete window list every time, never a delta. */
+    public record ItemSaleScheduleRequest(@NotNull List<@Valid ItemSaleWindowRequest> windows) {}
+
+    public record ItemSaleWindowResponse(int dayOfWeek, LocalTime opensAt, LocalTime closesAt) {
+
+        static ItemSaleWindowResponse of(ItemSaleSchedule.Window window) {
+            return new ItemSaleWindowResponse(window.dayOfWeek(), window.opensAt(), window.closesAt());
+        }
+    }
+
+    public record ItemSaleScheduleResponse(List<ItemSaleWindowResponse> windows) {}
+
+    // --------------------------------------------------- row 4.2h: cross-sell / recommendations
+
+    public record AttachRecommendationRequest(
+            @NotNull UUID targetVariantId, @PositiveOrZero int sortOrder) {}
+
+    /**
+     * @param targetProductName the recommended variant's product name in the
+     *                          requested locale; null on the {@code
+     *                          attachRecommendation} response, which does not
+     *                          look it up for a single write
+     */
+    public record RecommendationResponse(
+            UUID recommendationId,
+            UUID targetVariantId,
+            @Nullable String targetProductName,
+            int sortOrder) {
+
+        static RecommendationResponse of(JdbcCatalogStore.RecommendationRow row) {
+            return new RecommendationResponse(
+                    row.recommendationId(), row.targetVariantId(), row.targetProductName(), row.sortOrder());
+        }
+    }
+
+    public record RecommendationListResponse(List<RecommendationResponse> items) {}
 }

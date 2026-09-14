@@ -101,6 +101,11 @@ public class ReferralGrantService implements ReferralGrantPort {
                 now,
                 now.plus(Duration.ofDays(command.lotLifetimeDays())),
                 LotStatus.ACTIVE,
+                // A referral reward has no accrual rule to snapshot a warning
+                // window from — ADR 0046's own expiryWarningDays is that rule's
+                // authored value, and a reward program author has no equivalent
+                // field. Zero is "no warning configured", not "warn immediately".
+                0,
                 now);
 
         return Optional.of(new GrantResult(account.id(), entryId, balanceAfter));

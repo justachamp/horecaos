@@ -125,3 +125,22 @@
   margin-bottom: 8px;
   background: var(--q-surface-1);
 }
+
+/* wave P16 */
+
+.stop-list__search {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-body-sm);
+  min-width: 220px;
+}
+
+.stop-list__source {
+  color: var(--q-ink-muted);
+  cursor: help;
+}
+
+.stop-list__source-none {
+  color: var(--q-ink-subtle);
+}

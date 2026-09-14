@@ -1,6 +1,7 @@
 package uz.horecaos.platform.loyalty.application;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -9,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.loyalty.api.HeldTenderPort;
+import uz.horecaos.platform.loyalty.api.LoyaltyExpiryWarningPort;
 import uz.horecaos.platform.loyalty.domain.EntryType;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore.AccountRow;
@@ -52,13 +54,19 @@ public class LoyaltyMaintenanceService {
     private final JdbcLoyaltyStore store;
     private final PointsRedemptionService redemption;
     private final HeldTenderPort tenders;
+    private final LoyaltyExpiryWarningPort expiryWarnings;
     private final Clock clock;
 
     public LoyaltyMaintenanceService(
-            JdbcLoyaltyStore store, PointsRedemptionService redemption, HeldTenderPort tenders, Clock clock) {
+            JdbcLoyaltyStore store,
+            PointsRedemptionService redemption,
+            HeldTenderPort tenders,
+            LoyaltyExpiryWarningPort expiryWarnings,
+            Clock clock) {
         this.store = store;
         this.redemption = redemption;
         this.tenders = tenders;
+        this.expiryWarnings = expiryWarnings;
         this.clock = clock;
     }
 
@@ -166,6 +174,38 @@ public class LoyaltyMaintenanceService {
             destroyed++;
         }
         return destroyed;
+    }
+
+    /**
+     * Warns an account before a lot's value is destroyed — the message row
+     * {@link #expireLots} has run silently in front of since V0042:
+     * {@code expiryWarningDays} has been authorable, validated, and persisted
+     * on the accrual rule the whole time, and until this pass existed nothing
+     * ever read it.
+     *
+     * <p>One warning per lot, ever, enforced by {@code
+     * JdbcLoyaltyStore#markExpiryWarningSent} rather than by this loop: a lot
+     * inside its window on two consecutive passes must produce one message,
+     * not one per tick. A zero {@code expiryWarningDays} — the column's own
+     * default for a lot granted before it existed, or under a rule authored
+     * with no warning — never reaches this loop at all: {@code
+     * JdbcLoyaltyStore#lotsNeedingExpiryWarning} excludes it, so zero reads
+     * as "no warning configured" and never as "warn immediately".
+     *
+     * @return how many warnings were sent, which is what the sweeper logs
+     */
+    @Transactional
+    public int warnExpiringLots() {
+        Instant now = clock.instant();
+        List<LotRow> due = store.lotsNeedingExpiryWarning(now, BATCH);
+        for (LotRow lot : due) {
+            AccountRow account = accountOf(lot);
+            long daysRemaining = Duration.between(now, lot.expiresAt()).toDays();
+            expiryWarnings.lotExpiring(
+                    account.tenantId(), account.id(), lot.id(), lot.expiresAt(), lot.remainingMinor(), daysRemaining);
+            store.markExpiryWarningSent(account.tenantId(), lot.id(), now);
+        }
+        return due.size();
     }
 
     /**

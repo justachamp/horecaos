@@ -43,6 +43,8 @@ function campaign(overrides: Partial<CampaignView> = {}): CampaignView {
     approvedBy: null,
     blockedCount: 0,
     pausedAt: null,
+    scheduledAt: null,
+    isWired: true,
     createdAt: '2026-09-01T08:00:00Z',
     updatedAt: '2026-09-01T08:00:00Z',
     version: 1,
@@ -176,5 +178,21 @@ describe('CampaignDetailPane', () => {
     fixture.detectChanges();
 
     expect(host.textContent).toContain('Telegram');
+  });
+
+  it('T18: shows an unwired-channel warning on an APPROVED campaign the read model says cannot deliver', async () => {
+    await render(OTHER_ID, campaign({ status: 'APPROVED', isWired: false }));
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="campaign-unwired-warning"]')).not.toBeNull();
+  });
+
+  it('T18: renders scheduledAt as a fact when a campaign is armed for later', async () => {
+    await render(OTHER_ID, campaign({ status: 'SCHEDULED', scheduledAt: '2026-10-01T10:00:00Z' }));
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(
+      host.querySelector('[data-testid="campaign-scheduled-at-value"]')?.textContent,
+    ).toContain('2026-10-01');
   });
 });

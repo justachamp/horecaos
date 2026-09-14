@@ -22,6 +22,10 @@ import { StackedBarChart } from '../../shared/ui/charts/stacked-bar-chart';
 import { ChartCategory, ChartSeries } from '../../shared/ui/charts/chart-model';
 import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { LocationView, LocationsApi } from '../settings/locations/locations-api';
+import {
+  PaymentMethodView,
+  PaymentMethodsApi,
+} from '../settings/payment-methods/payment-methods-api';
 import { orderStatusLabel } from '../orders/order-status';
 import { ProvenanceBanner } from './provenance-banner';
 import {
@@ -116,8 +120,9 @@ type LoadState = 'loading' | 'ready' | 'denied' | 'error';
  * from); the delta compares against the same span one *whole number of weeks*
  * back rather than a hand-picked "same weekday last week", which is the same
  * property for every period this bar offers (`ReportsFilterState.comparisonRange`);
- * `Доставка`/`Самовывоз` timing and `Оплата` mix render as honest not-built
- * cards (ADR 0042, ADR 0013/0046); the cancellation panel is an inline
+ * `Доставка`/`Самовывоз` timing still renders as honest not-built cards
+ * (ADR 0042) — only `Оплата` (P39, ADR 0115) moved off that list, reading
+ * `payment_mix.amount.v1` over `reporting.fact_order_tender`; the cancellation panel is an inline
  * breakdown table rather than a peek modal, and it cannot show what a
  * cancellation *cost* — `stock_disposition`/`liability_party` are columns
  * `fact_order` carries but ADR 0039's `order_outcomes` does not exist yet to
@@ -135,6 +140,7 @@ export class BusinessOverviewPage implements OnInit {
   private readonly location = inject(CurrentLocation);
   private readonly locationsApi = inject(LocationsApi);
   private readonly channelsApi = inject(SalesChannelsApi);
+  private readonly paymentMethodsApi = inject(PaymentMethodsApi);
   private readonly filters = inject(ReportsFilterState);
   private readonly i18n = inject(I18n);
   private readonly router = inject(Router);
@@ -148,6 +154,8 @@ export class BusinessOverviewPage implements OnInit {
   protected readonly channelMix = signal<readonly MixRow[]>([]);
   protected readonly channelMixByRevenue = signal(false);
   protected readonly fulfilmentMix = signal<readonly MixRow[]>([]);
+  /** P39 (7.1c): the payment-mix card, folded across every branch in range. */
+  protected readonly paymentMix = signal<readonly MixRow[]>([]);
   protected readonly outcomes = signal<readonly OutcomeRow[]>([]);
   protected readonly completedCount = signal(0);
   protected readonly branches = signal<readonly BranchRow[]>([]);
@@ -191,6 +199,17 @@ export class BusinessOverviewPage implements OnInit {
 
   protected readonly fulfilmentMixSegments = computed<readonly ChartCategory[]>(() =>
     this.fulfilmentMix().map((row) => ({ key: row.key, label: row.label, value: row.count })),
+  );
+
+  /** P39 (7.1c): payment_mix.amount.v1 — takings by method, always by revenue. */
+  protected readonly paymentMixSegments = computed<readonly ChartCategory[]>(() =>
+    this.paymentMix().map((row) => ({ key: row.key, label: row.label, value: row.revenueSom })),
+  );
+
+  protected readonly paymentMixTotalDisplay = computed(() =>
+    this.formatMoneyValue(
+      this.paymentMixSegments().reduce((sum, segment) => sum + segment.value, 0),
+    ),
   );
 
   /** The donut's own centre label — the period's whole channel-mix total, on whichever basis is selected. */
@@ -243,6 +262,7 @@ export class BusinessOverviewPage implements OnInit {
         this.loadPrepTime(scope),
         this.loadOutcomes(scope),
         this.loadBranches(scope),
+        this.loadPaymentMix(scope),
       ]);
       this.state.set('ready');
       this.lastError.set(null);
@@ -473,6 +493,47 @@ export class BusinessOverviewPage implements OnInit {
         }))
         .sort((a, b) => b.grossSom - a.grossSom)
         .slice(0, 5),
+    );
+  }
+
+  /**
+   * P39 (7.1c): the payment-mix card. `overview` already folds every branch
+   * into one row per method (never across legal entities, ADR 0038) — this
+   * only has to attach a display name and turn the response into the same
+   * {@link MixRow} shape the channel and fulfilment cards beside it use.
+   */
+  private async loadPaymentMix(scope: LocationScope): Promise<void> {
+    const range = this.filters.range();
+    const paymentMethodCodes = this.filters.paymentMethodCodes();
+    const [methods, mix] = await Promise.all([
+      this.paymentMethodsApi.list(scope).catch(() => [] as readonly PaymentMethodView[]),
+      this.api.paymentMix(scope.tenantId, {
+        from: range.from,
+        to: range.to,
+        paymentMethodCode: paymentMethodCodes.length > 0 ? paymentMethodCodes : undefined,
+      }),
+    ]);
+    const nameByCode = new Map(methods.map((method) => [method.code, method]));
+    const total = mix.overview.reduce((sum, row) => sum + row.amountSom, 0);
+
+    const totalTenders = mix.overview.reduce((sum, row) => sum + row.tenderCount, 0);
+    this.paymentMix.set(
+      mix.overview
+        .map((row) => {
+          const method = nameByCode.get(row.paymentMethodCode);
+          const label = method
+            ? (method.localizedNames[this.i18n.locale()] ?? method.displayName)
+            : row.paymentMethodCode;
+          return {
+            key: row.paymentMethodCode,
+            label,
+            count: row.tenderCount,
+            revenueSom: row.amountSom,
+            countSharePercent: percentOf(row.tenderCount, totalTenders),
+            revenueSharePercent: percentOf(row.amountSom, total),
+          };
+        })
+        .sort((a, b) => b.revenueSom - a.revenueSom),
     );
   }
 

@@ -21,10 +21,24 @@
   path the storefront's own checkout takes — through a new
   `OperatorOrderingService`, so an operator-placed order differs from a
   customer's own only in attribution (`created_by_actor_type = 'USER'`).
-  Payment is cash only this wave — the endpoint refuses any other
-  `paymentMethodCode` before writing a row, since a card link sent to the
-  customer is a bigger piece this wave does not build and does not test end to
-  end. `POST .../orders/customer-lookups` (capability `CUSTOMER_READ` at
+  Payment is now the operator channel's own matrix (wave P14, gap map row
+  `1.3e`): the endpoint no longer hard-refuses anything but `CASH` itself —
+  `CheckoutEligibilityGuard`'s existing channel-matrix check (`tenant.channel_payment_methods`
+  intersected with `PaymentIntentPort#canAcceptPayment`) decides, the identical
+  gate every other checkout already passes through. A card link is still not
+  a separate flow this wave builds; whichever methods the tenant has actually
+  enabled on that channel are simply no longer refused by this endpoint's own
+  code. ADR 0072 promo codes are threaded the same wave: `PlaceOrderRequest.promoCode`
+  reaches `CartService#applyPromoCode` between filling the basket and pricing
+  it. Writing this test surfaced a pre-existing, unrelated defect this wave
+  does not fix: a discounted order's `subtotal_minor` (as `PricingEngine`
+  reports it) is already net of the discount, while `ordering.orders`'s
+  `ck_order_total_reconciles` (V0022, predating ADR 0072) assumes it is
+  gross — so any checkout anywhere, through this endpoint or the storefront's
+  own, that reaches a nonzero discount currently fails that constraint; see
+  `CartCheckoutAndOrderTests#anOperatorPlacedOrderAppliesAPromoCode`'s own doc
+  for the reproduction and why this wave does not attempt the schema fix.
+  `POST .../orders/customer-lookups` (capability `CUSTOMER_READ` at
   `LOCATION` scope) resolves a phone number through the existing ADR 0015
   hashed-lookup port (`CustomerPhoneLookup`, the same one ADR 0064's
   screen-pop already uses), returning a masked name, last-order date and
@@ -37,16 +51,27 @@
   A brand-new customer with no match still goes through the existing
   `POST .../tenants/{tenantId}/customers` (`CustomerIdentityService
   #createAccountWithoutPrincipal`, capability `CUSTOMER_MANAGE`, `TENANT`
-  scope, unchanged by this wave) rather than a second creation path; ADR
-  0015's `origin`/`created_by_actor_id` columns this ADR sketched for that
-  account remain not built; today's account is already non-contactable for
-  marketing on the same "absence of a decision is not consent" argument
-  `ConsentService` already relies on. Capturing change-due
+  scope) rather than a second creation path. ADR 0015's `origin`/`created_by_actor_id`
+  columns this ADR sketched for that account are now built (wave P14, V0295):
+  `customer.customer_accounts.origin` (`SELF_SERVICE | OPERATOR | IMPORT |
+  AGGREGATOR | MIGRATION`, default `SELF_SERVICE`) and `created_by_actor_id`,
+  written as `OPERATOR`/the staff subject by exactly this endpoint's own
+  create-on-miss path and by nothing else that reaches `CustomerIdentityService
+  #createAccountWithoutPrincipal` — the CSV import writes `IMPORT` with no
+  actor. Covered by `CustomerIdentityTests#createAccountWithoutPrincipalRecordsOriginAndActor`
+  and `#operatorOriginRequiresAnActor` (the database itself refuses an
+  `OPERATOR` row with no actor named, `ck_customer_account_operator_actor`).
+  The account is still non-contactable for marketing on the same "absence of
+  a decision is not consent" argument `ConsentService` already relies on —
+  `origin` is what now lets a marketing export filter it out by fact rather
+  than by the absence of one. Capturing change-due
   (`cash_tendered_expected_minor`), a kitchen note or the callback flag *at
   creation* is not built either — an operator sets those after the order
   exists, through the ordinary `POST .../amendments` endpoint's
   `SET_CASH_TENDERED`/`SET_KITCHEN_NOTE`/`SET_CALLBACK_REQUESTED` commands,
-  already built above. Bulk actions are now built (wave 97):
+  already built above; wave P14's New order screen shows a live, client-side-only
+  change-due computation at creation, still not persisted for the same reason.
+  Bulk actions are now built (wave 97):
   `POST .../tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/bulk-actions`
   (`OrderBulkActionService`, capability `ORDER_BULK_ACTION` at `LOCATION`
   scope, held only by `location-manager` — `location-staff` holds neither
@@ -103,6 +128,16 @@
   `OrderOutcomeService.reject` (OTHER requires an encrypted note), with the
   operations reject dialog a picker over `GET .../orders/reject-reasons`
   instead of free text; covered by `OrderAmendmentAndOutcomeTests`.
+  **Wave P10 ([ADR 0113](../partial/0113-wave-p10-operator-notes-and-the-amendment-client.md))
+  adds the two note commands §11 flagged as unowned** — `SET_COURIER_NOTE` and
+  `SET_INTERNAL_NOTE`, both non-financial and built like `SET_KITCHEN_NOTE`,
+  taking `AmendmentCommandType`'s built set from three to five and its closed
+  set from ten to twelve — and gives the console its first amendment client at
+  all: `OrderAmendmentsApi` (`Idempotency-Key`, `If-Match`) wires all five built
+  commands from the order detail pane's new §3.6 «Комментарии» block, including
+  the acknowledgeable `CASH_TENDERED_INSUFFICIENT` notice, and a history view
+  over `GET .../amendments`. See this record's own dated status addition below
+  for what ADR 0113 did and did not change here.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-21
 - Deciders: Ayubkhon Abbosov (platform architecture), product, finance, legal
@@ -457,3 +492,40 @@ address, and afterwards the order shows every revision with its own reproducible
 total; every closed order carries one outcome row naming the reason, the stock
 disposition, and the liable party; a re-run bulk action changes nothing; and an
 operator-created customer receives no marketing message.
+
+### Amended 2026-09-14 (ADR 0113, wave P10): operator-to-courier and internal notes
+
+This record's own command table above named three note-shaped commands and left
+two channels the legacy dashboard had — `courier_note`, operator to courier, and
+`internal_note`, operator to operator — with, in orders.md §11's own words,
+"no owning decision at all," closing the sentence "adding two commands is a
+one-line ADR amendment." [ADR 0113](../partial/0113-wave-p10-operator-notes-and-the-amendment-client.md)
+is that amendment: `AmendmentCommandType` gains `SET_COURIER_NOTE` and
+`SET_INTERNAL_NOTE`, both non-financial and `built = true` from the day they are
+declared — the closed set this record fixed at ten commands is from this date
+**twelve**, and a request fitting none of them still needs an ADR entry rather
+than a configuration change, exactly as the Accepted trade-offs above already
+said. Both take the identical shape `SET_KITCHEN_NOTE` already has — a free-text
+payload, no reprice, no reservation, no payment, no fiscal consequence, no POS
+consequence — with one difference wave P10's own zero migration-number
+allocation forced: neither has an `ordering.orders` column to land in the way
+`kitchen_note` does, so `OrderAmendmentService#patchOf` folds neither into the
+order's own fields, and the note lives only in
+`order_amendment_commands.payload_json`, read back through a new
+`OrderAmendmentService#noteOf` and a new read endpoint shape,
+`AmendmentHistoryEntryResponse`, distinct from the `AmendmentResponse`
+`amend`/`confirmAmendment` answer with for exactly the reason `SET_KITCHEN_NOTE`
+avoided a "note"-named field on that shared, idempotency-tracked type. **What
+that allocation did not anticipate**, and what a failing test caught the first
+time either command tried to insert a row, is that `ck_amendment_command_type`
+(V0029) is a closed value list naming exactly ten commands — Java accepting an
+eleventh and twelfth is not the database accepting them, and `built()`'s own
+contract ("whether the application can actually carry this command out today")
+is broken by a command that is `true` in Java and a constraint violation in
+Postgres. `V0290` widens the constraint to twelve, following the drop-and-
+recreate rule `V0172` already states for one; it spends the migration number
+this wave's allocation said it would not need, and ADR 0113 records that
+discovery and the choice to spend it rather than ship a command that crashes on
+first use. ADR 0113 carries the full decision, alternatives and consequences;
+this note only records that the two channels §11 named now have an owner and
+points there rather than restating it here.

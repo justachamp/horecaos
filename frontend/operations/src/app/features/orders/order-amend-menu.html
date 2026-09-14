@@ -1,0 +1,65 @@
+<q-modal
+  [title]="'orders.dialog.amendMenu.title' | t"
+  [dismissible]="true"
+  (dismiss)="dismiss.emit()"
+  data-testid="order-amend-menu"
+>
+  <ul class="amend-menu__list">
+    <li>
+      <button
+        type="button"
+        class="amend-menu__item q-body-sm"
+        (click)="select.emit('SET_KITCHEN_NOTE')"
+        data-testid="order-amend-menu-SET_KITCHEN_NOTE"
+      >
+        {{ 'orders.detail.details.kitchenNote' | t }}
+      </button>
+    </li>
+    <li>
+      <button
+        type="button"
+        class="amend-menu__item q-body-sm"
+        (click)="select.emit('SET_CALLBACK_REQUESTED')"
+        data-testid="order-amend-menu-SET_CALLBACK_REQUESTED"
+      >
+        {{ 'orders.detail.details.callback' | t }}
+      </button>
+    </li>
+    <li>
+      <button
+        type="button"
+        class="amend-menu__item q-body-sm"
+        (click)="select.emit('SET_CASH_TENDERED')"
+        data-testid="order-amend-menu-SET_CASH_TENDERED"
+      >
+        {{ 'orders.detail.details.cashTendered' | t }}
+      </button>
+    </li>
+    <li>
+      <button
+        type="button"
+        class="amend-menu__item q-body-sm"
+        (click)="select.emit('SET_COURIER_NOTE')"
+        data-testid="order-amend-menu-SET_COURIER_NOTE"
+      >
+        {{ 'orders.detail.comments.courier' | t }}
+      </button>
+    </li>
+    <li>
+      <button
+        type="button"
+        class="amend-menu__item q-body-sm"
+        (click)="select.emit('SET_INTERNAL_NOTE')"
+        data-testid="order-amend-menu-SET_INTERNAL_NOTE"
+      >
+        {{ 'orders.detail.comments.internal' | t }}
+      </button>
+    </li>
+  </ul>
+
+  <ng-container qModalActions>
+    <button type="button" class="amend-menu__dismiss q-body-sm" (click)="dismiss.emit()">
+      {{ 'orders.dialog.dismiss' | t }}
+    </button>
+  </ng-container>
+</q-modal>

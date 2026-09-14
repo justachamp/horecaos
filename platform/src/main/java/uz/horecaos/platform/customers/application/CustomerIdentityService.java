@@ -188,27 +188,45 @@ public class CustomerIdentityService implements CustomerDirectory {
         store.upsertBrandProfile(UUID.randomUUID(), tenantId, brandId, accountId, clock.instant());
     }
 
+    /** {@link #ORIGIN_IMPORT}, {@link #ORIGIN_OPERATOR} — see {@link #createAccountWithoutPrincipal}'s own doc. */
+    public static final String ORIGIN_IMPORT = "IMPORT";
+
+    /** See {@link #ORIGIN_IMPORT}. */
+    public static final String ORIGIN_OPERATOR = "OPERATOR";
+
     /**
-     * Creates an account with no Keycloak principal link at all (ADR 0059
-     * stage 3: the SendPulse contact-export import).
+     * Creates an account with no Keycloak principal link at all — two callers,
+     * told apart by {@code origin} (V0295, ADR 0015/0039).
      *
      * <p>Every other creation path in this class exists because a subject
-     * signed in; an imported contact never does, and a contact whose export
-     * row carries no phone number gives {@link CustomerImportDirectoryService}
-     * nothing an ADR 0015 identity resolution could ever match on either. The
-     * account this method creates is reachable only through the ADR 0058
-     * Telegram binding the import creates alongside it — the same
-     * "channel-identity-only" account the record's own Decision section
-     * names as the deliberate alternative to reporting a phone-less contact
-     * as needs-attention.
+     * signed in. Two do not. The ADR 0059 stage 3 SendPulse contact-export
+     * import ({@link #ORIGIN_IMPORT}, {@code createdByActorId} null — nobody
+     * typed this in, an export row did) reaches an account only through the
+     * ADR 0058 Telegram binding the import creates alongside it, the
+     * "channel-identity-only" shape the record's own Decision section names
+     * as the deliberate alternative to reporting a phone-less contact as
+     * needs-attention. An operator's own "Создать клиента" on the New order
+     * screen ({@link #ORIGIN_OPERATOR}, {@code createdByActorId} the staff
+     * subject who typed it) is orders.md §5.3's create-on-miss — the same
+     * shape, a different hand. Both stay non-contactable for marketing on the
+     * "absence of a decision is not consent" argument {@link
+     * uz.horecaos.platform.customers.application.ConsentService} already
+     * relies on; {@code origin} is what lets a marketing export filter either
+     * one out, which before V0295 it could not.
      *
      * <p>Still governed by the tenant's identity policy, for the same reason
      * {@link #create} is: the partition an account is created in must not
-     * silently change later, whether the account came from a sign-in or an
-     * import.
+     * silently change later, whether the account came from a sign-in, an
+     * import, or an operator's own hand.
+     *
+     * @param origin one of {@link #ORIGIN_IMPORT} or {@link #ORIGIN_OPERATOR}
+     * @param createdByActorId the staff subject, for {@link #ORIGIN_OPERATOR}
+     *                         only — null otherwise, enforced by
+     *                         {@code ck_customer_account_operator_actor}
      */
     @Transactional
-    public CustomerAccountRef createAccountWithoutPrincipal(UUID tenantId, UUID brandId) {
+    public CustomerAccountRef createAccountWithoutPrincipal(
+            UUID tenantId, UUID brandId, String origin, @Nullable String createdByActorId) {
         Instant now = clock.instant();
         ResolvedIdentityPolicy resolved = policies.policyFor(tenantId, now);
         UUID partition = resolved.mode().partitionFor(brandId);
@@ -217,9 +235,13 @@ public class CustomerIdentityService implements CustomerDirectory {
         // still a customer.customer_accounts id, so it must not disclose when
         // the row was created.
         UUID accountId = Ids.newUndisclosedTimestampId();
-        store.insertAccount(accountId, tenantId, partition, resolved.version(), now);
+        store.insertAccount(accountId, tenantId, partition, resolved.version(), origin, createdByActorId, now);
         ensureBrandProfile(tenantId, brandId, accountId);
-        log.info("Created channel-only customer account {} in tenant {} (no principal link)", accountId, tenantId);
+        log.info(
+                "Created channel-only customer account {} in tenant {} (no principal link, origin {})",
+                accountId,
+                tenantId,
+                origin);
         return new CustomerAccountRef(accountId, tenantId);
     }
 
