@@ -38,31 +38,350 @@
       </span>
     </div>
 
-    <dl class="policy__rows">
-      @for (row of rows(); track row.key) {
-        <div class="policy__row" [attr.data-testid]="'policy-row-' + row.key">
-          <div class="policy__rowHead">
-            <dt class="q-body-sm">{{ row.labelKey | t }}</dt>
-            @if (row.overridden) {
-              <q-status-pill [label]="'delivery.policy.overridden' | t" tone="warning" />
-            }
+    <section class="card">
+      <div class="card__head">
+        <h2 class="q-subhead">{{ 'delivery.policy.card.courier' | t }}</h2>
+        @if (!editing()) {
+          <button type="button" class="q-body primary" (click)="startEditing()">
+            {{ 'delivery.policy.edit' | t }}
+          </button>
+        }
+      </div>
+
+      @if (!editing()) {
+        <dl class="policy__rows">
+          @for (row of rows(); track row.key) {
+            <div class="policy__row" [attr.data-testid]="'policy-row-' + row.key">
+              <div class="policy__rowHead">
+                <dt class="q-body-sm">{{ row.labelKey | t }}</dt>
+                @if (row.overridden) {
+                  <q-status-pill [label]="'delivery.policy.overridden' | t" tone="warning" />
+                }
+              </div>
+              <dd class="q-emphasis">
+                {{ row.value }}
+                @if (row.inheritedValue; as inherited) {
+                  <span class="policy__inherited q-caption" data-testid="policy-row-inherited">
+                    {{ 'delivery.policy.inherited' | t: { value: inherited } }}
+                  </span>
+                }
+              </dd>
+              <p class="policy__consequence q-caption">{{ row.consequenceKey | t }}</p>
+            </div>
+          }
+
+          <div class="policy__row" data-testid="policy-row-billingMode">
+            <div class="policy__rowHead">
+              <dt class="q-body-sm">{{ 'delivery.policy.billingMode' | t }}</dt>
+              <q-status-pill [label]="'delivery.policy.billingMode.refused' | t" tone="info" />
+            </div>
+            <dd class="q-emphasis policy__disabledValue">{{ 'delivery.policy.no' | t }}</dd>
+            <p class="policy__consequence q-caption">
+              {{ 'delivery.policy.billingMode.reason' | t }}
+            </p>
           </div>
-          <dd class="q-emphasis">
-            {{ row.value }}
-            @if (row.inheritedValue; as inherited) {
-              <span class="policy__inherited q-caption" data-testid="policy-row-inherited">
-                {{ 'delivery.policy.inherited' | t: { value: inherited } }}
-              </span>
-            }
-          </dd>
-          <p class="policy__consequence q-caption">{{ row.consequenceKey | t }}</p>
+
+          <div class="policy__row" data-testid="policy-row-telemetryGate">
+            <div class="policy__rowHead">
+              <dt class="q-body-sm">{{ 'delivery.policy.telemetryGate' | t }}</dt>
+              <q-status-pill
+                [label]="'delivery.policy.telemetryGate.platformOnly' | t"
+                tone="info"
+              />
+            </div>
+            <dd class="q-emphasis policy__disabledValue">—</dd>
+            <p class="policy__consequence q-caption">
+              {{ 'delivery.policy.telemetryGate.reason' | t }}
+            </p>
+          </div>
+        </dl>
+      } @else {
+        <div class="form">
+          <label class="q-caption" for="policy-shift-enforcement">{{
+            'delivery.policy.shiftEnforcement' | t
+          }}</label>
+          <select
+            id="policy-shift-enforcement"
+            class="q-body field"
+            [value]="draftShiftEnforcement()"
+            (change)="draftShiftEnforcement.set($any($event.target).value)"
+            data-testid="policy-input-shiftEnforcement"
+          >
+            <option value="ADVISORY">{{ 'delivery.policy.shiftEnforcement.ADVISORY' | t }}</option>
+            <option value="ENFORCED">{{ 'delivery.policy.shiftEnforcement.ENFORCED' | t }}</option>
+            <option value="OFF">{{ 'delivery.policy.shiftEnforcement.OFF' | t }}</option>
+          </select>
+
+          <label class="checkbox q-body-sm">
+            <input
+              type="checkbox"
+              [checked]="draftKitchenReadyOnly()"
+              (change)="draftKitchenReadyOnly.set($any($event.target).checked)"
+              data-testid="policy-input-kitchenReadyOnly"
+            />
+            {{ 'delivery.policy.kitchenReadyOnly' | t }}
+          </label>
+
+          <label class="q-caption" for="policy-reveal-timing">{{
+            'delivery.policy.revealCustomerLocationTiming' | t
+          }}</label>
+          <select
+            id="policy-reveal-timing"
+            class="q-body field"
+            [value]="draftRevealTiming()"
+            (change)="draftRevealTiming.set($any($event.target).value)"
+            data-testid="policy-input-revealTiming"
+          >
+            <option value="AFTER_ACCEPT">
+              {{ 'delivery.policy.revealCustomerLocationTiming.AFTER_ACCEPT' | t }}
+            </option>
+            <option value="BEFORE_ACCEPT">
+              {{ 'delivery.policy.revealCustomerLocationTiming.BEFORE_ACCEPT' | t }}
+            </option>
+          </select>
+
+          <label class="checkbox q-body-sm">
+            <input
+              type="checkbox"
+              [checked]="draftPostDeliveryPaymentCheckRequired()"
+              (change)="draftPostDeliveryPaymentCheckRequired.set($any($event.target).checked)"
+              data-testid="policy-input-postDeliveryPaymentCheckRequired"
+            />
+            {{ 'delivery.policy.postDeliveryPaymentCheckRequired' | t }}
+          </label>
+
+          <label class="checkbox q-body-sm" data-testid="policy-input-gpsVerificationEnabled">
+            <input
+              type="checkbox"
+              [checked]="draftGpsVerificationEnabled()"
+              (change)="draftGpsVerificationEnabled.set($any($event.target).checked)"
+            />
+            {{ 'delivery.policy.gpsVerificationEnabled' | t }}
+          </label>
+
+          @if (draftGpsVerificationEnabled()) {
+            <label class="q-caption" for="policy-gps-accept-km">{{
+              'delivery.policy.gpsAcceptRadiusKm' | t
+            }}</label>
+            <input
+              id="policy-gps-accept-km"
+              class="q-body field"
+              type="number"
+              min="0.01"
+              step="0.01"
+              [value]="draftGpsAcceptRadiusKm()"
+              (input)="draftGpsAcceptRadiusKm.set(+$any($event.target).value)"
+              data-testid="policy-input-gpsAcceptRadiusKm"
+            />
+
+            <label class="q-caption" for="policy-gps-status-m">{{
+              'delivery.policy.gpsStatusChangeRadiusMeters' | t
+            }}</label>
+            <input
+              id="policy-gps-status-m"
+              class="q-body field"
+              type="number"
+              min="1"
+              step="1"
+              [value]="draftGpsStatusChangeRadiusMeters()"
+              (input)="draftGpsStatusChangeRadiusMeters.set(+$any($event.target).value)"
+              data-testid="policy-input-gpsStatusChangeRadiusMeters"
+            />
+          }
+
+          <label class="q-caption" for="policy-cash-ceiling">{{
+            'delivery.policy.cashCeiling' | t
+          }}</label>
+          <q-money-input
+            [valueMinor]="draftCashCeilingMinor()"
+            (valueMinorChange)="draftCashCeilingMinor.set($event)"
+            [ariaLabel]="'delivery.policy.cashCeiling' | t"
+            data-testid="policy-input-cashCeilingMinor"
+          />
+
+          <label class="q-caption" for="policy-penalty-threshold">{{
+            'delivery.policy.penaltyThreshold' | t
+          }}</label>
+          <q-money-input
+            [valueMinor]="draftPenaltyApprovalThresholdMinor()"
+            (valueMinorChange)="draftPenaltyApprovalThresholdMinor.set($event)"
+            [ariaLabel]="'delivery.policy.penaltyThreshold' | t"
+          />
+
+          <label class="q-caption" for="policy-reverification-days">{{
+            'delivery.policy.reverificationDays' | t
+          }}</label>
+          <input
+            id="policy-reverification-days"
+            class="q-body field"
+            type="number"
+            min="1"
+            [value]="draftReverificationDays()"
+            (input)="draftReverificationDays.set(+$any($event.target).value)"
+          />
+
+          <label class="q-caption" for="policy-warning-days">{{
+            'delivery.policy.warningDays' | t
+          }}</label>
+          <input
+            id="policy-warning-days"
+            class="q-body field"
+            type="number"
+            min="1"
+            [value]="draftWarningDays()"
+            (input)="draftWarningDays.set(+$any($event.target).value)"
+          />
+
+          <label class="q-caption" for="policy-settlement-days">{{
+            'delivery.policy.settlementPeriodDays' | t
+          }}</label>
+          <input
+            id="policy-settlement-days"
+            class="q-body field"
+            type="number"
+            min="1"
+            [value]="draftSettlementPeriodDays()"
+            (input)="draftSettlementPeriodDays.set(+$any($event.target).value)"
+          />
+
+          <label class="q-caption" for="policy-grace-seconds">{{
+            'delivery.policy.graceSeconds' | t
+          }}</label>
+          <input
+            id="policy-grace-seconds"
+            class="q-body field"
+            type="number"
+            min="0"
+            [value]="draftGraceSeconds()"
+            (input)="draftGraceSeconds.set(+$any($event.target).value)"
+          />
+
+          <label class="q-caption" for="policy-retention-days">{{
+            'delivery.policy.confirmationPointRetentionDays' | t
+          }}</label>
+          <input
+            id="policy-retention-days"
+            class="q-body field"
+            type="number"
+            min="1"
+            [value]="draftConfirmationPointRetentionDays()"
+            (input)="draftConfirmationPointRetentionDays.set(+$any($event.target).value)"
+          />
+
+          <label class="q-caption" for="policy-reason">{{ 'delivery.policy.reason' | t }}</label>
+          <input
+            id="policy-reason"
+            class="q-body field"
+            type="text"
+            [value]="draftReason()"
+            (input)="draftReason.set($any($event.target).value)"
+            [attr.placeholder]="'delivery.policy.reasonPlaceholder' | t"
+            data-testid="policy-input-reason"
+          />
+
+          @if (saveError(); as error) {
+            <p class="q-body-sm error" role="alert">{{ error }}</p>
+          }
+
+          <div class="form__actions">
+            <button
+              type="button"
+              class="q-body secondary"
+              (click)="cancelEditing()"
+              [disabled]="saving()"
+            >
+              {{ 'delivery.policy.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              class="q-body primary"
+              (click)="publish()"
+              [disabled]="!canPublish()"
+              data-testid="policy-publish"
+            >
+              {{ saving() ? ('delivery.policy.saving' | t) : ('delivery.policy.publish' | t) }}
+            </button>
+          </div>
         </div>
       }
-    </dl>
+    </section>
 
-    <div class="policy__not-built">
-      <p class="q-body-sm">{{ 'delivery.policy.notBuilt' | t }}</p>
-      <p class="q-caption">{{ 'delivery.policy.readOnly' | t }}</p>
-    </div>
+    <section class="card" data-testid="policy-outOfZone-card">
+      <div class="card__head">
+        <h2 class="q-subhead">{{ 'delivery.policy.outOfZone.title' | t }}</h2>
+        @if (!outOfZoneEditing() && !outOfZoneLoading()) {
+          <button type="button" class="q-body primary" (click)="startEditingOutOfZone()">
+            {{ 'delivery.policy.edit' | t }}
+          </button>
+        }
+      </div>
+      <p class="q-caption">{{ 'delivery.policy.outOfZone.catchmentNote' | t }}</p>
+
+      @if (outOfZoneLoading()) {
+        <div class="policy__skeleton" [attr.aria-label]="'delivery.policy.loading' | t"></div>
+      } @else if (outOfZoneError(); as error) {
+        <p class="q-body-sm error" role="alert">{{ error }}</p>
+      } @else if (!outOfZoneEditing()) {
+        <p class="q-emphasis" data-testid="policy-outOfZone-value">
+          {{ outOfZoneLabel(outOfZoneResolution()?.value ?? 'REJECT') }}
+        </p>
+        <p class="policy__consequence q-caption">{{ 'delivery.policy.outOfZone.hint' | t }}</p>
+      } @else {
+        <div class="form">
+          <label class="q-caption" for="policy-out-of-zone">{{
+            'delivery.policy.outOfZone.field' | t
+          }}</label>
+          <select
+            id="policy-out-of-zone"
+            class="q-body field"
+            [value]="draftOutOfZonePolicy()"
+            (change)="draftOutOfZonePolicy.set($any($event.target).value)"
+            data-testid="policy-outOfZone-select"
+          >
+            @for (option of outOfZoneOptions; track option) {
+              <option [value]="option">{{ outOfZoneLabel(option) }}</option>
+            }
+          </select>
+
+          <label class="q-caption" for="policy-out-of-zone-reason">{{
+            'delivery.policy.reason' | t
+          }}</label>
+          <input
+            id="policy-out-of-zone-reason"
+            class="q-body field"
+            type="text"
+            [value]="draftOutOfZoneReason()"
+            (input)="draftOutOfZoneReason.set($any($event.target).value)"
+            [attr.placeholder]="'delivery.policy.reasonPlaceholder' | t"
+          />
+
+          @if (outOfZoneSaveError(); as error) {
+            <p class="q-body-sm error" role="alert">{{ error }}</p>
+          }
+
+          <div class="form__actions">
+            <button
+              type="button"
+              class="q-body secondary"
+              (click)="cancelEditingOutOfZone()"
+              [disabled]="outOfZoneSaving()"
+            >
+              {{ 'delivery.policy.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              class="q-body primary"
+              (click)="saveOutOfZone()"
+              [disabled]="!canSaveOutOfZone()"
+              data-testid="policy-outOfZone-save"
+            >
+              {{
+                outOfZoneSaving() ? ('delivery.policy.saving' | t) : ('delivery.policy.publish' | t)
+              }}
+            </button>
+          </div>
+        </div>
+      }
+    </section>
   }
 </div>
