@@ -9,6 +9,7 @@ import { ApiError } from '../../../core/api/problem-details';
 import { describeApiError } from '../../orders/order-errors';
 import { orderStatusLabel } from '../../orders/order-status';
 import { describeReissueRefusal } from '../finance-errors';
+import { QQrCode } from '../../../shared/ui/qr-code';
 import {
   ENTITLEMENT_BENEFIT_KEYS,
   ENTITLEMENT_SCOPE_KEYS,
@@ -64,7 +65,7 @@ type ReissueKind = 'PAYMENT_LINK' | 'INVOICE_PUSH';
  */
 @Component({
   selector: 'q-payments-page',
-  imports: [TPipe],
+  imports: [TPipe, QQrCode],
   templateUrl: './payments-page.html',
   styleUrl: './payments-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
