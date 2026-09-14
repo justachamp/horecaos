@@ -609,6 +609,7 @@ class CampaignBroadcastIntegrationTest {
                 "UZS",
                 null,
                 null,
+                null,
                 UUID.fromString(author.subject()));
         campaigns.prepare(TENANT, id, author, "corr");
         campaigns.submitForReview(TENANT, id);
