@@ -42,6 +42,30 @@ export const operationsPaths = {
   },
 
   /**
+   * The order board (orders.md §2.4, ADR 0102, wave P07) — the branch's
+   * orders, filtered in the database and cursor-paged, superseding {@link
+   * orders} for any caller that needs a filter this console's toolbar offers
+   * (period, channel, fulfilment type, courier, payment method,
+   * `createdByActorId`, and the exact-match `reference` search). Same
+   * response shape as {@link orders}; a caller that has not moved yet gains
+   * nothing by switching path alone.
+   */
+  orderBoard(scope: LocationScope): string {
+    return `${this.orders(scope)}/board`;
+  },
+
+  /**
+   * N independent `ADVANCE`/`CANCEL` commands under one bulk operation id
+   * (ADR 0039, orders.md §2.10, wave P07) — `OrderBulkActionService`, capped
+   * at 200 orders, always `202` with a per-item outcome list. Bulk courier
+   * assignment is explicitly out of scope (`BulkActionType` has no such
+   * member); do not add a caller for it against this path.
+   */
+  orderBulkActions(scope: LocationScope): string {
+    return `${this.orders(scope)}/bulk-actions`;
+  },
+
+  /**
    * The board's seven tab badges in one call (§2.3), and the live board's two
    * mixes beside them. Falls back to client derivation on error.
    *

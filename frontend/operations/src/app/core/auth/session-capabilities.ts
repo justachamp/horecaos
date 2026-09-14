@@ -17,6 +17,7 @@ import { CurrentTenant } from './current-tenant';
  */
 export type Capability =
   | 'ORDER_READ'
+  | 'ORDER_BULK_ACTION'
   | 'CONVERSATION_INBOX_MANAGE'
   | 'KITCHEN_TICKET_READ'
   | 'DELIVERY_PLAN_READ'
