@@ -105,8 +105,15 @@ describe('NewOrderPage', () => {
   };
   let router: Router;
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.useRealTimers();
+    // submit() fires `void this.router.navigate(...)` without awaiting it, so
+    // a mocked navigate's own promise can still be settling after `await
+    // submit()` returns. Draining it here — after every test, not just the
+    // ones that call submit() — keeps that stray resolution from firing
+    // during whichever test happens to run next once this one's own router
+    // (and its spy) have already been torn down.
+    await flushMicrotasks();
   });
 
   async function render(
@@ -555,6 +562,7 @@ describe('NewOrderPage', () => {
       warnings: [],
     });
     await render({ placeOrder });
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
 
     fixture.componentInstance['selectCandidate'](candidate());
     fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
