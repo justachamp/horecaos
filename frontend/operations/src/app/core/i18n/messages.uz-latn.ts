@@ -1873,7 +1873,20 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.menus.bulk.confirmBody':
     'Bu ushbu filialdagi {count} ta pozitsiyaning menyudagi holatini oʻzgartiradi.',
   'catalog.menus.channelsNote':
-    'Kanal boʻyicha yoqish qurilmagan (ADR 0036) — bu jadval faqat filiallarni koʻrsatadi',
+    'Yoqish va narx har bir kanal uchun alohida, zal narxidan mustaqil belgilanadi (ADR 0036)',
+  'catalog.menus.channel.label': 'Kanal',
+  'catalog.menus.channel.hall': 'Zal',
+  'catalog.menus.column.channel': 'Kanalda',
+  'catalog.menus.channel.included': 'Kanalda',
+  'catalog.menus.channel.excluded': 'Kanalda yashirin',
+  'catalog.menus.channel.noOverride': 'Bu kanal uchun hali narx belgilanmagan',
+  'catalog.menus.channel.assignPriceLink': 'Narxlar roʻyxatini biriktirish',
+  'catalog.menus.bulk.channelEnable': 'Kanalda yoqish',
+  'catalog.menus.bulk.channelDisable': 'Kanalda oʻchirish',
+  'catalog.menus.bulk.channelConfirmTitle':
+    'Tanlangan pozitsiyalar uchun kanaldagi holat oʻzgartirilsinmi?',
+  'catalog.menus.bulk.channelConfirmBody':
+    'Bu {count} ta pozitsiyaning «{channel}» kanalida mavjudligini oʻzgartiradi.',
 
   'catalog.publication.loading': 'Nashrga tayyorlik hisoboti yuklanmoqda',
   'catalog.publication.denied': 'Bu brend katalogi nashriga kirish huquqi yoʻq',

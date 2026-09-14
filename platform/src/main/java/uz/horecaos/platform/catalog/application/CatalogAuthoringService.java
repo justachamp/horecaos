@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -445,6 +446,128 @@ public class CatalogAuthoringService {
                     .build());
         }
         return variantIds.size();
+    }
+
+    /**
+     * Hides or reveals a variant on one channel — ADR 0036 Layer B (gap map
+     * row 4.4b), the enablement plane {@code catalog.channel_offering_exclusions}
+     * had a reader for and no writer, so an operator could not say "this dish
+     * is not on Uzum Tezkor" from any screen. Kept apart from {@code
+     * price_on_channel} ({@code PriceAuthoringController.assignToChannel})
+     * deliberately: catalog.md's own warning against the Delever conflation
+     * of availability and price behind one toggle is the reason this method
+     * and that one never share a request.
+     *
+     * <p>{@code locationId} null narrows the exclusion to the whole brand on
+     * this channel; naming one narrows it to that branch only. A no-op call
+     * (already offered, or already excluded the same way) records no audit
+     * fact — nothing changed for anyone to review.
+     */
+    @Transactional
+    public void setChannelOffering(
+            UUID tenantId,
+            UUID brandId,
+            UUID channelId,
+            UUID variantId,
+            @Nullable UUID locationId,
+            boolean offered,
+            @Nullable String reasonCode,
+            String actorSubject) {
+        // reasonCode only means something on the exclude path — the caller
+        // including a variant back onto a channel has nothing to explain, so
+        // it stays nullable rather than forcing every call site to invent a
+        // reason for the direction that has none.
+        boolean changed = offered
+                ? store.includeInChannel(tenantId, brandId, channelId, variantId, locationId)
+                : store.excludeFromChannel(
+                        tenantId,
+                        brandId,
+                        channelId,
+                        variantId,
+                        locationId,
+                        Objects.requireNonNull(reasonCode, "An exclusion needs a reason code"));
+        if (!changed) {
+            return;
+        }
+        audit.record(AuditFact.of("catalog.channelOffering.set", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("ChannelOfferingExclusion", variantId)
+                .because(offered ? "Included on channel" : "Excluded from channel: " + reasonCode)
+                .usingCapability(Capability.CATALOG_AUTHOR.code())
+                .changed(Map.of(
+                        "channelId",
+                        channelId.toString(),
+                        "offered",
+                        offered,
+                        "locationId",
+                        locationId == null ? "BRAND" : locationId.toString()))
+                .correlatedBy(variantId.toString())
+                .occurredAt(clock.instant())
+                .build());
+    }
+
+    /**
+     * Sets many variants' channel offering in one gesture — the mass-enable
+     * an aggregator onboarding needs (gap map row 4.4b): "enabling 600 items
+     * one at a time is what makes an aggregator launch take a week." Same
+     * loop shape as {@link #bulkSetOfferingStatus}, for the same reason: the
+     * set one screen can select is bounded, so N round trips inside one
+     * transaction never cost more than the plumbing a single multi-row
+     * statement would need.
+     *
+     * @return how many rows actually changed — a variant already in the
+     *         requested state does not count, matching {@link
+     *         #excludeFromChannel}/{@link #includeInChannel}'s own report
+     */
+    @Transactional
+    public int bulkSetChannelOffering(
+            UUID tenantId,
+            UUID brandId,
+            UUID channelId,
+            List<UUID> variantIds,
+            @Nullable UUID locationId,
+            boolean offered,
+            @Nullable String reasonCode,
+            String actorSubject) {
+        // See setChannelOffering's own doc: reasonCode only means something
+        // on the exclude path, so every call site on the include path is
+        // free to pass null for the direction that has none.
+        int changed = 0;
+        for (UUID variantId : variantIds) {
+            boolean rowChanged = offered
+                    ? store.includeInChannel(tenantId, brandId, channelId, variantId, locationId)
+                    : store.excludeFromChannel(
+                            tenantId,
+                            brandId,
+                            channelId,
+                            variantId,
+                            locationId,
+                            Objects.requireNonNull(reasonCode, "An exclusion needs a reason code"));
+            if (rowChanged) {
+                changed++;
+            }
+        }
+        if (changed > 0) {
+            audit.record(AuditFact.of("catalog.channelOffering.bulkSet", AuditClass.BUSINESS)
+                    .by(ActorRef.user(actorSubject, null))
+                    .at(ResourceScope.brand(tenantId, brandId))
+                    .target("ChannelOfferingExclusion", channelId)
+                    .because("Bulk-set %d variants to %s on one channel"
+                            .formatted(changed, offered ? "offered" : "excluded"))
+                    .usingCapability(Capability.CATALOG_AUTHOR.code())
+                    .changed(Map.of("channelId", channelId.toString(), "offered", offered, "changedCount", changed))
+                    .correlatedBy(channelId.toString())
+                    .occurredAt(clock.instant())
+                    .build());
+        }
+        return changed;
+    }
+
+    /** The variants currently hidden from one channel at one location — ADR 0036 Layer B's read. */
+    @Transactional(readOnly = true)
+    public Set<UUID> channelExclusionsAtLocation(UUID tenantId, UUID brandId, UUID channelId, UUID locationId) {
+        return store.channelExclusionsAtLocation(tenantId, brandId, channelId, locationId);
     }
 
     @Transactional

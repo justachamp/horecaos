@@ -1112,6 +1112,41 @@
         },
         "type" : "object"
       },
+      "BulkChannelOfferingRequest" : {
+        "properties" : {
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "offered" : {
+            "type" : "boolean"
+          },
+          "reasonCode" : {
+            "pattern" : "^[A-Z_]{1,48}$",
+            "type" : "string"
+          },
+          "variantIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          }
+        },
+        "required" : [ "variantIds" ],
+        "type" : "object"
+      },
+      "BulkChannelOfferingResponse" : {
+        "properties" : {
+          "changedCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "BulkClassifyItemRequest" : {
         "properties" : {
           "fiscal" : {
@@ -1502,6 +1537,18 @@
           }
         },
         "required" : [ "reason", "status" ],
+        "type" : "object"
+      },
+      "ChannelExclusionsResponse" : {
+        "properties" : {
+          "excludedVariantIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
         "type" : "object"
       },
       "ChannelMatrices" : {
@@ -7860,6 +7907,22 @@
         },
         "type" : "object"
       },
+      "SetChannelOfferingRequest" : {
+        "properties" : {
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "offered" : {
+            "type" : "boolean"
+          },
+          "reasonCode" : {
+            "pattern" : "^[A-Z_]{1,48}$",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "SetConfigurationValueRequest" : {
         "properties" : {
           "booleanValue" : {
@@ -13028,6 +13091,170 @@
           }
         },
         "summary" : "Place a product in a category",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/exclusions" : {
+      "get" : {
+        "description" : "ADR 0036 Layer B's read (gap map row 4.4b): catalog.channel_offering_exclusions, joined the same way the live storefront path already reads it (JdbcCatalogStore.channelExcludedVariantIds) — a brand-wide exclusion (no locationId on the row) applies here too, not only a row naming this location.",
+        "operationId" : "channelExclusions",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChannelExclusionsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The variants currently hidden from one channel at one location",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/exclusions/bulk" : {
+      "post" : {
+        "description" : "The mass-enable an aggregator onboarding needs (gap map row 4.4b): enabling 600 items one at a time is what makes an aggregator launch take a week. Same shape as bulk-offering-status: capped at 200 items per call, and one changed count rather than one outcome per item, because every item in the batch shares the same target state.",
+        "operationId" : "bulkSetChannelOffering",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BulkChannelOfferingRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BulkChannelOfferingResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sets many variants' channel offering in one gesture",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/exclusions/variants/{variantId}" : {
+      "put" : {
+        "description" : "ADR 0036 Layer B (gap map row 4.4b): catalog.channel_offering_exclusions had a reader and no writer until this wave, so an operator could not say \"this dish is not on Uzum Tezkor\" from any screen. offered=false inserts a sparse exclusion row (idempotent — hiding an already-hidden variant changes nothing); offered=true deletes it. request.locationId narrows the exclusion to one branch; omitted, it applies brand-wide across every location on this channel. Deliberately separate from price_on_channel (PriceAuthoringController.assignToChannel) — catalog.md's own warning against the Delever conflation of availability and price behind one toggle.",
+        "operationId" : "setChannelOffering",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SetChannelOfferingRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sets whether a variant is offered on one sales channel",
         "tags" : [ "Catalog authoring" ]
       }
     },

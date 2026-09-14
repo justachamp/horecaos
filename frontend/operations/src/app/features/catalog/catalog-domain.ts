@@ -316,6 +316,36 @@ export interface BulkOfferingStatusResult {
   readonly updatedCount: number;
 }
 
+/**
+ * `SetChannelOfferingRequest` — ADR 0036 Layer B's single-item write (wave
+ * P45, gap map row 4.4b). `locationId` omitted narrows the exclusion to the
+ * whole brand on this channel; naming one narrows it to that branch only.
+ * `reasonCode` defaults server-side when omitted.
+ */
+export interface SetChannelOfferingRequest {
+  readonly offered: boolean;
+  readonly locationId?: string | null;
+  readonly reasonCode?: string | null;
+}
+
+/** `BulkChannelOfferingRequest` — the mass-enable/mass-disable gesture an aggregator onboarding needs. */
+export interface BulkChannelOfferingRequest {
+  readonly variantIds: readonly string[];
+  readonly offered: boolean;
+  readonly locationId?: string | null;
+  readonly reasonCode?: string | null;
+}
+
+/** `BulkChannelOfferingResponse`. */
+export interface BulkChannelOfferingResult {
+  readonly changedCount: number;
+}
+
+/** `ChannelExclusionsResponse` — which variants are currently hidden from one channel at one location. */
+export interface ChannelExclusionsResult {
+  readonly excludedVariantIds: readonly string[];
+}
+
 /** `UpdateCategoryRequest` — parentCategoryId, code and sortOrder only; name/description stay `TranslateRequest`'s. */
 export interface UpdateCategoryRequest {
   readonly parentCategoryId?: string | null;

@@ -165,6 +165,21 @@ export const catalogPaths = {
     return `${this.variantsAtLocation(scope, locationId)}/availability-counts`;
   },
 
+  /** ADR 0036 Layer B (wave P45): whether a variant is offered on one sales channel — separate from price_on_channel. */
+  channelOffering(scope: BrandScope, channelId: string, variantId: string): string {
+    return `${this.base(scope)}/channels/${encodeURIComponent(channelId)}/exclusions/variants/${encodeURIComponent(variantId)}`;
+  },
+
+  /** The mass-enable/mass-disable gesture (gap map row 4.4b) — up to 200 variants at once. */
+  bulkChannelOffering(scope: BrandScope, channelId: string): string {
+    return `${this.base(scope)}/channels/${encodeURIComponent(channelId)}/exclusions/bulk`;
+  },
+
+  /** Which variants are currently hidden from one channel at one location. Query param `locationId`. */
+  channelExclusions(scope: BrandScope, channelId: string): string {
+    return `${this.base(scope)}/channels/${encodeURIComponent(channelId)}/exclusions`;
+  },
+
   /** The catalog's live validation report — blockers and warnings, never a side effect. */
   validation(scope: BrandScope, catalogId: string): string {
     return `${this.base(scope)}/catalogs/${encodeURIComponent(catalogId)}/validation`;

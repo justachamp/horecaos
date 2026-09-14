@@ -364,6 +364,17 @@ export interface BulkAutoMatchResponse {
   sourced?: boolean;
 }
 
+export interface BulkChannelOfferingRequest {
+  locationId?: string;
+  offered?: boolean;
+  reasonCode?: string;
+  variantIds: Array<string>;
+}
+
+export interface BulkChannelOfferingResponse {
+  changedCount?: number;
+}
+
 export interface BulkClassifyItemRequest {
   fiscal?: FiscalClassificationRequest;
   nodeId: string;
@@ -494,6 +505,10 @@ export interface ChangeProgramStatusRequest {
   expectedVersion?: number;
   reason: string;
   status: "PLANNING" | "ACTIVE" | "COMPLETED" | "ABANDONED";
+}
+
+export interface ChannelExclusionsResponse {
+  excludedVariantIds?: Array<string>;
 }
 
 export interface ChannelMatrices {
@@ -2531,6 +2546,12 @@ export interface ServiceZoneControllerVersionView {
   zoneId?: string;
 }
 
+export interface SetChannelOfferingRequest {
+  locationId?: string;
+  offered?: boolean;
+  reasonCode?: string;
+}
+
 export interface SetConfigurationValueRequest {
   booleanValue?: boolean;
   brandId?: string;
@@ -3221,6 +3242,9 @@ export interface Operations {
   "validate_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/validation"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string } } }; responses: { "200": ValidationResponse } };
   "removeProductFromCategory": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/categories/{categoryId}/products/{productId}"; request: { parameters: { path: { brandId: string; categoryId: string; productId: string; tenantId: string } } }; responses: { "200": unknown } };
   "placeInCategory": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/categories/{categoryId}/products/{productId}"; request: { parameters: { path: { brandId: string; categoryId: string; productId: string; tenantId: string } }; body: SortOrderRequest }; responses: { "200": unknown } };
+  "channelExclusions": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/exclusions"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string }; query: { locationId: string } } }; responses: { "200": ChannelExclusionsResponse } };
+  "bulkSetChannelOffering": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/exclusions/bulk"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string } }; body: BulkChannelOfferingRequest }; responses: { "200": BulkChannelOfferingResponse } };
+  "setChannelOffering": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/exclusions/variants/{variantId}"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string; variantId: string } }; body: SetChannelOfferingRequest }; responses: { "200": unknown } };
   "classifyFee": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fees/{feeCode}/fiscal-classification"; request: { parameters: { path: { brandId: string; feeCode: string; tenantId: string } }; body: FiscalClassificationRequest }; responses: { "200": CatalogAuthoringControllerIdResponse } };
   "bulkClassify": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fiscal-classifications/bulk"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: BulkClassifyRequest }; responses: { "200": BulkClassifyResponse } };
   "fiscalCoverage": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fiscal-coverage"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": FiscalCoverageResponse } };

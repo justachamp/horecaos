@@ -9,6 +9,8 @@ import {
   AddVariantRequest,
   AttachMediaRequest,
   AttachRecommendationRequest,
+  BulkChannelOfferingRequest,
+  BulkChannelOfferingResult,
   BulkClassifyItem,
   BulkClassifyResult,
   BulkOfferingStatusRequest,
@@ -17,6 +19,7 @@ import {
   CatalogStatus,
   CatalogSummary,
   CategorySummary,
+  ChannelExclusionsResult,
   CreateCatalogRequest,
   CreateCategoryRequest,
   CreateModifierGroupRequest,
@@ -37,6 +40,7 @@ import {
   PublicationResult,
   RecommendationItem,
   RecommendationList,
+  SetChannelOfferingRequest,
   SetOfferingRequest,
   SortOrderRequest,
   StopInAllBranchesResult,
@@ -177,6 +181,58 @@ export class CatalogApi {
   ): Observable<BulkOfferingStatusResult> {
     return this.api.post<BulkOfferingStatusRequest, BulkOfferingStatusResult>(
       catalogPaths.bulkOfferingStatus(scope, locationId),
+      command(request),
+    );
+  }
+
+  /**
+   * Which variants are currently hidden from one channel at one location —
+   * ADR 0036 Layer B's read (wave P45, gap map row 4.4b). A brand-wide
+   * exclusion (no location named on the row) is folded in here too, exactly
+   * as the storefront's own live menu already reads it.
+   */
+  channelExclusions(
+    scope: BrandScope,
+    channelId: string,
+    locationId: string,
+  ): Observable<ChannelExclusionsResult> {
+    return unwrap(
+      this.api.get<ChannelExclusionsResult>(catalogPaths.channelExclusions(scope, channelId), {
+        params: { locationId },
+      }),
+    );
+  }
+
+  /**
+   * Sets whether one variant is offered on one channel — separate from
+   * price (`PricingApi.setVariantPrice`), the `offered_on_channel` half of
+   * catalog.md §4.5 Layer B this wave adds a writer for.
+   */
+  setChannelOffering(
+    scope: BrandScope,
+    channelId: string,
+    variantId: string,
+    request: SetChannelOfferingRequest,
+  ): Observable<void> {
+    return this.api.put<SetChannelOfferingRequest, void>(
+      catalogPaths.channelOffering(scope, channelId, variantId),
+      command(request),
+    );
+  }
+
+  /**
+   * The mass-enable/mass-disable gesture an aggregator onboarding needs
+   * (gap map row 4.4b): enabling 600 items one at a time is what makes an
+   * aggregator launch take a week. Same 200-item cap as {@link
+   * bulkSetOfferingStatus}.
+   */
+  bulkSetChannelOffering(
+    scope: BrandScope,
+    channelId: string,
+    request: BulkChannelOfferingRequest,
+  ): Observable<BulkChannelOfferingResult> {
+    return this.api.post<BulkChannelOfferingRequest, BulkChannelOfferingResult>(
+      catalogPaths.bulkChannelOffering(scope, channelId),
       command(request),
     );
   }

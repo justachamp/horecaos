@@ -1857,7 +1857,19 @@ export const messagesRu: MessageCatalogue = {
   'catalog.menus.bulk.confirmTitle': 'Изменить статус выбранных позиций?',
   'catalog.menus.bulk.confirmBody': 'Это изменит статус {count} позиций в меню этого филиала.',
   'catalog.menus.channelsNote':
-    'Включение по каналам не построено (ADR 0036) — эта матрица показывает только филиалы',
+    'Включение и цена задаются по каждому каналу отдельно от цены зала (ADR 0036)',
+  'catalog.menus.channel.label': 'Канал',
+  'catalog.menus.channel.hall': 'Зал',
+  'catalog.menus.column.channel': 'На канале',
+  'catalog.menus.channel.included': 'На канале',
+  'catalog.menus.channel.excluded': 'Скрыто на канале',
+  'catalog.menus.channel.noOverride': 'Для этого канала ещё не назначена цена',
+  'catalog.menus.channel.assignPriceLink': 'Назначить прайс-лист',
+  'catalog.menus.bulk.channelEnable': 'Включить на канале',
+  'catalog.menus.bulk.channelDisable': 'Отключить на канале',
+  'catalog.menus.bulk.channelConfirmTitle': 'Изменить доступность на канале для выбранных позиций?',
+  'catalog.menus.bulk.channelConfirmBody':
+    'Это изменит, доступны ли {count} позиций на канале «{channel}».',
 
   'catalog.publication.loading': 'Загрузка отчёта о готовности к публикации',
   'catalog.publication.denied': 'Нет доступа к публикации каталога этого бренда',
