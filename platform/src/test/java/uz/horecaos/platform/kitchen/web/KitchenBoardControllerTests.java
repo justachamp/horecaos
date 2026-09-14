@@ -132,8 +132,8 @@ class KitchenBoardControllerTests {
         TicketRow ticket = ticketAt(TicketStatus.FIRED);
         Instant eta = CREATED_AT.plusSeconds(1_200);
 
-        KitchenBoardController.TicketResponse response = KitchenBoardController.TicketResponse.of(
-                ticket, List.of(), "AGGREGATOR", "YE-2291-04", eta);
+        KitchenBoardController.TicketResponse response =
+                KitchenBoardController.TicketResponse.of(ticket, List.of(), "AGGREGATOR", "YE-2291-04", eta);
 
         assertThat(response.externalReference()).isEqualTo("YE-2291-04");
         assertThat(response.courierEtaAt()).isEqualTo(eta);
