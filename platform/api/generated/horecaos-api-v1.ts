@@ -2842,13 +2842,14 @@ export interface InvitationAcceptRequest {
   token: string;
 }
 
-export interface InvitationAccepted {
+export interface InvitationAcceptResponse {
   signInName?: string;
 }
 
-export interface InvitationInspection {
+export interface InvitationInspectionResponse {
   emailMasked?: string;
   expiresAt?: string;
+  jobName?: string;
   locale?: string;
   tenantName?: string;
 }
@@ -4044,6 +4045,13 @@ export interface OutcomeRowResponse {
   cancellationReasonCode?: string;
   count?: number;
   terminalStatus?: string;
+}
+
+export interface Outstanding {
+  invitationId?: string;
+  invitedAt?: string;
+  principalSubject?: string;
+  state?: string;
 }
 
 export interface OverrideRequest {
@@ -6128,6 +6136,34 @@ export interface SseEmitter {
   timeout?: number;
 }
 
+export interface StaffInvitationControllerReasonRequest {
+  reason: string;
+}
+
+export interface StaffInvitationCreatedResponse {
+  grantId?: string;
+  invitationId?: string;
+  inviteLink?: string;
+  principalSubject?: string;
+}
+
+export interface StaffInvitationLinkResponse {
+  inviteLink?: string;
+}
+
+export interface StaffInvitationRequest {
+  brandId?: string;
+  email?: string;
+  firstName: string;
+  lastName: string;
+  locale?: string;
+  locationId?: string;
+  phone: string;
+  reason: string;
+  roleCode: string;
+  validUntil?: string;
+}
+
 export interface StaffLinkView {
   id?: string;
   linkedAt?: string;
@@ -7205,7 +7241,7 @@ export interface Operations {
   "status_2": { method: "GET"; path: "/api/v1/control-plane/fiscal-reference/mxik/status"; request: { parameters: Record<string, never> }; responses: { "200": ReferenceStatus } };
   "list_27": { method: "GET"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlatformGrantView> } };
   "grant_1": { method: "POST"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never>; body: PlatformGrantRequest }; responses: { "200": PlatformGrantResponse } };
-  "revoke_3": { method: "DELETE"; path: "/api/v1/control-plane/grants/{grantId}"; request: { parameters: { path: { grantId: string } }; body: PlatformGrantControllerReasonRequest }; responses: { "200": PlatformGrantResponse } };
+  "revoke_4": { method: "DELETE"; path: "/api/v1/control-plane/grants/{grantId}"; request: { parameters: { path: { grantId: string } }; body: PlatformGrantControllerReasonRequest }; responses: { "200": PlatformGrantResponse } };
   "list_38": { method: "GET"; path: "/api/v1/control-plane/incidents"; request: { parameters: { query: { includeResolved?: boolean; limit?: number } } }; responses: { "200": Array<IncidentView> } };
   "acknowledge_1": { method: "POST"; path: "/api/v1/control-plane/incidents/{incidentId}/acknowledgement"; request: { parameters: { path: { incidentId: string } }; body?: NoteRequest }; responses: { "200": unknown } };
   "resolve_3": { method: "POST"; path: "/api/v1/control-plane/incidents/{incidentId}/resolution"; request: { parameters: { path: { incidentId: string } }; body: ControlPlaneIncidentControllerResolveRequest }; responses: { "200": unknown } };
@@ -7340,7 +7376,7 @@ export interface Operations {
   "entitlements_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/entitlements"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CommercialControlPlaneControllerEntitlementSnapshotResponse } };
   "list_23": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/grants"; request: { parameters: { path: { tenantId: string }; query: { includeInactive?: boolean } } }; responses: { "200": Array<GrantView> } };
   "grant": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/grants"; request: { parameters: { path: { tenantId: string } }; body: GrantRequest }; responses: { "200": {  } } };
-  "revoke_2": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/grants/{grantId}"; request: { parameters: { path: { grantId: string; tenantId: string } }; body: GrantControllerReasonRequest }; responses: { "200": {  } } };
+  "revoke_3": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/grants/{grantId}"; request: { parameters: { path: { grantId: string; tenantId: string } }; body: GrantControllerReasonRequest }; responses: { "200": {  } } };
   "linkKeycloakOrganization": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/identity/keycloak-organization"; request: { parameters: { path: { tenantId: string } }; body: LinkKeycloakOrganizationRequest }; responses: { "200": TenantView } };
   "list_22": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": PageInstallationView } };
   "install_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations"; request: { parameters: { path: { tenantId: string } }; body: InstallRequest }; responses: { "200": {  } } };
@@ -7381,7 +7417,7 @@ export interface Operations {
   "archive_1": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } } }; responses: { "200": unknown } };
   "update_5": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };
   "view": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/owner-invitation"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OwnerInvitationView } };
-  "resend": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/owner-invitation/resend"; request: { parameters: { path: { tenantId: string } }; body: OwnerInvitationResendRequest }; responses: { "200": unknown } };
+  "resend_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/owner-invitation/resend"; request: { parameters: { path: { tenantId: string } }; body: OwnerInvitationResendRequest }; responses: { "200": unknown } };
   "awaitingOperator": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports"; request: { parameters: { path: { tenantId: string }; query: { limit?: number } } }; responses: { "200": PageExportView } };
   "candidates": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports/{exportId}/candidates"; request: { parameters: { path: { exportId: string; tenantId: string } } }; responses: { "200": PageCandidateView } };
   "discover": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports/{exportId}/discovery"; request: { parameters: { path: { exportId: string; tenantId: string } } }; responses: { "200": {  } } };
@@ -7441,8 +7477,8 @@ export interface Operations {
   "signInOperations": { method: "POST"; path: "/api/v1/operations/auth/sessions"; request: { parameters: Record<string, never>; body: StaffSignInRequest }; responses: { "200": StaffSessionResponse } };
   "signOutOperations": { method: "DELETE"; path: "/api/v1/operations/auth/sessions/current"; request: { parameters: Record<string, never>; body: StaffLogoutRequest }; responses: { "200": unknown } };
   "refreshOperations": { method: "POST"; path: "/api/v1/operations/auth/sessions/refresh"; request: { parameters: Record<string, never>; body: StaffRefreshRequest }; responses: { "200": StaffSessionResponse } };
-  "accept_2": { method: "POST"; path: "/api/v1/operations/invitations/accept"; request: { parameters: Record<string, never>; body: InvitationAcceptRequest }; responses: { "200": InvitationAccepted } };
-  "inspect": { method: "POST"; path: "/api/v1/operations/invitations/inspect"; request: { parameters: Record<string, never>; body: InvitationTokenRequest }; responses: { "200": InvitationInspection } };
+  "accept_2": { method: "POST"; path: "/api/v1/operations/invitations/accept"; request: { parameters: Record<string, never>; body: InvitationAcceptRequest }; responses: { "200": InvitationAcceptResponse } };
+  "inspect": { method: "POST"; path: "/api/v1/operations/invitations/inspect"; request: { parameters: Record<string, never>; body: InvitationTokenRequest }; responses: { "200": InvitationInspectionResponse } };
   "adjustmentReasons": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/adjustment-reasons"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<AdjustmentReasonResponse> } };
   "createAdjustmentReason": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/adjustment-reasons"; request: { parameters: { path: { tenantId: string } }; body: CreateAdjustmentReasonRequest }; responses: { "200": AdjustmentReasonResponse } };
   "archiveAdjustmentReason": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/adjustment-reasons/{reasonId}/archival"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: ArchiveCourierTypeRequest }; responses: { "200": unknown } };
@@ -7595,7 +7631,7 @@ export interface Operations {
   "reconcileCapabilities": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/capability-reconciliation"; request: { parameters: { path: { installationId: string; tenantId: string } } }; responses: { "200": Reconciliation } };
   "list_12": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/partner-clients"; request: { parameters: { path: { installationId: string; tenantId: string } } }; responses: { "200": Array<PartnerClientResponse> } };
   "issue_3": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/partner-clients"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: IssuePartnerClientRequest }; responses: { "200": IssuedClientResponse } };
-  "revoke_1": { method: "DELETE"; path: "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/partner-clients/{clientId}"; request: { parameters: { path: { clientId: string; installationId: string; tenantId: string }; query: { expectedVersion: number } }; body: RevokePartnerClientRequest }; responses: { "200": {  } } };
+  "revoke_2": { method: "DELETE"; path: "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/partner-clients/{clientId}"; request: { parameters: { path: { clientId: string; installationId: string; tenantId: string }; query: { expectedVersion: number } }; body: RevokePartnerClientRequest }; responses: { "200": {  } } };
   "rotate_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/partner-clients/{clientId}/secret-rotations"; request: { parameters: { path: { clientId: string; installationId: string; tenantId: string }; query: { expectedVersion: number } }; body: RotatePartnerClientRequest }; responses: { "200": RotatedClientResponse } };
   "rotateSecret_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/secret-rotations"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: RotateSecretRequest }; responses: { "200": RotateSecretResponse } };
   "rotateSecretByValue": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/secret-rotations/value"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: RotateSecretValueRequest }; responses: { "200": RotateSecretResponse } };
@@ -7656,6 +7692,10 @@ export interface Operations {
   "verify": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/remedies/{remedyId}/verification"; request: { parameters: { path: { remedyId: string; tenantId: string } }; body: OperationsRemedyControllerVerificationRequest }; responses: { "200": OperationsRemedyControllerVerificationResponse } };
   "liability": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/reports/loyalty-liability"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<LiabilityResponse> } };
   "report": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/reports/remedies"; request: { parameters: { path: { tenantId: string }; query: { from: string; to: string } } }; responses: { "200": Array<RemedyTotalsResponse> } };
+  "outstanding": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/staff/invitations"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<Outstanding> } };
+  "invite": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/staff/invitations"; request: { parameters: { path: { tenantId: string } }; body: StaffInvitationRequest }; responses: { "200": StaffInvitationCreatedResponse } };
+  "revoke_1": { method: "DELETE"; path: "/api/v1/operations/tenants/{tenantId}/staff/invitations/{invitationId}"; request: { parameters: { path: { invitationId: string; tenantId: string } }; body: StaffInvitationControllerReasonRequest }; responses: { "200": {  } } };
+  "resend": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/staff/invitations/{invitationId}/resend"; request: { parameters: { path: { invitationId: string; tenantId: string } }; body: StaffInvitationControllerReasonRequest }; responses: { "200": StaffInvitationLinkResponse } };
   "visitsToTenant": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/support-sessions"; request: { parameters: { path: { tenantId: string }; query: { limit?: number } } }; responses: { "200": PageSupportSessionView } };
   "current_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/support-sessions/current"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": SupportSessionView } };
   "endFromTenant": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/support-sessions/{sessionId}/end"; request: { parameters: { path: { sessionId: string; tenantId: string } }; body: EndRequest }; responses: { "200": SupportSessionView } };
