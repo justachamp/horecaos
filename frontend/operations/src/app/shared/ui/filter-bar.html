@@ -1,0 +1,55 @@
+<div class="q-filter-bar" data-testid="q-filter-bar">
+  <div
+    class="q-filter-bar__primary"
+    role="group"
+    [attr.aria-label]="'ui.filterBar.primaryLabel' | t"
+  >
+    <div class="q-filter-bar__controls">
+      <ng-content select="[primary]" />
+    </div>
+    @if (hasSecondary()) {
+      <button
+        type="button"
+        class="q-filter-bar__more"
+        [class.q-filter-bar__more--open]="secondaryOpen()"
+        [attr.aria-expanded]="secondaryOpen()"
+        (click)="toggleSecondary()"
+        data-testid="q-filter-bar-more"
+      >
+        {{ 'ui.filterBar.more' | t }}
+      </button>
+    }
+  </div>
+
+  @if (chips().length > 0 || canReset()) {
+    <div class="q-filter-bar__chips" data-testid="q-filter-bar-chips">
+      @for (chip of chips(); track chip.id) {
+        <button
+          type="button"
+          class="q-filter-bar__chip"
+          (click)="chipRemoved.emit(chip.id)"
+          [attr.data-testid]="'q-filter-bar-chip-' + chip.id"
+        >
+          {{ chip.label }}
+          <span aria-hidden="true">×</span>
+        </button>
+      }
+      @if (canReset()) {
+        <button
+          type="button"
+          class="q-filter-bar__reset"
+          (click)="resetFilters.emit()"
+          data-testid="q-filter-bar-reset"
+        >
+          {{ 'ui.filterBar.reset' | t }}
+        </button>
+      }
+    </div>
+  }
+
+  @if (hasSecondary() && secondaryOpen()) {
+    <div class="q-filter-bar__secondary" role="group" data-testid="q-filter-bar-secondary">
+      <ng-content select="[secondary]" />
+    </div>
+  }
+</div>

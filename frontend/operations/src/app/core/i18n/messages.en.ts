@@ -395,6 +395,51 @@ export const messagesEn = {
   'orders.queue.denied': "No access to this branch's orders",
   'orders.queue.error.retry': 'Retry',
 
+  // --- orders.queue toolbar filters (orders.md §2.4, wave P07) -------------
+  'orders.queue.filter.search.placeholder': 'Order #, aggregator ID…',
+  'orders.queue.filter.search.ariaLabel': 'Search orders',
+  'orders.queue.filter.period.label': 'Period',
+  'orders.queue.filter.channel.label': 'Channel',
+  'orders.queue.filter.channel.all': 'All channels',
+  'orders.queue.filter.fulfillmentMode.label': 'Type',
+  'orders.queue.filter.fulfillmentMode.all': 'All',
+  'orders.queue.filter.courier.label': 'Courier',
+  'orders.queue.filter.courier.all': 'All couriers',
+  'orders.queue.filter.mine.label': 'My orders',
+  'orders.queue.filter.paymentMethod.label': 'Payment method',
+  'orders.queue.filter.paymentMethod.all': 'All methods',
+  'orders.queue.filter.paymentMethod.CASH': 'Cash',
+  'orders.queue.filter.paymentMethod.CLICK': 'Click',
+  'orders.queue.filter.paymentMethod.PAYME': 'Payme',
+
+  // --- orders.queue selection and bulk actions (orders.md §2.10, wave P07) -
+  'orders.queue.column.select': 'Select',
+  'orders.queue.selection.selectPage': 'Select {count} on this page',
+  'orders.queue.selection.selected': 'Selected {count}',
+  'orders.queue.selection.clear': 'Clear selection',
+  'orders.queue.selection.rowAriaLabel': 'Select order {number}',
+  'orders.queue.bulk.advance': 'Advance',
+  'orders.queue.bulk.advanceUnavailable':
+    '“Advance” unavailable: the selected orders are not all at the same stage',
+  'orders.queue.bulk.cancel': 'Cancel',
+  'orders.queue.bulk.cancelUnavailable':
+    '“Cancel” unavailable: {ineligible} of {total} orders can’t be cancelled',
+  'orders.queue.bulk.courierNote':
+    'Bulk courier assignment is not available yet — assign a courier one order at a time.',
+  'orders.queue.bulk.cancelDialog.title': 'Cancel {count} orders',
+  'orders.queue.bulk.cancelDialog.confirm': 'Cancel orders',
+  'orders.queue.bulk.result.summary': '{applied} applied · {failed} problems',
+  'orders.queue.bulk.result.allApplied': 'All {count} applied',
+  'orders.queue.bulk.result.retry': 'Retry problem orders',
+  'orders.queue.bulk.result.dismiss': 'Close',
+  'orders.queue.bulk.problem.STALE_VERSION': 'The order changed since it was selected',
+  'orders.queue.bulk.problem.ILLEGAL_TRANSITION': 'Not available in its current status',
+  'orders.queue.bulk.problem.CANCELLATION_NOT_PERMITTED': 'Cancellation not permitted',
+  'orders.queue.bulk.problem.REASON_NOT_FOUND': 'The reason is no longer active',
+  'orders.queue.bulk.problem.VALIDATION_FAILED': 'Rejected as invalid',
+  'orders.queue.bulk.problem.ORDER_NOT_FOUND_AT_LOCATION': 'Not found at this branch',
+  'orders.queue.bulk.problem.UNEXPECTED_FAILURE': 'Something went wrong',
+
   'inbox.title': 'Inbox',
   'inbox.denied': 'No access to this brand’s conversations',
   'inbox.list.empty': 'No conversations yet',
@@ -982,10 +1027,12 @@ export const messagesEn = {
   'settings.notifications.tab.templates': 'Templates',
   'settings.notifications.tab.routing': 'Routing',
   'settings.notifications.automation.title': 'Automation',
-  'settings.notifications.field.paymentLinkAutoSend': 'Send the payment link to the customer automatically',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Send the payment link to the customer automatically',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Not yet enforced: no send trigger reads this switch yet, so turning it on records the choice without changing behaviour.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Notify on aggregator shift open/close',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Notify on aggregator shift open/close',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Not yet enforced: no aggregator-shift event exists in the platform yet to trigger this.',
   'settings.notifications.create.action': 'New template',
@@ -1031,7 +1078,8 @@ export const messagesEn = {
   'settings.notifications.editor.subject': 'Subject',
   'settings.notifications.editor.body': 'Text',
   'settings.notifications.editor.variables': 'Insert a variable',
-  'settings.notifications.editor.variables.empty': 'No merge variables are offered for this notification class.',
+  'settings.notifications.editor.variables.empty':
+    'No merge variables are offered for this notification class.',
   'settings.notifications.editor.preview': 'How the customer sees it',
   'settings.notifications.editor.save': 'Save draft',
   'settings.notifications.editor.saving': 'Saving…',
@@ -1050,15 +1098,18 @@ export const messagesEn = {
   'settings.notifications.testSend.result.ACCEPTED': 'Accepted by the provider.',
   'settings.notifications.testSend.result.REJECTED': 'Refused by the provider.',
   'settings.notifications.testSend.result.RETRYABLE': 'A transport error — try again.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Uncertain — the provider may already have sent it.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Uncertain — the provider may already have sent it.',
   'settings.notifications.activate.confirm.title': 'Activate this version?',
-  'settings.notifications.activate.confirm.body': 'Every message using this template will use this wording from now on.',
+  'settings.notifications.activate.confirm.body':
+    'Every message using this template will use this wording from now on.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'This version is still {state} with its SMS gateway. Activating it will not make it send until that changes.',
   'settings.notifications.activate.confirm.confirm': 'Activate',
   'settings.notifications.routing.lead':
     'Which of this brand’s bound Telegram chats hear about which events, and their forum topic.',
-  'settings.notifications.routing.empty': 'No chat is bound yet. Use "/link <code>" in a Telegram group to bind one.',
+  'settings.notifications.routing.empty':
+    'No chat is bound yet. Use "/link <code>" in a Telegram group to bind one.',
   'settings.notifications.routing.column.chat': 'Chat',
   'settings.notifications.routing.column.topic': 'Topic',
   'settings.notifications.routing.column.status': 'Status',
@@ -1072,7 +1123,8 @@ export const messagesEn = {
   'settings.notifications.routing.action.editTopic': 'Change topic',
   'settings.notifications.routing.action.unbind': 'Unbind',
   'settings.notifications.routing.unbind.confirm.title': 'Unbind this chat?',
-  'settings.notifications.routing.unbind.confirm.body': 'It stops receiving every event class immediately.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'It stops receiving every event class immediately.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Unbind',
   'settings.notifications.routing.topic.prompt': 'Forum topic id — leave empty for the flat chat',
   'settings.notifications.routing.topic.save': 'Save',
@@ -4141,6 +4193,9 @@ export const messagesEn = {
   'ui.locked.module': 'Module:',
   'ui.locked.ask': 'The account owner can add it to the plan.',
   'ui.alert.dismiss': 'Dismiss this message',
+  'ui.filterBar.primaryLabel': 'Filters',
+  'ui.filterBar.more': 'More filters',
+  'ui.filterBar.reset': 'Reset filters',
   'ui.toast.dismiss': 'Dismiss',
   'ui.splitPane.handle': 'Resize the detail pane',
   'ui.richText.kind.paragraph': 'Paragraph',

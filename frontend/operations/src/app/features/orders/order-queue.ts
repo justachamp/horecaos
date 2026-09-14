@@ -3,6 +3,7 @@ import {
   Component,
   DestroyRef,
   OnInit,
+  Signal,
   inject,
   signal,
 } from '@angular/core';
@@ -11,8 +12,11 @@ import { Observable, firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
+import { Page } from '../../core/api/page';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { CurrentTenant } from '../../core/auth/current-tenant';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { TimeZone, formatClock, formatTime } from '../../core/format/datetime';
@@ -20,18 +24,43 @@ import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ServiceStatus } from '../../shell/service-status';
+import { DateRange, DateRangePicker } from '../../shared/ui/date-range-picker';
+import { FilterBar, FilterBarChip } from '../../shared/ui/filter-bar';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { Toasts } from '../../shared/ui/toast';
+import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
+import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
 import {
   DecisionIdRegistry,
   OrderActionResponse,
   actionLabel,
+  advanceReasonCode,
   decisionOutcomeLabel,
   splitInlineOverflow,
 } from './order-actions';
 import { DecisionResponse, OrderActionsApi } from './order-actions-api';
+import {
+  BulkActionRequest,
+  BulkActionResponse,
+  BulkOrderRef,
+  OrderBulkActionsApi,
+} from './order-bulk-actions-api';
 import { CountableOrder, OrderCounts, TabCounts, zeroTabCounts } from './order-counts';
 import { describeApiError, errorReference, mutationErrorNotice } from './order-errors';
+import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outcome-reason-dialog';
+import {
+  OrderQueueFilters,
+  OrderQueueFilterState,
+  boardQueryParams,
+} from './order-queue-filter-state';
+import {
+  bulkAdvanceTarget,
+  bulkCancelEligible,
+  bulkCancelIneligibleCount,
+  pruneSelection,
+  toggleOne,
+  toggleSelectPage,
+} from './order-queue-selection';
 import { OrderReasonDialog, OrderReasonSubmission } from './order-reason-dialog';
 import {
   OrderRejectReasonDialog,
@@ -62,13 +91,18 @@ import {
 const POLL_INTERVAL_MS = 10_000;
 
 /**
- * The ceiling on one fetch. The endpoint's own maximum is 500
+ * The ceiling on one fetch. The board endpoint's own maximum is 500
  * (`horecaos-api.json`); 200 is a first-render compromise between a complete
  * picture for the client-derived tab counts (`order-counts.ts`) and payload
  * size. A busier location than that needs the real `GET .../orders/counts`
- * endpoint, which is exactly the gap that endpoint exists to close.
+ * endpoint, which is exactly the gap that endpoint exists to close — and,
+ * unchanged by this wave's filter toolbar, `attention` is still counted over
+ * this one capped page, so it still undercounts above it (§11's own trap).
  */
 const FETCH_LIMIT = 200;
+
+/** §2.8: "300 ms debounce, minimum two characters" — the search box's own delay before it re-fetches. */
+const SEARCH_DEBOUNCE_MS = 300;
 
 /**
  * No location carries a timezone anywhere this board can reach yet — not on
@@ -82,6 +116,9 @@ const FETCH_LIMIT = 200;
  * `tenant.locations.timezone` the moment a call surfaces it.
  */
 const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
+
+/** §2.4's fixed, platform-wide set — ADR 0055 scopes the pilot to one payment provider, so a tenant-configurable registry is not this toolbar's to read (see `order-queue-filter-state.ts`'s own doc). */
+const PAYMENT_METHOD_CODES = ['CASH', 'CLICK', 'PAYME'] as const;
 
 /** One row, decorated with what the table and the sort actually need. */
 interface OrderRow {
@@ -99,25 +136,59 @@ interface RowDialogState {
 
 /**
  * The order queue — `docs/operations-spec/orders.md` §2: tabs, the dense
- * table, severity tint/rail/caption, and the §1.6 polling fallback.
+ * table, severity tint/rail/caption, the §1.6 polling fallback, row actions
+ * (§2.9), and — wave P07 — the toolbar and the bulk-action bar §2.4/§2.10
+ * describe.
  *
- * **Scope, deliberately.** This wave is rendering and liveness, not mutation:
- * no row actions, no bulk actions, no filters, no column picker. Those wait
- * on the server adding `actions[]` to the order response (§4.2) — rendering
- * an action this client invented availability for is exactly the mistake §4.2
- * warns against.
+ * **The toolbar.** Every filter here is bound to a real `GET
+ * .../orders/board` (wave P04, ADR 0102) query parameter — see
+ * `order-queue-filter-state.ts`'s own doc for exactly which of §2.4's rows
+ * this omits and why (a branch filter the endpoint has no parameter for, an
+ * aggregator predicate the ordering module does not read yet, a payment
+ * *status* filter with no server predicate at all). Filters persist **per
+ * tab** in `localStorage`, restored on every tab switch and on a full reload
+ * — not yet round-tripped through the URL, which stays this wave's own open
+ * issue rather than a silent gap. Because the board is one filtered fetch
+ * rather than one fetch per status, switching tabs re-fetches under the
+ * newly active tab's own remembered filters — a manager who filters
+ * Внимание to one channel and switches to Готовятся sees that tab's own
+ * filters take over, not Внимание's carried forward, and the tab badges
+ * reflect whichever filter set is currently in effect. That is a legacy
+ * per-status-page's own semantics (§9's "the legacy dashboard did"), read
+ * onto a shared-fetch board rather than seven separate ones.
+ *
+ * **Selection and bulk actions.** A checkbox column, a bulk-action bar that
+ * replaces the filter row while anything is selected, and `POST
+ * .../orders/bulk-actions` (ADR 0039) — `ADVANCE`/`CANCEL` only.
+ * **Bulk courier assignment is explicitly out of scope**: `BulkActionType`
+ * has no such member, and the bulk bar says so rather than offering a button
+ * that would 400. Every bulk action is offered only when it is valid for
+ * *every* selected row (§2.10) — see `order-queue-selection.ts` for the
+ * eligibility rules — and a partial failure renders §2.10's result panel,
+ * with **Повторить проблемные** resubmitting only the failed items under a
+ * fresh intent (never the same `Idempotency-Key` with the same body, which
+ * `OrderBulkActionService`'s own doc says changes nothing at all).
  *
  * **Columns, reduced to the wire.** `OrderSummaryResponse` — see
  * `order-summary.ts` — is short of §2.5's default set: no branch, no
  * customer, no line summary, no payment projection, no courier. What renders
- * here is severity rail, order number + severity caption, time, type/channel,
- * total, and status. `Филиал` is additionally out of place for a different
- * reason: this endpoint is already scoped to one location, which is the
- * spec's own condition for auto-hiding that column.
+ * here is a selection checkbox, severity rail, order number + severity
+ * caption, time, type/channel, total, and status. `Филиал` is additionally
+ * out of place for a different reason: this endpoint is already scoped to
+ * one location, which is the spec's own condition for auto-hiding that
+ * column.
  */
 @Component({
   selector: 'q-order-queue',
-  imports: [TPipe, OrderReasonDialog, OrderRejectReasonDialog, StatusPill],
+  imports: [
+    TPipe,
+    OrderReasonDialog,
+    OrderRejectReasonDialog,
+    OrderOutcomeReasonDialog,
+    StatusPill,
+    FilterBar,
+    DateRangePicker,
+  ],
   templateUrl: './order-queue.html',
   styleUrl: './order-queue.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -125,16 +196,22 @@ interface RowDialogState {
 export class OrderQueue implements OnInit {
   private readonly api = inject(ApiClient);
   private readonly location = inject(CurrentLocation);
+  private readonly tenant = inject(CurrentTenant);
+  private readonly capabilities = inject(SessionCapabilities);
   private readonly counts = inject(OrderCounts);
   private readonly latenessPolicyApi = inject(LatenessPolicyApi);
   private readonly actionsApi = inject(OrderActionsApi);
+  private readonly bulkActionsApi = inject(OrderBulkActionsApi);
   private readonly rejectReasonsApi = inject(RejectReasonsApi);
+  private readonly referenceDataApi = inject(ReferenceDataApi);
+  private readonly couriersApi = inject(CouriersApi);
   private readonly serviceStatus = inject(ServiceStatus);
   private readonly toasts = inject(Toasts);
   private readonly i18n = inject(I18n);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  protected readonly filterState = inject(OrderQueueFilterState);
 
   protected readonly tabs = ORDER_TABS.map((id) => ORDER_TAB_DEFINITIONS[id]);
 
@@ -146,6 +223,28 @@ export class OrderQueue implements OnInit {
   protected readonly refreshing = signal(false);
   protected readonly lastError = signal<ApiError | null>(null);
   protected readonly denied = signal(false);
+
+  /** §2.4: the toolbar's own filters for the active tab. */
+  protected readonly filters: Signal<OrderQueueFilters> = this.filterState.current;
+  protected readonly paymentMethodCodes = PAYMENT_METHOD_CODES;
+
+  /** §2.4's Канал: every channel code this session has observed, only ever growing — see {@link refresh}. */
+  protected readonly channelOptions = signal<readonly string[]>([]);
+  private readonly observedChannelCodes = new Set<string>();
+
+  /** §2.4's Курьер: fetched once, lazily, on first interaction with the control — see {@link ensureCourierRosterLoaded}. */
+  protected readonly courierRoster = signal<readonly RosterEntryResponse[]>([]);
+  private courierRosterRequested = false;
+
+  /** §2.10: the checkbox column's own selection, independent of the fetched rows' identity — survives a page boundary. */
+  protected readonly selectedIds = signal<ReadonlySet<string>>(new Set());
+
+  /** §2.10: the bulk bar's own busy/result/dialog state. */
+  protected readonly bulkBusy = signal(false);
+  protected readonly bulkResult = signal<BulkActionResponse | null>(null);
+  protected readonly bulkCancelDialogOpen = signal(false);
+  protected readonly bulkCancelReasons = signal<readonly ReasonResponse[]>([]);
+  private lastBulkSubmission: BulkActionRequest | null = null;
 
   /** §2.9: inline actions rendered from `actions[]`, plus their busy/dialog/notice state. */
   protected readonly busyOrderIds = signal<ReadonlySet<string>>(new Set());
@@ -173,10 +272,22 @@ export class OrderQueue implements OnInit {
     }
   };
 
+  /** Guards the tab-change refetch below from also firing on the very first route resolution — {@link start} already fetches once. */
+  private hasStarted = false;
+
   ngOnInit(): void {
     const querySub = this.route.queryParamMap.subscribe((params) => {
       const tab = params.get('tab');
-      this.activeTab.set(isOrderTabId(tab) ? tab : DEFAULT_ORDER_TAB);
+      const resolved = isOrderTabId(tab) ? tab : DEFAULT_ORDER_TAB;
+      // §2.4: filters are remembered **per tab**, and the board's one fetch
+      // is filtered by whichever tab is active — so switching tabs switches
+      // which remembered filter set is in effect and re-fetches under it.
+      const tabChanged = this.hasStarted && this.activeTab() !== resolved;
+      this.activeTab.set(resolved);
+      this.filterState.loadForTab(resolved);
+      if (tabChanged) {
+        void this.refresh();
+      }
     });
 
     document.addEventListener('visibilitychange', this.onVisibilityChange);
@@ -193,6 +304,9 @@ export class OrderQueue implements OnInit {
       if (this.pollHandle !== null) {
         clearInterval(this.pollHandle);
       }
+      if (this.searchDebounceHandle !== null) {
+        clearTimeout(this.searchDebounceHandle);
+      }
     });
 
     void this.start();
@@ -205,6 +319,7 @@ export class OrderQueue implements OnInit {
       this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
     }
     await this.refresh();
+    this.hasStarted = true;
   }
 
   /** Also the manual refresh control (§1.6: "the legacy dashboard's `FaRepeat` button, which staff use"). */
@@ -222,12 +337,13 @@ export class OrderQueue implements OnInit {
 
     this.refreshing.set(true);
     try {
+      const params = boardQueryParams(this.filters(), this.tenant.subject());
       const result = await firstValueFrom(
-        this.api.get<OrderSummaryResponse[]>(operationsPaths.orders(scope), {
-          params: { limit: FETCH_LIMIT },
+        this.api.get<Page<OrderSummaryResponse>>(operationsPaths.orderBoard(scope), {
+          params: { ...params, limit: FETCH_LIMIT },
         }),
       );
-      const orders = result.value ?? [];
+      const orders = result.value?.items ?? [];
       const now = new Date();
 
       this.rows.set(orders.map((order) => decorate(order, now, this.latenessPolicy)));
@@ -238,6 +354,10 @@ export class OrderQueue implements OnInit {
       this.lastError.set(null);
       this.denied.set(false);
       this.serviceStatus.set(deriveServiceStatus(orders, now, this.latenessPolicy), now);
+      this.observeChannelCodes(orders);
+      this.selectedIds.update((current) =>
+        pruneSelection(current, new Set(orders.map((order) => order.orderId))),
+      );
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 403) {
@@ -252,6 +372,20 @@ export class OrderQueue implements OnInit {
     } finally {
       this.refreshing.set(false);
       this.firstLoadComplete.set(true);
+    }
+  }
+
+  /** §2.4's Канал options: every code this session has actually seen on a row, sorted, never invented. */
+  private observeChannelCodes(orders: readonly OrderSummaryResponse[]): void {
+    let changed = false;
+    for (const order of orders) {
+      if (order.channelCode && !this.observedChannelCodes.has(order.channelCode)) {
+        this.observedChannelCodes.add(order.channelCode);
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.channelOptions.set([...this.observedChannelCodes].sort());
     }
   }
 
@@ -375,6 +509,354 @@ export class OrderQueue implements OnInit {
   /** ADR 0031's errorCode and correlation id, for support (§2.11's error band). */
   protected errorReference(error: ApiError): string {
     return errorReference(error);
+  }
+
+  // ---------------------------------------------------------------- §2.4 filters
+
+  private searchDebounceHandle: ReturnType<typeof setTimeout> | null = null;
+
+  /** §2.8: 300ms debounce before the search box re-fetches — every other filter refetches immediately on change. */
+  protected onSearchInput(text: string): void {
+    this.filterState.update({ reference: text });
+    if (this.searchDebounceHandle !== null) {
+      clearTimeout(this.searchDebounceHandle);
+    }
+    this.searchDebounceHandle = setTimeout(() => void this.refresh(), SEARCH_DEBOUNCE_MS);
+  }
+
+  protected onDateRangeChange(range: DateRange): void {
+    this.filterState.update({ dateRange: { start: range.start, end: range.end } });
+    void this.refresh();
+  }
+
+  protected onChannelChange(channelCode: string): void {
+    this.filterState.update({ channelCode: channelCode || null });
+    void this.refresh();
+  }
+
+  protected onFulfillmentModeChange(mode: string): void {
+    this.filterState.update({
+      fulfillmentMode: mode ? (mode as OrderQueueFilters['fulfillmentMode']) : null,
+    });
+    void this.refresh();
+  }
+
+  protected onCourierChange(courierId: string): void {
+    this.filterState.update({ courierId: courierId || null });
+    void this.refresh();
+  }
+
+  protected onPaymentMethodChange(code: string): void {
+    this.filterState.update({ paymentMethodCode: code || null });
+    void this.refresh();
+  }
+
+  protected onMineOnlyToggle(): void {
+    const next = !this.filters().mineOnly;
+    this.filterState.update({ mineOnly: next });
+    // §2.4: the client supplies its own subject; there is no server-side
+    // `me`. Lazily loaded here rather than at start-up, so a session that
+    // never touches this toggle never spends the extra request.
+    void this.tenant.ensureLoaded().then(() => void this.refresh());
+  }
+
+  protected onResetFilters(): void {
+    this.filterState.reset();
+    void this.refresh();
+  }
+
+  protected onChipRemoved(chipId: string): void {
+    if (chipId === 'mine') {
+      this.filterState.update({ mineOnly: false });
+    } else if (chipId === 'paymentMethod') {
+      this.filterState.update({ paymentMethodCode: null });
+    }
+    void this.refresh();
+  }
+
+  protected filterChips(): readonly FilterBarChip[] {
+    const filters = this.filters();
+    const chips: FilterBarChip[] = [];
+    if (filters.mineOnly) {
+      chips.push({ id: 'mine', label: this.i18n.t('orders.queue.filter.mine.label') });
+    }
+    if (filters.paymentMethodCode) {
+      chips.push({
+        id: 'paymentMethod',
+        label: this.paymentMethodLabel(filters.paymentMethodCode),
+      });
+    }
+    return chips;
+  }
+
+  protected paymentMethodLabel(code: string): string {
+    switch (code) {
+      case 'CASH':
+        return this.i18n.t('orders.queue.filter.paymentMethod.CASH');
+      case 'CLICK':
+        return this.i18n.t('orders.queue.filter.paymentMethod.CLICK');
+      case 'PAYME':
+        return this.i18n.t('orders.queue.filter.paymentMethod.PAYME');
+      default:
+        return code;
+    }
+  }
+
+  /** §2.4's Курьер: the roster loads once, on first focus of the control — never at start-up, for a session that never opens it. */
+  protected ensureCourierRosterLoaded(): void {
+    if (this.courierRosterRequested) {
+      return;
+    }
+    this.courierRosterRequested = true;
+    const tenantId = this.location.scope()?.tenantId;
+    if (!tenantId) {
+      return;
+    }
+    void this.couriersApi
+      .roster(tenantId)
+      .then((roster) => this.courierRoster.set(roster))
+      .catch(() => {
+        // A staff-level operator without COURIER_READ simply sees an empty
+        // picker rather than a broken toolbar — the same graceful-degrade
+        // stance `CurrentLocation.load` and `LatenessPolicyApi` already take.
+      });
+  }
+
+  // ------------------------------------------------------------ §2.10 selection
+
+  protected pageOrderIds(): readonly string[] {
+    return this.visibleRows().map((row) => row.order.orderId);
+  }
+
+  protected isAllPageSelected(): boolean {
+    const ids = this.pageOrderIds();
+    const selected = this.selectedIds();
+    return ids.length > 0 && ids.every((id) => selected.has(id));
+  }
+
+  protected toggleSelectPage(): void {
+    this.selectedIds.update((current) => toggleSelectPage(current, this.pageOrderIds()));
+  }
+
+  protected toggleRowSelection(orderId: string, event: Event): void {
+    event.stopPropagation();
+    this.selectedIds.update((current) => toggleOne(current, orderId));
+  }
+
+  protected isRowSelected(orderId: string): boolean {
+    return this.selectedIds().has(orderId);
+  }
+
+  protected selectionCount(): number {
+    return this.selectedIds().size;
+  }
+
+  protected clearSelection(): void {
+    this.selectedIds.set(new Set());
+  }
+
+  private selectedOrders(): readonly OrderSummaryResponse[] {
+    const ids = this.selectedIds();
+    return this.rows()
+      .filter((row) => ids.has(row.order.orderId))
+      .map((row) => row.order);
+  }
+
+  /**
+   * §2.10: "render the bar only when the session context carries it" — and,
+   * one step earlier than the brief's own wording, the checkbox column
+   * itself: an operator who cannot act on a selection is not offered one to
+   * make, rather than being shown a selection mechanism whose only outcome
+   * is a bulk bar with nothing enabled in it.
+   */
+  protected canSelectOrders(): boolean {
+    return this.capabilities.has('ORDER_BULK_ACTION');
+  }
+
+  protected canBulkCancel(): boolean {
+    return bulkCancelEligible(this.selectedOrders());
+  }
+
+  protected bulkCancelUnavailableMessage(): string | null {
+    if (this.selectionCount() === 0) {
+      return null;
+    }
+    const ineligible = bulkCancelIneligibleCount(this.selectedOrders());
+    if (ineligible === 0) {
+      return null;
+    }
+    return this.i18n.t('orders.queue.bulk.cancelUnavailable', {
+      ineligible,
+      total: this.selectionCount(),
+    });
+  }
+
+  protected bulkAdvanceTargetStatus(): string | null {
+    return bulkAdvanceTarget(this.selectedOrders());
+  }
+
+  protected bulkAdvanceLabel(): string {
+    const target = this.bulkAdvanceTargetStatus();
+    if (!target) {
+      return this.i18n.t('orders.queue.bulk.advance');
+    }
+    return actionLabel(
+      { action: 'ADVANCE', targetStatus: target },
+      null,
+      (key, values) => this.i18n.t(key, values),
+      (status) => this.statusLabel(status),
+    );
+  }
+
+  protected onBulkAdvanceClick(): void {
+    const target = this.bulkAdvanceTargetStatus();
+    const scope = this.location.scope();
+    if (!target || !scope) {
+      return;
+    }
+    void this.submitBulk({
+      actionType: 'ADVANCE',
+      orders: this.orderRefsOf(this.selectedOrders()),
+      targetStatus: target,
+      reasonCode: advanceReasonCode(target),
+    });
+  }
+
+  protected onBulkCancelClick(): void {
+    if (!this.canBulkCancel()) {
+      return;
+    }
+    void this.openBulkCancelDialog();
+  }
+
+  private async openBulkCancelDialog(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      this.bulkCancelReasons.set(await this.referenceDataApi.list(scope, 'CANCELLATION'));
+      this.bulkCancelDialogOpen.set(true);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.actionNotice.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  protected onBulkCancelDialogDismiss(): void {
+    this.bulkCancelDialogOpen.set(false);
+  }
+
+  protected onBulkCancelDialogConfirm(submission: OutcomeReasonSubmission): void {
+    this.bulkCancelDialogOpen.set(false);
+    void this.submitBulk({
+      actionType: 'CANCEL',
+      orders: this.orderRefsOf(this.selectedOrders()),
+      cancelReasonId: submission.reasonId,
+      cancelNote: submission.note,
+    });
+  }
+
+  private orderRefsOf(orders: readonly OrderSummaryResponse[]): readonly BulkOrderRef[] {
+    return orders.map((order) => ({ orderId: order.orderId, expectedVersion: order.version ?? 0 }));
+  }
+
+  private async submitBulk(request: BulkActionRequest): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    this.bulkBusy.set(true);
+    try {
+      const result = await firstValueFrom(this.bulkActionsApi.submit(scope, request));
+      this.bulkResult.set(result);
+      this.lastBulkSubmission = request;
+      this.clearSelection();
+      void this.refresh();
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.actionNotice.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
+      } else {
+        throw error;
+      }
+    } finally {
+      this.bulkBusy.set(false);
+    }
+  }
+
+  /**
+   * §2.10: "**Повторить проблемные** re-running under the same bulk key so
+   * successes replay their stored responses instead of executing twice."
+   * `OrderBulkActionService`'s own doc reads that literally: a resubmission
+   * under the *same* `Idempotency-Key` replays the whole prior result and
+   * retries nothing. So this mints a fresh intent — a new key, via {@link
+   * OrderBulkActionsApi.submit} — and narrows the request to only the items
+   * that failed, which is what actually makes "successes are never executed
+   * twice" true: they are simply never resent.
+   */
+  protected retryFailedBulkItems(): void {
+    const result = this.bulkResult();
+    const previous = this.lastBulkSubmission;
+    if (!result || !previous) {
+      return;
+    }
+    const failedIds = new Set(
+      result.items.filter((item) => item.itemStatus === 'FAILED').map((item) => item.orderId),
+    );
+    if (failedIds.size === 0) {
+      return;
+    }
+    const freshVersionById = new Map(
+      this.rows().map((row) => [row.order.orderId, row.order.version ?? 0]),
+    );
+    const retryOrders = previous.orders
+      .filter((ref) => failedIds.has(ref.orderId))
+      .map((ref) => ({
+        orderId: ref.orderId,
+        expectedVersion: freshVersionById.get(ref.orderId) ?? ref.expectedVersion,
+      }));
+    void this.submitBulk({ ...previous, orders: retryOrders });
+  }
+
+  protected dismissBulkResult(): void {
+    this.bulkResult.set(null);
+    this.lastBulkSubmission = null;
+  }
+
+  protected bulkResultItemLabel(orderId: string): string {
+    const row = this.rows().find((r) => r.order.orderId === orderId);
+    return row ? row.order.publicOrderNumber : orderId.slice(0, 8);
+  }
+
+  /**
+   * The known `BulkActionItemResponse.itemProblemCode` values
+   * (`OrderBulkActionService.fail`/`applyItem`). An additive server release
+   * must not blank a row — same "renders harmlessly" rule as an unrecognised
+   * order status — so a code this client does not know renders as itself
+   * rather than through a fabricated i18n key.
+   */
+  protected bulkProblemLabel(code: string | null | undefined): string {
+    switch (code) {
+      case 'STALE_VERSION':
+        return this.i18n.t('orders.queue.bulk.problem.STALE_VERSION');
+      case 'ILLEGAL_TRANSITION':
+        return this.i18n.t('orders.queue.bulk.problem.ILLEGAL_TRANSITION');
+      case 'CANCELLATION_NOT_PERMITTED':
+        return this.i18n.t('orders.queue.bulk.problem.CANCELLATION_NOT_PERMITTED');
+      case 'REASON_NOT_FOUND':
+        return this.i18n.t('orders.queue.bulk.problem.REASON_NOT_FOUND');
+      case 'VALIDATION_FAILED':
+        return this.i18n.t('orders.queue.bulk.problem.VALIDATION_FAILED');
+      case 'ORDER_NOT_FOUND_AT_LOCATION':
+        return this.i18n.t('orders.queue.bulk.problem.ORDER_NOT_FOUND_AT_LOCATION');
+      case 'UNEXPECTED_FAILURE':
+        return this.i18n.t('orders.queue.bulk.problem.UNEXPECTED_FAILURE');
+      default:
+        return code ?? '';
+    }
   }
 
   // ------------------------------------------------------------ §2.9 row actions

@@ -385,6 +385,51 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.queue.denied': 'Ushbu filial buyurtmalariga kirish yoʻq',
   'orders.queue.error.retry': 'Qayta urinish',
 
+  // --- orders.queue toolbar filters (orders.md §2.4, wave P07) -------------
+  'orders.queue.filter.search.placeholder': 'Buyurtma №, agregator ID…',
+  'orders.queue.filter.search.ariaLabel': 'Buyurtmalarni qidirish',
+  'orders.queue.filter.period.label': 'Davr',
+  'orders.queue.filter.channel.label': 'Kanal',
+  'orders.queue.filter.channel.all': 'Barcha kanallar',
+  'orders.queue.filter.fulfillmentMode.label': 'Turi',
+  'orders.queue.filter.fulfillmentMode.all': 'Barchasi',
+  'orders.queue.filter.courier.label': 'Kuryer',
+  'orders.queue.filter.courier.all': 'Barcha kuryerlar',
+  'orders.queue.filter.mine.label': 'Mening buyurtmalarim',
+  'orders.queue.filter.paymentMethod.label': 'Toʻlov usuli',
+  'orders.queue.filter.paymentMethod.all': 'Barcha usullar',
+  'orders.queue.filter.paymentMethod.CASH': 'Naqd',
+  'orders.queue.filter.paymentMethod.CLICK': 'Click',
+  'orders.queue.filter.paymentMethod.PAYME': 'Payme',
+
+  // --- orders.queue selection and bulk actions (orders.md §2.10, wave P07) -
+  'orders.queue.column.select': 'Tanlash',
+  'orders.queue.selection.selectPage': 'Sahifadagi {count} tasini tanlash',
+  'orders.queue.selection.selected': 'Tanlandi: {count}',
+  'orders.queue.selection.clear': 'Tanlovni bekor qilish',
+  'orders.queue.selection.rowAriaLabel': '{number} raqamli buyurtmani tanlash',
+  'orders.queue.bulk.advance': 'Oldinga siljitish',
+  'orders.queue.bulk.advanceUnavailable':
+    '«Oldinga siljitish» mavjud emas: tanlangan buyurtmalar bir xil bosqichda emas',
+  'orders.queue.bulk.cancel': 'Bekor qilish',
+  'orders.queue.bulk.cancelUnavailable':
+    '«Bekor qilish» mavjud emas: {total} tadan {ineligible} tasini bekor qilib boʻlmaydi',
+  'orders.queue.bulk.courierNote':
+    'Kuryerni ommaviy tayinlash hali mavjud emas — kuryerni har bir buyurtma uchun alohida tayinlang.',
+  'orders.queue.bulk.cancelDialog.title': '{count} ta buyurtmani bekor qilish',
+  'orders.queue.bulk.cancelDialog.confirm': 'Buyurtmalarni bekor qilish',
+  'orders.queue.bulk.result.summary': '{applied} qoʻllandi · {failed} muammo',
+  'orders.queue.bulk.result.allApplied': 'Barcha {count} tasi qoʻllandi',
+  'orders.queue.bulk.result.retry': 'Muammoli buyurtmalarni qayta urinish',
+  'orders.queue.bulk.result.dismiss': 'Yopish',
+  'orders.queue.bulk.problem.STALE_VERSION': 'Tanlangandan beri buyurtma oʻzgardi',
+  'orders.queue.bulk.problem.ILLEGAL_TRANSITION': 'Joriy holatida mavjud emas',
+  'orders.queue.bulk.problem.CANCELLATION_NOT_PERMITTED': 'Bekor qilishga ruxsat yoʻq',
+  'orders.queue.bulk.problem.REASON_NOT_FOUND': 'Sabab endi faol emas',
+  'orders.queue.bulk.problem.VALIDATION_FAILED': 'Notoʻgʻri deb rad etildi',
+  'orders.queue.bulk.problem.ORDER_NOT_FOUND_AT_LOCATION': 'Ushbu filialda topilmadi',
+  'orders.queue.bulk.problem.UNEXPECTED_FAILURE': 'Nimadir notoʻgʻri ketdi',
+
   'inbox.title': 'Suhbatlar',
   'inbox.denied': 'Ushbu brend suhbatlariga ruxsat yoʻq',
   'inbox.list.empty': 'Hozircha suhbatlar yoʻq',
@@ -965,10 +1010,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.tab.templates': 'Shablonlar',
   'settings.notifications.tab.routing': 'Yoʻnaltirish',
   'settings.notifications.automation.title': 'Avtomatlashtirish',
-  'settings.notifications.field.paymentLinkAutoSend': 'Toʻlov havolasini mijozga avtomatik yuborish',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Toʻlov havolasini mijozga avtomatik yuborish',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Hali ishlamaydi: hech qanday jarayon bu tugmachani hali oʻqimaydi, shuning uchun yoqish faqat tanlovni saqlaydi.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Agregator smenasi ochilishi/yopilishi haqida xabar berish',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Agregator smenasi ochilishi/yopilishi haqida xabar berish',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Hali ishlamaydi: platformada bu xabarni ishga tushiradigan agregator-smena hodisasi hali yoʻq.',
   'settings.notifications.create.action': 'Yangi shablon',
@@ -1014,7 +1061,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.editor.subject': 'Mavzu',
   'settings.notifications.editor.body': 'Matn',
   'settings.notifications.editor.variables': 'Oʻzgaruvchi qoʻshish',
-  'settings.notifications.editor.variables.empty': 'Bu bildirishnoma sinfi uchun oʻzgaruvchilar taklif etilmagan.',
+  'settings.notifications.editor.variables.empty':
+    'Bu bildirishnoma sinfi uchun oʻzgaruvchilar taklif etilmagan.',
   'settings.notifications.editor.preview': 'Mijoz qanday koʻradi',
   'settings.notifications.editor.save': 'Qoralamani saqlash',
   'settings.notifications.editor.saving': 'Saqlanmoqda…',
@@ -1033,9 +1081,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.testSend.result.ACCEPTED': 'Provayder qabul qildi.',
   'settings.notifications.testSend.result.REJECTED': 'Provayder rad etdi.',
   'settings.notifications.testSend.result.RETRYABLE': 'Uzatish xatosi — qayta urinib koʻring.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Noaniq — provayder allaqachon yuborgan boʻlishi mumkin.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Noaniq — provayder allaqachon yuborgan boʻlishi mumkin.',
   'settings.notifications.activate.confirm.title': 'Bu versiya faollashtirilsinmi?',
-  'settings.notifications.activate.confirm.body': 'Bu shablon boʻyicha har bir xabar shu matndan foydalanadi.',
+  'settings.notifications.activate.confirm.body':
+    'Bu shablon boʻyicha har bir xabar shu matndan foydalanadi.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'Bu versiya SMS shlyuzida hali «{state}» holatida. Bu oʻzgarmaguncha faollashtirish uni yuborilishiga olib kelmaydi.',
   'settings.notifications.activate.confirm.confirm': 'Faollashtirish',
@@ -1056,9 +1106,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.routing.action.editTopic': 'Mavzuni oʻzgartirish',
   'settings.notifications.routing.action.unbind': 'Uzish',
   'settings.notifications.routing.unbind.confirm.title': 'Bu chat uzilsinmi?',
-  'settings.notifications.routing.unbind.confirm.body': 'U darhol barcha hodisa sinflarini olishni toʻxtatadi.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'U darhol barcha hodisa sinflarini olishni toʻxtatadi.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Uzish',
-  'settings.notifications.routing.topic.prompt': 'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
+  'settings.notifications.routing.topic.prompt':
+    'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
   'settings.notifications.routing.topic.save': 'Saqlash',
 
   // 10.10 Maʻlumotnoma maʻlumotlari
@@ -1758,7 +1810,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.menus.filter.all': 'Barchasi',
   'catalog.menus.search.placeholder': 'Nomi yoki SKU boʻyicha qidirish',
   'catalog.menus.selectAll': 'Barcha qatorlarni tanlash',
-  'catalog.menus.selectionCapped': 'Faqat birinchi {cap} tasi — qo\'llang, so\'ng qolganlarini tanlang',
+  'catalog.menus.selectionCapped':
+    "Faqat birinchi {cap} tasi — qo'llang, so'ng qolganlarini tanlang",
   'catalog.menus.column.offering': 'Menyudagi holati',
   'catalog.menus.column.fulfillment': 'Buyurtma turlari',
   'catalog.menus.fulfillment.DELIVERY': 'Yetk',
@@ -2149,7 +2202,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.dispatch.hint':
     'Buyurtmani kuryer ustiga tashlab tayinlang. Uni orqaga, "Tayinlanmagan"ga tashlab, tayinlashni bekor qiling.',
   'delivery.dispatch.column.unassigned': 'Tayinlanmagan',
-  'delivery.dispatch.column.ineligible': 'Bu yerga tashlab bo\'lmaydi — {reason}',
+  'delivery.dispatch.column.ineligible': "Bu yerga tashlab bo'lmaydi — {reason}",
   'delivery.dispatch.action.unassign': 'Tayinlashni bekor qilish',
   'delivery.dispatch.status.PLANNED': 'Rejalashtirilgan',
   'delivery.dispatch.status.WAITING_TO_SOURCE': 'Kuryer izlanmoqda',
@@ -4145,6 +4198,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'ui.locked.module': 'Modul:',
   'ui.locked.ask': 'Uni tarifga hisob egasi qoʻsha oladi.',
   'ui.alert.dismiss': 'Xabarni yopish',
+  'ui.filterBar.primaryLabel': 'Filtrlar',
+  'ui.filterBar.more': 'Yana',
+  'ui.filterBar.reset': 'Filtrlarni tozalash',
   'ui.toast.dismiss': 'Yopish',
   'ui.splitPane.handle': 'Panel kengligini oʻzgartirish',
   'ui.richText.kind.paragraph': 'Abzats',

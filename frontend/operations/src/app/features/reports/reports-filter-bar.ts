@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 
+import { FilterBar } from '../../shared/ui/filter-bar';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { PeriodPreset, ReportsFilterState } from './reports-filter-state';
@@ -9,6 +10,16 @@ import { PeriodPreset, ReportsFilterState } from './reports-filter-state';
  * — see {@link ReportsFilterState}'s own doc for what row 2 (branch, legal
  * entity, custom date range, granularity) is deliberately short of, and why.
  *
+ * **Thin wrapper, not the real thing.** Wave P07 lifted this component's own
+ * chrome (the row, the padding, the border) out into `shared/ui/filter-bar`
+ * as `q-filter-bar` — orders.md §2.4 requires the order board and the order
+ * reports to share one filter component, and this file is what keeps Reports
+ * compiling against the old `q-reports-filter-bar` selector while that
+ * extraction lands. Wave P27 re-points every report screen at `q-filter-bar`
+ * directly and deletes this file; do not add a new consumer of
+ * `q-reports-filter-bar` in the meantime, and do not extract the bar a second
+ * time — it is already extracted.
+ *
  * **Тип оплаты renders locked, not hidden** (§1.1): `fact_order_tender`
  * (ADR 0046) is one of the fact families ADR 0043's own status line names as
  * not built, so a manager who goes looking for the payment filter is told why
@@ -16,7 +27,7 @@ import { PeriodPreset, ReportsFilterState } from './reports-filter-state';
  */
 @Component({
   selector: 'q-reports-filter-bar',
-  imports: [TPipe],
+  imports: [TPipe, FilterBar],
   templateUrl: './reports-filter-bar.html',
   styleUrl: './reports-filter-bar.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

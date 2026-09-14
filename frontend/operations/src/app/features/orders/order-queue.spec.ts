@@ -8,17 +8,84 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClient } from '../../core/api/api-client';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { CurrentTenant } from '../../core/auth/current-tenant';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
+import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
 import { OrderActionsApi } from './order-actions-api';
+import { OrderBulkActionsApi } from './order-bulk-actions-api';
 import { OrderCounts, zeroTabCounts } from './order-counts';
 import { OrderQueue } from './order-queue';
 import { RejectReasonOption } from './order-reject-reason-dialog';
 import { RejectReasonsApi } from './order-reject-reasons-api';
 import { OrderSummaryResponse } from './order-summary';
 import { Toasts } from '../../shared/ui/toast';
+
+const FAKE_CANCEL_REASONS: readonly ReasonResponse[] = [
+  {
+    id: 'reason-1',
+    kind: 'CANCELLATION',
+    systemCategory: 'CUSTOMER_CHANGED_MIND',
+    internalName: 'Customer changed their mind',
+    stockDisposition: 'RELEASE',
+    liabilityParty: 'TENANT',
+    customerRefund: 'FULL',
+    allowedFulfillmentModes: null,
+    customerTexts: {},
+    status: 'ACTIVE',
+    version: 1,
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+/**
+ * §2.10's bulk bar: `SessionCapabilities` grants `ORDER_BULK_ACTION`,
+ * `OrderBulkActionsApi`/`ReferenceDataApi` are faked directly (not through
+ * the shared `getOrders` mock) for the same reason `OrderActionsApi` is in
+ * {@link configureWithActions} above — one shared `ApiClient.get` stub
+ * cannot answer two unrelated endpoints correctly.
+ */
+function configureForBulk(
+  getOrders: ReturnType<typeof vi.fn>,
+  overrides: {
+    readonly bulkSubmit?: ReturnType<typeof vi.fn>;
+    readonly cancelReasons?: readonly ReasonResponse[];
+  } = {},
+): void {
+  TestBed.configureTestingModule({
+    providers: [
+      provideRouter([{ path: 'orders', component: OrderQueue }]),
+      {
+        provide: CurrentLocation,
+        useValue: {
+          scope: signal(FAKE_SCOPE),
+          denied: signal(false),
+          ensureLoaded: () => Promise.resolve(),
+        },
+      },
+      { provide: ApiClient, useValue: { get: getOrders } },
+      { provide: OrderCounts, useValue: { forOrders: () => Promise.resolve(zeroTabCounts()) } },
+      { provide: RejectReasonsApi, useValue: stubRejectReasons() },
+      {
+        provide: LatenessPolicyApi,
+        useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+      },
+      {
+        provide: SessionCapabilities,
+        useValue: { has: (capability: string) => capability === 'ORDER_BULK_ACTION' },
+      },
+      { provide: OrderBulkActionsApi, useValue: { submit: overrides.bulkSubmit ?? vi.fn() } },
+      {
+        provide: ReferenceDataApi,
+        useValue: { list: () => Promise.resolve(overrides.cancelReasons ?? FAKE_CANCEL_REASONS) },
+      },
+    ],
+  });
+  TestBed.inject(I18n).setLocale('en');
+}
 
 const FAKE_SCOPE = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 
@@ -103,8 +170,16 @@ function configure(getOrders: ReturnType<typeof vi.fn>): void {
   TestBed.inject(I18n).setLocale('en');
 }
 
+/**
+ * `GET .../orders/board` (wave P04/P07) answers a `Page<OrderSummaryResponse>`
+ * body, not a bare array — `ApiClient.get` still wraps it the same way it
+ * always has (`{value, version}`), only `value` now carries `{items,
+ * nextCursor}`. This is the one seam every existing test in this file goes
+ * through, so fixing the shape here is what keeps `configure`/
+ * `configureWithActions`'s many callers working unchanged.
+ */
 function ordersResponse(orders: readonly OrderSummaryResponse[]): ReturnType<typeof vi.fn> {
-  return vi.fn().mockReturnValue(of({ value: orders, version: null }));
+  return vi.fn().mockReturnValue(of({ value: { items: orders, nextCursor: null }, version: null }));
 }
 
 function order(overrides: Partial<OrderSummaryResponse>): OrderSummaryResponse {
@@ -135,6 +210,12 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
+/** §2.8's 300ms search debounce, under real timers — waits it out and then settles the refresh it fires. */
+async function flushSearchDebounce(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 320));
+  await flushMicrotasks();
+}
+
 function setVisibility(state: 'visible' | 'hidden'): void {
   Object.defineProperty(document, 'visibilityState', { value: state, configurable: true });
   document.dispatchEvent(new Event('visibilitychange'));
@@ -152,6 +233,11 @@ function rowNumbers(host: HTMLElement): string[] {
 
 afterEach(() => {
   resetVisibility();
+  // `OrderQueueFilterState` persists to the real jsdom `localStorage`, which
+  // is not reset between tests on its own — a filter left over from an
+  // earlier test in this file must not leak into a later one that never set
+  // it itself.
+  localStorage.clear();
 });
 
 describe('OrderQueue: status vocabulary', () => {
@@ -405,7 +491,9 @@ describe('OrderQueue: empty, error and denied states (§2.11)', () => {
       const firstOrder = order({ orderId: 'a', publicOrderNumber: '0007', status: 'RECEIVED' });
       const getOrders = vi
         .fn()
-        .mockReturnValueOnce(of({ value: [firstOrder], version: null }))
+        .mockReturnValueOnce(
+          of({ value: { items: [firstOrder], nextCursor: null }, version: null }),
+        )
         .mockReturnValueOnce(
           throwError(() => new ApiError(ApiErrorCode.INTERNAL_ERROR, 500, null, '01J8CORR')),
         );
@@ -785,5 +873,494 @@ describe('OrderQueue: migrated to shared/ui', () => {
     // ADR 0029: a toast is transient text on a terminal in a dining room.
     expect(announced[0].message).not.toContain('order-1');
     toasts.clear();
+  });
+});
+
+/**
+ * orders.md §2.4, wave P07: the toolbar's own filters, bound to `GET
+ * .../orders/board`'s real query parameters and persisted per tab.
+ * `boardQueryParams`'s own unit tests (`order-queue-filter-state.spec.ts`)
+ * cover every filter's exact mapping in isolation; these prove the wiring
+ * from a control on screen through to that same call.
+ */
+describe('OrderQueue: toolbar filters (orders.md §2.4, wave P07)', () => {
+  it('sends the search box’s text as the board’s reference parameter', async () => {
+    const getOrders = ordersResponse([]);
+    configure(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+
+    const search = harness.routeNativeElement!.querySelector(
+      '[data-testid="order-queue-filter-search"]',
+    ) as HTMLInputElement;
+    search.value = '0911-142';
+    search.dispatchEvent(new Event('input'));
+    await flushSearchDebounce();
+
+    const lastCall = getOrders.mock.calls.at(-1)!;
+    expect(lastCall[1].params.reference).toBe('0911-142');
+  });
+
+  it('sends the fulfilment-type select as the board’s fulfillmentMode parameter', async () => {
+    const getOrders = ordersResponse([]);
+    configure(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+
+    const select = harness.routeNativeElement!.querySelector(
+      '[data-testid="order-queue-filter-fulfillmentMode"]',
+    ) as HTMLSelectElement;
+    select.value = 'DELIVERY';
+    select.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+
+    const lastCall = getOrders.mock.calls.at(-1)!;
+    expect(lastCall[1].params.fulfillmentMode).toBe('DELIVERY');
+  });
+
+  it('sends «Мои заказы» as createdByActorId once the operator’s own subject is known', async () => {
+    const getOrders = ordersResponse([]);
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: 'orders', component: OrderQueue }]),
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal(FAKE_SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        {
+          provide: CurrentTenant,
+          useValue: {
+            subject: signal('actor-1'),
+            scopes: signal([]),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        { provide: ApiClient, useValue: { get: getOrders } },
+        { provide: OrderCounts, useValue: { forOrders: () => Promise.resolve(zeroTabCounts()) } },
+        { provide: RejectReasonsApi, useValue: stubRejectReasons() },
+        {
+          provide: LatenessPolicyApi,
+          useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+        },
+      ],
+    });
+    TestBed.inject(I18n).setLocale('en');
+
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    // «Мои заказы» lives behind §2.4's "⋯ ещё" secondary row.
+    (host.querySelector('[data-testid="q-filter-bar-more"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const toggle = host.querySelector(
+      '[data-testid="order-queue-filter-mine"]',
+    ) as HTMLInputElement;
+    toggle.click();
+    await flushMicrotasks();
+
+    const lastCall = getOrders.mock.calls.at(-1)!;
+    expect(lastCall[1].params.createdByActorId).toBe('actor-1');
+  });
+
+  it('persists a filter set on one tab, and restores it after what a reload does', async () => {
+    configure(ordersResponse([]));
+    let harness = await RouterTestingHarness.create('/orders?tab=attention');
+    await flushMicrotasks();
+
+    let search = harness.routeNativeElement!.querySelector(
+      '[data-testid="order-queue-filter-search"]',
+    ) as HTMLInputElement;
+    search.value = '0911-142';
+    search.dispatchEvent(new Event('input'));
+    await flushMicrotasks();
+
+    // A fresh `TestBed` is the closest a unit test comes to a full reload:
+    // no in-memory state survives, only what `localStorage` remembers.
+    // `resetTestingModule` is required, not optional, here — a component was
+    // already created above, and `configureTestingModule` refuses to run
+    // again without it.
+    TestBed.resetTestingModule();
+    configure(ordersResponse([]));
+    harness = await RouterTestingHarness.create('/orders?tab=attention');
+    await flushMicrotasks();
+
+    search = harness.routeNativeElement!.querySelector(
+      '[data-testid="order-queue-filter-search"]',
+    ) as HTMLInputElement;
+    expect(search.value).toBe('0911-142');
+  });
+
+  it('keeps a different tab’s filters independent — switching away and back does not carry the search text over', async () => {
+    configure(ordersResponse([]));
+    const harness = await RouterTestingHarness.create('/orders?tab=attention');
+    await flushMicrotasks();
+
+    const search = harness.routeNativeElement!.querySelector(
+      '[data-testid="order-queue-filter-search"]',
+    ) as HTMLInputElement;
+    search.value = '0911-142';
+    search.dispatchEvent(new Event('input'));
+    await flushMicrotasks();
+
+    const completedTab = [...harness.routeNativeElement!.querySelectorAll('[role="tab"]')].find(
+      (button) => button.textContent?.trim() === 'Completed',
+    ) as HTMLElement;
+    completedTab.click();
+    await flushMicrotasks();
+
+    const onCompleted = harness.routeNativeElement!.querySelector(
+      '[data-testid="order-queue-filter-search"]',
+    ) as HTMLInputElement;
+    expect(onCompleted.value).toBe('');
+
+    const attentionTab = [...harness.routeNativeElement!.querySelectorAll('[role="tab"]')].find(
+      (button) => button.textContent?.trim() === 'Attention',
+    ) as HTMLElement;
+    attentionTab.click();
+    await flushMicrotasks();
+
+    const backOnAttention = harness.routeNativeElement!.querySelector(
+      '[data-testid="order-queue-filter-search"]',
+    ) as HTMLInputElement;
+    expect(backOnAttention.value).toBe('0911-142');
+  });
+
+  it('offers «Сбросить фильтры» only once something is filtering, and clears every field but the period', async () => {
+    configure(ordersResponse([]));
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    expect(host.querySelector('[data-testid="q-filter-bar-reset"]')).toBeNull();
+
+    const search = host.querySelector(
+      '[data-testid="order-queue-filter-search"]',
+    ) as HTMLInputElement;
+    search.value = '0911-142';
+    search.dispatchEvent(new Event('input'));
+    await flushMicrotasks();
+
+    const reset = host.querySelector('[data-testid="q-filter-bar-reset"]') as HTMLButtonElement;
+    expect(reset).not.toBeNull();
+    reset.click();
+    await flushMicrotasks();
+
+    const restored = host.querySelector(
+      '[data-testid="order-queue-filter-search"]',
+    ) as HTMLInputElement;
+    expect(restored.value).toBe('');
+  });
+});
+
+/**
+ * orders.md §2.10, wave P07: selection, the bulk-action bar, and §2.10's
+ * result panel. Bulk courier assignment is explicitly out of scope.
+ */
+describe('OrderQueue: selection and bulk actions (orders.md §2.10, wave P07)', () => {
+  it('offers no selection column to an operator without ORDER_BULK_ACTION', async () => {
+    configure(ordersResponse([order({ status: 'CONFIRMED', actions: [{ action: 'CANCEL' }] })]));
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="order-row-select"]'),
+    ).toBeNull();
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="order-queue-select-page"]'),
+    ).toBeNull();
+  });
+
+  it('selects a row and shows the bulk bar, replacing the filter row, for an operator who holds ORDER_BULK_ACTION', async () => {
+    const getOrders = ordersResponse([
+      order({
+        orderId: 'a',
+        publicOrderNumber: '0001',
+        status: 'CONFIRMED',
+        actions: [{ action: 'CANCEL' }],
+      }),
+    ]);
+    configureForBulk(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    expect(host.querySelector('[data-testid="order-queue-filter-bar"]')).not.toBeNull();
+
+    (host.querySelector('[data-testid="order-row-select"]') as HTMLInputElement).click();
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="order-queue-filter-bar"]')).toBeNull();
+    expect(host.querySelector('[data-testid="order-queue-bulk-bar"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="order-queue-bulk-count"]')?.textContent).toContain(
+      'Selected 1',
+    );
+    expect(host.querySelector('[data-testid="order-queue-bulk-cancel"]')).not.toBeNull();
+  });
+
+  it('never offers bulk courier assignment — explicitly out of scope', async () => {
+    const getOrders = ordersResponse([
+      order({
+        orderId: 'a',
+        status: 'CONFIRMED',
+        actions: [{ action: 'CANCEL' }, { action: 'ADVANCE', targetStatus: 'PREPARING' }],
+      }),
+    ]);
+    configureForBulk(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="order-row-select"]') as HTMLInputElement).click();
+    await flushMicrotasks();
+
+    // The bulk bar says explicitly that bulk courier assignment is not
+    // offered, and no button in it performs one.
+    expect(host.querySelector('[data-testid="order-queue-bulk-courier-note"]')).not.toBeNull();
+    const bulkBar = host.querySelector('[data-testid="order-queue-bulk-bar"]')!;
+    const buttonLabels = [...bulkBar.querySelectorAll('button')].map((button) =>
+      button.textContent?.trim().toLowerCase(),
+    );
+    expect(buttonLabels.some((label) => label?.includes('courier'))).toBe(false);
+  });
+
+  it('offers Отменить only when every selected order can be cancelled, with a reason when it cannot', async () => {
+    const getOrders = ordersResponse([
+      order({
+        orderId: 'a',
+        publicOrderNumber: '0001',
+        status: 'CONFIRMED',
+        actions: [{ action: 'CANCEL' }],
+      }),
+      order({ orderId: 'b', publicOrderNumber: '0002', status: 'COMPLETED', actions: [] }),
+    ]);
+    configureForBulk(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    const checkboxes = [
+      ...host.querySelectorAll('[data-testid="order-row-select"]'),
+    ] as HTMLInputElement[];
+    checkboxes[0].click();
+    checkboxes[1].click();
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="order-queue-bulk-cancel"]')).toBeNull();
+    const notice = host.querySelector('[data-testid="order-queue-bulk-cancel-unavailable"]');
+    expect(notice?.textContent).toContain('1 of 2');
+  });
+
+  it('selection survives a refresh that still contains the order — a page boundary', async () => {
+    vi.useFakeTimers();
+    try {
+      setVisibility('visible');
+      const a = order({
+        orderId: 'a',
+        publicOrderNumber: '0001',
+        status: 'CONFIRMED',
+        actions: [{ action: 'CANCEL' }],
+      });
+      const b = order({
+        orderId: 'b',
+        publicOrderNumber: '0002',
+        status: 'CONFIRMED',
+        actions: [{ action: 'CANCEL' }],
+      });
+      const getOrders = vi
+        .fn()
+        .mockReturnValue(of({ value: { items: [a, b], nextCursor: null }, version: null }));
+      configureForBulk(getOrders);
+
+      const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+      await vi.advanceTimersByTimeAsync(FRAME_MS);
+      const host = harness.routeNativeElement!;
+
+      const checkboxes = [
+        ...host.querySelectorAll('[data-testid="order-row-select"]'),
+      ] as HTMLInputElement[];
+      checkboxes[0].click();
+      checkboxes[1].click();
+      await vi.advanceTimersByTimeAsync(FRAME_MS);
+      expect(host.querySelector('[data-testid="order-queue-bulk-count"]')?.textContent).toContain(
+        'Selected 2',
+      );
+
+      // The 10s poll refetches the identical window — both orders are still there.
+      await vi.advanceTimersByTimeAsync(10_000);
+      await vi.advanceTimersByTimeAsync(FRAME_MS);
+
+      expect(host.querySelector('[data-testid="order-queue-bulk-count"]')?.textContent).toContain(
+        'Selected 2',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('drops a selected order from the selection once a refresh no longer includes it', async () => {
+    vi.useFakeTimers();
+    try {
+      setVisibility('visible');
+      const a = order({
+        orderId: 'a',
+        publicOrderNumber: '0001',
+        status: 'CONFIRMED',
+        actions: [{ action: 'CANCEL' }],
+      });
+      const b = order({
+        orderId: 'b',
+        publicOrderNumber: '0002',
+        status: 'CONFIRMED',
+        actions: [{ action: 'CANCEL' }],
+      });
+      const getOrders = vi
+        .fn()
+        .mockReturnValueOnce(of({ value: { items: [a, b], nextCursor: null }, version: null }))
+        .mockReturnValue(of({ value: { items: [a], nextCursor: null }, version: null }));
+      configureForBulk(getOrders);
+
+      const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+      await vi.advanceTimersByTimeAsync(FRAME_MS);
+      const host = harness.routeNativeElement!;
+
+      const checkboxes = [
+        ...host.querySelectorAll('[data-testid="order-row-select"]'),
+      ] as HTMLInputElement[];
+      checkboxes[0].click();
+      checkboxes[1].click();
+      await vi.advanceTimersByTimeAsync(FRAME_MS);
+      expect(host.querySelector('[data-testid="order-queue-bulk-count"]')?.textContent).toContain(
+        'Selected 2',
+      );
+
+      // Order "b" leaves the fetched window on the next poll — its selection drops silently.
+      await vi.advanceTimersByTimeAsync(10_000);
+      await vi.advanceTimersByTimeAsync(FRAME_MS);
+
+      expect(host.querySelector('[data-testid="order-queue-bulk-count"]')?.textContent).toContain(
+        'Selected 1',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('renders §2.10’s result panel for a partial-failure bulk cancel, then retries only the failed item under a fresh submission', async () => {
+    const a = order({
+      orderId: 'a',
+      publicOrderNumber: '0001',
+      status: 'CONFIRMED',
+      actions: [{ action: 'CANCEL' }],
+    });
+    const b = order({
+      orderId: 'b',
+      publicOrderNumber: '0002',
+      status: 'CONFIRMED',
+      actions: [{ action: 'CANCEL' }],
+    });
+    const getOrders = ordersResponse([a, b]);
+    const bulkSubmit = vi.fn().mockReturnValue(
+      of({
+        bulkOperationId: 'bulk-1',
+        actionType: 'CANCEL',
+        requestedCount: 2,
+        appliedCount: 1,
+        failedCount: 1,
+        replayed: false,
+        items: [
+          { orderId: 'a', itemStatus: 'APPLIED', resultingOrderVersion: 1 },
+          { orderId: 'b', itemStatus: 'FAILED', itemProblemCode: 'STALE_VERSION' },
+        ],
+      }),
+    );
+    configureForBulk(getOrders, { bulkSubmit });
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    const checkboxes = [
+      ...host.querySelectorAll('[data-testid="order-row-select"]'),
+    ] as HTMLInputElement[];
+    checkboxes[0].click();
+    checkboxes[1].click();
+    await flushMicrotasks();
+
+    (host.querySelector('[data-testid="order-queue-bulk-cancel"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="order-outcome-reason-dialog"]')).not.toBeNull();
+    (
+      host.querySelector('[data-testid="order-outcome-reason-option-reason-1"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="order-outcome-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(bulkSubmit).toHaveBeenCalledTimes(1);
+    const resultPanel = host.querySelector('[data-testid="order-queue-bulk-result"]');
+    expect(resultPanel?.textContent).toContain('1 applied · 1 problems');
+    const items = [...host.querySelectorAll('[data-testid="order-queue-bulk-result-item"]')];
+    expect(items).toHaveLength(1);
+    expect(items[0].textContent).toContain('0002');
+    expect(items[0].textContent).toContain('The order changed since it was selected');
+
+    (host.querySelector('[data-testid="order-queue-bulk-retry"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(bulkSubmit).toHaveBeenCalledTimes(2);
+    const retryRequest = bulkSubmit.mock.calls[1][1];
+    expect(retryRequest.orders).toEqual([{ orderId: 'b', expectedVersion: 0 }]);
+    // A retry is a fresh intent: this is a second, distinct call, never the
+    // same body resubmitted under the first call's own key.
+    expect(retryRequest).not.toBe(bulkSubmit.mock.calls[0][1]);
+  });
+
+  it('renders "all applied" without a result list when nothing failed', async () => {
+    const a = order({
+      orderId: 'a',
+      publicOrderNumber: '0001',
+      status: 'CONFIRMED',
+      actions: [{ action: 'CANCEL' }],
+    });
+    const getOrders = ordersResponse([a]);
+    const bulkSubmit = vi.fn().mockReturnValue(
+      of({
+        bulkOperationId: 'bulk-2',
+        actionType: 'CANCEL',
+        requestedCount: 1,
+        appliedCount: 1,
+        failedCount: 0,
+        replayed: false,
+        items: [{ orderId: 'a', itemStatus: 'APPLIED', resultingOrderVersion: 1 }],
+      }),
+    );
+    configureForBulk(getOrders, { bulkSubmit });
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="order-row-select"]') as HTMLInputElement).click();
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="order-queue-bulk-cancel"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (
+      host.querySelector('[data-testid="order-outcome-reason-option-reason-1"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="order-outcome-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="order-queue-bulk-result"]')?.textContent).toContain(
+      'All 1 applied',
+    );
+    expect(host.querySelector('[data-testid="order-queue-bulk-retry"]')).toBeNull();
   });
 });
