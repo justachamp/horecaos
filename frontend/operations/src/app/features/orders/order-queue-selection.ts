@@ -84,12 +84,25 @@ export function bulkCancelEligible(selected: readonly OrderSummaryResponse[]): b
 }
 
 /**
+ * The bulk targets `OrderBulkActionService.ADVANCE_TARGETS` accepts — routine,
+ * reversible-in-effect kitchen-path moves only (ADR 0039). A per-row single
+ * advance may legitimately target other statuses too (`CONFIRMED`, say, off
+ * `RECEIVED`), but the *bulk* endpoint refuses every one of those with a
+ * batch-wide 400 before touching a single order, so a target outside this set
+ * must never be offered as a bulk action.
+ */
+const BULK_ADVANCE_TARGETS: ReadonlySet<string> = new Set(['PREPARING', 'READY', 'FULFILLING']);
+
+/**
  * The one `targetStatus` a bulk `ADVANCE` may use, or `null` when the
- * selection cannot share one — some row lacks an `ADVANCE` action at all, or
- * the rows are not all at the same stage (a `CONFIRMED` row's next status
- * differs from a `PREPARING` row's). A single bulk request carries exactly
- * one `targetStatus` (`OrderBulkActionService.BulkActionCommand`), so a
- * mixed selection has no single call that advances all of it correctly.
+ * selection cannot share one — some row lacks an `ADVANCE` action at all, the
+ * rows are not all at the same stage (a `CONFIRMED` row's next status differs
+ * from a `PREPARING` row's), or the shared target is not one
+ * {@link BULK_ADVANCE_TARGETS} allows (e.g. every selected row is `RECEIVED`,
+ * whose only `ADVANCE` target is `CONFIRMED`). A single bulk request carries
+ * exactly one `targetStatus` (`OrderBulkActionService.BulkActionCommand`), so
+ * a mixed selection — or one whose shared target the bulk endpoint refuses
+ * outright — has no single call that advances all of it correctly.
  */
 export function bulkAdvanceTarget(selected: readonly OrderSummaryResponse[]): string | null {
   if (selected.length === 0) {
@@ -107,5 +120,5 @@ export function bulkAdvanceTarget(selected: readonly OrderSummaryResponse[]): st
       return null;
     }
   }
-  return target;
+  return target !== null && BULK_ADVANCE_TARGETS.has(target) ? target : null;
 }

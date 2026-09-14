@@ -144,4 +144,38 @@ describe('bulkAdvanceTarget', () => {
     ];
     expect(bulkAdvanceTarget(selected)).toBeNull();
   });
+
+  it(
+    'is null when the shared target is CONFIRMED — OrderBulkActionService.ADVANCE_TARGETS ' +
+      'never includes it, so a RECEIVED-only selection must never offer a bulk Advance that ' +
+      'the server refuses wholesale',
+    () => {
+      const selected = [
+        order({
+          orderId: 'a',
+          status: 'RECEIVED',
+          actions: [{ action: 'ADVANCE', targetStatus: 'CONFIRMED' }],
+        }),
+        order({
+          orderId: 'b',
+          status: 'RECEIVED',
+          actions: [{ action: 'ADVANCE', targetStatus: 'CONFIRMED' }],
+        }),
+      ];
+      expect(bulkAdvanceTarget(selected)).toBeNull();
+    },
+  );
+
+  it('names PREPARING/READY/FULFILLING — every target OrderBulkActionService.ADVANCE_TARGETS allows', () => {
+    for (const target of ['PREPARING', 'READY', 'FULFILLING']) {
+      const selected = [
+        order({
+          orderId: 'a',
+          status: target,
+          actions: [{ action: 'ADVANCE', targetStatus: target }],
+        }),
+      ];
+      expect(bulkAdvanceTarget(selected)).toBe(target);
+    }
+  });
 });
