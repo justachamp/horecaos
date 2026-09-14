@@ -184,6 +184,7 @@ public class JdbcReviewStore {
     public List<Row> listForBrand(
             UUID tenantId,
             UUID brandId,
+            @Nullable UUID customerAccountId,
             @Nullable UUID locationId,
             @Nullable Integer minRating,
             @Nullable Integer maxRating,
@@ -200,6 +201,7 @@ public class JdbcReviewStore {
                        rating, comment_protected, submitted_at
                   FROM reviews.order_reviews
                  WHERE tenant_id = :tenantId AND brand_id = :brandId
+                   AND (:customerAccountId::uuid IS NULL OR customer_account_id = :customerAccountId)
                    AND (:locationId::uuid IS NULL OR location_id = :locationId)
                    AND (:minRating::smallint IS NULL OR rating >= :minRating)
                    AND (:maxRating::smallint IS NULL OR rating <= :maxRating)
@@ -212,6 +214,7 @@ public class JdbcReviewStore {
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
+                .param("customerAccountId", customerAccountId)
                 .param("locationId", locationId)
                 .param("minRating", minRating)
                 .param("maxRating", maxRating)
