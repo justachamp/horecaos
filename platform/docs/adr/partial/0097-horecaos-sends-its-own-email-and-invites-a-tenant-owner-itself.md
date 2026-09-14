@@ -118,6 +118,23 @@ A tenant onboarded with an owner email produces an email whose link lets the
 owner set a password and sign in to the operations console, and the control
 plane shows the invitation as accepted.
 
+## Status addition (2026-09-14)
+
+Gap map row `9.1a` — inviting a *staff* member with a job, not a tenant owner
+— was deferred behind this record's `Open inputs` (a sending provider and
+`horecaos.uz`'s DNS records). That deferral no longer holds: the mail module
+this record built works against Mailpit (`SmtpPlatformMailerTests`), and
+pre-production has sent mail through it since 2026-09-13. Wave `wave138-s01`
+built row `9.1a` on ADR 0116, a new, separate record — not an extension of
+this one. This record's Decision, Alternatives and Consequences are
+unchanged and describe the tenant-owner flow only; ADR 0116 explains why a
+staff invitation is a sibling table (`tenant.staff_invitations`) rather than
+a `kind` column added here, and `StaffInvitationController.inspect`/`.accept`
+— this record's own public endpoints — now serve either kind of token, tried
+in the order that record's Decision section states.
+
 ## References
 
 - ADR 0009, ADR 0062, ADR 0028, ADR 0029
+- ADR 0116 (a staff member's own invitation, built on this record's mail
+  module and public accept endpoints, but its own decision)

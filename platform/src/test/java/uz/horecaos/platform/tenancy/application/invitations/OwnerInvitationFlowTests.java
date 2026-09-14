@@ -915,7 +915,7 @@ class OwnerInvitationFlowTests {
         @Override
         public Optional<StaffAccount> findByLogin(String usernameOrEmail) {
             return accounts.values().stream()
-                    .filter(account -> account.email().equals(usernameOrEmail))
+                    .filter(account -> java.util.Objects.equals(account.email(), usernameOrEmail))
                     .findFirst();
         }
 

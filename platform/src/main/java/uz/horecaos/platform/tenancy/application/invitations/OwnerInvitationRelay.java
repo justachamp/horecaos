@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
@@ -171,7 +172,10 @@ public class OwnerInvitationRelay {
         String token = newToken();
         Instant expiresAt = now.plus(OwnerInvitationService.LINK_LIFETIME);
         MailOutcome outcome = mailer.send(InvitationEmail.render(
-                account.get().email(),
+                // Every row here was queued for a subject ensureMembership
+                // (ADR 0009) created or linked by email, never a staff account
+                // (ADR 0116) created by #create, so this is always present.
+                Objects.requireNonNull(account.get().email(), "an owner account always has an email"),
                 row.locale(),
                 store.tenantName(row.tenantId()),
                 operationsOrigin + "/invite#token=" + token,

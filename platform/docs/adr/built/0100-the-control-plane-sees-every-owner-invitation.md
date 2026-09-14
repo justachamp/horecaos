@@ -363,6 +363,22 @@ with their own subject and their reason — on the invitation's timeline on that
 tenant's onboarding screen; an operator holding only `TENANT_READ` sees the
 same screens with `d***a@example.uz` in place of every address.
 
+## Status addition (2026-09-14)
+
+ADR 0116 gave a *staff* invitation (gap map row `9.1a`) its own table and its
+own service rather than extending this record's `tenant.owner_invitations`
+or its event history — see that record's Decision for the reasons
+(`tenant.owner_invitations` proves at most one live row per tenant, which is
+correct for an owner and wrong for staff). A consequence worth recording
+here: `tenant.staff_invitations` (V0313) has no equivalent of this record's
+`tenant.owner_invitation_events` append-only timeline. A staff invitation's
+own audit facts (`tenant.staff_invitation.invited`/`.resent`/`.cancelled`/
+`.accepted`) are readable through the general activity log (staff-and-access.md
+§9's `9.3`) instead; this record's per-invitation timeline panel is an owner
+onboarding concept only and was not generalised.
+
 ## References
 
 - ADR 0097, ADR 0029, ADR 0027, ADR 0025, ADR 0031, ADR 0062
+- ADR 0116 (a staff invitation's own record; deliberately does not extend
+  this one's event history)

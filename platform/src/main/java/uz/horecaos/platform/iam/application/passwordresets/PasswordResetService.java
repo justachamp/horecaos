@@ -418,7 +418,10 @@ public class PasswordResetService {
     private @Nullable String maskedLogin(String subjectId) {
         try {
             return accounts.find(subjectId)
-                    .map(account -> mask(account.email()))
+                    // A staff account (ADR 0116) may have no email at all; this
+                    // page's reassurance is simply absent for one rather than
+                    // masking a value that is not there.
+                    .map(account -> account.email() == null ? null : mask(account.email()))
                     .orElse(null);
         } catch (RuntimeException unavailable) {
             // The page still works without it; only the reassurance of seeing
