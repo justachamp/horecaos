@@ -1,0 +1,127 @@
+.devices {
+  padding: 16px 20px;
+  max-width: 860px;
+}
+
+.devices__state {
+  padding: 32px;
+  text-align: center;
+  color: var(--q-ink-subtle);
+}
+
+.devices__hint {
+  color: var(--q-ink-subtle);
+  margin: 0 0 12px;
+}
+
+.card {
+  margin-top: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.card h2 {
+  margin: 0 0 8px;
+}
+
+.devices__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.devices__table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: var(--q-type-caption);
+  color: var(--q-ink-subtle);
+  background: var(--q-surface-1);
+}
+
+.devices__table td {
+  padding: 8px 12px;
+  border-top: 1px solid var(--q-hairline);
+  vertical-align: top;
+}
+
+.devices__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.devices__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.devices__field input {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font: inherit;
+  min-width: 180px;
+}
+
+.devices__error {
+  color: var(--q-error-text);
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.devices__revoke-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.devices__revoke-form input {
+  padding: 4px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font: inherit;
+  min-width: 200px;
+}
+
+.primary {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.secondary {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.destructive {
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-error);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.destructive:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

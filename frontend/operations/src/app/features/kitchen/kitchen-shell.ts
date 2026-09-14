@@ -18,11 +18,13 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * **On the "device shell" in IA §2's own heading.** The spec calls for a
  * third template — a fullscreen, no-sidebar, touch-first shell for the KDS —
  * beside the operator console and the wallboard (IA Part 4, "Template-level
- * gaps"). No such shell exists in this design system yet, and building one is
- * a template-level investment, not a screen-level one. This wave renders
- * Kitchen inside the existing operator console shell instead, which is the
- * same trade-off `products-page.ts`'s own doc names for missing backend: real
- * function over an unbuilt affordance. See the wave's final report.
+ * gaps"). Built by wave P17 as `../../device/device-shell.ts`, a top-level
+ * route sibling of this console's own `Shell` (`/device`, not `/kitchen/*`)
+ * — a kitchen tablet never enters through this shell at all, since it
+ * authenticates with its own ADR 0079 device credential, never a staff
+ * Keycloak session. What *is* new here, same wave: `devices` (IA row
+ * `2/X.2`) — the manager's own side of ADR 0079's pairing handshake, listing
+ * enrolled devices and approving the typed user code a new screen shows.
  */
 @Component({
   selector: 'q-kitchen-shell',
