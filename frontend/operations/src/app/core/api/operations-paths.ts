@@ -414,6 +414,26 @@ export const operationsPaths = {
   },
 
   /**
+   * The branch's kitchen display devices (ADR 0079, `KitchenDeviceController`,
+   * row `2/X.2`, wave P17) — active and revoked alike, with who enrolled or
+   * revoked each one. `POST`s land on {@link kitchenDeviceApprove} and
+   * {@link kitchenDeviceRevoke}, never here.
+   */
+  kitchenDevices(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/devices`;
+  },
+
+  /** Approves a pending enrolment by the `userCode` a new device's own screen shows. */
+  kitchenDeviceApprove(scope: LocationScope, userCode: string): string {
+    return `${this.kitchenDevices(scope)}/enrolments/${encodeURIComponent(userCode)}/approve`;
+  },
+
+  /** Revokes one enrolled device. Idempotent — revoking an already-revoked device is not an error. */
+  kitchenDeviceRevoke(scope: LocationScope, deviceId: string): string {
+    return `${this.kitchenDevices(scope)}/${encodeURIComponent(deviceId)}/revoke`;
+  },
+
+  /**
    * Table availability for a window (ADR 0047, `ReservationController`, IA
    * §1.5) — on {@link LEGACY_TENANT_PREFIX} directly under the location, not
    * under `/dine-in`: the controller's own `@RequestMapping` has no such

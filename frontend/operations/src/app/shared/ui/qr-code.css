@@ -1,0 +1,14 @@
+/*
+ * Deliberately not theme-aware: a QR code must stay pure black on pure white
+ * regardless of light/dark mode, because that contrast is what a scanner's
+ * own binarisation step relies on — see `qr-code.ts`'s own doc.
+ */
+.q-qr-code {
+  display: block;
+  shape-rendering: crispEdges;
+}
+
+.qr-code__fallback {
+  color: var(--q-ink-subtle);
+  max-width: 220px;
+}

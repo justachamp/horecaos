@@ -1,0 +1,194 @@
+/*
+ * Touch scale, replacing `kitchen-queue-page.css`'s 6-12px paddings and
+ * 12/14px type for exactly this shell — the operator console's own dense
+ * view keeps its own scale, since a desk mouse and a wall-mounted finger are
+ * different input devices with different error costs. `--q-type-*` tokens
+ * (design-tokens/tokens.css) top out at `--q-type-display` (42px); this
+ * shell reaches for the upper half of that closed scale rather than adding
+ * a new one, since a KDS is read at a shorter distance than the wallboard
+ * `--q-display-tv` step exists for.
+ */
+
+.device-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--q-canvas, var(--q-surface-1));
+  color: var(--q-ink);
+  padding: 24px;
+  box-sizing: border-box;
+  gap: 16px;
+}
+
+.device-shell__offline {
+  flex: none;
+  padding: 16px 24px;
+  border-radius: var(--q-radius);
+  background: var(--q-error);
+  color: var(--q-inverse-ink);
+  font-size: var(--q-type-title);
+  font-weight: 600;
+  text-align: center;
+}
+
+.device-shell__panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  text-align: center;
+}
+
+.device-shell__title {
+  font-size: var(--q-type-headline);
+  font-weight: 600;
+  margin: 0;
+}
+
+.device-shell__hint {
+  font-size: var(--q-type-body-lg);
+  color: var(--q-ink-subtle);
+  margin: 0;
+  max-width: 480px;
+}
+
+.device-shell__error {
+  font-size: var(--q-type-body-lg);
+  color: var(--q-error-text);
+  margin: 0;
+}
+
+.device-shell__form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.device-shell__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: var(--q-type-body-lg);
+  text-align: left;
+}
+
+.device-shell__field input {
+  height: 56px;
+  padding: 0 16px;
+  font-size: var(--q-type-headline);
+  border: 2px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-family: inherit;
+}
+
+.device-shell__button {
+  min-height: 56px;
+  padding: 0 32px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  font-size: var(--q-type-title);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.device-shell__button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.device-shell__button--item {
+  min-width: 96px;
+}
+
+.device-shell__pairing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.device-shell__usercode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.device-shell__usercode-label {
+  font-size: var(--q-type-body);
+  color: var(--q-ink-subtle);
+}
+
+.device-shell__usercode-value {
+  font-size: var(--q-type-display);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+
+.device-shell__board {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.device-shell__tickets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.device-shell__ticket {
+  border: 2px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  padding: 16px;
+}
+
+.device-shell__ticket-header {
+  margin-bottom: 12px;
+}
+
+.device-shell__ticket-label {
+  font-size: var(--q-type-title);
+  font-weight: 600;
+}
+
+.device-shell__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.device-shell__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+}
+
+.device-shell__item-qty {
+  font-size: var(--q-type-body-lg);
+  font-variant-numeric: tabular-nums;
+}
+
+.device-shell__reset {
+  flex: none;
+  align-self: center;
+  background: none;
+  border: none;
+  color: var(--q-ink-subtle);
+  font-size: var(--q-type-caption);
+  min-height: 44px;
+  padding: 0 16px;
+  cursor: pointer;
+}

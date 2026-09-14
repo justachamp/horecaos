@@ -222,6 +222,14 @@
                       : ('finance.payments.reissue.result.push' | t)
                   }}
                 </p>
+                @if (result.qrPayload) {
+                  <q-qr-code
+                    [value]="result.qrPayload"
+                    [size]="180"
+                    [label]="'finance.payments.reissue.result.qrLabel' | t"
+                    data-testid="reissue-qr-code"
+                  />
+                }
               }
 
               <div class="form__actions">

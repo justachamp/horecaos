@@ -1,0 +1,165 @@
+<div class="devices">
+  <h1 class="q-subhead">{{ 'kitchen.devices.title' | t }}</h1>
+  <p class="q-body-sm devices__hint">{{ 'kitchen.devices.hint' | t }}</p>
+
+  @if (!firstLoadComplete()) {
+    <p class="q-body-sm devices__state">{{ 'kitchen.devices.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm devices__state" data-testid="devices-denied">
+      {{ 'kitchen.devices.denied' | t }}
+    </p>
+  } @else if (lastError()) {
+    <p class="q-body-sm devices__state" data-testid="devices-error">
+      {{ 'kitchen.devices.loadError' | t }}
+    </p>
+  } @else {
+    <section class="card">
+      <h2 class="q-subhead">{{ 'kitchen.devices.approve.title' | t }}</h2>
+      <p class="q-body-sm devices__hint">{{ 'kitchen.devices.approve.hint' | t }}</p>
+
+      <form class="devices__form" (submit)="$event.preventDefault(); submitApprove()">
+        <label class="devices__field">
+          <span class="q-caption">{{ 'kitchen.devices.approve.userCode' | t }}</span>
+          <input
+            type="text"
+            autocomplete="off"
+            [value]="formUserCode()"
+            (input)="formUserCode.set($any($event.target).value)"
+            data-testid="devices-form-usercode"
+          />
+        </label>
+
+        <label class="devices__field">
+          <span class="q-caption">{{ 'kitchen.devices.approve.displayName' | t }}</span>
+          <input
+            type="text"
+            [value]="formDisplayName()"
+            (input)="formDisplayName.set($any($event.target).value)"
+            data-testid="devices-form-displayname"
+          />
+        </label>
+
+        @if (formTouched() && !formValid()) {
+          <p class="q-caption devices__error">{{ 'kitchen.devices.approve.incomplete' | t }}</p>
+        }
+        @if (formError()) {
+          <p class="q-caption devices__error" data-testid="devices-form-error">{{ formError() }}</p>
+        }
+
+        <button
+          type="submit"
+          class="primary"
+          [disabled]="formSubmitting()"
+          data-testid="devices-form-submit"
+        >
+          {{
+            formSubmitting()
+              ? ('kitchen.devices.approve.submitting' | t)
+              : ('kitchen.devices.approve.submit' | t)
+          }}
+        </button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2 class="q-subhead">{{ 'kitchen.devices.active.title' | t }}</h2>
+
+      @if (activeDevices().length === 0) {
+        <p class="q-body-sm devices__hint" data-testid="devices-active-empty">
+          {{ 'kitchen.devices.active.empty' | t }}
+        </p>
+      } @else {
+        <table class="devices__table" data-testid="devices-active-table">
+          <thead>
+            <tr>
+              <th>{{ 'kitchen.devices.column.displayName' | t }}</th>
+              <th>{{ 'kitchen.devices.column.enrolledBy' | t }}</th>
+              <th>{{ 'kitchen.devices.column.enrolledAt' | t }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (device of activeDevices(); track device.deviceId) {
+              <tr>
+                <td>{{ device.displayName }}</td>
+                <td>{{ device.enrolledBy }}</td>
+                <td class="q-tnum">{{ formattedInstant(device.enrolledAt) }}</td>
+                <td>
+                  @if (revokeTargetId() === device.deviceId) {
+                    <div class="devices__revoke-form">
+                      <input
+                        type="text"
+                        [value]="revokeReason()"
+                        (input)="revokeReason.set($any($event.target).value)"
+                        [placeholder]="'kitchen.devices.revoke.reasonPlaceholder' | t"
+                        [attr.data-testid]="'devices-revoke-reason-' + device.deviceId"
+                      />
+                      <button
+                        type="button"
+                        class="destructive"
+                        [disabled]="!canConfirmRevoke() || revokeSubmitting()"
+                        (click)="confirmRevoke()"
+                        [attr.data-testid]="'devices-revoke-confirm-' + device.deviceId"
+                      >
+                        {{
+                          revokeSubmitting()
+                            ? ('kitchen.devices.revoke.submitting' | t)
+                            : ('kitchen.devices.revoke.confirm' | t)
+                        }}
+                      </button>
+                      <button type="button" class="secondary" (click)="cancelRevoke()">
+                        {{ 'kitchen.devices.revoke.cancel' | t }}
+                      </button>
+                      @if (revokeError()) {
+                        <p class="q-caption devices__error" data-testid="devices-revoke-error">
+                          {{ revokeError() }}
+                        </p>
+                      }
+                    </div>
+                  } @else {
+                    <button
+                      type="button"
+                      class="secondary"
+                      (click)="startRevoke(device.deviceId)"
+                      [attr.data-testid]="'devices-revoke-start-' + device.deviceId"
+                    >
+                      {{ 'kitchen.devices.revoke.start' | t }}
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+
+    @if (revokedDevices().length > 0) {
+      <section class="card">
+        <h2 class="q-subhead">{{ 'kitchen.devices.revoked.title' | t }}</h2>
+        <table class="devices__table" data-testid="devices-revoked-table">
+          <thead>
+            <tr>
+              <th>{{ 'kitchen.devices.column.displayName' | t }}</th>
+              <th>{{ 'kitchen.devices.column.revokedBy' | t }}</th>
+              <th>{{ 'kitchen.devices.column.revokedAt' | t }}</th>
+              <th>{{ 'kitchen.devices.column.revokedReason' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (device of revokedDevices(); track device.deviceId) {
+              <tr>
+                <td>{{ device.displayName }}</td>
+                <td>{{ device.revokedBy }}</td>
+                <td class="q-tnum">
+                  {{ device.revokedAt ? formattedInstant(device.revokedAt) : '—' }}
+                </td>
+                <td>{{ device.revokedReason }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
+    }
+  }
+</div>

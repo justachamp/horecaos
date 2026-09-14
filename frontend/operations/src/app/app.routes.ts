@@ -55,6 +55,19 @@ export const routes: Routes = [
       import('./features/auth/reset-password-page').then((m) => m.ResetPasswordPage),
   },
   {
+    // Row `X/X.2` (ADR 0079, ADR 0119, wave P17) — the KDS fullscreen shell.
+    // Outside `authGuard` and declared *before* the console `Shell` route
+    // below, on purpose, the same placement as `/login`/`/invite` above and
+    // for the same reason: `Shell`'s own children end in a catch-all
+    // `redirectTo: 'today'` (`placeholderRoutes`'s own comment names this),
+    // which would otherwise swallow this path if it were declared after.
+    // `DeviceShell` authenticates as `PlatformRole.KITCHEN_DEVICE` through
+    // its own ADR 0079 credential (`device/device-session.ts`) — never the
+    // staff Keycloak session `authGuard` checks, so this route carries none.
+    path: 'device',
+    loadComponent: () => import('./device/device-shell').then((m) => m.DeviceShell),
+  },
+  {
     path: '',
     loadComponent: () => import('./shell/shell').then((m) => m.Shell),
     canActivate: [authGuard],
@@ -816,6 +829,16 @@ export const routes: Routes = [
             path: 'capacity',
             loadComponent: () =>
               import('./features/kitchen/capacity-page').then((m) => m.CapacityPage),
+          },
+          // IA row `2/X.2` (ADR 0079, wave P17): the manager's own side of
+          // the pairing handshake — list enrolled devices, approve a typed
+          // user code, revoke a lost one. The device's own side is
+          // `/device`, a top-level route outside this shell entirely — see
+          // `kitchen-shell.ts`'s own doc.
+          {
+            path: 'devices',
+            loadComponent: () =>
+              import('./features/kitchen/devices-page').then((m) => m.DevicesPage),
           },
         ],
       },
