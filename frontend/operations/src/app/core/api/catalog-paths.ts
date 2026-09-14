@@ -160,6 +160,11 @@ export const catalogPaths = {
     return `${this.variantsAtLocation(scope, locationId)}/bulk-offering-status`;
   },
 
+  /** The stop list's own tab badges (gap map row 2.5, wave P16) — exact over the whole catalog, following the same `search` filter. */
+  variantAvailabilityCounts(scope: BrandScope, locationId: string): string {
+    return `${this.variantsAtLocation(scope, locationId)}/availability-counts`;
+  },
+
   /** The catalog's live validation report — blockers and warnings, never a side effect. */
   validation(scope: BrandScope, catalogId: string): string {
     return `${this.base(scope)}/catalogs/${encodeURIComponent(catalogId)}/validation`;

@@ -15,6 +15,7 @@ import { operationsPaths } from '../../core/api/operations-paths';
 import { CursorState, firstPage, nextPage } from '../../core/api/page';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { TimeZone, formatDateTime } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { QCellDef, DataTable } from '../../shared/ui/data-table/data-table';
@@ -27,13 +28,23 @@ import { describeApiError } from '../orders/order-errors';
 
 type StopTab = 'ALL' | 'AVAILABLE' | 'ON_STOP';
 
+/** How long a keystroke in the search box waits before it becomes a server request — matches `products-page.ts`'s own debounce. */
+const SEARCH_DEBOUNCE_MS = 300;
+
+/** See `kitchen-queue-page.ts`'s identical constant — no location carries a timezone on this response yet. */
+const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
+
+/** `InventoryBulkAvailabilityService.MAX_ITEMS`, mirrored so the page can refuse an oversized selection before the round trip. */
+const BULK_AVAILABILITY_MAX_ITEMS = 200;
+
 /**
  * `q-data-table`'s `[(filters)]` model, so Save View / Apply View
- * (`X.18`) has a real effect on this screen: the active tab is the only
- * thing this page's own filter bar controls, so it is the whole shape.
+ * (`X.18`) has a real effect on this screen: the active tab and the search
+ * box are what this page's own filter bar controls.
  */
 interface StopListFilters {
   readonly tab: StopTab;
+  readonly search: string;
 }
 
 /**
@@ -46,37 +57,73 @@ interface StopListFilters {
  */
 const SINGLE_TOGGLE_REASON = 'OPERATIONS_STOP_LIST_TOGGLE';
 
-/** Mirrors `CatalogAuthoringController.VariantAvailabilityResponse`. */
+/**
+ * Mirrors `CatalogAuthoringController.VariantAvailabilityResponse`.
+ * `stopSource`/`stopReasonCode`/`stopChangedAt` are wave P16's own addition
+ * — gap map row 2.5b's explainer.
+ */
 interface VariantAvailabilityResponse {
   readonly variantId: string;
   readonly productName: string;
   readonly category?: string | null;
   readonly available: boolean;
   readonly trackingMode?: string | null;
+  /** `MANUAL` | `POS` | `UNKNOWN`. */
+  readonly stopSource: string;
+  readonly stopReasonCode?: string | null;
+  readonly stopChangedAt?: string | null;
+}
+
+/** Mirrors `CatalogAuthoringController.VariantAvailabilityCountsResponse` — the tab badges, exact over the whole catalog. */
+interface VariantAvailabilityCountsResponse {
+  readonly total: number;
+  readonly available: number;
+  readonly onStop: number;
+}
+
+/** Mirrors `InventoryController.BulkAvailabilityOutcome`. */
+interface BulkAvailabilityOutcome {
+  readonly variantId: string;
+  readonly status: string;
+  readonly changed: boolean;
+  readonly problemCode?: string | null;
+}
+
+/** Mirrors `InventoryController.BulkAvailabilityResponse`. */
+interface BulkAvailabilityResponse {
+  readonly requestedCount: number;
+  readonly appliedCount: number;
+  readonly failedCount: number;
+  readonly items: readonly BulkAvailabilityOutcome[];
 }
 
 /**
  * Stop list — IA 2.5, `docs/operations-spec/orders.md` §5.5's "стоп" chip.
  *
- * **Built.** Available/on-stop tabs and the read side reuse catalog.md
+ * **Built.** Available/on-stop/all tabs and the read side reuse catalog.md
  * §4.6's own screen — `catalogPaths.variantsAtLocation`
  * (`CatalogAuthoringController`, control-plane surface, same cross-surface
  * situation `catalog-paths.ts` already documents for the rest of Catalog).
- * The toggle is the audited `PUT .../inventory/variants/{id}/availability`
- * (`InventoryController`, operations surface). Bulk is a client-side loop
- * over that same single-item, audited endpoint — every row is its own
- * `Idempotency-Key`d command and its own `inventory.movements` fact, which is
- * more honest than a server contract this wave did not find any evidence of
- * (`GET .../inventory/availability` only checks variant ids the caller
- * already knows; there is no batch mutation endpoint).
+ * The single-row toggle is the audited `PUT .../inventory/variants/{id}/availability`
+ * (`InventoryController`).
  *
- * **Not built, honestly** (see the wave's final report for the full backend
- * audit): stop scope beyond LOCATION (menu/terminal/brand fan-out —
- * `INVENTORY_ADJUST` is LOCATION-scoped only); stop source (manual only —
- * `reasonCode` is free text, not a structured POS-push/threshold/schedule
- * taxonomy); a unified "why can't I sell this?" explainer (only
- * `available: boolean` + free-text reason exist); stop-change digest
- * notification.
+ * **Wave P16 closed three gaps.** Bulk stop/unstop is now one round trip —
+ * `POST .../inventory/variants/bulk-availability`, modelled on ADR 0039's
+ * bulk contract with a per-item outcome — replacing the sequential loop of
+ * one audited `PUT` per row that made a 300-item stop three hundred round
+ * trips. The tab badges and the `ON_STOP` tab are exact over the whole
+ * catalog (`GET .../variants/availability-counts`), not only the page
+ * already loaded. And every row now carries a structured stop source
+ * (`stopSource`/`stopReasonCode`/`stopChangedAt`), so an operator can tell a
+ * kitchen stop from a POS push instead of only a boolean and a free-text
+ * reason.
+ *
+ * **Not built, honestly**: stop scope beyond LOCATION (menu/terminal/brand
+ * fan-out — `INVENTORY_ADJUST`/`INVENTORY_AVAILABILITY_MANAGE` are
+ * LOCATION-scoped only, and a stop set here never reaches an aggregator
+ * channel); the digest-cadence settings screen (the digest itself is built —
+ * see `InventoryStopDigestSweeper` — but no console screen lets a manager
+ * choose the chat or the cadence).
  */
 @Component({
   selector: 'q-stop-list-page',
@@ -96,6 +143,7 @@ export class StopListPage implements OnInit {
       { key: 'product', header: this.i18n.t('kitchen.stopList.column.product') },
       { key: 'category', header: this.i18n.t('kitchen.stopList.column.category') },
       { key: 'status', header: this.i18n.t('kitchen.stopList.column.status') },
+      { key: 'source', header: this.i18n.t('kitchen.stopList.column.source') },
       { key: 'toggle', header: '', hideable: false },
     ];
   });
@@ -126,8 +174,16 @@ export class StopListPage implements OnInit {
   protected readonly hasMore = signal(false);
 
   /** Two-way bound to `q-data-table`'s `[(filters)]` — persisted per-tab filters and saved views both round-trip through this signal. */
-  protected readonly filters = signal<StopListFilters | null>({ tab: 'ALL' });
+  protected readonly filters = signal<StopListFilters | null>({ tab: 'ALL', search: '' });
   protected readonly activeTab = computed<StopTab>(() => this.filters()?.tab ?? 'ALL');
+  private readonly search = computed<string>(() => this.filters()?.search ?? '');
+  /** The search box's own displayed value — updated on every keystroke, independent of the debounced `filters.search`, so typing never stutters. */
+  protected readonly searchInputValue = signal('');
+  private searchDebounceHandle: ReturnType<typeof setTimeout> | null = null;
+
+  /** The stop list's own exact tab badges (wave P16) — `null` before the first load settles, or when the read failed (no wrong number). */
+  protected readonly counts = signal<VariantAvailabilityCountsResponse | null>(null);
+
   /** Two-way bound to `q-data-table`'s own selection model — read here to gate the reason field, written here to clear the selection once a bulk action lands. */
   protected readonly selectedIds = signal<ReadonlySet<string>>(new Set());
   protected readonly busyVariantIds = signal<ReadonlySet<string>>(new Set());
@@ -137,6 +193,7 @@ export class StopListPage implements OnInit {
   async ngOnInit(): Promise<void> {
     await this.location.ensureLoaded();
     await this.load(firstPage(50));
+    void this.loadCounts();
   }
 
   private async load(state: CursorState, append = false): Promise<void> {
@@ -147,11 +204,15 @@ export class StopListPage implements OnInit {
       return;
     }
     try {
+      const search = this.search().trim();
       const result = await firstValueFrom(
         this.api.page<VariantAvailabilityResponse>(
           catalogPaths.variantsAtLocation(toBrandScope(scope), scope.locationId),
           state,
-          { locale: this.i18n.locale() === 'uz-Latn' ? 'uz' : this.i18n.locale() },
+          {
+            locale: this.i18n.locale() === 'uz-Latn' ? 'uz' : this.i18n.locale(),
+            search: search === '' ? undefined : search,
+          },
         ),
       );
       this.items.set(append ? [...this.items(), ...result.items] : result.items);
@@ -174,32 +235,84 @@ export class StopListPage implements OnInit {
     }
   }
 
+  /**
+   * The tab badges (gap map row 2.5) — one server-side aggregate, exact over
+   * the whole catalog rather than the page {@link items} has loaded, and
+   * following the same search term {@link load} does so the badges track a
+   * typed search rather than the unfiltered catalog.
+   */
+  private async loadCounts(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      const search = this.search().trim();
+      const result = await firstValueFrom(
+        this.api.get<VariantAvailabilityCountsResponse>(
+          catalogPaths.variantAvailabilityCounts(toBrandScope(scope), scope.locationId),
+          {
+            params: {
+              locale: this.i18n.locale() === 'uz-Latn' ? 'uz' : this.i18n.locale(),
+              search: search === '' ? undefined : search,
+            },
+          },
+        ),
+      );
+      this.counts.set(result.value);
+    } catch {
+      // The badges simply render "…" — see tabCount's own null contract.
+      this.counts.set(null);
+    }
+  }
+
   protected async loadMore(): Promise<void> {
     this.loadingMore.set(true);
     await this.load(this.page(), true);
   }
 
+  /** Immediate — a tab is a click, not a keystroke, and needs no debounce. The row list itself is already loaded; only the visible slice changes. */
   protected selectTab(tab: StopTab): void {
-    this.filters.set({ tab });
+    this.filters.set({ tab, search: this.search() });
   }
 
   /**
-   * `null` while more pages remain unloaded — a count over `items()` alone
-   * undercounts until the operator has paged to the end, and a wrong number
-   * is worse than none (the trap this wave's own gap-map entry names).
+   * Updates the box instantly so typing never waits on the network to feel
+   * responsive, and re-fetches the row list and the tab badges only once
+   * the debounce elapses with no further keystroke.
+   */
+  protected onSearchInput(value: string): void {
+    this.searchInputValue.set(value);
+    if (this.searchDebounceHandle !== null) {
+      clearTimeout(this.searchDebounceHandle);
+    }
+    this.searchDebounceHandle = setTimeout(() => {
+      this.searchDebounceHandle = null;
+      this.filters.set({ tab: this.activeTab(), search: value });
+      void this.load(firstPage(50));
+      void this.loadCounts();
+    }, SEARCH_DEBOUNCE_MS);
+  }
+
+  /**
+   * The stop list's own tab badge (gap map row 2.5) — a server-side
+   * aggregate over the whole catalog, not a count over `items()` that
+   * undercounts until every page is loaded (the trap this row's own gap-map
+   * entry names). `null` renders as "…" rather than a wrong number.
    */
   protected tabCount(tab: StopTab): number | null {
-    if (this.hasMore()) {
+    const counts = this.counts();
+    if (!counts) {
       return null;
     }
-    const items = this.items();
-    if (tab === 'AVAILABLE') {
-      return items.filter((item) => item.available).length;
+    switch (tab) {
+      case 'AVAILABLE':
+        return counts.available;
+      case 'ON_STOP':
+        return counts.onStop;
+      case 'ALL':
+        return counts.total;
     }
-    if (tab === 'ON_STOP') {
-      return items.filter((item) => !item.available).length;
-    }
-    return items.length;
   }
 
   protected visibleItems(): readonly VariantAvailabilityResponse[] {
@@ -223,6 +336,41 @@ export class StopListPage implements OnInit {
     this.bulkReason.set(value);
   }
 
+  // -------------------------------------------------------- P16: stop source
+
+  /**
+   * The explainer's own label (gap map row 2.5b) — only rendered for a row
+   * currently on stop, since "why can't I sell this?" is the question the
+   * row makes its centrepiece and an available dish has no such question to
+   * answer.
+   */
+  protected stopSourceLabel(item: VariantAvailabilityResponse): string | null {
+    if (item.available) {
+      return null;
+    }
+    switch (item.stopSource) {
+      case 'MANUAL':
+        return this.i18n.t('kitchen.stopList.source.manual');
+      case 'POS':
+        return this.i18n.t('kitchen.stopList.source.pos');
+      default:
+        return this.i18n.t('kitchen.stopList.source.unknown');
+    }
+  }
+
+  /** The reveal-on-hover detail: the raw reason code and when it happened — never shown as the primary label, only as a title attribute. */
+  protected stopSourceDetail(item: VariantAvailabilityResponse): string | null {
+    if (item.available || !item.stopChangedAt) {
+      return null;
+    }
+    const when = formatDateTime(new Date(item.stopChangedAt), PLACEHOLDER_TIME_ZONE);
+    return item.stopReasonCode
+      ? this.i18n.t('kitchen.stopList.source.detail', { reason: item.stopReasonCode, when })
+      : when;
+  }
+
+  // ------------------------------------------------------------ mutations
+
   /** One row's stop/unstop, the audited single-item toggle. */
   protected async toggleOne(item: VariantAvailabilityResponse): Promise<void> {
     const scope = this.location.scope();
@@ -239,9 +387,17 @@ export class StopListPage implements OnInit {
       );
       this.items.update((current) =>
         current.map((row) =>
-          row.variantId === item.variantId ? { ...row, available: !row.available } : row,
+          row.variantId === item.variantId
+            ? {
+                ...row,
+                available: !row.available,
+                stopSource: 'MANUAL',
+                stopReasonCode: SINGLE_TOGGLE_REASON,
+              }
+            : row,
         ),
       );
+      void this.loadCounts();
     } catch (error) {
       this.notice.set(this.describe(error));
     } finally {
@@ -250,57 +406,75 @@ export class StopListPage implements OnInit {
   }
 
   /**
-   * Bulk stop/unstop — a client-side loop over the selected rows, each its
-   * own audited call. `toStop` decides the target state for every selected
-   * row alike, which is what "bulk" means on this screen: one shared reason,
-   * applied to a set an operator picked, never a mixed-outcome guess.
+   * Bulk stop/unstop — one round trip to the batch endpoint (wave P16,
+   * gap map row 2.5), replacing the sequential loop of one audited `PUT`
+   * per row this page used to run (a 300-item stop used to be three
+   * hundred round trips with a partial-failure count as the only report).
+   * `toStop` decides the target state for every selected row alike, which
+   * is what "bulk" means on this screen: one shared reason, applied to a
+   * set an operator picked.
    *
-   * `q-data-table`'s bulk-action bar has no field of its own for a reason,
-   * so the reason stays this page's own toolbar control, gated on
-   * `selectedIds()` being non-empty; the action id it emits (`'stop'` /
-   * `'unstop'`) is all this handler needs from the event itself.
+   * No client-side "already in the target state" pre-filter is needed
+   * here, unlike the old loop: `InventoryBulkAvailabilityService` already
+   * reports such a row `APPLIED` with `changed: false` rather than erroring,
+   * so sending every selected id — including one gone from the loaded page
+   * — is both simpler and more correct than guessing locally.
    */
   protected async onBulkAction(event: BulkActionEvent): Promise<void> {
     const toStop = event.actionId === 'stop';
     const scope = this.location.scope();
     const reasonCode = this.bulkReason().trim();
-    const ids = event.rowIds;
+    const ids = [...event.rowIds];
     if (!scope || !reasonCode || ids.length === 0) {
       return;
     }
-    let failed = 0;
-    for (const variantId of ids) {
-      const item = this.items().find((row) => row.variantId === variantId);
-      if (!item || item.available !== toStop) {
-        // Already in the target state, or gone from the loaded page — skip
-        // rather than send a no-op mutation.
-        continue;
-      }
-      this.setBusy(variantId, true);
-      try {
-        await firstValueFrom(
-          this.api.put<{ available: boolean; reasonCode: string }, void>(
-            operationsPaths.inventoryVariantAvailability(scope, variantId),
-            command({ available: !toStop, reasonCode }),
-          ),
-        );
-        this.items.update((current) =>
-          current.map((row) =>
-            row.variantId === variantId ? { ...row, available: !toStop } : row,
-          ),
-        );
-      } catch {
-        failed++;
-      } finally {
-        this.setBusy(variantId, false);
-      }
+    if (ids.length > BULK_AVAILABILITY_MAX_ITEMS) {
+      this.notice.set(
+        this.i18n.t('kitchen.stopList.bulk.tooMany', { max: BULK_AVAILABILITY_MAX_ITEMS }),
+      );
+      return;
     }
-    this.selectedIds.set(new Set());
-    this.notice.set(
-      failed > 0
-        ? this.i18n.t('kitchen.stopList.bulk.partial', { failed })
-        : this.i18n.t('kitchen.stopList.bulk.done', { count: ids.length }),
-    );
+    this.busyVariantIds.update((current) => new Set([...current, ...ids]));
+    try {
+      const result = await firstValueFrom(
+        this.api.post<
+          { variantIds: string[]; available: boolean; reasonCode: string },
+          BulkAvailabilityResponse
+        >(
+          operationsPaths.inventoryBulkAvailability(scope),
+          command({ variantIds: ids, available: !toStop, reasonCode }),
+        ),
+      );
+      const appliedIds = new Set(
+        result.items
+          .filter((outcome) => outcome.status === 'APPLIED')
+          .map((outcome) => outcome.variantId),
+      );
+      this.items.update((current) =>
+        current.map((row) =>
+          appliedIds.has(row.variantId)
+            ? { ...row, available: !toStop, stopSource: 'MANUAL', stopReasonCode: reasonCode }
+            : row,
+        ),
+      );
+      this.notice.set(
+        result.failedCount > 0
+          ? this.i18n.t('kitchen.stopList.bulk.partial', { failed: result.failedCount })
+          : this.i18n.t('kitchen.stopList.bulk.done', { count: result.appliedCount }),
+      );
+      void this.loadCounts();
+    } catch (error) {
+      this.notice.set(this.describe(error));
+    } finally {
+      this.busyVariantIds.update((current) => {
+        const next = new Set(current);
+        for (const id of ids) {
+          next.delete(id);
+        }
+        return next;
+      });
+      this.selectedIds.set(new Set());
+    }
   }
 
   protected dismissNotice(): void {
