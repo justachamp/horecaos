@@ -196,4 +196,22 @@ export const financePaths = {
   commercialStatementExport(tenantId: string, statementId: string): string {
     return `${financePaths.commercialStatement(tenantId, statementId)}/export`;
   },
+
+  /**
+   * `CommercialOperationsController.modulesOnSale`/`.purchaseModule` — Finance
+   * 8.6's purchasable-module catalogue with inline purchase (ADR 0127). GET
+   * browses what is on sale; POST purchases one for this tenant.
+   */
+  commercialModules(tenantId: string): string {
+    return `/api/v1/tenants/${enc(tenantId)}/commercial/modules`;
+  },
+
+  commercialModulesHeld(tenantId: string): string {
+    return `${financePaths.commercialModules(tenantId)}/held`;
+  },
+
+  /** `ArrearsController.tenantArrears` — this tenant's own arrears state (ADR 0127). */
+  commercialArrears(tenantId: string): string {
+    return `/api/v1/tenants/${enc(tenantId)}/commercial/arrears`;
+  },
 } as const;

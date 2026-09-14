@@ -3,6 +3,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { financePaths } from '../../core/api/finance-paths';
+import { command } from '../../core/api/idempotency';
 import { Money } from '../../core/format/money';
 
 /** Mirrors `CommercialOperationsController.SubscriptionResponse`. */
@@ -87,6 +88,59 @@ export interface StatementView {
   readonly lines: readonly StatementLineView[];
 }
 
+/** Mirrors `CommercialModuleController.ModuleView`, read through the tenant-reachable mirror. */
+export interface SellableModuleView {
+  readonly moduleId: string;
+  readonly code: string;
+  readonly name: string;
+  readonly description: string | null;
+  /** `BillingUnit.java`'s constants: `PER_TENANT`, `PER_BRAND`, `PER_LOCATION`, `PER_UNIT`, `ONE_OFF`. */
+  readonly billingUnit: string;
+  readonly unitPrice: Money;
+  readonly featureKeys: readonly string[];
+  readonly status: string;
+  readonly createdBy: string;
+  readonly approvedBy: string | null;
+  readonly activatedAt: string | null;
+  readonly retiredAt: string | null;
+}
+
+/** Mirrors `CommercialModuleController.TenantModuleView`. */
+export interface TenantModuleView {
+  readonly tenantModuleId: string;
+  readonly moduleId: string;
+  readonly moduleCode: string;
+  readonly moduleName: string;
+  readonly billingUnit: string;
+  readonly unitPrice: Money;
+  readonly quantity: number | null;
+  readonly startedAt: string;
+  readonly startedBy: string;
+  readonly startReason: string;
+  readonly endedAt: string | null;
+  readonly endedBy: string | null;
+  readonly endReason: string | null;
+}
+
+/** Mirrors `ArrearsController.TenantArrearsView` (ADR 0127). */
+export interface TenantArrearsView {
+  /** `SubscriptionStatus.java`'s constants — same set as `SubscriptionView.status`. */
+  readonly status: string;
+  readonly planEntitlementsApply: boolean;
+  readonly additionsBlocked: boolean;
+  readonly allowedNext: readonly string[];
+  readonly since: string;
+  readonly daysInStatus: number;
+  readonly suspensionReason: string | null;
+  readonly latestStatement: {
+    readonly statementId: string;
+    readonly number: string;
+    readonly periodKey: string;
+    readonly total: Money;
+    readonly issuedAt: string;
+  } | null;
+}
+
 /** Mirrors `CommercialOperationsController.UsageResponse`. */
 export interface UsageView {
   readonly entitlementKey: string;
@@ -116,11 +170,21 @@ export interface UsageView {
  * `OpenApiSurface` reaches (ADR 0057), rather than this app calling
  * `/api/v1/control-plane/**` for its own invoices.
  *
- * **What is not.** Period close and the prepaid wallet do not exist yet
- * (ADR 0021's own status line), and the platform-wide plan catalogue an
- * "inline purchase" would browse is a `ScopeType.PLATFORM` read no tenant
- * grant can satisfy — see `finance.md` §0 and this API's server-side doc for
- * why this screen does not pretend otherwise.
+ * **The purchasable-module catalogue and arrears state, as of ADR 0127** —
+ * `modulesOnSale`/`modulesHeld`/`purchaseModule` and `arrears` below. The
+ * catalogue was a `ScopeType.PLATFORM` read no tenant grant could satisfy;
+ * `CommercialOperationsController` now serves a tenant-scoped mirror under
+ * the new `COMMERCIAL_MODULE_READ` capability, and `purchaseModule` gives the
+ * calling tenant one of those modules under `COMMERCIAL_SUBSCRIPTION_MANAGE`
+ * — the same capability `TENANT_OWNER`/`TENANT_FINANCE` already hold for
+ * refund execution. `arrears` is the tenant-reachable, single-row mirror of
+ * the platform's cross-tenant arrears board, under the new
+ * `COMMERCIAL_ARREARS_READ` capability.
+ *
+ * **What is still not.** Period close is HorecaOS-staff work — ADR 0088
+ * decided a month is closed by issuing its statement, deliberately manual
+ * until tax and invoicing are approved — so there is nothing for this screen
+ * to add for it. The prepaid wallet stays blocked on ADR 0095.
  */
 @Injectable({ providedIn: 'root' })
 export class CommercialApi {
@@ -168,5 +232,48 @@ export class CommercialApi {
     return firstValueFrom(
       this.api.text(financePaths.commercialStatementExport(tenantId, statementId)),
     );
+  }
+
+  /** Modules HorecaOS sells that this tenant could add. Activated and not retired. */
+  async modulesOnSale(tenantId: string): Promise<readonly SellableModuleView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly SellableModuleView[]>(financePaths.commercialModules(tenantId)),
+    );
+    return result.value ?? [];
+  }
+
+  /** Every module this tenant has had, live ones first. */
+  async modulesHeld(tenantId: string): Promise<readonly TenantModuleView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly TenantModuleView[]>(financePaths.commercialModulesHeld(tenantId)),
+    );
+    return result.value ?? [];
+  }
+
+  /**
+   * The inline purchase: adds an on-sale module to this tenant. `quantity` is
+   * required exactly when the module is billed `PER_UNIT`; every other
+   * billing unit takes none. Billed on the next statement (ADR 0088) — this
+   * does not move money by itself.
+   */
+  async purchaseModule(
+    tenantId: string,
+    moduleId: string,
+    quantity: number | null,
+  ): Promise<{ tenantModuleId: string }> {
+    return firstValueFrom(
+      this.api.post(financePaths.commercialModules(tenantId), command({ moduleId, quantity })),
+    );
+  }
+
+  /**
+   * This tenant's own place in the arrears lifecycle: where the subscription
+   * is right now, how long it has been there, and what that stage restricts.
+   */
+  async arrears(tenantId: string): Promise<TenantArrearsView> {
+    const result = await firstValueFrom(
+      this.api.get<TenantArrearsView>(financePaths.commercialArrears(tenantId)),
+    );
+    return result.value;
   }
 }

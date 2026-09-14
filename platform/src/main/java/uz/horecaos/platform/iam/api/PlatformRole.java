@@ -313,6 +313,10 @@ public enum PlatformRole {
                     COMMERCIAL_SUBSCRIPTION_MANAGE,
                     COMMERCIAL_PLAN_READ,
                     COMMERCIAL_USAGE_READ,
+                    // ADR 0127: browsing the module catalogue and this tenant's own
+                    // place in the arrears lifecycle, from the operations console.
+                    COMMERCIAL_MODULE_READ,
+                    COMMERCIAL_ARREARS_READ,
                     // ADR 0095: the owner's own wallet -- both balances, the ledger,
                     // live bonus grants and each statement's paid and due amounts.
                     COMMERCIAL_WALLET_READ,
@@ -552,6 +556,9 @@ public enum PlatformRole {
                     COMMERCIAL_OVERRIDE_APPROVE,
                     COMMERCIAL_PLAN_READ,
                     COMMERCIAL_USAGE_READ,
+                    // ADR 0127: same pair as TENANT_OWNER's own copy of this block.
+                    COMMERCIAL_MODULE_READ,
+                    COMMERCIAL_ARREARS_READ,
                     // ADR 0095: finance is who answers "why is this still due".
                     COMMERCIAL_WALLET_READ,
                     REPORTING_READ,

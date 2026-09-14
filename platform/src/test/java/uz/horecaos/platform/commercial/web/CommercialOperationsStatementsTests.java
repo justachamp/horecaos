@@ -14,12 +14,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import uz.horecaos.platform.commercial.api.EntitlementService;
+import uz.horecaos.platform.commercial.application.ModuleCatalogService;
 import uz.horecaos.platform.commercial.application.PlanCatalogService;
 import uz.horecaos.platform.commercial.application.StatementService;
 import uz.horecaos.platform.commercial.application.SubscriptionService;
 import uz.horecaos.platform.commercial.application.UsageMeteringService;
 import uz.horecaos.platform.commercial.domain.Statement;
 import uz.horecaos.platform.commercial.domain.StatementLine;
+import uz.horecaos.platform.iam.api.CurrentActor;
 
 /**
  * Finance 8/X.4: the tenant-facing mirror of {@link CommercialStatementController}'s
@@ -48,7 +50,9 @@ class CommercialOperationsStatementsTests {
             mock(EntitlementService.class),
             mock(UsageMeteringService.class),
             mock(PlanCatalogService.class),
-            statements);
+            statements,
+            mock(ModuleCatalogService.class),
+            mock(CurrentActor.class));
 
     @Test
     void listPassesTheirOwnTenantThroughAndMapsEveryStatement() {

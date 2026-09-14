@@ -4429,8 +4429,27 @@ export const messagesEn = {
   'finance.subscription.statements.lineQuantity': 'Quantity',
   'finance.subscription.statements.lineAmount': 'Amount',
   'finance.subscription.statements.lineEmpty': 'This statement has no lines.',
+  'finance.subscription.arrears.title': 'Account standing',
+  'finance.subscription.arrears.restricted':
+    'New modules and locations cannot be added while this subscription is in this state.',
+  'finance.subscription.arrears.since': 'Since',
+  'finance.subscription.arrears.days': '{days} days',
+  'finance.subscription.arrears.latestStatement': 'Latest statement',
+  'finance.subscription.modules.title': 'Purchasable modules',
+  'finance.subscription.modules.name': 'Module',
+  'finance.subscription.modules.billingUnit': 'Billed',
+  'finance.subscription.modules.price': 'Price',
+  'finance.subscription.modules.add': 'Add',
+  'finance.subscription.modules.added': 'Added',
+  'finance.subscription.modules.empty': 'Nothing is on sale right now.',
+  'finance.subscription.modules.quantityLabel': 'Quantity',
+  'finance.subscription.modules.billingUnit.PER_TENANT': 'Per tenant',
+  'finance.subscription.modules.billingUnit.PER_BRAND': 'Per brand',
+  'finance.subscription.modules.billingUnit.PER_LOCATION': 'Per location',
+  'finance.subscription.modules.billingUnit.PER_UNIT': 'Per unit',
+  'finance.subscription.modules.billingUnit.ONE_OFF': 'One-off',
   'finance.subscription.notBuiltNote':
-    'Period close and the prepaid wallet are not built yet (ADR 0021); neither is the purchasable-module catalogue or the arrears banner.',
+    'Period close is HorecaOS staff work (a month is closed by issuing its statement, ADR 0088); the prepaid wallet is not built yet (ADR 0095).',
 
   // ---------------------------------------------------------------- staff 9.3 (wave 39)
   'staff.shell.activity': 'Activity',
