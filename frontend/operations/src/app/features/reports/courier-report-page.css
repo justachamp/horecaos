@@ -1,0 +1,135 @@
+.couriers {
+  padding: 24px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.denied {
+  color: var(--q-ink-muted);
+}
+
+.error-band {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--q-error-tint);
+  border-radius: var(--q-radius);
+}
+
+.section-gap {
+  margin-top: 32px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  overflow-x: auto;
+}
+
+.table thead th {
+  text-align: left;
+  color: var(--q-ink-muted);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.num {
+  text-align: right;
+}
+
+.sla-table {
+  overflow-x: auto;
+}
+
+.sla-cell {
+  position: relative;
+}
+
+.sla-cell__share {
+  display: block;
+  color: var(--q-ink-subtle);
+}
+
+/* Same green-to-red ramp branch-sla-report-page.css already uses — one distribution, two scopes. */
+.sla-cell--under_30 {
+  background: color-mix(in srgb, var(--q-success, #1a7f37) 12%, transparent);
+}
+.sla-cell--m30_35 {
+  background: color-mix(in srgb, var(--q-success, #1a7f37) 6%, transparent);
+}
+.sla-cell--m35_40 {
+  background: transparent;
+}
+.sla-cell--m40_50 {
+  background: color-mix(in srgb, var(--q-warning) 10%, transparent);
+}
+.sla-cell--m50_60 {
+  background: color-mix(in srgb, var(--q-warning) 20%, transparent);
+}
+.sla-cell--over_60 {
+  background: color-mix(in srgb, var(--q-error) 15%, transparent);
+}
+
+.bucket-version {
+  margin-top: 8px;
+  color: var(--q-ink-subtle);
+}
+
+.total-variance {
+  margin-top: 12px;
+  color: var(--q-ink-subtle);
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--q-type-body-xs);
+}
+
+.status-pill--matched {
+  background: color-mix(in srgb, var(--q-success, #1a7f37) 14%, transparent);
+  color: var(--q-success, #1a7f37);
+}
+
+.status-pill--variance {
+  background: color-mix(in srgb, var(--q-warning) 18%, transparent);
+  color: var(--q-warning-text);
+}
+
+.status-pill--unbilled {
+  background: color-mix(in srgb, var(--q-error) 14%, transparent);
+  color: var(--q-error-text);
+}
+
+.status-pill--pending,
+.status-pill--unmatched_line {
+  background: var(--q-hairline);
+  color: var(--q-ink-muted);
+}
+
+.secondary {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
