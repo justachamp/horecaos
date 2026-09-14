@@ -257,5 +257,16 @@
 }
 
 @if (inviteDialogOpen()) {
-  <q-staff-invite-dialog (dismiss)="closeInviteDialog()" />
+  <q-staff-invite-dialog
+    [tenantId]="tenantId() ?? ''"
+    [roles]="roles()"
+    [directory]="directory()"
+    [myScopes]="myScopes()"
+    [busy]="inviteDialogBusy()"
+    [serverError]="inviteDialogError()"
+    [duplicatePhoneSubject]="inviteDuplicateSubject()"
+    [createdLink]="inviteCreatedLink()"
+    (submitted)="submitInvite($event)"
+    (dismiss)="closeInviteDialog()"
+  />
 }

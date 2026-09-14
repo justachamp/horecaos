@@ -6,7 +6,7 @@ import { CurrentTenant } from '../../core/auth/current-tenant';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
-import { ApiError } from '../../core/api/problem-details';
+import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { formatDate } from '../../core/format/datetime';
 import { describeApiError } from '../orders/order-errors';
 import { StaffAccessDialog, StaffAccessDialogMode } from './staff-access-dialog';
@@ -16,6 +16,7 @@ import {
   RoleDescriptor,
   ScopeDirectory,
   StaffApi,
+  StaffInvitationRequest,
   TelegramStaffLinkView,
 } from './staff-api';
 import { StaffInviteDialog } from './staff-invite-dialog';
@@ -101,6 +102,10 @@ export class StaffPage {
   protected readonly accessDialogError = signal<string | null>(null);
 
   protected readonly inviteDialogOpen = signal(false);
+  protected readonly inviteDialogBusy = signal(false);
+  protected readonly inviteDialogError = signal<string | null>(null);
+  protected readonly inviteDuplicateSubject = signal<string | null>(null);
+  protected readonly inviteCreatedLink = signal<string | null>(null);
 
   protected readonly notice = signal<string | null>(null);
 
@@ -463,11 +468,46 @@ export class StaffPage {
   // ---------------------------------------------------------- invite dialog
 
   protected openInviteDialog(): void {
+    this.inviteDialogError.set(null);
+    this.inviteDuplicateSubject.set(null);
+    this.inviteCreatedLink.set(null);
     this.inviteDialogOpen.set(true);
   }
 
   protected closeInviteDialog(): void {
     this.inviteDialogOpen.set(false);
+    // A completed invite already refreshed the list on submit; closing from
+    // the success state must not lose that state before the reset.
+    this.inviteCreatedLink.set(null);
+    this.inviteDuplicateSubject.set(null);
+    this.inviteDialogError.set(null);
+  }
+
+  protected async submitInvite(request: StaffInvitationRequest): Promise<void> {
+    const tenantId = this.tenant.tenantId();
+    if (!tenantId) {
+      return;
+    }
+    this.inviteDialogBusy.set(true);
+    this.inviteDialogError.set(null);
+    this.inviteDuplicateSubject.set(null);
+    try {
+      const created = await this.api.invite(tenantId, request);
+      this.inviteCreatedLink.set(created.inviteLink);
+      this.notice.set(this.i18n.t('staff.inviteDialog.toast'));
+      await this.reload();
+    } catch (error) {
+      if (error instanceof ApiError && error.code === ApiErrorCode.RESOURCE_CONFLICT) {
+        const existingSubjectId = error.problem?.['existingSubjectId'];
+        if (typeof existingSubjectId === 'string') {
+          this.inviteDuplicateSubject.set(existingSubjectId);
+          return;
+        }
+      }
+      this.inviteDialogError.set(this.describeError(error));
+    } finally {
+      this.inviteDialogBusy.set(false);
+    }
   }
 
   // ----------------------------------------------------------------- load

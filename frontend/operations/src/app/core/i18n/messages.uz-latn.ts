@@ -429,6 +429,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'invite.loading': 'Taklifnoma tekshirilmoqda…',
   'invite.title': 'Hisobingizni sozlang',
   'invite.lead': '{tenant} HorecaOSʻdan foydalanadi va siz uning egasisiz.',
+  'invite.leadStaff': '{tenant} sizni "{job}" lavozimiga taklif qildi.',
   'invite.sentTo': 'Taklifnoma {email} manziliga yuborildi',
   'invite.firstName': 'Ism',
   'invite.lastName': 'Familiya',
@@ -965,10 +966,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.tab.templates': 'Shablonlar',
   'settings.notifications.tab.routing': 'Yoʻnaltirish',
   'settings.notifications.automation.title': 'Avtomatlashtirish',
-  'settings.notifications.field.paymentLinkAutoSend': 'Toʻlov havolasini mijozga avtomatik yuborish',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Toʻlov havolasini mijozga avtomatik yuborish',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Hali ishlamaydi: hech qanday jarayon bu tugmachani hali oʻqimaydi, shuning uchun yoqish faqat tanlovni saqlaydi.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Agregator smenasi ochilishi/yopilishi haqida xabar berish',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Agregator smenasi ochilishi/yopilishi haqida xabar berish',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Hali ishlamaydi: platformada bu xabarni ishga tushiradigan agregator-smena hodisasi hali yoʻq.',
   'settings.notifications.create.action': 'Yangi shablon',
@@ -1014,7 +1017,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.editor.subject': 'Mavzu',
   'settings.notifications.editor.body': 'Matn',
   'settings.notifications.editor.variables': 'Oʻzgaruvchi qoʻshish',
-  'settings.notifications.editor.variables.empty': 'Bu bildirishnoma sinfi uchun oʻzgaruvchilar taklif etilmagan.',
+  'settings.notifications.editor.variables.empty':
+    'Bu bildirishnoma sinfi uchun oʻzgaruvchilar taklif etilmagan.',
   'settings.notifications.editor.preview': 'Mijoz qanday koʻradi',
   'settings.notifications.editor.save': 'Qoralamani saqlash',
   'settings.notifications.editor.saving': 'Saqlanmoqda…',
@@ -1033,9 +1037,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.testSend.result.ACCEPTED': 'Provayder qabul qildi.',
   'settings.notifications.testSend.result.REJECTED': 'Provayder rad etdi.',
   'settings.notifications.testSend.result.RETRYABLE': 'Uzatish xatosi — qayta urinib koʻring.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Noaniq — provayder allaqachon yuborgan boʻlishi mumkin.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Noaniq — provayder allaqachon yuborgan boʻlishi mumkin.',
   'settings.notifications.activate.confirm.title': 'Bu versiya faollashtirilsinmi?',
-  'settings.notifications.activate.confirm.body': 'Bu shablon boʻyicha har bir xabar shu matndan foydalanadi.',
+  'settings.notifications.activate.confirm.body':
+    'Bu shablon boʻyicha har bir xabar shu matndan foydalanadi.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'Bu versiya SMS shlyuzida hali «{state}» holatida. Bu oʻzgarmaguncha faollashtirish uni yuborilishiga olib kelmaydi.',
   'settings.notifications.activate.confirm.confirm': 'Faollashtirish',
@@ -1056,9 +1062,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.routing.action.editTopic': 'Mavzuni oʻzgartirish',
   'settings.notifications.routing.action.unbind': 'Uzish',
   'settings.notifications.routing.unbind.confirm.title': 'Bu chat uzilsinmi?',
-  'settings.notifications.routing.unbind.confirm.body': 'U darhol barcha hodisa sinflarini olishni toʻxtatadi.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'U darhol barcha hodisa sinflarini olishni toʻxtatadi.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Uzish',
-  'settings.notifications.routing.topic.prompt': 'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
+  'settings.notifications.routing.topic.prompt':
+    'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
   'settings.notifications.routing.topic.save': 'Saqlash',
 
   // 10.10 Maʻlumotnoma maʻlumotlari
@@ -1758,7 +1766,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.menus.filter.all': 'Barchasi',
   'catalog.menus.search.placeholder': 'Nomi yoki SKU boʻyicha qidirish',
   'catalog.menus.selectAll': 'Barcha qatorlarni tanlash',
-  'catalog.menus.selectionCapped': 'Faqat birinchi {cap} tasi — qo\'llang, so\'ng qolganlarini tanlang',
+  'catalog.menus.selectionCapped':
+    "Faqat birinchi {cap} tasi — qo'llang, so'ng qolganlarini tanlang",
   'catalog.menus.column.offering': 'Menyudagi holati',
   'catalog.menus.column.fulfillment': 'Buyurtma turlari',
   'catalog.menus.fulfillment.DELIVERY': 'Yetk',
@@ -2149,7 +2158,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.dispatch.hint':
     'Buyurtmani kuryer ustiga tashlab tayinlang. Uni orqaga, "Tayinlanmagan"ga tashlab, tayinlashni bekor qiling.',
   'delivery.dispatch.column.unassigned': 'Tayinlanmagan',
-  'delivery.dispatch.column.ineligible': 'Bu yerga tashlab bo\'lmaydi — {reason}',
+  'delivery.dispatch.column.ineligible': "Bu yerga tashlab bo'lmaydi — {reason}",
   'delivery.dispatch.action.unassign': 'Tayinlashni bekor qilish',
   'delivery.dispatch.status.PLANNED': 'Rejalashtirilgan',
   'delivery.dispatch.status.WAITING_TO_SOURCE': 'Kuryer izlanmoqda',
@@ -2904,6 +2913,25 @@ export const messagesUzLatn: MessageCatalogue = {
     'Telefon orqali mustaqil taklif qilish hali qurilmagan: platforma faqat kompaniyani ulash jarayonida egasi uchun hisob yarata oladi, oddiy xodim uchun emas.',
   'staff.inviteDialog.workaround':
     'Allaqachon hisobi bor odamga kirish huquqi berish uchun uning kartasini oching va lavozim qoʻshing.',
+  'staff.inviteDialog.rule':
+    'Har bir xodimning bir yoki bir nechta lavozimi bor, va har bir lavozim biror joyda beriladi — butun kompaniyaga, bitta brendga yoki bitta filialga. Bitta filialda berilgan lavozim faqat oʻsha filialda ishlaydi.',
+  'staff.inviteDialog.name.label': 'Ism va familiya',
+  'staff.inviteDialog.name.required': 'Ismni kiriting',
+  'staff.inviteDialog.phone.label': 'Telefon',
+  'staff.inviteDialog.phone.required': 'Toʻliq telefon raqamini kiriting',
+  'staff.inviteDialog.phone.duplicate': 'Bu odamning allaqachon kirish huquqi bor.',
+  'staff.inviteDialog.phone.duplicateLink': 'Profilini ochish',
+  'staff.inviteDialog.email.label': 'Email (ixtiyoriy)',
+  'staff.inviteDialog.confirm': 'Taklif qilish',
+  'staff.inviteDialog.submitting': 'Taklif qilinmoqda…',
+  'staff.inviteDialog.confirmClose': 'Bu taklifni bekor qilasizmi?',
+  'staff.inviteDialog.doneTitle': 'Taklif yaratildi',
+  'staff.inviteDialog.doneBody':
+    'Bu havolani yangi hodimga qulay usulda yuboring — Telegram, SMS yoki shaxsan. U bir marta, 72 soat davomida ishlaydi.',
+  'staff.inviteDialog.copy': 'Havolani nusxalash',
+  'staff.inviteDialog.copied': 'Nusxalandi',
+  'staff.inviteDialog.done': 'Tayyor',
+  'staff.inviteDialog.toast': 'Taklif yaratildi',
 
   'staff.detail.back': 'Roʻyxatga qaytish',
   'staff.detail.notFound': 'Bunday xodim yoʻq',

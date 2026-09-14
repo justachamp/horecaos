@@ -444,6 +444,7 @@ export const messagesEn = {
   'invite.loading': 'Checking your invitation…',
   'invite.title': 'Set up your account',
   'invite.lead': '{tenant} uses HorecaOS, and you are its owner.',
+  'invite.leadStaff': '{tenant} invited you to work as {job}.',
   'invite.sentTo': 'Invitation sent to {email}',
   'invite.firstName': 'First name',
   'invite.lastName': 'Last name',
@@ -982,10 +983,12 @@ export const messagesEn = {
   'settings.notifications.tab.templates': 'Templates',
   'settings.notifications.tab.routing': 'Routing',
   'settings.notifications.automation.title': 'Automation',
-  'settings.notifications.field.paymentLinkAutoSend': 'Send the payment link to the customer automatically',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Send the payment link to the customer automatically',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Not yet enforced: no send trigger reads this switch yet, so turning it on records the choice without changing behaviour.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Notify on aggregator shift open/close',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Notify on aggregator shift open/close',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Not yet enforced: no aggregator-shift event exists in the platform yet to trigger this.',
   'settings.notifications.create.action': 'New template',
@@ -1031,7 +1034,8 @@ export const messagesEn = {
   'settings.notifications.editor.subject': 'Subject',
   'settings.notifications.editor.body': 'Text',
   'settings.notifications.editor.variables': 'Insert a variable',
-  'settings.notifications.editor.variables.empty': 'No merge variables are offered for this notification class.',
+  'settings.notifications.editor.variables.empty':
+    'No merge variables are offered for this notification class.',
   'settings.notifications.editor.preview': 'How the customer sees it',
   'settings.notifications.editor.save': 'Save draft',
   'settings.notifications.editor.saving': 'Saving…',
@@ -1050,15 +1054,18 @@ export const messagesEn = {
   'settings.notifications.testSend.result.ACCEPTED': 'Accepted by the provider.',
   'settings.notifications.testSend.result.REJECTED': 'Refused by the provider.',
   'settings.notifications.testSend.result.RETRYABLE': 'A transport error — try again.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Uncertain — the provider may already have sent it.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Uncertain — the provider may already have sent it.',
   'settings.notifications.activate.confirm.title': 'Activate this version?',
-  'settings.notifications.activate.confirm.body': 'Every message using this template will use this wording from now on.',
+  'settings.notifications.activate.confirm.body':
+    'Every message using this template will use this wording from now on.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'This version is still {state} with its SMS gateway. Activating it will not make it send until that changes.',
   'settings.notifications.activate.confirm.confirm': 'Activate',
   'settings.notifications.routing.lead':
     'Which of this brand’s bound Telegram chats hear about which events, and their forum topic.',
-  'settings.notifications.routing.empty': 'No chat is bound yet. Use "/link <code>" in a Telegram group to bind one.',
+  'settings.notifications.routing.empty':
+    'No chat is bound yet. Use "/link <code>" in a Telegram group to bind one.',
   'settings.notifications.routing.column.chat': 'Chat',
   'settings.notifications.routing.column.topic': 'Topic',
   'settings.notifications.routing.column.status': 'Status',
@@ -1072,7 +1079,8 @@ export const messagesEn = {
   'settings.notifications.routing.action.editTopic': 'Change topic',
   'settings.notifications.routing.action.unbind': 'Unbind',
   'settings.notifications.routing.unbind.confirm.title': 'Unbind this chat?',
-  'settings.notifications.routing.unbind.confirm.body': 'It stops receiving every event class immediately.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'It stops receiving every event class immediately.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Unbind',
   'settings.notifications.routing.topic.prompt': 'Forum topic id — leave empty for the flat chat',
   'settings.notifications.routing.topic.save': 'Save',
@@ -2916,6 +2924,25 @@ export const messagesEn = {
     'Self-service invitation by phone is not built yet: the platform can only create an account for the tenant owner during onboarding, not for an ordinary staff member.',
   'staff.inviteDialog.workaround':
     'To give access to someone who already has an account, open their record and add a job.',
+  'staff.inviteDialog.rule':
+    'A person has one or more jobs, and each job is given somewhere — the whole company, one brand, or one branch. A job given at one branch works only at that branch.',
+  'staff.inviteDialog.name.label': 'Full name',
+  'staff.inviteDialog.name.required': 'A name is required',
+  'staff.inviteDialog.phone.label': 'Phone',
+  'staff.inviteDialog.phone.required': 'A complete phone number is required',
+  'staff.inviteDialog.phone.duplicate': 'This person already has access.',
+  'staff.inviteDialog.phone.duplicateLink': 'Open their record',
+  'staff.inviteDialog.email.label': 'Email (optional)',
+  'staff.inviteDialog.confirm': 'Invite',
+  'staff.inviteDialog.submitting': 'Inviting…',
+  'staff.inviteDialog.confirmClose': 'Discard this invitation?',
+  'staff.inviteDialog.doneTitle': 'Invitation created',
+  'staff.inviteDialog.doneBody':
+    'Send this link to the new colleague however you reach them — Telegram, SMS, in person. It works once, for 72 hours.',
+  'staff.inviteDialog.copy': 'Copy link',
+  'staff.inviteDialog.copied': 'Copied',
+  'staff.inviteDialog.done': 'Done',
+  'staff.inviteDialog.toast': 'Invitation created',
 
   'staff.detail.back': 'Back to the list',
   'staff.detail.notFound': 'No such person',
