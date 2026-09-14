@@ -1,0 +1,39 @@
+@if (call(); as ringing) {
+  <div class="call-bar" data-testid="call-bar">
+    <span class="call-bar__dot" aria-hidden="true"></span>
+    <span class="q-caption call-bar__label">{{ 'shell.callBar.ringing' | t }}</span>
+    <span class="q-body-sm call-bar__caller">
+      {{
+        ringing.unknownCaller
+          ? (ringing.maskedCallerNumber ?? '—')
+          : (ringing.customerDisplayName ?? ringing.maskedCallerNumber ?? '—')
+      }}
+    </span>
+
+    @if (ringing.acknowledgedBy) {
+      @if (!ringing.unknownCaller) {
+        <button
+          type="button"
+          class="q-caption call-bar__action"
+          (click)="startOrder()"
+          data-testid="call-bar-start-order"
+        >
+          {{ 'shell.callBar.startOrder' | t }}
+        </button>
+      }
+      <button type="button" class="q-caption call-bar__action" (click)="openCallCentre()">
+        {{ 'shell.callBar.open' | t }}
+      </button>
+    } @else {
+      <button
+        type="button"
+        class="q-caption call-bar__action call-bar__action--primary"
+        [disabled]="claiming()"
+        (click)="claim()"
+        data-testid="call-bar-claim"
+      >
+        {{ 'shell.callBar.claim' | t }}
+      </button>
+    }
+  </div>
+}

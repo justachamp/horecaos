@@ -1,27 +1,39 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+import { Router } from '@angular/router';
 
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ApiError } from '../../core/api/problem-details';
-import { CreateCustomerDialog, CreateCustomerSubmission } from '../customers/create-customer-dialog';
+import { VoicePresence } from '../../shell/voice-presence';
+import {
+  CreateCustomerDialog,
+  CreateCustomerSubmission,
+} from '../customers/create-customer-dialog';
 import { CustomersApi } from '../customers/customers-api';
-import { CallCentreApi, CallLogEntry, PresenceState, PresenceView, ScreenPopCard } from './call-centre-api';
-
-/** Same cadence every other live screen in this app polls at (`order-queue.ts`, `vdu-page.ts`), until ADR 0045 exists. */
-const POLL_INTERVAL_MS = 10_000;
+import { CallCentreApi, CallLogEntry, PresenceState, PresenceView } from './call-centre-api';
 
 const PRESENCE_STATES: readonly PresenceState[] = ['ONLINE', 'PAUSED', 'WRAP_UP', 'OFFLINE'];
 
 /**
- * IA 1.6 — Call centre (ADR 0064, wave 46): presence, the screen-pop poll,
- * and the branch's call log.
+ * IA 1.6 — Call centre (ADR 0064, wave 46; presence/screen-pop lifted into
+ * `VoicePresence` and the roster wired up in W01).
  *
  * **Built**: marking your own presence at this branch, with a required
- * reason on PAUSED; polling for the current ringing call and claiming its
- * card; an unknown caller's card offering create-customer, prefilled with
- * the number the operator already heard; the branch's recent call list.
+ * reason on PAUSED; a team roster of every operator's presence at this
+ * branch; polling for the current ringing call and claiming its card; an
+ * unknown caller's card offering create-customer, prefilled with the number
+ * the operator already heard, or a known caller's card offering to start an
+ * order for them (which records the call's provenance once the order
+ * exists — see `new-order-page.ts`); the branch's recent call list.
  *
  * **Not built, deliberately**: a softphone or click-to-call. ADR 0064
  * considered a WebRTC softphone inside the operations app and refused it —
@@ -32,6 +44,15 @@ const PRESENCE_STATES: readonly PresenceState[] = ['ONLINE', 'PAUSED', 'WRAP_UP'
  * Telephony KPIs (average handling time, per-operator leaderboards) are IA
  * §7.5's own screen, fed by the same {@link CallCentreApi.callLog} facts
  * through ADR 0043's day-close pipeline — not duplicated here.
+ *
+ * **Presence and the screen-pop poll live in `VoicePresence` now**, not
+ * here — that is what lets the shell's call bar (IA X.37) show the same
+ * ringing card on every screen, not only this one. This page still owns the
+ * call log, the presence-change form, the roster, and the create-customer
+ * flow; `ngOnInit` calls `VoicePresence.start()` itself (idempotent, same
+ * shape as `CurrentLocation.ensureLoaded`) so the poll runs even when an
+ * operator opens this page directly rather than through the shell's
+ * already-mounted bar.
  */
 @Component({
   selector: 'q-call-centre-page',
@@ -44,7 +65,8 @@ export class CallCentrePage implements OnInit {
   private readonly location = inject(CurrentLocation);
   private readonly api = inject(CallCentreApi);
   private readonly customersApi = inject(CustomersApi);
-  private readonly destroyRef = inject(DestroyRef);
+  private readonly voicePresence = inject(VoicePresence);
+  private readonly router = inject(Router);
   protected readonly i18n = inject(I18n);
 
   protected readonly presenceStates = PRESENCE_STATES;
@@ -52,14 +74,19 @@ export class CallCentrePage implements OnInit {
   protected readonly firstLoadComplete = signal(false);
   protected readonly denied = signal(false);
 
-  protected readonly presence = signal<PresenceView | null>(null);
+  protected readonly presence = computed(() => this.voicePresence.presence());
   protected readonly presenceReason = signal('');
   protected readonly presenceSaving = signal(false);
   protected readonly presenceError = signal<string | null>(null);
 
-  protected readonly currentCall = signal<ScreenPopCard | null>(null);
-  protected readonly screenPopError = signal<string | null>(null);
+  protected readonly currentCall = computed(() => this.voicePresence.currentCall());
+  protected readonly screenPopError = computed(() =>
+    this.voicePresence.pollError() ? this.i18n.t('orders.callCentre.screenPop.error') : null,
+  );
   protected readonly acknowledging = signal(false);
+
+  /** The branch's team board — empty and silently hidden for an operator who holds VOICE_PRESENCE_MANAGE but not VOICE_PRESENCE_READ (`location-staff`, `PlatformRole.java`). */
+  protected readonly roster = signal<readonly PresenceView[]>([]);
 
   protected readonly callLog = signal<readonly CallLogEntry[]>([]);
 
@@ -67,13 +94,6 @@ export class CallCentrePage implements OnInit {
   protected readonly createCustomerPhone = signal('');
   protected readonly createCustomerBusy = signal(false);
   protected readonly createCustomerError = signal<string | null>(null);
-
-  private pollHandle: ReturnType<typeof setInterval> | null = null;
-  private readonly onVisibilityChange = (): void => {
-    if (document.visibilityState === 'visible') {
-      void this.pollCurrentCall();
-    }
-  };
 
   async ngOnInit(): Promise<void> {
     await this.location.ensureLoaded();
@@ -85,8 +105,10 @@ export class CallCentrePage implements OnInit {
     }
 
     try {
-      const [presence, callLog] = await Promise.all([this.api.myPresence(scope), this.api.callLog(scope)]);
-      this.presence.set(presence);
+      const [, callLog] = await Promise.all([
+        this.voicePresence.refreshPresence(),
+        this.api.callLog(scope),
+      ]);
       this.callLog.set(callLog);
       this.denied.set(false);
     } catch (error) {
@@ -99,48 +121,24 @@ export class CallCentrePage implements OnInit {
       this.firstLoadComplete.set(true);
     }
 
-    document.addEventListener('visibilitychange', this.onVisibilityChange);
-    this.pollHandle = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        void this.pollCurrentCall();
-      }
-    }, POLL_INTERVAL_MS);
-    this.destroyRef.onDestroy(() => {
-      document.removeEventListener('visibilitychange', this.onVisibilityChange);
-      if (this.pollHandle !== null) {
-        clearInterval(this.pollHandle);
-      }
-    });
-
-    void this.pollCurrentCall();
-  }
-
-  private async pollCurrentCall(): Promise<void> {
-    const scope = this.location.scope();
-    if (!scope) {
-      return;
-    }
     try {
-      const card = await this.api.currentCall(scope);
-      this.currentCall.set(card.ringing ? card : null);
-      this.screenPopError.set(null);
-    } catch (error) {
-      // A poll failing once is not worth interrupting an operator over; the
-      // next tick tries again. Only a persistent 403 is worth a message, and
-      // that already surfaced on first load.
-      if (error instanceof ApiError && error.status !== 403) {
-        this.screenPopError.set(this.i18n.t('orders.callCentre.screenPop.error'));
-      }
+      this.roster.set(await this.api.roster(scope));
+    } catch {
+      // location-staff holds VOICE_PRESENCE_MANAGE and not VOICE_PRESENCE_READ
+      // (PlatformRole.java's own comment on that split) — a 403 here just
+      // means no team board for this operator, not a reason to deny the
+      // whole screen they otherwise have every right to use.
     }
+
+    this.voicePresence.start();
   }
 
-  protected presenceStateLabel(state: PresenceState): string {
+  protected presenceStateLabel(state: string): string {
     return this.i18n.t(('orders.callCentre.presence.state.' + state) as MessageKey);
   }
 
   protected async setPresence(state: PresenceState): Promise<void> {
-    const scope = this.location.scope();
-    if (!scope || this.presenceSaving()) {
+    if (this.presenceSaving()) {
       return;
     }
     const reason = this.presenceReason().trim();
@@ -151,8 +149,7 @@ export class CallCentrePage implements OnInit {
     this.presenceSaving.set(true);
     this.presenceError.set(null);
     try {
-      const updated = await this.api.setPresence(scope, state, state === 'PAUSED' ? reason : null);
-      this.presence.set(updated);
+      await this.voicePresence.setPresence(state, state === 'PAUSED' ? reason : null);
       this.presenceReason.set('');
     } catch {
       this.presenceError.set(this.i18n.t('orders.callCentre.presence.error'));
@@ -162,15 +159,13 @@ export class CallCentrePage implements OnInit {
   }
 
   protected async claimCurrentCall(): Promise<void> {
-    const scope = this.location.scope();
     const call = this.currentCall();
-    if (!scope || !call?.callEventId || this.acknowledging()) {
+    if (!call?.callEventId || this.acknowledging()) {
       return;
     }
     this.acknowledging.set(true);
     try {
-      await this.api.acknowledge(scope, call.callEventId);
-      await this.pollCurrentCall();
+      await this.voicePresence.claim(call.callEventId);
     } catch {
       // A claim that lost the race (another operator got there first, or the
       // call already ended) is not an error worth a message — the next poll
@@ -178,6 +173,19 @@ export class CallCentrePage implements OnInit {
     } finally {
       this.acknowledging.set(false);
     }
+  }
+
+  /**
+   * ADR 0064: starts an order for the caller this claimed card already
+   * names, carrying the call's id so `new-order-page.ts` can link the order
+   * it creates back to this call — see that page's own doc.
+   */
+  protected startOrderForCall(): void {
+    const call = this.currentCall();
+    if (!call?.callEventId) {
+      return;
+    }
+    void this.router.navigate(['/orders/new'], { queryParams: { callEventId: call.callEventId } });
   }
 
   /** `eventType` is always one of the five ADR 0064 vocabulary words the backend's own `CallEventType` enum defines. */
@@ -238,7 +246,7 @@ export class CallCentrePage implements OnInit {
       this.createCustomerOpen.set(false);
       // The customer now exists; the next poll re-resolves this same caller
       // against it rather than this page guessing the new account's shape.
-      await this.pollCurrentCall();
+      await this.voicePresence.refreshCurrentCall();
     } catch {
       this.createCustomerError.set(this.i18n.t('orders.callCentre.screenPop.error'));
     } finally {

@@ -1,0 +1,55 @@
+.call-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+  border-radius: var(--q-radius, 4px);
+}
+
+/* Tone is carried by a dot plus text, never by colour alone — the same rule `shell.css`'s own `.late__dot` follows. */
+.call-bar__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--q-error);
+  flex: none;
+  animation: call-bar-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes call-bar-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.call-bar__caller {
+  font-weight: 600;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.call-bar__action {
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.call-bar__action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.call-bar__action--primary {
+  font-weight: 600;
+}
