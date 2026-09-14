@@ -181,11 +181,13 @@
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   padding: 6px 10px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   font-size: var(--q-type-body-sm);
+  font-family: inherit;
 }
 
 .predicate-row {
@@ -205,6 +207,26 @@
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   font-size: var(--q-type-body-xs);
+}
+
+.field__hint {
+  color: var(--q-error-text);
+  margin: 2px 0 0;
+}
+
+.predicate-summary {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.predicate-summary li {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
 }
 
 .dialog__error {

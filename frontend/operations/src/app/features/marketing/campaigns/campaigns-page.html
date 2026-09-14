@@ -27,6 +27,15 @@
         >
           {{ 'marketing.campaigns.tab.suppressions' | t }}
         </button>
+        <button
+          type="button"
+          class="main__subnav-item"
+          data-testid="tab-courier-broadcasts"
+          [class.main__subnav-item--active]="view() === 'courierBroadcasts'"
+          (click)="switchView('courierBroadcasts')"
+        >
+          {{ 'marketing.courierBroadcasts.title' | t }}
+        </button>
       </nav>
     </header>
 
@@ -121,18 +130,34 @@
                   <th>{{ 'marketing.audiences.column.name' | t }}</th>
                   <th>{{ 'marketing.audiences.column.description' | t }}</th>
                   <th>{{ 'marketing.audiences.column.status' | t }}</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 @for (audience of audiences(); track audience.audienceId) {
-                  <tr data-testid="audience-row">
+                  <tr
+                    class="row-clickable"
+                    tabindex="0"
+                    data-testid="audience-row"
+                    (click)="openAudienceDetail(audience)"
+                    (keydown.enter)="openAudienceDetail(audience)"
+                  >
                     <td>{{ audience.name }}</td>
                     <td>{{ audience.description ?? '—' }}</td>
                     <td>{{ audience.status }}</td>
+                    <td>
+                      <button
+                        type="button"
+                        data-testid="audience-view"
+                        (click)="$event.stopPropagation(); openAudienceDetail(audience)"
+                      >
+                        {{ 'marketing.audiences.detail.view' | t }}
+                      </button>
+                    </td>
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="3">
+                    <td colspan="4">
                       <p class="q-body-sm" data-testid="audiences-empty">
                         {{ 'marketing.audiences.empty' | t }}
                       </p>
@@ -144,6 +169,13 @@
           }
           @case ('suppressions') {
             <div class="section-toolbar">
+              <button
+                type="button"
+                data-testid="record-suppression-action"
+                (click)="openRecordSuppression()"
+              >
+                {{ 'marketing.suppressions.record.action' | t }}
+              </button>
               <label class="q-body-sm">
                 <input
                   type="checkbox"
@@ -199,6 +231,78 @@
               </table>
             }
           }
+          @case ('courierBroadcasts') {
+            <p class="q-body-sm">{{ 'marketing.courierBroadcasts.intro' | t }}</p>
+            <div class="section-toolbar">
+              <button type="button" (click)="openCreateBroadcast()">
+                {{ 'marketing.courierBroadcasts.create.action' | t }}
+              </button>
+            </div>
+            @if (courierBroadcastsError(); as error) {
+              <div class="error-band" role="alert">
+                <span class="q-body-sm">{{ error }}</span>
+              </div>
+            }
+            @if (courierBroadcastsLoading()) {
+              <p class="q-body-sm">{{ 'marketing.courierBroadcasts.loading' | t }}</p>
+            } @else {
+              <table class="campaigns__table">
+                <thead>
+                  <tr>
+                    <th>{{ 'marketing.courierBroadcasts.column.target' | t }}</th>
+                    <th>{{ 'marketing.courierBroadcasts.column.message' | t }}</th>
+                    <th>{{ 'marketing.courierBroadcasts.column.status' | t }}</th>
+                    <th>{{ 'marketing.courierBroadcasts.column.recipients' | t }}</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (broadcast of courierBroadcasts(); track broadcast.broadcastId) {
+                    <tr data-testid="courier-broadcast-row">
+                      <td>
+                        {{ broadcastTargetKindLabelKey(broadcast.targetKind) | t }}
+                      </td>
+                      <td>{{ broadcast.message }}</td>
+                      <td>
+                        <span class="status-badge">{{
+                          broadcastStatusLabelKey(broadcast.status) | t
+                        }}</span>
+                        @if (broadcast.refusalReason) {
+                          <div class="q-caption row-hint">
+                            {{
+                              'marketing.courierBroadcasts.refusalReason'
+                                | t: { reason: broadcast.refusalReason }
+                            }}
+                          </div>
+                        }
+                      </td>
+                      <td class="q-tnum">{{ broadcast.recipientCount }}</td>
+                      <td>
+                        @if (broadcast.status === 'DRAFT') {
+                          <button
+                            type="button"
+                            data-testid="courier-broadcast-send"
+                            [disabled]="sendingBroadcastId() === broadcast.broadcastId"
+                            (click)="sendBroadcast(broadcast)"
+                          >
+                            {{ 'marketing.courierBroadcasts.action.send' | t }}
+                          </button>
+                        }
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="5">
+                        <p class="q-body-sm" data-testid="courier-broadcasts-empty">
+                          {{ 'marketing.courierBroadcasts.empty' | t }}
+                        </p>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          }
         }
       }
     </div>
@@ -242,15 +346,37 @@
       <label class="field">
         <span class="q-caption">{{ 'marketing.campaigns.create.channel' | t }}</span>
         <select
+          data-testid="campaign-channel-select"
           [value]="newCampaignChannel()"
           (change)="
             newCampaignChannel.set($any($event.target).value); newCampaignTemplateKey.set('')
           "
         >
-          @for (channel of channels; track channel.value) {
-            <option [value]="channel.value">{{ channelLabelKey(channel.value) | t }}</option>
+          @for (channel of channels(); track channel.channel) {
+            <option [value]="channel.channel" [disabled]="!channel.isWired">
+              {{ channelLabelKey(channel.channel) | t }}
+              @if (!channel.isWired) {
+                {{ 'marketing.campaigns.create.channel.unwiredSuffix' | t }}
+              }
+            </option>
           }
         </select>
+        @if (!channelIsWired()) {
+          <p class="q-caption field__hint" data-testid="channel-unwired-hint">
+            {{ 'marketing.campaigns.create.channel.unwiredHint' | t }}
+          </p>
+        }
+      </label>
+
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.campaigns.create.scheduledAt' | t }}</span>
+        <input
+          type="datetime-local"
+          data-testid="campaign-scheduled-at"
+          [value]="newCampaignScheduledAt()"
+          (input)="newCampaignScheduledAt.set($any($event.target).value)"
+        />
+        <p class="q-caption">{{ 'marketing.campaigns.create.scheduledAt.hint' | t }}</p>
       </label>
 
       <label class="field">
@@ -497,6 +623,326 @@
           {{ 'marketing.suppressions.lift.submit' | t }}
         </button>
       </div>
+    </div>
+  </div>
+}
+
+@if (showRecordSuppression()) {
+  <div class="dialog-backdrop" (click)="closeRecordSuppression()">
+    <div class="dialog" (click)="$event.stopPropagation()">
+      <h2 class="q-subhead">{{ 'marketing.suppressions.record.title' | t }}</h2>
+
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.suppressions.record.customerAccountId' | t }}</span>
+        <input
+          type="text"
+          data-testid="suppression-account-id"
+          [value]="newSuppressionAccountId()"
+          (input)="newSuppressionAccountId.set($any($event.target).value)"
+        />
+      </label>
+
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.suppressions.record.channel' | t }}</span>
+        <select
+          [value]="newSuppressionChannel()"
+          (change)="newSuppressionChannel.set($any($event.target).value)"
+        >
+          <option value="">{{ 'marketing.suppressions.record.channel.everyChannel' | t }}</option>
+          <option value="SMS">{{ 'marketing.channel.SMS' | t }}</option>
+          <option value="EMAIL">{{ 'marketing.channel.EMAIL' | t }}</option>
+          <option value="PUSH">{{ 'marketing.channel.PUSH' | t }}</option>
+          <option value="MESSAGING_APP">{{ 'marketing.channel.MESSAGING_APP' | t }}</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.suppressions.record.reason' | t }}</span>
+        <select
+          data-testid="suppression-reason-select"
+          [value]="newSuppressionReason()"
+          (change)="newSuppressionReason.set($any($event.target).value)"
+        >
+          @for (reason of suppressionReasons; track reason) {
+            <option [value]="reason">{{ suppressionReasonLabelKey(reason) | t }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.suppressions.record.statedReason' | t }}</span>
+        <input
+          type="text"
+          [value]="newSuppressionStatedReason()"
+          (input)="newSuppressionStatedReason.set($any($event.target).value)"
+        />
+      </label>
+
+      @if (recordSuppressionError(); as error) {
+        <p class="dialog__error q-body-sm">{{ error }}</p>
+      }
+
+      <div class="dialog__actions">
+        <button type="button" (click)="closeRecordSuppression()">
+          {{ 'marketing.dialog.cancel' | t }}
+        </button>
+        <button
+          type="button"
+          data-testid="suppression-record-submit"
+          [disabled]="!canRecordSuppression()"
+          (click)="submitRecordSuppression()"
+        >
+          {{ 'marketing.suppressions.record.submit' | t }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (showCreateBroadcast()) {
+  <div class="dialog-backdrop" (click)="closeCreateBroadcast()">
+    <div class="dialog" (click)="$event.stopPropagation()">
+      <h2 class="q-subhead">{{ 'marketing.courierBroadcasts.create.title' | t }}</h2>
+
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.courierBroadcasts.create.targetKind' | t }}</span>
+        <select
+          [value]="newBroadcastTargetKind()"
+          (change)="newBroadcastTargetKind.set($any($event.target).value)"
+        >
+          <option value="ALL_ACTIVE">
+            {{ 'marketing.courierBroadcasts.create.targetKind.ALL_ACTIVE' | t }}
+          </option>
+          <option value="GROUP">
+            {{ 'marketing.courierBroadcasts.create.targetKind.GROUP' | t }}
+          </option>
+        </select>
+      </label>
+
+      @if (newBroadcastTargetKind() === 'GROUP') {
+        <label class="field">
+          <span class="q-caption">{{
+            'marketing.courierBroadcasts.create.targetGroupId' | t
+          }}</span>
+          <input
+            type="text"
+            [value]="newBroadcastTargetGroupId()"
+            (input)="newBroadcastTargetGroupId.set($any($event.target).value)"
+          />
+        </label>
+      }
+
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.courierBroadcasts.create.message' | t }}</span>
+        <textarea
+          rows="3"
+          maxlength="480"
+          [value]="newBroadcastMessage()"
+          (input)="newBroadcastMessage.set($any($event.target).value)"
+        ></textarea>
+      </label>
+
+      @if (createBroadcastError(); as error) {
+        <p class="dialog__error q-body-sm">{{ error }}</p>
+      }
+
+      <div class="dialog__actions">
+        <button type="button" (click)="closeCreateBroadcast()">
+          {{ 'marketing.dialog.cancel' | t }}
+        </button>
+        <button
+          type="button"
+          data-testid="courier-broadcast-submit"
+          [disabled]="!canCreateBroadcast()"
+          (click)="submitCreateBroadcast()"
+        >
+          {{ 'marketing.courierBroadcasts.create.submit' | t }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (audienceDetailId()) {
+  <div class="dialog-backdrop" (click)="closeAudienceDetail()">
+    <div
+      class="dialog dialog--wide"
+      (click)="$event.stopPropagation()"
+      data-testid="audience-detail-dialog"
+    >
+      <h2 class="q-subhead">{{ 'marketing.audiences.detail.title' | t }}</h2>
+
+      @if (audienceDetailLoading()) {
+        <p class="q-body-sm">{{ 'marketing.campaigns.loading' | t }}</p>
+      } @else if (audienceDetailError(); as error) {
+        <p class="dialog__error q-body-sm">{{ error }}</p>
+      } @else if (audienceDetail(); as detail) {
+        <p class="q-body-sm">{{ detail.name }}</p>
+        <p class="q-caption">
+          {{ 'marketing.audiences.detail.version' | t: { version: detail.definitionVersion } }}
+        </p>
+
+        @if (!audienceDetailEditing()) {
+          <ul class="predicate-summary">
+            @for (predicate of detail.predicates; track $index) {
+              <li class="q-body-sm">
+                {{ predicateTypeLabelKey(predicate.type) | t }}
+                {{ operatorLabelKey(predicate.operator) | t }}
+                @if (predicate.numericLow !== null && predicate.numericLow !== undefined) {
+                  {{ predicate.numericLow }}
+                  @if (predicate.numericHigh !== null && predicate.numericHigh !== undefined) {
+                    – {{ predicate.numericHigh }}
+                  }
+                }
+                @if (predicate.dateLow) {
+                  {{ predicate.dateLow }} – {{ predicate.dateHigh }}
+                }
+                @if (predicate.textValues && predicate.textValues.length > 0) {
+                  {{ predicate.textValues.join(', ') }}
+                }
+                @if (predicate.audienceId) {
+                  {{ audienceName(predicate.audienceId) }}
+                }
+              </li>
+            } @empty {
+              <li class="q-body-sm">{{ 'marketing.audiences.detail.noPredicates' | t }}</li>
+            }
+          </ul>
+          <div class="dialog__actions">
+            <button type="button" (click)="closeAudienceDetail()">
+              {{ 'marketing.dialog.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              data-testid="audience-edit-action"
+              (click)="startEditingAudience()"
+            >
+              {{ 'marketing.audiences.detail.edit' | t }}
+            </button>
+          </div>
+        } @else {
+          @for (row of audienceDetailPredicates(); track $index) {
+            <div class="predicate-row">
+              <select
+                [value]="row.type"
+                (change)="onAudienceDetailPredicateTypeChange($index, $any($event.target).value)"
+              >
+                @for (descriptor of predicateTypes; track descriptor.type) {
+                  <option [value]="descriptor.type">{{ descriptor.labelKey | t }}</option>
+                }
+              </select>
+
+              <select
+                [value]="row.operator"
+                (change)="
+                  updateAudienceDetailPredicateRow($index, { operator: $any($event.target).value })
+                "
+              >
+                @for (operator of operatorsForRow(row); track operator) {
+                  <option [value]="operator">{{ operatorLabelKey(operator) | t }}</option>
+                }
+              </select>
+
+              @switch (valueKindOfRow(row)) {
+                @case ('NUMERIC') {
+                  <input
+                    type="number"
+                    [value]="row.numericLow"
+                    (input)="
+                      updateAudienceDetailPredicateRow($index, {
+                        numericLow: $any($event.target).value ? +$any($event.target).value : null,
+                      })
+                    "
+                  />
+                  @if (row.operator === 'BETWEEN') {
+                    <input
+                      type="number"
+                      [value]="row.numericHigh"
+                      (input)="
+                        updateAudienceDetailPredicateRow($index, {
+                          numericHigh: $any($event.target).value
+                            ? +$any($event.target).value
+                            : null,
+                        })
+                      "
+                    />
+                  }
+                }
+                @case ('DATE_RANGE') {
+                  <input
+                    type="date"
+                    [value]="row.dateLow"
+                    (input)="
+                      updateAudienceDetailPredicateRow($index, {
+                        dateLow: $any($event.target).value || null,
+                      })
+                    "
+                  />
+                  <input
+                    type="date"
+                    [value]="row.dateHigh"
+                    (input)="
+                      updateAudienceDetailPredicateRow($index, {
+                        dateHigh: $any($event.target).value || null,
+                      })
+                    "
+                  />
+                }
+                @case ('TEXT_SET') {
+                  <input
+                    type="text"
+                    [value]="row.textValuesCsv"
+                    (input)="
+                      updateAudienceDetailPredicateRow($index, {
+                        textValuesCsv: $any($event.target).value,
+                      })
+                    "
+                  />
+                }
+                @case ('AUDIENCE') {
+                  <select
+                    [value]="row.audienceId"
+                    (change)="
+                      updateAudienceDetailPredicateRow($index, {
+                        audienceId: $any($event.target).value,
+                      })
+                    "
+                  >
+                    <option value="">—</option>
+                    @for (audience of audiences(); track audience.audienceId) {
+                      <option [value]="audience.audienceId">{{ audience.name }}</option>
+                    }
+                  </select>
+                }
+              }
+
+              @if (audienceDetailPredicates().length > 1) {
+                <button type="button" (click)="removeAudienceDetailPredicateRow($index)">
+                  {{ 'marketing.audiences.create.removePredicate' | t }}
+                </button>
+              }
+            </div>
+          }
+
+          <button type="button" (click)="addAudienceDetailPredicateRow()">
+            {{ 'marketing.audiences.create.addPredicate' | t }}
+          </button>
+
+          <div class="dialog__actions">
+            <button type="button" (click)="closeAudienceDetail()">
+              {{ 'marketing.dialog.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              data-testid="audience-save-action"
+              [disabled]="!canSaveAudienceDetail()"
+              (click)="submitRedefineAudience()"
+            >
+              {{ 'marketing.audiences.detail.save' | t }}
+            </button>
+          </div>
+        }
+      }
     </div>
   </div>
 }

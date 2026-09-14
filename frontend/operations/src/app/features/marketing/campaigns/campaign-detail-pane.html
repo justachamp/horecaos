@@ -71,7 +71,23 @@
         <dd class="q-tnum">
           {{ c.reservedCostMinor }} {{ c.currency }} · {{ c.reservedRecipients }}
         </dd>
+
+        @if (c.scheduledAt) {
+          <dt>{{ 'marketing.campaign.field.scheduledAt' | t }}</dt>
+          <dd data-testid="campaign-scheduled-at-value">{{ c.scheduledAt }}</dd>
+        }
       </dl>
+
+      @if (!c.isWired && (c.status === 'APPROVED' || c.status === 'SCHEDULED')) {
+        <div class="error-band" role="alert" data-testid="campaign-unwired-warning">
+          <span class="q-body-sm">
+            {{
+              'marketing.campaign.unwired.warning'
+                | t: { channel: (channelLabelKey(c.channel) | t) }
+            }}
+          </span>
+        </div>
+      }
 
       @if (c.status === 'PAUSED') {
         <div class="pause-banner" role="status">

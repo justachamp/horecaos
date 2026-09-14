@@ -15,8 +15,12 @@ import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
 import {
+  AudienceDetail,
+  AudiencePredicate,
   AudienceSummary,
   CampaignView,
+  ChannelView,
+  CourierBroadcastView,
   MarketingApi,
   MarketingTemplateView,
   SuppressionView,
@@ -28,13 +32,22 @@ import {
   PredicateValueKind,
 } from '../audience-predicates';
 
-/** A marketing channel this build knows, with whether one more recipient costs money. */
-const CHANNELS: readonly { readonly value: string; readonly marginalCost: boolean }[] = [
-  { value: 'SMS', marginalCost: true },
-  { value: 'EMAIL', marginalCost: true },
-  { value: 'PUSH', marginalCost: false },
-  { value: 'MESSAGING_APP', marginalCost: false },
+/**
+ * A closed catalogue for the "record a suppression" form, mirroring
+ * `SuppressionReason` — `PLATFORM_BLOCK` excluded, the same refusal the
+ * server itself applies (`OperationsMarketingController.suppress`): it is
+ * settable only by the control plane, so an operator role never sees it as
+ * an option here.
+ */
+const SUPPRESSION_REASONS: readonly string[] = [
+  'UNSUBSCRIBE',
+  'HARD_BOUNCE',
+  'INVALID_NUMBER',
+  'COMPLAINT',
+  'OPERATOR_BLOCK',
 ];
+
+type CampaignsPageView = 'campaigns' | 'audiences' | 'suppressions' | 'courierBroadcasts';
 
 /** One predicate row being authored — the form's own shape, converted to the wire shape on submit. */
 interface PredicateDraft {
@@ -92,12 +105,13 @@ export class CampaignsPage implements OnInit {
   protected readonly denied = signal(false);
   protected readonly loadError = signal<string | null>(null);
 
-  protected readonly view = signal<'campaigns' | 'audiences' | 'suppressions'>('campaigns');
+  protected readonly view = signal<CampaignsPageView>('campaigns');
 
   protected readonly campaigns = signal<readonly CampaignView[]>([]);
   protected readonly audiences = signal<readonly AudienceSummary[]>([]);
   protected readonly templates = signal<readonly MarketingTemplateView[]>([]);
   protected readonly templatesDenied = signal(false);
+  protected readonly channels = signal<readonly ChannelView[]>([]);
 
   protected readonly suppressions = signal<readonly SuppressionView[]>([]);
   protected readonly suppressionsLoaded = signal(false);
@@ -109,6 +123,32 @@ export class CampaignsPage implements OnInit {
   protected readonly liftReason = signal('');
   protected readonly liftSubmitting = signal(false);
   protected readonly liftError = signal<string | null>(null);
+
+  // ------------------------------------------------------- courier broadcasts
+
+  protected readonly courierBroadcasts = signal<readonly CourierBroadcastView[]>([]);
+  protected readonly courierBroadcastsLoaded = signal(false);
+  protected readonly courierBroadcastsLoading = signal(false);
+  protected readonly courierBroadcastsError = signal<string | null>(null);
+  protected readonly sendingBroadcastId = signal<string | null>(null);
+
+  protected readonly showCreateBroadcast = signal(false);
+  protected readonly createBroadcastSubmitting = signal(false);
+  protected readonly createBroadcastError = signal<string | null>(null);
+  protected readonly newBroadcastTargetKind = signal<'ALL_ACTIVE' | 'GROUP'>('ALL_ACTIVE');
+  protected readonly newBroadcastTargetGroupId = signal('');
+  protected readonly newBroadcastMessage = signal('');
+
+  // --------------------------------------------------------- record suppression
+
+  protected readonly showRecordSuppression = signal(false);
+  protected readonly recordSuppressionSubmitting = signal(false);
+  protected readonly recordSuppressionError = signal<string | null>(null);
+  protected readonly newSuppressionAccountId = signal('');
+  protected readonly newSuppressionChannel = signal('');
+  protected readonly newSuppressionReason = signal('UNSUBSCRIBE');
+  protected readonly newSuppressionStatedReason = signal('');
+  protected readonly suppressionReasons = SUPPRESSION_REASONS;
 
   // --------------------------------------------------------------- create campaign
 
@@ -122,12 +162,19 @@ export class CampaignsPage implements OnInit {
   protected readonly newCampaignRecipientCap = signal(1000);
   protected readonly newCampaignCostCeilingMinor = signal<number | null>(null);
   protected readonly newCampaignCurrency = signal('UZS');
+  /** Empty means "launch immediately" — a `datetime-local` input's own value shape. */
+  protected readonly newCampaignScheduledAt = signal('');
 
-  protected readonly channels = CHANNELS;
+  protected readonly selectedChannel = computed(() =>
+    this.channels().find((c) => c.channel === this.newCampaignChannel()),
+  );
 
   protected readonly channelCarriesMarginalCost = computed(
-    () => CHANNELS.find((c) => c.value === this.newCampaignChannel())?.marginalCost ?? false,
+    () => this.selectedChannel()?.carriesMarginalCost ?? false,
   );
+
+  /** Whether the channel currently picked can actually deliver — T18's own read-model fix. */
+  protected readonly channelIsWired = computed(() => this.selectedChannel()?.isWired ?? true);
 
   /** MARKETING-class templates for the channel selected, so a campaign's consent purpose comes from the template it will actually use. */
   protected readonly templatesForChannel = computed(() =>
@@ -153,6 +200,21 @@ export class CampaignsPage implements OnInit {
 
   protected readonly predicateTypes = PREDICATE_TYPES;
 
+  // -------------------------------------------------------- audience detail/edit
+
+  /**
+   * T18: `getAudience`/`redefineAudience` existed in `MarketingApi` with no
+   * caller anywhere in this screen — once defined, an audience's predicates
+   * could never be viewed or changed. This dialog is that caller.
+   */
+  protected readonly audienceDetailId = signal<string | null>(null);
+  protected readonly audienceDetail = signal<AudienceDetail | null>(null);
+  protected readonly audienceDetailLoading = signal(false);
+  protected readonly audienceDetailError = signal<string | null>(null);
+  protected readonly audienceDetailEditing = signal(false);
+  protected readonly audienceDetailPredicates = signal<PredicateDraft[]>([]);
+  protected readonly audienceDetailSaving = signal(false);
+
   async ngOnInit(): Promise<void> {
     await this.load();
   }
@@ -167,12 +229,14 @@ export class CampaignsPage implements OnInit {
       return;
     }
     try {
-      const [campaigns, audiences] = await Promise.all([
+      const [campaigns, audiences, channels] = await Promise.all([
         this.api.listCampaigns(scope),
         this.api.listAudiences(scope),
+        this.api.listChannels(scope),
       ]);
       this.campaigns.set(campaigns);
       this.audiences.set(audiences);
+      this.channels.set(channels);
       // Best-effort: a campaign author who does not also hold
       // NOTIFICATION_TEMPLATE_AUTHOR still gets a working page — the create
       // form falls back to typing the template key by hand.
@@ -194,15 +258,95 @@ export class CampaignsPage implements OnInit {
     }
   }
 
-  protected switchView(next: 'campaigns' | 'audiences' | 'suppressions'): void {
+  protected switchView(next: CampaignsPageView): void {
     this.view.set(next);
     if (next === 'suppressions' && !this.suppressionsLoaded()) {
       void this.loadSuppressions();
+    }
+    if (next === 'courierBroadcasts' && !this.courierBroadcastsLoaded()) {
+      void this.loadCourierBroadcasts();
     }
   }
 
   protected audienceName(audienceId: string): string {
     return this.audiences().find((a) => a.audienceId === audienceId)?.name ?? audienceId;
+  }
+
+  // -------------------------------------------------------- audience detail/edit
+
+  protected async openAudienceDetail(audience: AudienceSummary): Promise<void> {
+    const scope = this.brand.scope();
+    if (!scope) {
+      return;
+    }
+    this.audienceDetailId.set(audience.audienceId);
+    this.audienceDetail.set(null);
+    this.audienceDetailError.set(null);
+    this.audienceDetailEditing.set(false);
+    this.audienceDetailLoading.set(true);
+    try {
+      const detail = await this.api.getAudience(scope, audience.audienceId);
+      this.audienceDetail.set(detail);
+      this.audienceDetailPredicates.set(detail.predicates.map((p) => toPredicateDraft(p)));
+    } catch (error) {
+      this.audienceDetailError.set(this.describe(error));
+    } finally {
+      this.audienceDetailLoading.set(false);
+    }
+  }
+
+  protected closeAudienceDetail(): void {
+    this.audienceDetailId.set(null);
+  }
+
+  protected startEditingAudience(): void {
+    this.audienceDetailEditing.set(true);
+  }
+
+  protected addAudienceDetailPredicateRow(): void {
+    this.audienceDetailPredicates.update((rows) => [...rows, newPredicateDraft()]);
+  }
+
+  protected removeAudienceDetailPredicateRow(index: number): void {
+    this.audienceDetailPredicates.update((rows) => rows.filter((_, i) => i !== index));
+  }
+
+  protected updateAudienceDetailPredicateRow(index: number, patch: Partial<PredicateDraft>): void {
+    this.audienceDetailPredicates.update((rows) =>
+      rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    );
+  }
+
+  protected onAudienceDetailPredicateTypeChange(index: number, type: string): void {
+    const operators = operatorsFor(descriptorFor(type).valueKind);
+    this.updateAudienceDetailPredicateRow(index, { type, operator: operators[0] });
+  }
+
+  protected canSaveAudienceDetail(): boolean {
+    return !this.audienceDetailSaving() && this.audienceDetailPredicates().length > 0;
+  }
+
+  protected async submitRedefineAudience(): Promise<void> {
+    const scope = this.brand.scope();
+    const audienceId = this.audienceDetailId();
+    if (!scope || !audienceId || !this.canSaveAudienceDetail()) {
+      return;
+    }
+    this.audienceDetailSaving.set(true);
+    this.audienceDetailError.set(null);
+    try {
+      const updated = await this.api.redefineAudience(scope, audienceId, {
+        predicates: this.audienceDetailPredicates().map((row) => toWirePredicate(row)),
+      });
+      this.audienceDetail.set(updated);
+      this.audienceDetailEditing.set(false);
+      // definitionVersion bumped — the list's own row is stale until re-read.
+      this.audiences.set(await this.api.listAudiences(scope));
+    } catch (error) {
+      this.audienceDetailError.set(this.describe(error));
+    } finally {
+      this.audienceDetailSaving.set(false);
+    }
   }
 
   protected channelLabelKey(channel: string): MessageKey {
@@ -240,12 +384,18 @@ export class CampaignsPage implements OnInit {
     this.newCampaignRecipientCap.set(1000);
     this.newCampaignCostCeilingMinor.set(null);
     this.newCampaignCurrency.set('UZS');
+    this.newCampaignScheduledAt.set('');
     this.createCampaignError.set(null);
     this.showCreateCampaign.set(true);
   }
 
   protected closeCreateCampaign(): void {
     this.showCreateCampaign.set(false);
+  }
+
+  /** A wired channel this build knows nothing else about defaults to selectable, so a channel the read model has not caught up to does not silently vanish from the form. */
+  protected channelIsWiredValue(channel: ChannelView): boolean {
+    return channel.isWired;
   }
 
   protected canCreateCampaign(): boolean {
@@ -255,6 +405,7 @@ export class CampaignsPage implements OnInit {
       this.newCampaignAudienceId().length > 0 &&
       this.newCampaignTemplateKey().trim().length > 0 &&
       this.newCampaignRecipientCap() > 0 &&
+      this.channelIsWired() &&
       (!this.channelCarriesMarginalCost() ||
         (this.newCampaignCostCeilingMinor() !== null && this.newCampaignCostCeilingMinor()! > 0))
     );
@@ -269,6 +420,7 @@ export class CampaignsPage implements OnInit {
     this.createCampaignError.set(null);
     try {
       const template = this.selectedTemplate();
+      const scheduledAt = this.newCampaignScheduledAt();
       const created = await this.api.createCampaign(scope, {
         name: this.newCampaignName().trim(),
         channel: this.newCampaignChannel(),
@@ -284,6 +436,10 @@ export class CampaignsPage implements OnInit {
           ? this.newCampaignCostCeilingMinor()
           : null,
         currency: this.newCampaignCurrency().trim() || 'UZS',
+        // The <input type="datetime-local"> value has no timezone of its
+        // own; `new Date(...)` parses it as the browser's local time, which
+        // is the honest reading of what an operator typed into a local clock.
+        scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
       });
       this.showCreateCampaign.set(false);
       await this.router.navigate(['/marketing/campaigns', created.campaignId]);
@@ -334,6 +490,18 @@ export class CampaignsPage implements OnInit {
 
   protected operatorLabelKey(operator: string): MessageKey {
     return `marketing.predicate.operator.${operator}` as MessageKey;
+  }
+
+  protected predicateTypeLabelKey(type: string): MessageKey {
+    return `marketing.predicate.type.${type}` as MessageKey;
+  }
+
+  protected suppressionReasonLabelKey(reason: string): MessageKey {
+    return `marketing.suppressions.reason.${reason}` as MessageKey;
+  }
+
+  protected broadcastTargetKindLabelKey(targetKind: string): MessageKey {
+    return `marketing.courierBroadcasts.create.targetKind.${targetKind}` as MessageKey;
   }
 
   protected valueKindOfRow(row: PredicateDraft): PredicateValueKind {
@@ -401,6 +569,49 @@ export class CampaignsPage implements OnInit {
     await this.loadSuppressions();
   }
 
+  // T18: `POST /suppressions` existed with no caller in this screen — an
+  // operator could lift a suppression and could not record one.
+  protected openRecordSuppression(): void {
+    this.newSuppressionAccountId.set('');
+    this.newSuppressionChannel.set('');
+    this.newSuppressionReason.set('UNSUBSCRIBE');
+    this.newSuppressionStatedReason.set('');
+    this.recordSuppressionError.set(null);
+    this.showRecordSuppression.set(true);
+  }
+
+  protected closeRecordSuppression(): void {
+    this.showRecordSuppression.set(false);
+  }
+
+  protected canRecordSuppression(): boolean {
+    return !this.recordSuppressionSubmitting() && this.newSuppressionAccountId().trim().length > 0;
+  }
+
+  protected async submitRecordSuppression(): Promise<void> {
+    const scope = this.brand.scope();
+    if (!scope || !this.canRecordSuppression()) {
+      return;
+    }
+    this.recordSuppressionSubmitting.set(true);
+    this.recordSuppressionError.set(null);
+    try {
+      await this.api.suppress(scope, {
+        customerAccountId: this.newSuppressionAccountId().trim(),
+        channel: this.newSuppressionChannel() || null,
+        reason: this.newSuppressionReason(),
+        statedReason: this.newSuppressionStatedReason().trim() || null,
+      });
+      this.showRecordSuppression.set(false);
+      this.suppressionsLoaded.set(false);
+      await this.loadSuppressions();
+    } catch (error) {
+      this.recordSuppressionError.set(this.describe(error));
+    } finally {
+      this.recordSuppressionSubmitting.set(false);
+    }
+  }
+
   protected openLift(suppression: SuppressionView): void {
     this.liftingId.set(suppression.suppressionId);
     this.liftReason.set('');
@@ -431,11 +642,120 @@ export class CampaignsPage implements OnInit {
     }
   }
 
+  // ------------------------------------------------------- courier broadcasts
+
+  private async loadCourierBroadcasts(): Promise<void> {
+    const scope = this.brand.scope();
+    if (!scope) {
+      return;
+    }
+    this.courierBroadcastsLoading.set(true);
+    this.courierBroadcastsError.set(null);
+    try {
+      this.courierBroadcasts.set(await this.api.listCourierBroadcasts(scope));
+      this.courierBroadcastsLoaded.set(true);
+    } catch (error) {
+      this.courierBroadcastsError.set(this.describe(error));
+    } finally {
+      this.courierBroadcastsLoading.set(false);
+    }
+  }
+
+  protected openCreateBroadcast(): void {
+    this.newBroadcastTargetKind.set('ALL_ACTIVE');
+    this.newBroadcastTargetGroupId.set('');
+    this.newBroadcastMessage.set('');
+    this.createBroadcastError.set(null);
+    this.showCreateBroadcast.set(true);
+  }
+
+  protected closeCreateBroadcast(): void {
+    this.showCreateBroadcast.set(false);
+  }
+
+  protected canCreateBroadcast(): boolean {
+    return (
+      !this.createBroadcastSubmitting() &&
+      this.newBroadcastMessage().trim().length > 0 &&
+      this.newBroadcastMessage().length <= 480 &&
+      (this.newBroadcastTargetKind() === 'ALL_ACTIVE' ||
+        this.newBroadcastTargetGroupId().trim().length > 0)
+    );
+  }
+
+  protected async submitCreateBroadcast(): Promise<void> {
+    const scope = this.brand.scope();
+    if (!scope || !this.canCreateBroadcast()) {
+      return;
+    }
+    this.createBroadcastSubmitting.set(true);
+    this.createBroadcastError.set(null);
+    try {
+      await this.api.draftCourierBroadcast(scope, {
+        targetKind: this.newBroadcastTargetKind(),
+        targetGroupId:
+          this.newBroadcastTargetKind() === 'GROUP'
+            ? this.newBroadcastTargetGroupId().trim()
+            : null,
+        message: this.newBroadcastMessage().trim(),
+      });
+      this.showCreateBroadcast.set(false);
+      this.courierBroadcastsLoaded.set(false);
+      await this.loadCourierBroadcasts();
+    } catch (error) {
+      this.createBroadcastError.set(this.describe(error));
+    } finally {
+      this.createBroadcastSubmitting.set(false);
+    }
+  }
+
+  /**
+   * Refused, visibly, when SMS has no wired delivery path — the same
+   * honesty {@link channelIsWired} gives the campaign create form. The row
+   * stays in the list either way, now carrying its own outcome.
+   */
+  protected async sendBroadcast(broadcast: CourierBroadcastView): Promise<void> {
+    const scope = this.brand.scope();
+    if (!scope) {
+      return;
+    }
+    this.sendingBroadcastId.set(broadcast.broadcastId);
+    this.courierBroadcastsError.set(null);
+    try {
+      await this.api.sendCourierBroadcast(scope, broadcast.broadcastId);
+    } catch {
+      // Refused sends still update the row (status FAILED, refusalReason
+      // set) — nothing further to show here beyond re-reading the list.
+    } finally {
+      this.sendingBroadcastId.set(null);
+      this.courierBroadcastsLoaded.set(false);
+      await this.loadCourierBroadcasts();
+    }
+  }
+
+  protected broadcastStatusLabelKey(status: string): MessageKey {
+    return `marketing.courierBroadcasts.status.${status}` as MessageKey;
+  }
+
   private describe(error: unknown): string {
     return error instanceof ApiError
       ? describeApiError(error, (key, values) => this.i18n.t(key, values))
       : this.i18n.t('error.unknown.noReference');
   }
+}
+
+/** The inverse of {@link toWirePredicate} — a predicate read back from the server, as an editable form row. */
+function toPredicateDraft(predicate: AudiencePredicate): PredicateDraft {
+  return {
+    type: predicate.type,
+    operator: predicate.operator,
+    numericLow: predicate.numericLow ?? null,
+    numericHigh: predicate.numericHigh ?? null,
+    dateLow: predicate.dateLow ?? null,
+    dateHigh: predicate.dateHigh ?? null,
+    textValuesCsv: (predicate.textValues ?? []).join(', '),
+    audienceId: predicate.audienceId ?? null,
+  };
 }
 
 /** Turns one form row into ADR 0044's closed predicate wire shape. */
