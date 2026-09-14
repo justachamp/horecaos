@@ -757,7 +757,7 @@ class SalesChannelAndServiceabilityTests {
 
     @Test
     @DisplayName("a schedule of another brand cannot be bound to this location")
-    void aCrossBrandBindingIsRefusedByTheDatabase() {
+    void aCrossBrandBindingIsRefusedByTheService() {
         UUID otherBrandSchedule = schedules.createSchedule(
                 TENANT,
                 OTHER_BRAND,
@@ -766,11 +766,14 @@ class SalesChannelAndServiceabilityTests {
                         true,
                         List.of(new WeeklySchedule.Rule(5, LocalTime.of(9, 0), LocalTime.of(23, 0)))));
 
-        // The binding's foreign key matches (tenant_id, brand_id, schedule_id), so
-        // one brand's Ramadan timetable can never silently govern another's.
+        // bind() now runs the same requireOwned guard replaceRules/closeForDay/
+        // shortenDay already applied, so the refusal is a clean not-found from
+        // the service — the database's own composite foreign key (tenant_id,
+        // brand_id, schedule_id) stays as defense in depth behind it, never
+        // reached here.
         assertThat(catchThrowable(
                         () -> schedules.bind(TENANT, BRAND, LOCATION, FulfillmentMode.DELIVERY, otherBrandSchedule)))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .isInstanceOf(TenantResourceNotFoundException.class);
     }
 
     // ------------------------------------------------------- promised duration

@@ -85,7 +85,7 @@ public class CourierBroadcastController {
             throw new ApiException(
                     ErrorCode.RESOURCE_NOT_FOUND, "No courier broadcast " + broadcastId + " belongs to this brand");
         }
-        return ResponseEntity.ok(CourierBroadcastResponse.of(broadcasts.send(tenantId, broadcastId)));
+        return ResponseEntity.ok(CourierBroadcastResponse.of(broadcasts.send(tenantId, broadcastId, actorId())));
     }
 
     private UUID actorId() {

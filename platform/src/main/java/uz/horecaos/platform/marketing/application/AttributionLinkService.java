@@ -4,14 +4,24 @@ import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAttributionLinkStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAttributionLinkStore.AttributionLinkRow;
+import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignStore;
+import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignStore.CampaignRow;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -38,10 +48,15 @@ public class AttributionLinkService {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final JdbcAttributionLinkStore store;
+    private final JdbcCampaignStore campaigns;
+    private final AuditRecorder audit;
     private final Clock clock;
 
-    public AttributionLinkService(JdbcAttributionLinkStore store, Clock clock) {
+    public AttributionLinkService(
+            JdbcAttributionLinkStore store, JdbcCampaignStore campaigns, AuditRecorder audit, Clock clock) {
         this.store = store;
+        this.campaigns = campaigns;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -71,6 +86,9 @@ public class AttributionLinkService {
                     ErrorCode.VALIDATION_FAILED,
                     "A CAMPAIGN destination names a destinationId; STOREFRONT_HOME/INFLUENCER carry none");
         }
+        if ("CAMPAIGN".equals(destinationType)) {
+            requireOwnCampaign(tenantId, brandId, Objects.requireNonNull(destinationId, "shape-checked above"));
+        }
 
         Instant now = clock.instant();
         if (validUntil != null && !validUntil.isAfter(now)) {
@@ -93,14 +111,61 @@ public class AttributionLinkService {
                 validUntil,
                 createdBy,
                 now);
+
+        audit.record(AuditFact.of("MARKETING_LINK_MINTED", AuditClass.BUSINESS)
+                .by(ActorRef.user(createdBy.toString(), null))
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("AttributionLink", id)
+                .because("Minted a trackable acquisition link")
+                .changed(
+                        destinationId == null
+                                ? Map.of("channel", channel, "destinationType", destinationType)
+                                : Map.of(
+                                        "channel",
+                                        channel,
+                                        "destinationType",
+                                        destinationType,
+                                        "destinationId",
+                                        destinationId))
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
         return id;
     }
 
+    /**
+     * A CAMPAIGN destination must name a real campaign of the same brand — the
+     * DB foreign key (V0309) only constrains {@code tenant_id}, so this is the
+     * only check standing between a Brand A marketer and a link that
+     * permanently points at Brand B's campaign.
+     */
+    private void requireOwnCampaign(UUID tenantId, UUID brandId, UUID campaignId) {
+        CampaignRow campaign = campaigns.find(tenantId, campaignId).orElse(null);
+        // Absent and wrong-brand are refused identically: telling them apart
+        // would let a caller confirm a sibling brand's campaign id exists by
+        // the shape of the error alone.
+        if (campaign == null || !campaign.brandId().equals(brandId)) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "No campaign %s belongs to this brand".formatted(campaignId));
+        }
+    }
+
     @Transactional
-    public void archive(UUID tenantId, UUID id) {
-        if (!store.archive(tenantId, id, clock.instant())) {
+    public void archive(UUID tenantId, UUID id, UUID actorId) {
+        Instant now = clock.instant();
+        AttributionLinkRow link = require(tenantId, id);
+        if (!store.archive(tenantId, id, now)) {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This link is already archived, or does not exist");
         }
+
+        audit.record(AuditFact.of("MARKETING_LINK_ARCHIVED", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorId.toString(), null))
+                .at(ResourceScope.brand(tenantId, link.brandId()))
+                .target("AttributionLink", id)
+                .because("Archived an attribution link")
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
     }
 
     @Transactional
@@ -140,5 +205,13 @@ public class AttributionLinkService {
             }
         }
         throw new IllegalStateException("Could not mint a unique attribution token after 5 attempts");
+    }
+
+    /** Same MDC-or-random fallback {@code ServiceScheduleService} uses for an audit fact with no request-scoped id. */
+    private static String correlationId() {
+        String correlationId = MDC.get("correlationId");
+        return correlationId == null || correlationId.isBlank()
+                ? UUID.randomUUID().toString()
+                : correlationId;
     }
 }

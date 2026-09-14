@@ -91,7 +91,7 @@ public class AttributionLinkController {
             throw new ApiException(
                     ErrorCode.RESOURCE_NOT_FOUND, "No attribution link " + linkId + " belongs to this brand");
         }
-        links.archive(tenantId, linkId);
+        links.archive(tenantId, linkId, actorId());
         return ResponseEntity.accepted().build();
     }
 
