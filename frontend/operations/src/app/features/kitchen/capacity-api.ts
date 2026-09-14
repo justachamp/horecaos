@@ -30,6 +30,26 @@ export interface NewCapacityWindow {
 }
 
 /**
+ * `KitchenStationController.RoutingRuleRequest`/`RoutingRuleResponse` — row
+ * 4.2g's kitchen department. `stationId` names the location layer;
+ * `stationRole` (this file's own product-editor caller) names the brand
+ * layer, which the location resolves for itself at every branch.
+ */
+export interface NewRoutingRule {
+  readonly variantId?: string | null;
+  readonly productId?: string | null;
+  readonly categoryId?: string | null;
+  readonly stationRole?: string | null;
+  readonly stationId?: string | null;
+}
+
+export interface RoutingRuleResponse {
+  readonly ruleId: string;
+  /** `BRAND` or `LOCATION`. */
+  readonly layer: string;
+}
+
+/**
  * IA §2.6 — Capacity & buffer settings (`KitchenStationController`, new this
  * wave). Read today only by this settings screen: the release scheduler does
  * not shift on a ceiling yet — see `CapacityPage`'s own doc for the full
@@ -41,7 +61,9 @@ export class CapacityApi {
 
   async list(scope: LocationScope): Promise<readonly CapacityWindowResponse[]> {
     const result = await firstValueFrom(
-      this.api.get<readonly CapacityWindowResponse[]>(operationsPaths.kitchenStationCapacity(scope)),
+      this.api.get<readonly CapacityWindowResponse[]>(
+        operationsPaths.kitchenStationCapacity(scope),
+      ),
     );
     return result.value ?? [];
   }
@@ -50,6 +72,19 @@ export class CapacityApi {
   create(scope: LocationScope, body: NewCapacityWindow): Observable<CapacityWindowResponse> {
     return this.api.post<NewCapacityWindow, CapacityWindowResponse>(
       operationsPaths.kitchenStationCapacity(scope),
+      command(body),
+    );
+  }
+
+  /**
+   * Routes one catalogue node — row 4.2g's kitchen department. Refused (409)
+   * when that node is already routed at the layer this call would write; a
+   * second save for the same product is a real "already routed" state, not a
+   * bug, since `KitchenStationController` keeps no edit path on this table.
+   */
+  route(scope: LocationScope, body: NewRoutingRule): Observable<RoutingRuleResponse> {
+    return this.api.post<NewRoutingRule, RoutingRuleResponse>(
+      operationsPaths.kitchenRoutingRules(scope),
       command(body),
     );
   }

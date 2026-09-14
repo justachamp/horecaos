@@ -48,6 +48,8 @@ export class ScheduleGrid {
 
   readonly rules = input<readonly ScheduleRule[]>([]);
   readonly exceptions = input<readonly ScheduleException[]>([]);
+  /** Hides the dated-exceptions section for a caller with no calendar to offer — e.g. row 4.2g's per-item schedule, which is weekly-only. */
+  readonly showExceptions = input<boolean>(true);
 
   readonly rulesChange = output<readonly ScheduleRule[]>();
   readonly exceptionsChange = output<readonly ScheduleException[]>();

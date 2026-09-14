@@ -1,15 +1,20 @@
 package uz.horecaos.platform.catalog.application;
 
 import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -25,6 +30,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
+import uz.horecaos.platform.catalog.domain.ItemSaleSchedule;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.commercial.api.EntitlementService;
@@ -60,18 +66,40 @@ public class CatalogAuthoringService {
     private final EntitlementService entitlements;
     private final UsageMeter usage;
     private final Clock clock;
+    private final CatalogTenantContext tenantContext;
 
+    /**
+     * See {@code ServiceabilityService}'s matching overload for why this
+     * exists: every one of this file's own tests already constructs the
+     * service directly with five arguments, and widening the constructor
+     * they call would be an unrelated mass edit across files this wave does
+     * not own. A caller on this overload never reaches {@link #isOnSaleNow}
+     * (nothing here calls it on their behalf), so the always-empty context is
+     * never exercised, not a silently wrong answer.
+     */
     public CatalogAuthoringService(
             JdbcCatalogStore store,
             AuditRecorder audit,
             EntitlementService entitlements,
             UsageMeter usage,
             Clock clock) {
+        this(store, audit, entitlements, usage, clock, (tenantId, locationId) -> Optional.empty());
+    }
+
+    @Autowired
+    public CatalogAuthoringService(
+            JdbcCatalogStore store,
+            AuditRecorder audit,
+            EntitlementService entitlements,
+            UsageMeter usage,
+            Clock clock,
+            CatalogTenantContext tenantContext) {
         this.store = store;
         this.audit = audit;
         this.entitlements = entitlements;
         this.usage = usage;
         this.clock = clock;
+        this.tenantContext = tenantContext;
     }
 
     @Transactional
@@ -1052,6 +1080,129 @@ public class CatalogAuthoringService {
 
         public UUID productId() {
             return productId;
+        }
+    }
+
+    // --------------------------------------------------- row 4.2g: per-item sale schedule
+
+    /**
+     * Replaces the whole weekly sale-window set for one variant at one
+     * location. Empty means unrestricted — the default every variant starts
+     * with, unchanged since V0020 withdrew the binding this table finally
+     * supplies.
+     */
+    @Transactional
+    public void replaceItemSaleWindows(
+            UUID tenantId, UUID brandId, UUID locationId, UUID variantId, List<ItemSaleSchedule.Window> windows) {
+        if (!store.entityExistsInBrand(tenantId, brandId, EntityType.VARIANT, variantId)) {
+            throw new UnknownCatalogEntityException(EntityType.VARIANT, variantId);
+        }
+        store.replaceItemSaleWindows(tenantId, brandId, locationId, variantId, windows);
+    }
+
+    public List<ItemSaleSchedule.Window> itemSaleWindows(UUID tenantId, UUID locationId, UUID variantId) {
+        return store.listItemSaleWindows(tenantId, locationId, variantId);
+    }
+
+    /**
+     * Whether a variant is on sale at this instant, resolved in the
+     * <em>location's</em> own timezone — never the caller's, never the
+     * server's — exactly the discipline {@code ServiceabilityService.resolve}
+     * already keeps for the branch's own opening hours. A breakfast window
+     * closing at 11:00 closes at 11:00 Tashkent time regardless of where the
+     * request that asks originates.
+     *
+     * <p>A variant with no windows at all is always on sale: the absence of a
+     * binding is not a restriction, it is the unrestricted default this row
+     * had before this wave and keeps having for every item nobody has scoped.
+     */
+    public boolean isOnSaleNow(UUID tenantId, UUID locationId, UUID variantId, Instant at) {
+        List<ItemSaleSchedule.Window> windows = store.listItemSaleWindows(tenantId, locationId, variantId);
+        if (windows.isEmpty()) {
+            return true;
+        }
+        ZoneId zone = tenantContext
+                .timezoneOf(tenantId, locationId)
+                .orElseThrow(() ->
+                        new IllegalStateException("No location %s for tenant %s".formatted(locationId, tenantId)));
+        LocalDateTime local = LocalDateTime.ofInstant(at, zone);
+        return new ItemSaleSchedule(windows).isOnSaleAt(local);
+    }
+
+    // --------------------------------------------------- row 4.2h: cross-sell / recommendations
+
+    /**
+     * Attaches a target variant to a source product, or re-sorts it if it is
+     * already attached — the same call, since {@link JdbcCatalogStore
+     * #upsertRecommendation} upserts on the natural key.
+     *
+     * @throws SelfRecommendationException a product cannot recommend one of
+     *                                      its own variants; that is not
+     *                                      cross-sell, it is a decoration on
+     *                                      the same dish
+     */
+    @Transactional
+    public UUID attachRecommendation(
+            UUID tenantId, UUID brandId, UUID sourceProductId, UUID targetVariantId, int sortOrder) {
+        if (!store.entityExistsInBrand(tenantId, brandId, EntityType.PRODUCT, sourceProductId)) {
+            throw new UnknownProductException(sourceProductId);
+        }
+        // Checked against this brand explicitly, not left to the insert's own
+        // composite foreign key: the key would refuse a cross-brand target too,
+        // but as a raw constraint-violation exception rather than the clean
+        // RESOURCE_NOT_FOUND every other unknown-entity path in this class answers
+        // with.
+        if (!store.entityExistsInBrand(tenantId, brandId, EntityType.VARIANT, targetVariantId)) {
+            throw new UnknownCatalogEntityException(EntityType.VARIANT, targetVariantId);
+        }
+        UUID targetProductId = store.productIdForVariant(tenantId, targetVariantId)
+                .orElseThrow(() -> new UnknownCatalogEntityException(EntityType.VARIANT, targetVariantId));
+        if (targetProductId.equals(sourceProductId)) {
+            throw new SelfRecommendationException(sourceProductId, targetVariantId);
+        }
+        return store.upsertRecommendation(tenantId, brandId, sourceProductId, targetVariantId, sortOrder);
+    }
+
+    /** Idempotent — detaching a pair that was never attached, or is already gone, still resolves. */
+    @Transactional
+    public void detachRecommendation(UUID tenantId, UUID brandId, UUID sourceProductId, UUID targetVariantId) {
+        store.deleteRecommendation(tenantId, brandId, sourceProductId, targetVariantId);
+    }
+
+    /** Every recommendation attached to one product, unfiltered — the editor's own management list. */
+    public List<JdbcCatalogStore.RecommendationRow> listRecommendations(
+            UUID tenantId, UUID brandId, UUID sourceProductId, String locale) {
+        return store.listRecommendations(tenantId, brandId, sourceProductId, locale);
+    }
+
+    /**
+     * IA 4.2's own filter, resolved fresh on every call rather than pruned
+     * from the stored set: active + in-menu + not-stopped, at one location. A
+     * target stopped today and un-stopped tomorrow reappears here on its own.
+     */
+    public List<JdbcCatalogStore.RecommendationRow> resolvedRecommendations(
+            UUID tenantId, UUID brandId, UUID sourceProductId, UUID locationId, String locale) {
+        return store.listResolvedRecommendations(tenantId, brandId, sourceProductId, locationId, locale);
+    }
+
+    /** A product was asked to recommend one of its own variants — cross-sell, never a self-reference. */
+    public static final class SelfRecommendationException extends RuntimeException {
+
+        private final transient UUID productId;
+        private final transient UUID variantId;
+
+        public SelfRecommendationException(UUID productId, UUID variantId) {
+            super("Product %s cannot recommend its own variant %s".formatted(productId, variantId));
+            this.productId = productId;
+            this.variantId = variantId;
+        }
+
+        public UUID productId() {
+            return productId;
+        }
+
+        public UUID variantId() {
+            return variantId;
         }
     }
 }

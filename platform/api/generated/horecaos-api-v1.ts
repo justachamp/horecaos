@@ -404,6 +404,11 @@ export interface AttachMediaRequest {
   sortOrder?: number;
 }
 
+export interface AttachRecommendationRequest {
+  sortOrder?: number;
+  targetVariantId: string;
+}
+
 export interface AttachedModifierGroupView {
   groupId?: string;
   sortOrder?: number;
@@ -2928,6 +2933,26 @@ export interface ItemResponse {
   ticketVersion?: number;
 }
 
+export interface ItemSaleScheduleRequest {
+  windows: Array<ItemSaleWindowRequest>;
+}
+
+export interface ItemSaleScheduleResponse {
+  windows?: Array<ItemSaleWindowResponse>;
+}
+
+export interface ItemSaleWindowRequest {
+  closesAt: string;
+  dayOfWeek?: number;
+  opensAt: string;
+}
+
+export interface ItemSaleWindowResponse {
+  closesAt?: string;
+  dayOfWeek?: number;
+  opensAt?: string;
+}
+
 export interface ItemView {
   itemId?: string;
   orderLineId?: string;
@@ -5120,6 +5145,17 @@ export interface RecipientResponse {
   refusalReason?: string;
   status?: string;
   terminalStatus?: string;
+}
+
+export interface RecommendationListResponse {
+  items?: Array<RecommendationResponse>;
+}
+
+export interface RecommendationResponse {
+  recommendationId?: string;
+  sortOrder?: number;
+  targetProductName?: string;
+  targetVariantId?: string;
 }
 
 export interface ReconcileRequest {
@@ -7359,6 +7395,10 @@ export interface Operations {
   "product": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": ProductDetailResponse } };
   "duplicateProduct": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/duplicate"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": ProductResponse } };
   "attachModifierGroup": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/modifier-groups/{groupId}"; request: { parameters: { path: { brandId: string; groupId: string; productId: string; tenantId: string } }; body: SortOrderRequest }; responses: { "200": unknown } };
+  "recommendations": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/recommendations"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string }; query: { locale?: string } } }; responses: { "200": RecommendationListResponse } };
+  "attachRecommendation": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/recommendations"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } }; body: AttachRecommendationRequest }; responses: { "200": RecommendationResponse } };
+  "effectiveRecommendations": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/recommendations/effective"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string }; query: { locale?: string; locationId: string } } }; responses: { "200": RecommendationListResponse } };
+  "detachRecommendation": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/recommendations/{variantId}"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string; variantId: string } } }; responses: { "200": unknown } };
   "setProductStatus": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/status"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } }; body: ProductStatusRequest }; responses: { "200": unknown } };
   "stopInAllBranches": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/stop-in-all-branches"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": StopInAllBranchesResponse } };
   "addVariant": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/variants"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } }; body: AddVariantRequest }; responses: { "200": CatalogAuthoringControllerIdResponse } };
@@ -7368,6 +7408,8 @@ export interface Operations {
   "setTranslation": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/translations"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: TranslateRequest }; responses: { "200": unknown } };
   "classifyVariant": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/fiscal-classification"; request: { parameters: { path: { brandId: string; tenantId: string; variantId: string } }; body: FiscalClassificationRequest }; responses: { "200": unknown } };
   "setOffering": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/location-offerings/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } }; body: SetOfferingRequest }; responses: { "200": unknown } };
+  "itemSaleSchedule": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/location-offerings/{locationId}/sale-schedule"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } } }; responses: { "200": ItemSaleScheduleResponse } };
+  "replaceItemSaleSchedule": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/location-offerings/{locationId}/sale-schedule"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } }; body: ItemSaleScheduleRequest }; responses: { "200": ItemSaleScheduleResponse } };
   "list_35": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<FlowDocumentResponse> } };
   "author_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows/{flowKey}"; request: { parameters: { path: { brandId: string; flowKey: string; tenantId: string } }; body: AuthorFlowDocumentRequest }; responses: { "200": FlowDocumentResponse } };
   "list_25": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<TariffSummaryResponse> } };

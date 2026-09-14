@@ -3,6 +3,7 @@ package uz.horecaos.platform.catalog.infrastructure.persistence;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -32,6 +33,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.FiscalClassification.MarkingScheme;
+import uz.horecaos.platform.catalog.domain.ItemSaleSchedule;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.configuration.Ids;
@@ -2343,4 +2345,204 @@ public class JdbcCatalogStore {
             @Nullable String categoryName,
             int locationCount,
             boolean unclassified) {}
+
+    // --------------------------------------------------- row 4.2g: per-item sale schedule
+
+    public List<ItemSaleSchedule.Window> listItemSaleWindows(UUID tenantId, UUID locationId, UUID variantId) {
+        return jdbc.sql("""
+                SELECT day_of_week, opens_at, closes_at
+                FROM catalog.item_sale_windows
+                WHERE tenant_id = :tenantId AND location_id = :locationId AND variant_id = :variantId
+                ORDER BY day_of_week, opens_at
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("variantId", variantId)
+                .query((row, number) -> new ItemSaleSchedule.Window(
+                        row.getInt("day_of_week"),
+                        row.getObject("opens_at", LocalTime.class),
+                        row.getObject("closes_at", LocalTime.class)))
+                .list();
+    }
+
+    /**
+     * Replaces the whole weekly window set for one (location, variant) — the
+     * same whole-set discipline {@code q-schedule-grid} already keeps
+     * client-side, so the caller's save is always exactly what the grid shows,
+     * never a delta. Must run inside the caller's transaction: a crash between
+     * the delete and the inserts must not leave an item with no windows at all
+     * (unrestricted) when the operator meant a narrower set.
+     */
+    public void replaceItemSaleWindows(
+            UUID tenantId, UUID brandId, UUID locationId, UUID variantId, List<ItemSaleSchedule.Window> windows) {
+        jdbc.sql("""
+                DELETE FROM catalog.item_sale_windows
+                WHERE tenant_id = :tenantId AND location_id = :locationId AND variant_id = :variantId
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("variantId", variantId)
+                .update();
+        for (ItemSaleSchedule.Window window : windows) {
+            jdbc.sql("""
+                    INSERT INTO catalog.item_sale_windows (
+                        id, tenant_id, brand_id, location_id, variant_id, day_of_week, opens_at, closes_at)
+                    VALUES (:id, :tenantId, :brandId, :locationId, :variantId, :dayOfWeek, :opensAt, :closesAt)
+                    """)
+                    .param("id", Ids.newId())
+                    .param("tenantId", tenantId)
+                    .param("brandId", brandId)
+                    .param("locationId", locationId)
+                    .param("variantId", variantId)
+                    .param("dayOfWeek", window.dayOfWeek())
+                    .param("opensAt", window.opensAt())
+                    .param("closesAt", window.closesAt())
+                    .update();
+        }
+    }
+
+    // --------------------------------------------------- row 4.2h: cross-sell / recommendations
+
+    public Optional<UUID> productIdForVariant(UUID tenantId, UUID variantId) {
+        return jdbc.sql("""
+                SELECT product_id FROM catalog.variants WHERE tenant_id = :tenantId AND id = :variantId
+                """)
+                .param("tenantId", tenantId)
+                .param("variantId", variantId)
+                .query(UUID.class)
+                .optional();
+    }
+
+    /**
+     * Attaches a target variant to a source product, or — the same call,
+     * {@code ON CONFLICT} on the natural key — re-sorts it if it is already
+     * attached, exactly the discipline {@code attachMedia}'s re-{@code PUT}
+     * already uses elsewhere in this store. Never a second row for one pair.
+     */
+    public UUID upsertRecommendation(
+            UUID tenantId, UUID brandId, UUID sourceProductId, UUID targetVariantId, int sortOrder) {
+        return jdbc.sql("""
+                INSERT INTO catalog.product_recommendations (
+                    id, tenant_id, brand_id, source_product_id, target_variant_id, sort_order)
+                VALUES (:id, :tenantId, :brandId, :sourceProductId, :targetVariantId, :sortOrder)
+                ON CONFLICT (source_product_id, target_variant_id) DO UPDATE
+                SET sort_order = EXCLUDED.sort_order,
+                    version = catalog.product_recommendations.version + 1,
+                    updated_at = now()
+                RETURNING id
+                """)
+                .param("id", Ids.newId())
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("sourceProductId", sourceProductId)
+                .param("targetVariantId", targetVariantId)
+                .param("sortOrder", sortOrder)
+                .query(UUID.class)
+                .single();
+    }
+
+    /**
+     * Idempotent: detaching a pair that is already gone still resolves, exactly
+     * like {@code detachMedia}. Filtered by {@code brand_id} as well as {@code
+     * tenant_id} -- unlike the insert side, which the composite foreign keys
+     * already refuse across a brand boundary, a bare {@code DELETE} has no such
+     * backstop, so the predicate has to carry it itself.
+     */
+    public boolean deleteRecommendation(UUID tenantId, UUID brandId, UUID sourceProductId, UUID targetVariantId) {
+        return jdbc.sql("""
+                DELETE FROM catalog.product_recommendations
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND source_product_id = :sourceProductId
+                  AND target_variant_id = :targetVariantId
+                """)
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
+                        .param("sourceProductId", sourceProductId)
+                        .param("targetVariantId", targetVariantId)
+                        .update()
+                > 0;
+    }
+
+    /**
+     * Every recommendation attached to one product, unfiltered — the product
+     * editor's own management list, where an operator must be able to see and
+     * detach a target even while it is stopped or hidden.
+     */
+    public List<RecommendationRow> listRecommendations(
+            UUID tenantId, UUID brandId, UUID sourceProductId, String locale) {
+        return jdbc.sql("""
+                SELECT r.id AS recommendation_id, r.target_variant_id, r.sort_order,
+                       t.name AS target_product_name
+                FROM catalog.product_recommendations r
+                JOIN catalog.variants tv
+                    ON tv.id = r.target_variant_id AND tv.tenant_id = r.tenant_id AND tv.brand_id = r.brand_id
+                JOIN catalog.products tp
+                    ON tp.id = tv.product_id AND tp.tenant_id = tv.tenant_id AND tp.brand_id = tv.brand_id
+                LEFT JOIN catalog.translations t
+                    ON t.entity_type = 'PRODUCT' AND t.entity_id = tp.id AND t.tenant_id = tp.tenant_id
+                       AND t.locale = :locale
+                WHERE r.tenant_id = :tenantId AND r.brand_id = :brandId AND r.source_product_id = :sourceProductId
+                ORDER BY r.sort_order
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("sourceProductId", sourceProductId)
+                .param("locale", locale)
+                .query((row, number) -> new RecommendationRow(
+                        row.getObject("recommendation_id", UUID.class),
+                        row.getObject("target_variant_id", UUID.class),
+                        row.getString("target_product_name"),
+                        row.getInt("sort_order")))
+                .list();
+    }
+
+    /**
+     * IA 4.2's own filter — active + in-menu + not-stopped — resolved here, at
+     * read time, against one location's own {@code catalog.location_offerings}
+     * row: {@code AVAILABLE} is exactly "in menu, not stopped" in this schema
+     * ({@code catalog.menus.status.UNAVAILABLE} reads "Stopped" to an operator
+     * for the same column), and {@code tv.status}/{@code tp.status ACTIVE} is
+     * "active". Nothing is pruned from {@link #listRecommendations}'s stored
+     * set to get here — a target that is stopped today and un-stopped tomorrow
+     * reappears in this read on its own, because the predicate is evaluated
+     * fresh on every call rather than baked into a stored flag.
+     */
+    public List<RecommendationRow> listResolvedRecommendations(
+            UUID tenantId, UUID brandId, UUID sourceProductId, UUID locationId, String locale) {
+        return jdbc.sql("""
+                SELECT r.id AS recommendation_id, r.target_variant_id, r.sort_order,
+                       t.name AS target_product_name
+                FROM catalog.product_recommendations r
+                JOIN catalog.variants tv
+                    ON tv.id = r.target_variant_id AND tv.tenant_id = r.tenant_id AND tv.brand_id = r.brand_id
+                JOIN catalog.products tp
+                    ON tp.id = tv.product_id AND tp.tenant_id = tv.tenant_id AND tp.brand_id = tv.brand_id
+                JOIN catalog.location_offerings lo
+                    ON lo.variant_id = tv.id AND lo.tenant_id = tv.tenant_id AND lo.brand_id = tv.brand_id
+                       AND lo.location_id = :locationId
+                LEFT JOIN catalog.translations t
+                    ON t.entity_type = 'PRODUCT' AND t.entity_id = tp.id AND t.tenant_id = tp.tenant_id
+                       AND t.locale = :locale
+                WHERE r.tenant_id = :tenantId AND r.brand_id = :brandId AND r.source_product_id = :sourceProductId
+                  AND tv.status = 'ACTIVE' AND tp.status = 'ACTIVE' AND lo.status = 'AVAILABLE'
+                ORDER BY r.sort_order
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("sourceProductId", sourceProductId)
+                .param("locationId", locationId)
+                .param("locale", locale)
+                .query((row, number) -> new RecommendationRow(
+                        row.getObject("recommendation_id", UUID.class),
+                        row.getObject("target_variant_id", UUID.class),
+                        row.getString("target_product_name"),
+                        row.getInt("sort_order")))
+                .list();
+    }
+
+    /** One recommended target — its attachment id, the variant it names, that variant's product name, and its position. */
+    public record RecommendationRow(
+            UUID recommendationId,
+            UUID targetVariantId,
+            @Nullable String targetProductName,
+            int sortOrder) {}
 }
