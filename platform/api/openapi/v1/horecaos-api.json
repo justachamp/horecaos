@@ -18307,6 +18307,25 @@
         "required" : [ "coordinateSource", "fields" ],
         "type" : "object"
       },
+      "ScheduleSummaryResponse" : {
+        "properties" : {
+          "acceptsScheduledOrders" : {
+            "type" : "boolean"
+          },
+          "boundLocationCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ScheduleView" : {
         "properties" : {
           "acceptsScheduledOrders" : {
@@ -22879,7 +22898,7 @@
     "/api/v1/control-plane/capabilities" : {
       "get" : {
         "description" : "The code-owned registry, not one session's slice of it. Platform-admin only: the vocabulary itself is what an approval policy's requiredApproverCapability and a grant's roleCode are built from.",
-        "operationId" : "list_40",
+        "operationId" : "list_41",
         "responses" : {
           "200" : {
             "content" : {
@@ -23131,7 +23150,7 @@
     "/api/v1/control-plane/event-contracts" : {
       "get" : {
         "description" : "Code-owned (ADR 0032): a producer cannot publish an event with no entry here. Static within a build, so there is nothing to paginate.",
-        "operationId" : "list_39",
+        "operationId" : "list_40",
         "responses" : {
           "200" : {
             "content" : {
@@ -23287,7 +23306,7 @@
     },
     "/api/v1/control-plane/grants" : {
       "get" : {
-        "operationId" : "list_27",
+        "operationId" : "list_28",
         "responses" : {
           "200" : {
             "content" : {
@@ -23377,7 +23396,7 @@
     "/api/v1/control-plane/incidents" : {
       "get" : {
         "description" : "Each alert class and subject has at most one live incident; raising it again counts another occurrence.",
-        "operationId" : "list_38",
+        "operationId" : "list_39",
         "parameters" : [ {
           "in" : "query",
           "name" : "includeResolved",
@@ -23989,7 +24008,7 @@
     },
     "/api/v1/control-plane/onboarding-templates" : {
       "get" : {
-        "operationId" : "list_37",
+        "operationId" : "list_38",
         "responses" : {
           "200" : {
             "content" : {
@@ -24372,7 +24391,7 @@
     "/api/v1/control-plane/template-reviews" : {
       "get" : {
         "description" : "Versions in force or in draft, awaiting first. A version awaiting or refused is not sent. Filter to one state with ?state=.",
-        "operationId" : "list_36",
+        "operationId" : "list_37",
         "parameters" : [ {
           "in" : "query",
           "name" : "state",
@@ -24583,7 +24602,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/approval-policies" : {
       "get" : {
         "description" : "Every version of each policy, newest first. An action code with no row here needs no second signature, which is the state every action is in until somebody publishes one.",
-        "operationId" : "list_26",
+        "operationId" : "list_27",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -27162,7 +27181,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows" : {
       "get" : {
         "description" : "Every version of every flow key, newest first. At most one version per flow key is ever active at once.",
-        "operationId" : "list_35",
+        "operationId" : "list_36",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -27256,7 +27275,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
       "get" : {
         "description" : "Operations §3.7.",
-        "operationId" : "list_25",
+        "operationId" : "list_26",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -28618,6 +28637,44 @@
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules" : {
+      "get" : {
+        "description" : "The Hours tab's rebind picker and the shared-schedule warning's source: each schedule's name and how many locations currently bind it.",
+        "operationId" : "list_25",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ScheduleSummaryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every named timetable this brand owns",
+        "tags" : [ "Service schedules" ]
+      },
       "post" : {
         "description" : "Named and reusable, so thirty branches on one Ramadan timetable edit one object. That is the point, and also the accident.",
         "operationId" : "create_13",
@@ -32394,7 +32451,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/statements" : {
       "get" : {
         "description" : "Newest month first, void ones included.",
-        "operationId" : "list_34",
+        "operationId" : "list_35",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -34019,7 +34076,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands" : {
       "get" : {
-        "operationId" : "list_31",
+        "operationId" : "list_32",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -34180,7 +34237,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
         "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. No message bodies here — open a conversation for its decrypted history.",
-        "operationId" : "list_33",
+        "operationId" : "list_34",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -37104,7 +37161,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews" : {
       "get" : {
         "description" : "Every filter is optional. Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end.",
-        "operationId" : "list_32",
+        "operationId" : "list_33",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -49322,7 +49379,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices" : {
       "get" : {
         "description" : "Active and revoked alike, with who enrolled or revoked each one. Behind kitchen.station.manage rather than kitchen.ticket.read, because a revocation reason and an enrolling manager's name are administrative facts a line cook's board read does not need.",
-        "operationId" : "list_30",
+        "operationId" : "list_31",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -54249,7 +54306,7 @@
     "/api/v1/tenants/{tenantId}/consent-types" : {
       "get" : {
         "description" : "Bootstraps the code-owned default catalogue on this tenant's first read, so a tenant with no rows yet still sees the two purposes already in production use (MARKETING_PROMOTIONS, TERMS_OF_SERVICE) rather than an empty registry.",
-        "operationId" : "list_29",
+        "operationId" : "list_30",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -55726,7 +55783,7 @@
     "/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences" : {
       "get" : {
         "description" : "Only what has been set. An absent row means the default for that class, which is on rather than off: a customer who never expressed a preference has not opted out of anything.",
-        "operationId" : "list_28",
+        "operationId" : "list_29",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -57544,11 +57601,11 @@
     "description" : "The maker-checker queue: actions waiting for a second signature",
     "name" : "Approval requests"
   }, {
-    "description" : "A staff member who forgot their password (ADR 0098)",
-    "name" : "Staff password resets"
-  }, {
     "description" : "Named, reusable opening timetables",
     "name" : "Service schedules"
+  }, {
+    "description" : "A staff member who forgot their password (ADR 0098)",
+    "name" : "Staff password resets"
   }, {
     "description" : "What delivery costs here, and the evidence for it",
     "name" : "Delivery fee"

@@ -7508,6 +7508,25 @@
         },
         "type" : "object"
       },
+      "ScheduleSummaryResponse" : {
+        "properties" : {
+          "acceptsScheduledOrders" : {
+            "type" : "boolean"
+          },
+          "boundLocationCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ScheduleView" : {
         "properties" : {
           "acceptsScheduledOrders" : {
@@ -9900,7 +9919,7 @@
     "/api/v1/control-plane/capabilities" : {
       "get" : {
         "description" : "The code-owned registry, not one session's slice of it. Platform-admin only: the vocabulary itself is what an approval policy's requiredApproverCapability and a grant's roleCode are built from.",
-        "operationId" : "list_17",
+        "operationId" : "list_18",
         "responses" : {
           "200" : {
             "content" : {
@@ -10152,7 +10171,7 @@
     "/api/v1/control-plane/event-contracts" : {
       "get" : {
         "description" : "Code-owned (ADR 0032): a producer cannot publish an event with no entry here. Static within a build, so there is nothing to paginate.",
-        "operationId" : "list_16",
+        "operationId" : "list_17",
         "responses" : {
           "200" : {
             "content" : {
@@ -10308,7 +10327,7 @@
     },
     "/api/v1/control-plane/grants" : {
       "get" : {
-        "operationId" : "list_10",
+        "operationId" : "list_11",
         "responses" : {
           "200" : {
             "content" : {
@@ -10398,7 +10417,7 @@
     "/api/v1/control-plane/incidents" : {
       "get" : {
         "description" : "Each alert class and subject has at most one live incident; raising it again counts another occurrence.",
-        "operationId" : "list_15",
+        "operationId" : "list_16",
         "parameters" : [ {
           "in" : "query",
           "name" : "includeResolved",
@@ -11010,7 +11029,7 @@
     },
     "/api/v1/control-plane/onboarding-templates" : {
       "get" : {
-        "operationId" : "list_14",
+        "operationId" : "list_15",
         "responses" : {
           "200" : {
             "content" : {
@@ -11393,7 +11412,7 @@
     "/api/v1/control-plane/template-reviews" : {
       "get" : {
         "description" : "Versions in force or in draft, awaiting first. A version awaiting or refused is not sent. Filter to one state with ?state=.",
-        "operationId" : "list_13",
+        "operationId" : "list_14",
         "parameters" : [ {
           "in" : "query",
           "name" : "state",
@@ -11604,7 +11623,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/approval-policies" : {
       "get" : {
         "description" : "Every version of each policy, newest first. An action code with no row here needs no second signature, which is the state every action is in until somebody publishes one.",
-        "operationId" : "list_9",
+        "operationId" : "list_10",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -14183,7 +14202,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows" : {
       "get" : {
         "description" : "Every version of every flow key, newest first. At most one version per flow key is ever active at once.",
-        "operationId" : "list_12",
+        "operationId" : "list_13",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -14277,7 +14296,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
       "get" : {
         "description" : "Operations §3.7.",
-        "operationId" : "list_8",
+        "operationId" : "list_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -15639,6 +15658,44 @@
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules" : {
+      "get" : {
+        "description" : "The Hours tab's rebind picker and the shared-schedule warning's source: each schedule's name and how many locations currently bind it.",
+        "operationId" : "list_8",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ScheduleSummaryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every named timetable this brand owns",
+        "tags" : [ "Service schedules" ]
+      },
       "post" : {
         "description" : "Named and reusable, so thirty branches on one Ramadan timetable edit one object. That is the point, and also the accident.",
         "operationId" : "create_5",
@@ -19415,7 +19472,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/statements" : {
       "get" : {
         "description" : "Newest month first, void ones included.",
-        "operationId" : "list_11",
+        "operationId" : "list_12",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -22150,11 +22207,11 @@
     "description" : "The maker-checker queue: actions waiting for a second signature",
     "name" : "Approval requests"
   }, {
-    "description" : "A staff member who forgot their password (ADR 0098)",
-    "name" : "Staff password resets"
-  }, {
     "description" : "Named, reusable opening timetables",
     "name" : "Service schedules"
+  }, {
+    "description" : "A staff member who forgot their password (ADR 0098)",
+    "name" : "Staff password resets"
   }, {
     "description" : "What delivery costs here, and the evidence for it",
     "name" : "Delivery fee"
