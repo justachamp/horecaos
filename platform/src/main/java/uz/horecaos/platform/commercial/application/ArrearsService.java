@@ -3,7 +3,9 @@ package uz.horecaos.platform.commercial.application;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.commercial.api.ArrearsDirectory;
@@ -46,6 +48,21 @@ public class ArrearsService implements ArrearsDirectory {
         return arrears.pastDueSince(before, limit);
     }
 
+    /**
+     * This tenant's own row and its newest standing statement (Finance 8.6, ADR
+     * 0127) — the single-tenant sibling of {@link #board}, tenant-reachable
+     * rather than platform-wide.
+     */
+    @Transactional(readOnly = true)
+    public Optional<TenantArrears> forTenant(UUID tenantId) {
+        return arrears.forTenant(tenantId)
+                .map(row -> new TenantArrears(
+                        row, statements.latestIssued(List.of(tenantId)).get(tenantId)));
+    }
+
     /** The board's rows, and the newest standing statement of each tenant on it. */
     public record Board(List<ArrearRow> rows, Map<UUID, Statement> latestStatements) {}
+
+    /** One tenant's own row and its newest standing statement. */
+    public record TenantArrears(ArrearRow row, @Nullable Statement latestStatement) {}
 }

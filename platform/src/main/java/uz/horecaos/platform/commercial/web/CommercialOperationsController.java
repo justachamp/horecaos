@@ -2,10 +2,16 @@ package uz.horecaos.platform.commercial.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -13,20 +19,26 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.commercial.api.EntitlementService;
 import uz.horecaos.platform.commercial.api.EntitlementSnapshot;
 import uz.horecaos.platform.commercial.api.EntitlementValue;
+import uz.horecaos.platform.commercial.application.ModuleCatalogService;
 import uz.horecaos.platform.commercial.application.PlanCatalogService;
 import uz.horecaos.platform.commercial.application.StatementService;
 import uz.horecaos.platform.commercial.application.SubscriptionService;
 import uz.horecaos.platform.commercial.application.UsageMeteringService;
 import uz.horecaos.platform.commercial.domain.PlanVersion;
+import uz.horecaos.platform.commercial.domain.SellableModule;
 import uz.horecaos.platform.commercial.domain.Statement;
 import uz.horecaos.platform.commercial.domain.Subscription;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcUsageStore;
 import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
@@ -43,12 +55,6 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * OpenAPI group cannot reach (ADR 0057). Reusing the same services rather than
  * a second read path keeps "what the plan says" answerable one way.
  *
- * <p>Deliberately thin: ADR 0021's own status line is explicit that there is no
- * period close yet, and the platform-wide plan catalogue (an inline-purchase
- * source) is a {@code ScopeType.PLATFORM} read a tenant grant cannot satisfy —
- * a tenant does not yet browse and buy a module from this screen, and the
- * screen says so rather than a stub inviting a click that goes nowhere.
- *
  * <p>Finance 8/X.4 adds the one read that was already tenant-scoped and simply
  * unreachable from here: {@code statements}/{@code oneStatement}/{@code
  * statementExport} below mirror {@code CommercialStatementController}'s three
@@ -57,29 +63,63 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * console's own OpenAPI group can reach, so it stops calling
  * {@code /api/v1/control-plane/**} for its own invoices. Issuing and voiding a
  * statement stay HorecaOS-staff-only and stay on the control-plane controller.
+ *
+ * <p>Finance 8.6 (ADR 0127) adds the tenant-facing purchasable-module
+ * catalogue: {@code modulesOnSale} browses what HorecaOS sells under the new
+ * {@code COMMERCIAL_MODULE_READ} capability — a tenant-scoped mirror of
+ * {@code CommercialModuleController.onSale}'s {@code ScopeType.PLATFORM} read,
+ * which no tenant grant could ever satisfy — and {@code purchaseModule} gives
+ * the calling tenant one of those modules under {@code
+ * COMMERCIAL_SUBSCRIPTION_MANAGE} at {@code ScopeType.TENANT}, the same
+ * capability {@code TENANT_OWNER}/{@code TENANT_FINANCE} already hold for
+ * this exact scope (`PlatformRole.java`) with no bundle change required. It
+ * reuses {@link ModuleCatalogService#add} unchanged — the same on-sale check,
+ * per-unit quantity rule, and one-live-instance-per-module guard the
+ * platform-admin route enforces — with a fixed, non-PII reason recorded on
+ * the audit trail rather than asking the merchant to type one for a purchase
+ * click. Reading is composed into tenant roles the same way {@link
+ * #entitlements} is; purchasing is execution authority, kept to the same pair
+ * that already holds {@code refund.execute} (`PlatformRoleTests
+ * .aTenantAdminHasNoCommercialOrExecutionAuthority`).
+ *
+ * <p>Period close does not belong on this list: ADR 0088 (Built) already
+ * decided a month is closed by issuing its statement, which is HorecaOS-staff
+ * work on {@code CommercialStatementController.issue} — deliberately manual
+ * until tax and invoicing are approved (that ADR's own Alternatives table).
+ * There is nothing left here to add for it; ADR 0021's older checklist line
+ * predates ADR 0088 and is stale on that point.
  */
 @RestController
 @RequestMapping("/api/v1/tenants/{tenantId}/commercial")
 @Tag(name = "Commercial", description = "The merchant's own plan, entitlements, and usage")
 public class CommercialOperationsController {
 
+    /** Non-PII: a purchase from this screen is the tenant's own act, recorded like any other. */
+    private static final String SELF_SERVICE_PURCHASE_REASON = "Purchased from the operations console";
+
     private final SubscriptionService subscriptions;
     private final EntitlementService entitlements;
     private final UsageMeteringService usage;
     private final PlanCatalogService plans;
     private final StatementService statements;
+    private final ModuleCatalogService modules;
+    private final CurrentActor currentActor;
 
     public CommercialOperationsController(
             SubscriptionService subscriptions,
             EntitlementService entitlements,
             UsageMeteringService usage,
             PlanCatalogService plans,
-            StatementService statements) {
+            StatementService statements,
+            ModuleCatalogService modules,
+            CurrentActor currentActor) {
         this.subscriptions = subscriptions;
         this.entitlements = entitlements;
         this.usage = usage;
         this.plans = plans;
         this.statements = statements;
+        this.modules = modules;
+        this.currentActor = currentActor;
     }
 
     @GetMapping("/subscription")
@@ -166,7 +206,61 @@ public class CommercialOperationsController {
                 .body(CommercialStatementController.csv(statement));
     }
 
+    @GetMapping("/modules")
+    @RequiresCapability(value = Capability.COMMERCIAL_MODULE_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "Modules HorecaOS sells, that this tenant could add",
+            description = "Activated and not retired; drafts are not quotable. Mirrors "
+                    + "CommercialModuleController.onSale (ADR 0127).")
+    public ResponseEntity<List<CommercialModuleController.ModuleView>> modulesOnSale(@PathVariable UUID tenantId) {
+        return ResponseEntity.ok(modules.onSale().stream()
+                .map(CommercialModuleController.ModuleView::of)
+                .toList());
+    }
+
+    @GetMapping("/modules/held")
+    @RequiresCapability(value = Capability.COMMERCIAL_MODULE_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "Every module this tenant has had",
+            description = "Live ones first. Mirrors CommercialModuleController.tenantModules (ADR 0127), "
+                    + "at a path this console can reach.")
+    public ResponseEntity<List<CommercialModuleController.TenantModuleView>> modulesHeld(@PathVariable UUID tenantId) {
+        Map<UUID, SellableModule> byId =
+                modules.all().stream().collect(Collectors.toMap(SellableModule::id, Function.identity()));
+        return ResponseEntity.ok(modules.tenantModules(tenantId).stream()
+                .map(held -> CommercialModuleController.TenantModuleView.of(held, byId.get(held.moduleId())))
+                .toList());
+    }
+
+    @PostMapping("/modules")
+    @RequiresCapability(value = Capability.COMMERCIAL_SUBSCRIPTION_MANAGE, scope = ScopeType.TENANT, mutating = true)
+    @Operation(
+            summary = "Add one of the on-sale modules to this tenant",
+            description = "The inline purchase Finance 8.6 asks for: a quantity is required exactly "
+                    + "when the module is billed per unit, and its features switch on at once. "
+                    + "Billed on the next statement (ADR 0088) — this does not move money by itself.")
+    public ResponseEntity<CommercialModuleController.TenantModuleAdded> purchaseModule(
+            @PathVariable UUID tenantId, @Valid @RequestBody PurchaseModuleRequest body) {
+        UUID id = modules.add(
+                tenantId, body.moduleId(), body.quantity(), actor(), SELF_SERVICE_PURCHASE_REASON, correlationId());
+        return ResponseEntity.ok(new CommercialModuleController.TenantModuleAdded(id));
+    }
+
+    private ActorRef actor() {
+        return ActorRef.user(currentActor.get().subject(), null);
+    }
+
+    private static String correlationId() {
+        String correlationId = org.slf4j.MDC.get("correlationId");
+        return correlationId == null || correlationId.isBlank()
+                ? UUID.randomUUID().toString()
+                : correlationId;
+    }
+
     // ---------------------------------------------------------- wire records
+
+    public record PurchaseModuleRequest(
+            @NotNull UUID moduleId, @Min(1) Integer quantity) {}
 
     /** A subscription as the merchant sees it, with its plan named rather than only its id. */
     public record SubscriptionResponse(
