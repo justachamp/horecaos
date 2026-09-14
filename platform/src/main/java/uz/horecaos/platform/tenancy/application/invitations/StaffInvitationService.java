@@ -28,11 +28,10 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.StaffAccount;
+import uz.horecaos.platform.iam.api.grants.GrantAuthority;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner.EnsureMembership;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner.MembershipRef;
-import uz.horecaos.platform.iam.application.GrantManagementService;
-import uz.horecaos.platform.iam.application.GrantManagementService.GrantCommand;
 import uz.horecaos.platform.mail.api.MailOutcome;
 import uz.horecaos.platform.mail.api.PlatformMailer;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcStaffInvitationStore;
@@ -48,7 +47,7 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * <p>The account and the grant are created up front, before this ever writes
  * a row: {@link #invite} creates the Keycloak account, links the tenant's
  * organization, grants the chosen job through the exact path the People
- * screen's Add-job uses ({@link GrantManagementService#grant}, same refusal
+ * screen's Add-job uses ({@link GrantAuthority#grant}, same refusal
  * when the actor cannot confer it), and only then writes the one-time link
  * this class owns. So a staff invitation's row is never "waiting for an
  * account" the way an owner's is -- it is a receipt for work already done,
@@ -78,7 +77,7 @@ public class StaffInvitationService {
     private final JdbcStaffInvitationStore store;
     private final StaffAccounts accounts;
     private final OrganizationProvisioner organizations;
-    private final GrantManagementService grants;
+    private final GrantAuthority grants;
     private final AuthorizationService authorization;
     private final PlatformMailer mailer;
     private final AuditRecorder audit;
@@ -90,7 +89,7 @@ public class StaffInvitationService {
             JdbcStaffInvitationStore store,
             StaffAccounts accounts,
             OrganizationProvisioner organizations,
-            GrantManagementService grants,
+            GrantAuthority grants,
             AuthorizationService authorization,
             PlatformMailer mailer,
             AuditRecorder audit,
@@ -117,7 +116,7 @@ public class StaffInvitationService {
      * linked yet would be authority resting on nothing, and an invitation row
      * for a grant that was never made would offer a link to nobody's job.
      *
-     * <p>The coarse half of {@link GrantManagementService#grant}'s own
+     * <p>The coarse half of {@link GrantAuthority#grant}'s own
      * authorization check -- does the actor hold {@code IAM_GRANT_MANAGE} at
      * the chosen scope at all -- is repeated here, first, before any Keycloak
      * account exists: without it, a manager who holds the capability only at
@@ -134,7 +133,7 @@ public class StaffInvitationService {
      *                      not hold {@code IAM_GRANT_MANAGE} at the chosen scope
      * @throws ApiException {@code RESOURCE_CONFLICT} naming the existing
      *                      subject when the phone is already registered;
-     *                      whatever {@link GrantManagementService#grant}
+     *                      whatever {@link GrantAuthority#grant}
      *                      throws when the actor cannot confer this specific
      *                      job at this scope (staff-and-access.md §0's corollary)
      */
@@ -169,12 +168,11 @@ public class StaffInvitationService {
                 organizations.ensureMembership(new EnsureMembership(organizationId, "", account.subjectId()));
 
         UUID grantId = grants.grant(
-                new GrantCommand(
-                        membership.subjectId(),
-                        command.roleCode(),
-                        command.scope(),
-                        command.reason(),
-                        command.validUntil()),
+                membership.subjectId(),
+                command.roleCode(),
+                command.scope(),
+                command.reason(),
+                command.validUntil(),
                 actor.subject());
 
         String token = newToken();

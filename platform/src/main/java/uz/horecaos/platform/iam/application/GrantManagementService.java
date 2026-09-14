@@ -21,6 +21,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.GrantChanged;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.grants.GrantAuthority;
 import uz.horecaos.platform.iam.infrastructure.authorization.JdbcAuthorizationService;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.web.api.ApiException;
@@ -63,7 +64,7 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * {@code iam} ever depending back.
  */
 @Service
-public class GrantManagementService {
+public class GrantManagementService implements GrantAuthority {
 
     private final JdbcClient jdbc;
     private final AuthorizationService authorization;
@@ -82,6 +83,24 @@ public class GrantManagementService {
         this.cacheOwner = cacheOwner;
         this.events = events;
         this.clock = clock;
+    }
+
+    /**
+     * {@link GrantAuthority}'s own seam for a caller outside {@code iam} —
+     * translates into {@link #grant(GrantCommand, String)}, the same
+     * enforcement, just without exposing this class's own nested command
+     * type across the module boundary.
+     */
+    @Override
+    @Transactional
+    public UUID grant(
+            String principalSubject,
+            String roleCode,
+            ResourceScope scope,
+            String reason,
+            @Nullable Instant validUntil,
+            String granterSubject) {
+        return grant(new GrantCommand(principalSubject, roleCode, scope, reason, validUntil), granterSubject);
     }
 
     @Transactional
@@ -332,6 +351,7 @@ public class GrantManagementService {
      * non-null {@code tenantId} the two operators agree exactly, so no
      * existing tenant-scoped caller changes behaviour.
      */
+    @Override
     @Transactional
     public boolean revoke(@Nullable UUID tenantId, UUID grantId, String revokerSubject, String reason) {
         var existing = jdbc.sql("""
