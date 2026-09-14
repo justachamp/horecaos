@@ -3106,6 +3106,30 @@
         },
         "type" : "object"
       },
+      "CourierBucketResponse" : {
+        "properties" : {
+          "bucketCode" : {
+            "type" : "string"
+          },
+          "businessDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "courierId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "shareBasisPoints" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "CourierComplianceFileRequest" : {
         "properties" : {
           "clear" : {
@@ -3468,6 +3492,20 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierSlaResponse" : {
+        "properties" : {
+          "buckets" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CourierBucketResponse"
+            },
+            "type" : "array"
+          },
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
           }
         },
         "type" : "object"
@@ -5215,6 +5253,72 @@
         "required" : [ "purpose" ],
         "type" : "object"
       },
+      "ExternalDeliveryCostResponse" : {
+        "properties" : {
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ExternalDeliveryCostRowResponse"
+            },
+            "type" : "array"
+          },
+          "totalVarianceMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ExternalDeliveryCostRowResponse" : {
+        "properties" : {
+          "chargedDeliveryMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderTotalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "providerBilledMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "providerEstimatedMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "providerType" : {
+            "type" : "string"
+          },
+          "publicOrderNumber" : {
+            "type" : "string"
+          },
+          "reconcileActionAvailable" : {
+            "type" : "boolean"
+          },
+          "reconciliationStatus" : {
+            "type" : "string"
+          },
+          "shipmentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "varianceMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "FiscalDocumentControllerResolutionRequest" : {
         "properties" : {
           "reason" : {
@@ -5902,6 +6006,61 @@
           },
           "noPromiseFallbackSeconds" : {
             "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "LeaderboardResponse" : {
+        "properties" : {
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LeaderboardRowResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "LeaderboardRowResponse" : {
+        "properties" : {
+          "avgDistanceMeters" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "avgTransitHours" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "courierId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "deliveryCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "maxDistanceMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "minDistanceMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "onTimeShare" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "totalDistanceMeters" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalTransitSeconds" : {
+            "format" : "int64",
             "type" : "integer"
           }
         },
@@ -9985,6 +10144,24 @@
         },
         "type" : "object"
       },
+      "ReconcileShipmentRequest" : {
+        "properties" : {
+          "reason" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "ReconcileShipmentResponse" : {
+        "properties" : {
+          "reconciled" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "Reconciliation" : {
         "properties" : {
           "adapterVersion" : {
@@ -13012,6 +13189,56 @@
             "type" : "string"
           },
           "tagId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "TariffAuditResponse" : {
+        "properties" : {
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TariffAuditRowResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "TariffAuditRowResponse" : {
+        "properties" : {
+          "bandSequence" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "courierId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "resolutionCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tariffId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tariffVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "totalFinalFeeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "zoneId" : {
             "format" : "uuid",
             "type" : "string"
           }
@@ -24175,6 +24402,53 @@
         "tags" : [ "Order remedies" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/shipments/{shipmentId}/external-delivery-cost/reconcile" : {
+      "post" : {
+        "description" : "Marks the shipment's DELIVERY-charge invoice line MATCHED when one exists. A shipment with no invoice line at all is genuinely UNBILLED -- nothing to reconcile against yet -- and the acknowledgement is recorded on the audit trail alone; reconciled is false on that response.",
+        "operationId" : "reconcileExternalDeliveryCost",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "shipmentId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReconcileShipmentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReconcileShipmentResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "T11 7.4c: the per-order external-delivery-cost report's per-line reconcile action",
+        "tags" : [ "Courier operations" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/staff/invitations" : {
       "get" : {
         "description" : "Not accepted, not cancelled -- the People screen's «Приглашён» pill and filter.",
@@ -33490,6 +33764,208 @@
         "tags" : [ "Order lookup" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/reporting/couriers/external-delivery-cost" : {
+      "get" : {
+        "description" : "Order amount vs charged delivery vs provider billed vs variance vs reconciliation status, for every PARTNER-sourced delivered shipment in range. reconciliationStatus is UNBILLED (never PENDING) for a shipment with no invoice line at all -- 'HorecaOS has a shipment the partner never billed', excluded from varianceMinor's own total the same way it is excluded from every sum here: a null variance never contributes. The invoice-scoped half of this reconciliation renders in Finance 8.4; this is the per-order cut.",
+        "operationId" : "externalDeliveryCost",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExternalDeliveryCostResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "7.4c: per-order external-delivery cost",
+        "tags" : [ "Courier reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/couriers/leaderboard" : {
+      "get" : {
+        "description" : "One row per courier across the range, straight off reporting.fact_delivery (ADR 0125). courierId only; resolve display through the couriers endpoint (P19), never from this report.",
+        "operationId" : "leaderboard",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LeaderboardResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "7.4: courier leaderboard — distance, transit hours, deliveries, on-time %",
+        "tags" : [ "Courier reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/couriers/sla-buckets" : {
+      "get" : {
+        "description" : "The COURIER scope of agg_sla_bucket_day (ck_agg_sla_scope_kind has allowed it since V0031; this is the first producer and reader). Same sla_bucket_set.v1 six buckets as the branch distribution, bucketed on a courier's own acceptance-to-delivery span rather than the order's full elapsed time.",
+        "operationId" : "slaBuckets_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierSlaResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "7.4a: the fixed SLA distribution, per courier",
+        "tags" : [ "Courier reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/couriers/tariff-audit" : {
+      "get" : {
+        "description" : "fulfillment.delivery_fee_resolutions (ADR 0037) joined through quote -> order -> shipment for the one fact none of the three tables has alone: which courier actually worked each resolution. Grouped by (tariff, courier); 'today' means whatever the range covers, not a business-day close.",
+        "operationId" : "tariffAudit",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TariffAuditResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "7.4b: delivery-sum-by-tariff audit",
+        "tags" : [ "Courier reporting" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/reporting/demand-history" : {
       "get" : {
         "description" : "Not a forecast (the owner's 2026-09-05 decision, ADR 0043's implementation status): an average of completed orders in each hour, over the location's most recent occurrences of the requested weekday. Below minimumSampleSize qualifying dates, averageOrders is null on every hour and ordersByDate carries the raw per-date counts instead, so a sample too thin to mean anything is never shown as a confident number.",
@@ -34548,6 +35024,9 @@
   }, {
     "description" : "A courier's own shift, breaks, and cash declaration",
     "name" : "Courier shift"
+  }, {
+    "description" : "Leaderboard, SLA buckets, tariff audit and external-delivery cost",
+    "name" : "Courier reporting"
   }, {
     "description" : "Production stations and routing rules",
     "name" : "Kitchen configuration"

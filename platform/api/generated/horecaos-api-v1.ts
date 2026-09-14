@@ -1576,6 +1576,14 @@ export interface CourierBroadcastResponse {
   targetKind?: string;
 }
 
+export interface CourierBucketResponse {
+  bucketCode?: string;
+  businessDate?: string;
+  courierId?: string;
+  orderCount?: number;
+  shareBasisPoints?: number;
+}
+
 export interface CourierComplianceFileRequest {
   clear?: Array<string>;
   drivingLicence?: string;
@@ -1684,6 +1692,11 @@ export interface CourierShiftControllerShiftResponse {
   shiftId?: string;
   status?: string;
   version?: number;
+}
+
+export interface CourierSlaResponse {
+  buckets?: Array<CourierBucketResponse>;
+  provenance?: ProvenanceResponse;
 }
 
 export interface CourierTypeResponse {
@@ -2604,6 +2617,27 @@ export interface ExportView {
   venue?: string;
 }
 
+export interface ExternalDeliveryCostResponse {
+  provenance?: ProvenanceResponse;
+  rows?: Array<ExternalDeliveryCostRowResponse>;
+  totalVarianceMinor?: number;
+}
+
+export interface ExternalDeliveryCostRowResponse {
+  chargedDeliveryMinor?: number;
+  currency?: string;
+  orderId?: string;
+  orderTotalMinor?: number;
+  providerBilledMinor?: number;
+  providerEstimatedMinor?: number;
+  providerType?: string;
+  publicOrderNumber?: string;
+  reconcileActionAvailable?: boolean;
+  reconciliationStatus?: string;
+  shipmentId?: string;
+  varianceMinor?: number;
+}
+
 export interface FailureOperationsControllerReasonRequest {
   reason: string;
 }
@@ -3082,6 +3116,23 @@ export interface LatestStatementView {
   periodKey?: string;
   statementId?: string;
   total?: ApiMoney;
+}
+
+export interface LeaderboardResponse {
+  provenance?: ProvenanceResponse;
+  rows?: Array<LeaderboardRowResponse>;
+}
+
+export interface LeaderboardRowResponse {
+  avgDistanceMeters?: number;
+  avgTransitHours?: number;
+  courierId?: string;
+  deliveryCount?: number;
+  maxDistanceMeters?: number;
+  minDistanceMeters?: number;
+  onTimeShare?: number;
+  totalDistanceMeters?: number;
+  totalTransitSeconds?: number;
 }
 
 export interface LedgerLine {
@@ -5292,6 +5343,14 @@ export interface ReconcileRequest {
   providerType: string;
 }
 
+export interface ReconcileShipmentRequest {
+  reason: string;
+}
+
+export interface ReconcileShipmentResponse {
+  reconciled?: boolean;
+}
+
 export interface Reconciliation {
   adapterVersion?: string;
   capabilities?: { [key: string]: string };
@@ -6778,6 +6837,22 @@ export interface TagResponse {
   tagId?: string;
 }
 
+export interface TariffAuditResponse {
+  provenance?: ProvenanceResponse;
+  rows?: Array<TariffAuditRowResponse>;
+}
+
+export interface TariffAuditRowResponse {
+  bandSequence?: number;
+  courierId?: string;
+  currency?: string;
+  resolutionCount?: number;
+  tariffId?: string;
+  tariffVersion?: number;
+  totalFinalFeeMinor?: number;
+  zoneId?: string;
+}
+
 export interface TariffDetailResponse {
   activeVersion?: ActiveVersionResponse;
   tariff?: TariffSummaryResponse;
@@ -7947,6 +8022,7 @@ export interface Operations {
   "verify": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/remedies/{remedyId}/verification"; request: { parameters: { path: { remedyId: string; tenantId: string } }; body: OperationsRemedyControllerVerificationRequest }; responses: { "200": OperationsRemedyControllerVerificationResponse } };
   "liability": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/reports/loyalty-liability"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<LiabilityResponse> } };
   "report": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/reports/remedies"; request: { parameters: { path: { tenantId: string }; query: { from: string; to: string } } }; responses: { "200": Array<RemedyTotalsResponse> } };
+  "reconcileExternalDeliveryCost": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/shipments/{shipmentId}/external-delivery-cost/reconcile"; request: { parameters: { path: { shipmentId: string; tenantId: string } }; body: ReconcileShipmentRequest }; responses: { "200": ReconcileShipmentResponse } };
   "outstanding": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/staff/invitations"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<Outstanding> } };
   "invite": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/staff/invitations"; request: { parameters: { path: { tenantId: string } }; body: StaffInvitationRequest }; responses: { "200": StaffInvitationCreatedResponse } };
   "revoke_1": { method: "DELETE"; path: "/api/v1/operations/tenants/{tenantId}/staff/invitations/{invitationId}"; request: { parameters: { path: { invitationId: string; tenantId: string } }; body: StaffInvitationControllerReasonRequest }; responses: { "200": {  } } };
@@ -8248,6 +8324,10 @@ export interface Operations {
   "detail": { method: "GET"; path: "/api/v1/tenants/{tenantId}/notifications/{notificationId}"; request: { parameters: { path: { notificationId: string; tenantId: string } } }; responses: { "200": NotificationResponse } };
   "retry": { method: "POST"; path: "/api/v1/tenants/{tenantId}/notifications/{notificationId}/retry"; request: { parameters: { path: { notificationId: string; tenantId: string } }; body: RetryRequest }; responses: { "200": unknown } };
   "byNumber": { method: "GET"; path: "/api/v1/tenants/{tenantId}/orders/by-number"; request: { parameters: { path: { tenantId: string }; query: { publicOrderNumber: string } } }; responses: { "200": OrderNumberLookupResponse } };
+  "externalDeliveryCost": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/couriers/external-delivery-cost"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": ExternalDeliveryCostResponse } };
+  "leaderboard": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/couriers/leaderboard"; request: { parameters: { path: { tenantId: string }; query: { from: string; to: string } } }; responses: { "200": LeaderboardResponse } };
+  "slaBuckets_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/couriers/sla-buckets"; request: { parameters: { path: { tenantId: string }; query: { from: string; to: string } } }; responses: { "200": CourierSlaResponse } };
+  "tariffAudit": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/couriers/tariff-audit"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": TariffAuditResponse } };
   "demandHistory": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/demand-history"; request: { parameters: { path: { tenantId: string }; query: { locationId: string; sampleSize?: number; weekday: number } } }; responses: { "200": DemandHistoryResponse } };
   "metrics": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/metrics"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<MetricResponse> } };
   "operatorLeaderboard": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/operator-leaderboard"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": OperatorLeaderboardResponse } };
