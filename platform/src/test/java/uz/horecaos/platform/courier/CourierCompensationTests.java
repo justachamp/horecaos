@@ -15,6 +15,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -62,6 +63,7 @@ import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
 import uz.horecaos.platform.courier.domain.DistanceSource;
 import uz.horecaos.platform.courier.domain.EngagementStatus;
 import uz.horecaos.platform.courier.domain.LedgerEntryType;
+import uz.horecaos.platform.courier.domain.MatchStatus;
 import uz.horecaos.platform.courier.domain.OnTimeOutcome;
 import uz.horecaos.platform.courier.domain.PartnerChargeType;
 import uz.horecaos.platform.courier.domain.PayoutMethod;
@@ -79,12 +81,14 @@ import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedger
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore.PeriodRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierRateCardStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore.HandoverRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore.ShiftRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierTypeRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.EngagementRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore.CostLineRow;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore.InvoiceLineRow;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
@@ -1427,6 +1431,221 @@ class CourierCompensationTests {
         assertThat(invoiced.partnerMinor())
                 .as("the phantom line is reported, never added")
                 .isEqualTo(20_000);
+    }
+
+    // -------------------------------------------------- T07: Finance courier money
+
+    @Test
+    @DisplayName("a shift with a recorded delivery produces a non-zero cashCollectedDuringShift and "
+            + "opens a handover — empty on every real tenant until recordDelivery has a production caller")
+    void cashCollectedDuringShiftIsNonZeroOnceADeliveryIsRecorded() {
+        ShiftRow shift = openShift();
+        assertThat(ledgerStore.cashCollectedDuringShift(TENANT, shift.id())).isZero();
+
+        accruals.recordDelivery(deliveryOnShift(shift.id(), 3000, 65_000));
+
+        assertThat(ledgerStore.cashCollectedDuringShift(TENANT, shift.id())).isEqualTo(65_000);
+
+        clock.set(NOON.plus(Duration.ofHours(4)));
+        CourierShiftService.CloseOutcome outcome = shifts.close(new CourierShiftService.CloseShift(
+                TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
+
+        assertThat(outcome.cashHandoverId())
+                .as("a shift that collected cash opens a handover — the case that is empty on every "
+                        + "real tenant today")
+                .isNotNull();
+        HandoverRow handover = shiftStore
+                .findHandover(TENANT, Objects.requireNonNull(outcome.cashHandoverId()))
+                .orElseThrow();
+        assertThat(handover.expectedMinor()).isEqualTo(65_000);
+        assertThat(handover.status()).isEqualTo("PENDING");
+
+        JdbcCourierLedgerStore.ShiftCashSummary summary = Objects.requireNonNull(
+                ledgerStore.cashSummaryByShift(TENANT, Set.of(shift.id())).get(shift.id()));
+        assertThat(summary.cashDeliveredCount()).isEqualTo(1);
+        assertThat(summary.nonCashDeliveredCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("a shift with only prepaid deliveries collects no cash and opens no handover, and "
+            + "the payment-method split counts it as non-cash")
+    void aPrepaidOnlyShiftOpensNoHandover() {
+        ShiftRow shift = openShift();
+        accruals.recordDelivery(deliveryOnShift(shift.id(), 2500, 0));
+
+        assertThat(ledgerStore.cashCollectedDuringShift(TENANT, shift.id())).isZero();
+
+        clock.set(NOON.plus(Duration.ofHours(2)));
+        CourierShiftService.CloseOutcome outcome = shifts.close(new CourierShiftService.CloseShift(
+                TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
+        assertThat(outcome.cashHandoverId()).isNull();
+
+        JdbcCourierLedgerStore.ShiftCashSummary summary = Objects.requireNonNull(
+                ledgerStore.cashSummaryByShift(TENANT, Set.of(shift.id())).get(shift.id()));
+        assertThat(summary.cashDeliveredCount()).isZero();
+        assertThat(summary.nonCashDeliveredCount()).isEqualTo(1);
+        assertThat(summary.nonCashEarningsMinor()).isPositive();
+    }
+
+    @Test
+    @DisplayName("an UNMATCHED_LINE resolves on a second match once the operator supplies the "
+            + "correct shipment reference, without reprocessing — and re-costing — a line already matched")
+    void anUnmatchedLineResolvesOnASecondMatch() {
+        LocalDate today = LocalDate.ofInstant(NOON, ZoneOffset.UTC);
+        UUID knownA = deliveredShipment().shipmentId();
+        UUID knownB = deliveredShipment().shipmentId();
+        partnerInvoices.recordPartnerCost(
+                TENANT, knownA, "NOOR", 20_000, UZS, today, null, PartnerChargeType.DELIVERY, "sourcing");
+        partnerInvoices.recordPartnerCost(
+                TENANT, knownB, "NOOR", 18_000, UZS, today, null, PartnerChargeType.DELIVERY, "sourcing");
+
+        UUID invoiceId = partnerInvoices.importInvoice(new PartnerInvoiceService.ImportInvoice(
+                TENANT,
+                "NOOR",
+                "INV-3",
+                null,
+                today,
+                today,
+                38_000,
+                UZS,
+                List.of(
+                        new PartnerInvoiceService.ImportedLine("NOOR-A", 20_000, PartnerChargeType.DELIVERY),
+                        new PartnerInvoiceService.ImportedLine("NOOR-B", 18_000, PartnerChargeType.DELIVERY)),
+                manager(),
+                "importing"));
+
+        // First pass: only NOOR-A's own reference is known yet.
+        PartnerInvoiceService.MatchReport first =
+                partnerInvoices.match(TENANT, invoiceId, Map.of("NOOR-A", knownA), manager(), "matching");
+        assertThat(first.matchedLines()).isEqualTo(1);
+        assertThat(first.unmatchedLineIds()).hasSize(1);
+        assertThat(deliveryCosts
+                        .report(TENANT, CostBasis.INVOICED, today, today)
+                        .partnerMinor())
+                .isEqualTo(20_000);
+
+        // The operator has since found NOOR-B's shipment and resolves it — the
+        // resolution UI's call, a second match with a fuller map.
+        PartnerInvoiceService.MatchReport second = partnerInvoices.match(
+                TENANT, invoiceId, Map.of("NOOR-A", knownA, "NOOR-B", knownB), manager(), "resolving");
+        assertThat(second.matchedLines())
+                .as("only the newly-resolved line is reprocessed, not the one already matched")
+                .isEqualTo(1);
+        assertThat(second.unmatchedLineIds()).isEmpty();
+
+        assertThat(deliveryCosts
+                        .report(TENANT, CostBasis.INVOICED, today, today)
+                        .partnerMinor())
+                .as("NOOR-A's cost line is not duplicated by the second match call")
+                .isEqualTo(38_000);
+
+        List<InvoiceLineRow> lines = costStore.linesOfInvoice(TENANT, invoiceId);
+        assertThat(lines).extracting(InvoiceLineRow::matchStatus).allMatch(status -> status == MatchStatus.MATCHED);
+    }
+
+    @Test
+    @DisplayName("a VARIANCE line can be accepted or disputed without its match status changing, "
+            + "and a matched invoice can be flagged for pushback to the partner")
+    void aVarianceCanBeAcceptedAndAnInvoiceDisputed() {
+        LocalDate today = LocalDate.ofInstant(NOON, ZoneOffset.UTC);
+        UUID shipment = deliveredShipment().shipmentId();
+        partnerInvoices.recordPartnerCost(
+                TENANT, shipment, "NOOR", 20_000, UZS, today, null, PartnerChargeType.DELIVERY, "sourcing");
+
+        UUID invoiceId = partnerInvoices.importInvoice(new PartnerInvoiceService.ImportInvoice(
+                TENANT,
+                "NOOR",
+                "INV-4",
+                null,
+                today,
+                today,
+                23_000,
+                UZS,
+                List.of(new PartnerInvoiceService.ImportedLine("NOOR-V", 23_000, PartnerChargeType.DELIVERY)),
+                manager(),
+                "importing"));
+        PartnerInvoiceService.MatchReport report =
+                partnerInvoices.match(TENANT, invoiceId, Map.of("NOOR-V", shipment), manager(), "matching");
+        assertThat(report.varianceLineIds()).hasSize(1);
+        UUID lineId = report.varianceLineIds().getFirst();
+
+        InvoiceLineRow accepted =
+                partnerInvoices.resolveVariance(TENANT, invoiceId, lineId, true, manager(), "accepting the charge");
+        assertThat(accepted.varianceResolution()).isEqualTo("ACCEPTED");
+        assertThat(accepted.matchStatus())
+                .as("resolution never overwrites the match status — VARIANCE stays a fact about the money")
+                .isEqualTo(MatchStatus.VARIANCE);
+
+        assertThat(costStore.findInvoice(TENANT, invoiceId).orElseThrow().status())
+                .isEqualTo("MATCHED");
+        partnerInvoices.disputeInvoice(TENANT, invoiceId, manager(), "pushing back to the partner");
+        assertThat(costStore.findInvoice(TENANT, invoiceId).orElseThrow().status())
+                .isEqualTo("DISPUTED");
+
+        assertThat(catchThrowable(() -> partnerInvoices.resolveVariance(
+                        TENANT, invoiceId, UUID.randomUUID(), true, manager(), "no such line")))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    @DisplayName("a closed settlement period carries km and hours off the stored row, and the "
+            + "penalty/bonus split apart from the combined adjustments total")
+    void settlementPeriodCarriesKmHoursAndThePenaltyBonusSplit() {
+        ShiftRow shift = openShift();
+        accruals.recordDelivery(deliveryOnShift(shift.id(), 5000, 0));
+        clock.set(NOON.plus(Duration.ofHours(3)));
+        shifts.close(new CourierShiftService.CloseShift(
+                TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
+
+        PeriodRow open = ledgerStore.findOpenPeriod(TENANT, courierId).orElseThrow();
+        ledger.append(new CourierLedgerService.NewEntry(
+                TENANT,
+                courierId,
+                branch,
+                LedgerEntryType.BONUS,
+                15_000,
+                UZS,
+                "test-fixture",
+                null,
+                AdjustmentOrigin.MANUAL,
+                "GOOD_WORK",
+                clock.instant(),
+                "test-bonus:" + UUID.randomUUID(),
+                null,
+                null,
+                "test"));
+        // RULE origin: a manual penalty needs ADR 0027 four-eyes approval, which
+        // is CourierAdjustmentService's own concern and already covered
+        // elsewhere in this file — this test only exercises the read-time split.
+        ledger.append(new CourierLedgerService.NewEntry(
+                TENANT,
+                courierId,
+                branch,
+                LedgerEntryType.PENALTY,
+                -4_000,
+                UZS,
+                "test-fixture",
+                null,
+                AdjustmentOrigin.RULE,
+                "LATE",
+                clock.instant(),
+                "test-penalty:" + UUID.randomUUID(),
+                null,
+                null,
+                "test"));
+
+        settlement.close(TENANT, open.id(), manager(), "closing");
+        PeriodRow closed = ledgerStore.findPeriod(TENANT, open.id()).orElseThrow();
+
+        assertThat(closed.distanceMeters()).isEqualTo(5000);
+        assertThat(closed.paidSeconds()).isEqualTo(Duration.ofHours(3).toSeconds());
+        // The combined figure the period row has always stored, still correct.
+        assertThat(closed.adjustmentsMinor()).isEqualTo(11_000);
+
+        JdbcCourierLedgerStore.AdjustmentSplit split = Objects.requireNonNull(
+                ledgerStore.adjustmentSplitByPeriod(TENANT, Set.of(open.id())).get(open.id()));
+        assertThat(split.bonusMinor()).isEqualTo(15_000);
+        assertThat(split.penaltyMinor()).isEqualTo(-4_000);
     }
 
     // --------------------------------------------------- privacy and retention

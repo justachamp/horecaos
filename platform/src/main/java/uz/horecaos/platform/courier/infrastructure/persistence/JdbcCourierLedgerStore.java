@@ -5,12 +5,14 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -415,6 +417,101 @@ public class JdbcCourierLedgerStore {
                 .single();
         return balance == null ? 0L : balance;
     }
+
+    /**
+     * Finance 8.3's per-shift enrichment: what a courier earned and collected
+     * during one shift, split by whether cash changed hands, plus any bonus
+     * posted to the same courier while the shift was open.
+     *
+     * <p>{@code bonusPaidMinor} is windowed on {@code occurred_at} between the
+     * shift's own open and close instants rather than stamped with a shift id,
+     * because a manual bonus (ADR 0042's {@code courier_adjustment} source) has
+     * no shift to stamp — the window is the only fact this module has linking
+     * one to the other.
+     */
+    public Map<UUID, ShiftCashSummary> cashSummaryByShift(UUID tenantId, Collection<UUID> shiftIds) {
+        if (shiftIds.isEmpty()) {
+            return Map.of();
+        }
+        return jdbc
+                .sql("""
+                SELECT s.id AS shift_id,
+                       COALESCE((
+                           SELECT SUM(bonus.amount_minor) FROM fulfillment.courier_ledger_entries bonus
+                            WHERE bonus.tenant_id = s.tenant_id AND bonus.courier_id = s.courier_id
+                              AND bonus.entry_type = 'BONUS'
+                              AND bonus.occurred_at >= s.opened_at
+                              AND bonus.occurred_at <= COALESCE(s.closed_at, now())
+                       ), 0)::bigint AS bonus_paid_minor,
+                       COUNT(earning.id) FILTER (WHERE EXISTS (
+                           SELECT 1 FROM fulfillment.courier_ledger_entries cash
+                            WHERE cash.tenant_id = earning.tenant_id AND cash.entry_type = 'CASH_COLLECTED'
+                              AND cash.source_id = earning.shipment_id))::int AS cash_delivered_count,
+                       COUNT(earning.id) FILTER (WHERE NOT EXISTS (
+                           SELECT 1 FROM fulfillment.courier_ledger_entries cash
+                            WHERE cash.tenant_id = earning.tenant_id AND cash.entry_type = 'CASH_COLLECTED'
+                              AND cash.source_id = earning.shipment_id))::int AS non_cash_delivered_count,
+                       COALESCE(SUM(earning.total_minor) FILTER (WHERE NOT EXISTS (
+                           SELECT 1 FROM fulfillment.courier_ledger_entries cash
+                            WHERE cash.tenant_id = earning.tenant_id AND cash.entry_type = 'CASH_COLLECTED'
+                              AND cash.source_id = earning.shipment_id)), 0)::bigint AS non_cash_earnings_minor
+                  FROM fulfillment.courier_shifts s
+                  LEFT JOIN fulfillment.courier_assignment_earnings earning
+                    ON earning.tenant_id = s.tenant_id AND earning.shift_id = s.id
+                 WHERE s.tenant_id = :tenantId AND s.id IN (:shiftIds)
+                 GROUP BY s.id
+                """)
+                .param("tenantId", tenantId)
+                .param("shiftIds", shiftIds)
+                .query((ResultSet rs, int rowNumber) -> Map.entry(
+                        rs.getObject("shift_id", UUID.class),
+                        new ShiftCashSummary(
+                                rs.getLong("bonus_paid_minor"),
+                                rs.getInt("cash_delivered_count"),
+                                rs.getInt("non_cash_delivered_count"),
+                                rs.getLong("non_cash_earnings_minor"))))
+                .list()
+                .stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    /**
+     * Finance 8.5's penalty/bonus split: {@code courier_settlement_periods}
+     * stores one combined {@code adjustments_minor}, and the salary report
+     * needs the two components apart (IA §8.5's "penalties, bonus" columns).
+     * Read-time only — nothing here is persisted, so a period's stored total
+     * stays the single number it always was.
+     */
+    public Map<UUID, AdjustmentSplit> adjustmentSplitByPeriod(UUID tenantId, Collection<UUID> periodIds) {
+        if (periodIds.isEmpty()) {
+            return Map.of();
+        }
+        return jdbc
+                .sql("""
+                SELECT settlement_period_id,
+                       COALESCE(SUM(amount_minor) FILTER (WHERE entry_type = 'BONUS'), 0)::bigint AS bonus_minor,
+                       COALESCE(SUM(amount_minor) FILTER (WHERE entry_type = 'PENALTY'), 0)::bigint AS penalty_minor
+                  FROM fulfillment.courier_ledger_entries
+                 WHERE tenant_id = :tenantId AND settlement_period_id IN (:periodIds)
+                   AND entry_type IN ('BONUS', 'PENALTY')
+                 GROUP BY settlement_period_id
+                """)
+                .param("tenantId", tenantId)
+                .param("periodIds", periodIds)
+                .query((ResultSet rs, int rowNumber) -> Map.entry(
+                        rs.getObject("settlement_period_id", UUID.class),
+                        new AdjustmentSplit(rs.getLong("bonus_minor"), rs.getLong("penalty_minor"))))
+                .list()
+                .stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    /** @see #cashSummaryByShift */
+    public record ShiftCashSummary(
+            long bonusPaidMinor, int cashDeliveredCount, int nonCashDeliveredCount, long nonCashEarningsMinor) {}
+
+    /** @see #adjustmentSplitByPeriod */
+    public record AdjustmentSplit(long bonusMinor, long penaltyMinor) {}
 
     // ------------------------------------------------------- assignment earnings
 

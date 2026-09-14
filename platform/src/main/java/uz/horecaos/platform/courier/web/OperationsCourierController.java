@@ -62,6 +62,8 @@ import uz.horecaos.platform.courier.domain.SettlementPeriodStatus;
 import uz.horecaos.platform.courier.domain.ShiftActor;
 import uz.horecaos.platform.courier.domain.VerificationMethod;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore.AdjustmentSplit;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore.ShiftCashSummary;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierRateCardStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierRateCardStore.CardSummaryRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore;
@@ -797,8 +799,13 @@ public class OperationsCourierController {
             @RequestParam(required = false) UUID locationId,
             @RequestParam(defaultValue = "100") int limit) {
 
-        return ResponseEntity.ok(shiftStore.listHandovers(tenantId, status, locationId, Math.min(limit, 500)).stream()
-                .map(CashHandoverResponse::of)
+        List<HandoverRow> rows = shiftStore.listHandovers(tenantId, status, locationId, Math.min(limit, 500));
+        Map<UUID, String> names = courierStore.displayReferencesOf(
+                tenantId, rows.stream().map(HandoverRow::courierId).collect(Collectors.toSet()));
+        Map<UUID, ShiftCashSummary> summaries = ledger.cashSummaryByShift(
+                tenantId, rows.stream().map(HandoverRow::shiftId).collect(Collectors.toSet()));
+        return ResponseEntity.ok(rows.stream()
+                .map(row -> CashHandoverResponse.of(row, names.get(row.courierId()), summaries.get(row.shiftId())))
                 .toList());
     }
 
@@ -909,9 +916,15 @@ public class OperationsCourierController {
     public ResponseEntity<LedgerResponse> ledgerOf(
             @PathVariable UUID tenantId, @PathVariable UUID courierId, @RequestParam(defaultValue = "100") int limit) {
 
+        List<JdbcCourierLedgerStore.LedgerEntryRow> entries =
+                ledger.entriesOfCourier(tenantId, courierId, Math.min(limit, 500));
         return ResponseEntity.ok(new LedgerResponse(
                 ledger.balanceMinor(tenantId, courierId),
-                ledger.entriesOfCourier(tenantId, courierId, Math.min(limit, 500)).stream()
+                // entriesOfCourier orders newest first; the most recent entry's
+                // currency is the balance's, and null only for a courier with no
+                // ledger entries at all, whose balance is zero regardless.
+                entries.isEmpty() ? null : entries.getFirst().currency(),
+                entries.stream()
                         .map(entry -> new LedgerLine(
                                 entry.id(),
                                 entry.entryType().name(),
@@ -936,8 +949,12 @@ public class OperationsCourierController {
             @RequestParam(defaultValue = "100") int limit) {
 
         SettlementPeriodStatus parsed = status == null ? null : parseSettlementStatus(status);
-        return ResponseEntity.ok(ledger.listPeriods(tenantId, parsed, Math.min(limit, 500)).stream()
-                .map(SettlementPeriodResponse::of)
+        List<JdbcCourierLedgerStore.PeriodRow> rows = ledger.listPeriods(tenantId, parsed, Math.min(limit, 500));
+        Map<UUID, AdjustmentSplit> splits = ledger.adjustmentSplitByPeriod(
+                tenantId,
+                rows.stream().map(JdbcCourierLedgerStore.PeriodRow::id).collect(Collectors.toSet()));
+        return ResponseEntity.ok(rows.stream()
+                .map(row -> SettlementPeriodResponse.of(row, splits.get(row.id())))
                 .toList());
     }
 
@@ -1070,6 +1087,36 @@ public class OperationsCourierController {
 
         return ResponseEntity.ok(
                 partnerInvoices.match(tenantId, invoiceId, body.shipmentsByProviderRef(), actor(), body.reason()));
+    }
+
+    @PostMapping("/partner-delivery-invoices/{invoiceId}/dispute")
+    @RequiresCapability(value = Capability.PARTNER_INVOICE_MANAGE, mutating = true)
+    @Operation(
+            summary = "Flag an invoice for pushback to the partner — the акт сверки dispute path",
+            description = "Refused once the invoice is PAID. Disputing records the operator's "
+                    + "decision; it settles nothing with the partner itself.")
+    public ResponseEntity<Void> disputeInvoice(
+            @PathVariable UUID tenantId, @PathVariable UUID invoiceId, @Valid @RequestBody DisputeInvoiceRequest body) {
+
+        partnerInvoices.disputeInvoice(tenantId, invoiceId, actor(), body.reason());
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/partner-delivery-invoices/{invoiceId}/lines/{lineId}/variance-acceptance")
+    @RequiresCapability(value = Capability.PARTNER_INVOICE_MANAGE, mutating = true)
+    @Operation(
+            summary = "Accept or dispute one VARIANCE line",
+            description = "The only two dispositions a VARIANCE row can carry: pay the partner's "
+                    + "charge as invoiced, or flag it disputed. match_status stays VARIANCE either "
+                    + "way — it is a fact about the money — only variance_resolution changes.")
+    public ResponseEntity<PartnerInvoiceLineResponse> resolveVariance(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID invoiceId,
+            @PathVariable UUID lineId,
+            @Valid @RequestBody VarianceAcceptanceRequest body) {
+
+        return ResponseEntity.ok(PartnerInvoiceLineResponse.of(
+                partnerInvoices.resolveVariance(tenantId, invoiceId, lineId, body.accept(), actor(), body.reason())));
     }
 
     private static SettlementPeriodStatus parseSettlementStatus(String status) {
@@ -1506,6 +1553,12 @@ public class OperationsCourierController {
             @NotNull Map<String, UUID> shipmentsByProviderRef,
             @NotBlank String reason) {}
 
+    record DisputeInvoiceRequest(@NotBlank String reason) {}
+
+    /** @param accept true pays the partner's charge as invoiced; false disputes it. */
+    record VarianceAcceptanceRequest(
+            boolean accept, @NotBlank String reason) {}
+
     /**
      * One roster row on the wire. No name field exists here at all — not even
      * a masked one — because there is nothing decrypted to mask; see {@link
@@ -1828,7 +1881,8 @@ public class OperationsCourierController {
     record AdjustmentResponse(
             @Nullable UUID entryId, @Nullable UUID approvalRequestId, boolean written) {}
 
-    record LedgerResponse(long balanceMinor, List<LedgerLine> entries) {}
+    /** @param currency null only for a courier with no ledger entries; the balance is then zero regardless. */
+    record LedgerResponse(long balanceMinor, @Nullable String currency, List<LedgerLine> entries) {}
 
     record LedgerLine(
             UUID entryId,
@@ -1842,11 +1896,34 @@ public class OperationsCourierController {
 
     record PayoutResponse(@Nullable UUID payoutId, @Nullable UUID approvalRequestId, boolean authorised) {}
 
-    /** One cash handover — Finance 8.3. */
+    /**
+     * One cash handover — Finance 8.3.
+     *
+     * @param courierDisplayReference the non-personal handle (ADR 0029), never
+     *                                the decrypted name — null only where the
+     *                                courier row has since been removed
+     * @param bonusPaidMinor          a bonus already posted to this courier
+     *                                while the shift was open — money paid
+     *                                that reduces what the cash count still
+     *                                owes, shown rather than netted into
+     *                                {@code expectedMinor}: the handover's own
+     *                                expected figure stays exactly what
+     *                                {@code cashCollectedDuringShift} says
+     * @param cashDeliveredCount      deliveries this shift where cash changed
+     *                                hands
+     * @param nonCashDeliveredCount   deliveries this shift on any other
+     *                                payment method — the IA's "by payment
+     *                                method" split
+     * @param nonCashEarningsMinor    gross earnings on those non-cash
+     *                                deliveries; there is no "collected"
+     *                                figure for them because no cash changed
+     *                                hands on any of them
+     */
     record CashHandoverResponse(
             UUID handoverId,
             UUID shiftId,
             UUID courierId,
+            @Nullable String courierDisplayReference,
             UUID locationId,
             String status,
             String currency,
@@ -1854,16 +1931,22 @@ public class OperationsCourierController {
             @Nullable Long declaredMinor,
             @Nullable Long confirmedMinor,
             @Nullable Long varianceMinor,
+            long bonusPaidMinor,
+            int cashDeliveredCount,
+            int nonCashDeliveredCount,
+            long nonCashEarningsMinor,
             @Nullable String declaredAt,
             @Nullable String confirmedBy,
             @Nullable String confirmedAt,
             @Nullable String reasonCode) {
 
-        static CashHandoverResponse of(HandoverRow row) {
+        static CashHandoverResponse of(
+                HandoverRow row, @Nullable String courierDisplayReference, @Nullable ShiftCashSummary summary) {
             return new CashHandoverResponse(
                     row.id(),
                     row.shiftId(),
                     row.courierId(),
+                    courierDisplayReference,
                     row.locationId(),
                     row.status(),
                     row.currency(),
@@ -1871,6 +1954,10 @@ public class OperationsCourierController {
                     row.declaredMinor(),
                     row.confirmedMinor(),
                     row.varianceMinor(),
+                    summary == null ? 0L : summary.bonusPaidMinor(),
+                    summary == null ? 0 : summary.cashDeliveredCount(),
+                    summary == null ? 0 : summary.nonCashDeliveredCount(),
+                    summary == null ? 0L : summary.nonCashEarningsMinor(),
                     row.declaredAt() == null ? null : row.declaredAt().toString(),
                     row.confirmedBy(),
                     row.confirmedAt() == null ? null : row.confirmedAt().toString(),
@@ -1878,7 +1965,20 @@ public class OperationsCourierController {
         }
     }
 
-    /** One settlement period — Finance 8.5. */
+    /**
+     * One settlement period — Finance 8.5's salary report (IA §8.5: "orders,
+     * km, hours, вовремя, penalties, bonus, К оплате").
+     *
+     * @param distanceMeters the period's km column, in the base unit money
+     *                       already uses this codebase over: raw metres,
+     *                       never a pre-divided double
+     * @param paidSeconds    the period's hours column, in seconds for the same
+     *                       reason
+     * @param bonusMinor     the period's bonus column, split from {@code
+     *                       adjustmentsMinor} at read time — see {@link
+     *                       JdbcCourierLedgerStore#adjustmentSplitByPeriod}
+     * @param penaltyMinor   the period's penalty column, same split
+     */
     record SettlementPeriodResponse(
             UUID periodId,
             UUID courierId,
@@ -1892,12 +1992,16 @@ public class OperationsCourierController {
             long amountPayableMinor,
             int deliveredCount,
             int onTimeCount,
+            long distanceMeters,
+            long paidSeconds,
+            long bonusMinor,
+            long penaltyMinor,
             boolean complianceFlag,
             @Nullable String statementHash,
             @Nullable String closedAt,
             @Nullable String settledAt) {
 
-        static SettlementPeriodResponse of(JdbcCourierLedgerStore.PeriodRow row) {
+        static SettlementPeriodResponse of(JdbcCourierLedgerStore.PeriodRow row, @Nullable AdjustmentSplit split) {
             return new SettlementPeriodResponse(
                     row.id(),
                     row.courierId(),
@@ -1911,6 +2015,10 @@ public class OperationsCourierController {
                     row.amountPayableMinor(),
                     row.deliveredCount(),
                     row.onTimeCount(),
+                    row.distanceMeters(),
+                    row.paidSeconds(),
+                    split == null ? 0L : split.bonusMinor(),
+                    split == null ? 0L : split.penaltyMinor(),
                     row.complianceFlag(),
                     row.statementHash(),
                     row.closedAt() == null ? null : row.closedAt().toString(),
@@ -1944,6 +2052,7 @@ public class OperationsCourierController {
         }
     }
 
+    /** @param varianceResolution ACCEPTED or DISPUTED — only ever set on a VARIANCE line. */
     record PartnerInvoiceLineResponse(
             UUID lineId,
             String providerShipmentRef,
@@ -1953,7 +2062,8 @@ public class OperationsCourierController {
             String chargeType,
             String matchStatus,
             @Nullable Long varianceMinor,
-            @Nullable String reasonCode) {
+            @Nullable String reasonCode,
+            @Nullable String varianceResolution) {
 
         static PartnerInvoiceLineResponse of(InvoiceLineRow row) {
             return new PartnerInvoiceLineResponse(
@@ -1965,7 +2075,8 @@ public class OperationsCourierController {
                     row.chargeType().name(),
                     row.matchStatus().name(),
                     row.varianceMinor(),
-                    row.reasonCode());
+                    row.reasonCode(),
+                    row.varianceResolution());
         }
     }
 
