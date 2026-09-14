@@ -74,6 +74,20 @@ export const SETTINGS_NAVIGATION: readonly SettingsNavGroup[] = [
         description: 'settings.home.description.catalogBaseSettings',
         builtRoute: true,
       },
+      {
+        // 10.13 Delivery policy (wave P38). Points at `/delivery/courier-policy`
+        // (an absolute `routerLink`, resolved outside `/settings/**`) rather
+        // than a route mounted under this shell: the screen already has its
+        // own complete TENANT/BRAND/LOCATION scope selector
+        // (`courier-policy-page.ts`'s own doc explains why it is not
+        // `q-scope-bar`), and mounting the same component under
+        // `settings-shell` too would stack a second, narrower BRAND/LOCATION
+        // scope bar above it for no reason.
+        path: '/delivery/courier-policy',
+        label: 'settings.nav.deliveryPolicy',
+        description: 'settings.home.description.deliveryPolicy',
+        builtRoute: true,
+      },
     ],
   },
   {

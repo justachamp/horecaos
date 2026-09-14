@@ -16,6 +16,7 @@ import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { ScheduleException, ScheduleGrid, ScheduleRule } from '../../../shared/ui/schedule-grid';
 import { describeApiError } from '../../orders/order-errors';
+import { FloorPlanPane } from './floor-plan-pane';
 import {
   BandRequest,
   BandView,
@@ -27,14 +28,20 @@ import {
   ServiceSummaryResponse,
 } from './locations-api';
 
-type LocationTab = 'basics' | 'hours' | 'load' | 'fiscal' | 'channels' | 'notifications';
+type LocationTab =
+  'basics' | 'hours' | 'load' | 'fiscal' | 'channels' | 'notifications' | 'floorplan';
 
 /** ADR 0036 — `uz.horecaos.platform.tenancy.api.FulfillmentMode`'s three values, fixed. */
 const FULFILLMENT_MODES = ['DELIVERY', 'PICKUP', 'DINE_IN'] as const;
 
 /**
- * 10.2b Location detail — `docs/operations-spec/settings.md` §10.2b. Six
- * tabs, per the spec; three are real, three link out honestly.
+ * 10.2b Location detail — `docs/operations-spec/settings.md` §10.2b. Seven
+ * tabs: four are real, two link out honestly, and — new in wave P38 —
+ * **Floor plan** (rows `10.2d`/`X.36`/`10.5b`) hosts `q-floor-plan-pane`:
+ * `FloorPlanController`'s dine-in QR settings, sections, and the drag-to-
+ * reposition canvas over the new `PUT .../tables/{tableId}`. See
+ * `floor-plan-pane.ts`'s own doc for what that tab does and why it renders
+ * `SETTLE_OPEN_TICKET` disabled rather than omitting it.
  *
  * **Tab 1 (Основное)** reads `LocationServiceOperationsController.profile`
  * (new, operations surface) and writes address/phone/landmark through
@@ -65,7 +72,7 @@ const FULFILLMENT_MODES = ['DELIVERY', 'PICKUP', 'DINE_IN'] as const;
  */
 @Component({
   selector: 'q-location-detail-pane',
-  imports: [TPipe, ScheduleGrid, NgTemplateOutlet],
+  imports: [TPipe, ScheduleGrid, NgTemplateOutlet, FloorPlanPane],
   templateUrl: './location-detail-pane.html',
   styleUrl: './location-detail-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -519,7 +526,7 @@ export class LocationDetailPane {
     }
   }
 
-  private scope(): LocationScope | null {
+  protected scope(): LocationScope | null {
     const base = this.baseLocation.scope();
     if (!base) {
       return null;

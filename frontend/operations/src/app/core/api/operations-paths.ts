@@ -416,6 +416,45 @@ export const operationsPaths = {
   },
 
   /**
+   * Floor plan settings (ADR 0047, `FloorPlanController`, rows `10.2d`/
+   * `10.5b`, wave P38): `qrMode`, turnaround buffer, guest-session TTL,
+   * service-charge rate. `GET`/`PUT`, both `DINEIN_FLOORPLAN_MANAGE`.
+   */
+  dineInSettings(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/dine-in/settings`;
+  },
+
+  /** A branch's sections (wave P38). `GET` (`RESERVATION_READ`) or `POST` (`DINEIN_FLOORPLAN_MANAGE`, mutating). */
+  dineInSections(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/dine-in/sections`;
+  },
+
+  /** A branch's tables (wave P38). `GET` (`RESERVATION_READ`) or `POST` (`DINEIN_FLOORPLAN_MANAGE`, mutating). */
+  dineInTables(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/dine-in/tables`;
+  },
+
+  /** One table (wave P38). `PUT` moves it — `layoutX`/`layoutY`, `If-Match` required. */
+  dineInTable(scope: LocationScope, tableId: string): string {
+    return `${this.dineInTables(scope)}/${encodeURIComponent(tableId)}`;
+  },
+
+  /** Archive/restore a table (ADR 0047). `POST`, `If-Match` required. */
+  dineInTableStatusChanges(scope: LocationScope, tableId: string): string {
+    return `${this.dineInTable(scope, tableId)}/status-changes`;
+  },
+
+  /**
+   * Issue or rotate a table's QR token (ADR 0047). `POST`, `If-Match`
+   * required. The only endpoint in the platform whose response carries a
+   * live credential, and carries it exactly once — see
+   * `FloorPlanController`'s own doc.
+   */
+  dineInTableQrRotations(scope: LocationScope, tableId: string): string {
+    return `${this.dineInTable(scope, tableId)}/qr-token-rotations`;
+  },
+
+  /**
    * The dispatch board (ADR 0014, `DispatchController`, wave 30) — on the ADR
    * 0031 prefix, unlike the kitchen board above: this controller is new and
    * has no legacy shape to inherit.
@@ -823,7 +862,12 @@ export const courierPaths = {
     return `${this.courierRosterEntries(tenantId)}/${encodeURIComponent(entryId)}/cancel`;
   },
 
-  /** The courier compensation policy in force (IA 3.9). Query params: optional `brandId`, `locationId`. */
+  /**
+   * The courier compensation policy (IA 3.9, settings.md §10.13/couriers.md
+   * §16). `GET` reads what is in force; `PUT` (wave P38) publishes the next
+   * whole-document version. Both take optional `brandId`/`locationId` query
+   * params — omit both for the tenant-wide scope.
+   */
   courierPolicy(tenantId: string): string {
     return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-policy`;
   },
