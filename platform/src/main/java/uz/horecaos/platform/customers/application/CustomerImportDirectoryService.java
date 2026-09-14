@@ -39,7 +39,9 @@ public class CustomerImportDirectoryService implements CustomerImportDirectory {
     @Override
     @Transactional
     public CustomerAccountRef createAccountWithoutPrincipal(UUID tenantId, UUID brandId) {
-        return identity.createAccountWithoutPrincipal(tenantId, brandId);
+        // V0295: this import path is CustomerIdentityService#ORIGIN_IMPORT —
+        // an export row, never a staff member, so no actor is named.
+        return identity.createAccountWithoutPrincipal(tenantId, brandId, CustomerIdentityService.ORIGIN_IMPORT, null);
     }
 
     @Override
