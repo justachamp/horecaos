@@ -133,9 +133,10 @@ public class ReportingController {
             @PathVariable UUID tenantId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) List<UUID> locationId) {
+            @RequestParam(required = false) List<UUID> locationId,
+            @RequestParam(required = false) List<String> paymentMethodCode) {
 
-        var result = queries.paymentMix(tenantId, from, to, orEmpty(locationId));
+        var result = queries.paymentMix(tenantId, from, to, orEmpty(locationId), orEmpty(paymentMethodCode));
         return ResponseEntity.ok(new PaymentMixResponse(
                 result.overview().stream().map(PaymentMixRowResponse::of).toList(),
                 result.byLocation().stream().map(PaymentMixRowResponse::of).toList(),

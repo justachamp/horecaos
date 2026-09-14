@@ -504,9 +504,14 @@ export class BusinessOverviewPage implements OnInit {
    */
   private async loadPaymentMix(scope: LocationScope): Promise<void> {
     const range = this.filters.range();
+    const paymentMethodCodes = this.filters.paymentMethodCodes();
     const [methods, mix] = await Promise.all([
       this.paymentMethodsApi.list(scope).catch(() => [] as readonly PaymentMethodView[]),
-      this.api.paymentMix(scope.tenantId, { from: range.from, to: range.to }),
+      this.api.paymentMix(scope.tenantId, {
+        from: range.from,
+        to: range.to,
+        paymentMethodCode: paymentMethodCodes.length > 0 ? paymentMethodCodes : undefined,
+      }),
     ]);
     const nameByCode = new Map(methods.map((method) => [method.code, method]));
     const total = mix.overview.reduce((sum, row) => sum + row.amountSom, 0);

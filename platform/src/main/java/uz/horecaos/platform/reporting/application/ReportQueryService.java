@@ -136,13 +136,19 @@ public class ReportQueryService {
      * byLocation} keeps the branch split so a manager can answer «7.3b»'s cash
      * reconciliation from the same read. Both come from the one grouped SQL
      * read in {@link JdbcReportingStore#readPaymentMix}, never a second query.
+     *
+     * <p>{@code paymentMethodCodes} narrows both {@code overview} and {@code
+     * byLocation} to those methods only — empty means every method, the same
+     * convention {@code locationIds} already uses.
      */
     @Transactional(readOnly = true)
-    public PaymentMixResult paymentMix(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+    public PaymentMixResult paymentMix(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<String> paymentMethodCodes) {
         validateRange(from, to);
         refuseMixedBoundaryRegime(tenantId, from, to);
 
-        List<JdbcReportingStore.PaymentMixRow> rows = store.readPaymentMix(tenantId, from, to, locationIds);
+        List<JdbcReportingStore.PaymentMixRow> rows =
+                store.readPaymentMix(tenantId, from, to, locationIds, paymentMethodCodes);
 
         Map<OverviewKey, PaymentMixAccumulator> overview = new LinkedHashMap<>();
         for (JdbcReportingStore.PaymentMixRow row : rows) {

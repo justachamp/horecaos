@@ -146,9 +146,18 @@ async function flushMicrotasks(): Promise<void> {
 
 describe('BusinessOverviewPage', () => {
   let fixture: ComponentFixture<BusinessOverviewPage>;
+  let paymentMixSpy: ReturnType<typeof vi.fn>;
 
-  async function render(): Promise<void> {
+  /**
+   * `configure` runs after the testing module is compiled but before the
+   * component is created, so it can set {@link ReportsFilterState} signals
+   * (the same instance `BusinessOverviewPage` injects) ahead of `ngOnInit`'s
+   * one-shot `load()` — P39 fix4's payment-method-filter regression test
+   * needs `paymentMethodCodes` set before the component ever calls `load()`.
+   */
+  async function render(configure?: (filters: ReportsFilterState) => void): Promise<void> {
     TestBed.resetTestingModule();
+    paymentMixSpy = vi.fn().mockResolvedValue(paymentMixResponse());
     await TestBed.configureTestingModule({
       imports: [BusinessOverviewPage],
       providers: [
@@ -173,7 +182,7 @@ describe('BusinessOverviewPage', () => {
             orders: vi
               .fn()
               .mockResolvedValue({ rows: [], maybeMore: false, provenance: provenance() }),
-            paymentMix: vi.fn().mockResolvedValue(paymentMixResponse()),
+            paymentMix: paymentMixSpy,
           },
         },
         { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
@@ -182,6 +191,7 @@ describe('BusinessOverviewPage', () => {
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
+    configure?.(TestBed.inject(ReportsFilterState));
     fixture = TestBed.createComponent(BusinessOverviewPage);
     fixture.detectChanges();
     await flushMicrotasks();
@@ -226,6 +236,28 @@ describe('BusinessOverviewPage', () => {
     expect(host.textContent).not.toContain('ADR 0013');
     expect(host.textContent).toContain('CASH');
     expect(host.textContent).toContain('70%');
+  });
+
+  it(
+    'loadPaymentMix passes the filter bar’s selected payment method codes to ' +
+      'ReportingApi.paymentMix (P39 fix4: the chip used to toggle state nothing read)',
+    async () => {
+      await render((filters) => filters.setPaymentMethodCodes(['CASH']));
+      await flushMicrotasks();
+
+      expect(paymentMixSpy).toHaveBeenCalledWith(
+        SCOPE.tenantId,
+        expect.objectContaining({ paymentMethodCode: ['CASH'] }),
+      );
+    },
+  );
+
+  it('loadPaymentMix omits paymentMethodCode entirely when no method is selected', async () => {
+    await render();
+    await flushMicrotasks();
+
+    const params = paymentMixSpy.mock.calls[0]?.[1] as { paymentMethodCode?: unknown };
+    expect(params.paymentMethodCode).toBeUndefined();
   });
 
   it('renders the daily revenue and orders trend as line charts over the per-day rows Band A already fetched', async () => {

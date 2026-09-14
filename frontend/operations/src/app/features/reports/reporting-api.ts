@@ -341,11 +341,21 @@ export class ReportingApi {
   /** P39 (7.1c/7.3b): takings split by payment method. */
   async paymentMix(
     tenantId: string,
-    params: { readonly from: string; readonly to: string; readonly locationId?: readonly string[] },
+    params: {
+      readonly from: string;
+      readonly to: string;
+      readonly locationId?: readonly string[];
+      readonly paymentMethodCode?: readonly string[];
+    },
   ): Promise<PaymentMixResponse> {
     const result = await firstValueFrom(
       this.api.get<PaymentMixResponse>(reportsPaths.paymentMix(tenantId), {
-        params: { from: params.from, to: params.to, locationId: params.locationId },
+        params: {
+          from: params.from,
+          to: params.to,
+          locationId: params.locationId,
+          paymentMethodCode: params.paymentMethodCode,
+        },
       }),
     );
     return result.value;
