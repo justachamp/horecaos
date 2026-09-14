@@ -7,11 +7,21 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
+import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
+import { DispatchApi, DispatchResponse } from '../delivery/dispatch-api';
+import { KitchenApi, KitchenEventsResponse } from '../kitchen/kitchen-api';
 import { OrderActionsApi } from './order-actions-api';
 import { AmendmentResponse } from './order-amendments';
 import { OrderAmendmentsApi } from './order-amendments-api';
+import { OrderDeliveryApi } from './order-delivery-api';
 import { OrderDetailPane } from './order-detail-pane';
-import { OrderDetailResponse, OrderTimelineEntry, RevisionResponse } from './order-detail';
+import {
+  OrderApprovalDecision,
+  OrderDeliveryResponse,
+  OrderDetailResponse,
+  OrderTimelineEntry,
+  RevisionResponse,
+} from './order-detail';
 import { OrderHandoverApi } from './order-handover-api';
 import { RejectReasonOption } from './order-reject-reason-dialog';
 import { RejectReasonsApi } from './order-reject-reasons-api';
@@ -36,6 +46,7 @@ const FAKE_REJECT_REASONS: readonly RejectReasonOption[] = [
 ];
 const ORDER_PATH = '/api/v1/tenants/t1/brands/b1/locations/l1/orders/order-1';
 const TIMELINE_PATH = `${ORDER_PATH}/timeline`;
+const DECISIONS_PATH = `${ORDER_PATH}/decisions`;
 
 /** Settles the constructor `effect()` → `load()` → `firstValueFrom` chain, matching `order-queue.spec.ts`'s helper. */
 async function flushMicrotasks(): Promise<void> {
@@ -108,14 +119,24 @@ function amendmentResult(overrides: Partial<AmendmentResponse> = {}): AmendmentR
   };
 }
 
-/** A path-aware `ApiClient.get` stub, since the pane fetches both the order and its timeline. */
+/**
+ * A path-aware `ApiClient.get` stub, since the pane fetches the order, its
+ * timeline, and (wave P11, row 1.2b) the losing side of its decisions
+ * straight through `ApiClient` — everything else the pane loads (delivery,
+ * kitchen events, courier roster) goes through its own dedicated API class
+ * and is mocked separately below.
+ */
 function apiGet(
   orderResult: unknown,
   timelineResult: readonly OrderTimelineEntry[] = [],
+  decisionsResult: readonly OrderApprovalDecision[] = [],
 ): ReturnType<typeof vi.fn> {
   return vi.fn().mockImplementation((path: string) => {
     if (path === TIMELINE_PATH) {
       return of({ value: timelineResult, version: null });
+    }
+    if (path === DECISIONS_PATH) {
+      return of({ value: decisionsResult, version: null });
     }
     if (path === ORDER_PATH) {
       return orderResult instanceof Error ? throwError(() => orderResult) : of(orderResult);
@@ -132,6 +153,10 @@ function configure(options: {
   rejectReasonsApi?: Partial<RejectReasonsApi>;
   referenceDataApi?: Partial<ReferenceDataApi>;
   handoverApi?: Partial<OrderHandoverApi>;
+  deliveryApi?: Partial<OrderDeliveryApi>;
+  dispatchApi?: Partial<DispatchApi>;
+  couriersApi?: Partial<CouriersApi>;
+  kitchenApi?: Partial<KitchenApi>;
   scope?: typeof FAKE_SCOPE | null;
 }): void {
   TestBed.configureTestingModule({
@@ -166,6 +191,27 @@ function configure(options: {
       {
         provide: OrderHandoverApi,
         useValue: options.handoverApi ?? { challenge: () => of(null) },
+      },
+      // The order-to-fulfilment seam (wave P11, rows 1.2e/1.2n/2.1a/1.2b):
+      // every test not focused on it gets a harmless "nothing here" answer,
+      // the same rule OrderHandoverApi's own comment states above.
+      {
+        provide: OrderDeliveryApi,
+        useValue: options.deliveryApi ?? { delivery: () => Promise.resolve(null) },
+      },
+      { provide: DispatchApi, useValue: options.dispatchApi ?? {} },
+      {
+        provide: CouriersApi,
+        useValue: options.couriersApi ?? { roster: () => Promise.resolve([]) },
+      },
+      {
+        provide: KitchenApi,
+        useValue:
+          options.kitchenApi ??
+          ({
+            eventsForOrder: () =>
+              Promise.resolve({ ticketId: null, ticketStatus: null, events: [] }),
+          } as Partial<KitchenApi>),
       },
     ],
   });
@@ -649,10 +695,14 @@ describe('OrderDetailPane: timeline (§3.10)', () => {
     expect(row?.textContent).toContain('Approval decision');
   });
 
-  it('renders the production and delivery lanes as not built, never silently dropped', async () => {
+  it('renders the production and delivery lanes as built (wave P11, row 1.2b) — see that wave’s own describe block for the elapsed-duration detail', async () => {
     configure({ get: apiGet({ value: detail(), version: 3 }) });
     const fixture = await render();
-    expect(fixture.nativeElement.textContent).toContain('not built yet');
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="order-detail-timeline-production"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="order-detail-timeline-delivery"]')).not.toBeNull();
+    expect(host.textContent).not.toContain('not built yet');
   });
 });
 
@@ -1350,5 +1400,359 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
     fixture.detectChanges();
 
     expect(host.querySelector('[data-testid="order-note-dialog"]')).not.toBeNull();
+  });
+});
+
+// ================================================================ wave P11: the order-to-fulfilment seam
+
+/** `OrderDeliveryResponse`, minimally filled — every P11 test below narrows this as it needs. */
+function deliveryResponse(overrides: Partial<OrderDeliveryResponse> = {}): OrderDeliveryResponse {
+  return {
+    planId: 'plan-1',
+    planVersion: 2,
+    planStatus: 'ASSIGNED',
+    estimatedReadyAt: '2026-08-30T09:20:00Z',
+    customerDeliveryFeeMinor: 12_000,
+    currency: 'UZS',
+    ...overrides,
+  };
+}
+
+function roster(overrides: Partial<RosterEntryResponse> = {}): RosterEntryResponse {
+  return {
+    courierId: 'courier-1',
+    displayReference: 'K-014',
+    status: 'ACTIVE',
+    courierTypeId: 'type-1',
+    courierTypeName: 'Scooter',
+    vehicleClass: 'SCOOTER',
+    activeAssignments: 0,
+    concurrencyCeiling: 2,
+    ...overrides,
+  };
+}
+
+/** Opens the picker, types into it, and clicks the first rendered option — `installation-detail-panel.spec.ts`'s own `q-combobox` idiom. */
+async function pickCourier(fixture: { nativeElement: HTMLElement }, query: string): Promise<void> {
+  const host = fixture.nativeElement;
+  (
+    host.querySelector('[data-testid="order-detail-courier-assign-toggle"]') as HTMLButtonElement
+  ).click();
+  await flushMicrotasks();
+  const input = host.querySelector<HTMLInputElement>(
+    '[data-testid="order-detail-courier-picker"] [data-testid="q-combobox-input"]',
+  )!;
+  input.value = query;
+  input.dispatchEvent(new Event('input'));
+  await flushMicrotasks();
+  host
+    .querySelector<HTMLElement>(
+      '[data-testid="order-detail-courier-picker"] [data-testid="q-combobox-option"]',
+    )!
+    .click();
+  await flushMicrotasks();
+}
+
+describe('OrderDetailPane: assign/unassign courier (wave P11, row 1.2e)', () => {
+  it('is not shown for a pickup order, or before the delivery plan has loaded', async () => {
+    configure({
+      get: apiGet({
+        value: detail({ summary: { ...detail().summary, fulfillmentMode: 'PICKUP' } }),
+        version: 3,
+      }),
+      deliveryApi: { delivery: () => Promise.resolve(deliveryResponse()) },
+    });
+    const fixture = await render();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="order-detail-courier"]')).toBeNull();
+  });
+
+  it('assigns a courier through DispatchApi against the planId and version the delivery read returns', async () => {
+    const assign = vi.fn().mockResolvedValue({
+      applied: true,
+      planStatus: 'ASSIGNED',
+      planVersion: 3,
+    });
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: { delivery: () => Promise.resolve(deliveryResponse()) },
+      couriersApi: { roster: () => Promise.resolve([roster()]) },
+      dispatchApi: { assign },
+    });
+    const fixture = await render();
+
+    await pickCourier(fixture, 'K-014');
+    fixture.detectChanges();
+
+    expect(assign).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'plan-1',
+      'courier-1',
+      2,
+      'OPERATIONS_ORDER_DETAIL_ASSIGN',
+    );
+    // The picker closes on a successful assign, exactly like the kitchen pass's own.
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-courier-picker"]'),
+    ).toBeNull();
+  });
+
+  it('surfaces a refused assign (ALREADY_ASSIGNED, a lost race) as a notice, never a thrown error', async () => {
+    const assign = vi
+      .fn()
+      .mockResolvedValue({
+        applied: false,
+        planStatus: 'ASSIGNED',
+        planVersion: 3,
+        reason: 'ALREADY_ASSIGNED',
+      });
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: { delivery: () => Promise.resolve(deliveryResponse()) },
+      couriersApi: { roster: () => Promise.resolve([roster()]) },
+      dispatchApi: { assign },
+    });
+    const fixture = await render();
+
+    await pickCourier(fixture, 'K-014');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('ALREADY_ASSIGNED');
+  });
+
+  it('unassigns the current courier through DispatchApi against the shipment version', async () => {
+    const unassign = vi.fn().mockResolvedValue({
+      applied: true,
+      planStatus: 'WAITING_TO_SOURCE',
+      planVersion: 3,
+    });
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () =>
+          Promise.resolve(
+            deliveryResponse({
+              shipment: {
+                shipmentId: 'shipment-1',
+                status: 'ASSIGNED',
+                sourceType: 'INTERNAL',
+                courierId: 'courier-1',
+                version: 4,
+              },
+            }),
+          ),
+      },
+      dispatchApi: { unassign },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-courier-unassign"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(unassign).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'plan-1',
+      4,
+      'OPERATIONS_ORDER_DETAIL_UNASSIGN',
+    );
+  });
+
+  it('offers no unassign button once no courier is carried', async () => {
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: { delivery: () => Promise.resolve(deliveryResponse()) },
+    });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-courier-unassign"]'),
+    ).toBeNull();
+  });
+});
+
+describe('OrderDetailPane: three real timeline lanes with elapsed durations (wave P11, row 1.2b)', () => {
+  function stageLabels(
+    fixture: { nativeElement: HTMLElement },
+    testId: string,
+  ): (string | undefined)[] {
+    const lane = fixture.nativeElement.querySelector(`[data-testid="${testId}"]`);
+    return Array.from(lane?.querySelectorAll('.q-steps__label') ?? []).map((el) =>
+      el.textContent?.trim(),
+    );
+  }
+
+  it('renders the production lane from kitchen.ticket_events, with elapsed durations between stages', async () => {
+    const events: KitchenEventsResponse['events'] = [
+      {
+        id: 'e1',
+        toStatus: 'FIRED',
+        trigger: 'SYSTEM',
+        actorType: 'SYSTEM',
+        actorId: 'system',
+        occurredAt: '2026-08-30T09:00:00Z',
+      },
+      {
+        id: 'e2',
+        fromStatus: 'FIRED',
+        toStatus: 'IN_PRODUCTION',
+        trigger: 'OPERATIONS_ACTION',
+        actorType: 'USER',
+        actorId: 'cook-1',
+        occurredAt: '2026-08-30T09:05:00Z',
+      },
+      {
+        id: 'e3',
+        fromStatus: 'IN_PRODUCTION',
+        toStatus: 'READY',
+        trigger: 'OPERATIONS_ACTION',
+        actorType: 'USER',
+        actorId: 'cook-1',
+        occurredAt: '2026-08-30T09:15:00Z',
+      },
+      {
+        id: 'e4',
+        fromStatus: 'READY',
+        toStatus: 'HANDED_OVER',
+        trigger: 'OPERATIONS_ACTION',
+        actorType: 'USER',
+        actorId: 'expo-1',
+        occurredAt: '2026-08-30T09:20:00Z',
+      },
+    ];
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      kitchenApi: {
+        eventsForOrder: () =>
+          Promise.resolve({ ticketId: 'ticket-1', ticketStatus: 'HANDED_OVER', events }),
+      },
+    });
+    const fixture = await render();
+
+    expect(stageLabels(fixture, 'order-detail-timeline-production')).toEqual([
+      'Fired',
+      'In production · 5 min',
+      'Ready · 10 min',
+      'Handed over · 5 min',
+    ]);
+  });
+
+  it('renders nothing on the production lane for an order that never opened a ticket', async () => {
+    configure({ get: apiGet({ value: detail(), version: 3 }) });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-timeline-production"]'),
+    ).not.toBeNull();
+    expect(stageLabels(fixture, 'order-detail-timeline-production')).toEqual([]);
+  });
+
+  it("renders the delivery lane from the shipment's own custody timestamps, with elapsed durations", async () => {
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () =>
+          Promise.resolve(
+            deliveryResponse({
+              shipment: {
+                shipmentId: 'shipment-1',
+                status: 'DELIVERED',
+                sourceType: 'INTERNAL',
+                courierId: 'courier-1',
+                assignedAt: '2026-08-30T09:02:00Z',
+                pickedUpAt: '2026-08-30T09:10:00Z',
+                deliveredAt: '2026-08-30T09:22:00Z',
+                version: 5,
+              },
+            }),
+          ),
+      },
+    });
+    const fixture = await render();
+
+    expect(stageLabels(fixture, 'order-detail-timeline-delivery')).toEqual([
+      'Assigned',
+      'Picked up · 8 min',
+      'Delivered · 12 min',
+    ]);
+  });
+
+  it('still renders the commercial lane unchanged alongside the two new ones', async () => {
+    configure({
+      get: apiGet({ value: detail(), version: 3 }, [
+        {
+          sequence: 1,
+          fromStatus: 'RECEIVED',
+          toStatus: 'CONFIRMED',
+          trigger: 'CHECKOUT',
+          reasonCode: '',
+          actorType: 'SYSTEM',
+          occurredAt: '2026-08-30T09:00:00Z',
+        },
+      ]),
+    });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-timeline"]'),
+    ).not.toBeNull();
+  });
+});
+
+describe('OrderDetailPane: the losing side of a decision is shown (wave P11, row 1.2b)', () => {
+  it('shows a REJECT that lost the compare-and-set, and never the one that won', async () => {
+    const decisions: OrderApprovalDecision[] = [
+      {
+        decisionId: 'click-a',
+        action: 'REJECT',
+        decisionChannel: 'HORECAOS_OPERATIONS',
+        actorType: 'USER',
+        actorId: 'operator-a',
+        reasonCode: 'OUT_OF_STOCK',
+        effective: false,
+        issuedAt: '2026-08-30T09:00:00Z',
+      },
+      {
+        decisionId: 'click-b',
+        action: 'APPROVE',
+        decisionChannel: 'HORECAOS_OPERATIONS',
+        actorType: 'USER',
+        actorId: 'operator-b',
+        effective: true,
+        issuedAt: '2026-08-30T09:00:01Z',
+      },
+    ];
+    configure({ get: apiGet({ value: detail(), version: 3 }, [], decisions) });
+    const fixture = await render();
+
+    const section = fixture.nativeElement.querySelector(
+      '[data-testid="order-detail-timeline-losing-decisions"]',
+    );
+    expect(section).not.toBeNull();
+    expect(section!.textContent).toContain('rejected');
+    expect(section!.textContent).toContain('OUT_OF_STOCK');
+    expect(section!.textContent).not.toContain('operator-b');
+  });
+
+  it('renders no losing-decisions lane when every decision on record was effective', async () => {
+    const decisions: OrderApprovalDecision[] = [
+      {
+        decisionId: 'click-a',
+        action: 'APPROVE',
+        decisionChannel: 'HORECAOS_OPERATIONS',
+        actorType: 'USER',
+        actorId: 'operator-a',
+        effective: true,
+        issuedAt: '2026-08-30T09:00:00Z',
+      },
+    ];
+    configure({ get: apiGet({ value: detail(), version: 3 }, [], decisions) });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-timeline-losing-decisions"]'),
+    ).toBeNull();
   });
 });
