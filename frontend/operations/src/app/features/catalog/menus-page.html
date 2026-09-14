@@ -25,6 +25,21 @@
         data-testid="menus-search"
       />
 
+      <label class="menus__channel-picker">
+        <span class="q-caption">{{ 'catalog.menus.channel.label' | t }}</span>
+        <select
+          class="menus__channel-select"
+          [value]="selectedChannelId() ?? ''"
+          (change)="onChannelChange($any($event.target).value)"
+          data-testid="menus-channel-select"
+        >
+          <option value="">{{ 'catalog.menus.channel.hall' | t }}</option>
+          @for (channel of channels(); track channel.id) {
+            <option [value]="channel.id">{{ channel.displayName }}</option>
+          }
+        </select>
+      </label>
+
       <div class="menus__filter-tabs" role="tablist">
         @for (option of statusFilterOptions; track option) {
           <button
@@ -65,6 +80,24 @@
           >
             {{ 'catalog.menus.bulk.setStopped' | t }}
           </button>
+          @if (selectedChannelId(); as channelId) {
+            <button
+              type="button"
+              class="menus__bulk-button"
+              (click)="requestChannelBulk(true)"
+              data-testid="menus-bulk-channel-enable"
+            >
+              {{ 'catalog.menus.bulk.channelEnable' | t }}
+            </button>
+            <button
+              type="button"
+              class="menus__bulk-button"
+              (click)="requestChannelBulk(false)"
+              data-testid="menus-bulk-channel-disable"
+            >
+              {{ 'catalog.menus.bulk.channelDisable' | t }}
+            </button>
+          }
         </div>
       }
     </div>
@@ -91,6 +124,9 @@
             <th>{{ 'catalog.menus.column.product' | t }}</th>
             <th class="menus__num-col">{{ 'catalog.menus.column.price' | t }}</th>
             <th>{{ 'catalog.menus.column.offering' | t }}</th>
+            @if (selectedChannelId()) {
+              <th>{{ 'catalog.menus.column.channel' | t }}</th>
+            }
             <th>{{ 'catalog.menus.column.fulfillment' | t }}</th>
             <th>{{ 'catalog.menus.column.status' | t }}</th>
           </tr>
@@ -112,7 +148,38 @@
                   <div class="q-caption">{{ row.category }}</div>
                 }
               </td>
-              <td class="menus__num-col q-mono q-tnum">{{ priceLabel(row.variantId) }}</td>
+              <td class="menus__num-col q-mono q-tnum">
+                <span data-testid="menus-price">{{ priceLabel(row.variantId) }}</span>
+                @if (selectedChannelId()) {
+                  @if (canEditChannelPrice()) {
+                    <input
+                      #channelPriceInput
+                      type="text"
+                      class="menus__price-input"
+                      placeholder="0"
+                      [disabled]="isBusy(row.variantId)"
+                      (keydown.enter)="setChannelPrice(row, channelPriceInput.value)"
+                      data-testid="menus-channel-price-input"
+                    />
+                    <button
+                      type="button"
+                      class="menus__price-save"
+                      [disabled]="isBusy(row.variantId)"
+                      (click)="setChannelPrice(row, channelPriceInput.value)"
+                      data-testid="menus-channel-price-save"
+                    >
+                      {{ 'catalog.editor.variants.setPrice' | t }}
+                    </button>
+                  } @else {
+                    <div class="q-caption menus__price-hint" data-testid="menus-channel-price-hint">
+                      {{ 'catalog.menus.channel.noOverride' | t }}
+                      <a routerLink="/catalog/prices">{{
+                        'catalog.menus.channel.assignPriceLink' | t
+                      }}</a>
+                    </div>
+                  }
+                }
+              </td>
               <td>
                 <span
                   class="menus__offering"
@@ -122,6 +189,21 @@
                   {{ offeringStatusLabel(row) }}
                 </span>
               </td>
+              @if (selectedChannelId()) {
+                <td>
+                  <button
+                    type="button"
+                    class="menus__cell"
+                    [class.menus__cell--available]="channelOffered(row.variantId)"
+                    [class.menus__cell--stopped]="!channelOffered(row.variantId)"
+                    [disabled]="isChannelBusy(row.variantId)"
+                    (click)="toggleChannelOffering(row)"
+                    data-testid="menus-channel-status"
+                  >
+                    {{ channelStatusLabel(row.variantId) }}
+                  </button>
+                </td>
+              }
               <td>
                 <span class="menus__fulfillment" data-testid="menus-fulfillment">
                   @for (mode of fulfillmentModes; track mode) {
@@ -155,19 +237,38 @@
     }
   }
 
-  @if (bulkTarget(); as status) {
-    <q-confirm-dialog
-      [title]="'catalog.menus.bulk.confirmTitle' | t"
-      [body]="'catalog.menus.bulk.confirmBody' | t: { count: selectedCount() }"
-      [confirmLabel]="
-        status === 'AVAILABLE'
-          ? ('catalog.menus.bulk.setAvailable' | t)
-          : ('catalog.menus.bulk.setStopped' | t)
-      "
-      [cancelLabel]="'catalog.dialog.cancel' | t"
-      [busy]="bulkBusy()"
-      (confirm)="confirmBulk()"
-      (cancel)="cancelBulk()"
-    />
+  @if (bulkTarget(); as target) {
+    @if (target.kind === 'OFFERING') {
+      <q-confirm-dialog
+        [title]="'catalog.menus.bulk.confirmTitle' | t"
+        [body]="'catalog.menus.bulk.confirmBody' | t: { count: selectedCount() }"
+        [confirmLabel]="
+          target.status === 'AVAILABLE'
+            ? ('catalog.menus.bulk.setAvailable' | t)
+            : ('catalog.menus.bulk.setStopped' | t)
+        "
+        [cancelLabel]="'catalog.dialog.cancel' | t"
+        [busy]="bulkBusy()"
+        (confirm)="confirmBulk()"
+        (cancel)="cancelBulk()"
+      />
+    } @else {
+      <q-confirm-dialog
+        [title]="'catalog.menus.bulk.channelConfirmTitle' | t"
+        [body]="
+          'catalog.menus.bulk.channelConfirmBody'
+            | t: { count: selectedCount(), channel: channelLabel(selectedChannelId() ?? '') }
+        "
+        [confirmLabel]="
+          target.offered
+            ? ('catalog.menus.bulk.channelEnable' | t)
+            : ('catalog.menus.bulk.channelDisable' | t)
+        "
+        [cancelLabel]="'catalog.dialog.cancel' | t"
+        [busy]="bulkBusy()"
+        (confirm)="confirmBulk()"
+        (cancel)="cancelBulk()"
+      />
+    }
   }
 </div>

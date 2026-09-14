@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
+import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { CatalogApi } from './catalog-api';
 import { InventoryApi } from './inventory-api';
 import { MenusPage } from './menus-page';
@@ -17,6 +18,7 @@ import { VariantAvailabilityRow } from './catalog-domain';
 const FAKE_SCOPE = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 
 const EMPTY_PRICES = { priceBookId: null, currency: null, amountsMinor: {} };
+const EMPTY_EXCLUSIONS = { excludedVariantIds: [] };
 
 function row(overrides: Partial<VariantAvailabilityRow>): VariantAvailabilityRow {
   return {
@@ -24,6 +26,25 @@ function row(overrides: Partial<VariantAvailabilityRow>): VariantAvailabilityRow
     productName: 'Плов',
     category: 'Основные блюда',
     available: true,
+    ...overrides,
+  };
+}
+
+function channel(overrides: Partial<ChannelView> = {}): ChannelView {
+  return {
+    id: 'ch1',
+    code: 'UZUM_TEZKOR',
+    systemType: 'AGGREGATOR',
+    displayName: 'Uzum Tezkor',
+    status: 'ACTIVE',
+    pricePlaneChannelId: null,
+    externallyPriced: false,
+    guestOrdersAllowed: false,
+    providerInstallationId: null,
+    version: 1,
+    locationCount: 1,
+    enabledPaymentMethodCount: 0,
+    enabledFulfillmentModes: [],
     ...overrides,
   };
 }
@@ -37,6 +58,7 @@ function configure(
   catalogApi: Partial<CatalogApi>,
   pricingApi: Partial<PricingApi> = {},
   inventoryApi: Partial<InventoryApi> = {},
+  channelsApi: Partial<SalesChannelsApi> = {},
 ): void {
   TestBed.configureTestingModule({
     providers: [
@@ -49,12 +71,19 @@ function configure(
           ensureLoaded: () => Promise.resolve(),
         },
       },
-      { provide: CatalogApi, useValue: catalogApi },
+      {
+        provide: CatalogApi,
+        useValue: { channelExclusions: () => of(EMPTY_EXCLUSIONS), ...catalogApi },
+      },
       {
         provide: PricingApi,
         useValue: { resolvedVariantPrices: () => of(EMPTY_PRICES), ...pricingApi },
       },
       { provide: InventoryApi, useValue: inventoryApi },
+      {
+        provide: SalesChannelsApi,
+        useValue: { list: () => Promise.resolve([]), ...channelsApi },
+      },
     ],
   });
   TestBed.inject(I18n).setLocale('ru');
@@ -97,6 +126,7 @@ describe('MenusPage', () => {
         { provide: CatalogApi, useValue: {} },
         { provide: PricingApi, useValue: {} },
         { provide: InventoryApi, useValue: {} },
+        { provide: SalesChannelsApi, useValue: {} },
       ],
     });
     TestBed.inject(I18n).setLocale('ru');
@@ -291,4 +321,182 @@ describe('MenusPage', () => {
     const call = bulkSetOfferingStatus.mock.calls.at(-1)!;
     expect((call[2] as { variantIds: readonly string[] }).variantIds).toHaveLength(200);
   });
+
+  // ---------------------------------------------------------- P45: the channel plane
+
+  it('renders "Зал" plus every configured channel in the channel picker', async () => {
+    configure(
+      { variantsAtLocation: () => of({ items: [row({ variantId: 'v1' })], nextCursor: null }) },
+      {},
+      {},
+      { list: () => Promise.resolve([channel({ id: 'ch1', displayName: 'Uzum Tezkor' })]) },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/menus');
+    await flushMicrotasks();
+
+    const options = [
+      ...harness.routeNativeElement!.querySelectorAll<HTMLOptionElement>(
+        '[data-testid="menus-channel-select"] option',
+      ),
+    ];
+    expect(options.map((option) => option.textContent?.trim())).toEqual(['Зал', 'Uzum Tezkor']);
+  });
+
+  it(
+    'selecting a channel that has no price book of its own shows a hint instead of an ' +
+      'editable price, so a save can never silently rewrite the hall price',
+    async () => {
+      // Both calls resolve the same book — the channel is falling back to
+      // the hall's own book, not carrying a channel-scoped one.
+      const resolvedVariantPrices = vi
+        .fn()
+        .mockReturnValue(
+          of({ priceBookId: 'hall-book', currency: 'UZS', amountsMinor: { v1: 50_000 } }),
+        );
+      configure(
+        { variantsAtLocation: () => of({ items: [row({ variantId: 'v1' })], nextCursor: null }) },
+        { resolvedVariantPrices },
+        {},
+        { list: () => Promise.resolve([channel({ id: 'ch1' })]) },
+      );
+
+      const harness = await RouterTestingHarness.create('/catalog/menus');
+      await flushMicrotasks();
+      const host = harness.routeNativeElement!;
+
+      const select = host.querySelector<HTMLSelectElement>('[data-testid="menus-channel-select"]')!;
+      select.value = 'ch1';
+      select.dispatchEvent(new Event('change'));
+      await flushMicrotasks();
+
+      expect(host.querySelector('[data-testid="menus-channel-price-hint"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="menus-channel-price-input"]')).toBeNull();
+    },
+  );
+
+  it(
+    'selecting a channel with its own price book allows editing it, and saving writes ' +
+      'through the channel book, never the hall one',
+    async () => {
+      const resolvedVariantPrices = vi.fn(
+        (_scope: unknown, _locationId: unknown, _ids: unknown, channelId?: string) =>
+          channelId === undefined
+            ? of({ priceBookId: 'hall-book', currency: 'UZS', amountsMinor: { v1: 50_000 } })
+            : of({ priceBookId: 'channel-book', currency: 'UZS', amountsMinor: { v1: 60_000 } }),
+      );
+      const setVariantPrice = vi.fn().mockReturnValue(of({}));
+      configure(
+        { variantsAtLocation: () => of({ items: [row({ variantId: 'v1' })], nextCursor: null }) },
+        { resolvedVariantPrices, setVariantPrice },
+        {},
+        { list: () => Promise.resolve([channel({ id: 'ch1' })]) },
+      );
+
+      const harness = await RouterTestingHarness.create('/catalog/menus');
+      await flushMicrotasks();
+      const host = harness.routeNativeElement!;
+
+      const select = host.querySelector<HTMLSelectElement>('[data-testid="menus-channel-select"]')!;
+      select.value = 'ch1';
+      select.dispatchEvent(new Event('change'));
+      await flushMicrotasks();
+
+      const input = host.querySelector<HTMLInputElement>(
+        '[data-testid="menus-channel-price-input"]',
+      )!;
+      expect(input).not.toBeNull();
+      input.value = '65000';
+      (host.querySelector('[data-testid="menus-channel-price-save"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+
+      expect(setVariantPrice).toHaveBeenCalledWith(FAKE_SCOPE, 'channel-book', 'v1', 65_000);
+    },
+  );
+
+  it('clicking the channel toggle calls setChannelOffering and flips the label', async () => {
+    const setChannelOffering = vi.fn().mockReturnValue(of(undefined));
+    configure(
+      {
+        variantsAtLocation: () => of({ items: [row({ variantId: 'v1' })], nextCursor: null }),
+        channelExclusions: () => of({ excludedVariantIds: [] }),
+        setChannelOffering,
+      },
+      {},
+      {},
+      { list: () => Promise.resolve([channel({ id: 'ch1' })]) },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/menus');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    const select = host.querySelector<HTMLSelectElement>('[data-testid="menus-channel-select"]')!;
+    select.value = 'ch1';
+    select.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="menus-channel-status"]')?.textContent?.trim()).toBe(
+      'На канале',
+    );
+
+    (host.querySelector('[data-testid="menus-channel-status"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(setChannelOffering).toHaveBeenCalledWith(FAKE_SCOPE, 'ch1', 'v1', {
+      offered: false,
+      locationId: 'l1',
+    });
+    expect(host.querySelector('[data-testid="menus-channel-status"]')?.textContent?.trim()).toBe(
+      'Скрыто на канале',
+    );
+  });
+
+  it(
+    'the mass-enable gesture calls bulkSetChannelOffering with the selection, the ' +
+      'channel and the location — the row this wave exists to fix',
+    async () => {
+      const bulkSetChannelOffering = vi.fn().mockReturnValue(of({ changedCount: 2 }));
+      configure(
+        {
+          variantsAtLocation: () =>
+            of({ items: [row({ variantId: 'v1' }), row({ variantId: 'v2' })], nextCursor: null }),
+          bulkSetChannelOffering,
+        },
+        {},
+        {},
+        { list: () => Promise.resolve([channel({ id: 'ch1' })]) },
+      );
+
+      const harness = await RouterTestingHarness.create('/catalog/menus');
+      await flushMicrotasks();
+      const host = harness.routeNativeElement!;
+
+      const select = host.querySelector<HTMLSelectElement>('[data-testid="menus-channel-select"]')!;
+      select.value = 'ch1';
+      select.dispatchEvent(new Event('change'));
+      await flushMicrotasks();
+
+      for (const checkbox of [
+        ...host.querySelectorAll<HTMLInputElement>('[data-testid="menus-row-checkbox"]'),
+      ]) {
+        checkbox.checked = true;
+        checkbox.dispatchEvent(new Event('change'));
+      }
+      await flushMicrotasks();
+
+      (
+        host.querySelector('[data-testid="menus-bulk-channel-enable"]') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+
+      expect(bulkSetChannelOffering).toHaveBeenCalledWith(FAKE_SCOPE, 'ch1', {
+        variantIds: ['v1', 'v2'],
+        offered: true,
+        locationId: 'l1',
+      });
+    },
+  );
 });
