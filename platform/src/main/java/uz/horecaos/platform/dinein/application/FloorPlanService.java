@@ -200,6 +200,47 @@ public class FloorPlanService {
         return store.listTables(tenantId, locationId);
     }
 
+    /**
+     * Moves a table on the canvas (drag-to-reposition).
+     *
+     * <p>Conditional on the version the caller read, the same optimistic-locking
+     * shape every other table write here uses: two managers dragging the same
+     * table at once settle on one final position, not a race the last write wins
+     * silently.
+     */
+    @Transactional
+    public TableRow moveTable(
+            UUID tenantId,
+            UUID tableId,
+            int expectedVersion,
+            BigDecimal layoutX,
+            BigDecimal layoutY,
+            String actorSubject,
+            String reason) {
+
+        TableRow table = store.findTable(tenantId, tableId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such table"));
+
+        Instant now = clock.instant();
+        if (!store.updateTableLayout(tenantId, tableId, expectedVersion, layoutX, layoutY, now)) {
+            throw ApiException.staleVersion(expectedVersion, table.version());
+        }
+
+        audit.record(AuditFact.of("dinein.table.repositioned", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.location(table.tenantId(), table.brandId(), table.locationId()))
+                .target("dinein.table", tableId)
+                .targetVersion((long) expectedVersion + 1)
+                .because(reason)
+                .changed(Map.of("layoutX", layoutX, "layoutY", layoutY))
+                .usingCapability("dinein.floorplan.manage")
+                .correlatedBy(tableId.toString())
+                .occurredAt(now)
+                .build());
+
+        return store.findTable(tenantId, tableId).orElseThrow();
+    }
+
     // ----------------------------------------------------------- the QR token
 
     /**

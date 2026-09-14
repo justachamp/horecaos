@@ -282,6 +282,31 @@ public class JdbcDineInStore {
                 == 1;
     }
 
+    /**
+     * Moves a table on the canvas (drag-to-reposition), conditionally on the
+     * version the caller read — the same optimistic-locking shape as {@link
+     * #updateTableStatus} and {@link #rotateQrToken}.
+     *
+     * @return whether the row moved
+     */
+    public boolean updateTableLayout(
+            UUID tenantId, UUID tableId, int expectedVersion, BigDecimal layoutX, BigDecimal layoutY, Instant now) {
+
+        return jdbc.sql("""
+                UPDATE dinein.tables
+                   SET layout_x = :layoutX, layout_y = :layoutY, version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
+                """)
+                        .param("layoutX", layoutX)
+                        .param("layoutY", layoutY)
+                        .param("now", utc(now))
+                        .param("tenantId", tenantId)
+                        .param("id", tableId)
+                        .param("expectedVersion", expectedVersion)
+                        .update()
+                == 1;
+    }
+
     // -------------------------------------------------------- guest sessions
 
     public void insertGuestSession(GuestSessionRow guest) {
