@@ -63,6 +63,12 @@ public class ReviewQueryService {
      * A brand's reviews, newest first, filtered by whatever the operator
      * supplied — every parameter is optional.
      *
+     * @param customerAccountId row 5.2h: narrows to one customer's own reviews
+     *                          at this brand — the customer detail pane's own
+     *                          tab, so an operator handling a complaint can
+     *                          see this person's rating history without
+     *                          scrolling the whole brand-wide list and
+     *                          matching account ids by eye
      * @param cursorReviewId the last review of the previous page, or null for the first
      * @throws UnknownCursorException when the cursor names no review at this brand
      */
@@ -71,6 +77,7 @@ public class ReviewQueryService {
     public List<ReviewView> list(
             UUID tenantId,
             UUID brandId,
+            @Nullable UUID customerAccountId,
             @Nullable UUID locationId,
             @Nullable Integer minRating,
             @Nullable Integer maxRating,
@@ -86,6 +93,7 @@ public class ReviewQueryService {
                 .listForBrand(
                         tenantId,
                         brandId,
+                        customerAccountId,
                         locationId,
                         minRating,
                         maxRating,

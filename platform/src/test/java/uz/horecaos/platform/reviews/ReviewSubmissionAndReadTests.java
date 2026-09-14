@@ -224,10 +224,10 @@ class ReviewSubmissionAndReadTests {
                 .extracting(t -> ((ApiException) t).errorCode())
                 .isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
 
-        assertThat(query.list(TENANT_B, brandB, null, null, null, null, null, null, 50))
+        assertThat(query.list(TENANT_B, brandB, null, null, null, null, null, null, null, 50))
                 .as("tenant B's brand-scoped read never returns tenant A's row")
                 .isEmpty();
-        assertThat(query.list(TENANT_A, BRAND_A, null, null, null, null, null, null, 50))
+        assertThat(query.list(TENANT_A, BRAND_A, null, null, null, null, null, null, null, 50))
                 .hasSize(1);
     }
 
@@ -251,7 +251,7 @@ class ReviewSubmissionAndReadTests {
                 .doesNotContain("neighbour");
 
         List<ReviewQueryService.ReviewView> views =
-                query.list(TENANT_A, BRAND_A, null, null, null, null, null, null, 50);
+                query.list(TENANT_A, BRAND_A, null, null, null, null, null, null, null, 50);
         assertThat(views).hasSize(1);
         assertThat(views.get(0).comment()).isEqualTo("the courier was rude to my neighbour");
     }
@@ -297,13 +297,13 @@ class ReviewSubmissionAndReadTests {
         submission.submit(TENANT_A, BRAND_A, orderTwo, customerTwo, 1, "cold food");
 
         List<ReviewQueryService.ReviewView> atLocationOne =
-                query.list(TENANT_A, BRAND_A, locationId, null, null, null, null, null, 50);
+                query.list(TENANT_A, BRAND_A, null, locationId, null, null, null, null, null, 50);
         assertThat(atLocationOne)
                 .extracting(ReviewQueryService.ReviewView::rating)
                 .containsExactly(5);
 
         List<ReviewQueryService.ReviewView> highRatingOnly =
-                query.list(TENANT_A, BRAND_A, null, 4, null, null, null, null, 50);
+                query.list(TENANT_A, BRAND_A, null, null, 4, null, null, null, null, 50);
         assertThat(highRatingOnly)
                 .extracting(ReviewQueryService.ReviewView::orderId)
                 .containsExactly(orderOne);
@@ -311,6 +311,34 @@ class ReviewSubmissionAndReadTests {
         JdbcReviewStore.Summary summary = query.summary(TENANT_A, BRAND_A, null, null, null);
         assertThat(summary.reviewCount()).isEqualTo(2);
         assertThat(summary.averageRating()).isEqualTo(3.0);
+    }
+
+    @Test
+    @DisplayName("row 5.2h: filtering by customerAccountId narrows the operations list to one customer's own reviews")
+    void operationsListFiltersByCustomerAccountId() {
+        UUID customerOne = newCustomer(TENANT_A);
+        UUID customerTwo = newCustomer(TENANT_A);
+        UUID orderOne = order(TENANT_A, BRAND_A, customerOne, "COMPLETED");
+        UUID orderTwo = order(TENANT_A, BRAND_A, customerTwo, "COMPLETED");
+        submission.submit(TENANT_A, BRAND_A, orderOne, customerOne, 5, "loved it");
+        submission.submit(TENANT_A, BRAND_A, orderTwo, customerTwo, 2, "meh");
+
+        List<ReviewQueryService.ReviewView> customerOnesReviews =
+                query.list(TENANT_A, BRAND_A, customerOne, null, null, null, null, null, null, 50);
+        assertThat(customerOnesReviews)
+                .as("an operator handling a complaint sees exactly this customer's own reviews, "
+                        + "not the whole brand-wide list")
+                .extracting(ReviewQueryService.ReviewView::orderId)
+                .containsExactly(orderOne);
+        assertThat(customerOnesReviews.get(0).customerAccountId()).isEqualTo(customerOne);
+
+        assertThat(query.list(TENANT_A, BRAND_A, customerTwo, null, null, null, null, null, null, 50))
+                .extracting(ReviewQueryService.ReviewView::orderId)
+                .containsExactly(orderTwo);
+
+        assertThat(query.list(TENANT_A, BRAND_A, null, null, null, null, null, null, null, 50))
+                .as("omitting the filter still returns every review at the brand")
+                .hasSize(2);
     }
 
     @Test
@@ -390,12 +418,13 @@ class ReviewSubmissionAndReadTests {
         Submission second = orderedSubmission.submit(TENANT_A, BRAND_A, orderTwo, customerTwo, 4, null);
 
         List<ReviewQueryService.ReviewView> firstPage =
-                query.list(TENANT_A, BRAND_A, null, null, null, null, null, null, 1);
+                query.list(TENANT_A, BRAND_A, null, null, null, null, null, null, null, 1);
         assertThat(firstPage).extracting(ReviewQueryService.ReviewView::orderId).containsExactly(orderTwo);
 
         List<ReviewQueryService.ReviewView> secondPage = query.list(
                 TENANT_A,
                 BRAND_A,
+                null,
                 null,
                 null,
                 null,
@@ -412,7 +441,7 @@ class ReviewSubmissionAndReadTests {
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                 VALUES (:id, :tenantId, 'OTHER', 'other', 'OTHER', 'ACTIVE', 0)
                 """).param("id", otherBrand).param("tenantId", TENANT_A).update();
-        assertThatThrownBy(() -> query.list(TENANT_A, otherBrand, null, null, null, null, null, second.id(), 50))
+        assertThatThrownBy(() -> query.list(TENANT_A, otherBrand, null, null, null, null, null, null, second.id(), 50))
                 .isInstanceOf(ReviewQueryService.UnknownCursorException.class);
     }
 

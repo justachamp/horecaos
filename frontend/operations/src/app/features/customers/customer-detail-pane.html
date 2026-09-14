@@ -72,6 +72,30 @@
       >
         {{ 'customers.tab.blacklist' | t }}
       </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'promos'"
+        (click)="selectTab('promos')"
+      >
+        {{ 'customers.tab.promos' | t }}
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'reviews'"
+        (click)="selectTab('reviews')"
+      >
+        {{ 'customers.tab.reviews' | t }}
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'erasure'"
+        (click)="selectTab('erasure')"
+      >
+        {{ 'customers.tab.erasure' | t }}
+      </button>
     </div>
 
     <!-- ---------------------------------------------------------------- profile -->
@@ -573,9 +597,6 @@
 
     <!-- ------------------------------------------------------------------ orders -->
     @if (activeTab() === 'orders') {
-      <button type="button" class="secondary reorder-button" (click)="reorder()">
-        {{ 'customers.orders.reorder' | t }}
-      </button>
       <table class="grid">
         <thead>
           <tr>
@@ -583,19 +604,38 @@
             <th class="q-caption">{{ 'customers.orders.status' | t }}</th>
             <th class="q-caption">{{ 'customers.orders.total' | t }}</th>
             <th class="q-caption">{{ 'customers.orders.placedAt' | t }}</th>
+            <th class="q-caption"></th>
           </tr>
         </thead>
         <tbody>
           @for (order of orders(); track order.orderId) {
-            <tr class="row" (click)="openOrder(order.orderId)">
-              <td class="q-body-sm q-mono">{{ order.publicOrderNumber }}</td>
-              <td class="q-body-sm">{{ order.status }}</td>
-              <td class="q-body-sm q-tnum">{{ formatOrderTotal(order) }}</td>
-              <td class="q-body-sm q-tnum">{{ formatOrderPlacedAt(order.placedAt) }}</td>
+            <tr class="row">
+              <td class="q-body-sm q-mono" (click)="openOrder(order.orderId)">
+                {{ order.publicOrderNumber }}
+              </td>
+              <td class="q-body-sm" (click)="openOrder(order.orderId)">
+                {{ orderStatusText(order.status) }}
+              </td>
+              <td class="q-body-sm q-tnum" (click)="openOrder(order.orderId)">
+                {{ formatOrderTotal(order) }}
+              </td>
+              <td class="q-body-sm q-tnum" (click)="openOrder(order.orderId)">
+                {{ formatOrderPlacedAt(order.placedAt) }}
+              </td>
+              <td class="q-body-sm">
+                <button
+                  type="button"
+                  class="link reorder-button"
+                  data-testid="customer-order-reorder"
+                  (click)="reorder(order.orderId)"
+                >
+                  {{ 'customers.orders.reorder' | t }}
+                </button>
+              </td>
             </tr>
           } @empty {
             <tr>
-              <td class="q-body-sm empty" colspan="4">
+              <td class="q-body-sm empty" colspan="5">
                 {{ loadingOrders() ? ('customers.loading' | t) : ('customers.orders.empty' | t) }}
               </td>
             </tr>
@@ -727,7 +767,10 @@
     @if (activeTab() === 'cashback') {
       <p class="q-body-sm">{{ 'customers.cashback.lead' | t }}</p>
       @for (balance of balances(); track balance.accountId) {
-        <div class="balance-card">
+        <div class="balance-card" data-testid="cashback-balance-card">
+          <p class="q-caption balance-card__brand" data-testid="cashback-balance-brand">
+            {{ brandLabel(balance.brandId) }}
+          </p>
           <p class="q-body">
             <strong>{{ formatBalanceMoney(balance.balance) }}</strong>
             <span class="q-caption"
@@ -735,25 +778,133 @@
               {{ formatBalanceMoney(balance.spendable) }}</span
             >
           </p>
-          <button type="button" class="link" (click)="toggleBalance(balance.accountId)">
-            {{
-              expandedBalanceId() === balance.accountId
-                ? ('customers.cashback.hideLedger' | t)
-                : ('customers.cashback.showLedger' | t)
-            }}
-          </button>
+          <div class="balance-card__actions">
+            <button type="button" class="link" (click)="toggleBalance(balance.accountId)">
+              {{
+                expandedBalanceId() === balance.accountId
+                  ? ('customers.cashback.hideLedger' | t)
+                  : ('customers.cashback.showLedger' | t)
+              }}
+            </button>
+            @if (canAdjustLoyalty()) {
+              <button
+                type="button"
+                class="link"
+                data-testid="cashback-adjust-open"
+                (click)="startAdjusting(balance)"
+              >
+                {{ 'customers.cashback.adjust.action' | t }}
+              </button>
+            }
+          </div>
+
+          @if (adjustingBalanceId() === balance.accountId) {
+            <div class="form" data-testid="cashback-adjust-form">
+              <label class="q-caption">{{ 'customers.cashback.adjust.direction' | t }}</label>
+              <select
+                class="q-body field"
+                [value]="adjustDirection()"
+                (change)="adjustDirection.set($any($event.target).value)"
+              >
+                <option value="CREDIT">
+                  {{ 'customers.cashback.adjust.direction.CREDIT' | t }}
+                </option>
+                <option value="DEBIT">{{ 'customers.cashback.adjust.direction.DEBIT' | t }}</option>
+              </select>
+              <label class="q-caption">{{ 'customers.cashback.adjust.amount' | t }}</label>
+              <q-money-input
+                [valueMinor]="adjustAmountMinor()"
+                (valueMinorChange)="adjustAmountMinor.set($event)"
+              />
+              <label class="q-caption">{{ 'customers.cashback.adjust.reasonCode' | t }}</label>
+              <input
+                class="q-body field"
+                type="text"
+                [value]="adjustReasonCode()"
+                (input)="adjustReasonCode.set($any($event.target).value)"
+                [placeholder]="'customers.cashback.adjust.reasonCode.placeholder' | t"
+              />
+              <label class="q-caption">{{ 'customers.cashback.adjust.reason' | t }}</label>
+              <textarea
+                class="q-body field"
+                rows="2"
+                [value]="adjustReason()"
+                (input)="adjustReason.set($any($event.target).value)"
+              ></textarea>
+              <div class="form__actions">
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="cancelAdjusting()"
+                  [disabled]="adjustSaving()"
+                >
+                  {{ 'customers.cancel' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="primary"
+                  data-testid="cashback-adjust-submit"
+                  (click)="submitAdjustment(balance)"
+                  [disabled]="
+                    adjustSaving() ||
+                    adjustAmountMinor() <= 0 ||
+                    !adjustReasonCode().trim() ||
+                    !adjustReason().trim()
+                  "
+                >
+                  {{
+                    adjustSaving()
+                      ? ('customers.saving' | t)
+                      : ('customers.cashback.adjust.submit' | t)
+                  }}
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (adjustResult(); as result) {
+            <p class="q-caption" data-testid="cashback-adjust-result">
+              {{ adjustmentStatusLabel(result.status) }}
+            </p>
+          }
+
           @if (expandedBalanceId() === balance.accountId) {
             <table class="grid">
+              <thead>
+                <tr>
+                  <th class="q-caption">{{ 'customers.cashback.ledger.type' | t }}</th>
+                  <th class="q-caption">{{ 'customers.cashback.ledger.amount' | t }}</th>
+                  <th class="q-caption">{{ 'customers.cashback.ledger.balanceAfter' | t }}</th>
+                  <th class="q-caption">{{ 'customers.cashback.ledger.reason' | t }}</th>
+                  <th class="q-caption">{{ 'customers.cashback.ledger.order' | t }}</th>
+                  <th class="q-caption">{{ 'customers.cashback.ledger.occurredAt' | t }}</th>
+                </tr>
+              </thead>
               <tbody>
                 @for (entry of loyaltyEntries(); track entry.id) {
                   <tr>
                     <td class="q-body-sm">{{ entry.entryType }}</td>
-                    <td class="q-body-sm q-tnum">{{ entry.amountMinor }}</td>
+                    <td class="q-body-sm q-tnum" data-testid="cashback-entry-amount">
+                      {{ formatEntryAmount(entry.amountMinor, balance.balance.currency) }}
+                    </td>
+                    <td class="q-body-sm q-tnum">
+                      {{ formatEntryAmount(entry.balanceAfterMinor, balance.balance.currency) }}
+                    </td>
+                    <td class="q-body-sm">{{ entry.reasonCode ?? '—' }}</td>
+                    <td class="q-body-sm">
+                      @if (entry.orderId; as orderId) {
+                        <button type="button" class="link" (click)="openOrder(orderId)">
+                          {{ 'customers.cashback.ledger.viewOrder' | t }}
+                        </button>
+                      } @else {
+                        —
+                      }
+                    </td>
                     <td class="q-body-sm q-tnum">{{ formatOrderPlacedAt(entry.occurredAt) }}</td>
                   </tr>
                 } @empty {
                   <tr>
-                    <td class="q-body-sm empty" colspan="3">
+                    <td class="q-body-sm empty" colspan="6">
                       {{
                         loadingEntries()
                           ? ('customers.loading' | t)
@@ -774,8 +925,6 @@
 
       <section class="block">
         <p class="q-caption not-built">{{ 'customers.cashback.depositNotBuilt' | t }}</p>
-        <p class="q-caption not-built">{{ 'customers.cashback.promoNotBuilt' | t }}</p>
-        <p class="q-caption not-built">{{ 'customers.cashback.reviewsNotBuilt' | t }}</p>
       </section>
     }
 
@@ -784,9 +933,18 @@
       @if (blacklistStatus(); as status) {
         @if (status.active) {
           <p class="q-body">
-            <span class="status-badge status-badge--active">{{
-              'customers.blacklist.active' | t
-            }}</span>
+            <span
+              class="status-badge status-badge--active"
+              [class.status-badge--expired]="status.expired"
+              data-testid="blacklist-status-badge"
+            >
+              {{ blacklistExpiryLabel(status) }}
+            </span>
+            @if (status.since) {
+              <span class="q-caption" data-testid="blacklist-since"
+                >{{ 'customers.blacklist.since' | t }} {{ formatOrderPlacedAt(status.since) }}</span
+              >
+            }
             @if (status.expiresAt) {
               <span class="q-caption"
                 >{{ 'customers.blacklist.expiresAt' | t }}
@@ -860,11 +1018,36 @@
         <h3 class="q-subhead">{{ 'customers.blacklist.history' | t }}</h3>
         @if (blacklistHistory(); as history) {
           @for (entry of history; track entry.id) {
-            <div class="address-card">
+            <div class="address-card" data-testid="blacklist-history-entry">
               <p class="q-body">{{ entry.reason }}</p>
               <p class="q-caption">
                 {{ entry.status }} · {{ formatOrderPlacedAt(entry.createdAt) }}
               </p>
+              <p class="q-caption" data-testid="blacklist-history-actor">
+                {{ 'customers.blacklist.history.actor' | t }}
+                <q-actor-chip [kind]="entry.actorType" [subject]="entry.actorId" />
+              </p>
+              @if (entry.expiresAt) {
+                <p class="q-caption" data-testid="blacklist-history-expiry">
+                  {{ 'customers.blacklist.expiresAt' | t }}
+                  {{ formatOrderPlacedAt(entry.expiresAt) }}
+                </p>
+              }
+              @if (entry.liftedAt) {
+                <p class="q-caption" data-testid="blacklist-history-lift">
+                  {{ 'customers.blacklist.history.liftedAt' | t }}
+                  {{ formatOrderPlacedAt(entry.liftedAt) }}
+                  @if (entry.liftedByActorId) {
+                    · {{ 'customers.blacklist.history.liftedBy' | t }}
+                    <span class="q-mono">{{ entry.liftedByActorId }}</span>
+                  }
+                </p>
+                @if (entry.liftReason) {
+                  <p class="q-caption" data-testid="blacklist-history-lift-reason">
+                    {{ 'customers.blacklist.history.liftReason' | t }} {{ entry.liftReason }}
+                  </p>
+                }
+              }
             </div>
           } @empty {
             <p class="q-body-sm">{{ 'customers.blacklist.history.empty' | t }}</p>
@@ -880,6 +1063,173 @@
           </button>
         }
       </section>
+    }
+
+    <!-- ------------------------------------------------------------------ promos -->
+    @if (activeTab() === 'promos') {
+      @if (discountHistory(); as history) {
+        @if (history.totalsRedeemed.length > 0) {
+          <p class="q-body-sm" data-testid="promos-totals">
+            {{ 'customers.promos.totalsRedeemed' | t }}
+            @for (total of history.totalsRedeemed; track total.currency) {
+              <span class="q-tnum">{{ formatRedemptionTotal(total) }}</span>
+            }
+          </p>
+        }
+        <table class="grid">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'customers.promos.code' | t }}</th>
+              <th class="q-caption">{{ 'customers.promos.promotion' | t }}</th>
+              <th class="q-caption">{{ 'customers.promos.status' | t }}</th>
+              <th class="q-caption">{{ 'customers.promos.amount' | t }}</th>
+              <th class="q-caption">{{ 'customers.promos.order' | t }}</th>
+              <th class="q-caption">{{ 'customers.promos.reservedAt' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (redemption of history.redemptions; track redemption.redemptionId) {
+              <tr data-testid="promo-redemption-row">
+                <td class="q-body-sm q-mono">{{ redemption.codeHint ?? '—' }}</td>
+                <td class="q-body-sm">{{ redemption.promotionName }}</td>
+                <td class="q-body-sm">{{ redemptionStatusLabel(redemption.status) }}</td>
+                <td class="q-body-sm q-tnum">{{ formatRedemptionAmount(redemption) }}</td>
+                <td class="q-body-sm">
+                  @if (redemption.orderId; as orderId) {
+                    <button type="button" class="link" (click)="openOrder(orderId)">
+                      {{ 'customers.cashback.ledger.viewOrder' | t }}
+                    </button>
+                  } @else {
+                    —
+                  }
+                </td>
+                <td class="q-body-sm q-tnum">{{ formatOrderPlacedAt(redemption.reservedAt) }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td class="q-body-sm empty" colspan="6">{{ 'customers.promos.empty' | t }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      } @else {
+        <p class="q-body-sm">
+          {{
+            loadingDiscountHistory() ? ('customers.loading' | t) : ('customers.promos.empty' | t)
+          }}
+        </p>
+      }
+    }
+
+    <!-- ----------------------------------------------------------------- reviews -->
+    @if (activeTab() === 'reviews') {
+      <table class="grid">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'customers.detail.reviews.rating' | t }}</th>
+            <th class="q-caption">{{ 'customers.detail.reviews.comment' | t }}</th>
+            <th class="q-caption">{{ 'customers.detail.reviews.order' | t }}</th>
+            <th class="q-caption">{{ 'customers.detail.reviews.submittedAt' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (review of customerReviews(); track review.id) {
+            <tr data-testid="customer-review-row">
+              <td class="q-body-sm q-tnum">{{ review.rating }}</td>
+              <td class="q-body-sm">{{ review.comment ?? '—' }}</td>
+              <td class="q-body-sm">
+                <button type="button" class="link" (click)="openOrder(review.orderId)">
+                  {{ 'customers.cashback.ledger.viewOrder' | t }}
+                </button>
+              </td>
+              <td class="q-body-sm q-tnum">{{ formatReviewSubmittedAt(review.submittedAt) }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="4">
+                {{
+                  loadingReviews()
+                    ? ('customers.loading' | t)
+                    : ('customers.detail.reviews.empty' | t)
+                }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+
+    <!-- ----------------------------------------------------------------- erasure -->
+    @if (activeTab() === 'erasure') {
+      <p class="q-body-sm">{{ 'customers.erasure.lead' | t }}</p>
+
+      @if (canRaiseErasure() && !hasPendingErasureRequest()) {
+        <button
+          type="button"
+          class="secondary"
+          data-testid="erasure-raise"
+          (click)="raiseErasure()"
+          [disabled]="raisingErasure()"
+        >
+          {{ raisingErasure() ? ('customers.saving' | t) : ('customers.erasure.raise' | t) }}
+        </button>
+      }
+
+      <table class="grid">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'customers.erasure.status' | t }}</th>
+            <th class="q-caption">{{ 'customers.erasure.requestedVia' | t }}</th>
+            <th class="q-caption">{{ 'customers.erasure.requestedAt' | t }}</th>
+            <th class="q-caption"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (request of erasureRequests(); track request.id) {
+            <tr data-testid="erasure-request-row">
+              <td class="q-body-sm">{{ erasureStatusLabel(request.status) }}</td>
+              <td class="q-body-sm">{{ request.requestedVia }}</td>
+              <td class="q-body-sm q-tnum">{{ formatErasureAt(request.requestedAt) }}</td>
+              <td class="q-body-sm">
+                @if (request.status === 'PENDING') {
+                  @if (canRaiseErasure()) {
+                    <button
+                      type="button"
+                      class="link"
+                      data-testid="erasure-withdraw"
+                      [disabled]="erasureActionPendingId() === request.id"
+                      (click)="withdrawErasure(request.id)"
+                    >
+                      {{ 'customers.erasure.withdraw' | t }}
+                    </button>
+                  }
+                  @if (canExecuteErasure()) {
+                    <button
+                      type="button"
+                      class="link"
+                      data-testid="erasure-execute"
+                      [disabled]="erasureActionPendingId() === request.id"
+                      (click)="executeErasureRequest(request.id)"
+                    >
+                      {{ 'customers.erasure.execute' | t }}
+                    </button>
+                  }
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="4">
+                {{
+                  loadingErasureRequests()
+                    ? ('customers.loading' | t)
+                    : ('customers.erasure.empty' | t)
+                }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
     }
   }
 </div>

@@ -24,6 +24,8 @@ export interface ReviewSummary {
 }
 
 export interface ReviewFilters {
+  /** Row 5.2h: narrows to one customer's own reviews — the customer detail pane's own tab. */
+  readonly customerAccountId?: string;
   readonly locationId?: string;
   readonly minRating?: number;
   readonly maxRating?: number;
@@ -33,6 +35,7 @@ export interface ReviewFilters {
 
 function toQueryParams(filters: ReviewFilters): QueryParams {
   return {
+    customerAccountId: filters.customerAccountId,
     locationId: filters.locationId,
     minRating: filters.minRating,
     maxRating: filters.maxRating,

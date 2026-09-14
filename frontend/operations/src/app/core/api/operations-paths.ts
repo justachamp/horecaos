@@ -715,6 +715,50 @@ export const operationsPaths = {
   loyaltyLiability(scope: LocationScope): string {
     return `${OPERATIONS}${tenant(scope)}/reports/loyalty-liability`;
   },
+
+  /**
+   * Credit or debit a balance by hand (row 5.2e) — `LoyaltyOperationsController.adjust`,
+   * the same ADR-0031-prefixed controller as {@link customerLoyaltyBalances}.
+   * Mutation: key, `LOYALTY_ADJUST`, and above the configured threshold an
+   * ADR 0027 approval — the response's own `status` says which.
+   */
+  customerLoyaltyAdjustments(scope: LocationScope, accountId: string): string {
+    return `${this.customerLoyaltyBalances(scope, accountId)}/adjustments`;
+  },
+
+  /**
+   * Row 5.2g: every coupon-gated discount this customer has ever held,
+   * tenant-wide (`CustomerDiscountHistoryController`, ADR 0072, row 7.9a) —
+   * `pricing.coupon_redemptions`' own `ix_redemptions_customer` index, read
+   * here for the first time from this console.
+   */
+  customerDiscountHistory(scope: LocationScope, accountId: string): string {
+    return `${OPERATIONS}${tenant(scope)}/customers/${encodeURIComponent(accountId)}/discount-history`;
+  },
+
+  /**
+   * Row 5/X.1: raise (`POST`) or read (`GET`) this customer's own
+   * data-subject erasure requests (`CustomerController`, V0178). The
+   * tenant-wide worklist a merchant has no reason to browse from here stays
+   * behind the control plane; this is the per-account history only.
+   */
+  customerErasureRequests(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/erasure-requests`;
+  },
+
+  /** Withdraw a PENDING request. Mutation: key required. */
+  customerErasureRequestCancel(scope: LocationScope, accountId: string, requestId: string): string {
+    return `${this.customerErasureRequests(scope, accountId)}/${encodeURIComponent(requestId)}/cancel`;
+  },
+
+  /** The transition that actually anonymises the account. Mutation: key and `CUSTOMER_ERASURE_EXECUTE`. */
+  customerErasureRequestExecute(
+    scope: LocationScope,
+    accountId: string,
+    requestId: string,
+  ): string {
+    return `${this.customerErasureRequests(scope, accountId)}/${encodeURIComponent(requestId)}/execute`;
+  },
 } as const;
 
 /**

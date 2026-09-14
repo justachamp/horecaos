@@ -102,6 +102,8 @@ describe('NewOrderPage', () => {
     revealAddresses: ReturnType<typeof vi.fn>;
     addAddress: ReturnType<typeof vi.fn>;
     reorderPlan: ReturnType<typeof vi.fn>;
+    /** Row 5.2d: the reorder deep link's own bootstrap read — no default resolution, only the tests that set query params call it. */
+    profile: ReturnType<typeof vi.fn>;
   };
   let router: Router;
 
@@ -138,6 +140,7 @@ describe('NewOrderPage', () => {
       revealAddresses: vi.fn().mockResolvedValue([]),
       addAddress: vi.fn().mockResolvedValue({ id: 'addr-new' }),
       reorderPlan: vi.fn().mockResolvedValue(null),
+      profile: vi.fn().mockRejectedValue(new Error('no reorder deep link in this test')),
       ...customersOverrides,
     };
     await TestBed.configureTestingModule({
@@ -665,6 +668,74 @@ describe('NewOrderPage', () => {
     expect(reorderPlan).toHaveBeenCalledWith(SCOPE, 'acct-1', 'order-old');
     expect(fixture.componentInstance['basket']()).toHaveLength(1);
     expect(fixture.componentInstance['basket']()[0].quantity).toBe(2);
+  });
+
+  /**
+   * Row 5.2d: the customer detail pane's own «Повторить» (`customer-detail-pane.ts`'s
+   * `reorder`) navigates here with `?reorderAccountId=&reorderOrderId=`
+   * instead of a not-built page. `ngOnInit`'s own `bootstrapReorder` must
+   * pre-select the customer from the deep link and resolve the identical
+   * reorder plan the history popover's own «Повторить» does — proving the
+   * operator lands with the basket already filled, not an empty screen.
+   */
+  it('a reorder deep link pre-selects the customer and fills the basket from the plan', async () => {
+    const reorderPlan = vi.fn().mockResolvedValue({
+      orderId: 'order-old',
+      publicOrderNumber: '#0900',
+      locationId: 'l1',
+      channelCode: 'call-centre',
+      verdict: 'READY',
+      currency: 'UZS',
+      lines: [
+        {
+          lineNumber: 1,
+          productName: 'Cheeseburger',
+          variantName: null,
+          productId: 'p-1',
+          variantId: 'v-1',
+          quantity: 3,
+          modifierOptionIds: [],
+          status: 'AVAILABLE',
+          unitAmountMinor: 30_000,
+          originalUnitAmountMinor: 30_000,
+        },
+      ],
+    });
+    const profile = vi.fn().mockResolvedValue({ value: { displayName: 'Aziza Karimova' } });
+
+    await render(
+      {},
+      { reorderPlan, profile },
+      [],
+      { paymentMethods: {} },
+      { reorderAccountId: 'acct-1', reorderOrderId: 'order-old' },
+    );
+
+    expect(profile).toHaveBeenCalledWith(SCOPE, 'acct-1');
+    expect(fixture.componentInstance['selectedCustomer']()).toEqual({
+      accountId: 'acct-1',
+      label: 'Aziza Karimova',
+    });
+    expect(reorderPlan).toHaveBeenCalledWith(SCOPE, 'acct-1', 'order-old');
+    expect(fixture.componentInstance['basket']()).toHaveLength(1);
+    expect(fixture.componentInstance['basket']()[0].quantity).toBe(3);
+  });
+
+  it('a stale reorder deep link (account no longer resolvable) leaves the customer picker empty rather than blocking the screen', async () => {
+    const profile = vi.fn().mockRejectedValue(new Error('not found'));
+
+    await render(
+      {},
+      { profile },
+      [],
+      { paymentMethods: {} },
+      {
+        reorderAccountId: 'acct-gone',
+        reorderOrderId: 'order-old',
+      },
+    );
+
+    expect(fixture.componentInstance['selectedCustomer']()).toBeNull();
   });
 
   // --------------------------------------------------------- «Заказ агрегатора» (1.3g)

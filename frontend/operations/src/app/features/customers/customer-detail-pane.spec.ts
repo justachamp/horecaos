@@ -5,12 +5,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Versioned } from '../../core/api/aggregate-version';
 import { LocationScope } from '../../core/api/operations-paths';
+import { Auth } from '../../core/auth/auth';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { Capability, SessionCapabilities } from '../../core/auth/session-capabilities';
+import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
+import { BrandProfileApi } from '../settings/brand-profile/brand-profile-api';
+import { ReviewsApi } from './reviews/reviews-api';
 import {
   BlacklistStatus,
   CustomerProfile,
   CustomersApi,
+  LoyaltyBalance,
+  RevealedBlacklistEntry,
   RevealedCustomerAddress,
 } from './customers-api';
 import { CustomerDetailPane } from './customer-detail-pane';
@@ -45,6 +52,24 @@ class FakeCurrentLocation {
   ensureLoaded = vi.fn().mockResolvedValue(undefined);
 }
 
+/** Every capability this pane checks, granted by default — tests that need a denial override with `held`. */
+function fakeCapabilities(
+  held: readonly Capability[] = [
+    'CUSTOMER_MANAGE',
+    'CUSTOMER_PII_REVEAL',
+    'CUSTOMER_ERASURE_EXECUTE',
+    'LOYALTY_ADJUST',
+  ],
+): { has: (capability: Capability) => boolean } {
+  return { has: (capability) => held.includes(capability) };
+}
+
+const FAKE_AUTH = { subject: () => 'operator-subject-1' };
+
+const FAKE_REVIEWS_API = { list: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) };
+
+const FAKE_BRAND_PROFILE_API = { list: vi.fn().mockResolvedValue([]) };
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -66,8 +91,15 @@ describe('CustomerDetailPane', () => {
       recordConsent: vi.fn().mockResolvedValue(undefined),
       eligibility: vi.fn().mockResolvedValue({ eligible: true, refusalReason: null }),
       loyaltyBalances: vi.fn().mockResolvedValue([]),
+      loyaltyEntries: vi.fn().mockResolvedValue([]),
+      adjustLoyalty: vi.fn().mockResolvedValue({ status: 'NOT_REQUIRED', approvalRequestId: null }),
       ordersPage: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
       revealBlacklistHistory: vi.fn().mockResolvedValue([]),
+      discountHistory: vi.fn().mockResolvedValue({ redemptions: [], totalsRedeemed: [] }),
+      erasureRequests: vi.fn().mockResolvedValue([]),
+      requestErasure: vi.fn(),
+      cancelErasure: vi.fn(),
+      executeErasure: vi.fn(),
     };
 
     await TestBed.configureTestingModule({
@@ -76,6 +108,10 @@ describe('CustomerDetailPane', () => {
         provideRouter([]),
         { provide: CustomersApi, useValue: api },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+        { provide: Auth, useValue: FAKE_AUTH },
+        { provide: SessionCapabilities, useValue: fakeCapabilities() },
+        { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+        { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -183,6 +219,10 @@ describe('CustomerDetailPane', () => {
           provideRouter([]),
           { provide: CustomersApi, useValue: api },
           { provide: CurrentLocation, useValue: denied },
+          { provide: Auth, useValue: FAKE_AUTH },
+          { provide: SessionCapabilities, useValue: fakeCapabilities() },
+          { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+          { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
         ],
       })
       .compileComponents();
@@ -234,6 +274,10 @@ describe('CustomerDetailPane', () => {
           provideRouter([]),
           { provide: CustomersApi, useValue: updateApi },
           { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+          { provide: Auth, useValue: FAKE_AUTH },
+          { provide: SessionCapabilities, useValue: fakeCapabilities() },
+          { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+          { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
         ],
       })
       .compileComponents();
@@ -284,5 +328,291 @@ describe('CustomerDetailPane', () => {
     expect(request.longitude).toBe(69.28);
     expect(request.coordinateSource).toBe('CUSTOMER_PIN');
     expect(request.fields.line1).toBe('Amir Temur ko’chasi 14');
+  });
+
+  function tabByLabel(host: HTMLElement, label: string): HTMLButtonElement {
+    return Array.from(host.querySelectorAll('.tab')).find(
+      (tab) => tab.textContent?.trim() === label,
+    ) as HTMLButtonElement;
+  }
+
+  /**
+   * Row 5.2i: `RevealedBlacklistEntry` carries `actorType`, `actorId`,
+   * `expiresAt`, `liftedAt`, `liftedByActorId` and `liftReason` — the pane
+   * used to render only `reason`, `status` and `createdAt`. This pins that
+   * the rest of the row — «a row whose own title is reason, actor, expiry» —
+   * actually reaches the page.
+   */
+  it('the blacklist history renders the actor, the expiry and the lift reason', async () => {
+    const entry: RevealedBlacklistEntry = {
+      id: 'entry-1',
+      reason: 'Repeated no-shows',
+      status: 'LIFTED',
+      actorType: 'USER',
+      actorId: 'operator-subject-9',
+      createdAt: '2026-08-01T10:00:00Z',
+      expiresAt: '2026-09-01T10:00:00Z',
+      liftedAt: '2026-08-20T10:00:00Z',
+      liftedByActorId: 'operator-subject-3',
+      liftReason: 'Customer called in, apologised',
+    };
+    const historyApi = { ...api, revealBlacklistHistory: vi.fn().mockResolvedValue([entry]) };
+
+    await TestBed.resetTestingModule()
+      .configureTestingModule({
+        imports: [CustomerDetailPane],
+        providers: [
+          provideRouter([]),
+          { provide: CustomersApi, useValue: historyApi },
+          { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+          { provide: Auth, useValue: FAKE_AUTH },
+          { provide: SessionCapabilities, useValue: fakeCapabilities() },
+          { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+          { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
+        ],
+      })
+      .compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    const blacklistFixture = TestBed.createComponent(CustomerDetailPane);
+    blacklistFixture.componentRef.setInput('accountId', 'customer-1');
+    blacklistFixture.detectChanges();
+    await flushMicrotasks();
+    blacklistFixture.detectChanges();
+
+    const host: HTMLElement = blacklistFixture.nativeElement;
+    tabByLabel(host, 'Blacklist').click();
+    blacklistFixture.detectChanges();
+    await flushMicrotasks();
+    blacklistFixture.detectChanges();
+
+    const revealButton = Array.from(host.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Reveal',
+    ) as HTMLButtonElement;
+    revealButton.click();
+    blacklistFixture.detectChanges();
+    await flushMicrotasks();
+    blacklistFixture.detectChanges();
+
+    expect(historyApi.revealBlacklistHistory).toHaveBeenCalled();
+    const entryCard = host.querySelector('[data-testid="blacklist-history-entry"]') as HTMLElement;
+    expect(entryCard.textContent).toContain('operator-subject-9');
+    expect(
+      entryCard.querySelector('[data-testid="blacklist-history-expiry"]')?.textContent,
+    ).toContain('until');
+    expect(
+      entryCard.querySelector('[data-testid="blacklist-history-lift"]')?.textContent,
+    ).toContain('operator-subject-3');
+    expect(
+      entryCard.querySelector('[data-testid="blacklist-history-lift-reason"]')?.textContent,
+    ).toContain('Customer called in, apologised');
+  });
+
+  /**
+   * Row 5.2e: "per-brand separation is the endpoint's whole point and two
+   * brands render as two indistinguishable cards" — this pins that the
+   * fix holds: two balances with different `brandId`s render two visibly
+   * different labels, not the same text twice.
+   */
+  it('per-brand balance cards are distinguishable by their own brand label', async () => {
+    const balances: readonly LoyaltyBalance[] = [
+      {
+        accountId: 'loy-1',
+        brandId: 'brand-burger',
+        balance: { amountMinor: 10_000, currency: 'UZS' },
+        spendable: { amountMinor: 10_000, currency: 'UZS' },
+        held: { amountMinor: 0, currency: 'UZS' },
+        nextExpiryAt: null,
+        nextExpiryAmount: { amountMinor: 0, currency: 'UZS' },
+      },
+      {
+        accountId: 'loy-2',
+        brandId: 'brand-coffee',
+        balance: { amountMinor: 20_000, currency: 'UZS' },
+        spendable: { amountMinor: 20_000, currency: 'UZS' },
+        held: { amountMinor: 0, currency: 'UZS' },
+        nextExpiryAt: null,
+        nextExpiryAmount: { amountMinor: 0, currency: 'UZS' },
+      },
+    ];
+    const balancesApi = { ...api, loyaltyBalances: vi.fn().mockResolvedValue(balances) };
+    const brandProfiles = {
+      list: vi.fn().mockResolvedValue([
+        { id: 'brand-burger', displayName: 'Burger House' },
+        { id: 'brand-coffee', displayName: 'Coffee Corner' },
+      ]),
+    };
+
+    await TestBed.resetTestingModule()
+      .configureTestingModule({
+        imports: [CustomerDetailPane],
+        providers: [
+          provideRouter([]),
+          { provide: CustomersApi, useValue: balancesApi },
+          { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+          { provide: Auth, useValue: FAKE_AUTH },
+          { provide: SessionCapabilities, useValue: fakeCapabilities() },
+          { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+          { provide: BrandProfileApi, useValue: brandProfiles },
+        ],
+      })
+      .compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    const cashbackFixture = TestBed.createComponent(CustomerDetailPane);
+    cashbackFixture.componentRef.setInput('accountId', 'customer-1');
+    cashbackFixture.detectChanges();
+    await flushMicrotasks();
+    cashbackFixture.detectChanges();
+
+    const host: HTMLElement = cashbackFixture.nativeElement;
+    tabByLabel(host, 'Cashback').click();
+    cashbackFixture.detectChanges();
+    await flushMicrotasks();
+    cashbackFixture.detectChanges();
+
+    const brandLabels = Array.from(
+      host.querySelectorAll('[data-testid="cashback-balance-brand"]'),
+    ).map((el) => el.textContent?.trim());
+    expect(brandLabels).toEqual(['Burger House', 'Coffee Corner']);
+  });
+
+  /**
+   * Row 5.2e: "ledger rows also print entry.amountMinor raw while the
+   * balance above uses formatMoney, so the two numbers look like different
+   * currencies" — a raw `5000` and a formatted `5 000 UZS` are the two
+   * possible renders, and this pins the formatted one.
+   */
+  it('formats entry.amountMinor in the enclosing balance’s own currency', async () => {
+    const balance: LoyaltyBalance = {
+      accountId: 'loy-1',
+      brandId: 'brand-burger',
+      balance: { amountMinor: 10_000, currency: 'UZS' },
+      spendable: { amountMinor: 10_000, currency: 'UZS' },
+      held: { amountMinor: 0, currency: 'UZS' },
+      nextExpiryAt: null,
+      nextExpiryAmount: { amountMinor: 0, currency: 'UZS' },
+    };
+    const entriesApi = {
+      ...api,
+      loyaltyBalances: vi.fn().mockResolvedValue([balance]),
+      loyaltyEntries: vi.fn().mockResolvedValue([
+        {
+          id: 'entry-1',
+          entryType: 'ACCRUAL',
+          amountMinor: 5_000,
+          balanceAfterMinor: 15_000,
+          lotId: null,
+          orderId: null,
+          tenderId: null,
+          reasonCode: null,
+          occurredAt: '2026-09-01T10:00:00Z',
+        },
+      ]),
+    };
+
+    await TestBed.resetTestingModule()
+      .configureTestingModule({
+        imports: [CustomerDetailPane],
+        providers: [
+          provideRouter([]),
+          { provide: CustomersApi, useValue: entriesApi },
+          { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+          { provide: Auth, useValue: FAKE_AUTH },
+          { provide: SessionCapabilities, useValue: fakeCapabilities() },
+          { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+          { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
+        ],
+      })
+      .compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    const ledgerFixture = TestBed.createComponent(CustomerDetailPane);
+    ledgerFixture.componentRef.setInput('accountId', 'customer-1');
+    ledgerFixture.detectChanges();
+    await flushMicrotasks();
+    ledgerFixture.detectChanges();
+
+    const host: HTMLElement = ledgerFixture.nativeElement;
+    tabByLabel(host, 'Cashback').click();
+    ledgerFixture.detectChanges();
+    await flushMicrotasks();
+    ledgerFixture.detectChanges();
+
+    const showLedger = Array.from(host.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Show ledger',
+    ) as HTMLButtonElement;
+    showLedger.click();
+    ledgerFixture.detectChanges();
+    await flushMicrotasks();
+    ledgerFixture.detectChanges();
+
+    const amountCell = host.querySelector('[data-testid="cashback-entry-amount"]') as HTMLElement;
+    const expectedFormatted = formatMoney({ amountMinor: 5_000, currency: 'UZS' }, 'en', {
+      withUnit: true,
+    });
+    expect(amountCell.textContent).toContain(expectedFormatted);
+    expect(amountCell.textContent?.trim()).not.toBe('5000');
+  });
+
+  /**
+   * Row 5/X.1: `CUSTOMER_ERASURE_EXECUTE` is a deliberately narrower
+   * capability than the one that raises and withdraws a request (`Capability.java`'s
+   * own doc on the split) — the Execute action must disappear without it
+   * while Raise stays available.
+   */
+  it('gates the erasure section’s Execute action on CUSTOMER_ERASURE_EXECUTE', async () => {
+    const pendingRequest = {
+      id: 'erasure-1',
+      status: 'PENDING',
+      requestedVia: 'OPERATIONS',
+      requestedByActorType: 'USER',
+      requestedByActorId: 'operator-subject-1',
+      requestedAt: '2026-09-10T10:00:00Z',
+      completedAt: null,
+      completedByActorId: null,
+      cancelledAt: null,
+      cancelledByActorId: null,
+    };
+    const erasureApi = { ...api, erasureRequests: vi.fn().mockResolvedValue([pendingRequest]) };
+
+    async function renderWithCapabilities(
+      held: readonly Capability[],
+    ): Promise<{ fixture: ComponentFixture<CustomerDetailPane>; host: HTMLElement }> {
+      await TestBed.resetTestingModule()
+        .configureTestingModule({
+          imports: [CustomerDetailPane],
+          providers: [
+            provideRouter([]),
+            { provide: CustomersApi, useValue: erasureApi },
+            { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+            { provide: Auth, useValue: FAKE_AUTH },
+            { provide: SessionCapabilities, useValue: fakeCapabilities(held) },
+            { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+            { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
+          ],
+        })
+        .compileComponents();
+      TestBed.inject(I18n).setLocale('en');
+      const erasureFixture = TestBed.createComponent(CustomerDetailPane);
+      erasureFixture.componentRef.setInput('accountId', 'customer-1');
+      erasureFixture.detectChanges();
+      await flushMicrotasks();
+      erasureFixture.detectChanges();
+
+      const host: HTMLElement = erasureFixture.nativeElement;
+      tabByLabel(host, 'Data erasure').click();
+      erasureFixture.detectChanges();
+      await flushMicrotasks();
+      erasureFixture.detectChanges();
+      return { fixture: erasureFixture, host };
+    }
+
+    const withoutExecute = await renderWithCapabilities(['CUSTOMER_MANAGE']);
+    expect(withoutExecute.host.querySelector('[data-testid="erasure-execute"]')).toBeNull();
+    expect(withoutExecute.host.querySelector('[data-testid="erasure-withdraw"]')).not.toBeNull();
+
+    const withExecute = await renderWithCapabilities([
+      'CUSTOMER_MANAGE',
+      'CUSTOMER_ERASURE_EXECUTE',
+    ]);
+    expect(withExecute.host.querySelector('[data-testid="erasure-execute"]')).not.toBeNull();
   });
 });

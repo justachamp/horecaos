@@ -51,11 +51,14 @@ public class OperationsReviewController {
     @Operation(
             summary = "This brand's reviews, newest first, filtered",
             description = "Every filter is optional. Cursor-paginated per ADR 0031: pass the "
-                    + "previous page's nextCursor, and a null nextCursor is the end.")
+                    + "previous page's nextCursor, and a null nextCursor is the end. Row 5.2h: "
+                    + "pass customerAccountId to narrow to one customer's own reviews — the "
+                    + "customer detail pane's own tab.")
     @SuppressWarnings("checkstyle:ParameterNumber")
     public Page<ReviewResponse> list(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
+            @RequestParam(required = false) UUID customerAccountId,
             @RequestParam(required = false) UUID locationId,
             @RequestParam(required = false) Integer minRating,
             @RequestParam(required = false) Integer maxRating,
@@ -69,7 +72,16 @@ public class OperationsReviewController {
         List<ReviewView> rows;
         try {
             rows = reviews.list(
-                    tenantId, brandId, locationId, minRating, maxRating, submittedFrom, submittedTo, cursor, pageSize);
+                    tenantId,
+                    brandId,
+                    customerAccountId,
+                    locationId,
+                    minRating,
+                    maxRating,
+                    submittedFrom,
+                    submittedTo,
+                    cursor,
+                    pageSize);
         } catch (UnknownCursorException unusable) {
             throw new ApiException(ErrorCode.INVALID_REQUEST, unusable.getMessage());
         }
