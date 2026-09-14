@@ -43,6 +43,52 @@ export function formatClock(instant: Date, zone: TimeZone): string {
 }
 
 /**
+ * The UTC instant for a wall clock reading in a named zone — the inverse of
+ * {@link formatTime} and the rest of this file's instant-to-zone direction.
+ *
+ * `hoursFromMidnight` may be fractional (`19.5` = 19:30) and may fall outside
+ * `[0, 24)`: `24` is the next calendar day's `00:00`, `-1` the previous day's
+ * `23:00`. `Date.UTC` normalises the overflow on its own, which is exactly
+ * what a service window that closes after midnight needs — see
+ * `reservations-page.ts`'s day-window comment for the booking screen this
+ * exists for.
+ *
+ * Computed by a first guess-then-correct pass rather than one lookup, because
+ * `Intl` converts instant-to-zone, never the other way: treat the wall clock
+ * as if it were already UTC, read the zone's offset at that instant, and
+ * shift by it. Exact for a zone with no DST transition at that moment —
+ * `Asia/Tashkent` has none, ever — and off by at most the transition's own
+ * size for the rare wall-clock hour a DST jump makes ambiguous or
+ * non-existent, which every zone this platform trades in as of ADR 0055
+ * (`docs/adr/meta/0055-greenfield-launch-scope.md`) avoids entirely.
+ */
+export function zonedTimeToInstant(
+  dateIso: string,
+  hoursFromMidnight: number,
+  zone: TimeZone,
+): Date {
+  const [year, month, day] = dateIso.split('-').map(Number);
+  const totalMinutes = Math.round(hoursFromMidnight * 60);
+  const naiveUtc = Date.UTC(year, month - 1, day, 0, totalMinutes, 0);
+  const offsetMinutes = offsetMinutesEastOfUtc(new Date(naiveUtc), zone);
+  return new Date(naiveUtc - offsetMinutes * 60_000);
+}
+
+/** Minutes to ADD to a UTC instant to read the zone's local wall clock (positive east of UTC, e.g. +300 for Tashkent). */
+function offsetMinutesEastOfUtc(instant: Date, zone: TimeZone): number {
+  const parts = zonedParts(instant, zone);
+  const asUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second),
+  );
+  return (asUtc - instant.getTime()) / 60_000;
+}
+
+/**
  * A duration in whole minutes, as `12 мин` or `1 ч 04 мин`.
  *
  * The minutes are zero-padded past the hour so that a column of durations stays

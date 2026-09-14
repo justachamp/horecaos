@@ -105,6 +105,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'reservations.denied': 'Ushbu filial bronlariga kirish huquqi yoʻq',
   'reservations.loadError': 'Kunlik rejani yuklab boʻlmadi',
   'reservations.noTables': 'Bu filialda hali stollar sozlanmagan',
+  'reservations.closedToday': 'Filial jadvaliga koʻra bu kuni yopiq',
   'reservations.grid.time': 'Vaqt',
   'reservations.detail.title': 'Bron',
   'reservations.detail.time': 'Vaqt',
@@ -113,8 +114,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'reservations.detail.status': 'Holati',
   'reservations.detail.id': 'Bron raqami',
   'reservations.detail.edit': 'Bronni tahrirlash',
-  'reservations.detail.seatNotBuilt':
-    'Mehmonni oʻtqazish va bronni yakunlash stol sessiyasi orqali amalga oshiriladi — bu konsolda hali qurilmagan alohida ekran.',
+  'reservations.detail.guestName': 'Mehmon ismi',
+  'reservations.detail.guestPhone': 'Telefon',
+  'reservations.detail.guestNote': 'Izoh',
+  'reservations.detail.revealGuest': 'Mehmon maʼlumotlarini koʻrsatish',
+  'reservations.detail.revealing': 'Yuklanmoqda…',
+  'reservations.detail.guestRevealError': 'Mehmon maʼlumotlarini yuklab boʻlmadi',
   'reservations.status.REQUESTED': 'Soʻralgan',
   'reservations.status.CONFIRMED': 'Tasdiqlangan',
   'reservations.status.REJECTED': 'Rad etilgan',
@@ -126,10 +131,14 @@ export const messagesUzLatn: MessageCatalogue = {
   'reservations.action.reject': 'Rad etish',
   'reservations.action.cancel': 'Bekor qilish',
   'reservations.action.noShow': 'Kelmadi',
+  'reservations.action.complete': 'Yakunlangan deb belgilash',
+  'reservations.action.seat': 'Mehmonlarni oʻtqazish',
+  'reservations.seat.title': 'Mehmonlarni oʻtqazish',
+  'reservations.seat.confirm': 'Oʻtqazish',
   'reservations.form.title': 'Yangi bron',
   'reservations.form.editTitle': 'Bronni tahrirlash',
   'reservations.form.editHint':
-    'Mehmon ismi, telefoni va izohini bu yerda oʻzgartirib boʻlmaydi — buni tuzatish uchun bronni bekor qilib, qayta yarating.',
+    'Mehmon ismi, telefoni yoki izohini boʻsh qoldiring — brondagi qiymat saqlanadi; faqat tuzatish kerak boʻlgan maydonni toʻldiring.',
   'reservations.form.guestName': 'Mehmon ismi',
   'reservations.form.guestPhone': 'Telefon',
   'reservations.form.secondaryPhone': 'Qoʻshimcha telefon',
@@ -965,10 +974,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.tab.templates': 'Shablonlar',
   'settings.notifications.tab.routing': 'Yoʻnaltirish',
   'settings.notifications.automation.title': 'Avtomatlashtirish',
-  'settings.notifications.field.paymentLinkAutoSend': 'Toʻlov havolasini mijozga avtomatik yuborish',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Toʻlov havolasini mijozga avtomatik yuborish',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Hali ishlamaydi: hech qanday jarayon bu tugmachani hali oʻqimaydi, shuning uchun yoqish faqat tanlovni saqlaydi.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Agregator smenasi ochilishi/yopilishi haqida xabar berish',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Agregator smenasi ochilishi/yopilishi haqida xabar berish',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Hali ishlamaydi: platformada bu xabarni ishga tushiradigan agregator-smena hodisasi hali yoʻq.',
   'settings.notifications.create.action': 'Yangi shablon',
@@ -1014,7 +1025,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.editor.subject': 'Mavzu',
   'settings.notifications.editor.body': 'Matn',
   'settings.notifications.editor.variables': 'Oʻzgaruvchi qoʻshish',
-  'settings.notifications.editor.variables.empty': 'Bu bildirishnoma sinfi uchun oʻzgaruvchilar taklif etilmagan.',
+  'settings.notifications.editor.variables.empty':
+    'Bu bildirishnoma sinfi uchun oʻzgaruvchilar taklif etilmagan.',
   'settings.notifications.editor.preview': 'Mijoz qanday koʻradi',
   'settings.notifications.editor.save': 'Qoralamani saqlash',
   'settings.notifications.editor.saving': 'Saqlanmoqda…',
@@ -1033,9 +1045,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.testSend.result.ACCEPTED': 'Provayder qabul qildi.',
   'settings.notifications.testSend.result.REJECTED': 'Provayder rad etdi.',
   'settings.notifications.testSend.result.RETRYABLE': 'Uzatish xatosi — qayta urinib koʻring.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Noaniq — provayder allaqachon yuborgan boʻlishi mumkin.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Noaniq — provayder allaqachon yuborgan boʻlishi mumkin.',
   'settings.notifications.activate.confirm.title': 'Bu versiya faollashtirilsinmi?',
-  'settings.notifications.activate.confirm.body': 'Bu shablon boʻyicha har bir xabar shu matndan foydalanadi.',
+  'settings.notifications.activate.confirm.body':
+    'Bu shablon boʻyicha har bir xabar shu matndan foydalanadi.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'Bu versiya SMS shlyuzida hali «{state}» holatida. Bu oʻzgarmaguncha faollashtirish uni yuborilishiga olib kelmaydi.',
   'settings.notifications.activate.confirm.confirm': 'Faollashtirish',
@@ -1056,9 +1070,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.routing.action.editTopic': 'Mavzuni oʻzgartirish',
   'settings.notifications.routing.action.unbind': 'Uzish',
   'settings.notifications.routing.unbind.confirm.title': 'Bu chat uzilsinmi?',
-  'settings.notifications.routing.unbind.confirm.body': 'U darhol barcha hodisa sinflarini olishni toʻxtatadi.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'U darhol barcha hodisa sinflarini olishni toʻxtatadi.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Uzish',
-  'settings.notifications.routing.topic.prompt': 'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
+  'settings.notifications.routing.topic.prompt':
+    'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
   'settings.notifications.routing.topic.save': 'Saqlash',
 
   // 10.10 Maʻlumotnoma maʻlumotlari
@@ -1758,7 +1774,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.menus.filter.all': 'Barchasi',
   'catalog.menus.search.placeholder': 'Nomi yoki SKU boʻyicha qidirish',
   'catalog.menus.selectAll': 'Barcha qatorlarni tanlash',
-  'catalog.menus.selectionCapped': 'Faqat birinchi {cap} tasi — qo\'llang, so\'ng qolganlarini tanlang',
+  'catalog.menus.selectionCapped':
+    "Faqat birinchi {cap} tasi — qo'llang, so'ng qolganlarini tanlang",
   'catalog.menus.column.offering': 'Menyudagi holati',
   'catalog.menus.column.fulfillment': 'Buyurtma turlari',
   'catalog.menus.fulfillment.DELIVERY': 'Yetk',
@@ -2149,7 +2166,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.dispatch.hint':
     'Buyurtmani kuryer ustiga tashlab tayinlang. Uni orqaga, "Tayinlanmagan"ga tashlab, tayinlashni bekor qiling.',
   'delivery.dispatch.column.unassigned': 'Tayinlanmagan',
-  'delivery.dispatch.column.ineligible': 'Bu yerga tashlab bo\'lmaydi — {reason}',
+  'delivery.dispatch.column.ineligible': "Bu yerga tashlab bo'lmaydi — {reason}",
   'delivery.dispatch.action.unassign': 'Tayinlashni bekor qilish',
   'delivery.dispatch.status.PLANNED': 'Rejalashtirilgan',
   'delivery.dispatch.status.WAITING_TO_SOURCE': 'Kuryer izlanmoqda',

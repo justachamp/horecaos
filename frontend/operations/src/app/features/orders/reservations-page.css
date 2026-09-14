@@ -133,6 +133,10 @@
   word-break: break-all;
 }
 
+.reservations__guest {
+  margin-bottom: 12px;
+}
+
 .reservations__actions {
   display: flex;
   flex-wrap: wrap;
