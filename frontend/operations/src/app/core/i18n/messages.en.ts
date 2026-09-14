@@ -2841,6 +2841,8 @@ export const messagesEn = {
   'staff.action.addJob': 'Change job',
   'staff.action.suspend': 'Suspend access',
   'staff.action.restore': 'Restore access',
+  'staff.action.resendInvite': 'Resend invitation',
+  'staff.action.revokeInvite': 'Revoke invitation',
   'staff.action.remove': 'Remove',
 
   'staff.chip.you': 'You',
@@ -2868,10 +2870,12 @@ export const messagesEn = {
   'staff.status.ok': 'All fine',
   'staff.status.revoked': 'Access revoked',
   'staff.status.expiring': 'Expiring soon',
+  'staff.status.invited': 'Invited',
 
   'staff.row.revoked.reason': 'Access revoked: {reason}',
   'staff.row.revoked.noReason': 'Access revoked',
   'staff.row.expiring': 'Expires {date}',
+  'staff.row.invited': 'Has not set up their account yet',
 
   'staff.telegram.linked': 'Telegram linked',
   'staff.telegram.notLinked': 'Telegram not linked',
@@ -2918,6 +2922,14 @@ export const messagesEn = {
   'staff.accessDialog.reason.label': 'Why?',
   'staff.accessDialog.reason.placeholder': 'For example: moved to the Yunusobod branch',
   'staff.accessDialog.reason.required': 'A reason is required',
+  'staff.accessDialog.resendInvite.title': 'Resend the invitation',
+  'staff.accessDialog.resendInvite.body':
+    'A fresh link will be created; the one already sent stops working.',
+  'staff.accessDialog.resendInvite.confirm': 'Resend',
+  'staff.accessDialog.revokeInvite.title': 'Revoke the invitation',
+  'staff.accessDialog.revokeInvite.body':
+    'This cancels the invitation and revokes the job it was for. The link already sent stops working.',
+  'staff.accessDialog.revokeInvite.confirm': 'Revoke',
 
   'staff.inviteDialog.title': 'Invite',
   'staff.inviteDialog.body':

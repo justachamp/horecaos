@@ -155,45 +155,67 @@
                     class="status-pill"
                     [class.status-pill--revoked]="statusOfPerson(person).kind === 'ALL_REVOKED'"
                     [class.status-pill--expiring]="statusOfPerson(person).kind === 'EXPIRING_SOON'"
+                    [class.status-pill--invited]="statusOfPerson(person).kind === 'INVITED'"
                   >
                     {{
                       (statusOfPerson(person).kind === 'ALL_REVOKED'
                         ? 'staff.status.revoked'
                         : statusOfPerson(person).kind === 'EXPIRING_SOON'
                           ? 'staff.status.expiring'
-                          : 'staff.status.ok'
+                          : statusOfPerson(person).kind === 'INVITED'
+                            ? 'staff.status.invited'
+                            : 'staff.status.ok'
                       ) | t
                     }}
                   </span>
                 </td>
                 <td class="row-actions" (click)="$event.stopPropagation()">
                   @if (!isSelf(person.principalSubject)) {
-                    <button
-                      type="button"
-                      class="text-button"
-                      (click)="openJobDialog(person.principalSubject)"
-                      data-testid="staff-row-add-job"
-                    >
-                      {{ 'staff.action.addJob' | t }}
-                    </button>
-                    @if (statusOfPerson(person).kind !== 'ALL_REVOKED') {
+                    @if (pendingInvitationOf(person.principalSubject); as invitation) {
+                      <button
+                        type="button"
+                        class="text-button"
+                        (click)="openResendInviteDialog(person.principalSubject)"
+                        data-testid="staff-row-resend-invite"
+                      >
+                        {{ 'staff.action.resendInvite' | t }}
+                      </button>
                       <button
                         type="button"
                         class="text-button text-button--destructive"
-                        (click)="openSuspendDialog(person.principalSubject)"
-                        data-testid="staff-row-suspend"
+                        (click)="openRevokeInviteDialog(person.principalSubject)"
+                        data-testid="staff-row-revoke-invite"
                       >
-                        {{ 'staff.action.suspend' | t }}
+                        {{ 'staff.action.revokeInvite' | t }}
                       </button>
                     } @else {
                       <button
                         type="button"
                         class="text-button"
-                        (click)="openRestoreDialog(person.principalSubject)"
-                        data-testid="staff-row-restore"
+                        (click)="openJobDialog(person.principalSubject)"
+                        data-testid="staff-row-add-job"
                       >
-                        {{ 'staff.action.restore' | t }}
+                        {{ 'staff.action.addJob' | t }}
                       </button>
+                      @if (statusOfPerson(person).kind !== 'ALL_REVOKED') {
+                        <button
+                          type="button"
+                          class="text-button text-button--destructive"
+                          (click)="openSuspendDialog(person.principalSubject)"
+                          data-testid="staff-row-suspend"
+                        >
+                          {{ 'staff.action.suspend' | t }}
+                        </button>
+                      } @else {
+                        <button
+                          type="button"
+                          class="text-button"
+                          (click)="openRestoreDialog(person.principalSubject)"
+                          data-testid="staff-row-restore"
+                        >
+                          {{ 'staff.action.restore' | t }}
+                        </button>
+                      }
                     }
                   }
                 </td>

@@ -2829,6 +2829,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.action.addJob': 'Lavozimni oʻzgartirish',
   'staff.action.suspend': 'Kirish huquqini toʻxtatish',
   'staff.action.restore': 'Kirish huquqini qaytarish',
+  'staff.action.resendInvite': 'Taklifni qayta yuborish',
+  'staff.action.revokeInvite': 'Taklifni bekor qilish',
   'staff.action.remove': 'Olib tashlash',
 
   'staff.chip.you': 'Siz',
@@ -2856,10 +2858,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.status.ok': 'Hammasi joyida',
   'staff.status.revoked': 'Kirish huquqi bekor qilingan',
   'staff.status.expiring': 'Muddati tugamoqda',
+  'staff.status.invited': 'Taklif qilingan',
 
   'staff.row.revoked.reason': 'Kirish huquqi bekor qilingan: {reason}',
   'staff.row.revoked.noReason': 'Kirish huquqi bekor qilingan',
   'staff.row.expiring': 'Muddati {date} da tugaydi',
+  'staff.row.invited': 'Hali hisobini sozlamagan',
 
   'staff.telegram.linked': 'Telegram bogʻlangan',
   'staff.telegram.notLinked': 'Telegram bogʻlanmagan',
@@ -2907,6 +2911,14 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.accessDialog.reason.label': 'Nima uchun?',
   'staff.accessDialog.reason.placeholder': 'Masalan: Yunusobod filialiga koʻchirildi',
   'staff.accessDialog.reason.required': 'Sabab kiritilishi shart',
+  'staff.accessDialog.resendInvite.title': 'Taklifni qayta yuborish',
+  'staff.accessDialog.resendInvite.body':
+    'Yangi havola yaratiladi; allaqachon yuborilgani ishlamay qoladi.',
+  'staff.accessDialog.resendInvite.confirm': 'Yuborish',
+  'staff.accessDialog.revokeInvite.title': 'Taklifni bekor qilish',
+  'staff.accessDialog.revokeInvite.body':
+    'Bu taklifni bekor qiladi va u uchun berilgan lavozimni qaytarib oladi. Allaqachon yuborilgan havola ishlamay qoladi.',
+  'staff.accessDialog.revokeInvite.confirm': 'Bekor qilish',
 
   'staff.inviteDialog.title': 'Taklif qilish',
   'staff.inviteDialog.body':

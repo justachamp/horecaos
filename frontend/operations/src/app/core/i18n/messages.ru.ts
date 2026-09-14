@@ -2812,6 +2812,8 @@ export const messagesRu: MessageCatalogue = {
   'staff.action.addJob': 'Изменить должность',
   'staff.action.suspend': 'Приостановить доступ',
   'staff.action.restore': 'Вернуть доступ',
+  'staff.action.resendInvite': 'Отправить приглашение повторно',
+  'staff.action.revokeInvite': 'Отозвать приглашение',
   'staff.action.remove': 'Убрать',
 
   'staff.chip.you': 'Вы',
@@ -2839,10 +2841,12 @@ export const messagesRu: MessageCatalogue = {
   'staff.status.ok': 'Всё в порядке',
   'staff.status.revoked': 'Доступ отозван',
   'staff.status.expiring': 'Заканчивается',
+  'staff.status.invited': 'Приглашён',
 
   'staff.row.revoked.reason': 'Доступ отозван: {reason}',
   'staff.row.revoked.noReason': 'Доступ отозван',
   'staff.row.expiring': 'Заканчивается {date}',
+  'staff.row.invited': 'Ещё не настроил учётную запись',
 
   'staff.telegram.linked': 'Telegram привязан',
   'staff.telegram.notLinked': 'Telegram не привязан',
@@ -2889,6 +2893,14 @@ export const messagesRu: MessageCatalogue = {
   'staff.accessDialog.reason.label': 'Почему?',
   'staff.accessDialog.reason.placeholder': 'Например: перевод в Юнусабад',
   'staff.accessDialog.reason.required': 'Причина обязательна',
+  'staff.accessDialog.resendInvite.title': 'Отправить приглашение повторно',
+  'staff.accessDialog.resendInvite.body':
+    'Будет создана новая ссылка; уже отправленная перестанет работать.',
+  'staff.accessDialog.resendInvite.confirm': 'Отправить',
+  'staff.accessDialog.revokeInvite.title': 'Отозвать приглашение',
+  'staff.accessDialog.revokeInvite.body':
+    'Приглашение будет отменено, а должность, для которой оно было создано, — отозвана. Уже отправленная ссылка перестанет работать.',
+  'staff.accessDialog.revokeInvite.confirm': 'Отозвать',
 
   'staff.inviteDialog.title': 'Пригласить',
   'staff.inviteDialog.body':

@@ -48,7 +48,15 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
-function makeApi(grants: readonly GrantView[]) {
+function makeApi(
+  grants: readonly GrantView[],
+  invitations: readonly {
+    invitationId: string;
+    principalSubject: string;
+    state: string;
+    invitedAt: string;
+  }[] = [],
+) {
   return {
     listGrants: vi.fn().mockResolvedValue(grants),
     roles: vi
@@ -63,11 +71,26 @@ function makeApi(grants: readonly GrantView[]) {
     telegramLinks: vi.fn().mockResolvedValue([]),
     grant: vi.fn().mockResolvedValue({ grantId: 'new-grant' }),
     revoke: vi.fn().mockResolvedValue({ changed: true, outcome: 'revoked' }),
+    staffInvitations: vi.fn().mockResolvedValue(invitations),
+    invite: vi.fn(),
+    resendStaffInvitation: vi
+      .fn()
+      .mockResolvedValue({ inviteLink: 'https://ops.example.uz/invite#token=fresh' }),
+    revokeStaffInvitation: vi.fn().mockResolvedValue({ changed: true }),
   };
 }
 
-async function setUp(grants: readonly GrantView[], subject = 'the-operator') {
-  const api = makeApi(grants);
+async function setUp(
+  grants: readonly GrantView[],
+  subject = 'the-operator',
+  invitations: readonly {
+    invitationId: string;
+    principalSubject: string;
+    state: string;
+    invitedAt: string;
+  }[] = [],
+) {
+  const api = makeApi(grants, invitations);
   await TestBed.configureTestingModule({
     imports: [StaffPage],
     providers: [
@@ -222,5 +245,46 @@ describe('StaffPage', () => {
         reason: 'Second branch',
       }),
     );
+  });
+
+  it('shows «Приглашён» and resend/revoke instead of add-job/suspend for a person with an open invitation (ADR 0116)', async () => {
+    const { fixture, api } = await setUp(
+      [grant({ principalSubject: 'staff-1', roleCode: 'location-staff' })],
+      'the-operator',
+      [
+        {
+          invitationId: 'inv-1',
+          principalSubject: 'staff-1',
+          state: 'SENT',
+          invitedAt: '2026-09-14T09:00:00Z',
+        },
+      ],
+    );
+
+    expect(fixture.nativeElement.textContent).toContain('Приглашён');
+    expect(fixture.nativeElement.querySelector('[data-testid="staff-row-add-job"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="staff-row-suspend"]')).toBeNull();
+
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="staff-row-revoke-invite"]',
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    const reasonInput = fixture.nativeElement.querySelector(
+      '[data-testid="staff-access-dialog-reason"]',
+    ) as HTMLInputElement;
+    reasonInput.value = 'Changed their mind';
+    reasonInput.dispatchEvent(new Event('input'));
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="staff-access-dialog-confirm"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.revokeStaffInvitation).toHaveBeenCalledWith('t1', 'inv-1', 'Changed their mind');
   });
 });
