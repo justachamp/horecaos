@@ -200,6 +200,14 @@
   background: var(--q-error);
 }
 
+/* Wave P08, row X.34/0.1f: the accelerator's own state, plus `updatedAt` —
+   see `service-status.ts`'s doc for why that stamp had no home before this. */
+.realtime-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* Houses the (optional) location picker and the always-present locale
    picker, hugging the right edge together — see `shell.ts`'s doc comment on
    why the location half of settings.md §1.1's scope bar lives here. */

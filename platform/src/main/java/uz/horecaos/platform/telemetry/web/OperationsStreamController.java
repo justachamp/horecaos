@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -116,10 +117,12 @@ public class OperationsStreamController {
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
-            @RequestParam(name = "scope", required = false) String scope,
+            @RequestParam(name = "scope", required = false) @Nullable String scope,
             @RequestParam(name = "channels") List<String> channels,
-            @RequestHeader(name = "Last-Event-Id", required = false) String lastEventId,
-            @AuthenticationPrincipal Jwt token) {
+            @RequestHeader(name = "Last-Event-Id", required = false) @Nullable String lastEventId,
+            // Genuinely nullable: tokenExpiry(Jwt) already null-checks it below,
+            // for a request whose token failed to resolve as a Jwt principal.
+            @AuthenticationPrincipal @Nullable Jwt token) {
 
         String subject = currentActor.get().subject();
 
@@ -203,7 +206,7 @@ public class OperationsStreamController {
         return subscriptions;
     }
 
-    private static ScopeKey parseScope(String scope, UUID locationId) {
+    private static ScopeKey parseScope(@Nullable String scope, UUID locationId) {
         if (scope == null || scope.isBlank()) {
             return ScopeKey.location(locationId);
         }
@@ -221,7 +224,7 @@ public class OperationsStreamController {
      * shift on a token that expired in five minutes is an authorization hole that
      * looks like a working feature.
      */
-    private Instant tokenExpiry(Jwt token) {
+    private Instant tokenExpiry(@Nullable Jwt token) {
         if (token == null || token.getExpiresAt() == null) {
             return clock.instant().plus(UNKNOWN_TOKEN_LIFETIME);
         }

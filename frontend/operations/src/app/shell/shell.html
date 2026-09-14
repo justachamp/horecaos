@@ -75,6 +75,17 @@
            `call-bar.ts`'s own doc. Renders nothing while nothing is ringing. -->
       <q-call-bar />
 
+      <!-- Wave P08, row 0.1f: `service-status.ts`'s own `updatedAt` "exists
+           and is displayed nowhere" until this. `q-connection-state-banner`
+           renders nothing while the accelerator is connected or still
+           connecting; `q-live-badge` is the reverse, silent except when it
+           is. -->
+      <div class="realtime-status">
+        <q-connection-state-banner [state]="realtime.state()" />
+        <q-live-badge [state]="realtime.state()" />
+        <q-refresh-indicator [updatedAt]="status.updatedAt()" (refresh)="status.refresh()" />
+      </div>
+
       <div class="scope">
         <!-- Hidden below two options on purpose (settings.md §1.1): a picker
              with nothing to switch between is noise, and an operator whose

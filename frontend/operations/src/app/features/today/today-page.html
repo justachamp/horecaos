@@ -9,10 +9,12 @@
       {{ 'today.myWork.link' | t }}
     </a>
     <div class="today__status">
+      <q-connection-state-banner [state]="realtime.state()" />
       @if (formatUpdatedAt(); as stamp) {
         <span class="today__stamp q-caption q-tnum" [class.today__stamp--pulse]="refreshing()">
           {{ stamp }}
         </span>
+        <q-stale-indicator [updatedAt]="lastUpdatedAt()" />
       }
       <button
         type="button"

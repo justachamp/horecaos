@@ -8,6 +8,8 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -24,6 +26,10 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmen
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcCourierEligibilityStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.telemetry.api.RealtimeSignal;
+import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
+import uz.horecaos.platform.telemetry.api.ScopeKey;
+import uz.horecaos.platform.telemetry.api.StreamChannel;
 
 /**
  * The dispatch board's own assign/unassign (operations §3.1), on top of ADR
@@ -47,6 +53,16 @@ import uz.horecaos.platform.iam.api.ResourceScope;
  * courier once accepted this order — and only the shipment and the plan move.
  * {@link JdbcAssignmentStore#cancelShipment} is a new, narrow write for exactly
  * this: nothing existing already un-does a {@code win()}.
+ *
+ * <p><strong>Also the ADR 0045 {@code DISPATCH_BOARD} producer (wave P08).</strong>
+ * {@code StreamChannel.DISPATCH_BOARD} has been declared since ADR 0045 and
+ * nothing in {@code fulfillment} ever published on it, so a correctly
+ * subscribed board received keep-alives forever. An operator's own
+ * assign/unassign is the highest-value case — it is the action the drag-drop
+ * board (P18) exists for — so this publishes a signal on success, after the
+ * plan and shipment writes above have committed; the scheduler-driven
+ * automated-sourcing path (ADR 0014) does not yet, and the board's existing
+ * 10-second poll is what covers that gap until a later wave closes it too.
  */
 @Service
 public class ManualDispatchService {
@@ -55,6 +71,7 @@ public class ManualDispatchService {
     private final JdbcAssignmentStore assignments;
     private final JdbcCourierEligibilityStore courierEligibility;
     private final AuditRecorder audit;
+    private final RealtimeSignalPublisher realtime;
     private final Clock clock;
 
     public ManualDispatchService(
@@ -62,11 +79,13 @@ public class ManualDispatchService {
             JdbcAssignmentStore assignments,
             JdbcCourierEligibilityStore courierEligibility,
             AuditRecorder audit,
+            RealtimeSignalPublisher realtime,
             Clock clock) {
         this.plans = plans;
         this.assignments = assignments;
         this.courierEligibility = courierEligibility;
         this.audit = audit;
+        this.realtime = realtime;
         this.clock = clock;
     }
 
@@ -150,6 +169,7 @@ public class ManualDispatchService {
                 .occurredAt(now)
                 .build());
 
+        signalDispatchBoardChanged(tenantId, plan.locationId(), planId, newPlanVersion, now);
         return DispatchOutcome.applied(PlanStatus.ASSIGNED, newPlanVersion, shipmentId.get());
     }
 
@@ -193,14 +213,52 @@ public class ManualDispatchService {
         // say) is left as it is rather than forced backwards. The shipment
         // cancellation just committed is the fact that matters either way.
         boolean movedBack = plans.transition(tenantId, planId, PlanStatus.ASSIGNED, PlanStatus.WAITING_TO_SOURCE, now);
+        int newPlanVersion = movedBack ? plan.version() + 1 : plan.version();
+        signalDispatchBoardChanged(tenantId, plan.locationId(), planId, newPlanVersion, now);
         return movedBack
-                ? DispatchOutcome.applied(PlanStatus.WAITING_TO_SOURCE, plan.version() + 1, null)
-                : DispatchOutcome.applied(plan.status(), plan.version(), null);
+                ? DispatchOutcome.applied(PlanStatus.WAITING_TO_SOURCE, newPlanVersion, null)
+                : DispatchOutcome.applied(plan.status(), newPlanVersion, null);
     }
 
     private DeliveryPlan requirePlan(UUID tenantId, UUID planId) {
         return plans.find(tenantId, planId)
                 .orElseThrow(() -> new DeliveryResourceNotFoundException("No delivery plan " + planId));
+    }
+
+    /**
+     * Publishes the ADR 0045 {@code DISPATCH_BOARD} signal for one plan,
+     * deferred past this transaction's commit when one is open.
+     *
+     * <p>{@link RealtimeSignalPublisher#publish} never blocks on the network
+     * call it starts, but firing it before this method's caller returns would
+     * still announce a change the database has not yet durably committed — a
+     * client that re-read on the strength of the signal could see the row
+     * before the write that produced it. {@link
+     * TransactionSynchronizationManager#isSynchronizationActive()} is false
+     * outside a real {@code @Transactional} proxy (every unit test in this
+     * suite constructs this service with {@code new}, where the annotation is
+     * inert), so those tests publish immediately rather than losing the signal
+     * to a callback nothing ever invokes.
+     */
+    private void signalDispatchBoardChanged(UUID tenantId, UUID locationId, UUID planId, int version, Instant now) {
+        Runnable publish = () -> realtime.publish(RealtimeSignal.of(
+                tenantId,
+                StreamChannel.DISPATCH_BOARD,
+                ScopeKey.location(locationId),
+                "DeliveryPlan",
+                planId,
+                (long) version,
+                now));
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    publish.run();
+                }
+            });
+        } else {
+            publish.run();
+        }
     }
 
     /**

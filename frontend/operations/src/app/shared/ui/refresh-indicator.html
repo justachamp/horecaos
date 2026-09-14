@@ -1,0 +1,19 @@
+<span class="q-refresh-indicator" data-testid="q-refresh-indicator">
+  @if (stamp(); as time) {
+    <span
+      class="q-refresh-indicator__stamp q-caption q-tnum"
+      [class.q-refresh-indicator__stamp--pulse]="refreshing()"
+      >{{ 'ui.refreshIndicator.updated' | t: { time: time } }}</span
+    >
+  }
+  <button
+    type="button"
+    class="q-refresh-indicator__button"
+    (click)="onRefreshClick()"
+    [attr.aria-label]="'ui.refreshIndicator.refresh' | t"
+    [attr.title]="'ui.refreshIndicator.refresh' | t"
+    data-testid="q-refresh-indicator-button"
+  >
+    <span aria-hidden="true">⟳</span>
+  </button>
+</span>

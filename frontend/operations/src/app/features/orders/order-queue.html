@@ -173,6 +173,7 @@
     </div>
 
     <div class="order-queue__status">
+      <q-connection-state-banner [state]="realtime.state()" />
       @if (formatUpdatedAt(); as stamp) {
         <span
           class="order-queue__stamp q-caption q-tnum"
@@ -180,6 +181,7 @@
         >
           {{ stamp }}
         </span>
+        <q-stale-indicator [updatedAt]="lastUpdatedAt()" />
       }
       <button
         type="button"

@@ -88,6 +88,27 @@ public class LiveBoardQueryService {
     }
 
     /**
+     * One location's counters and mixes, cut to {@code period} — {@link
+     * #forLocation}'s sibling for a caller with a {@code locationId} and no
+     * {@code brandId} in hand, which is exactly what the ADR 0045 {@code
+     * COUNTERS} snapshot source has: a stream subscription's scope key is
+     * {@code (LOCATION, locationId)} alone.
+     *
+     * <p>Always the live window ({@link CountsWindow#NONE} for the board
+     * window), because the only caller is the snapshot source and nothing
+     * upstream of it carries an order-board {@code boardFrom}/{@code boardTo}
+     * to pass through.
+     */
+    @Transactional(readOnly = true)
+    public LocationLiveBoard locationCounts(UUID tenantId, UUID locationId, OrderCountsPeriod period) {
+        Window window = windowFor(tenantId, period);
+        OrderCountsRow counts = orders.locationCounts(
+                tenantId, locationId, CountsWindow.NONE, new CountsWindow(window.from(), window.to()));
+        List<MixSliceRow> mix = orders.activeMixForLocation(tenantId, locationId);
+        return new LocationLiveBoard(window, counts, mix);
+    }
+
+    /**
      * The whole brand: its totals, its branch leaderboard and its two mixes.
      *
      * <p>The totals are read as their own aggregate rather than summed from the
