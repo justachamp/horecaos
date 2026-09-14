@@ -107,9 +107,19 @@ public class KitchenBoardController {
                 .collect(Collectors.toSet());
         Map<String, String> channelSystemTypes = tickets.channelSystemTypes(tenantId, channelCodes);
 
+        // Same batching, over orderId, for the VDU's own reason to exist (gap
+        // map row 2.4): sequenceLabel is HorecaOS's own number, and a courier
+        // or a customer quoting the aggregator's own code needs this to match
+        // the wall to what they are holding.
+        Set<UUID> orderIds = ticketRows.stream().map(TicketRow::orderId).collect(Collectors.toSet());
+        Map<UUID, String> externalReferences = tickets.externalReferencesByOrder(tenantId, orderIds);
+
         List<TicketResponse> board = ticketRows.stream()
                 .map(ticket -> TicketResponse.of(
-                        ticket, tickets.items(tenantId, ticket.id()), channelSystemTypes.get(ticket.channelCode())))
+                        ticket,
+                        tickets.items(tenantId, ticket.id()),
+                        channelSystemTypes.get(ticket.channelCode()),
+                        externalReferences.get(ticket.orderId())))
                 .toList();
 
         // The gap travels on every response rather than in a startup log. A branch
@@ -343,17 +353,22 @@ public class KitchenBoardController {
      * <p>{@code channelSystemType} (wave P16) is {@code
      * tenant.sales_channels.system_type} resolved off {@code channelCode} —
      * {@code AGGREGATOR} lets the client render a real aggregator tab instead
-     * of the raw channel code as an unclassified chip (gap map row 2.1). Only
-     * {@link #board} resolves it, at the cost of one batch read over the
-     * page's distinct codes; the single-ticket read and every mutation
-     * response below keep the cheaper two-argument {@link #of(TicketRow,
-     * List)} overload; a client that already holds the chip from its last
-     * board read loses nothing by a mutation response not repeating it.
+     * of the raw channel code as an unclassified chip (gap map row 2.1).
+     * {@code externalReference} (wave T02, gap map row 2.4) is the
+     * provider-assigned identifier a courier or a customer would actually
+     * quote — {@code sequenceLabel} is HorecaOS's own number, never that.
+     * Both are resolved only by {@link #board}, at the cost of one batch read
+     * each over the page's distinct channel codes and order ids; the
+     * single-ticket read and every mutation response below keep the cheaper
+     * two-argument {@link #of(TicketRow, List)} overload, carrying neither —
+     * a client that already holds them from its last board read loses
+     * nothing by a mutation response not repeating either.
      */
     record TicketResponse(
             UUID ticketId,
             UUID orderId,
             String sequenceLabel,
+            @Nullable String externalReference,
             String fulfilmentMode,
             @Nullable String channelCode,
             @Nullable String channelSystemType,
@@ -370,14 +385,23 @@ public class KitchenBoardController {
             List<ItemView> items) {
 
         static TicketResponse of(TicketRow ticket, List<TicketItemRow> items) {
-            return of(ticket, items, null);
+            return of(ticket, items, null, null);
         }
 
         static TicketResponse of(TicketRow ticket, List<TicketItemRow> items, @Nullable String channelSystemType) {
+            return of(ticket, items, channelSystemType, null);
+        }
+
+        static TicketResponse of(
+                TicketRow ticket,
+                List<TicketItemRow> items,
+                @Nullable String channelSystemType,
+                @Nullable String externalReference) {
             return new TicketResponse(
                     ticket.id(),
                     ticket.orderId(),
                     ticket.sequenceLabel(),
+                    externalReference,
                     ticket.fulfilmentMode(),
                     ticket.channelCode(),
                     channelSystemType,

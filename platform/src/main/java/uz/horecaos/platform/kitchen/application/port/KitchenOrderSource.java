@@ -2,7 +2,9 @@ package uz.horecaos.platform.kitchen.application.port;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
@@ -26,6 +28,28 @@ public interface KitchenOrderSource {
      *         same answer as "it does not exist" and deliberately so
      */
     Optional<OrderForKitchen> find(UUID tenantId, UUID orderId);
+
+    /**
+     * The provider-assigned identifier a courier or customer would quote for
+     * each of these orders — never {@code sequenceLabel}, which is HorecaOS's
+     * own number (gap map row 2.4, IA 2.4's "provider-assigned external
+     * identifiers shown to humans"; ADR 0040's {@code
+     * ordering.order_external_references}).
+     *
+     * <p>An order carries several reference rows — {@code PARTNER_ORDER_ID},
+     * {@code PARTNER_DISPLAY_CODE}, {@code PARTNER_VENUE_ORDER_NO}, and the
+     * non-partner {@code DELIVERY_CLAIM_ID}/{@code POS_ORDER_ID} kinds this
+     * method excludes entirely — and this picks one per order: the partner's
+     * own display code first, since that is what a partner's app actually
+     * shows a courier or a customer, then the partner's order id, then its
+     * venue order number, tied by which arrived first.
+     *
+     * @return only orders that carry at least one {@code issued_by = 'PARTNER'}
+     *         reference; an order with none is simply absent from the map,
+     *         which the caller reads the same way {@link #channelSystemTypes}
+     *         in the sibling {@code JdbcKitchenStore} treats an unresolved code
+     */
+    Map<UUID, String> externalReferences(UUID tenantId, Set<UUID> orderIds);
 
     /**
      * The order facts one ticket is built from.

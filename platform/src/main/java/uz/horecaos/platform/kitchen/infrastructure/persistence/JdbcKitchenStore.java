@@ -134,6 +134,14 @@ public class JdbcKitchenStore {
                 .list();
     }
 
+    public Optional<StationCapacityRow> findStationCapacity(UUID tenantId, UUID capacityWindowId) {
+        return jdbc.sql(SELECT_STATION_CAPACITY + " WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("id", capacityWindowId)
+                .query(JdbcKitchenStore::mapStationCapacity)
+                .optional();
+    }
+
     /**
      * Whether a proposed window would overlap one already stored for this station
      * and weekday.
@@ -145,11 +153,22 @@ public class JdbcKitchenStore {
      * backstop for the one shape of that race an exact retry produces.
      */
     public boolean overlapsExisting(UUID tenantId, UUID stationId, int weekday, LocalTime start, LocalTime end) {
+        return overlapsExisting(tenantId, stationId, weekday, start, end, null);
+    }
+
+    /**
+     * The same check, excluding one window's own row — what an edit needs: a
+     * window is always compared against its siblings, never against the version
+     * of itself the caller is trying to replace.
+     */
+    public boolean overlapsExisting(
+            UUID tenantId, UUID stationId, int weekday, LocalTime start, LocalTime end, @Nullable UUID excludingId) {
         Boolean exists = jdbc.sql("""
                 SELECT EXISTS (
                     SELECT 1 FROM kitchen.station_capacity
                      WHERE tenant_id = :tenantId AND station_id = :stationId AND weekday = :weekday
                        AND window_start < :end AND window_end > :start
+                       AND (CAST(:excludingId AS uuid) IS NULL OR id <> CAST(:excludingId AS uuid))
                 )
                 """)
                 .param("tenantId", tenantId)
@@ -157,9 +176,68 @@ public class JdbcKitchenStore {
                 .param("weekday", weekday)
                 .param("start", start)
                 .param("end", end)
+                .param("excludingId", excludingId)
                 .query(Boolean.class)
                 .single();
         return Boolean.TRUE.equals(exists);
+    }
+
+    /**
+     * Corrects a stored window's own fields, conditional on the version the
+     * caller last saw — the mistyped-ceiling fix (gap map row 2.6): {@code
+     * KitchenStationController} had no way to touch a window once created.
+     *
+     * @return the new version, or empty when the row moved (or vanished) since
+     *         the caller read it
+     */
+    public Optional<Integer> updateStationCapacity(
+            UUID tenantId,
+            UUID capacityWindowId,
+            LocalTime windowStart,
+            LocalTime windowEnd,
+            int portionsPerHour,
+            int expectedVersion,
+            Instant now) {
+        return jdbc.sql("""
+                UPDATE kitchen.station_capacity
+                SET window_start = :windowStart,
+                    window_end = :windowEnd,
+                    portions_per_hour = :portionsPerHour,
+                    version = version + 1,
+                    updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
+                RETURNING version
+                """)
+                .param("tenantId", tenantId)
+                .param("id", capacityWindowId)
+                .param("windowStart", windowStart)
+                .param("windowEnd", windowEnd)
+                .param("portionsPerHour", portionsPerHour)
+                .param("expectedVersion", expectedVersion)
+                .param("now", utc(now))
+                .query(Integer.class)
+                .optional();
+    }
+
+    /**
+     * Removes one window, conditional on the version the caller last saw — the
+     * other half of gap map row 2.6: deleting a mistyped or overlapping window
+     * is what frees its station and weekday for the correct one to be authored,
+     * since {@link #overlapsExisting} refuses a second window over the same
+     * slot.
+     *
+     * @return whether a row was actually removed
+     */
+    public boolean deleteStationCapacity(UUID tenantId, UUID capacityWindowId, int expectedVersion) {
+        return jdbc.sql("""
+                DELETE FROM kitchen.station_capacity
+                WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", capacityWindowId)
+                        .param("expectedVersion", expectedVersion)
+                        .update()
+                > 0;
     }
 
     /**

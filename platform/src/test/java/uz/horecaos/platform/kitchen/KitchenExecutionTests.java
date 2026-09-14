@@ -358,6 +358,172 @@ class KitchenExecutionTests {
         assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
     }
 
+    @Test
+    @DisplayName("a throughput ceiling can be corrected once created (gap map row 2.6)")
+    void aCapacityWindowCanBeCorrected() {
+        StationCapacityRow created = stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(18, 0), LocalTime.of(22, 0), 40));
+
+        StationCapacityRow updated = stationService.updateCapacityWindow(new KitchenStationService.CapacityWindowEdit(
+                TENANT, branch, created.id(), LocalTime.of(17, 0), LocalTime.of(21, 0), 55, created.version()));
+
+        assertThat(updated.windowStart()).isEqualTo(LocalTime.of(17, 0));
+        assertThat(updated.windowEnd()).isEqualTo(LocalTime.of(21, 0));
+        assertThat(updated.portionsPerHour()).isEqualTo(55);
+        assertThat(updated.version()).isEqualTo(created.version() + 1);
+        assertThat(stationService.listCapacityWindows(TENANT, branch))
+                .as("the correction must actually be what a second read sees")
+                .extracting(StationCapacityRow::portionsPerHour)
+                .containsExactly(55);
+    }
+
+    @Test
+    @DisplayName("correcting a ceiling with a version somebody else already moved is refused")
+    void updatingACapacityWindowAtTheWrongVersionIsRefused() {
+        StationCapacityRow created = stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(18, 0), LocalTime.of(22, 0), 40));
+        stationService.updateCapacityWindow(new KitchenStationService.CapacityWindowEdit(
+                TENANT, branch, created.id(), LocalTime.of(18, 0), LocalTime.of(22, 0), 50, created.version()));
+
+        // created.version() is now stale — somebody else's edit already moved it.
+        Throwable failure =
+                catchThrowable(() -> stationService.updateCapacityWindow(new KitchenStationService.CapacityWindowEdit(
+                        TENANT,
+                        branch,
+                        created.id(),
+                        LocalTime.of(18, 0),
+                        LocalTime.of(22, 0),
+                        60,
+                        created.version())));
+
+        assertThat(failure).isInstanceOf(ApiException.class);
+        assertThat(stationService.listCapacityWindows(TENANT, branch))
+                .as("the refused write must not have landed over the winning one")
+                .extracting(StationCapacityRow::portionsPerHour)
+                .containsExactly(50);
+    }
+
+    @Test
+    @DisplayName("correcting a ceiling into another window's slot is refused, the same as creating one there")
+    void updatingACapacityWindowIntoAnOverlapIsRefused() {
+        stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(9, 0), LocalTime.of(12, 0), 30));
+        StationCapacityRow evening = stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(18, 0), LocalTime.of(22, 0), 40));
+
+        Throwable failure =
+                catchThrowable(() -> stationService.updateCapacityWindow(new KitchenStationService.CapacityWindowEdit(
+                        TENANT,
+                        branch,
+                        evening.id(),
+                        LocalTime.of(11, 0),
+                        LocalTime.of(13, 0),
+                        40,
+                        evening.version())));
+
+        assertThat(failure).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT);
+    }
+
+    @Test
+    @DisplayName("a ceiling can be deleted, and deleting an overlapping one unblocks authoring the correct window")
+    void deletingAnOverlappingCeilingUnblocksTheCorrectOne() {
+        StationCapacityRow wrong = stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(9, 0), LocalTime.of(12, 0), 999));
+
+        // The manager meant 09:00-13:00, typed 09:00-12:00, and a second attempt
+        // at the real window collides with the typo — exactly the trap gap map
+        // row 2.6 names, with no edit or delete to escape it before this wave.
+        Throwable blocked =
+                catchThrowable(() -> stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                        TENANT, BRAND, branch, grillStation, 5, LocalTime.of(9, 0), LocalTime.of(13, 0), 30)));
+        assertThat(blocked).isInstanceOf(ApiException.class);
+
+        stationService.deleteCapacityWindow(TENANT, branch, wrong.id(), wrong.version());
+        assertThat(stationService.listCapacityWindows(TENANT, branch)).isEmpty();
+
+        StationCapacityRow corrected = stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(9, 0), LocalTime.of(13, 0), 30));
+
+        assertThat(stationService.listCapacityWindows(TENANT, branch))
+                .extracting(StationCapacityRow::id)
+                .containsExactly(corrected.id());
+    }
+
+    @Test
+    @DisplayName("deleting a ceiling with a stale version is refused, and the row survives")
+    void deletingACapacityWindowAtTheWrongVersionIsRefused() {
+        StationCapacityRow created = stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(9, 0), LocalTime.of(12, 0), 30));
+
+        Throwable failure = catchThrowable(() -> stationService.deleteCapacityWindow(TENANT, branch, created.id(), 99));
+
+        assertThat(failure).isInstanceOf(ApiException.class);
+        assertThat(stationService.listCapacityWindows(TENANT, branch))
+                .extracting(StationCapacityRow::id)
+                .containsExactly(created.id());
+    }
+
+    @Test
+    @DisplayName("neither edit nor delete reaches a ceiling at a sibling branch")
+    void aCapacityWindowAtAnotherBranchIsNotFound() {
+        StationRow siblingGrill = stationService.create(new KitchenStationService.NewStation(
+                TENANT, BRAND, siblingBranch, "GRILL", StationRole.GRILL, "Гриль", "Gril", "Grill", 1, true));
+        StationCapacityRow created = stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, siblingBranch, siblingGrill.id(), 5, LocalTime.of(9, 0), LocalTime.of(12, 0), 30));
+
+        Throwable updateFailure =
+                catchThrowable(() -> stationService.updateCapacityWindow(new KitchenStationService.CapacityWindowEdit(
+                        TENANT, branch, created.id(), LocalTime.of(9, 0), LocalTime.of(12, 0), 40, created.version())));
+        Throwable deleteFailure = catchThrowable(
+                () -> stationService.deleteCapacityWindow(TENANT, branch, created.id(), created.version()));
+
+        assertThat(updateFailure).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) updateFailure).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+        assertThat(deleteFailure).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) deleteFailure).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    // ------------------------------------------------------- external references
+
+    @Test
+    @DisplayName("the VDU's external reference prefers a partner's display code over its order id, "
+            + "and ignores POS/HorecaOS-issued references entirely (gap map row 2.4)")
+    void externalReferencesPreferThePartnersOwnDisplayCode() {
+        UUID orderId = seedConfirmedOrder("A-050", null, null, null, burger);
+        UUID otherOrderId = seedConfirmedOrder("A-051", null, null, null, burger);
+
+        insertExternalReference(orderId, "PARTNER_ORDER_ID", "9911", "PARTNER");
+        insertExternalReference(orderId, "PARTNER_DISPLAY_CODE", "YE-42", "PARTNER");
+        insertExternalReference(otherOrderId, "POS_ORDER_ID", "POS-1", "POS");
+
+        Map<UUID, String> references = tickets.externalReferencesByOrder(TENANT, Set.of(orderId, otherOrderId));
+
+        assertThat(references)
+                .as("the partner's own display code wins over its order id")
+                .containsEntry(orderId, "YE-42");
+        assertThat(references)
+                .as("a POS-issued reference is never what a courier or a customer is holding")
+                .doesNotContainKey(otherOrderId);
+    }
+
+    private void insertExternalReference(UUID orderId, String type, String value, String issuedBy) {
+        jdbc.sql("""
+                INSERT INTO ordering.order_external_references
+                    (id, tenant_id, order_id, reference_type, reference_value,
+                     reference_value_normalised, issued_by)
+                VALUES (:id, :tenantId, :orderId, :type, :value, :normalised, :issuedBy)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("orderId", orderId)
+                .param("type", type)
+                .param("value", value)
+                .param("normalised", value.toUpperCase(java.util.Locale.ROOT))
+                .param("issuedBy", issuedBy)
+                .update();
+    }
+
     // --------------------------------------------------------- tickets and roll-up
 
     @Test

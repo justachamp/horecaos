@@ -120,6 +120,48 @@ class KitchenBoardControllerTests {
         assertThat(response.channelSystemType()).isEqualTo("AGGREGATOR");
     }
 
+    @Test
+    void neitherTheTwoNorTheThreeArgumentOverloadCarriesAnExternalReference() {
+        // The single-ticket read and every mutation response keep one of these
+        // two cheaper overloads (see TicketResponse's own doc) — externalReference
+        // stays null on both, the same as channelSystemType above.
+        TicketRow ticket = ticketAt(TicketStatus.FIRED);
+
+        assertThat(KitchenBoardController.TicketResponse.of(ticket, List.of()).externalReference())
+                .isNull();
+        assertThat(KitchenBoardController.TicketResponse.of(ticket, List.of(), "AGGREGATOR")
+                        .externalReference())
+                .isNull();
+    }
+
+    @Test
+    void theFourArgumentOverloadCarriesTheExternalReference() {
+        // Only board() calls this overload (gap map row 2.4, wave T02): the
+        // provider-assigned identifier a courier or customer would quote —
+        // never sequenceLabel, HorecaOS's own number, which this test leaves
+        // unchanged to prove the two are not confused with one another.
+        TicketRow ticket = ticketAt(TicketStatus.FIRED);
+
+        KitchenBoardController.TicketResponse response =
+                KitchenBoardController.TicketResponse.of(ticket, List.of(), "AGGREGATOR", "YE-2291-04");
+
+        assertThat(response.externalReference()).isEqualTo("YE-2291-04");
+        assertThat(response.sequenceLabel()).isEqualTo(ticket.sequenceLabel());
+    }
+
+    @Test
+    void aTicketWithNoPartnerReferenceCarriesNullRatherThanAPlaceholder() {
+        // externalReference is honestly absent, not "", for the common case: a
+        // direct order, or an order from a partner nobody has issued a code for
+        // yet — a client must not render either as a real courier-facing code.
+        TicketRow ticket = ticketAt(TicketStatus.FIRED);
+
+        KitchenBoardController.TicketResponse response =
+                KitchenBoardController.TicketResponse.of(ticket, List.of(), "AGGREGATOR", null);
+
+        assertThat(response.externalReference()).isNull();
+    }
+
     private static TicketRow ticketAt(TicketStatus status) {
         return new TicketRow(
                 UUID.randomUUID(),
