@@ -38586,7 +38586,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews" : {
       "get" : {
-        "description" : "Every filter is optional. Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end.",
+        "description" : "Every filter is optional. Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end. Row 5.2h: pass customerAccountId to narrow to one customer's own reviews — the customer detail pane's own tab.",
         "operationId" : "list_35",
         "parameters" : [ {
           "in" : "path",
@@ -38600,6 +38600,14 @@
           "in" : "path",
           "name" : "brandId",
           "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "customerAccountId",
+          "required" : false,
           "schema" : {
             "format" : "uuid",
             "type" : "string"
