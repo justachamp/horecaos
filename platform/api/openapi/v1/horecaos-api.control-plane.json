@@ -506,6 +506,21 @@
         "required" : [ "role" ],
         "type" : "object"
       },
+      "AttachRecommendationRequest" : {
+        "properties" : {
+          "sortOrder" : {
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "targetVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "targetVariantId" ],
+        "type" : "object"
+      },
       "AttachedModifierGroupView" : {
         "properties" : {
           "groupId" : {
@@ -4165,6 +4180,66 @@
         },
         "type" : "object"
       },
+      "ItemSaleScheduleRequest" : {
+        "properties" : {
+          "windows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ItemSaleWindowRequest"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "windows" ],
+        "type" : "object"
+      },
+      "ItemSaleScheduleResponse" : {
+        "properties" : {
+          "windows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ItemSaleWindowResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "ItemSaleWindowRequest" : {
+        "properties" : {
+          "closesAt" : {
+            "format" : "time-local",
+            "type" : "string"
+          },
+          "dayOfWeek" : {
+            "format" : "int32",
+            "maximum" : 7,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "opensAt" : {
+            "format" : "time-local",
+            "type" : "string"
+          }
+        },
+        "required" : [ "closesAt", "opensAt" ],
+        "type" : "object"
+      },
+      "ItemSaleWindowResponse" : {
+        "properties" : {
+          "closesAt" : {
+            "format" : "time-local",
+            "type" : "string"
+          },
+          "dayOfWeek" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "opensAt" : {
+            "format" : "time-local",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "LatestStatementView" : {
         "properties" : {
           "issuedAt" : {
@@ -6703,6 +6778,37 @@
               "type" : "integer"
             },
             "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
+      "RecommendationListResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RecommendationResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "RecommendationResponse" : {
+        "properties" : {
+          "recommendationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "targetProductName" : {
+            "type" : "string"
+          },
+          "targetVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -13739,6 +13845,219 @@
         "tags" : [ "Catalog authoring" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/recommendations" : {
+      "get" : {
+        "description" : "Row 4.2h's own management list -- an operator must be able to see and detach a target even while it is stopped or hidden, which {@code effective} below deliberately will not show.",
+        "operationId" : "recommendations",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "default" : "uz",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecommendationListResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every recommendation attached to one product, unfiltered",
+        "tags" : [ "Catalog authoring" ]
+      },
+      "post" : {
+        "description" : "Directional: this product recommends the named variant, never the reverse. Refused (VALIDATION_FAILED) when the target variant belongs to this same product -- a product cannot recommend itself.",
+        "operationId" : "attachRecommendation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AttachRecommendationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecommendationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Attach a variant as a recommendation, or re-sort it if already attached",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/recommendations/effective" : {
+      "get" : {
+        "description" : "IA 4.2's own filter -- active + in-menu + not-stopped -- resolved here, at read time, against one location's catalog.location_offerings. Nothing is pruned from the stored set to get here: a target that is stopped today and un-stopped tomorrow reappears in this read on its own.",
+        "operationId" : "effectiveRecommendations",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "default" : "uz",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecommendationListResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This product's recommendations, filtered to what is safe to render",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/recommendations/{variantId}" : {
+      "delete" : {
+        "description" : "Idempotent: detaching a pair that is already gone still resolves.",
+        "operationId" : "detachRecommendation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Detach a recommendation",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/status" : {
       "put" : {
         "description" : "Черновик/Активен/Архивирован. catalog.md §4.1's archive/restore row action.",
@@ -14177,6 +14496,120 @@
           }
         },
         "summary" : "Set whether a location sells a variant",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/location-offerings/{locationId}/sale-schedule" : {
+      "get" : {
+        "description" : "Row 4.2g. Empty means unrestricted -- today's unchanged default for every variant nobody has scoped yet.",
+        "operationId" : "itemSaleSchedule",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ItemSaleScheduleResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One variant's weekly sale windows at one location",
+        "tags" : [ "Catalog authoring" ]
+      },
+      "put" : {
+        "description" : "The whole set every time, matching q-schedule-grid's own whole-set output -- a save is always exactly what the grid shows, never a delta. Resolved at order time against the location's own timezone, never the operator's. An empty list clears every restriction -- the variant is sold whenever it otherwise would be.",
+        "operationId" : "replaceItemSaleSchedule",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ItemSaleScheduleRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ItemSaleScheduleResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replaces one variant's weekly sale windows at one location",
         "tags" : [ "Catalog authoring" ]
       }
     },
