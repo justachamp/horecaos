@@ -717,38 +717,35 @@ class CartCheckoutAndOrderTests {
      * ADR 0072, threaded from the operator's own request into {@link
      * CartService#applyPromoCode} before pricing — the wiring wave P14 added.
      *
-     * <p><b>Why this stops at verifying the call, not the order's own
-     * total.</b> Writing this test against a real activated coupon all the
-     * way through to a committed order surfaced a pre-existing defect three
-     * layers below anything this wave touches: {@code PricingEngine} (stage
-     * 7-8, {@code grossTotal = grossTotal - discountTotal} before {@code
-     * subtotal}/{@code total} are ever derived from it) reports {@code
-     * subtotalMinor} already net of the discount while separately reporting
-     * {@code discountMinor} for display — by design, per that method's own
-     * "Stage 8" comment. {@code ordering.orders}'s {@code
-     * ck_order_total_reconciles} (V0022, written before ADR 0072 existed)
-     * instead assumes {@code subtotal_minor} is gross and demands {@code
-     * total = subtotal + tax + fee - discount}, so any order — through this
-     * wave's wiring, the storefront's own {@code POST .../promo-code}, or
-     * the bot — that reaches checkout with a nonzero discount fails this
-     * constraint. No test anywhere in this suite (grep confirms this class
-     * is the only caller of {@code applyPromoCode} in the whole test tree)
-     * had exercised a discounted checkout end to end before this one, so
-     * nothing had caught it. Flagged in the wave report rather than patched
-     * here: fixing which side of that mismatch is wrong is a pricing-schema
-     * decision outside a P14 wiring change, and the constraint is shared by
-     * every checkout path in the platform, not this wave's own code.
+     * <p><b>The defect this test used to document, now fixed.</b> Writing
+     * this test against a real activated coupon all the way through to a
+     * committed order originally surfaced a defect three layers below
+     * anything wave P14 touched: {@code PricingEngine} subtracted the
+     * discount from the gross total before deriving {@code subtotal}, so a
+     * quote's {@code subtotalMinor} came back net of the discount while
+     * {@code discountMinor} was reported separately for display.
+     * {@code ordering.orders}'s {@code ck_order_total_reconciles} (V0022,
+     * written before ADR 0072 existed) assumes {@code subtotal_minor} is
+     * gross and demands {@code total = subtotal + tax + fee - discount}, so
+     * every checkout path — this one, the storefront's own {@code
+     * POST .../promo-code}, or the bot — failed that constraint the moment a
+     * promo code produced a nonzero discount. The fix (2026-09-14) makes
+     * {@code PricingEngine} derive {@code subtotal} from the pre-discount
+     * gross, matching the receipt convention {@code ck_order_total_reconciles}
+     * already encoded, and this test now asserts the order that constraint
+     * used to reject.
      *
-     * <p>What this test proves instead, unaffected by that separate defect:
-     * {@link OperatorOrderingService#place} calls {@link
-     * CartService#applyPromoCode} with exactly the tenant, brand, customer,
-     * cart and normalised code the request named, between filling the
-     * basket and pricing it — a {@link org.mockito.Mockito#spy} on the real,
-     * production {@link #carts} rather than a stand-in, so the coupon
-     * eligibility check it runs is the genuine one.
+     * <p>What this test proves: {@link OperatorOrderingService#place} calls
+     * {@link CartService#applyPromoCode} with exactly the tenant, brand,
+     * customer, cart and normalised code the request named, between filling
+     * the basket and pricing it — a {@link org.mockito.Mockito#spy} on the
+     * real, production {@link #carts} rather than a stand-in, so the coupon
+     * eligibility check it runs is the genuine one — and that the resulting
+     * order is written with a gross subtotal, the discount applied, and a
+     * total that reconciles.
      */
     @Test
-    @DisplayName("an operator-placed order threads its promo code into CartService.applyPromoCode")
+    @DisplayName("an operator-placed order applies its promo code and the order reconciles gross of the discount")
     void anOperatorPlacedOrderAppliesAPromoCode() {
         var promoCodeStore =
                 new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore(jdbc, objectMapper);
@@ -793,15 +790,30 @@ class CartCheckoutAndOrderTests {
                 "operator-subject-9",
                 null);
 
-        // The transaction still rolls back on ck_order_total_reconciles — see
-        // this test's own doc — so the call is expected to throw exactly
-        // that constraint violation and no other failure. What matters here
-        // is that CartService.applyPromoCode was reached first, with the
-        // right arguments, which the verify below checks independently of
-        // how the transaction ultimately resolves.
-        assertThatThrownBy(() -> tx(() -> operatorOrderingWithSpy.place(withCode)))
-                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
-                .hasMessageContaining("ck_order_total_reconciles");
+        var result = tx(() -> operatorOrderingWithSpy.place(withCode));
+
+        assertThat(result.created()).isTrue();
+        UUID orderId = Objects.requireNonNull(result.orderId());
+        var order = orderStore.find(TENANT, orderId).orElseThrow();
+
+        // 1 burger at 50,000, 12% INCLUSIVE VAT, 10% off the order: the promo
+        // takes 5,000 off the 50,000 gross. subtotal is the pre-discount
+        // 50,000 minus the VAT extracted from the discounted 45,000 the
+        // customer actually pays, exactly PricingEngineTests' own worked
+        // example for this price and rate.
+        assertThat(order.discountMinor()).as("10% of the 50,000 gross").isEqualTo(5_000L);
+        assertThat(order.subtotalMinor())
+                .as("gross of the discount, not net of it")
+                .isEqualTo(45_179L);
+        assertThat(order.taxMinor()).isEqualTo(4_821L);
+        assertThat(order.totalMinor())
+                .as("the discounted price the customer pays")
+                .isEqualTo(45_000L);
+        // ck_order_total_reconciles's own identity — the CHECK this order row
+        // now satisfies rather than violates.
+        assertThat(order.subtotalMinor() + order.taxMinor() + order.feeMinor() - order.discountMinor())
+                .as("total = subtotal + tax + fee - discount")
+                .isEqualTo(order.totalMinor());
 
         org.mockito.Mockito.verify(spiedCarts)
                 .applyPromoCode(
@@ -811,6 +823,64 @@ class CartCheckoutAndOrderTests {
                         org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.anyInt(),
                         org.mockito.ArgumentMatchers.eq("operator10"));
+    }
+
+    /**
+     * The same fix, through the customer's own path rather than the
+     * operator's: {@link CartService#applyPromoCode} then {@link
+     * CartService#price}, exactly what {@code StorefrontOrderingController}'s
+     * {@code POST .../promo-code} and {@code POST .../pricing} call, followed
+     * by {@link CheckoutService#checkout} — the same {@code
+     * ck_order_total_reconciles} constraint every checkout path shares, now
+     * satisfied here too.
+     */
+    @Test
+    @DisplayName("a storefront checkout with a promo code applies the discount and the order reconciles")
+    void aStorefrontCheckoutAppliesAPromoCode() {
+        var promoCodeStore =
+                new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore(jdbc, objectMapper);
+        var authoring = new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService(promoCodeStore, clock);
+        var drafted = authoring.draft(
+                TENANT,
+                BRAND,
+                new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.PromoCodeDraft(
+                        "Promo CUSTOMER10",
+                        "CUSTOMER10",
+                        uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.DiscountShape
+                                .PERCENTAGE_OFF_ORDER,
+                        1_000,
+                        null,
+                        "UZS",
+                        0,
+                        List.of(),
+                        List.of(),
+                        null,
+                        100,
+                        null,
+                        null));
+        authoring.activate(TENANT, BRAND, drafted.couponId());
+
+        UUID cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+        tx(() -> carts.applyPromoCode(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "customer10"));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-storefront-with-promo")));
+
+        assertThat(result.created()).isTrue();
+        var order = orderStore.find(TENANT, orderIdOf(result)).orElseThrow();
+
+        // Same price, rate and 10%-off-order promo as the operator path above
+        // — same worked numbers.
+        assertThat(order.discountMinor()).isEqualTo(5_000L);
+        assertThat(order.subtotalMinor())
+                .as("gross of the discount, not net of it")
+                .isEqualTo(45_179L);
+        assertThat(order.taxMinor()).isEqualTo(4_821L);
+        assertThat(order.totalMinor()).isEqualTo(45_000L);
+        assertThat(order.subtotalMinor() + order.taxMinor() + order.feeMinor() - order.discountMinor())
+                .as("total = subtotal + tax + fee - discount")
+                .isEqualTo(order.totalMinor());
     }
 
     /**

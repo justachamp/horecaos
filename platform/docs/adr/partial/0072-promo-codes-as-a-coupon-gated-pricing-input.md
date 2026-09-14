@@ -35,6 +35,31 @@
   deliberately out of this record's scope, per Open inputs, except the
   discount-checkout defect above, which is newly in scope for whoever picks
   it up next).
+  **Update, 2026-09-14 (branch `fix-promo-subtotal-gross`): the
+  discount-checkout defect above is fixed.** The platform owner decided the
+  convention: `subtotal` is gross of the discount (the receipt convention —
+  subtotal, then discount, then tax/fee, then total — and
+  `ck_order_total_reconciles`'s own convention), not the constraint.
+  `PricingEngine` now keeps the pre-discount gross in its own variable and
+  derives `subtotal` from that instead of from the discounted `grossTotal`;
+  `total`, `discount_minor`, `tax_minor`, and `fee_minor` are unchanged, and
+  tax is still computed on the discounted amount exactly as before. A
+  checkout with a nonzero promo-code discount now succeeds for every caller
+  — `frontend/storefront-milliy`, the operator console, and the bot alike —
+  and the order row it writes satisfies `ck_order_total_reconciles` instead
+  of violating it. `CartCheckoutAndOrderTests#anOperatorPlacedOrderAppliesAPromoCode`
+  now asserts the created order (gross subtotal, the discount applied, a
+  reconciling total) instead of the constraint violation it used to
+  document; a new `#aStorefrontCheckoutAppliesAPromoCode` covers the same
+  fix through `CartService`/`CheckoutService` directly, the path
+  `StorefrontOrderingController` calls; `PricingEngineTests` adds a
+  percentage and a fixed order promo under both INCLUSIVE and EXCLUSIVE tax,
+  asserting `total = subtotal + tax + fee - discount`; and
+  `PromotionPricingTests#taxFollowsTheDiscount`, which had asserted the old
+  net-of-discount figure, is corrected to the gross one. Still `Partial`:
+  `frontend/storefront` (the original app) still has no promo-code UI of its
+  own, and the implementation checklist's remaining unchecked items are
+  unaffected by this fix.
 - Date proposed: 2026-09-05
 - Date decided: 2026-09-05
 - Deciders: Ayubkhon Abbosov (platform architecture), product, finance

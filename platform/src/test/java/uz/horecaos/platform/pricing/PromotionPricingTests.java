@@ -72,9 +72,16 @@ class PromotionPricingTests {
         // Taxing the undiscounted 50 000 would give 5357 and charge the customer
         // VAT on money they never paid.
         assertThat(result.tax().minor()).isEqualTo(4_821L);
-        assertThat(result.subtotal().minor()).isEqualTo(45_000L - 4_821L);
-        assertThat(result.subtotal().minor() + result.tax().minor())
-                .as("the identity a fiscal receipt has to satisfy")
+        // subtotal is gross of the discount — the receipt convention (subtotal,
+        // then discount, then tax/fee, then total) and ck_order_total_reconciles's
+        // — so it is the undiscounted 50,000 minus the VAT extracted from what
+        // the customer actually paid, not the discounted 45,000 minus that VAT.
+        assertThat(result.subtotal().minor()).isEqualTo(50_000L - 4_821L);
+        assertThat(result.subtotal().minor()
+                        + result.tax().minor()
+                        + result.fees().minor()
+                        - result.discount().minor())
+                .as("the identity a fiscal receipt has to satisfy: total = subtotal + tax + fee - discount")
                 .isEqualTo(result.total().minor());
     }
 

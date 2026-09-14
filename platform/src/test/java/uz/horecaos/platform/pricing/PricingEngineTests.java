@@ -6,12 +6,15 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.pricing.application.PricingEngine;
 import uz.horecaos.platform.pricing.application.PricingEngine.PricingInputs;
 import uz.horecaos.platform.pricing.application.PricingEngine.TaxMode;
+import uz.horecaos.platform.pricing.application.PromotionEvaluator;
+import uz.horecaos.platform.pricing.domain.Promotion;
 import uz.horecaos.platform.pricing.domain.Quote;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
 import uz.horecaos.platform.pricing.domain.TaxCalculation;
@@ -173,6 +176,77 @@ class PricingEngineTests {
     }
 
     @Test
+    @DisplayName("a percentage order promo leaves the subtotal gross of the discount, under INCLUSIVE tax")
+    void aPercentageOrderPromoLeavesTheSubtotalGrossUnderInclusiveTax() {
+        // 50,000 som burger, 12% VAT INCLUSIVE, 10% off the whole order. The
+        // promo takes 5,000 off the 50,000 gross, so the customer pays 45,000
+        // — and the receipt convention (ADR 0072's decision on this defect)
+        // is that the subtotal line is the pre-discount 50,000, not the
+        // 45,000 net figure: subtotal, then discount, then tax, then total.
+        var promo = orderPercentageOffPromo(1_000);
+        var result = engine.price(cart(BURGER, 1), inputsWithPromotion(Map.of(BURGER, 50_000L), promo), NOW);
+
+        assertThat(result.discount().minor()).as("10% of the 50,000 gross").isEqualTo(5_000L);
+        assertThat(result.subtotal().minor())
+                .as("gross of the discount, not net of it")
+                .isEqualTo(45_179L);
+        assertThat(result.tax().minor())
+                .as("VAT extracted from the discounted 45,000 the customer actually pays")
+                .isEqualTo(4_821L);
+        assertThat(result.total().minor())
+                .as("the discounted price the customer pays")
+                .isEqualTo(45_000L);
+        // ck_order_total_reconciles's own identity, in both tax modes.
+        assertThat(result.subtotal().minor()
+                        + result.tax().minor()
+                        + result.fees().minor()
+                        - result.discount().minor())
+                .as("total = subtotal + tax + fee - discount")
+                .isEqualTo(result.total().minor());
+    }
+
+    @Test
+    @DisplayName("a fixed order promo leaves the subtotal gross of the discount, under EXCLUSIVE tax")
+    void aFixedOrderPromoLeavesTheSubtotalGrossUnderExclusiveTax() {
+        // 33,333 som net, 12% VAT EXCLUSIVE, 5,000 off the order. Tax is added
+        // on top of the discounted 28,333, and the subtotal line is still the
+        // pre-discount 33,333: the same gross-of-discount convention holds in
+        // both tax modes.
+        var promo = orderFixedOffPromo(5_000L);
+        var exclusive = new PricingInputs(
+                "UZS",
+                PUBLICATION,
+                PRICE_BOOK,
+                1,
+                TAX_PROFILE,
+                1,
+                1_200,
+                TaxMode.EXCLUSIVE,
+                Map.of(BURGER, 33_333L),
+                Map.of(),
+                Map.of(),
+                null,
+                promo);
+
+        var result = engine.price(cart(BURGER, 1), exclusive, NOW);
+
+        assertThat(result.discount().minor()).isEqualTo(5_000L);
+        assertThat(result.subtotal().minor())
+                .as("gross of the discount — the undiscounted price book amount")
+                .isEqualTo(33_333L);
+        assertThat(result.tax().minor())
+                .as("VAT added on top of the discounted 28,333")
+                .isEqualTo(3_400L);
+        assertThat(result.total().minor()).isEqualTo(31_733L);
+        assertThat(result.subtotal().minor()
+                        + result.tax().minor()
+                        + result.fees().minor()
+                        - result.discount().minor())
+                .as("total = subtotal + tax + fee - discount")
+                .isEqualTo(result.total().minor());
+    }
+
+    @Test
     @DisplayName("the same cart prices identically however its lines are ordered")
     void theContextHashIgnoresLineOrder() {
         var ascending = new QuoteRequest(
@@ -299,6 +373,62 @@ class PricingEngineTests {
                 variantPrices,
                 Map.of(),
                 Map.of());
+    }
+
+    private static PricingInputs inputsWithPromotion(
+            Map<UUID, Long> variantPrices, PricingEngine.PromotionInputs promotion) {
+        return new PricingInputs(
+                "UZS",
+                PUBLICATION,
+                PRICE_BOOK,
+                1,
+                TAX_PROFILE,
+                1,
+                1_200,
+                TaxMode.INCLUSIVE,
+                variantPrices,
+                Map.of(),
+                Map.of(),
+                null,
+                promotion);
+    }
+
+    private static PricingEngine.PromotionInputs orderPercentageOffPromo(long basisPoints) {
+        return promotionOf(new Promotion.Action(
+                1,
+                Promotion.Action.Type.ORDER_PERCENTAGE_DISCOUNT,
+                new Promotion.Operands(Map.of("basisPoints", basisPoints))));
+    }
+
+    private static PricingEngine.PromotionInputs orderFixedOffPromo(long amountMinor) {
+        return promotionOf(new Promotion.Action(
+                1,
+                Promotion.Action.Type.ORDER_FIXED_DISCOUNT,
+                new Promotion.Operands(Map.of("amountMinor", amountMinor))));
+    }
+
+    /** One unconditional, order-scoped promotion, in force at {@link #NOW}. */
+    private static PricingEngine.PromotionInputs promotionOf(Promotion.Action action) {
+        var promotion = new Promotion(
+                UUID.randomUUID(),
+                TENANT,
+                BRAND,
+                "TEN-OFF",
+                Promotion.Scope.ORDER,
+                "PROMO",
+                false,
+                0,
+                false,
+                null,
+                "UZS",
+                NOW.minusSeconds(3_600),
+                null,
+                1,
+                List.of(),
+                List.of(action));
+        var context = new PromotionEvaluator.PromotionContext(
+                "STOREFRONT", LOCATION, "PICKUP", false, Set.of(), Set.of(), 1, 600);
+        return new PricingEngine.PromotionInputs(List.of(promotion), context, Map.of());
     }
 
     private static PricingInputs inputsWithModifiers(Map<UUID, Long> variants, Map<UUID, Long> modifiers) {
