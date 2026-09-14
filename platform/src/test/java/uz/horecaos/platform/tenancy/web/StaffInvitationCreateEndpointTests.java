@@ -144,9 +144,7 @@ class StaffInvitationCreateEndpointTests {
                 .as("the same invitation id comes back both times")
                 .isEqualTo(first.getResponse().getContentAsString());
 
-        assertThat(accounts.created)
-                .as("the handler itself ran exactly once")
-                .hasSize(1);
+        assertThat(accounts.created).as("the handler itself ran exactly once").hasSize(1);
         assertThat(jdbc.sql("SELECT count(*) FROM tenant.staff_invitations WHERE tenant_id = :t")
                         .param("t", TENANT)
                         .query(Long.class)
@@ -168,17 +166,11 @@ class StaffInvitationCreateEndpointTests {
                              status, keycloak_organization_id, version)
                         VALUES (:id, 'invite-endpoint-tenant', 'Legal', 'Display', 'UZS', 'Asia/Tashkent',
                                 'ACTIVE', :orgId, 0)
-                        """)
-                .param("id", TENANT)
-                .param("orgId", ORGANIZATION_ID)
-                .update();
+                        """).param("id", TENANT).param("orgId", ORGANIZATION_ID).update();
         jdbc.sql("""
                         INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                         VALUES (:id, :tenantId, 'BRAND_A', 'brand-a', 'Brand A', 'ACTIVE', 0)
-                        """)
-                .param("id", BRAND)
-                .param("tenantId", TENANT)
-                .update();
+                        """).param("id", BRAND).param("tenantId", TENANT).update();
         jdbc.sql("""
                         INSERT INTO tenant.locations
                             (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
@@ -295,14 +287,18 @@ class StaffInvitationCreateEndpointTests {
 
             @Override
             public Optional<StaffAccount> findByPhone(String phone) {
-                return byId.values().stream().filter(a -> phone.equals(a.username())).findFirst();
+                return byId.values().stream()
+                        .filter(a -> phone.equals(a.username()))
+                        .findFirst();
             }
 
             @Override
             public void completeSetup(String subjectId, String firstName, String lastName, String password) {
                 StaffAccount current = byId.get(subjectId);
                 if (current != null) {
-                    byId.put(subjectId, new StaffAccount(current.subjectId(), current.email(), true, true, current.username()));
+                    byId.put(
+                            subjectId,
+                            new StaffAccount(current.subjectId(), current.email(), true, true, current.username()));
                 }
             }
 
