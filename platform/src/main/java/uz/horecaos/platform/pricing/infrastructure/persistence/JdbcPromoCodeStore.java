@@ -732,6 +732,60 @@ public class JdbcPromoCodeStore {
                 .list();
     }
 
+    /**
+     * Caps {@link #redemptionsForCustomer} the same way {@link #REDEMPTION_PAGE}
+     * caps a coupon's own drill-down: a healthy account's history is nowhere
+     * near this many rows, and one that is stays capped rather than unbounded.
+     */
+    private static final int CUSTOMER_HISTORY_PAGE = 500;
+
+    /**
+     * Every reservation, redemption and release this customer account has ever
+     * held against this tenant, across every brand, newest first — the query
+     * {@code ix_redemptions_customer} (V0093) was built for and has had no
+     * caller until now. Answers "how much has this customer been discounted",
+     * the abuse check a marketer runs before granting another goodwill code
+     * (row 7.9a): {@code fact_order.customer_subject_hash} is a one-way ADR
+     * 0029 hash, so {@code reporting} cannot answer this and {@code pricing}
+     * has to.
+     *
+     * <p>Joined to {@code coupon_codes} for {@code code_hint} and to
+     * {@code promotions} for its name so a caller does not have to resolve
+     * either id itself — both survive a coupon or promotion later being
+     * retired or archived, since neither row is ever deleted.
+     */
+    public List<CustomerRedemptionRow> redemptionsForCustomer(UUID tenantId, UUID customerAccountId) {
+        return jdbc.sql("""
+                SELECT r.id, r.brand_id, r.coupon_id, cc.code_hint, r.promotion_id, p.name AS promotion_name,
+                       r.order_id, r.status, r.amount_minor, r.currency,
+                       r.reserved_at, r.redeemed_at, r.released_at
+                FROM pricing.coupon_redemptions r
+                JOIN pricing.coupon_codes cc ON cc.id = r.coupon_id AND cc.tenant_id = r.tenant_id
+                JOIN pricing.promotions p ON p.id = r.promotion_id AND p.tenant_id = r.tenant_id
+                WHERE r.tenant_id = :tenantId AND r.customer_account_id = :customerId
+                ORDER BY r.reserved_at DESC
+                LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("customerId", customerAccountId)
+                .param("limit", CUSTOMER_HISTORY_PAGE)
+                .query((row, n) -> new CustomerRedemptionRow(
+                        row.getObject("id", UUID.class),
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("coupon_id", UUID.class),
+                        row.getString("code_hint"),
+                        row.getObject("promotion_id", UUID.class),
+                        row.getString("promotion_name"),
+                        row.getObject("order_id", UUID.class),
+                        row.getString("status"),
+                        row.getLong("amount_minor"),
+                        row.getString("currency"),
+                        row.getObject("reserved_at", OffsetDateTime.class).toInstant(),
+                        instant(row.getObject("redeemed_at", OffsetDateTime.class)),
+                        instant(row.getObject("released_at", OffsetDateTime.class))))
+                .list();
+    }
+
     private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
@@ -808,6 +862,26 @@ public class JdbcPromoCodeStore {
 
     public record ReleasedRedemption(
             UUID couponId, @Nullable UUID customerAccountId) {}
+
+    /**
+     * One row of {@link #redemptionsForCustomer}.
+     *
+     * @param orderId null until the reservation redeems; a released reservation never gets one at all
+     */
+    public record CustomerRedemptionRow(
+            UUID redemptionId,
+            UUID brandId,
+            UUID couponId,
+            @Nullable String codeHint,
+            UUID promotionId,
+            String promotionName,
+            @Nullable UUID orderId,
+            String status,
+            long amountMinor,
+            String currency,
+            Instant reservedAt,
+            @Nullable Instant redeemedAt,
+            @Nullable Instant releasedAt) {}
 
     private record PromotionBase(
             UUID id,
