@@ -7,9 +7,12 @@ import { LocationScope, operationsPaths } from '../../core/api/operations-paths'
 
 /**
  * Mirrors `KitchenBoardController.ItemView` — deliberately no dish name or
- * comment. ADR 0041 keeps both off kitchen rows; `KitchenQueue` resolves a
- * name by joining `orderLineId` against the order it already has to fetch for
- * `kitchenNote` and per-line notes (§2.1's "per-line comments" sub-feature).
+ * comment. ADR 0041 keeps both off kitchen rows; `KitchenQueuePage` resolves
+ * a name by joining `orderLineId` against the order it already fetches for
+ * `kitchenNote`, and the per-line note itself (§2.1's "per-line comments"
+ * sub-feature, wave P16) through the audited `OrderRevealApi.revealLineNote`
+ * — `hasNote` on the order line says whether one exists; the text is a
+ * separate ADR 0029 reveal, never carried here or on the order read.
  */
 export interface TicketItemView {
   readonly itemId: string;
@@ -31,6 +34,16 @@ export interface TicketResponse {
   /** `DELIVERY` | `PICKUP` | `DINE_IN`. */
   readonly fulfilmentMode: string;
   readonly channelCode?: string | null;
+  /**
+   * `tenant.sales_channels.system_type` resolved off `channelCode` (wave
+   * P16) — `AGGREGATOR` is what types the aggregator tab and chip, typed
+   * rather than pattern-matched off the free-string code. Only `board()`
+   * resolves this; a single-ticket read or a mutation response carries
+   * `null` here (see `KitchenBoardController.TicketResponse`'s own doc) —
+   * `kitchen-queue-page.ts` keeps whichever value the last board read gave
+   * a ticket when merging a mutation response back in.
+   */
+  readonly channelSystemType?: string | null;
   /** `HELD` | `FIRED` | `IN_PRODUCTION` | `READY` | `HANDED_OVER` | `VOIDED`. */
   readonly status: string;
   readonly releaseMode: string;
@@ -45,10 +58,30 @@ export interface TicketResponse {
   readonly items: readonly TicketItemView[];
 }
 
+/**
+ * Mirrors `KitchenBoardController.CountsResponse` (wave P16) — the board's
+ * own exact tab badges, over every matching ticket rather than only over
+ * the page `tickets` above may have been cut to by `limit`.
+ */
+export interface BoardCounts {
+  readonly total: number;
+  readonly delivery: number;
+  readonly pickup: number;
+  readonly dineIn: number;
+  readonly aggregator: number;
+}
+
 export interface BoardResponse {
   readonly tickets: readonly TicketResponse[];
   /** `OrderProgressPort.NOT_WIRED_WARNING` when present — every proposal from this board silently drops. */
   readonly warnings: readonly string[];
+  /**
+   * Present on every real response (`KitchenBoardController.board` always
+   * sets it); optional here only so `buffer-page.ts`/`expo-page.ts`/
+   * `vdu-page.ts` — which read `stream=buffer`/`pass` and never render a
+   * tab count — keep their own fixtures unchanged by wave P16.
+   */
+  readonly counts?: BoardCounts;
 }
 
 export interface ItemResponse {

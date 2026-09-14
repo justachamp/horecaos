@@ -6,6 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
@@ -17,6 +18,8 @@ import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lat
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
+import { DispatchApi, PlanQueueResponse } from '../delivery/dispatch-api';
 import {
   ChangeServiceStateRequest,
   LocationsApi,
@@ -24,7 +27,9 @@ import {
 } from '../settings/locations/locations-api';
 import { describeApiError } from '../orders/order-errors';
 import { OrderDetailResponse, OrderLine } from '../orders/order-detail';
+import { OrderRevealApi } from '../orders/order-reveal-api';
 import {
+  BoardCounts,
   BoardResponse,
   ItemResponse,
   KitchenApi,
@@ -44,6 +49,17 @@ import {
   isKitchenTabMember,
 } from './kitchen-ticket';
 
+/**
+ * Fixed, English, machine-facing ADR 0029 reveal purpose — matches
+ * `order-detail-pane.ts`'s own `REVEAL_PURPOSE.lineNote`, read by whoever
+ * reviews the audit log rather than by the operator, so it is never
+ * translated.
+ */
+const REVEAL_LINE_NOTE_PURPOSE = 'Operations console: view a line note (kitchen)';
+
+/** `DispatchApi.assign`'s own reason code, distinct from the dispatch board's `OPERATIONS_MANUAL_ASSIGN` so an auditor can tell the pass assigned it from the board. */
+const KDS_ASSIGN_REASON = 'OPERATIONS_KDS_ASSIGN';
+
 /** Same cadence as the order board, until ADR 0045 live updates exist (§1.6). */
 const POLL_INTERVAL_MS = 10_000;
 
@@ -56,21 +72,30 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  * built" as the spec's own prose says — see the wave's final report).
  *
  * **Built**: the live board (`stream=live`), partitioned by fulfilment mode
- * with a channel chip; SLA colour from the ticket's own `targetReadyAt` (a
- * real promise, unlike the order board's ADR 0014 workaround); department
- * routing shown per line via the branch's stations; start/ready/recall;
- * per-line customer notes and the operator's own `kitchenNote`, both read
- * from the order the line belongs to (`ItemView` carries no name — see
- * `kitchen-api.ts`'s own doc); the branch open/closed toggle, reusing
- * settings 10.2's own `LocationsApi` rather than inventing a second one.
+ * with a typed aggregator tab (wave P16: `channelSystemType`, resolved off
+ * `sales_channels.system_type`, not a raw `channelCode` chip); server-side
+ * tab counts, exact over every matching ticket rather than over the one
+ * `stream=live` page this screen loads (wave P16: `BoardResponse.counts`);
+ * SLA colour from the ticket's own `targetReadyAt` (a real promise, unlike
+ * the order board's ADR 0014 workaround); department routing shown per line
+ * via the branch's stations; start/ready/recall; the operator's own
+ * `kitchenNote`, read from the order the line belongs to (`ItemView` carries
+ * no name — see `kitchen-api.ts`'s own doc); a per-line customer note, read
+ * on demand through the audited `OrderRevealApi.revealLineNote` (wave P16 —
+ * before it, `hasNote` rendered as a bare chip and the note text was never
+ * fetched even though the endpoint existed); assigning an in-house courier
+ * to a delivery ticket from the pass (wave P16: `DispatchApi.assign` joined
+ * to this board's own `orderId` — the endpoint was already client-proven on
+ * the dispatch board, P18); a counter-sale link to `orders/new` (P13's
+ * screen, which did not exist when this class's own doc first called this
+ * not-built); the branch open/closed toggle, reusing settings 10.2's own
+ * `LocationsApi` rather than inventing a second one.
  *
  * **Not built, honestly**: preset product comments (no backend vocabulary
- * exists at all — see the wave's report); assign own courier / dispatch an
- * external provider and change payment type from the kitchen (no backend
- * endpoint exists for either); create an order from the kitchen (no
- * operator-facing order-create endpoint exists anywhere in this build — the
- * shell's own `F2`/`Новый заказ` action already routes to the same honest
- * not-built page any such affordance here would duplicate).
+ * exists at all — see the wave's report); dispatching to an *external*
+ * provider from the kitchen (only in-house assignment reuses an existing
+ * endpoint; a provider dispatch call from the pass has none); change
+ * payment type from the kitchen (no backend endpoint exists for it).
  */
 @Component({
   selector: 'q-kitchen-queue-page',
@@ -85,6 +110,10 @@ export class KitchenQueuePage implements OnInit {
   private readonly location = inject(CurrentLocation);
   private readonly locationsApi = inject(LocationsApi);
   private readonly latenessPolicyApi = inject(LatenessPolicyApi);
+  private readonly revealApi = inject(OrderRevealApi);
+  private readonly dispatchApi = inject(DispatchApi);
+  private readonly couriersApi = inject(CouriersApi);
+  private readonly router = inject(Router);
   private readonly i18n = inject(I18n);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -97,6 +126,8 @@ export class KitchenQueuePage implements OnInit {
   protected readonly wiringWarning = signal(false);
 
   protected readonly tickets = signal<readonly TicketResponse[]>([]);
+  /** The board's own exact tab badges (wave P16) — `null` only before the first load settles. */
+  protected readonly boardCounts = signal<BoardCounts | null>(null);
   protected readonly stationsById = signal<ReadonlyMap<string, StationResponse>>(new Map());
   protected readonly expandedTicketId = signal<string | null>(null);
   protected readonly orderLinesByOrderId = signal<
@@ -108,6 +139,20 @@ export class KitchenQueuePage implements OnInit {
 
   protected readonly serviceSummary = signal<ServiceSummaryResponse | null>(null);
   protected readonly togglingService = signal(false);
+
+  // ------------------------------------------------------- P16: line notes
+
+  /** `undefined` = never revealed this load; `null` = revealed and genuinely empty. Keyed by `lineId`. */
+  protected readonly revealedNotes = signal<ReadonlyMap<string, string | null>>(new Map());
+  protected readonly revealingNoteFor = signal<string | null>(null);
+
+  // ------------------------------------------------- P16: assign from the pass
+
+  protected readonly courierRoster = signal<readonly RosterEntryResponse[]>([]);
+  protected readonly assignPickerForTicketId = signal<string | null>(null);
+  /** The dispatch queue's own plan for the open picker's ticket, joined by `orderId` (`DispatchController` carries no `orderId`-keyed read of its own). `undefined` while resolving, `null` when none was found. */
+  protected readonly assignPickerPlan = signal<PlanQueueResponse | null | undefined>(undefined);
+  protected readonly assigningTicketId = signal<string | null>(null);
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
 
@@ -149,6 +194,12 @@ export class KitchenQueuePage implements OnInit {
     } catch {
       // The toggle simply does not render without this — see the template.
     }
+    try {
+      this.courierRoster.set(await this.couriersApi.roster(scope.tenantId));
+    } catch {
+      // Assign-from-the-pass simply offers no courier list if this fails —
+      // every other affordance on the board still works.
+    }
     await this.refresh();
   }
 
@@ -162,6 +213,7 @@ export class KitchenQueuePage implements OnInit {
     try {
       const board: BoardResponse = await this.kitchen.board(scope);
       this.tickets.set(board.tickets);
+      this.boardCounts.set(board.counts ?? null);
       this.wiringWarning.set(board.warnings.length > 0);
       this.denied.set(false);
       this.lastError.set(null);
@@ -183,14 +235,36 @@ export class KitchenQueuePage implements OnInit {
     this.activeTab.set(tab);
   }
 
-  protected tabCount(tab: KitchenTabId): number {
-    return this.tickets().filter((ticket) => isKitchenTabMember(tab, ticket.fulfilmentMode)).length;
+  /**
+   * The board's own server-side badge (wave P16) — exact over every matching
+   * ticket, not the client-side filter over `stream=live`'s own page this
+   * method used to run (gap map row 2.1's own finding). `null` before the
+   * first load settles, matching `stop-list-page.ts`'s own "no wrong number"
+   * rule for a not-yet-known count.
+   */
+  protected tabCount(tab: KitchenTabId): number | null {
+    const counts = this.boardCounts();
+    if (!counts) {
+      return null;
+    }
+    switch (tab) {
+      case 'all':
+        return counts.total;
+      case 'delivery':
+        return counts.delivery;
+      case 'pickup':
+        return counts.pickup;
+      case 'dineIn':
+        return counts.dineIn;
+      case 'aggregator':
+        return counts.aggregator;
+    }
   }
 
   protected visibleTickets(): readonly TicketResponse[] {
     const tab = this.activeTab();
     return this.tickets()
-      .filter((ticket) => isKitchenTabMember(tab, ticket.fulfilmentMode))
+      .filter((ticket) => isKitchenTabMember(tab, ticket.fulfilmentMode, ticket.channelSystemType))
       .slice()
       .sort(compareBySeverityThenTime(this.latenessPolicy));
   }
@@ -326,6 +400,55 @@ export class KitchenQueuePage implements OnInit {
     return this.kitchenNoteByOrderId().get(ticket.orderId) ?? null;
   }
 
+  // ------------------------------------------------------- P16: line notes
+
+  /** `undefined` = never revealed this load; `null` = revealed and genuinely empty — mirrors `order-detail-pane.ts`'s own contract. */
+  protected revealedNote(lineId: string): string | null | undefined {
+    return this.revealedNotes().get(lineId);
+  }
+
+  protected isRevealingNote(lineId: string): boolean {
+    return this.revealingNoteFor() === lineId;
+  }
+
+  /**
+   * The already-translated display text for a revealed line — computed here
+   * rather than inline in the template because `revealedNote`'s `string |
+   * null` return does not narrow across two separate template calls to it,
+   * and a null note (revealed, genuinely empty) must render differently
+   * from a non-empty one.
+   */
+  protected noteDisplayText(lineId: string): string {
+    const note = this.revealedNotes().get(lineId);
+    return note
+      ? this.i18n.t('kitchen.item.customerNote', { note })
+      : this.i18n.t('kitchen.item.noteEmpty');
+  }
+
+  /**
+   * The audited ADR 0029 reveal a cook clicks for once per line — `hasNote`
+   * alone never carries the text (see `kitchen-api.ts`'s own doc), and a
+   * bare "has note" chip is exactly what gap map row 2.1 names as the
+   * defect this closes: «без лука» never reaching the line.
+   */
+  protected async revealLineNote(ticket: TicketResponse, lineId: string): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope || this.revealedNotes().has(lineId)) {
+      return;
+    }
+    this.revealingNoteFor.set(lineId);
+    try {
+      const result = await firstValueFrom(
+        this.revealApi.revealLineNote(scope, ticket.orderId, lineId, REVEAL_LINE_NOTE_PURPOSE),
+      );
+      this.revealedNotes.update((current) => new Map(current).set(lineId, result.note));
+    } catch (error) {
+      this.actionNotice.set(this.describeError(error));
+    } finally {
+      this.revealingNoteFor.set(null);
+    }
+  }
+
   // ----------------------------------------------------------------- actions
 
   protected itemActions(
@@ -362,11 +485,7 @@ export class KitchenQueuePage implements OnInit {
       }
       this.applyItemUpdate(response);
     } catch (error) {
-      this.actionNotice.set(
-        error instanceof ApiError
-          ? describeApiError(error, (key, values) => this.i18n.t(key, values))
-          : this.i18n.t('error.unknown.noReference'),
-      );
+      this.actionNotice.set(this.describeError(error));
     } finally {
       this.setItemBusy(item.itemId, false);
     }
@@ -374,6 +493,12 @@ export class KitchenQueuePage implements OnInit {
 
   protected dismissNotice(): void {
     this.actionNotice.set(null);
+  }
+
+  private describeError(error: unknown): string {
+    return error instanceof ApiError
+      ? describeApiError(error, (key, values) => this.i18n.t(key, values))
+      : this.i18n.t('error.unknown.noReference');
   }
 
   private applyItemUpdate(response: ItemResponse): void {
@@ -443,14 +568,98 @@ export class KitchenQueuePage implements OnInit {
       await this.locationsApi.changeServiceState(scope, request);
       this.serviceSummary.set(await this.locationsApi.serviceSummary(scope));
     } catch (error) {
-      this.actionNotice.set(
-        error instanceof ApiError
-          ? describeApiError(error, (key, values) => this.i18n.t(key, values))
-          : this.i18n.t('error.unknown.noReference'),
-      );
+      this.actionNotice.set(this.describeError(error));
     } finally {
       this.togglingService.set(false);
     }
+  }
+
+  // ------------------------------------------------- P16: assign from the pass
+
+  protected isDeliveryTicket(ticket: TicketResponse): boolean {
+    return ticket.fulfilmentMode === 'DELIVERY';
+  }
+
+  protected isAssignPickerOpen(ticket: TicketResponse): boolean {
+    return this.assignPickerForTicketId() === ticket.ticketId;
+  }
+
+  protected isAssigning(ticket: TicketResponse): boolean {
+    return this.assigningTicketId() === ticket.ticketId;
+  }
+
+  /**
+   * Opens the courier picker and resolves the one delivery plan this
+   * ticket's own order maps to. `DispatchController`'s queue is keyed by
+   * `planId`, not `orderId` — the kitchen board never learned a `planId` of
+   * its own — so this reads the branch's whole dispatch queue (`P18`'s own
+   * `<=200`-row read) and joins it here by `orderId`, exactly the seam the
+   * wave's own brief names.
+   */
+  protected async openAssignPicker(ticket: TicketResponse): Promise<void> {
+    if (this.isAssignPickerOpen(ticket)) {
+      this.assignPickerForTicketId.set(null);
+      return;
+    }
+    const scope = this.location.scope();
+    this.assignPickerForTicketId.set(ticket.ticketId);
+    this.assignPickerPlan.set(undefined);
+    if (!scope) {
+      this.assignPickerPlan.set(null);
+      return;
+    }
+    try {
+      const queue = await this.dispatchApi.queue(scope);
+      const plan = queue.find((candidate) => candidate.orderId === ticket.orderId) ?? null;
+      this.assignPickerPlan.set(plan);
+    } catch (error) {
+      this.assignPickerPlan.set(null);
+      this.actionNotice.set(this.describeError(error));
+    }
+  }
+
+  protected closeAssignPicker(): void {
+    this.assignPickerForTicketId.set(null);
+    this.assignPickerPlan.set(undefined);
+  }
+
+  protected async assignCourier(ticket: TicketResponse, courierId: string): Promise<void> {
+    const scope = this.location.scope();
+    const plan = this.assignPickerPlan();
+    if (!scope || !plan) {
+      return;
+    }
+    this.assigningTicketId.set(ticket.ticketId);
+    try {
+      const result = await this.dispatchApi.assign(
+        scope,
+        plan.planId,
+        courierId,
+        plan.version,
+        KDS_ASSIGN_REASON,
+      );
+      if (!result.applied) {
+        this.actionNotice.set(
+          this.i18n.t('kitchen.assign.refused', { reason: result.reason ?? '' }),
+        );
+      }
+      this.closeAssignPicker();
+    } catch (error) {
+      this.actionNotice.set(this.describeError(error));
+    } finally {
+      this.assigningTicketId.set(null);
+    }
+  }
+
+  // ------------------------------------------------------- P16: counter sale
+
+  /**
+   * Links to `P13`'s new-order screen (`/orders/new`) rather than duplicating
+   * it here — this class's own doc used to call that page not-built, which
+   * has not been true since `P13` merged.
+   */
+  protected startCounterSale(): void {
+    void this.router.navigateByUrl('/orders/new');
   }
 }
 

@@ -9,23 +9,36 @@
           (click)="selectTab(tab.id)"
         >
           {{ tab.labelKey | t }}
-          <span class="tab__count q-tnum">{{ tabCount(tab.id) }}</span>
+          <span class="tab__count q-tnum">{{ tabCount(tab.id) ?? '…' }}</span>
         </button>
       }
     </div>
 
-    @if (canToggleService()) {
+    <div class="kitchen__toolbar-actions">
       <button
         type="button"
-        class="kitchen__service-toggle"
-        [class.kitchen__service-toggle--closed]="serviceSummary()?.effectiveMode === 'FORCE_CLOSED'"
-        [disabled]="togglingService()"
-        (click)="toggleService()"
-        data-testid="kitchen-service-toggle"
+        class="kitchen__counter-sale"
+        (click)="startCounterSale()"
+        data-testid="kitchen-counter-sale"
       >
-        {{ serviceModeLabel() }}
+        {{ 'kitchen.action.counterSale' | t }}
       </button>
-    }
+
+      @if (canToggleService()) {
+        <button
+          type="button"
+          class="kitchen__service-toggle"
+          [class.kitchen__service-toggle--closed]="
+            serviceSummary()?.effectiveMode === 'FORCE_CLOSED'
+          "
+          [disabled]="togglingService()"
+          (click)="toggleService()"
+          data-testid="kitchen-service-toggle"
+        >
+          {{ serviceModeLabel() }}
+        </button>
+      }
+    </div>
   </div>
 
   @if (wiringWarning()) {
@@ -76,7 +89,9 @@
             <div class="ticket__number">
               <span class="q-emphasis">{{ ticket.sequenceLabel }}</span>
               <span class="chip">{{ fulfilmentModeLabel(ticket.fulfilmentMode) }}</span>
-              @if (ticket.channelCode) {
+              @if (ticket.channelSystemType === 'AGGREGATOR') {
+                <span class="chip chip--aggregator">{{ 'kitchen.tab.aggregator' | t }}</span>
+              } @else if (ticket.channelCode) {
                 <span class="chip chip--muted">{{ ticket.channelCode }}</span>
               }
             </div>
@@ -93,6 +108,47 @@
           @if (kitchenNoteFor(ticket); as note) {
             <div class="ticket__note q-body-sm">
               {{ 'kitchen.ticket.kitchenNote' | t: { note: note } }}
+            </div>
+          }
+
+          @if (isDeliveryTicket(ticket)) {
+            <div class="ticket__assign">
+              <button
+                type="button"
+                class="ticket__assign-toggle"
+                [disabled]="isAssigning(ticket)"
+                (click)="openAssignPicker(ticket)"
+                data-testid="kitchen-assign-courier"
+              >
+                {{ 'kitchen.assign.button' | t }}
+              </button>
+
+              @if (isAssignPickerOpen(ticket)) {
+                <div class="ticket__assign-picker" data-testid="kitchen-assign-picker">
+                  @if (assignPickerPlan() === undefined) {
+                    <span class="q-caption">{{ 'kitchen.assign.loading' | t }}</span>
+                  } @else if (assignPickerPlan() === null) {
+                    <span class="q-caption">{{ 'kitchen.assign.noPlan' | t }}</span>
+                  } @else if (courierRoster().length === 0) {
+                    <span class="q-caption">{{ 'kitchen.assign.empty' | t }}</span>
+                  } @else {
+                    @for (courier of courierRoster(); track courier.courierId) {
+                      <button
+                        type="button"
+                        class="ticket__assign-courier"
+                        [disabled]="isAssigning(ticket)"
+                        (click)="assignCourier(ticket, courier.courierId)"
+                        data-testid="kitchen-assign-courier-option"
+                      >
+                        {{ courier.displayReference }}
+                      </button>
+                    }
+                  }
+                  <button type="button" class="ticket__assign-cancel" (click)="closeAssignPicker()">
+                    {{ 'kitchen.assign.cancel' | t }}
+                  </button>
+                </div>
+              }
             </div>
           }
 
@@ -117,9 +173,29 @@
                           <div class="q-caption">{{ line.variantName }}</div>
                         }
                         @if (line.hasNote) {
-                          <div class="q-caption ticket__has-note">
-                            {{ 'kitchen.item.hasNote' | t }}
-                          </div>
+                          @if (revealedNote(item.orderLineId) !== undefined) {
+                            <div
+                              class="q-caption ticket__note-revealed"
+                              data-testid="kitchen-line-note"
+                            >
+                              {{ noteDisplayText(item.orderLineId) }}
+                            </div>
+                          } @else {
+                            <button
+                              type="button"
+                              class="ticket__reveal-note"
+                              [disabled]="isRevealingNote(item.orderLineId)"
+                              (click)="revealLineNote(ticket, item.orderLineId)"
+                              data-testid="kitchen-reveal-note"
+                            >
+                              {{
+                                (isRevealingNote(item.orderLineId)
+                                  ? 'kitchen.item.revealingNote'
+                                  : 'kitchen.item.revealNote'
+                                ) | t
+                              }}
+                            </button>
+                          }
                         }
                       } @else {
                         <span class="q-caption">{{ 'kitchen.item.lineUnresolved' | t }}</span>
