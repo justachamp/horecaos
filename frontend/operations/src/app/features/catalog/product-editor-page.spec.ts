@@ -9,6 +9,7 @@ import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
+import { CapacityApi } from '../kitchen/capacity-api';
 import { ActivityLogApi } from '../staff/activity-log-api';
 import { CatalogApi } from './catalog-api';
 import { InventoryApi } from './inventory-api';
@@ -59,6 +60,7 @@ function configure(
   catalogApi: Partial<CatalogApi>,
   activityLogApi: Partial<ActivityLogApi> = {},
   mediaApi: Partial<MediaApi> = {},
+  capacityApi: Partial<CapacityApi> = {},
 ): void {
   TestBed.configureTestingModule({
     providers: [
@@ -84,6 +86,8 @@ function configure(
         useValue: {
           validate: () => of(CLEAN_REPORT),
           variantsAtLocation: () => of({ items: [], nextCursor: null }),
+          itemSaleSchedule: () => of({ windows: [] }),
+          listRecommendations: () => of({ items: [] }),
           ...catalogApi,
         },
       },
@@ -100,6 +104,13 @@ function configure(
         useValue: {
           search: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
           ...activityLogApi,
+        },
+      },
+      {
+        provide: CapacityApi,
+        useValue: {
+          route: () => of({ ruleId: 'rule-1', layer: 'BRAND' }),
+          ...capacityApi,
         },
       },
     ],
@@ -606,19 +617,17 @@ describe('ProductEditorPage', () => {
   });
 
   it('searches the ИКПУ/MXIK reference from the fiscal tab’s combobox', async () => {
-    const searchMxikReference = vi
-      .fn()
-      .mockReturnValue(
-        of([
-          {
-            code: '01234',
-            labelRu: 'Плов',
-            labelUz: 'Osh',
-            defaultPackageCodes: [],
-            validFrom: '2020-01-01',
-          },
-        ]),
-      );
+    const searchMxikReference = vi.fn().mockReturnValue(
+      of([
+        {
+          code: '01234',
+          labelRu: 'Плов',
+          labelUz: 'Osh',
+          defaultPackageCodes: [],
+          validFrom: '2020-01-01',
+        },
+      ]),
+    );
     configure({ productDetail: () => of(productDetail()), searchMxikReference });
 
     const harness = await RouterTestingHarness.create('/catalog/products/product-1');
@@ -636,5 +645,167 @@ describe('ProductEditorPage', () => {
     await flushMicrotasks();
 
     expect(searchMxikReference).toHaveBeenCalledWith(BRAND_SCOPE, '01234');
+  });
+
+  it('writes a brand-layer kitchen routing rule for this product — pure wiring over the existing endpoint', async () => {
+    const route = vi.fn().mockReturnValue(of({ ruleId: 'rule-1', layer: 'BRAND' }));
+    configure({ productDetail: () => of(productDetail()) }, {}, {}, { route });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    const select = host.querySelector(
+      '[data-testid="editor-kitchen-role-select"]',
+    ) as HTMLSelectElement;
+    select.value = 'GRILL';
+    select.dispatchEvent(new Event('change'));
+    harness.detectChanges();
+    (host.querySelector('[data-testid="editor-save-kitchen-role"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(route).toHaveBeenCalledWith(LOCATION_SCOPE, {
+      productId: 'product-1',
+      stationRole: 'GRILL',
+    });
+  });
+
+  it('no longer shows the stale "not built" caption over the kitchen department picker', async () => {
+    configure({ productDetail: () => of(productDetail()) });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+
+    expect(harness.routeNativeElement!.textContent).not.toContain('открытый вопрос ADR 0016');
+  });
+
+  it('loads the per-item sale schedule and saves a whole-set replace through q-schedule-grid', async () => {
+    const itemSaleSchedule = vi
+      .fn()
+      .mockReturnValue(of({ windows: [{ dayOfWeek: 1, opensAt: '06:00', closesAt: '11:00' }] }));
+    const replaceItemSaleSchedule = vi.fn().mockReturnValue(
+      of({
+        windows: [
+          { dayOfWeek: 1, opensAt: '06:00', closesAt: '11:00' },
+          { dayOfWeek: 2, opensAt: '06:00', closesAt: '11:00' },
+        ],
+      }),
+    );
+    configure({
+      productDetail: () => of(productDetail()),
+      itemSaleSchedule,
+      replaceItemSaleSchedule,
+    });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-SCHEDULE"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(itemSaleSchedule).toHaveBeenCalledWith(BRAND_SCOPE, 'variant-1', 'l1');
+    expect(host.querySelector('[data-testid="q-schedule-grid-row-1"]')?.textContent).toBeTruthy();
+
+    (
+      host.querySelector('[data-testid="q-schedule-grid-add-window-2"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="editor-save-schedule"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(replaceItemSaleSchedule).toHaveBeenCalledWith(BRAND_SCOPE, 'variant-1', 'l1', {
+      windows: [
+        { dayOfWeek: 1, opensAt: '06:00', closesAt: '11:00' },
+        { dayOfWeek: 2, opensAt: '09:00', closesAt: '18:00' },
+      ],
+    });
+  });
+
+  it('attaches a recommendation, directional — the target must never appear as this product’s own source', async () => {
+    const attachRecommendation = vi
+      .fn()
+      .mockReturnValue(
+        of({
+          recommendationId: 'rec-1',
+          targetVariantId: 'variant-9',
+          targetProductName: null,
+          sortOrder: 0,
+        }),
+      );
+    const listRecommendations = vi
+      .fn()
+      .mockReturnValueOnce(of({ items: [] }))
+      .mockReturnValueOnce(
+        of({
+          items: [
+            {
+              recommendationId: 'rec-1',
+              targetVariantId: 'variant-9',
+              targetProductName: 'Fries',
+              sortOrder: 0,
+            },
+          ],
+        }),
+      );
+    configure({
+      productDetail: () => of(productDetail()),
+      listRecommendations,
+      attachRecommendation,
+    });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-RECOMMENDATIONS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const input = host.querySelector(
+      '[data-testid="editor-recommendation-target"]',
+    ) as HTMLInputElement;
+    input.value = 'variant-9';
+    input.dispatchEvent(new Event('input'));
+    (
+      host.querySelector('[data-testid="editor-recommendation-attach"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(attachRecommendation).toHaveBeenCalledWith(BRAND_SCOPE, 'product-1', {
+      targetVariantId: 'variant-9',
+      sortOrder: 0,
+    });
+    expect(host.querySelector('.editor__table')?.textContent).toContain('Fries');
+  });
+
+  it('detaches a recommendation — idempotent, the undo the trap named', async () => {
+    const detachRecommendation = vi.fn().mockReturnValue(of(undefined));
+    configure({
+      productDetail: () => of(productDetail()),
+      listRecommendations: () =>
+        of({
+          items: [
+            {
+              recommendationId: 'rec-1',
+              targetVariantId: 'variant-9',
+              targetProductName: 'Fries',
+              sortOrder: 0,
+            },
+          ],
+        }),
+      detachRecommendation,
+    });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-RECOMMENDATIONS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    (
+      host.querySelector('[data-testid="editor-recommendation-detach"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(detachRecommendation).toHaveBeenCalledWith(BRAND_SCOPE, 'product-1', 'variant-9');
+    expect(host.querySelector('[data-testid="editor-recommendation-detach"]')).toBeNull();
   });
 });

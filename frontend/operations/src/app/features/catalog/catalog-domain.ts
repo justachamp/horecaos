@@ -543,6 +543,41 @@ export interface BulkPriceChangeReport {
   readonly items: readonly BulkPriceChangeItemOutcome[];
 }
 
+// ------------------------------------------------------------ row 4.2g: per-item sale schedule
+
+/** `ItemSaleWindowRequest`/`ItemSaleWindowResponse` — one weekly window, ISO-8601 numbered: 1 = Monday through 7 = Sunday. Same shape `q-schedule-grid`'s own `ScheduleRule` already uses. */
+export interface ItemSaleWindow {
+  readonly dayOfWeek: number;
+  readonly opensAt: string;
+  readonly closesAt: string;
+}
+
+/** `ItemSaleScheduleRequest`/`ItemSaleScheduleResponse` — the whole weekly set for one variant at one location. Empty means unrestricted. */
+export interface ItemSaleScheduleBody {
+  readonly windows: readonly ItemSaleWindow[];
+}
+
+// ------------------------------------------------------------ row 4.2h: cross-sell / recommendations
+
+/** `AttachRecommendationRequest`. */
+export interface AttachRecommendationRequest {
+  readonly targetVariantId: string;
+  readonly sortOrder: number;
+}
+
+/** `RecommendationResponse` — one attached target, `targetProductName` null on the single-write response. */
+export interface RecommendationItem {
+  readonly recommendationId: string;
+  readonly targetVariantId: string;
+  readonly targetProductName?: string | null;
+  readonly sortOrder: number;
+}
+
+/** `RecommendationListResponse`. */
+export interface RecommendationList {
+  readonly items: readonly RecommendationItem[];
+}
+
 // ------------------------------------------------------------ CatalogPublicationController (history)
 
 /** `PublicationHistoryResponse`, IA 4.6 Region 3. */

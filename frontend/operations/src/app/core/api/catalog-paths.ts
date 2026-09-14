@@ -221,6 +221,28 @@ export const catalogPaths = {
   draftPreview(scope: BrandScope, catalogId: string): string {
     return `${this.base(scope)}/catalogs/${encodeURIComponent(catalogId)}/draft-preview`;
   },
+
+  // -------------------------------------------------- P47: per-item sale schedule and cross-sell
+
+  /** Row 4.2g: one variant's weekly sale windows at one location. Same path for `GET` and `PUT` (whole-set replace). */
+  itemSaleSchedule(scope: BrandScope, variantId: string, locationId: string): string {
+    return `${this.base(scope)}/variants/${encodeURIComponent(variantId)}/location-offerings/${encodeURIComponent(locationId)}/sale-schedule`;
+  },
+
+  /** Row 4.2h: a product's recommendations. `GET` (unfiltered, management) and `POST` (attach/reorder). */
+  recommendations(scope: BrandScope, productId: string): string {
+    return `${this.base(scope)}/products/${encodeURIComponent(productId)}/recommendations`;
+  },
+
+  /** Row 4.2h: IA 4.2's own filter -- active + in-menu + not-stopped -- resolved at one location. Query param `locationId`. */
+  effectiveRecommendations(scope: BrandScope, productId: string): string {
+    return `${this.recommendations(scope, productId)}/effective`;
+  },
+
+  /** Detach one recommendation. */
+  recommendation(scope: BrandScope, productId: string, targetVariantId: string): string {
+    return `${this.recommendations(scope, productId)}/${encodeURIComponent(targetVariantId)}`;
+  },
 } as const;
 
 export const pricingPaths = {

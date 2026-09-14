@@ -163,4 +163,16 @@ describe('ScheduleGrid', () => {
       { date: '2027-01-01', closedAllDay: true, opensAt: null, closesAt: null },
     ]);
   });
+
+  it('hides the dated-exceptions section when showExceptions is false — row 4.2g has no calendar to offer', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('rules', [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }]);
+    fixture.componentRef.setInput('showExceptions', false);
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('[data-testid="q-schedule-grid-new-exception-date"]')).toBeNull();
+    // The weekly grid still renders — only the exceptions section is hidden.
+    expect(root.querySelector('[data-testid="q-schedule-grid-row-1"]')).not.toBeNull();
+  });
 });

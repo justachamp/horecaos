@@ -20,17 +20,21 @@ import { ActorChip } from '../../shared/ui/actor-chip';
 import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
 import { LocalizedFieldGroup } from '../../shared/ui/localized-field-group';
 import { MediaUploader } from '../../shared/ui/media-uploader';
+import { ScheduleGrid } from '../../shared/ui/schedule-grid';
 import { describeApiError } from '../orders/order-errors';
 import { ActivityLogApi, AuditEventView } from '../staff/activity-log-api';
+import { CapacityApi } from '../kitchen/capacity-api';
 import { CatalogApi, fetchAllVariantsAtLocation } from './catalog-api';
 import {
   ALL_CHANNELS,
   CatalogStatus,
   FiscalClassification,
+  ItemSaleWindow,
   MediaRelation,
   ModifierGroupSummary,
   ProductDetail,
   PublicationResult,
+  RecommendationItem,
   UNCLASSIFIED,
   ValidationFinding,
   VariantAvailabilityRow,
@@ -44,7 +48,15 @@ import { InventoryApi } from './inventory-api';
 const STATUSES: readonly CatalogStatus[] = ['DRAFT', 'ACTIVE', 'ARCHIVED'];
 
 type EditorTab =
-  'BASIC' | 'VARIANTS' | 'MODIFIERS' | 'PHOTOS' | 'FISCAL' | 'AVAILABILITY' | 'HISTORY';
+  | 'BASIC'
+  | 'VARIANTS'
+  | 'MODIFIERS'
+  | 'PHOTOS'
+  | 'FISCAL'
+  | 'AVAILABILITY'
+  | 'SCHEDULE'
+  | 'RECOMMENDATIONS'
+  | 'HISTORY';
 
 const TABS: readonly EditorTab[] = [
   'BASIC',
@@ -53,6 +65,8 @@ const TABS: readonly EditorTab[] = [
   'PHOTOS',
   'FISCAL',
   'AVAILABILITY',
+  'SCHEDULE',
+  'RECOMMENDATIONS',
   'HISTORY',
 ];
 const TAB_LABEL: Readonly<Record<EditorTab, MessageKey>> = {
@@ -62,8 +76,21 @@ const TAB_LABEL: Readonly<Record<EditorTab, MessageKey>> = {
   PHOTOS: 'catalog.editor.tab.photos',
   FISCAL: 'catalog.editor.tab.fiscal',
   AVAILABILITY: 'catalog.editor.tab.availability',
+  SCHEDULE: 'catalog.editor.tab.schedule',
+  RECOMMENDATIONS: 'catalog.editor.tab.recommendations',
   HISTORY: 'catalog.editor.tab.history',
 };
+
+/** The closed station-role set `StationRole` names (ADR 0041) — row 4.2g's kitchen department picker. */
+const STATION_ROLES: readonly string[] = [
+  'HOT',
+  'COLD',
+  'GRILL',
+  'BAR',
+  'BAKERY',
+  'PACKING',
+  'EXPO',
+];
 
 const EDITING_LOCALES = ['ru', 'uz', 'en'] as const;
 
@@ -97,10 +124,23 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
 };
 
 /**
- * catalog.md §4.2 — the product editor. One page, seven tabs, a live
+ * catalog.md §4.2 — the product editor. One page, nine tabs, a live
  * readiness rail.
  *
- * **What this wave (`P22`) closed.** Three defects the previous wave left:
+ * **What this wave (`P47`) closed.** Kitchen department was pure wiring: the
+ * caption over it used to read "Not built — ADR 0016 open input" although
+ * `KitchenStationController.route` already existed with nothing calling it;
+ * the caption is gone and the picker now writes a brand-layer routing rule.
+ * The per-item sale schedule had no binding at all since V0020 withdrew
+ * `location_offerings.sales_schedule_id` — the new SCHEDULE tab is the first
+ * screen that can set one, resolved at order time against the location's own
+ * timezone rather than pruned/toggled by hand twice a day. Cross-sell
+ * (`4.2h`) was unbuilt at every layer; the new RECOMMENDATIONS tab is
+ * directional attach/detach/reorder over `catalog.product_recommendations`,
+ * filtered to active + in-menu + not-stopped at read time — never a
+ * symmetric link table, never a combo.
+ *
+ * **What the previous wave (`P22`) closed.** Three defects the previous wave left:
  * "Add variant" posted only `sortOrder` and an `UNCLASSIFIED` fiscal block
  * although `AddVariantRequest` always accepted `sku`/`unitCode`/`name` — it
  * now sends them, and the variants tab is fully editable (name via `PUT
@@ -127,7 +167,7 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
  * this wave's own report on why widening the allowlist needs a video
  * dimension probe first.
  *
- * **Tab 7: real, and narrower than "history" implies.** `CatalogAuthoringService`
+ * **Tab 9 (History): real, and narrower than "history" implies.** `CatalogAuthoringService`
  * records exactly one audit fact today — `catalog.offering.set`, this
  * location's own availability toggle — so this tab shows real, non-fabricated
  * history and nothing invented, while staying honest that product/variant/
@@ -139,7 +179,15 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
  */
 @Component({
   selector: 'q-product-editor-page',
-  imports: [TPipe, RouterLink, LocalizedFieldGroup, ActorChip, Combobox, MediaUploader],
+  imports: [
+    TPipe,
+    RouterLink,
+    LocalizedFieldGroup,
+    ActorChip,
+    Combobox,
+    MediaUploader,
+    ScheduleGrid,
+  ],
   templateUrl: './product-editor-page.html',
   styleUrl: './product-editor-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -152,6 +200,7 @@ export class ProductEditorPage implements OnInit {
   private readonly mediaApi = inject(MediaApi);
   private readonly inventoryApi = inject(InventoryApi);
   private readonly activityLogApi = inject(ActivityLogApi);
+  private readonly kitchenApi = inject(CapacityApi);
   private readonly brand = inject(CurrentBrand);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
@@ -211,6 +260,26 @@ export class ProductEditorPage implements OnInit {
   protected readonly mxikQuery = signal<Readonly<Record<string, string>>>({});
   protected readonly mxikOptions = signal<Readonly<Record<string, readonly ComboboxOption[]>>>({});
   protected readonly mxikSearching = signal<Readonly<Record<string, boolean>>>({});
+
+  /** Row 4.2g's kitchen department picker — a brand-layer routing rule for this product. */
+  protected readonly stationRoles = STATION_ROLES;
+  protected readonly kitchenRoleSelection = signal('');
+  protected readonly kitchenSaving = signal(false);
+  protected readonly kitchenNotice = signal<string | null>(null);
+
+  /** Row 4.2g's per-item sale schedule — the product's default variant, at the current location. */
+  protected readonly scheduleLoading = signal(false);
+  protected readonly scheduleLoaded = signal(false);
+  protected readonly scheduleWindows = signal<readonly ItemSaleWindow[]>([]);
+  protected readonly scheduleSaving = signal(false);
+  protected readonly scheduleNotice = signal<string | null>(null);
+
+  /** Row 4.2h's cross-sell block. */
+  protected readonly recommendationsLoading = signal(false);
+  protected readonly recommendationsLoaded = signal(false);
+  protected readonly recommendations = signal<readonly RecommendationItem[]>([]);
+  protected readonly recommendationSaving = signal(false);
+  protected readonly recommendationNotice = signal<string | null>(null);
 
   async ngOnInit(): Promise<void> {
     this.editingLocale.set(toCatalogLocale(this.i18n.locale()));
@@ -307,6 +376,30 @@ export class ProductEditorPage implements OnInit {
     if (tab === 'PHOTOS') {
       void this.loadPhotoUrls();
     }
+    if (tab === 'SCHEDULE' && !this.scheduleLoaded()) {
+      void this.loadSchedule();
+    }
+    if (tab === 'RECOMMENDATIONS' && !this.recommendationsLoaded()) {
+      void this.loadRecommendations();
+    }
+  }
+
+  /**
+   * Row 4.2g and 4.2h both operate on one sellable unit, and the product
+   * editor otherwise lets every variant have its own everything — but neither
+   * row's brief asks for a per-variant picker, so both default to the
+   * product's own default variant, exactly like {@link setPrice}'s sibling
+   * screens treat "the product" and "its default variant" as one thing for a
+   * single-variant item, which is the common case this closes.
+   */
+  protected defaultVariantId(): string | null {
+    const product = this.product();
+    if (!product) {
+      return null;
+    }
+    return (
+      product.variants.find((v) => v.isDefault)?.variantId ?? product.variants[0]?.variantId ?? null
+    );
   }
 
   /**
@@ -1037,6 +1130,229 @@ export class ProductEditorPage implements OnInit {
 
   protected onMxikOptionSelected(variantId: string, option: ComboboxOption): void {
     this.onMxikQueryChange(variantId, option.id);
+  }
+
+  // ------------------------------------------------------------ Row 4.2g — Kitchen department (Tab 1)
+
+  /**
+   * Pure wiring over `KitchenStationController.route` — the endpoint already
+   * existed, and the only thing missing was a caller. Writes the brand layer
+   * (a station role, never a specific station: the location resolves that
+   * role to its own station at every branch), matching ADR 0041's own
+   * two-layer design. `CurrentLocation`'s scope supplies the URL's
+   * `locationId` even though the rule this writes is brand-wide — the
+   * controller's own doc names this as the safe direction, since a
+   * location-scoped grant satisfies a brand-scoped requirement's downward
+   * cover.
+   */
+  protected async saveKitchenDepartment(role: string): Promise<void> {
+    const brandScope = this.brand.scope();
+    const product = this.product();
+    await this.location.ensureLoaded();
+    const locationScope = this.location.scope();
+    if (!brandScope || !product || !locationScope || !role) {
+      return;
+    }
+    this.kitchenSaving.set(true);
+    this.kitchenNotice.set(null);
+    try {
+      await firstValueFrom(
+        this.kitchenApi.route(locationScope, { productId: product.productId, stationRole: role }),
+      );
+      this.kitchenNotice.set(this.i18n.t('catalog.editor.saved'));
+    } catch (error) {
+      this.kitchenNotice.set(
+        error instanceof ApiError
+          ? describeApiError(error, (key, values) => this.i18n.t(key, values))
+          : this.i18n.t('error.unknown.noReference'),
+      );
+    } finally {
+      this.kitchenSaving.set(false);
+    }
+  }
+
+  protected kitchenRoleLabel(role: string): string {
+    return this.i18n.t(`catalog.editor.kitchen.role.${role}` as MessageKey);
+  }
+
+  // ------------------------------------------------------------ Row 4.2g — Sale schedule (Tab 8)
+
+  /**
+   * `ItemSaleScheduleController`'s read — the binding V0020 withdrew and
+   * nothing replaced until this wave. Operates on the product's own default
+   * variant (see {@link defaultVariantId}'s doc) at the console's current
+   * location; empty windows means unrestricted, today's unchanged default.
+   */
+  private async loadSchedule(): Promise<void> {
+    const scope = this.brand.scope();
+    await this.location.ensureLoaded();
+    const locationScope = this.location.scope();
+    const variantId = this.defaultVariantId();
+    if (!scope || !locationScope || !variantId) {
+      return;
+    }
+    this.scheduleLoading.set(true);
+    try {
+      const schedule = await firstValueFrom(
+        this.api.itemSaleSchedule(scope, variantId, locationScope.locationId),
+      );
+      this.scheduleWindows.set(schedule.windows);
+      this.scheduleLoaded.set(true);
+    } catch (error) {
+      this.handleSaveError(error);
+    } finally {
+      this.scheduleLoading.set(false);
+    }
+  }
+
+  /** `q-schedule-grid`'s whole-set output — replaces the local draft, not yet saved. */
+  protected onScheduleWindowsChange(windows: readonly ItemSaleWindow[]): void {
+    this.scheduleWindows.set(windows);
+  }
+
+  /**
+   * Replaces the whole weekly window set server-side — never a delta, so a
+   * save is always exactly what the grid shows. Resolved at order time
+   * against the location's own timezone by `CatalogAuthoringService
+   * .isOnSaleNow`, never the operator's.
+   */
+  protected async saveSchedule(): Promise<void> {
+    const scope = this.brand.scope();
+    const locationScope = this.location.scope();
+    const variantId = this.defaultVariantId();
+    if (!scope || !locationScope || !variantId) {
+      return;
+    }
+    this.scheduleSaving.set(true);
+    this.scheduleNotice.set(null);
+    try {
+      const saved = await firstValueFrom(
+        this.api.replaceItemSaleSchedule(scope, variantId, locationScope.locationId, {
+          windows: this.scheduleWindows(),
+        }),
+      );
+      this.scheduleWindows.set(saved.windows);
+      this.scheduleNotice.set(this.i18n.t('catalog.editor.saved'));
+    } catch (error) {
+      this.scheduleNotice.set(
+        error instanceof ApiError
+          ? describeApiError(error, (key, values) => this.i18n.t(key, values))
+          : this.i18n.t('error.unknown.noReference'),
+      );
+    } finally {
+      this.scheduleSaving.set(false);
+    }
+  }
+
+  // ------------------------------------------------------------ Row 4.2h — Cross-sell (Tab 9)
+
+  /** Every recommendation attached to this product, unfiltered — the editor's own management list (never the storefront's filtered view). */
+  private async loadRecommendations(): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    if (!scope || !product) {
+      return;
+    }
+    this.recommendationsLoading.set(true);
+    try {
+      const result = await firstValueFrom(this.api.listRecommendations(scope, product.productId));
+      this.recommendations.set(result.items);
+      this.recommendationsLoaded.set(true);
+    } catch (error) {
+      this.handleSaveError(error);
+    } finally {
+      this.recommendationsLoading.set(false);
+    }
+  }
+
+  /**
+   * Attaches a target variant, or re-sorts it if already attached — the same
+   * call. Directional: this product recommends the pasted variant, never the
+   * reverse — see `catalog.product_recommendations`' own doc for why a
+   * symmetric link table is exactly the trap this avoids.
+   */
+  protected async attachRecommendation(targetVariantId: string): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    const trimmed = targetVariantId.trim();
+    if (!scope || !product || !trimmed) {
+      return;
+    }
+    this.recommendationSaving.set(true);
+    this.recommendationNotice.set(null);
+    try {
+      await firstValueFrom(
+        this.api.attachRecommendation(scope, product.productId, {
+          targetVariantId: trimmed,
+          sortOrder: this.recommendations().length,
+        }),
+      );
+      await this.loadRecommendations();
+    } catch (error) {
+      this.recommendationNotice.set(
+        error instanceof ApiError
+          ? describeApiError(error, (key, values) => this.i18n.t(key, values))
+          : this.i18n.t('error.unknown.noReference'),
+      );
+    } finally {
+      this.recommendationSaving.set(false);
+    }
+  }
+
+  protected async detachRecommendation(item: RecommendationItem): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    if (!scope || !product) {
+      return;
+    }
+    this.recommendationSaving.set(true);
+    try {
+      await firstValueFrom(
+        this.api.detachRecommendation(scope, product.productId, item.targetVariantId),
+      );
+      this.recommendations.set(
+        this.recommendations().filter((r) => r.recommendationId !== item.recommendationId),
+      );
+    } catch (error) {
+      this.handleSaveError(error);
+    } finally {
+      this.recommendationSaving.set(false);
+    }
+  }
+
+  /** Re-sorts by swapping this row's `sortOrder` with its neighbour's and re-attaching both, exactly {@link reorderPhoto}'s own shape. */
+  protected async moveRecommendation(item: RecommendationItem, direction: -1 | 1): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    if (!scope || !product) {
+      return;
+    }
+    const items = [...this.recommendations()];
+    const index = items.findIndex((r) => r.recommendationId === item.recommendationId);
+    const swapWith = index + direction;
+    if (index < 0 || swapWith < 0 || swapWith >= items.length) {
+      return;
+    }
+    this.recommendationSaving.set(true);
+    try {
+      await firstValueFrom(
+        this.api.attachRecommendation(scope, product.productId, {
+          targetVariantId: items[index].targetVariantId,
+          sortOrder: items[swapWith].sortOrder,
+        }),
+      );
+      await firstValueFrom(
+        this.api.attachRecommendation(scope, product.productId, {
+          targetVariantId: items[swapWith].targetVariantId,
+          sortOrder: items[index].sortOrder,
+        }),
+      );
+      await this.loadRecommendations();
+    } catch (error) {
+      this.handleSaveError(error);
+    } finally {
+      this.recommendationSaving.set(false);
+    }
   }
 
   // ------------------------------------------------------------ readiness rail + publish

@@ -982,10 +982,12 @@ export const messagesEn = {
   'settings.notifications.tab.templates': 'Templates',
   'settings.notifications.tab.routing': 'Routing',
   'settings.notifications.automation.title': 'Automation',
-  'settings.notifications.field.paymentLinkAutoSend': 'Send the payment link to the customer automatically',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Send the payment link to the customer automatically',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Not yet enforced: no send trigger reads this switch yet, so turning it on records the choice without changing behaviour.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Notify on aggregator shift open/close',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Notify on aggregator shift open/close',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Not yet enforced: no aggregator-shift event exists in the platform yet to trigger this.',
   'settings.notifications.create.action': 'New template',
@@ -1031,7 +1033,8 @@ export const messagesEn = {
   'settings.notifications.editor.subject': 'Subject',
   'settings.notifications.editor.body': 'Text',
   'settings.notifications.editor.variables': 'Insert a variable',
-  'settings.notifications.editor.variables.empty': 'No merge variables are offered for this notification class.',
+  'settings.notifications.editor.variables.empty':
+    'No merge variables are offered for this notification class.',
   'settings.notifications.editor.preview': 'How the customer sees it',
   'settings.notifications.editor.save': 'Save draft',
   'settings.notifications.editor.saving': 'Saving…',
@@ -1050,15 +1053,18 @@ export const messagesEn = {
   'settings.notifications.testSend.result.ACCEPTED': 'Accepted by the provider.',
   'settings.notifications.testSend.result.REJECTED': 'Refused by the provider.',
   'settings.notifications.testSend.result.RETRYABLE': 'A transport error — try again.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Uncertain — the provider may already have sent it.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Uncertain — the provider may already have sent it.',
   'settings.notifications.activate.confirm.title': 'Activate this version?',
-  'settings.notifications.activate.confirm.body': 'Every message using this template will use this wording from now on.',
+  'settings.notifications.activate.confirm.body':
+    'Every message using this template will use this wording from now on.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'This version is still {state} with its SMS gateway. Activating it will not make it send until that changes.',
   'settings.notifications.activate.confirm.confirm': 'Activate',
   'settings.notifications.routing.lead':
     'Which of this brand’s bound Telegram chats hear about which events, and their forum topic.',
-  'settings.notifications.routing.empty': 'No chat is bound yet. Use "/link <code>" in a Telegram group to bind one.',
+  'settings.notifications.routing.empty':
+    'No chat is bound yet. Use "/link <code>" in a Telegram group to bind one.',
   'settings.notifications.routing.column.chat': 'Chat',
   'settings.notifications.routing.column.topic': 'Topic',
   'settings.notifications.routing.column.status': 'Status',
@@ -1072,7 +1078,8 @@ export const messagesEn = {
   'settings.notifications.routing.action.editTopic': 'Change topic',
   'settings.notifications.routing.action.unbind': 'Unbind',
   'settings.notifications.routing.unbind.confirm.title': 'Unbind this chat?',
-  'settings.notifications.routing.unbind.confirm.body': 'It stops receiving every event class immediately.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'It stops receiving every event class immediately.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Unbind',
   'settings.notifications.routing.topic.prompt': 'Forum topic id — leave empty for the flat chat',
   'settings.notifications.routing.topic.save': 'Save',
@@ -1616,6 +1623,8 @@ export const messagesEn = {
   'catalog.editor.tab.photos': 'Photos',
   'catalog.editor.tab.fiscal': 'Fiscal data',
   'catalog.editor.tab.availability': 'Availability',
+  'catalog.editor.tab.schedule': 'Sale schedule',
+  'catalog.editor.tab.recommendations': 'Recommended products',
   'catalog.editor.tab.history': 'History',
   'catalog.editor.locale.label': 'Editing language',
   'catalog.editor.save': 'Save',
@@ -1632,7 +1641,14 @@ export const messagesEn = {
   'catalog.editor.basic.addCategory': 'Add to category…',
   'catalog.editor.basic.remove': 'Remove',
   'catalog.editor.basic.kitchenDept': 'Kitchen department',
-  'catalog.editor.basic.kitchenDeptNote': 'Not built — ADR 0016 open input',
+  'catalog.editor.kitchen.role.none': '— Not routed —',
+  'catalog.editor.kitchen.role.HOT': 'Hot line',
+  'catalog.editor.kitchen.role.COLD': 'Cold line',
+  'catalog.editor.kitchen.role.GRILL': 'Grill',
+  'catalog.editor.kitchen.role.BAR': 'Bar',
+  'catalog.editor.kitchen.role.BAKERY': 'Bakery',
+  'catalog.editor.kitchen.role.PACKING': 'Packing',
+  'catalog.editor.kitchen.role.EXPO': 'Expo',
   'catalog.editor.variants.column.name': 'Variant name',
   'catalog.editor.variants.column.sku': 'SKU',
   'catalog.editor.variants.column.unit': 'Unit',
@@ -1684,6 +1700,20 @@ export const messagesEn = {
   'catalog.editor.availability.empty': 'This product is not offered at any location yet',
   'catalog.editor.availability.stop': 'Stop',
   'catalog.editor.availability.resume': 'Resume',
+  'catalog.editor.schedule.hint':
+    'Empty means always on sale. Windows below limit when this item can be sold, resolved in this branch’s own local time.',
+  'catalog.editor.schedule.loading': 'Loading schedule…',
+  'catalog.editor.schedule.noVariant': 'This product has no variant yet',
+  'catalog.editor.recommendations.hint':
+    'Shown to customers only while the target is active, in the menu, and not stopped — a stop that lifts restores it here on its own.',
+  'catalog.editor.recommendations.loading': 'Loading recommendations…',
+  'catalog.editor.recommendations.empty': 'No recommendations attached yet',
+  'catalog.editor.recommendations.column.target': 'Recommended product',
+  'catalog.editor.recommendations.moveUp': 'Move earlier',
+  'catalog.editor.recommendations.moveDown': 'Move later',
+  'catalog.editor.recommendations.detach': 'Remove',
+  'catalog.editor.recommendations.targetLabel': 'Variant ID to recommend',
+  'catalog.editor.recommendations.attach': 'Attach',
   'catalog.editor.history.scope':
     'Availability changes at this location only — product, price, and modifier edits are not audited yet.',
   'catalog.editor.history.loading': 'Loading…',

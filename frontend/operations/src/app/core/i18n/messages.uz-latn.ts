@@ -965,10 +965,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.tab.templates': 'Shablonlar',
   'settings.notifications.tab.routing': 'Yoʻnaltirish',
   'settings.notifications.automation.title': 'Avtomatlashtirish',
-  'settings.notifications.field.paymentLinkAutoSend': 'Toʻlov havolasini mijozga avtomatik yuborish',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Toʻlov havolasini mijozga avtomatik yuborish',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Hali ishlamaydi: hech qanday jarayon bu tugmachani hali oʻqimaydi, shuning uchun yoqish faqat tanlovni saqlaydi.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Agregator smenasi ochilishi/yopilishi haqida xabar berish',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Agregator smenasi ochilishi/yopilishi haqida xabar berish',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Hali ishlamaydi: platformada bu xabarni ishga tushiradigan agregator-smena hodisasi hali yoʻq.',
   'settings.notifications.create.action': 'Yangi shablon',
@@ -1014,7 +1016,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.editor.subject': 'Mavzu',
   'settings.notifications.editor.body': 'Matn',
   'settings.notifications.editor.variables': 'Oʻzgaruvchi qoʻshish',
-  'settings.notifications.editor.variables.empty': 'Bu bildirishnoma sinfi uchun oʻzgaruvchilar taklif etilmagan.',
+  'settings.notifications.editor.variables.empty':
+    'Bu bildirishnoma sinfi uchun oʻzgaruvchilar taklif etilmagan.',
   'settings.notifications.editor.preview': 'Mijoz qanday koʻradi',
   'settings.notifications.editor.save': 'Qoralamani saqlash',
   'settings.notifications.editor.saving': 'Saqlanmoqda…',
@@ -1033,9 +1036,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.testSend.result.ACCEPTED': 'Provayder qabul qildi.',
   'settings.notifications.testSend.result.REJECTED': 'Provayder rad etdi.',
   'settings.notifications.testSend.result.RETRYABLE': 'Uzatish xatosi — qayta urinib koʻring.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Noaniq — provayder allaqachon yuborgan boʻlishi mumkin.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Noaniq — provayder allaqachon yuborgan boʻlishi mumkin.',
   'settings.notifications.activate.confirm.title': 'Bu versiya faollashtirilsinmi?',
-  'settings.notifications.activate.confirm.body': 'Bu shablon boʻyicha har bir xabar shu matndan foydalanadi.',
+  'settings.notifications.activate.confirm.body':
+    'Bu shablon boʻyicha har bir xabar shu matndan foydalanadi.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'Bu versiya SMS shlyuzida hali «{state}» holatida. Bu oʻzgarmaguncha faollashtirish uni yuborilishiga olib kelmaydi.',
   'settings.notifications.activate.confirm.confirm': 'Faollashtirish',
@@ -1056,9 +1061,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.routing.action.editTopic': 'Mavzuni oʻzgartirish',
   'settings.notifications.routing.action.unbind': 'Uzish',
   'settings.notifications.routing.unbind.confirm.title': 'Bu chat uzilsinmi?',
-  'settings.notifications.routing.unbind.confirm.body': 'U darhol barcha hodisa sinflarini olishni toʻxtatadi.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'U darhol barcha hodisa sinflarini olishni toʻxtatadi.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Uzish',
-  'settings.notifications.routing.topic.prompt': 'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
+  'settings.notifications.routing.topic.prompt':
+    'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
   'settings.notifications.routing.topic.save': 'Saqlash',
 
   // 10.10 Maʻlumotnoma maʻlumotlari
@@ -1603,6 +1610,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.tab.photos': 'Rasmlar',
   'catalog.editor.tab.fiscal': 'Fiskal maʻlumotlar',
   'catalog.editor.tab.availability': 'Mavjudlik',
+  'catalog.editor.tab.schedule': 'Sotuv jadvali',
+  'catalog.editor.tab.recommendations': 'Tavsiya etilgan tovarlar',
   'catalog.editor.tab.history': 'Tarix',
   'catalog.editor.locale.label': 'Tahrirlash tili',
   'catalog.editor.save': 'Saqlash',
@@ -1619,7 +1628,14 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.basic.addCategory': 'Kategoriyaga qoʻshish…',
   'catalog.editor.basic.remove': 'Olib tashlash',
   'catalog.editor.basic.kitchenDept': 'Oshxona boʻlimi',
-  'catalog.editor.basic.kitchenDeptNote': 'Qurilmagan — ADR 0016 ochiq savoli',
+  'catalog.editor.kitchen.role.none': '— Yoʻnaltirilmagan —',
+  'catalog.editor.kitchen.role.HOT': 'Issiq sex',
+  'catalog.editor.kitchen.role.COLD': 'Sovuq sex',
+  'catalog.editor.kitchen.role.GRILL': 'Grill',
+  'catalog.editor.kitchen.role.BAR': 'Bar',
+  'catalog.editor.kitchen.role.BAKERY': 'Nonvoyxona',
+  'catalog.editor.kitchen.role.PACKING': 'Qadoqlash',
+  'catalog.editor.kitchen.role.EXPO': 'Ekspeditsiya',
   'catalog.editor.variants.column.name': 'Variant nomi',
   'catalog.editor.variants.column.sku': 'SKU',
   'catalog.editor.variants.column.unit': 'Oʻlchov birligi',
@@ -1671,6 +1687,20 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.availability.empty': 'Mahsulot hali birorta filialda taklif qilinmagan',
   'catalog.editor.availability.stop': 'Toʻxtatish',
   'catalog.editor.availability.resume': 'Qayta yoqish',
+  'catalog.editor.schedule.hint':
+    'Boʻsh boʻlsa — tovar doim sotuvda. Quyidagi oynalar sotuv vaqtini cheklaydi va filialning oʻz mahalliy vaqtida hisoblanadi.',
+  'catalog.editor.schedule.loading': 'Jadval yuklanmoqda…',
+  'catalog.editor.schedule.noVariant': 'Bu mahsulotda hali variant yoʻq',
+  'catalog.editor.recommendations.hint':
+    'Mijozga faqat tavsiya qilingan tovar faol, menyuda va stopda boʻlmaganda koʻrsatiladi — stopdan chiqarilishi uni shu yerga oʻz-oʻzidan qaytaradi.',
+  'catalog.editor.recommendations.loading': 'Tavsiyalar yuklanmoqda…',
+  'catalog.editor.recommendations.empty': 'Hali tavsiyalar qoʻshilmagan',
+  'catalog.editor.recommendations.column.target': 'Tavsiya etilgan tovar',
+  'catalog.editor.recommendations.moveUp': 'Yuqoriga koʻchirish',
+  'catalog.editor.recommendations.moveDown': 'Pastga koʻchirish',
+  'catalog.editor.recommendations.detach': 'Oʻchirish',
+  'catalog.editor.recommendations.targetLabel': 'Tavsiya qilinadigan variant ID',
+  'catalog.editor.recommendations.attach': 'Qoʻshish',
   'catalog.editor.history.scope':
     'Faqat shu filialdagi mavjudlik oʻzgarishlari — mahsulot, narx va modifikator tahrirlari hali audit qilinmaydi.',
   'catalog.editor.history.loading': 'Yuklanmoqda…',
@@ -1758,7 +1788,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.menus.filter.all': 'Barchasi',
   'catalog.menus.search.placeholder': 'Nomi yoki SKU boʻyicha qidirish',
   'catalog.menus.selectAll': 'Barcha qatorlarni tanlash',
-  'catalog.menus.selectionCapped': 'Faqat birinchi {cap} tasi — qo\'llang, so\'ng qolganlarini tanlang',
+  'catalog.menus.selectionCapped':
+    "Faqat birinchi {cap} tasi — qo'llang, so'ng qolganlarini tanlang",
   'catalog.menus.column.offering': 'Menyudagi holati',
   'catalog.menus.column.fulfillment': 'Buyurtma turlari',
   'catalog.menus.fulfillment.DELIVERY': 'Yetk',
@@ -2149,7 +2180,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.dispatch.hint':
     'Buyurtmani kuryer ustiga tashlab tayinlang. Uni orqaga, "Tayinlanmagan"ga tashlab, tayinlashni bekor qiling.',
   'delivery.dispatch.column.unassigned': 'Tayinlanmagan',
-  'delivery.dispatch.column.ineligible': 'Bu yerga tashlab bo\'lmaydi — {reason}',
+  'delivery.dispatch.column.ineligible': "Bu yerga tashlab bo'lmaydi — {reason}",
   'delivery.dispatch.action.unassign': 'Tayinlashni bekor qilish',
   'delivery.dispatch.status.PLANNED': 'Rejalashtirilgan',
   'delivery.dispatch.status.WAITING_TO_SOURCE': 'Kuryer izlanmoqda',

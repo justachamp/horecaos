@@ -288,6 +288,17 @@ export const operationsPaths = {
   },
 
   /**
+   * Routes a catalogue node to a station role (the brand layer) or a station
+   * (the location layer) -- `KitchenStationController.route`, row 4.2g's
+   * kitchen department. `POST`-only; naming `stationRole` and leaving
+   * `stationId` null writes the brand layer, which is what the product
+   * editor's picker always does.
+   */
+  kitchenRoutingRules(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/routing-rules`;
+  },
+
+  /**
    * Table availability for a window (ADR 0047, `ReservationController`, IA
    * §1.5) — on {@link LEGACY_TENANT_PREFIX} directly under the location, not
    * under `/dine-in`: the controller's own `@RequestMapping` has no such

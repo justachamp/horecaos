@@ -174,7 +174,34 @@
                     }
                   </dd>
                   <dt class="q-caption">{{ 'catalog.editor.basic.kitchenDept' | t }}</dt>
-                  <dd class="q-caption">{{ 'catalog.editor.basic.kitchenDeptNote' | t }}</dd>
+                  <dd class="editor__status-row">
+                    <select
+                      #kitchenRoleSelect
+                      [value]="kitchenRoleSelection()"
+                      (change)="kitchenRoleSelection.set($any($event.target).value)"
+                      data-testid="editor-kitchen-role-select"
+                    >
+                      <option value="">{{ 'catalog.editor.kitchen.role.none' | t }}</option>
+                      @for (role of stationRoles; track role) {
+                        <option [value]="role">{{ kitchenRoleLabel(role) }}</option>
+                      }
+                    </select>
+                    <button
+                      type="button"
+                      [disabled]="kitchenSaving() || !kitchenRoleSelection()"
+                      (click)="saveKitchenDepartment(kitchenRoleSelection())"
+                      data-testid="editor-save-kitchen-role"
+                    >
+                      {{
+                        kitchenSaving()
+                          ? ('catalog.editor.saving' | t)
+                          : ('catalog.editor.save' | t)
+                      }}
+                    </button>
+                    @if (kitchenNotice(); as notice) {
+                      <span class="q-caption">{{ notice }}</span>
+                    }
+                  </dd>
                 </dl>
               </div>
             }
@@ -653,6 +680,120 @@
                       }
                     </tbody>
                   </table>
+                }
+              </div>
+            }
+            @case ('SCHEDULE') {
+              <div class="editor__section">
+                <p class="q-caption">{{ 'catalog.editor.schedule.hint' | t }}</p>
+                @if (scheduleLoading()) {
+                  <p class="q-caption">{{ 'catalog.editor.schedule.loading' | t }}</p>
+                } @else if (!defaultVariantId()) {
+                  <p class="q-caption">{{ 'catalog.editor.schedule.noVariant' | t }}</p>
+                } @else {
+                  <q-schedule-grid
+                    [rules]="scheduleWindows()"
+                    [showExceptions]="false"
+                    (rulesChange)="onScheduleWindowsChange($event)"
+                    data-testid="editor-schedule-grid"
+                  />
+                  <button
+                    type="button"
+                    [disabled]="scheduleSaving()"
+                    (click)="saveSchedule()"
+                    data-testid="editor-save-schedule"
+                  >
+                    {{
+                      scheduleSaving() ? ('catalog.editor.saving' | t) : ('catalog.editor.save' | t)
+                    }}
+                  </button>
+                  @if (scheduleNotice(); as notice) {
+                    <span class="q-caption">{{ notice }}</span>
+                  }
+                }
+              </div>
+            }
+            @case ('RECOMMENDATIONS') {
+              <div class="editor__section">
+                <p class="q-caption">{{ 'catalog.editor.recommendations.hint' | t }}</p>
+
+                @if (recommendationsLoading()) {
+                  <p class="q-caption">{{ 'catalog.editor.recommendations.loading' | t }}</p>
+                } @else if (recommendations().length === 0) {
+                  <p class="q-caption">{{ 'catalog.editor.recommendations.empty' | t }}</p>
+                } @else {
+                  <table class="editor__table">
+                    <thead>
+                      <tr>
+                        <th>{{ 'catalog.editor.recommendations.column.target' | t }}</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (item of recommendations(); track item.recommendationId) {
+                        <tr>
+                          <td>
+                            {{ item.targetProductName || item.targetVariantId }}
+                            <span class="q-caption q-mono">{{ item.targetVariantId }}</span>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              [disabled]="recommendationSaving()"
+                              (click)="moveRecommendation(item, -1)"
+                              [attr.aria-label]="'catalog.editor.recommendations.moveUp' | t"
+                              data-testid="editor-recommendation-move-up"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              [disabled]="recommendationSaving()"
+                              (click)="moveRecommendation(item, 1)"
+                              [attr.aria-label]="'catalog.editor.recommendations.moveDown' | t"
+                              data-testid="editor-recommendation-move-down"
+                            >
+                              ↓
+                            </button>
+                            <button
+                              type="button"
+                              [disabled]="recommendationSaving()"
+                              (click)="detachRecommendation(item)"
+                              data-testid="editor-recommendation-detach"
+                            >
+                              {{ 'catalog.editor.recommendations.detach' | t }}
+                            </button>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+
+                <label class="editor__field">
+                  <span class="q-body-sm">{{
+                    'catalog.editor.recommendations.targetLabel' | t
+                  }}</span>
+                  <input
+                    #newRecommendationVariant
+                    type="text"
+                    class="q-mono"
+                    data-testid="editor-recommendation-target"
+                  />
+                </label>
+                <button
+                  type="button"
+                  [disabled]="recommendationSaving()"
+                  (click)="
+                    attachRecommendation(newRecommendationVariant.value);
+                    newRecommendationVariant.value = ''
+                  "
+                  data-testid="editor-recommendation-attach"
+                >
+                  {{ 'catalog.editor.recommendations.attach' | t }}
+                </button>
+                @if (recommendationNotice(); as notice) {
+                  <span class="q-caption">{{ notice }}</span>
                 }
               </div>
             }

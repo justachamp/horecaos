@@ -955,10 +955,12 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.tab.templates': 'Шаблоны',
   'settings.notifications.tab.routing': 'Маршрутизация',
   'settings.notifications.automation.title': 'Автоматизация',
-  'settings.notifications.field.paymentLinkAutoSend': 'Отправлять клиенту ссылку на оплату автоматически',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Отправлять клиенту ссылку на оплату автоматически',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Пока не действует: ни один сценарий ещё не читает этот переключатель, поэтому включение только сохраняет выбор.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Уведомлять об открытии/закрытии смены агрегатора',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Уведомлять об открытии/закрытии смены агрегатора',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Пока не действует: в платформе ещё нет самого события смены агрегатора, которое запускало бы это уведомление.',
   'settings.notifications.create.action': 'Новый шаблон',
@@ -1004,7 +1006,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.editor.subject': 'Тема',
   'settings.notifications.editor.body': 'Текст',
   'settings.notifications.editor.variables': 'Вставить переменную',
-  'settings.notifications.editor.variables.empty': 'Для этого класса уведомлений переменные не предложены.',
+  'settings.notifications.editor.variables.empty':
+    'Для этого класса уведомлений переменные не предложены.',
   'settings.notifications.editor.preview': 'Как увидит клиент',
   'settings.notifications.editor.save': 'Сохранить черновик',
   'settings.notifications.editor.saving': 'Сохранение…',
@@ -1023,15 +1026,18 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.testSend.result.ACCEPTED': 'Принято провайдером.',
   'settings.notifications.testSend.result.REJECTED': 'Отклонено провайдером.',
   'settings.notifications.testSend.result.RETRYABLE': 'Ошибка передачи — попробуйте ещё раз.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Неопределённо — провайдер, возможно, уже отправил.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Неопределённо — провайдер, возможно, уже отправил.',
   'settings.notifications.activate.confirm.title': 'Активировать эту версию?',
-  'settings.notifications.activate.confirm.body': 'Каждое сообщение по этому шаблону будет использовать этот текст.',
+  'settings.notifications.activate.confirm.body':
+    'Каждое сообщение по этому шаблону будет использовать этот текст.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'Эта версия пока «{state}» у SMS-шлюза. Активация не заставит её отправляться, пока это не изменится.',
   'settings.notifications.activate.confirm.confirm': 'Активировать',
   'settings.notifications.routing.lead':
     'Какие из привязанных Telegram-чатов этого бренда слышат какие события, и их форум-тема.',
-  'settings.notifications.routing.empty': 'Ни один чат ещё не привязан. Отправьте «/link <код>» в Telegram-группе, чтобы привязать её.',
+  'settings.notifications.routing.empty':
+    'Ни один чат ещё не привязан. Отправьте «/link <код>» в Telegram-группе, чтобы привязать её.',
   'settings.notifications.routing.column.chat': 'Чат',
   'settings.notifications.routing.column.topic': 'Тема',
   'settings.notifications.routing.column.status': 'Статус',
@@ -1045,9 +1051,11 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.routing.action.editTopic': 'Сменить тему',
   'settings.notifications.routing.action.unbind': 'Отвязать',
   'settings.notifications.routing.unbind.confirm.title': 'Отвязать этот чат?',
-  'settings.notifications.routing.unbind.confirm.body': 'Он сразу перестанет получать любые классы событий.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'Он сразу перестанет получать любые классы событий.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Отвязать',
-  'settings.notifications.routing.topic.prompt': 'ID темы форума — оставьте пустым для обычного чата',
+  'settings.notifications.routing.topic.prompt':
+    'ID темы форума — оставьте пустым для обычного чата',
   'settings.notifications.routing.topic.save': 'Сохранить',
 
   // 10.10 Справочные данные
@@ -1589,6 +1597,8 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.tab.photos': 'Фото',
   'catalog.editor.tab.fiscal': 'Фискальные данные',
   'catalog.editor.tab.availability': 'Наличие',
+  'catalog.editor.tab.schedule': 'График продаж',
+  'catalog.editor.tab.recommendations': 'Рекомендованные товары',
   'catalog.editor.tab.history': 'История',
   'catalog.editor.locale.label': 'Язык редактирования',
   'catalog.editor.save': 'Сохранить',
@@ -1605,7 +1615,14 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.basic.addCategory': 'Добавить в категорию…',
   'catalog.editor.basic.remove': 'Убрать',
   'catalog.editor.basic.kitchenDept': 'Отдел кухни',
-  'catalog.editor.basic.kitchenDeptNote': 'Не построено — открытый вопрос ADR 0016',
+  'catalog.editor.kitchen.role.none': '— Не назначено —',
+  'catalog.editor.kitchen.role.HOT': 'Горячий цех',
+  'catalog.editor.kitchen.role.COLD': 'Холодный цех',
+  'catalog.editor.kitchen.role.GRILL': 'Гриль',
+  'catalog.editor.kitchen.role.BAR': 'Бар',
+  'catalog.editor.kitchen.role.BAKERY': 'Пекарня',
+  'catalog.editor.kitchen.role.PACKING': 'Упаковка',
+  'catalog.editor.kitchen.role.EXPO': 'Экспедиция',
   'catalog.editor.variants.column.name': 'Название варианта',
   'catalog.editor.variants.column.sku': 'SKU',
   'catalog.editor.variants.column.unit': 'Ед. изм.',
@@ -1657,6 +1674,20 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.availability.empty': 'Товар пока не предложен ни в одном филиале',
   'catalog.editor.availability.stop': 'В стоп',
   'catalog.editor.availability.resume': 'Снять со стопа',
+  'catalog.editor.schedule.hint':
+    'Пусто — значит товар всегда в продаже. Окна ниже ограничивают время продажи и рассчитываются по местному времени филиала.',
+  'catalog.editor.schedule.loading': 'Загрузка графика…',
+  'catalog.editor.schedule.noVariant': 'У этого товара пока нет варианта',
+  'catalog.editor.recommendations.hint':
+    'Показывается клиенту, только пока рекомендуемый товар активен, есть в меню и не в стопе — снятие со стопа само возвращает его сюда.',
+  'catalog.editor.recommendations.loading': 'Загрузка рекомендаций…',
+  'catalog.editor.recommendations.empty': 'Рекомендации пока не добавлены',
+  'catalog.editor.recommendations.column.target': 'Рекомендуемый товар',
+  'catalog.editor.recommendations.moveUp': 'Переместить выше',
+  'catalog.editor.recommendations.moveDown': 'Переместить ниже',
+  'catalog.editor.recommendations.detach': 'Удалить',
+  'catalog.editor.recommendations.targetLabel': 'ID варианта для рекомендации',
+  'catalog.editor.recommendations.attach': 'Добавить',
   'catalog.editor.history.scope':
     'Только изменения доступности в этом филиале — правки товара, цены и модификаторов пока не аудируются.',
   'catalog.editor.history.loading': 'Загрузка…',
