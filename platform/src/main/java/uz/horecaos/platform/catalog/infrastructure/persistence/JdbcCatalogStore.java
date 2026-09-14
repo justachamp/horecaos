@@ -1409,7 +1409,9 @@ public class JdbcCatalogStore {
                        si.tracking_mode AS tracking_mode,
                        pos.binary_available AS binary_available,
                        lo.status AS offering_status,
-                       lo.fulfillment_modes AS fulfillment_modes
+                       lo.fulfillment_modes AS fulfillment_modes,
+                       last_movement.reason_code AS stop_reason_code,
+                       last_movement.occurred_at AS stop_changed_at
                 FROM catalog.variants v
                 JOIN catalog.products p
                     ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
@@ -1435,6 +1437,18 @@ public class JdbcCatalogStore {
                     ON si.variant_id = v.id AND si.tenant_id = v.tenant_id AND si.location_id = :locationId
                 LEFT JOIN inventory.positions pos
                     ON pos.stock_item_id = si.id AND pos.tenant_id = si.tenant_id
+                -- gap map row 2.5b: the stop explainer's own source. The most
+                -- recent AVAILABILITY_CHANGE movement on this stock item names
+                -- who last touched it — ix_movements_by_item (V0019) already
+                -- keys on exactly (stock_item_id, sequence_number DESC).
+                LEFT JOIN LATERAL (
+                    SELECT m.reason_code, m.occurred_at
+                    FROM inventory.movements m
+                    WHERE m.stock_item_id = si.id AND m.tenant_id = si.tenant_id
+                      AND m.movement_type = 'AVAILABILITY_CHANGE'
+                    ORDER BY m.sequence_number DESC
+                    LIMIT 1
+                ) last_movement ON true
                 WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId
                   AND v.status = 'ACTIVE' AND p.status = 'ACTIVE'
                   AND (CAST(:cursor AS uuid) IS NULL OR v.id > CAST(:cursor AS uuid))
@@ -1471,6 +1485,8 @@ public class JdbcCatalogStore {
                         available = false;
                     }
                     String fulfillmentModesRaw = row.getString("fulfillment_modes");
+                    String stopReasonCode = row.getString("stop_reason_code");
+                    OffsetDateTime stopChangedAtRaw = row.getObject("stop_changed_at", OffsetDateTime.class);
                     return new VariantAvailabilityRow(
                             row.getObject("variant_id", UUID.class),
                             row.getString("product_name"),
@@ -1478,9 +1494,83 @@ public class JdbcCatalogStore {
                             available,
                             trackingMode,
                             row.getString("offering_status"),
-                            fulfillmentModesRaw == null ? List.of() : List.of(fulfillmentModesRaw.split(",")));
+                            fulfillmentModesRaw == null ? List.of() : List.of(fulfillmentModesRaw.split(",")),
+                            stopSourceOf(stopReasonCode),
+                            stopReasonCode,
+                            stopChangedAtRaw == null ? null : stopChangedAtRaw.toInstant());
                 })
                 .list();
+    }
+
+    /**
+     * The gap map row 2.5b explainer's own three-way classification, off the
+     * one signal already distinguishing the two real sources today: {@code
+     * PosAvailabilityPoll}'s own fixed {@code POS_STOP_LIST} reason code
+     * (that class's own constant) against every other reason a human toggle
+     * sends, single or bulk (the console's {@code
+     * OPERATIONS_STOP_LIST_TOGGLE} and whatever an operator types on a bulk
+     * stop alike). {@code UNKNOWN} is not a fourth source; it is "never
+     * toggled since listed", which is the honest answer when no movement
+     * exists to read a source off at all.
+     */
+    private static String stopSourceOf(@Nullable String reasonCode) {
+        if (reasonCode == null) {
+            return "UNKNOWN";
+        }
+        return "POS_STOP_LIST".equals(reasonCode) ? "POS" : "MANUAL";
+    }
+
+    /**
+     * The stop list's own tab badges (gap map row 2.5), one aggregate over
+     * every matching variant rather than the client counting the one page it
+     * has loaded — the row's own finding: "the tab counts... only cover the
+     * 50-row page already loaded, so 'what is on stop right now' is not
+     * answerable without scrolling the whole catalog". Available/on-stop
+     * follow {@link #variantsAtLocation}'s own row mapper exactly (untracked
+     * or binary-available is available; everything else, unlisted included,
+     * is on stop), so a badge and its tab's own filtered page always agree.
+     *
+     * @param search same case-insensitive product-name-or-SKU match {@link
+     *               #variantsAtLocation} takes, so the badges track the
+     *               search box rather than the whole catalog once a search
+     *               is typed
+     */
+    public VariantAvailabilityCountsRow variantAvailabilityCounts(
+            UUID tenantId, UUID brandId, UUID locationId, String locale, @Nullable String search) {
+        String searchPattern = search == null || search.isBlank() ? null : "%" + search.trim() + "%";
+        return jdbc.sql("""
+                SELECT
+                    COUNT(*) AS total,
+                    COUNT(*) FILTER (WHERE
+                        si.tracking_mode = 'UNTRACKED'
+                        OR (si.tracking_mode = 'BINARY' AND pos.binary_available = true)
+                    ) AS available
+                FROM catalog.variants v
+                JOIN catalog.products p
+                    ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
+                LEFT JOIN catalog.translations t
+                    ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
+                       AND t.brand_id = p.brand_id AND t.locale = :locale
+                LEFT JOIN inventory.stock_items si
+                    ON si.variant_id = v.id AND si.tenant_id = v.tenant_id AND si.location_id = :locationId
+                LEFT JOIN inventory.positions pos
+                    ON pos.stock_item_id = si.id AND pos.tenant_id = si.tenant_id
+                WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId
+                  AND v.status = 'ACTIVE' AND p.status = 'ACTIVE'
+                  AND (CAST(:search AS varchar) IS NULL
+                       OR t.name ILIKE :search OR v.sku ILIKE :search)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("locale", locale)
+                .param("search", searchPattern)
+                .query((row, number) -> {
+                    long total = row.getLong("total");
+                    long available = row.getLong("available");
+                    return new VariantAvailabilityCountsRow(total, available, total - available);
+                })
+                .single();
     }
 
     /**
@@ -2091,6 +2181,21 @@ public class JdbcCatalogStore {
      * @param fulfillmentModes {@code catalog.location_offerings.fulfillment_modes}
      *                         — empty when no offering row exists here at all
      */
+    /**
+     * @param stopSource {@code MANUAL} | {@code POS} | {@code UNKNOWN} — gap
+     *                   map row 2.5b's explainer, derived from {@code
+     *                   inventory.movements}' own reason code rather than a
+     *                   new column: {@code POS_STOP_LIST} is {@code
+     *                   PosAvailabilityPoll}'s own reason, every other
+     *                   non-null reason is a human toggle (the console's own
+     *                   single/bulk stop both send one), and {@code UNKNOWN}
+     *                   means the item has never been toggled since it was
+     *                   listed — its current state is the untouched default.
+     * @param stopReasonCode the raw reason on that same latest movement, for
+     *                       an operator who wants more than the three-way
+     *                       classification
+     * @param stopChangedAt when that movement happened
+     */
     public record VariantAvailabilityRow(
             UUID variantId,
             String productName,
@@ -2098,7 +2203,13 @@ public class JdbcCatalogStore {
             boolean available,
             @Nullable String trackingMode,
             @Nullable String offeringStatus,
-            List<String> fulfillmentModes) {}
+            List<String> fulfillmentModes,
+            String stopSource,
+            @Nullable String stopReasonCode,
+            @Nullable Instant stopChangedAt) {}
+
+    /** {@link #variantAvailabilityCounts}'s own aggregate. */
+    public record VariantAvailabilityCountsRow(long total, long available, long onStop) {}
 
     public record PublicationRow(
             UUID id, PublicationStatus status, String contentHash, UUID catalogId, String channel) {}

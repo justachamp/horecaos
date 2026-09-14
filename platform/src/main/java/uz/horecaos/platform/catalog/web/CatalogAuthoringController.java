@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -614,6 +615,23 @@ public class CatalogAuthoringController {
         return new Page<>(items, nextCursor);
     }
 
+    @GetMapping("/locations/{locationId}/variants/availability-counts")
+    @RequiresCapability(value = Capability.INVENTORY_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "The stop list's tab badges: all / available / on stop",
+            description = "gap map row 2.5: exact over the whole catalog rather than the one page "
+                    + "the stop list has loaded, and following the same search box (`search`, "
+                    + "matches product name or SKU) so the badges track a typed search.")
+    public ResponseEntity<VariantAvailabilityCountsResponse> variantAvailabilityCounts(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestParam(defaultValue = "uz") String locale,
+            @RequestParam(required = false) @Nullable String search) {
+        return ResponseEntity.ok(VariantAvailabilityCountsResponse.of(
+                authoring.variantAvailabilityCounts(tenantId, brandId, locationId, locale, search)));
+    }
+
     @PostMapping("/locations/{locationId}/variants/bulk-offering-status")
     @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
@@ -924,6 +942,14 @@ public class CatalogAuthoringController {
      *                        question
      * @param fulfillmentModes empty when {@code offeringStatus} is null
      */
+    /**
+     * @param stopSource     gap map row 2.5b's explainer: {@code MANUAL} |
+     *                       {@code POS} | {@code UNKNOWN} — see {@link
+     *                       JdbcCatalogStore.VariantAvailabilityRow}'s own doc
+     * @param stopReasonCode the raw reason behind {@code stopSource}, from
+     *                       the same latest {@code inventory.movements} row
+     * @param stopChangedAt  when that movement happened
+     */
     public record VariantAvailabilityResponse(
             UUID variantId,
             String productName,
@@ -931,7 +957,10 @@ public class CatalogAuthoringController {
             boolean available,
             @Nullable String trackingMode,
             @Nullable String offeringStatus,
-            List<String> fulfillmentModes) {
+            List<String> fulfillmentModes,
+            String stopSource,
+            @Nullable String stopReasonCode,
+            @Nullable Instant stopChangedAt) {
 
         static VariantAvailabilityResponse of(JdbcCatalogStore.VariantAvailabilityRow row) {
             return new VariantAvailabilityResponse(
@@ -941,7 +970,17 @@ public class CatalogAuthoringController {
                     row.available(),
                     row.trackingMode(),
                     row.offeringStatus(),
-                    row.fulfillmentModes());
+                    row.fulfillmentModes(),
+                    row.stopSource(),
+                    row.stopReasonCode(),
+                    row.stopChangedAt());
+        }
+    }
+
+    /** {@link #variantAvailabilityCounts}'s own response — gap map row 2.5's tab badges. */
+    public record VariantAvailabilityCountsResponse(long total, long available, long onStop) {
+        static VariantAvailabilityCountsResponse of(JdbcCatalogStore.VariantAvailabilityCountsRow row) {
+            return new VariantAvailabilityCountsResponse(row.total(), row.available(), row.onStop());
         }
     }
 }
