@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -41,6 +42,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.ordering.application.AggregatorOrderIntakeService;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
 import uz.horecaos.platform.ordering.application.LiveBoardQueryService;
@@ -107,6 +109,7 @@ public class OperationsOrderController {
     private final OperatorCustomerLookupService customerLookup;
     private final OrderBulkActionService bulkActions;
     private final LiveBoardQueryService liveBoard;
+    private final AggregatorOrderIntakeService aggregatorOrders;
 
     /**
      * Every capability {@link OrderActionsPolicy#availableFor} reads. Computed
@@ -137,7 +140,8 @@ public class OperationsOrderController {
             OperatorOrderingService operatorOrdering,
             OperatorCustomerLookupService customerLookup,
             OrderBulkActionService bulkActions,
-            LiveBoardQueryService liveBoard) {
+            LiveBoardQueryService liveBoard,
+            AggregatorOrderIntakeService aggregatorOrders) {
         this.orderQuery = orderQuery;
         this.orderState = orderState;
         this.outcomes = outcomes;
@@ -151,6 +155,7 @@ public class OperationsOrderController {
         this.customerLookup = customerLookup;
         this.bulkActions = bulkActions;
         this.liveBoard = liveBoard;
+        this.aggregatorOrders = aggregatorOrders;
     }
 
     /**
@@ -412,6 +417,7 @@ public class OperationsOrderController {
                     body.lines().stream().map(OrderLineRequest::toLine).toList(),
                     body.destination() == null ? null : body.destination().toDestination(),
                     body.paymentMethodCode(),
+                    body.promoCode(),
                     idempotencyKey,
                     currentActor.get().subject(),
                     null));
@@ -448,6 +454,50 @@ public class OperationsOrderController {
                     unpriced.getMessage(),
                     Map.of("reason", unpriced.code(), "subjectId", String.valueOf(unpriced.subjectId())));
         }
+    }
+
+    @PostMapping("/aggregator-entries")
+    @RequiresCapability(value = Capability.ORDER_PLACE, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Record an order an aggregator phoned through by hand",
+            description = "orders.md §5, gap map row 1.3g (ADR 0040). For when an aggregator's "
+                    + "own integration is down and they call the branch instead: the order is "
+                    + "recorded under that aggregator's own AGGREGATOR-system-type channel with "
+                    + "the total it already collected, never run back through the HorecaOS quote "
+                    + "pipeline — `pricing_authority = EXTERNAL`, `entry_mode = MANUAL`, and "
+                    + "`origin`/`marketplace_binding_id` set exactly as an automated partner push "
+                    + "sets them, so this order counts in the channel mix as what it is rather "
+                    + "than as an ordinary own-channel sale. Creates no customer account: a "
+                    + "marketplace order never matches one (ADR 0040).")
+    public ResponseEntity<PlaceOrderResponse> aggregatorEntry(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
+            @Valid @RequestBody AggregatorOrderRequest body) {
+        var result = aggregatorOrders.create(new AggregatorOrderIntakeService.Command(
+                tenantId,
+                brandId,
+                locationId,
+                body.channelCode(),
+                body.externalOrderId(),
+                body.lines().stream().map(AggregatorOrderLineRequest::toLine).toList(),
+                body.currency(),
+                body.subtotalMinor(),
+                body.discountMinor(),
+                body.feeMinor(),
+                body.totalMinor(),
+                idempotencyKey,
+                currentActor.get().subject()));
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new PlaceOrderResponse(
+                        result.orderId(),
+                        result.publicOrderNumber(),
+                        OrderStatus.RECEIVED.name(),
+                        1,
+                        result.replayed() ? "REPLAYED" : "CREATED",
+                        List.of()));
     }
 
     @PostMapping("/customer-lookups")
@@ -1330,12 +1380,15 @@ public class OperationsOrderController {
      *                          the caller the same way it resolves any other
      *                          channel code — this endpoint does not invent a
      *                          channel-selection rule of its own
-     * @param paymentMethodCode <strong>{@code CASH} only, this release.</strong>
-     *                          A card link sent to the customer is a bigger
-     *                          piece of work this wave does not build, and
-     *                          this endpoint refuses anything else before it
-     *                          writes a row rather than half-building a
-     *                          payment path it cannot test end to end
+     * @param paymentMethodCode checked against the operator channel's own
+     *                          payment matrix inside {@code CheckoutEligibilityGuard},
+     *                          the same gate every other checkout passes
+     *                          through — this endpoint no longer narrows it to
+     *                          {@code CASH} itself (wave P14; see {@code
+     *                          OperatorOrderingService}'s own doc)
+     * @param promoCode         optional (ADR 0072); applied to the cart before
+     *                          pricing, exactly as a customer's own {@code
+     *                          POST /carts/{cartId}/promo-code} would
      */
     public record PlaceOrderRequest(
             @NotNull UUID customerAccountId,
@@ -1343,7 +1396,8 @@ public class OperationsOrderController {
             @NotNull FulfillmentMode fulfillmentMode,
             @NotEmpty @Size(max = 50) List<OrderLineRequest> lines,
             @Nullable DestinationRequest destination,
-            @NotBlank @Size(max = 32) String paymentMethodCode) {}
+            @NotBlank @Size(max = 32) String paymentMethodCode,
+            @Nullable @Size(max = 32) String promoCode) {}
 
     /** One line the operator entered into the basket, same shape as a storefront cart line. */
     public record OrderLineRequest(
@@ -1397,6 +1451,53 @@ public class OperationsOrderController {
             int version,
             String outcome,
             List<String> warnings) {}
+
+    // ---------------------------------------------- manual aggregator order entry (ADR 0040)
+
+    /**
+     * Record an aggregator's own order by hand (orders.md §5, row {@code 1.3g}).
+     *
+     * @param channelCode     the tenant's own {@code AGGREGATOR}-system-type
+     *                        channel (ADR 0036) for this aggregator — resolved
+     *                        the same way the operator channel is, never a
+     *                        second binding picker
+     * @param externalOrderId the aggregator's own order number, stored as an
+     *                        {@code order_external_references} row so the
+     *                        board's {@code reference} filter finds it
+     * @param subtotalMinor   the aggregator's own totals, stored verbatim —
+     * @param discountMinor   HorecaOS validates only that they reconcile to
+     * @param feeMinor        {@code totalMinor}, never re-derives them
+     */
+    public record AggregatorOrderRequest(
+            @NotBlank @Size(max = 32) String channelCode,
+            @NotBlank @Size(max = 64) String externalOrderId,
+            @NotEmpty @Size(max = 50) List<AggregatorOrderLineRequest> lines,
+            @NotBlank @Size(min = 3, max = 3) String currency,
+            @PositiveOrZero long subtotalMinor,
+            @PositiveOrZero long discountMinor,
+            @PositiveOrZero long feeMinor,
+            @PositiveOrZero long totalMinor) {}
+
+    /**
+     * One line the operator typed off the aggregator's own order screen.
+     *
+     * @param variantId null when nothing in the catalogue matches what the
+     *                  aggregator called it — the same {@code UNMAPPED} shape
+     *                  an automated partner push uses rather than refusing
+     *                  the whole order over one line
+     */
+    public record AggregatorOrderLineRequest(
+            @Nullable UUID variantId,
+            @NotBlank @Size(max = 200) String nameSnapshot,
+            @Positive @Max(999) int quantity,
+            @PositiveOrZero long unitAmountMinor,
+            @Size(max = 128) @Nullable String externalItemReference) {
+
+        AggregatorOrderIntakeService.Line toLine() {
+            return new AggregatorOrderIntakeService.Line(
+                    variantId, nameSnapshot, quantity, unitAmountMinor, externalItemReference);
+        }
+    }
 
     /** A phone number to search, in the body — never a query string (orders.md §5.3). */
     public record CustomerLookupRequest(

@@ -104,6 +104,41 @@ public class JdbcProviderInstallationLookup
                 .optional();
     }
 
+    @Override
+    public Optional<BindingRef> bindingForInstallation(
+            UUID tenantId, UUID installationId, UUID brandId, @Nullable UUID locationId) {
+        return jdbc.sql("""
+                SELECT b.id, b.installation_id, b.tenant_id, b.brand_id, b.location_id,
+                       i.provider_category, i.provider_type
+                  FROM integration.bindings b
+                  JOIN integration.installations i
+                    ON i.id = b.installation_id AND i.tenant_id = b.tenant_id
+                 WHERE b.tenant_id = :tenantId
+                   AND b.installation_id = :installationId
+                   AND b.status = 'ACTIVE'
+                   AND i.status = 'ACTIVE'
+                   AND (
+                        (b.location_id = :locationId)
+                     OR (b.location_id IS NULL AND b.brand_id = :brandId)
+                   )
+                 ORDER BY (b.location_id IS NOT NULL) DESC, b.priority ASC
+                 LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("installationId", installationId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .query((rs, n) -> new BindingRef(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("installation_id", UUID.class),
+                        rs.getObject("tenant_id", UUID.class),
+                        ProviderCategory.valueOf(rs.getString("provider_category")),
+                        rs.getString("provider_type"),
+                        rs.getObject("brand_id", UUID.class),
+                        rs.getObject("location_id", UUID.class)))
+                .optional();
+    }
+
     /**
      * The per-tenant half is always read fresh — never cached, because {@code
      * status} and {@code secret_reference} can change at any moment and this

@@ -622,6 +622,7 @@ class CartCheckoutAndOrderTests {
                                 burgerVariant, 2, List.of(), null)),
                         null,
                         "CASH",
+                        null,
                         "idem-operator-place",
                         "operator-subject-9",
                         null)));
@@ -639,13 +640,18 @@ class CartCheckoutAndOrderTests {
     }
 
     /**
-     * ADR 0039's payment decision for this wave, enforced before a single row
-     * is written: a card link sent to the customer is a bigger piece of work
-     * this wave does not build, so nothing but {@code CASH} is accepted.
+     * Wave P14: the CASH-only guard wave P13 wrote in {@code
+     * OperatorOrderingService} itself is gone. What decides now is the same
+     * {@code CheckoutEligibilityGuard} channel-matrix check every other
+     * checkout passes through — {@code seedTenancyAndCatalog} already puts
+     * CLICK on this suite's STOREFRONT channel for every test
+     * ({@code enablePaymentMethodOnTheStorefrontChannel}), so an operator
+     * order naming it succeeds exactly as a CASH one does, with no hard-coded
+     * refusal in the way.
      */
     @Test
-    @DisplayName("an operator-placed order refuses anything but cash, this release")
-    void anOperatorPlacedOrderRefusesNonCashPayment() {
+    @DisplayName("an operator-placed order accepts a non-cash method the operator channel's matrix allows")
+    void anOperatorPlacedOrderAcceptsAChannelEnabledNonCashMethod() {
         var command = new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
                 TENANT,
                 BRAND,
@@ -657,16 +663,150 @@ class CartCheckoutAndOrderTests {
                         burgerVariant, 1, List.of(), null)),
                 null,
                 "CLICK",
-                "idem-operator-cash-only",
+                null,
+                "idem-operator-click",
                 "operator-subject-9",
                 null);
 
-        assertThatThrownBy(() -> tx(() -> operatorOrdering.place(command)))
-                .isInstanceOf(ApiException.class)
-                .satisfies(thrown ->
-                        assertThat(((ApiException) thrown).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+        var result = tx(() -> operatorOrdering.place(command));
 
-        assertThat(cartCount()).as("refused before a cart was ever opened").isZero();
+        assertThat(result.created()).isTrue();
+    }
+
+    /**
+     * The other half of the same fact: a method the operator channel's own
+     * matrix does not offer is refused by {@code CheckoutEligibilityGuard} —
+     * a settled {@code REJECTED} outcome naming why, not a thrown exception —
+     * for an operator order exactly as it already is for a customer's own.
+     * {@code BANK_TRANSFER} is deliberately a code {@code seedTenancyAndCatalog}
+     * never enables on the STOREFRONT channel, unlike CASH/CLICK/PAYME.
+     */
+    @Test
+    @DisplayName(
+            "an operator-placed order is rejected for a payment method the operator channel's matrix does not offer")
+    void anOperatorPlacedOrderRejectsAPaymentMethodTheChannelDoesNotOffer() {
+        var command = new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
+                TENANT,
+                BRAND,
+                LOCATION,
+                CUSTOMER,
+                "STOREFRONT",
+                FulfillmentMode.PICKUP,
+                List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
+                        burgerVariant, 1, List.of(), null)),
+                null,
+                "BANK_TRANSFER",
+                null,
+                "idem-operator-unoffered-method",
+                "operator-subject-9",
+                null);
+
+        var result = tx(() -> operatorOrdering.place(command));
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.outcome())
+                .isEqualTo(uz.horecaos.platform.ordering.application.CheckoutService.CheckoutResult.Outcome.REJECTED);
+        assertThat(result.rejectionCode()).isEqualTo("PAYMENT_METHOD_UNAVAILABLE");
+    }
+
+    /**
+     * ADR 0072, threaded from the operator's own request into {@link
+     * CartService#applyPromoCode} before pricing — the wiring wave P14 added.
+     *
+     * <p><b>Why this stops at verifying the call, not the order's own
+     * total.</b> Writing this test against a real activated coupon all the
+     * way through to a committed order surfaced a pre-existing defect three
+     * layers below anything this wave touches: {@code PricingEngine} (stage
+     * 7-8, {@code grossTotal = grossTotal - discountTotal} before {@code
+     * subtotal}/{@code total} are ever derived from it) reports {@code
+     * subtotalMinor} already net of the discount while separately reporting
+     * {@code discountMinor} for display — by design, per that method's own
+     * "Stage 8" comment. {@code ordering.orders}'s {@code
+     * ck_order_total_reconciles} (V0022, written before ADR 0072 existed)
+     * instead assumes {@code subtotal_minor} is gross and demands {@code
+     * total = subtotal + tax + fee - discount}, so any order — through this
+     * wave's wiring, the storefront's own {@code POST .../promo-code}, or
+     * the bot — that reaches checkout with a nonzero discount fails this
+     * constraint. No test anywhere in this suite (grep confirms this class
+     * is the only caller of {@code applyPromoCode} in the whole test tree)
+     * had exercised a discounted checkout end to end before this one, so
+     * nothing had caught it. Flagged in the wave report rather than patched
+     * here: fixing which side of that mismatch is wrong is a pricing-schema
+     * decision outside a P14 wiring change, and the constraint is shared by
+     * every checkout path in the platform, not this wave's own code.
+     *
+     * <p>What this test proves instead, unaffected by that separate defect:
+     * {@link OperatorOrderingService#place} calls {@link
+     * CartService#applyPromoCode} with exactly the tenant, brand, customer,
+     * cart and normalised code the request named, between filling the
+     * basket and pricing it — a {@link org.mockito.Mockito#spy} on the real,
+     * production {@link #carts} rather than a stand-in, so the coupon
+     * eligibility check it runs is the genuine one.
+     */
+    @Test
+    @DisplayName("an operator-placed order threads its promo code into CartService.applyPromoCode")
+    void anOperatorPlacedOrderAppliesAPromoCode() {
+        var promoCodeStore =
+                new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore(jdbc, objectMapper);
+        var authoring = new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService(promoCodeStore, clock);
+        var drafted = authoring.draft(
+                TENANT,
+                BRAND,
+                new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.PromoCodeDraft(
+                        "Promo OPERATOR10",
+                        "OPERATOR10",
+                        uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.DiscountShape
+                                .PERCENTAGE_OFF_ORDER,
+                        1_000,
+                        null,
+                        "UZS",
+                        0,
+                        List.of(),
+                        List.of(),
+                        null,
+                        100,
+                        null,
+                        null));
+        authoring.activate(TENANT, BRAND, drafted.couponId());
+
+        var spiedCarts = org.mockito.Mockito.spy(carts);
+        var operatorOrderingWithSpy =
+                new uz.horecaos.platform.ordering.application.OperatorOrderingService(spiedCarts, checkout);
+
+        var withCode = new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
+                TENANT,
+                BRAND,
+                LOCATION,
+                CUSTOMER,
+                "STOREFRONT",
+                FulfillmentMode.PICKUP,
+                List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
+                        burgerVariant, 1, List.of(), null)),
+                null,
+                "CASH",
+                "operator10",
+                "idem-operator-with-promo",
+                "operator-subject-9",
+                null);
+
+        // The transaction still rolls back on ck_order_total_reconciles — see
+        // this test's own doc — so the call is expected to throw exactly
+        // that constraint violation and no other failure. What matters here
+        // is that CartService.applyPromoCode was reached first, with the
+        // right arguments, which the verify below checks independently of
+        // how the transaction ultimately resolves.
+        assertThatThrownBy(() -> tx(() -> operatorOrderingWithSpy.place(withCode)))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_order_total_reconciles");
+
+        org.mockito.Mockito.verify(spiedCarts)
+                .applyPromoCode(
+                        org.mockito.ArgumentMatchers.eq(TENANT),
+                        org.mockito.ArgumentMatchers.eq(BRAND),
+                        org.mockito.ArgumentMatchers.eq(CUSTOMER),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.anyInt(),
+                        org.mockito.ArgumentMatchers.eq("operator10"));
     }
 
     /**
@@ -689,6 +829,7 @@ class CartCheckoutAndOrderTests {
                                 burgerVariant, 1, List.of(), null)),
                         null,
                         "CASH",
+                        null,
                         "idem-operator-no-destination",
                         "operator-subject-9",
                         null);
@@ -711,6 +852,7 @@ class CartCheckoutAndOrderTests {
                         new uz.horecaos.platform.ordering.application.OperatorOrderingService.Destination(
                                 UUID.randomUUID(), "A Customer", "+998901234567", null),
                         "CASH",
+                        null,
                         "idem-operator-unwanted-destination",
                         "operator-subject-9",
                         null);

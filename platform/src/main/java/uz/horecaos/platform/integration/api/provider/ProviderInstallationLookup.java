@@ -47,6 +47,31 @@ public interface ProviderInstallationLookup {
     }
 
     /**
+     * The single active binding of a known installation that covers a scope,
+     * chosen by location specificity — for a caller that already knows which
+     * installation it wants and has no per-capability code to resolve by.
+     *
+     * <p>{@link #primaryBinding} and {@link #candidateBindings} answer "which
+     * provider handles this capability here", resolved through {@code
+     * integration.binding_capabilities}. An aggregator order an operator keys
+     * in by hand (ADR 0040, wave P14's row {@code 1.3g}) asks a narrower
+     * question: the tenant's own operator channel already names the
+     * installation ({@code tenant.sales_channels.provider_installation_id}),
+     * so there is nothing left to resolve except which of that installation's
+     * bindings covers this branch — a MARKETPLACE binding registers no
+     * outbound capability at all, since nothing here ever calls out to it.
+     *
+     * @return empty when the installation has no active binding covering this
+     *         scope. Defaulted, like {@link #binding}, so the several test
+     *         doubles of this port that predate this need grow no mechanical
+     *         implementation.
+     */
+    default Optional<BindingRef> bindingForInstallation(
+            UUID tenantId, UUID installationId, UUID brandId, @Nullable UUID locationId) {
+        return Optional.empty();
+    }
+
+    /**
      * A binding's non-sensitive installation detail, resolved from ADR 0026.
      *
      * @param secretReference an ADR 0028 reference, resolved at call time by the

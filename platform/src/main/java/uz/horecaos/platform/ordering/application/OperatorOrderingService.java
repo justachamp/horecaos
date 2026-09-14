@@ -26,12 +26,22 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * than the account as {@code CUSTOMER}, which is what lands in {@code
  * ordering.orders.created_by_actor_type/id} (V0029).
  *
- * <p><strong>Cash only, this release.</strong> A card link sent to the
- * customer or any other online method is a bigger piece of work this wave does
- * not build, so {@link #place} refuses anything but {@code CASH} before it
- * writes a single row — the same "decide deliberately, do not half-build a
- * payment path" discipline {@code CustomerBotOrderingAdapter#checkoutForCash}
- * already applies for ADR 0075's chat channel.
+ * <p><strong>Payment is whatever the operator channel's own matrix offers,
+ * not a hard-coded list.</strong> Wave P13 refused anything but {@code CASH}
+ * here before writing a row; that check is gone, because {@link
+ * CheckoutEligibilityGuard} already asks the identical question of every
+ * other checkout — {@code tenant.channel_payment_methods} intersected with
+ * {@code PaymentIntentPort#canAcceptPayment} — and a second, narrower rule in
+ * front of it would just be a worse copy of the one rule that has to be right.
+ * Today's channel matrix for the tenant's operator channel may still enable
+ * cash alone, which is a configuration fact and not a rule this class states;
+ * enabling Click or Payme on that channel is a Settings change, not a release.
+ *
+ * <p><strong>A promo code applies exactly as a customer's own does</strong>
+ * (ADR 0072): {@link #place} calls {@link CartService#applyPromoCode} between
+ * filling the basket and pricing it, so the same eligibility check — active,
+ * in its window, not exhausted — runs on a phone order that runs on a
+ * self-service one.
  *
  * <p>The phone lookup ADR 0039 describes beside this is {@code
  * OperatorCustomerLookupService} — a separate class with separate
@@ -41,9 +51,6 @@ import uz.horecaos.platform.web.api.ErrorCode;
  */
 @Service
 public class OperatorOrderingService {
-
-    /** ADR 0039's payment decision for this wave: cash only, tested end to end. */
-    static final String CASH = "CASH";
 
     private final CartService carts;
     private final CheckoutService checkout;
@@ -82,23 +89,20 @@ public class OperatorOrderingService {
             List<OrderLine> lines,
             @Nullable Destination destination,
             String paymentMethodCode,
+            @Nullable String promoCode,
             String idempotencyKey,
             String operatorSubject,
             @Nullable String correlationId) {}
 
     /**
      * Opens a cart for the resolved customer, fills it exactly as entered,
-     * prices it and checks it out through {@link CheckoutService} — the same
-     * transaction, the same rules, and the same order that a customer's own
-     * checkout would produce, attributed to the operator who took the call.
+     * applies a promo code when one was given, prices it and checks it out
+     * through {@link CheckoutService} — the same transaction, the same rules,
+     * and the same order that a customer's own checkout would produce,
+     * attributed to the operator who took the call.
      */
     @Transactional
     public CheckoutService.CheckoutResult place(PlaceOrderCommand command) {
-        if (!CASH.equals(command.paymentMethodCode())) {
-            throw new ApiException(
-                    ErrorCode.VALIDATION_FAILED,
-                    "Only CASH is supported for an operator-placed order in this release (ADR 0039)");
-        }
         if (command.lines().isEmpty()) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "An order needs at least one line");
         }
@@ -157,6 +161,22 @@ public class OperatorOrderingService {
             version = view.cart().version();
         }
 
+        if (command.promoCode() != null && !command.promoCode().isBlank()) {
+            // ADR 0072, threaded exactly as a customer's own
+            // POST /carts/{cartId}/promo-code does: checked read-only against
+            // live coupon state, stored, and re-checked independently on every
+            // price that follows — this call does not decide anything the
+            // quote below will not decide again.
+            var view = carts.applyPromoCode(
+                    command.tenantId(),
+                    command.brandId(),
+                    command.customerAccountId(),
+                    cart.cartId(),
+                    version,
+                    command.promoCode());
+            version = view.cart().version();
+        }
+
         var priced =
                 carts.price(command.tenantId(), command.brandId(), command.customerAccountId(), cart.cartId(), version);
 
@@ -168,7 +188,7 @@ public class OperatorOrderingService {
                 priced.quote().quoteId(),
                 priced.quote().contextHash(),
                 command.idempotencyKey(),
-                CASH,
+                command.paymentMethodCode(),
                 0L,
                 "USER",
                 command.operatorSubject(),
