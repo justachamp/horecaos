@@ -110,6 +110,23 @@ public class AggregatorOrderIntakeService {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "Subtotal, discount and fee cannot be negative");
         }
 
+        // The header subtotal is operator-typed off the aggregator's own order
+        // screen, independent of the lines the operator also types below it — a
+        // mistyped digit in either would otherwise write a header and a line set
+        // that quietly disagree, with nothing at the database catching it
+        // (ck_order_total_reconciles only checks total against subtotal/tax/
+        // fee/discount, never against the lines' own sum). Line amounts, not the
+        // header, are what JdbcAggregatorOrderStore.create persists as each
+        // order_lines row's final_amount_minor, so this is the one check that
+        // keeps the header telling the truth about what was actually written.
+        long lineTotalMinor = command.lines().stream()
+                .mapToLong(line -> line.unitAmountMinor() * line.quantity())
+                .sum();
+        if (lineTotalMinor != command.subtotalMinor()) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "The subtotal does not match the sum of the lines given");
+        }
+
         // Idempotency-Key replay, the same contract every other mutating
         // endpoint gives (ADR 0031) — this path writes ordering.orders
         // directly rather than through CheckoutService, so it must give that

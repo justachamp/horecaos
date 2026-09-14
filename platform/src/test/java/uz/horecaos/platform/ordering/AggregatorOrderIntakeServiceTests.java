@@ -233,6 +233,59 @@ class AggregatorOrderIntakeServiceTests {
         assertThat(orderCount).isZero();
     }
 
+    @Test
+    @DisplayName("a subtotal that does not match the sum of the lines given is refused before anything is written")
+    void refusesAMistypedSubtotal() {
+        var command = new AggregatorOrderIntakeService.Command(
+                TENANT,
+                BRAND,
+                LOCATION,
+                "UZUM-TEZKOR",
+                "YE-9001",
+                // 2 * 25,000 = 50,000, but the operator typed the aggregator's subtotal as 45,000.
+                List.of(new AggregatorOrderIntakeService.Line(variantId, "Osh", 2, 25_000, null)),
+                "UZS",
+                45_000,
+                0,
+                0,
+                45_000,
+                "idem-aggregator-mistyped-subtotal",
+                "operator-subject-7");
+
+        assertThatThrownBy(() -> service.create(command)).isInstanceOf(ApiException.class);
+
+        long orderCount = jdbc.sql("SELECT count(*) FROM ordering.orders WHERE tenant_id = :tenantId")
+                .param("tenantId", TENANT)
+                .query(Long.class)
+                .single();
+        assertThat(orderCount).isZero();
+    }
+
+    @Test
+    @DisplayName("a subtotal that reconciles with the sum of several lines is accepted")
+    void acceptsASubtotalThatReconcilesAcrossMultipleLines() {
+        var command = new AggregatorOrderIntakeService.Command(
+                TENANT,
+                BRAND,
+                LOCATION,
+                "UZUM-TEZKOR",
+                "YE-9002",
+                List.of(
+                        new AggregatorOrderIntakeService.Line(variantId, "Osh", 2, 25_000, null),
+                        new AggregatorOrderIntakeService.Line(variantId, "Salad", 1, 10_000, null)),
+                "UZS",
+                60_000, // 2 * 25,000 + 1 * 10,000
+                0,
+                0,
+                60_000,
+                "idem-aggregator-reconciles",
+                "operator-subject-7");
+
+        var result = service.create(command);
+
+        assertThat(result.replayed()).isFalse();
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private record SalesChannelLookupAndBindings(UUID bindingId) {}
