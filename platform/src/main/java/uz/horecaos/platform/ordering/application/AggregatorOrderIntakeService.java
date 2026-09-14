@@ -8,8 +8,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.configuration.Ids;
-import uz.horecaos.platform.integration.api.provider.BindingRef;
-import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
+import uz.horecaos.platform.ordering.api.MarketplaceBindingLookup;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcAggregatorOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
@@ -41,22 +40,24 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * sales channel (ADR 0036) exactly as the rest of the New order screen picks
  * the operator channel — no second "which partner" picker. That channel's
  * {@code provider_installation_id} names the ADR 0026 installation, and
- * {@link ProviderInstallationLookup#bindingForInstallation} resolves the one
+ * {@link MarketplaceBindingLookup#bindingForInstallation} resolves the one
  * binding of it that covers this branch, which is what {@code
- * ordering.orders.marketplace_binding_id} actually points at.
+ * ordering.orders.marketplace_binding_id} actually points at. Ordering asks
+ * through this module's own port rather than {@code integration}'s directly
+ * — see {@link MarketplaceBindingLookup}'s own doc for why.
  */
 @Service
 public class AggregatorOrderIntakeService {
 
     private final SalesChannelLookup channels;
-    private final ProviderInstallationLookup installations;
+    private final MarketplaceBindingLookup installations;
     private final JdbcOrderStore orders;
     private final JdbcAggregatorOrderStore store;
     private final Clock clock;
 
     public AggregatorOrderIntakeService(
             SalesChannelLookup channels,
-            ProviderInstallationLookup installations,
+            MarketplaceBindingLookup installations,
             JdbcOrderStore orders,
             JdbcAggregatorOrderStore store,
             Clock clock) {
@@ -135,7 +136,7 @@ public class AggregatorOrderIntakeService {
                     ErrorCode.VALIDATION_FAILED,
                     "This channel has no marketplace installation configured (Settings > Sales channels)");
         }
-        BindingRef binding = installations
+        UUID bindingId = installations
                 .bindingForInstallation(command.tenantId(), installationId, command.brandId(), command.locationId())
                 .orElseThrow(() -> new ApiException(
                         ErrorCode.VALIDATION_FAILED,
@@ -159,7 +160,7 @@ public class AggregatorOrderIntakeService {
                 command.locationId(),
                 channel.id(),
                 channel.code(),
-                binding.bindingId(),
+                bindingId,
                 command.externalOrderId(),
                 command.lines().stream()
                         .map(line -> new JdbcAggregatorOrderStore.Line(

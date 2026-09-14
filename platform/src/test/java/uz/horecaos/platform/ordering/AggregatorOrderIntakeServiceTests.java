@@ -17,8 +17,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
+import uz.horecaos.platform.integration.api.provider.BindingRef;
 import uz.horecaos.platform.integration.provider.JdbcProviderEnvironmentLookup;
 import uz.horecaos.platform.integration.provider.JdbcProviderInstallationLookup;
+import uz.horecaos.platform.ordering.api.MarketplaceBindingLookup;
 import uz.horecaos.platform.ordering.application.AggregatorOrderIntakeService;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcAggregatorOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
@@ -85,7 +87,14 @@ class AggregatorOrderIntakeServiceTests {
         variantId = UUID.randomUUID();
 
         var channels = new JdbcSalesChannelStore(jdbc);
-        var installations = new JdbcProviderInstallationLookup(jdbc, clock, new JdbcProviderEnvironmentLookup(jdbc));
+        var providerInstallations =
+                new JdbcProviderInstallationLookup(jdbc, clock, new JdbcProviderEnvironmentLookup(jdbc));
+        // Same translation OrderingMarketplaceBindingAdapter performs in production — this test
+        // stays in the ordering package, so it cannot reach that package-private class directly.
+        MarketplaceBindingLookup installations =
+                (tenantId, installationId, brandId, locationId) -> providerInstallations
+                        .bindingForInstallation(tenantId, installationId, brandId, locationId)
+                        .map(BindingRef::bindingId);
         var orderStore = new JdbcOrderStore(jdbc);
         var aggregatorStore = new JdbcAggregatorOrderStore(jdbc);
         service = new AggregatorOrderIntakeService(channels, installations, orderStore, aggregatorStore, clock);
