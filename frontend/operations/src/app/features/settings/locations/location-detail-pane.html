@@ -246,32 +246,168 @@
         <h3 class="q-subhead">{{ 'settings.locations.hours.schedulesTitle' | t }}</h3>
         @for (binding of data.bindings; track binding.fulfillmentMode) {
           <div class="schedule">
-            <p class="q-body">
-              <strong>{{ binding.fulfillmentMode }}</strong> → {{ binding.scheduleName }}
-            </p>
+            <div class="schedule__head">
+              <p class="q-body">
+                <strong>{{ binding.fulfillmentMode }}</strong> → {{ binding.scheduleName }}
+              </p>
+              <div class="schedule__actions">
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="startEditingHours(binding)"
+                  [disabled]="editingMode() === binding.fulfillmentMode"
+                  [attr.data-testid]="'edit-hours-' + binding.fulfillmentMode"
+                >
+                  {{ 'settings.locations.hours.editSchedule' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="openRebindPicker(binding.fulfillmentMode)"
+                  [attr.data-testid]="'rebind-' + binding.fulfillmentMode"
+                >
+                  {{ 'settings.locations.hours.rebind' | t }}
+                </button>
+              </div>
+            </div>
             @if (binding.sharedWithLocationCount > 1) {
               <p class="q-caption shared-note">
                 {{
-                  'settings.locations.hours.shared' | t: { count: binding.sharedWithLocationCount }
+                  'settings.locations.hours.shared'
+                    | t: { count: binding.sharedWithLocationCount - 1 }
                 }}
               </p>
             }
-            <table class="grid">
-              <tbody>
-                @for (rule of binding.rules; track rule.dayOfWeek + rule.opensAt) {
-                  <tr>
-                    <td class="q-body-sm q-tnum">{{ rule.dayOfWeek }}</td>
-                    <td class="q-body-sm q-tnum">{{ rule.opensAt }}–{{ rule.closesAt }}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
+
+            @if (rebindingMode() === binding.fulfillmentMode) {
+              <ng-container
+                *ngTemplateOutlet="rebindPicker; context: { $implicit: binding.fulfillmentMode }"
+              />
+            }
+
+            @if (editingMode() === binding.fulfillmentMode) {
+              <q-schedule-grid
+                [rules]="draftRules()"
+                [exceptions]="draftExceptions()"
+                (rulesChange)="draftRules.set($event)"
+                (exceptionsChange)="draftExceptions.set($event)"
+              />
+              <p class="q-caption">{{ 'settings.locations.hours.exceptionRemoveNote' | t }}</p>
+              @if (hoursError(); as message) {
+                <p class="q-body-sm error" role="alert">{{ message }}</p>
+              }
+              <div class="form__actions">
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="cancelEditingHours()"
+                  [disabled]="hoursSaving()"
+                >
+                  {{ 'settings.locations.cancel' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="primary"
+                  (click)="saveHours()"
+                  [disabled]="hoursSaving()"
+                  data-testid="save-hours"
+                >
+                  {{
+                    hoursSaving()
+                      ? ('settings.locations.saving' | t)
+                      : ('settings.locations.save' | t)
+                  }}
+                </button>
+              </div>
+            } @else {
+              <table class="grid">
+                <tbody>
+                  @for (rule of binding.rules; track rule.dayOfWeek + rule.opensAt) {
+                    <tr>
+                      <td class="q-body-sm q-tnum">{{ rule.dayOfWeek }}</td>
+                      <td class="q-body-sm q-tnum">{{ rule.opensAt }}–{{ rule.closesAt }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
           </div>
         } @empty {
           <p class="q-body-sm">{{ 'settings.locations.hours.noBindings' | t }}</p>
         }
+
+        @for (mode of unboundModes(); track mode) {
+          <div class="schedule schedule--unbound">
+            <div class="schedule__head">
+              <p class="q-body">
+                <strong>{{ mode }}</strong> — {{ 'settings.locations.hours.notBound' | t }}
+              </p>
+              <button
+                type="button"
+                class="secondary"
+                (click)="openRebindPicker(mode)"
+                [attr.data-testid]="'rebind-' + mode"
+              >
+                {{ 'settings.locations.hours.rebind' | t }}
+              </button>
+            </div>
+            @if (rebindingMode() === mode) {
+              <ng-container *ngTemplateOutlet="rebindPicker; context: { $implicit: mode }" />
+            }
+          </div>
+        }
       </section>
     }
+
+    <ng-template #rebindPicker let-mode>
+      <div class="rebind">
+        @if (schedulesLoading()) {
+          <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+        } @else if (schedulesError(); as message) {
+          <p class="q-body-sm error" role="alert">{{ message }}</p>
+        } @else {
+          <select
+            class="q-body field"
+            [value]="rebindTarget()"
+            (change)="rebindTarget.set($any($event.target).value)"
+            data-testid="rebind-select"
+          >
+            <option value="">{{ 'settings.locations.hours.pickSchedule' | t }}</option>
+            @for (option of availableSchedules(); track option.id) {
+              <option [value]="option.id">
+                {{ option.name }} ({{ option.boundLocationCount }})
+              </option>
+            }
+          </select>
+        }
+        @if (rebindError(); as message) {
+          <p class="q-body-sm error" role="alert">{{ message }}</p>
+        }
+        <div class="form__actions">
+          <button
+            type="button"
+            class="secondary"
+            (click)="cancelRebind()"
+            [disabled]="rebindSaving()"
+          >
+            {{ 'settings.locations.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            class="primary"
+            (click)="confirmRebind()"
+            [disabled]="rebindSaving() || !rebindTarget()"
+            data-testid="confirm-rebind"
+          >
+            {{
+              rebindSaving()
+                ? ('settings.locations.saving' | t)
+                : ('settings.locations.hours.bind' | t)
+            }}
+          </button>
+        </div>
+      </div>
+    </ng-template>
 
     @if (activeTab() === 'load' && summary(); as data) {
       <section class="block">
@@ -318,26 +454,167 @@
 
       <section class="block">
         <h3 class="q-subhead">{{ 'settings.locations.load.bandsTitle' | t }}</h3>
-        <table class="grid">
-          <tbody>
-            @for (band of data.preparationBands; track band.startsAt + band.durationMinutes) {
+        @if (!editingBands()) {
+          <table class="grid">
+            <tbody>
+              @for (band of data.preparationBands; track band.startsAt + band.durationMinutes) {
+                <tr>
+                  <td class="q-body-sm">{{ band.fulfillmentMode ?? '—' }}</td>
+                  <td class="q-body-sm q-tnum">{{ band.dayOfWeek ?? '—' }}</td>
+                  <td class="q-body-sm q-tnum">{{ band.startsAt }}–{{ band.endsAt }}</td>
+                  <td class="q-body-sm q-tnum">
+                    {{ band.durationMinutes }} {{ 'settings.locations.load.minutes' | t }}
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td class="q-body-sm empty" colspan="4">
+                    {{ 'settings.locations.load.noBands' | t }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          <button
+            type="button"
+            class="secondary band-edit-start"
+            (click)="startEditingBands()"
+            data-testid="edit-bands"
+          >
+            {{ 'settings.locations.edit' | t }}
+          </button>
+        } @else {
+          <table class="grid band-editor">
+            <thead>
               <tr>
-                <td class="q-body-sm">{{ band.fulfillmentMode ?? '—' }}</td>
-                <td class="q-body-sm q-tnum">{{ band.dayOfWeek ?? '—' }}</td>
-                <td class="q-body-sm q-tnum">{{ band.startsAt }}–{{ band.endsAt }}</td>
-                <td class="q-body-sm q-tnum">
-                  {{ band.durationMinutes }} {{ 'settings.locations.load.minutes' | t }}
-                </td>
+                <th class="q-caption">{{ 'settings.locations.load.mode' | t }}</th>
+                <th class="q-caption">{{ 'settings.locations.load.day' | t }}</th>
+                <th class="q-caption">{{ 'settings.locations.load.from' | t }}</th>
+                <th class="q-caption">{{ 'settings.locations.load.to' | t }}</th>
+                <th class="q-caption">{{ 'settings.locations.load.duration' | t }}</th>
+                <th class="q-caption">{{ 'settings.locations.load.priority' | t }}</th>
+                <th></th>
               </tr>
-            } @empty {
-              <tr>
-                <td class="q-body-sm empty" colspan="4">
-                  {{ 'settings.locations.load.noBands' | t }}
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              @for (band of draftBands(); track $index) {
+                <tr [attr.data-testid]="'band-row-' + $index">
+                  <td>
+                    <select
+                      class="q-body field"
+                      [value]="band.fulfillmentMode ?? ''"
+                      (change)="
+                        updateBandRow($index, {
+                          fulfillmentMode: $any($event.target).value || null,
+                        })
+                      "
+                    >
+                      <option value="">{{ 'settings.locations.load.anyMode' | t }}</option>
+                      @for (mode of fulfillmentModes; track mode) {
+                        <option [value]="mode">{{ mode }}</option>
+                      }
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      class="q-body field"
+                      [value]="band.dayOfWeek ?? ''"
+                      (change)="
+                        updateBandRow($index, {
+                          dayOfWeek: $any($event.target).value ? +$any($event.target).value : null,
+                        })
+                      "
+                    >
+                      <option value="">{{ 'settings.locations.load.anyDay' | t }}</option>
+                      @for (day of [1, 2, 3, 4, 5, 6, 7]; track day) {
+                        <option [value]="day">{{ day }}</option>
+                      }
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      type="time"
+                      class="q-body field"
+                      [value]="band.startsAt"
+                      (input)="updateBandRow($index, { startsAt: $any($event.target).value })"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="time"
+                      class="q-body field"
+                      [value]="band.endsAt"
+                      (input)="updateBandRow($index, { endsAt: $any($event.target).value })"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      min="1"
+                      max="1440"
+                      class="q-body field band-number"
+                      [value]="band.durationMinutes"
+                      (input)="
+                        updateBandRow($index, { durationMinutes: +$any($event.target).value })
+                      "
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      class="q-body field band-number"
+                      [value]="band.priority"
+                      (input)="updateBandRow($index, { priority: +$any($event.target).value })"
+                    />
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      class="secondary"
+                      (click)="removeBandRow($index)"
+                      [attr.aria-label]="'ui.scheduleGrid.remove' | t"
+                    >
+                      ✕
+                    </button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td class="q-body-sm empty" colspan="7">
+                    {{ 'settings.locations.load.noBands' | t }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          <button type="button" class="secondary" (click)="addBandRow()" data-testid="add-band">
+            + {{ 'settings.locations.load.addBand' | t }}
+          </button>
+          @if (bandsError(); as message) {
+            <p class="q-body-sm error" role="alert">{{ message }}</p>
+          }
+          <div class="form__actions">
+            <button
+              type="button"
+              class="secondary"
+              (click)="cancelEditingBands()"
+              [disabled]="bandsSaving()"
+            >
+              {{ 'settings.locations.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              class="primary"
+              (click)="saveBands()"
+              [disabled]="bandsSaving()"
+              data-testid="save-bands"
+            >
+              {{
+                bandsSaving() ? ('settings.locations.saving' | t) : ('settings.locations.save' | t)
+              }}
+            </button>
+          </div>
+        }
       </section>
     }
 

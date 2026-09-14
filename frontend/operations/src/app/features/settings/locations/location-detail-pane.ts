@@ -1,14 +1,36 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { ScheduleException, ScheduleGrid, ScheduleRule } from '../../../shared/ui/schedule-grid';
 import { describeApiError } from '../../orders/order-errors';
-import { LocationsApi, LocationView, ServiceSummaryResponse } from './locations-api';
+import {
+  BandRequest,
+  BandView,
+  ExceptionRequest,
+  LocationsApi,
+  LocationView,
+  ModeBindingView,
+  ScheduleSummaryView,
+  ServiceSummaryResponse,
+} from './locations-api';
 
 type LocationTab = 'basics' | 'hours' | 'load' | 'fiscal' | 'channels' | 'notifications';
+
+/** ADR 0036 — `uz.horecaos.platform.tenancy.api.FulfillmentMode`'s three values, fixed. */
+const FULFILLMENT_MODES = ['DELIVERY', 'PICKUP', 'DINE_IN'] as const;
 
 /**
  * 10.2b Location detail — `docs/operations-spec/settings.md` §10.2b. Six
@@ -24,13 +46,18 @@ type LocationTab = 'basics' | 'hours' | 'load' | 'fiscal' | 'channels' | 'notifi
  *
  * **Tabs 2 and 3 (Часы, Загрузка и приготовление)** read the new
  * `service-summary` endpoint — the manual override, every bound schedule's
- * full grid, preparation bands, live capacity. Writing is scoped to what is
- * simple and real: the manual open/close override and the capacity ceiling.
- * Binding a different schedule, or editing a schedule's own weekly grid, is
- * not built here — `ServiceScheduleController` has no HTTP list of a brand's
- * schedules to pick from (only this location's own summary resolves one),
- * so a picker would be a text field for a raw schedule id with nothing to
- * validate it against, which is worse than naming the gap.
+ * full grid, preparation bands, live capacity. The manual open/close
+ * override and the capacity ceiling were already writable (P32).
+ *
+ * Wave P43 (gap map row `10.2c`) adds the rest: editing a bound schedule's
+ * own weekly grid and dated exceptions (over `PUT
+ * service-schedules/{id}/rules`/`/exceptions`, with `q-schedule-grid`),
+ * rebinding a fulfilment mode to a different timetable (`ServiceScheduleController`
+ * gained its first `GET` this wave, precisely because a picker had nothing to
+ * read from before), and a preparation-band editor over the `PUT
+ * preparation-bands` endpoint that existed with no caller. Editing a schedule
+ * bound to more than one location is gated behind a `confirm()` naming how
+ * many other locations share it — see `saveHours`'s own doc.
  *
  * **Tabs 4–6** link to the screens that actually own the data (10.7, 10.4,
  * 10.9) rather than duplicating a weaker read of it here, per the spec's own
@@ -38,7 +65,7 @@ type LocationTab = 'basics' | 'hours' | 'load' | 'fiscal' | 'channels' | 'notifi
  */
 @Component({
   selector: 'q-location-detail-pane',
-  imports: [TPipe],
+  imports: [TPipe, ScheduleGrid, NgTemplateOutlet],
   templateUrl: './location-detail-pane.html',
   styleUrl: './location-detail-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -77,6 +104,42 @@ export class LocationDetailPane {
   protected readonly capacitySaving = signal(false);
   protected readonly capacityError = signal<string | null>(null);
   protected readonly draftCapacity = signal<number | null>(null);
+
+  // -------------------------------------------------------- P43: Hours editor
+
+  protected readonly fulfillmentModes = FULFILLMENT_MODES;
+
+  /** The fulfilment mode whose bound schedule is open for editing, or null. */
+  protected readonly editingMode = signal<string | null>(null);
+  protected readonly draftRules = signal<readonly ScheduleRule[]>([]);
+  protected readonly draftExceptions = signal<readonly ScheduleException[]>([]);
+  /** The loaded binding's own rules/exceptions, to diff against on save — see `changedExceptions`. */
+  private originalRules: readonly ScheduleRule[] = [];
+  private originalExceptionsByDate = new Map<string, ScheduleException>();
+  protected readonly hoursSaving = signal(false);
+  protected readonly hoursError = signal<string | null>(null);
+
+  /** The fulfilment mode whose rebind picker is open, or null. Also covers binding an unbound mode. */
+  protected readonly rebindingMode = signal<string | null>(null);
+  protected readonly availableSchedules = signal<readonly ScheduleSummaryView[] | null>(null);
+  protected readonly schedulesLoading = signal(false);
+  protected readonly schedulesError = signal<string | null>(null);
+  protected readonly rebindTarget = signal('');
+  protected readonly rebindSaving = signal(false);
+  protected readonly rebindError = signal<string | null>(null);
+
+  /** Modes enabled on ADR 0036's fixed set with no bound schedule at all yet. */
+  protected readonly unboundModes = computed(() => {
+    const bound = new Set((this.summary()?.bindings ?? []).map((b) => b.fulfillmentMode));
+    return this.fulfillmentModes.filter((mode) => !bound.has(mode));
+  });
+
+  // ------------------------------------------------------ P43: Prep bands editor
+
+  protected readonly editingBands = signal(false);
+  protected readonly draftBands = signal<readonly BandRequest[]>([]);
+  protected readonly bandsSaving = signal(false);
+  protected readonly bandsError = signal<string | null>(null);
 
   constructor() {
     // The route reuses this component across a `:locationId` change (default
@@ -191,6 +254,271 @@ export class LocationDetailPane {
     }
   }
 
+  // --------------------------------------------------------- P43: Hours editor
+
+  /** Opens the weekly-grid/exceptions editor for one mode's bound schedule. */
+  protected startEditingHours(binding: ModeBindingView): void {
+    this.editingMode.set(binding.fulfillmentMode);
+    this.originalRules = binding.rules;
+    this.draftRules.set(binding.rules);
+    // `ExceptionResponse` (what `binding.exceptions` is read from) carries
+    // neither `label` nor `reason` -- see `ScheduleException`'s own doc --
+    // so every draft starts with both blank regardless of what is stored,
+    // and `changedExceptions` below treats a non-blank one as "the operator
+    // means to touch this row".
+    const drafts: ScheduleException[] = binding.exceptions.map((exception) => ({
+      ...exception,
+      label: '',
+      reason: '',
+    }));
+    this.originalExceptionsByDate = new Map<string, ScheduleException>(
+      drafts.map((exception) => [exception.date, exception]),
+    );
+    this.draftExceptions.set(drafts);
+    this.hoursError.set(null);
+  }
+
+  protected cancelEditingHours(): void {
+    this.editingMode.set(null);
+  }
+
+  /**
+   * Saves the weekly grid (whole-set `PUT .../rules`, only when it actually
+   * changed) and every dated exception the operator touched (one `PUT
+   * .../exceptions` per row, upsert).
+   *
+   * **A row removed from the grid and then saved is not deleted.**
+   * `ServiceScheduleController` has no delete for a dated exception — only
+   * `closeForDay`/`shortenDay`, both upserts by date — so a row taken out of
+   * `q-schedule-grid`'s local draft simply is not re-sent; it stays exactly
+   * as it was on the server until it is edited back over. Naming that here
+   * rather than pretending removal works is deliberate (see this class's own
+   * "code first" review culture on that point).
+   *
+   * **The shared-schedule warning.** `binding.sharedWithLocationCount` is
+   * "how many locations bind this schedule right now, including this one"
+   * (`JdbcServiceabilityStore.schedulesForBrand`'s own doc) -- so a count
+   * above 1 means at least one *other* branch is about to see this same
+   * edit. `confirm()` names how many, the same native-dialog idiom this app
+   * already uses for a blast-radius warning (see `integrations-page.ts`'s
+   * own note on why a shared component was not built for it).
+   */
+  protected async saveHours(): Promise<void> {
+    const scope = this.scope();
+    const mode = this.editingMode();
+    const binding = this.currentBinding(mode);
+    if (!scope || !mode || !binding || this.hoursSaving()) {
+      return;
+    }
+
+    const rulesChanged = JSON.stringify(this.originalRules) !== JSON.stringify(this.draftRules());
+    const toUpsert = this.changedExceptions();
+    if (!rulesChanged && toUpsert.length === 0) {
+      this.editingMode.set(null);
+      return;
+    }
+    for (const exception of toUpsert) {
+      if ((exception.label ?? '').trim() === '' || (exception.reason ?? '').trim() === '') {
+        this.hoursError.set(this.i18n.t('settings.locations.hours.exceptionFieldsRequired'));
+        return;
+      }
+    }
+    if (
+      binding.sharedWithLocationCount > 1 &&
+      !confirm(
+        this.i18n.t('settings.locations.hours.sharedConfirm', {
+          count: binding.sharedWithLocationCount - 1,
+          name: binding.scheduleName,
+        }),
+      )
+    ) {
+      return;
+    }
+
+    this.hoursSaving.set(true);
+    this.hoursError.set(null);
+    try {
+      if (rulesChanged) {
+        await this.api.replaceScheduleRules(scope, binding.scheduleId, this.draftRules());
+      }
+      for (const exception of toUpsert) {
+        const request: ExceptionRequest = {
+          date: exception.date,
+          closedAllDay: exception.closedAllDay,
+          opensAt: exception.closedAllDay ? undefined : (exception.opensAt ?? undefined),
+          closesAt: exception.closedAllDay ? undefined : (exception.closesAt ?? undefined),
+          label: (exception.label ?? '').trim(),
+          reason: (exception.reason ?? '').trim(),
+        };
+        await this.api.upsertScheduleException(scope, binding.scheduleId, request);
+      }
+      this.summary.set(await this.api.serviceSummary(scope));
+      this.editingMode.set(null);
+    } catch (error) {
+      this.hoursError.set(this.describe(error));
+    } finally {
+      this.hoursSaving.set(false);
+    }
+  }
+
+  /** A row counts as an edit worth a `PUT` when it is new, its hours changed, or a label/reason was typed. */
+  private changedExceptions(): readonly ScheduleException[] {
+    return this.draftExceptions().filter((draft) => {
+      const original = this.originalExceptionsByDate.get(draft.date);
+      if (!original) {
+        return true;
+      }
+      if (
+        draft.closedAllDay !== original.closedAllDay ||
+        draft.opensAt !== original.opensAt ||
+        draft.closesAt !== original.closesAt
+      ) {
+        return true;
+      }
+      return (draft.label ?? '').trim() !== '' || (draft.reason ?? '').trim() !== '';
+    });
+  }
+
+  private currentBinding(mode: string | null): ModeBindingView | null {
+    if (!mode) {
+      return null;
+    }
+    return this.summary()?.bindings.find((binding) => binding.fulfillmentMode === mode) ?? null;
+  }
+
+  /**
+   * Opens the rebind picker for one fulfilment mode -- bound already, or not
+   * yet bound at all (see `unboundModes`). Lazily loads
+   * `ServiceScheduleController.list`, the picker's only source, once per
+   * visit to this tab rather than on every open.
+   */
+  protected async openRebindPicker(mode: string): Promise<void> {
+    this.rebindingMode.set(mode);
+    this.rebindTarget.set('');
+    this.rebindError.set(null);
+    if (this.availableSchedules() !== null) {
+      return;
+    }
+    const scope = this.scope();
+    if (!scope) {
+      return;
+    }
+    this.schedulesLoading.set(true);
+    this.schedulesError.set(null);
+    try {
+      this.availableSchedules.set(await this.api.listSchedules(scope));
+    } catch (error) {
+      this.schedulesError.set(this.describe(error));
+    } finally {
+      this.schedulesLoading.set(false);
+    }
+  }
+
+  protected cancelRebind(): void {
+    this.rebindingMode.set(null);
+  }
+
+  protected async confirmRebind(): Promise<void> {
+    const scope = this.scope();
+    const mode = this.rebindingMode();
+    const scheduleId = this.rebindTarget();
+    if (!scope || !mode || !scheduleId || this.rebindSaving()) {
+      return;
+    }
+    this.rebindSaving.set(true);
+    this.rebindError.set(null);
+    try {
+      await this.api.bindSchedule(scope, { fulfillmentMode: mode, scheduleId });
+      this.summary.set(await this.api.serviceSummary(scope));
+      // The bound-location count on every schedule just shifted by one; the
+      // next picker open re-fetches rather than showing a stale count.
+      this.availableSchedules.set(null);
+      this.rebindingMode.set(null);
+    } catch (error) {
+      this.rebindError.set(this.describe(error));
+    } finally {
+      this.rebindSaving.set(false);
+    }
+  }
+
+  // ------------------------------------------------------- P43: Prep bands editor
+
+  protected startEditingBands(): void {
+    const current = this.summary()?.preparationBands ?? [];
+    this.draftBands.set(
+      current.map((band: BandView) => ({
+        fulfillmentMode: band.fulfillmentMode,
+        dayOfWeek: band.dayOfWeek,
+        startsAt: band.startsAt,
+        endsAt: band.endsAt,
+        durationMinutes: band.durationMinutes,
+        priority: band.priority,
+      })),
+    );
+    this.bandsError.set(null);
+    this.editingBands.set(true);
+  }
+
+  protected cancelEditingBands(): void {
+    this.editingBands.set(false);
+  }
+
+  protected addBandRow(): void {
+    this.draftBands.set([
+      ...this.draftBands(),
+      {
+        fulfillmentMode: null,
+        dayOfWeek: null,
+        startsAt: '09:00',
+        endsAt: '17:00',
+        durationMinutes: 20,
+        priority: 0,
+      },
+    ]);
+  }
+
+  protected removeBandRow(index: number): void {
+    this.draftBands.set(this.draftBands().filter((_, candidateIndex) => candidateIndex !== index));
+  }
+
+  protected updateBandRow(index: number, patch: Partial<BandRequest>): void {
+    this.draftBands.set(
+      this.draftBands().map((row, candidateIndex) =>
+        candidateIndex === index ? { ...row, ...patch } : row,
+      ),
+    );
+  }
+
+  /**
+   * `ck_preparation_band_window` refuses a band that wraps past midnight;
+   * settings.md's own instruction is to say so inline rather than surface
+   * the constraint name, so an after-midnight rush is entered as two rows
+   * here, the same way the weekly schedule handles an overnight window.
+   */
+  protected async saveBands(): Promise<void> {
+    const scope = this.scope();
+    if (!scope || this.bandsSaving()) {
+      return;
+    }
+    for (const band of this.draftBands()) {
+      if (band.endsAt <= band.startsAt) {
+        this.bandsError.set(this.i18n.t('settings.locations.load.bandOvernight'));
+        return;
+      }
+    }
+    this.bandsSaving.set(true);
+    this.bandsError.set(null);
+    try {
+      await this.api.replacePreparationBands(scope, this.draftBands());
+      this.summary.set(await this.api.serviceSummary(scope));
+      this.editingBands.set(false);
+    } catch (error) {
+      this.bandsError.set(this.describe(error));
+    } finally {
+      this.bandsSaving.set(false);
+    }
+  }
+
   private scope(): LocationScope | null {
     const base = this.baseLocation.scope();
     if (!base) {
@@ -202,6 +530,12 @@ export class LocationDetailPane {
   private async load(locationId: string): Promise<void> {
     this.loading.set(true);
     this.loadError.set(null);
+    // A route change while an editor is open must not leave the previous
+    // branch's draft state open over the next branch's data.
+    this.editingMode.set(null);
+    this.rebindingMode.set(null);
+    this.availableSchedules.set(null);
+    this.editingBands.set(false);
     await this.baseLocation.ensureLoaded();
     const base = this.baseLocation.scope();
     if (!base) {

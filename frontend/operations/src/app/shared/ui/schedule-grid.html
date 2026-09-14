@@ -72,6 +72,24 @@
               />
             </div>
           }
+          <input
+            type="text"
+            class="q-schedule-grid__exception-text"
+            [value]="exception.label ?? ''"
+            [attr.placeholder]="'ui.scheduleGrid.exceptionLabel' | t"
+            [attr.aria-label]="'ui.scheduleGrid.exceptionLabel' | t"
+            (input)="updateException(exception, { label: $any($event.target).value })"
+            data-testid="q-schedule-grid-exception-label"
+          />
+          <input
+            type="text"
+            class="q-schedule-grid__exception-text"
+            [value]="exception.reason ?? ''"
+            [attr.placeholder]="'ui.scheduleGrid.exceptionReason' | t"
+            [attr.aria-label]="'ui.scheduleGrid.exceptionReason' | t"
+            (input)="updateException(exception, { reason: $any($event.target).value })"
+            data-testid="q-schedule-grid-exception-reason"
+          />
           <button
             type="button"
             class="q-schedule-grid__remove"

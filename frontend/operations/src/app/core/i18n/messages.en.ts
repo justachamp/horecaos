@@ -1318,12 +1318,34 @@ export const messagesEn = {
   'settings.locations.hours.schedulesTitle': 'Bound timetables',
   'settings.locations.hours.shared': 'Also used by {count} other locations',
   'settings.locations.hours.noBindings': 'No fulfilment mode has a bound timetable yet.',
+  'settings.locations.hours.editSchedule': 'Edit hours',
+  'settings.locations.hours.rebind': 'Bind a different timetable',
+  'settings.locations.hours.notBound': 'no timetable bound',
+  'settings.locations.hours.pickSchedule': 'Choose a timetable…',
+  'settings.locations.hours.bind': 'Bind',
+  'settings.locations.hours.exceptionRemoveNote':
+    'Removing a dated exception here only hides it until the page reloads — saving does not delete it. Edit it instead, or ask engineering for a delete.',
+  'settings.locations.hours.exceptionFieldsRequired':
+    'Give every changed date a label and a reason before saving.',
+  'settings.locations.hours.sharedConfirm':
+    '"{name}" is also used by {count} other locations. This change applies to all of them. Continue?',
   'settings.locations.load.capacityTitle': 'Concurrent order ceiling',
   'settings.locations.load.occupancy': '{open} / {limit} orders holding capacity right now',
   'settings.locations.load.maxConcurrentOrders': 'Maximum concurrent orders',
   'settings.locations.load.bandsTitle': 'Preparation bands',
   'settings.locations.load.minutes': 'min',
   'settings.locations.load.noBands': 'No preparation bands configured.',
+  'settings.locations.load.mode': 'Mode',
+  'settings.locations.load.day': 'Day',
+  'settings.locations.load.from': 'From',
+  'settings.locations.load.to': 'To',
+  'settings.locations.load.duration': 'Minutes',
+  'settings.locations.load.priority': 'Priority',
+  'settings.locations.load.anyMode': 'Any mode',
+  'settings.locations.load.anyDay': 'Any day',
+  'settings.locations.load.addBand': 'Add band',
+  'settings.locations.load.bandOvernight':
+    'A band cannot cross midnight — enter the after-midnight part as its own row.',
   'settings.locations.fiscal.note':
     'Legal entity and fiscal assignment are managed on Settings → Fiscalization.',
   'settings.locations.channels.note':
@@ -4534,6 +4556,8 @@ export const messagesEn = {
   'ui.scheduleGrid.closedAllDay': 'Closed all day',
   'ui.scheduleGrid.addException': 'Add exception',
   'ui.scheduleGrid.noWindows': 'No hours set',
+  'ui.scheduleGrid.exceptionLabel': 'Label',
+  'ui.scheduleGrid.exceptionReason': 'Reason',
   'ui.combobox.noResults': 'No matches',
   'ui.combobox.loading': 'Searching…',
   'ui.combobox.createOption': 'Create “{query}”',

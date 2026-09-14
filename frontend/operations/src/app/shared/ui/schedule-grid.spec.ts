@@ -175,4 +175,60 @@ describe('ScheduleGrid', () => {
     // The weekly grid still renders — only the exceptions section is hidden.
     expect(root.querySelector('[data-testid="q-schedule-grid-row-1"]')).not.toBeNull();
   });
+
+  /**
+   * P43: `ExceptionRequest`'s `label`/`reason` are `@NotBlank` on the server
+   * but absent from `ExceptionResponse`, so the grid carries them as optional
+   * fields a caller fills in before writing back — this proves the two text
+   * inputs actually reach the emitted object rather than being decorative.
+   * Each field is exercised against the same untouched input, the same way
+   * `opensAt`/`closesAt` are exercised independently above: this component
+   * is controlled (an `input()`, not local state), so a second edit only
+   * sees the first one's result once the caller feeds the emission back in
+   * — `location-detail-pane.ts` does; this spec, like its siblings, checks
+   * one field at a time against the fixture it was given.
+   */
+  it('edits a dated exception’s label through its own field', () => {
+    const exception: ScheduleException = {
+      date: '2026-12-31',
+      closedAllDay: true,
+      opensAt: null,
+      closesAt: null,
+    };
+    const fixture = render();
+    fixture.componentRef.setInput('exceptions', [exception]);
+    fixture.detectChanges();
+    let emitted: readonly ScheduleException[] | undefined;
+    fixture.componentInstance.exceptionsChange.subscribe((e) => (emitted = e));
+
+    const labelField = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="q-schedule-grid-exception-label"]',
+    ) as HTMLInputElement;
+    labelField.value = 'New Year';
+    labelField.dispatchEvent(new Event('input'));
+
+    expect(emitted?.[0]).toEqual({ ...exception, label: 'New Year' });
+  });
+
+  it('edits a dated exception’s reason through its own field', () => {
+    const exception: ScheduleException = {
+      date: '2026-12-31',
+      closedAllDay: true,
+      opensAt: null,
+      closesAt: null,
+    };
+    const fixture = render();
+    fixture.componentRef.setInput('exceptions', [exception]);
+    fixture.detectChanges();
+    let emitted: readonly ScheduleException[] | undefined;
+    fixture.componentInstance.exceptionsChange.subscribe((e) => (emitted = e));
+
+    const reasonField = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="q-schedule-grid-exception-reason"]',
+    ) as HTMLInputElement;
+    reasonField.value = 'Public holiday';
+    reasonField.dispatchEvent(new Event('input'));
+
+    expect(emitted?.[0]).toEqual({ ...exception, reason: 'Public holiday' });
+  });
 });

@@ -1306,12 +1306,34 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.locations.hours.schedulesTitle': 'Bogʻlangan jadvallar',
   'settings.locations.hours.shared': 'Bu jadvalni yana {count} ta filial ishlatadi',
   'settings.locations.hours.noBindings': 'Hech bir yetkazish turi uchun jadval hali bogʻlanmagan.',
+  'settings.locations.hours.editSchedule': 'Soatlarni tahrirlash',
+  'settings.locations.hours.rebind': 'Boshqa jadvalni bogʻlash',
+  'settings.locations.hours.notBound': 'jadval bogʻlanmagan',
+  'settings.locations.hours.pickSchedule': 'Jadvalni tanlang…',
+  'settings.locations.hours.bind': 'Bogʻlash',
+  'settings.locations.hours.exceptionRemoveNote':
+    'Bu yerda istisnoni oʻchirish uni faqat sahifa qayta yuklanguncha yashiradi — saqlash uni oʻchirmaydi. Buning oʻrniga uni tahrirlang yoki oʻchirish uchun muhandislikka murojaat qiling.',
+  'settings.locations.hours.exceptionFieldsRequired':
+    'Saqlashdan oldin har bir oʻzgartirilgan sana uchun nom va sabab kiriting.',
+  'settings.locations.hours.sharedConfirm':
+    '"{name}" ni yana {count} ta filial ishlatadi. Oʻzgartirish ularning barchasiga taʻsir qiladi. Davom etasizmi?',
   'settings.locations.load.capacityTitle': 'Bir vaqtdagi buyurtmalar chegarasi',
   'settings.locations.load.occupancy': 'Hozir {open} / {limit} buyurtma sigʻimni band qilmoqda',
   'settings.locations.load.maxConcurrentOrders': 'Maksimal bir vaqtdagi buyurtmalar',
   'settings.locations.load.bandsTitle': 'Tayyorlash intervallari',
   'settings.locations.load.minutes': 'daqiqa',
   'settings.locations.load.noBands': 'Tayyorlash intervallari sozlanmagan.',
+  'settings.locations.load.mode': 'Turi',
+  'settings.locations.load.day': 'Kun',
+  'settings.locations.load.from': 'Dan',
+  'settings.locations.load.to': 'Gacha',
+  'settings.locations.load.duration': 'Daqiqa',
+  'settings.locations.load.priority': 'Ustuvorlik',
+  'settings.locations.load.anyMode': 'Har qanday turi',
+  'settings.locations.load.anyDay': 'Har qanday kun',
+  'settings.locations.load.addBand': 'Interval qoʻshish',
+  'settings.locations.load.bandOvernight':
+    'Interval yarim tundan oʻtolmaydi — yarim tundan keyingi qismini alohida qator qilib kiriting.',
   'settings.locations.fiscal.note':
     'Yuridik shaxs va fiskal tayinlash Sozlamalar → Fiskalizatsiyada boshqariladi.',
   'settings.locations.channels.note':
@@ -4544,6 +4566,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'ui.scheduleGrid.closedAllDay': 'Butun kun yopiq',
   'ui.scheduleGrid.addException': 'Istisno qoʻshish',
   'ui.scheduleGrid.noWindows': 'Soatlar belgilanmagan',
+  'ui.scheduleGrid.exceptionLabel': 'Nomi',
+  'ui.scheduleGrid.exceptionReason': 'Sababi',
   'ui.combobox.noResults': 'Mos kelishi topilmadi',
   'ui.combobox.loading': 'Qidirilmoqda…',
   'ui.combobox.createOption': '«{query}»ni yaratish',

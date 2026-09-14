@@ -1293,12 +1293,34 @@ export const messagesRu: MessageCatalogue = {
   'settings.locations.hours.shared': 'Это расписание используют ещё {count} филиалов',
   'settings.locations.hours.noBindings':
     'Ни для одного типа получения расписание ещё не привязано.',
+  'settings.locations.hours.editSchedule': 'Изменить часы',
+  'settings.locations.hours.rebind': 'Привязать другое расписание',
+  'settings.locations.hours.notBound': 'расписание не привязано',
+  'settings.locations.hours.pickSchedule': 'Выберите расписание…',
+  'settings.locations.hours.bind': 'Привязать',
+  'settings.locations.hours.exceptionRemoveNote':
+    'Удаление исключения здесь только скрывает его до перезагрузки страницы — сохранение его не удаляет. Отредактируйте запись вместо этого, либо обратитесь к разработке за удалением.',
+  'settings.locations.hours.exceptionFieldsRequired':
+    'Укажите название и причину для каждой изменённой даты перед сохранением.',
+  'settings.locations.hours.sharedConfirm':
+    '«{name}» используют ещё {count} филиалов. Изменение применится ко всем. Продолжить?',
   'settings.locations.load.capacityTitle': 'Лимит одновременных заказов',
   'settings.locations.load.occupancy': '{open} / {limit} заказов занимают ёмкость сейчас',
   'settings.locations.load.maxConcurrentOrders': 'Максимум одновременных заказов',
   'settings.locations.load.bandsTitle': 'Интервалы приготовления',
   'settings.locations.load.minutes': 'мин',
   'settings.locations.load.noBands': 'Интервалы приготовления не настроены.',
+  'settings.locations.load.mode': 'Способ получения',
+  'settings.locations.load.day': 'День',
+  'settings.locations.load.from': 'С',
+  'settings.locations.load.to': 'До',
+  'settings.locations.load.duration': 'Минут',
+  'settings.locations.load.priority': 'Приоритет',
+  'settings.locations.load.anyMode': 'Любой способ',
+  'settings.locations.load.anyDay': 'Любой день',
+  'settings.locations.load.addBand': 'Добавить интервал',
+  'settings.locations.load.bandOvernight':
+    'Интервал не может переходить через полночь — оформите часть после полуночи отдельной строкой.',
   'settings.locations.fiscal.note':
     'Юридическое лицо и фискальное назначение управляются в Настройки → Фискализация.',
   'settings.locations.channels.note':
@@ -4513,6 +4535,8 @@ export const messagesRu: MessageCatalogue = {
   'ui.scheduleGrid.closedAllDay': 'Закрыто весь день',
   'ui.scheduleGrid.addException': 'Добавить исключение',
   'ui.scheduleGrid.noWindows': 'Часы не заданы',
+  'ui.scheduleGrid.exceptionLabel': 'Название',
+  'ui.scheduleGrid.exceptionReason': 'Причина',
   'ui.combobox.noResults': 'Совпадений нет',
   'ui.combobox.loading': 'Поиск…',
   'ui.combobox.createOption': 'Создать «{query}»',

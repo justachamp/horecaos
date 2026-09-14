@@ -114,6 +114,52 @@ export interface LocationServiceStateView {
 }
 
 /**
+ * Mirrors uz.horecaos.platform.tenancy.web.ServiceScheduleController
+ * .ScheduleSummaryResponse (wave P43) — the Hours tab's rebind picker and
+ * the source of `sharedWithLocationCount`'s own live count.
+ */
+export interface ScheduleSummaryView {
+  readonly id: string;
+  readonly name: string;
+  readonly acceptsScheduledOrders: boolean;
+  readonly boundLocationCount: number;
+}
+
+export interface RuleRequest {
+  readonly dayOfWeek: number;
+  readonly opensAt: string;
+  readonly closesAt: string;
+}
+
+/**
+ * Mirrors uz.horecaos.platform.tenancy.web.ServiceScheduleController
+ * .ExceptionRequest. Unlike `ExceptionResponse`, `label`/`reason` are
+ * required here — the server rejects a blank one with `VALIDATION_FAILED`.
+ */
+export interface ExceptionRequest {
+  readonly date: string;
+  readonly closedAllDay: boolean;
+  readonly opensAt?: string;
+  readonly closesAt?: string;
+  readonly label: string;
+  readonly reason: string;
+}
+
+export interface BindingRequest {
+  readonly fulfillmentMode: string;
+  readonly scheduleId: string;
+}
+
+export interface BandRequest {
+  readonly fulfillmentMode?: string | null;
+  readonly dayOfWeek?: number | null;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly durationMinutes: number;
+  readonly priority: number;
+}
+
+/**
  * 10.2 Locations. `LocationServiceOperationsController` (list/profile/summary,
  * plus the service-state and capacity writes) is on the operations surface —
  * new in wave 26. `describePlace` reuses `TenantControlPlaneController`'s
@@ -123,6 +169,11 @@ export interface LocationServiceStateView {
  * to know which branches were shut was one {@link serviceSummary}-shaped call
  * per row — the N+1 `locations-page.ts`'s own comment named as the reason it
  * shipped without a state column, a state filter, or a close/open row action.
+ *
+ * Wave P43 (gap map row `10.2c`) adds {@link listSchedules}, {@link
+ * replaceScheduleRules}, {@link upsertScheduleException}, {@link
+ * bindSchedule} and {@link replacePreparationBands} — the writes {@link
+ * serviceSummary} already had a reader for but nothing on this screen called.
  */
 @Injectable({ providedIn: 'root' })
 export class LocationsApi {
@@ -189,6 +240,81 @@ export class LocationsApi {
         'PUT',
         settingsPaths.locationCapacity(scope),
         command({ maxConcurrentOrders }),
+      ),
+    );
+  }
+
+  /**
+   * `ServiceScheduleController.list` (wave P43) — every timetable this brand
+   * owns, for the Hours tab's rebind picker. `settingsPaths.brandServiceSchedules`
+   * pre-dated this wave as the base for the `rules`/`exceptions` writes below;
+   * this is its first `GET` caller.
+   */
+  async listSchedules(scope: LocationScope): Promise<readonly ScheduleSummaryView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly ScheduleSummaryView[]>(settingsPaths.brandServiceSchedules(scope)),
+    );
+    return result.value ?? [];
+  }
+
+  /** `ServiceScheduleController.replaceRules` — the whole weekly grid, whole-set. */
+  async replaceScheduleRules(
+    scope: LocationScope,
+    scheduleId: string,
+    rules: readonly RuleRequest[],
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.send<{ rules: readonly RuleRequest[] }, void>(
+        'PUT',
+        settingsPaths.scheduleRules(scope, scheduleId),
+        command({ rules }),
+      ),
+    );
+  }
+
+  /**
+   * `ServiceScheduleController.upsertException` — one dated exception per
+   * call, upsert by date. There is no delete: a row removed locally from
+   * `q-schedule-grid`'s draft and then saved stays exactly as it was on the
+   * server until it is edited back over, not deleted (see
+   * `location-detail-pane.ts`'s `saveExceptions` for where that is spelled
+   * out to the operator).
+   */
+  async upsertScheduleException(
+    scope: LocationScope,
+    scheduleId: string,
+    exception: ExceptionRequest,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.send<ExceptionRequest, void>(
+        'PUT',
+        settingsPaths.scheduleExceptions(scope, scheduleId),
+        command(exception),
+      ),
+    );
+  }
+
+  /** `LocationServiceOperationsController.bindSchedule` — rebinds one fulfilment mode. */
+  async bindSchedule(scope: LocationScope, request: BindingRequest): Promise<void> {
+    await firstValueFrom(
+      this.api.send<BindingRequest, void>(
+        'PUT',
+        settingsPaths.locationServiceBindings(scope),
+        command(request),
+      ),
+    );
+  }
+
+  /** `LocationServiceOperationsController.replacePreparationBands` — the whole set. */
+  async replacePreparationBands(
+    scope: LocationScope,
+    bands: readonly BandRequest[],
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.send<{ bands: readonly BandRequest[] }, void>(
+        'PUT',
+        settingsPaths.locationPreparationBands(scope),
+        command({ bands }),
       ),
     );
   }
