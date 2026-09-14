@@ -553,7 +553,7 @@ as the service.
 - [ADR 0044](../partial/0044-marketing-campaigns-audiences-and-engagement.md) — the campaign, audience, suppression and engagement-policy model this record extends, not redecides
 - [ADR 0046](../partial/0046-loyalty-points-and-split-tender.md) — the accrual-rule reference an offer may point at instead of a promotion
 - [ADR 0055](../meta/0055-greenfield-launch-scope.md) — the pilot's build order this record's rollout is sequenced against
-- [ADR 0072](../built/0072-promo-codes-as-a-coupon-gated-pricing-input.md) — the coupon-gated pricing input an offer may reference
+- [ADR 0072](../partial/0072-promo-codes-as-a-coupon-gated-pricing-input.md) — the coupon-gated pricing input an offer may reference
 - [ADR 0111](../not-started/0111-customer-card-and-communication-history.md) — the `customer.leads` queue a `CALL_CENTRE` scenario step's command lands in, and the port this record extends
 - `platform/docs/operations-gap-map.md` lines 680-681, 764-765, 1744, 1759 (waves
   `T05`, `T18`); lines 740, 741, 1326, 1347 (adjacent waves `P40`, `P26`); §6 rows
