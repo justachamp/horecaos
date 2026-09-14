@@ -204,7 +204,7 @@ public class SchedulingConfiguration {
      * relay — without it a staff member who forgot their password could ask
      * for a reset and no email would ever leave.
      */
-    static final int DEFAULT_POOL_SIZE = 59;
+    static final int DEFAULT_POOL_SIZE = 60;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.
