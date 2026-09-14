@@ -118,6 +118,25 @@ export const financePaths = {
     return `${financePaths.partnerInvoices(tenantId)}/${enc(invoiceId)}`;
   },
 
+  /** `.match` — the provider-ref→shipment resolution, also the resolution UI's retry call — wave T07. */
+  partnerInvoiceMatch(tenantId: string, invoiceId: string): string {
+    return `${financePaths.partnerInvoice(tenantId, invoiceId)}/match`;
+  },
+
+  /** `.dispute` — the акт сверки pushback path — wave T07. */
+  partnerInvoiceDispute(tenantId: string, invoiceId: string): string {
+    return `${financePaths.partnerInvoice(tenantId, invoiceId)}/dispute`;
+  },
+
+  /** `.resolveVariance` — accept or dispute one VARIANCE line — wave T07. */
+  partnerInvoiceLineVarianceAcceptance(
+    tenantId: string,
+    invoiceId: string,
+    lineId: string,
+  ): string {
+    return `${financePaths.partnerInvoice(tenantId, invoiceId)}/lines/${enc(lineId)}/variance-acceptance`;
+  },
+
   // ---------------------------------------------------------- 8.5 Courier payouts
 
   courierLedger(tenantId: string, courierId: string): string {
