@@ -213,6 +213,23 @@ export class NewOrderApi {
       ),
     );
   }
+
+  /**
+   * ADR 0064: links the order this call just placed to the claimed
+   * screen-pop card that started it (`OperationsOrderController
+   * .recordCallProvenance`), write-once server-side. `new-order-page.ts`'s
+   * own doc explains where `callEventId` comes from — this had zero callers
+   * anywhere before wave W01, so no phone order's provenance was ever
+   * recorded and every operator KPI that depends on the join lost it.
+   */
+  recordCallProvenance(scope: LocationScope, orderId: string, callEventId: string): Promise<void> {
+    return firstValueFrom(
+      this.api.post<{ callId: string }, void>(
+        operationsPaths.orderCallProvenance(scope, orderId),
+        command({ callId: callEventId }),
+      ),
+    );
+  }
 }
 
 function toBrandScope(scope: LocationScope): BrandScope {

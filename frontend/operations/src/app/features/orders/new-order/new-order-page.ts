@@ -8,7 +8,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 
 import { firstPage } from '../../../core/api/page';
 import { ApiError } from '../../../core/api/problem-details';
@@ -108,10 +108,19 @@ export class NewOrderPage implements OnInit {
   private readonly channelsApi = inject(SalesChannelsApi);
   private readonly location = inject(CurrentLocation);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly toasts = inject(Toasts);
   protected readonly i18n = inject(I18n);
 
   private readonly phoneInput = viewChild<ElementRef<HTMLInputElement>>('phoneInput');
+
+  /**
+   * ADR 0064: set only when this screen was opened from a claimed screen-pop
+   * card — the shell's call bar and `call-centre-page.ts`'s own "start
+   * order" link both navigate here with `?callEventId=...`. `submit()`
+   * links the placed order to it, write-once, once it exists.
+   */
+  private readonly callEventId = this.route.snapshot.queryParamMap.get('callEventId');
 
   // ------------------------------------------------------------- bootstrap
 
@@ -527,6 +536,15 @@ export class NewOrderPage implements OnInit {
         lines,
         paymentMethodCode: 'CASH',
       });
+      if (this.callEventId) {
+        try {
+          await this.api.recordCallProvenance(scope, result.orderId, this.callEventId);
+        } catch {
+          // The order already exists and is worth keeping either way — a
+          // lost provenance link is an operator-KPI gap, not a reason to
+          // treat an order that already succeeded as a failure.
+        }
+      }
       this.toasts.show({
         message: this.i18n.t('orders.newOrder.order.created', { number: result.publicOrderNumber }),
         tone: 'success',
