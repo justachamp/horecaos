@@ -55,6 +55,8 @@ export class StaffInviteDialog {
   readonly serverError = input<string | null>(null);
   readonly duplicatePhoneSubject = input<string | null>(null);
   readonly createdLink = input<string | null>(null);
+  /** Whether `createdLink` is a freshly-resent link (staff-page's «Отправить повторно») rather than a just-created invite's. */
+  readonly resent = input(false);
 
   readonly submitted = output<StaffInvitationRequest>();
   readonly dismiss = output<void>();

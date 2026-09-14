@@ -1346,17 +1346,21 @@ public class JdbcLoyaltyStore {
     }
 
     /**
-     * Whether {@code locationId} is a real location of this tenant — the check
+     * Whether {@code locationId} is a real location of this brand — the check
      * {@link uz.horecaos.platform.loyalty.application.LoyaltyPolicyAuthoringService}
-     * runs before persisting a LOCATION-scoped rule, so a bad id is refused as
-     * a clean 422 rather than persisting and silently never matching
-     * {@link #accrualRule}'s own resolver. V0308's trigger is the backstop for
-     * every writer that does not run this check first.
+     * runs before persisting a LOCATION-scoped rule, so a bad id, or one that
+     * names a real location of some sibling brand in the same tenant, is
+     * refused as a clean 422 rather than persisting and silently never
+     * matching {@link #accrualRule}'s own resolver, which selects by this
+     * rule's own {@code brand_id}. V0308's trigger is the backstop for every
+     * writer that does not run this check first, though its own check today
+     * is tenant-only.
      */
-    public boolean locationExists(UUID tenantId, UUID locationId) {
-        Boolean exists = jdbc.sql(
-                        "SELECT EXISTS (SELECT 1 FROM tenant.locations WHERE tenant_id = :tenantId AND id = :id)")
+    public boolean locationExists(UUID tenantId, UUID brandId, UUID locationId) {
+        Boolean exists = jdbc.sql("SELECT EXISTS (SELECT 1 FROM tenant.locations "
+                        + "WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id)")
                 .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("id", locationId)
                 .query(Boolean.class)
                 .single();

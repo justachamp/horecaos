@@ -221,7 +221,8 @@ public class KeycloakOrganizationProvisioner implements OrganizationProvisioner 
                 .toBodilessEntity();
     }
 
-    private boolean isMember(String organizationId, String subjectId) {
+    @Override
+    public boolean isMember(String organizationId, String subjectId) {
         List<Map<String, Object>> members = client.get()
                 .uri("/admin/realms/{realm}/organizations/{org}/members", realm, organizationId)
                 .retrieve()

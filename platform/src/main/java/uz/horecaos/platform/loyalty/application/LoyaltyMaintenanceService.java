@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.loyalty.api.HeldTenderPort;
 import uz.horecaos.platform.loyalty.api.LoyaltyExpiryWarningPort;
 import uz.horecaos.platform.loyalty.domain.EntryType;
@@ -55,6 +56,17 @@ public class LoyaltyMaintenanceService {
     private final PointsRedemptionService redemption;
     private final HeldTenderPort tenders;
     private final LoyaltyExpiryWarningPort expiryWarnings;
+
+    /**
+     * Demarcated here rather than with {@code @Transactional}, because {@link
+     * #warnExpiringLots} commits one lot's mark at a time itself, around a
+     * port call {@code @Transactional} would otherwise hold a database
+     * transaction open across — the reason {@code OwnerInvitationRelay},
+     * {@code TenantControlPlaneService} and {@code PaymentAttemptService}
+     * each carry one of these too.
+     */
+    private final TransactionTemplate transactions;
+
     private final Clock clock;
 
     public LoyaltyMaintenanceService(
@@ -62,11 +74,13 @@ public class LoyaltyMaintenanceService {
             PointsRedemptionService redemption,
             HeldTenderPort tenders,
             LoyaltyExpiryWarningPort expiryWarnings,
+            TransactionTemplate transactions,
             Clock clock) {
         this.store = store;
         this.redemption = redemption;
         this.tenders = tenders;
         this.expiryWarnings = expiryWarnings;
+        this.transactions = transactions;
         this.clock = clock;
     }
 
@@ -192,9 +206,19 @@ public class LoyaltyMaintenanceService {
      * JdbcLoyaltyStore#lotsNeedingExpiryWarning} excludes it, so zero reads
      * as "no warning configured" and never as "warn immediately".
      *
+     * <p><strong>Not {@code @Transactional}.</strong> {@code expiryWarnings} is
+     * the seam onto a real ADR 0020 adapter (SMS/push/Telegram) — an external
+     * call, forbidden inside a database transaction. A single transaction
+     * wrapping the whole batch would hold {@code markExpiryWarningSent}'s row
+     * lock open across every lot's send, and a failure partway through would
+     * roll back the marks already committed for the lots warned earlier in
+     * this same pass — which sends the same warning to the same customer a
+     * second time on the next sweep. Each lot's mark is instead its own short
+     * transaction, committed the instant its warning is sent: a failure on lot
+     * N never touches lots 1..N-1, and only lot N itself is retried later.
+     *
      * @return how many warnings were sent, which is what the sweeper logs
      */
-    @Transactional
     public int warnExpiringLots() {
         Instant now = clock.instant();
         List<LotRow> due = store.lotsNeedingExpiryWarning(now, BATCH);
@@ -203,7 +227,7 @@ public class LoyaltyMaintenanceService {
             long daysRemaining = Duration.between(now, lot.expiresAt()).toDays();
             expiryWarnings.lotExpiring(
                     account.tenantId(), account.id(), lot.id(), lot.expiresAt(), lot.remainingMinor(), daysRemaining);
-            store.markExpiryWarningSent(account.tenantId(), lot.id(), now);
+            transactions.executeWithoutResult(status -> store.markExpiryWarningSent(account.tenantId(), lot.id(), now));
         }
         return due.size();
     }
