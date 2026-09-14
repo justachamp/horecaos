@@ -4,19 +4,19 @@ import { MessageKey } from '../../core/i18n/messages.en';
 /**
  * The KDS queue's tabs (IA 2.1: "delivery/pickup/hall/aggregator tabs").
  *
- * **Reduced to three, deliberately.** `TicketResponse.fulfilmentMode` is
- * `DELIVERY` | `PICKUP` | `DINE_IN` (`uz.horecaos.platform.tenancy.api.FulfillmentMode`)
- * — "hall" is `DINE_IN`, matching `order-queue.ts`'s own mapping. There is no
- * fourth value for "aggregator": that is a *channel* fact
- * (`sales_channels.system_type = 'AGGREGATOR'`), and `channelCode` on the wire
- * is a free string, not a typed system-type — nothing on this response lets
- * this client tell an aggregator channel from a direct one. Fabricating a
- * fourth tab from data that is not there is exactly the mistake `order-queue.ts`
- * already refuses for its own missing columns, so `channelCode` renders as a
- * chip on each ticket instead (§2.1's own "channel" fact, honestly reduced to
- * "here is the raw code" rather than a classified tab).
+ * **Four fulfilment/channel facts, not a fifth "all".** `fulfilmentMode`
+ * gives delivery/pickup/hall — "hall" is `DINE_IN`, matching
+ * `order-queue.ts`'s own mapping — and `aggregator` (wave P16) is a
+ * *channel* fact, `channelSystemType === 'AGGREGATOR'`, resolved server-side
+ * off `sales_channels.system_type` rather than pattern-matched from the free
+ * -string `channelCode` this response also carries. Before this wave nothing
+ * on the wire let a client tell an aggregator channel from a direct one, so
+ * `channelCode` rendered as an unclassified chip and this fourth tab did not
+ * exist; `all` is kept as the default landing tab rather than dropped, since
+ * every one of the other four is a genuine subset and a cook opening the
+ * screen still wants the whole queue first.
  */
-export const KITCHEN_TABS = ['all', 'delivery', 'pickup', 'dineIn'] as const;
+export const KITCHEN_TABS = ['all', 'delivery', 'pickup', 'dineIn', 'aggregator'] as const;
 export type KitchenTabId = (typeof KITCHEN_TABS)[number];
 export const DEFAULT_KITCHEN_TAB: KitchenTabId = 'all';
 
@@ -36,9 +36,22 @@ export const KITCHEN_TAB_DEFINITIONS: Readonly<Record<KitchenTabId, KitchenTabDe
   delivery: { id: 'delivery', labelKey: 'kitchen.tab.delivery' },
   pickup: { id: 'pickup', labelKey: 'kitchen.tab.pickup' },
   dineIn: { id: 'dineIn', labelKey: 'kitchen.tab.dineIn' },
+  aggregator: { id: 'aggregator', labelKey: 'kitchen.tab.aggregator' },
 };
 
-export function isKitchenTabMember(tab: KitchenTabId, fulfilmentMode: string): boolean {
+/**
+ * `channelSystemType` is `undefined`/`null` on a ticket a single-item
+ * mutation just settled without repeating the board's own resolved chip
+ * (see `TicketResponse.channelSystemType`'s own doc) — such a ticket never
+ * matches the `aggregator` tab until the next board refresh re-resolves it,
+ * which is the same "eventually correct, never wrong" trade every other
+ * field on this board already makes at the 10-second poll boundary.
+ */
+export function isKitchenTabMember(
+  tab: KitchenTabId,
+  fulfilmentMode: string,
+  channelSystemType?: string | null,
+): boolean {
   switch (tab) {
     case 'all':
       return true;
@@ -48,6 +61,8 @@ export function isKitchenTabMember(tab: KitchenTabId, fulfilmentMode: string): b
       return fulfilmentMode === 'PICKUP';
     case 'dineIn':
       return fulfilmentMode === 'DINE_IN';
+    case 'aggregator':
+      return channelSystemType === 'AGGREGATOR';
   }
 }
 

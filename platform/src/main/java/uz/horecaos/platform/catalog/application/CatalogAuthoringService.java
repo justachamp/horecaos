@@ -937,6 +937,13 @@ public class CatalogAuthoringService {
                 tenantId, brandId, locationId, locale, cursor, limit, search, offeringStatusFilter);
     }
 
+    /** The stop list's own tab badges (gap map row 2.5) — see {@link JdbcCatalogStore#variantAvailabilityCounts}. */
+    @Transactional(readOnly = true)
+    public JdbcCatalogStore.VariantAvailabilityCountsRow variantAvailabilityCounts(
+            UUID tenantId, UUID brandId, UUID locationId, String locale, @Nullable String search) {
+        return store.variantAvailabilityCounts(tenantId, brandId, locationId, locale, search);
+    }
+
     /**
      * Sets one entity's name and description in one locale.
      *

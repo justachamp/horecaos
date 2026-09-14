@@ -1997,6 +1997,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.tab.delivery': 'Yetkazib berish',
   'kitchen.tab.pickup': 'Olib ketish',
   'kitchen.tab.dineIn': 'Zalda',
+  'kitchen.tab.aggregator': 'Agregator',
 
   'kitchen.fulfilmentMode.DELIVERY': 'Yetkazib berish',
   'kitchen.fulfilmentMode.PICKUP': 'Olib ketish',
@@ -2025,6 +2026,24 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.item.action.READY': 'Tayyor',
   'kitchen.item.action.RECALL': 'Qaytarish',
 
+  // Mijozning qator bo'yicha izohi (2.1) — P16 to'lqini
+  'kitchen.item.revealNote': "Izohni ko'rsatish",
+  'kitchen.item.revealingNote': 'Ochilmoqda…',
+  'kitchen.item.customerNote': 'Izoh: {note}',
+  'kitchen.item.noteEmpty': "Izoh matni yo'q",
+
+  // Raspredelitelnidan o'z kuryerini biriktirish (2.1c) — P16 to'lqini
+  'kitchen.assign.button': 'Kuryer biriktirish',
+  'kitchen.assign.title': 'Kuryer biriktirish',
+  'kitchen.assign.loading': 'Yetkazib berish rejasi qidirilmoqda…',
+  'kitchen.assign.noPlan': 'Bu buyurtma uchun yetkazib berish rejasi topilmadi',
+  'kitchen.assign.empty': "Shtatda kuryerlar yo'q",
+  'kitchen.assign.cancel': 'Bekor qilish',
+  'kitchen.assign.refused': 'Biriktirish rad etildi ({reason})',
+
+  // Peshtaxta savdosi — yangi buyurtma ekraniga havola (2.1e) — P16 to'lqini
+  'kitchen.action.counterSale': 'Peshtaxta savdosi',
+
   'kitchen.buffer.column.ticket': 'Buyurtma',
   'kitchen.buffer.column.releaseMode': 'Ishga tushirish rejimi',
   'kitchen.buffer.column.releaseAt': 'Ishga tushadi',
@@ -2050,13 +2069,21 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.stopList.bulk.clear': 'Tozalash',
   'kitchen.stopList.bulk.done': 'Yangilangan tovarlar: {count}',
   'kitchen.stopList.bulk.partial': 'Yangilanmadi: {failed}',
+  'kitchen.stopList.bulk.tooMany':
+    "Ommaviy oʻzgartirish uchun {max} tadan koʻp bo'lmagan tovar tanlang",
   'kitchen.stopList.loading': 'Stop-roʻyxat yuklanmoqda',
   'kitchen.stopList.denied': 'Bu filial stop-roʻyxatiga kirish huquqi yoʻq',
+  'kitchen.stopList.searchPlaceholder': 'Mahsulot yoki SKU boʻyicha qidirish',
   'kitchen.stopList.column.product': 'Mahsulot',
   'kitchen.stopList.column.category': 'Turkum',
   'kitchen.stopList.column.status': 'Holati',
+  'kitchen.stopList.column.source': 'Manba',
   'kitchen.stopList.status.available': 'Sotuvda',
   'kitchen.stopList.status.onStop': 'Stopda',
+  'kitchen.stopList.source.manual': 'Oshxona',
+  'kitchen.stopList.source.pos': 'POS',
+  'kitchen.stopList.source.unknown': 'Nomaʻlum',
+  'kitchen.stopList.source.detail': '{reason} · {when}',
   'kitchen.stopList.action.stop': 'Stop',
   'kitchen.stopList.action.unstop': 'Stopdan olish',
   'kitchen.stopList.empty': 'Bu filialda hali mahsulotlar yoʻq',

@@ -158,6 +158,111 @@ class CatalogAvailabilityReadModelTests {
     }
 
     @Test
+    @DisplayName("a variant never toggled since listing has an UNKNOWN stop source")
+    void aNeverToggledVariantHasAnUnknownStopSource() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, plov.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, plov.defaultVariantId(), TrackingMode.BINARY);
+
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, null, 50))
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.stopSource()).isEqualTo("UNKNOWN");
+                    assertThat(row.stopReasonCode()).isNull();
+                    assertThat(row.stopChangedAt()).isNull();
+                });
+    }
+
+    @Test
+    @DisplayName("gap map row 2.5b: a kitchen's own toggle is a MANUAL stop source")
+    void aManualToggleIsAManualStopSource() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, plov.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, plov.defaultVariantId(), TrackingMode.BINARY);
+
+        inventory.setAvailability(
+                TENANT, LOCATION, plov.defaultVariantId(), false, "OPERATIONS_STOP_LIST_TOGGLE", ACTOR);
+
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, null, 50))
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.stopSource()).isEqualTo("MANUAL");
+                    assertThat(row.stopReasonCode()).isEqualTo("OPERATIONS_STOP_LIST_TOGGLE");
+                    assertThat(row.stopChangedAt()).isNotNull();
+                });
+    }
+
+    @Test
+    @DisplayName("gap map row 2.5b: PosAvailabilityPoll's own reason code is a POS stop source")
+    void aPosPushIsAPosStopSource() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, plov.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, plov.defaultVariantId(), TrackingMode.BINARY);
+
+        // PosAvailabilityPoll's own actor (a non-UUID subject, so
+        // InventoryService#setAvailability records it as no actor at all —
+        // see that class's own doc) and its own fixed reason code.
+        inventory.setAvailability(TENANT, LOCATION, plov.defaultVariantId(), false, "POS_STOP_LIST", null);
+
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, null, 50))
+                .singleElement()
+                .satisfies(row -> assertThat(row.stopSource()).isEqualTo("POS"));
+    }
+
+    @Test
+    @DisplayName("gap map row 2.5: the stop list's own exact tab badges, over the whole catalog")
+    void variantAvailabilityCountsAreExactAcrossTheWholeCatalog() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        var lagman = authoring.createProduct(
+                TENANT, BRAND, catalogId, "LAGMAN", "Lagman", null, LOCALE, "SKU-LAGMAN", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, plov.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, lagman.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, plov.defaultVariantId(), TrackingMode.BINARY);
+        inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, lagman.defaultVariantId(), TrackingMode.BINARY);
+        inventory.setAvailability(TENANT, LOCATION, lagman.defaultVariantId(), false, "SOLD_OUT", ACTOR);
+
+        var counts = store.variantAvailabilityCounts(TENANT, BRAND, LOCATION, LOCALE, null);
+
+        assertThat(counts.total()).isEqualTo(2);
+        assertThat(counts.available()).isEqualTo(1);
+        assertThat(counts.onStop()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("the tab badges follow the same search box the row list does")
+    void variantAvailabilityCountsFollowTheSearchTerm() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        var lagman = authoring.createProduct(
+                TENANT, BRAND, catalogId, "LAGMAN", "Lagman", null, LOCALE, "SKU-LAGMAN", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, plov.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, lagman.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, plov.defaultVariantId(), TrackingMode.BINARY);
+        inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, lagman.defaultVariantId(), TrackingMode.BINARY);
+
+        var counts = store.variantAvailabilityCounts(TENANT, BRAND, LOCATION, LOCALE, "Osh");
+
+        assertThat(counts.total()).isEqualTo(1);
+        assertThat(counts.available()).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("toggling a variant off publishes the ADR 0058 stop-list event with the stock item's own brand")
     void togglingOffPublishesAnAvailabilityChangedEvent() {
         UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);

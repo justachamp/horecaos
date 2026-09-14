@@ -2008,6 +2008,7 @@ export const messagesEn = {
   'kitchen.tab.delivery': 'Delivery',
   'kitchen.tab.pickup': 'Pickup',
   'kitchen.tab.dineIn': 'Dine-in',
+  'kitchen.tab.aggregator': 'Aggregator',
 
   'kitchen.fulfilmentMode.DELIVERY': 'Delivery',
   'kitchen.fulfilmentMode.PICKUP': 'Pickup',
@@ -2036,6 +2037,24 @@ export const messagesEn = {
   'kitchen.item.action.READY': 'Ready',
   'kitchen.item.action.RECALL': 'Recall',
 
+  // Per-line customer notes (2.1) — wave P16
+  'kitchen.item.revealNote': 'Show note',
+  'kitchen.item.revealingNote': 'Revealing…',
+  'kitchen.item.customerNote': 'Note: {note}',
+  'kitchen.item.noteEmpty': 'No note text',
+
+  // Assign an in-house courier from the pass (2.1c) — wave P16
+  'kitchen.assign.button': 'Assign courier',
+  'kitchen.assign.title': 'Assign a courier',
+  'kitchen.assign.loading': 'Finding the delivery plan…',
+  'kitchen.assign.noPlan': 'No delivery plan found for this order',
+  'kitchen.assign.empty': 'No couriers on the roster',
+  'kitchen.assign.cancel': 'Cancel',
+  'kitchen.assign.refused': 'The assignment was refused ({reason})',
+
+  // Counter sale link to the new-order screen (2.1e) — wave P16
+  'kitchen.action.counterSale': 'Counter sale',
+
   'kitchen.buffer.column.ticket': 'Ticket',
   'kitchen.buffer.column.releaseMode': 'Release',
   'kitchen.buffer.column.releaseAt': 'Fires at',
@@ -2061,13 +2080,20 @@ export const messagesEn = {
   'kitchen.stopList.bulk.clear': 'Clear',
   'kitchen.stopList.bulk.done': '{count} items updated',
   'kitchen.stopList.bulk.partial': '{failed} items failed to update',
+  'kitchen.stopList.bulk.tooMany': 'Select at most {max} items for a bulk change',
   'kitchen.stopList.loading': 'Loading the stop list',
   'kitchen.stopList.denied': 'No access to this location’s stop list',
+  'kitchen.stopList.searchPlaceholder': 'Search products or SKU',
   'kitchen.stopList.column.product': 'Product',
   'kitchen.stopList.column.category': 'Category',
   'kitchen.stopList.column.status': 'Status',
+  'kitchen.stopList.column.source': 'Source',
   'kitchen.stopList.status.available': 'Available',
   'kitchen.stopList.status.onStop': 'On stop',
+  'kitchen.stopList.source.manual': 'Kitchen',
+  'kitchen.stopList.source.pos': 'POS',
+  'kitchen.stopList.source.unknown': 'Unknown',
+  'kitchen.stopList.source.detail': '{reason} · {when}',
   'kitchen.stopList.action.stop': 'Stop',
   'kitchen.stopList.action.unstop': 'Restore',
   'kitchen.stopList.empty': 'No products at this location yet',

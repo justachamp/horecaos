@@ -1981,6 +1981,7 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.tab.delivery': 'Доставка',
   'kitchen.tab.pickup': 'Самовывоз',
   'kitchen.tab.dineIn': 'В зале',
+  'kitchen.tab.aggregator': 'Агрегатор',
 
   'kitchen.fulfilmentMode.DELIVERY': 'Доставка',
   'kitchen.fulfilmentMode.PICKUP': 'Самовывоз',
@@ -2009,6 +2010,24 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.item.action.READY': 'Готово',
   'kitchen.item.action.RECALL': 'Вернуть',
 
+  // Комментарии клиента к позиции (2.1) — волна P16
+  'kitchen.item.revealNote': 'Показать комментарий',
+  'kitchen.item.revealingNote': 'Раскрываем…',
+  'kitchen.item.customerNote': 'Комментарий: {note}',
+  'kitchen.item.noteEmpty': 'Текст комментария пуст',
+
+  // Назначить своего курьера с раздачи (2.1c) — волна P16
+  'kitchen.assign.button': 'Назначить курьера',
+  'kitchen.assign.title': 'Назначить курьера',
+  'kitchen.assign.loading': 'Ищем план доставки…',
+  'kitchen.assign.noPlan': 'План доставки для этого заказа не найден',
+  'kitchen.assign.empty': 'В штате нет курьеров',
+  'kitchen.assign.cancel': 'Отмена',
+  'kitchen.assign.refused': 'В назначении отказано ({reason})',
+
+  // Продажа за прилавком — ссылка на экран нового заказа (2.1e) — волна P16
+  'kitchen.action.counterSale': 'Продажа за прилавком',
+
   'kitchen.buffer.column.ticket': 'Заказ',
   'kitchen.buffer.column.releaseMode': 'Режим запуска',
   'kitchen.buffer.column.releaseAt': 'Запуск в',
@@ -2034,13 +2053,20 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.stopList.bulk.clear': 'Очистить',
   'kitchen.stopList.bulk.done': 'Обновлено позиций: {count}',
   'kitchen.stopList.bulk.partial': 'Не удалось обновить: {failed}',
+  'kitchen.stopList.bulk.tooMany': 'Выберите не более {max} позиций для массового изменения',
   'kitchen.stopList.loading': 'Загрузка стоп-листа',
   'kitchen.stopList.denied': 'Нет доступа к стоп-листу этого филиала',
+  'kitchen.stopList.searchPlaceholder': 'Поиск по названию или артикулу',
   'kitchen.stopList.column.product': 'Товар',
   'kitchen.stopList.column.category': 'Категория',
   'kitchen.stopList.column.status': 'Статус',
+  'kitchen.stopList.column.source': 'Источник',
   'kitchen.stopList.status.available': 'В продаже',
   'kitchen.stopList.status.onStop': 'На стопе',
+  'kitchen.stopList.source.manual': 'Кухня',
+  'kitchen.stopList.source.pos': 'POS',
+  'kitchen.stopList.source.unknown': 'Неизвестно',
+  'kitchen.stopList.source.detail': '{reason} · {when}',
   'kitchen.stopList.action.stop': 'Стоп',
   'kitchen.stopList.action.unstop': 'Снять со стопа',
   'kitchen.stopList.empty': 'В этом филиале пока нет товаров',

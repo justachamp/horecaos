@@ -287,6 +287,16 @@ export const operationsPaths = {
     return `${OPERATIONS}${tenantBrandLocation(scope)}/inventory/variants/${encodeURIComponent(variantId)}/availability`;
   },
 
+  /**
+   * The stop list's own batch stop/unstop (gap map row 2.5, wave P16),
+   * modelled on ADR 0039's bulk contract — replaces the sequential loop of
+   * one {@link inventoryVariantAvailability} `PUT` per row `stop-list-page.ts`
+   * used to run. Mutation: key required, capped at 200 variants.
+   */
+  inventoryBulkAvailability(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/inventory/variants/bulk-availability`;
+  },
+
   /** Current binary availability for a set of variants at this location (query param `variantIds`, max 100). */
   inventoryAvailability(scope: LocationScope): string {
     return `${OPERATIONS}${tenantBrandLocation(scope)}/inventory/availability`;
