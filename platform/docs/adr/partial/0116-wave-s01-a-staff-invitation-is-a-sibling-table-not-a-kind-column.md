@@ -5,11 +5,16 @@
   `StaffInvitationService`, `JdbcStaffInvitationStore`, `StaffAccounts#create`/
   `#findByPhone`, and the invite/resend/revoke/inspect/accept endpoints on
   `StaffInvitationController` are built by wave `wave138-s01` and exercised by
-  `StaffInvitationFlowTests`. Not built: a settings screen for choosing the
-  sending provider was never in this row's scope (ADR 0097 already carries
-  that decision and SMTP is live against Mailpit); the People screen's
-  «Приглашён» pill and its outstanding-invitations read are wired only as far
-  as this wave's time allowed — see the wave report's open issues.
+  `StaffInvitationFlowTests` and `StaffInvitationCreateEndpointTests`. The
+  People screen's own side is built too: `staff-invite-dialog.ts` to
+  staff-and-access.md §4, the «Приглашён» pill (`staff-row.ts`'s `INVITED`
+  status) sourced from `GET .../staff/invitations`, and resend/revoke wired
+  through `staff-access-dialog.ts`'s two new modes. Not built: a settings
+  screen for choosing the sending provider was never in this row's scope
+  (ADR 0097 already carries that decision and SMTP is live against Mailpit);
+  requireGrantable's finer, per-capability escalation check still runs only
+  inside `GrantManagementService#grant`, after the Keycloak account already
+  exists — see this record's Consequences and the wave report's open issues.
 - Date proposed: 2026-09-14
 - Date decided: —
 - Deciders: proposed by Claude and built on the platform owner's instruction
@@ -188,9 +193,8 @@ migration that drops it, not edit V0313.
 - [x] `StaffInvitationService` (invite/resend/revoke/inspect/accept)
 - [x] `StaffInvitationController` extended for both endpoint families
 - [x] `staff-invite-dialog.ts` built to staff-and-access.md §4
-- [ ] People screen's «Приглашён» pill sourced from `GET .../staff/invitations`
-      end to end (frontend derivation wired only partially — see the wave
-      report)
+- [x] People screen's «Приглашён» pill sourced from `GET .../staff/invitations`,
+      and resend/revoke wired through `staff-access-dialog.ts`
 
 ## Exit criteria
 
