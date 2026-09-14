@@ -153,7 +153,7 @@ public class ReservationController {
             @PathVariable UUID reservationId,
             @RequestParam(required = false) String purpose) {
 
-        ReservationRow reservation = reservations.find(tenantId, reservationId);
+        ReservationRow reservation = reservations.find(tenantId, locationId, reservationId);
         List<UUID> tableIds = reservations.tablesFor(tenantId, reservationId);
 
         if (purpose == null || purpose.isBlank()) {
@@ -161,7 +161,7 @@ public class ReservationController {
         }
 
         ReservationService.GuestDetails guest = reservations.revealGuest(
-                tenantId, reservationId, purpose, currentActor.get().subject());
+                tenantId, locationId, reservationId, purpose, currentActor.get().subject());
         return ResponseEntity.ok(
                 ReservationResponse.of(reservation, tableIds, guest.guestName(), guest.guestPhone(), guest.note()));
     }
@@ -197,6 +197,7 @@ public class ReservationController {
 
         ReservationRow moved = reservations.move(
                 tenantId,
+                locationId,
                 reservationId,
                 target,
                 (int) expected,
@@ -228,6 +229,7 @@ public class ReservationController {
 
         ReservationRow amended = reservations.amend(
                 tenantId,
+                locationId,
                 reservationId,
                 body.partySize(),
                 body.requestedFrom(),
