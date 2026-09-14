@@ -28,6 +28,11 @@
   color: var(--q-error-text);
 }
 
+.status-badge--expired {
+  border-color: var(--q-warning-text);
+  color: var(--q-warning-text);
+}
+
 .tabs {
   display: flex;
   flex-wrap: wrap;
@@ -215,6 +220,20 @@ textarea.field {
   display: flex;
   gap: 12px;
   margin-top: 6px;
+}
+
+.balance-card__brand {
+  margin: 0 0 2px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--q-ink-muted);
+}
+
+.balance-card__actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
 .coordinate-missing {
