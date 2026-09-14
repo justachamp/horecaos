@@ -101,6 +101,82 @@ describe('BufferPage', () => {
     expect(host.querySelector('[data-testid="buffer-empty"]')).not.toBeNull();
   });
 
+  it('places a ticket with no promise yet on manual hold, with no reason (gap map row 2.2)', async () => {
+    const board: BoardResponse = { tickets: [held({})], warnings: [] };
+    const reschedule = vi
+      .fn()
+      .mockReturnValue(of({ ...held({}), releaseMode: 'MANUAL_HOLD', releaseAt: null }));
+    await render({ board: () => Promise.resolve(board), reschedule });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="buffer-hold"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(reschedule).toHaveBeenCalledWith(SCOPE, 'ticket-1', 1, 'MANUAL_HOLD', null, undefined);
+  });
+
+  it('edits a held ticket’s fire time through PUT .../release-schedule', async () => {
+    const board: BoardResponse = { tickets: [held({})], warnings: [] };
+    const rescheduled = { ...held({}), releaseMode: 'SCHEDULED' as const };
+    const reschedule = vi.fn().mockReturnValue(of(rescheduled));
+    await render({ board: () => Promise.resolve(board), reschedule });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="buffer-edit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const input = host.querySelector('[data-testid="buffer-edit-release-at"]') as HTMLInputElement;
+    expect(input).not.toBeNull();
+    input.value = '2026-09-14T19:30';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    (host.querySelector('[data-testid="buffer-edit-submit"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(reschedule).toHaveBeenCalledTimes(1);
+    const call = reschedule.mock.calls[0];
+    expect(call[0]).toEqual(SCOPE);
+    expect(call[1]).toBe('ticket-1');
+    expect(call[2]).toBe(1);
+    expect(call[3]).toBe('SCHEDULED');
+    expect(new Date(call[4] as string).getTime()).toBe(new Date('2026-09-14T19:30').getTime());
+    // No promise on this fixture, so no reason is required or sent.
+    expect(call[5]).toBeUndefined();
+
+    expect(host.querySelector('[data-testid="buffer-edit-row"]')).toBeNull();
+  });
+
+  it('requires a reason to hold or re-time a ticket that already has a promise', async () => {
+    const board: BoardResponse = {
+      tickets: [
+        held({
+          targetReadyAt: new Date(Date.now() + 20 * 60_000).toISOString(),
+          prepEstimateSeconds: 300,
+        }),
+      ],
+      warnings: [],
+    };
+    await render({ board: () => Promise.resolve(board), reschedule: vi.fn() });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="buffer-edit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    // This ticket has no releaseAt yet, so the editor opens with the fire-time
+    // field blank — an explicit hold on a ticket that already has a promise,
+    // which the reason field reflects immediately, with nothing typed yet.
+    expect(host.querySelector('[data-testid="buffer-edit-reason"]')).not.toBeNull();
+
+    (host.querySelector('[data-testid="buffer-edit-submit"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="buffer-edit-error"]')).not.toBeNull();
+  });
+
   it('shows the denied state when the location grant is missing', async () => {
     await TestBed.configureTestingModule({
       imports: [BufferPage],

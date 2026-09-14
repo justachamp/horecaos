@@ -334,6 +334,19 @@ export const operationsPaths = {
     return `${this.kitchenTicket(scope, ticketId)}/release`;
   },
 
+  /**
+   * Places a ticket on manual hold, or edits when a held ticket fires (2.2's
+   * buffer, `KitchenBoardController.reschedule`, wave T02). Moving a fire time
+   * later than the promise permits additionally needs
+   * `kitchen.ticket.release.override` and a reason; moving it earlier or
+   * placing an ordinary hold needs neither. `expectedVersion` travels in the
+   * body, not `If-Match` — the same convention this controller's own
+   * `release` above keeps.
+   */
+  kitchenTicketReleaseSchedule(scope: LocationScope, ticketId: string): string {
+    return `${this.kitchenTicket(scope, ticketId)}/release-schedule`;
+  },
+
   /** Custody transfer off the pass (2.3, Раздача). Mutation: key required, no body. */
   kitchenTicketHandOver(scope: LocationScope, ticketId: string): string {
     return `${this.kitchenTicket(scope, ticketId)}/hand-over`;
@@ -361,6 +374,15 @@ export const operationsPaths = {
   /** The branch's throughput ceilings (IA §2.6, `KitchenStationController`). Same `GET`/`POST` shape as {@link kitchenStations}. */
   kitchenStationCapacity(scope: LocationScope): string {
     return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/station-capacity`;
+  },
+
+  /**
+   * One throughput ceiling — `PUT` corrects it, `DELETE` removes it (wave
+   * T02, gap map row 2.6). Both take `expectedVersion` in the body, the same
+   * convention {@link kitchenStationCapacity}'s own `POST` sibling keeps.
+   */
+  kitchenStationCapacityWindow(scope: LocationScope, capacityWindowId: string): string {
+    return `${this.kitchenStationCapacity(scope)}/${encodeURIComponent(capacityWindowId)}`;
   },
 
   /**
