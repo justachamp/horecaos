@@ -2607,13 +2607,26 @@ public class JdbcCatalogStore {
     /**
      * IA 4.2's own filter — active + in-menu + not-stopped — resolved here, at
      * read time, against one location's own {@code catalog.location_offerings}
-     * row: {@code AVAILABLE} is exactly "in menu, not stopped" in this schema
-     * ({@code catalog.menus.status.UNAVAILABLE} reads "Stopped" to an operator
-     * for the same column), and {@code tv.status}/{@code tp.status ACTIVE} is
-     * "active". Nothing is pruned from {@link #listRecommendations}'s stored
-     * set to get here — a target that is stopped today and un-stopped tomorrow
-     * reappears in this read on its own, because the predicate is evaluated
-     * fresh on every call rather than baked into a stored flag.
+     * row: {@code AVAILABLE} is exactly "in menu" in this schema ({@code
+     * catalog.menus.status.UNAVAILABLE} reads "Stopped" to an operator for the
+     * same column), and {@code tv.status}/{@code tp.status ACTIVE} is "active".
+     * "not-stopped" itself is read from {@code inventory.stock_items}/{@code
+     * inventory.positions} — the Stop List's own mechanism (gap map row 2.5)
+     * flips {@code inventory.positions.binary_available} and never touches
+     * {@code location_offerings.status}, so a target checked only against the
+     * offering row would still be handed out as a safe cross-sell while it is
+     * 86'd. Unlike {@link #variantsAtLocation}, a target with no {@code
+     * inventory.stock_items} row at this location at all is <em>not</em>
+     * excluded here — this LEFT JOIN never demoted a row to "unavailable" for
+     * a reason unrelated to the Stop List, it only excludes what the Stop
+     * List itself stopped: {@code tracking_mode = 'BINARY' AND
+     * binary_available = false}. {@code UNTRACKED} and never-stocked both
+     * count as not-stopped, the same as before this fix; only an explicit
+     * binary 86 removes a target now. Nothing is pruned from {@link
+     * #listRecommendations}'s stored set to get here — a target that is
+     * stopped today and un-stopped tomorrow reappears in this read on its
+     * own, because the predicate is evaluated fresh on every call rather
+     * than baked into a stored flag.
      */
     public List<RecommendationRow> listResolvedRecommendations(
             UUID tenantId, UUID brandId, UUID sourceProductId, UUID locationId, String locale) {
@@ -2628,11 +2641,16 @@ public class JdbcCatalogStore {
                 JOIN catalog.location_offerings lo
                     ON lo.variant_id = tv.id AND lo.tenant_id = tv.tenant_id AND lo.brand_id = tv.brand_id
                        AND lo.location_id = :locationId
+                LEFT JOIN inventory.stock_items si
+                    ON si.variant_id = tv.id AND si.tenant_id = tv.tenant_id AND si.location_id = :locationId
+                LEFT JOIN inventory.positions pos
+                    ON pos.stock_item_id = si.id AND pos.tenant_id = si.tenant_id
                 LEFT JOIN catalog.translations t
                     ON t.entity_type = 'PRODUCT' AND t.entity_id = tp.id AND t.tenant_id = tp.tenant_id
                        AND t.locale = :locale
                 WHERE r.tenant_id = :tenantId AND r.brand_id = :brandId AND r.source_product_id = :sourceProductId
                   AND tv.status = 'ACTIVE' AND tp.status = 'ACTIVE' AND lo.status = 'AVAILABLE'
+                  AND (si.id IS NULL OR si.tracking_mode <> 'BINARY' OR pos.binary_available = true)
                 ORDER BY r.sort_order
                 """)
                 .param("tenantId", tenantId)

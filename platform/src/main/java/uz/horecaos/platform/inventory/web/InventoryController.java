@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.Set;
@@ -158,17 +159,30 @@ public class InventoryController {
     public record ListVariantRequest(
             @NotNull UUID variantId, @NotNull TrackingMode trackingMode) {}
 
+    /**
+     * {@code reasonCode} is a short enumerated code — never free text an
+     * operator typed, per ADR 0029 — matching {@code
+     * CatalogAuthoringController.SetChannelOfferingRequest}'s own convention:
+     * it is kept permanently in the ADR 0027 audit trail and echoed back on
+     * every read of this variant's stop reason.
+     */
     public record AvailabilityRequest(
-            boolean available, @Size(max = 64) String reasonCode) {}
+            boolean available,
+
+            @Pattern(regexp = "^[A-Z_]{1,48}$") @Size(max = 64)
+            String reasonCode) {}
 
     public record StockItemResponse(UUID stockItemId, String trackingMode) {}
 
+    /** {@code reasonCode} is a short enumerated code — see {@link AvailabilityRequest}'s own doc. */
     public record BulkAvailabilityRequest(
             @NotEmpty @Size(max = InventoryBulkAvailabilityService.MAX_ITEMS)
             List<UUID> variantIds,
 
             boolean available,
-            @NotBlank @Size(max = 64) String reasonCode) {}
+
+            @NotBlank @Pattern(regexp = "^[A-Z_]{1,48}$") @Size(max = 64)
+            String reasonCode) {}
 
     public record BulkAvailabilityOutcome(
             UUID variantId,

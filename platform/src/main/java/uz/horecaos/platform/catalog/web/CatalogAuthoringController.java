@@ -705,7 +705,13 @@ public class CatalogAuthoringController {
             List<ItemSaleSchedule.Window> windows = request.windows().stream()
                     .map(ItemSaleWindowRequest::toWindow)
                     .toList();
-            authoring.replaceItemSaleWindows(tenantId, brandId, locationId, variantId, windows);
+            authoring.replaceItemSaleWindows(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    variantId,
+                    windows,
+                    currentActor.get().subject());
             return ResponseEntity.ok(new ItemSaleScheduleResponse(
                     windows.stream().map(ItemSaleWindowResponse::of).toList()));
         } catch (CatalogAuthoringService.UnknownCatalogEntityException unknown) {
@@ -767,7 +773,12 @@ public class CatalogAuthoringController {
             @Valid @RequestBody AttachRecommendationRequest request) {
         try {
             UUID id = authoring.attachRecommendation(
-                    tenantId, brandId, productId, request.targetVariantId(), request.sortOrder());
+                    tenantId,
+                    brandId,
+                    productId,
+                    request.targetVariantId(),
+                    request.sortOrder(),
+                    currentActor.get().subject());
             return ResponseEntity.ok(
                     new RecommendationResponse(id, request.targetVariantId(), null, request.sortOrder()));
         } catch (CatalogAuthoringService.UnknownProductException
@@ -788,7 +799,8 @@ public class CatalogAuthoringController {
             @PathVariable UUID brandId,
             @PathVariable UUID productId,
             @PathVariable UUID variantId) {
-        authoring.detachRecommendation(tenantId, brandId, productId, variantId);
+        authoring.detachRecommendation(
+                tenantId, brandId, productId, variantId, currentActor.get().subject());
         return ResponseEntity.noContent().build();
     }
 
@@ -811,16 +823,20 @@ public class CatalogAuthoringController {
             @PathVariable UUID channelId,
             @PathVariable UUID variantId,
             @Valid @RequestBody SetChannelOfferingRequest request) {
-        authoring.setChannelOffering(
-                tenantId,
-                brandId,
-                channelId,
-                variantId,
-                request.locationId(),
-                request.offered(),
-                request.reasonCode() == null ? DEFAULT_EXCLUSION_REASON : request.reasonCode(),
-                currentActor.get().subject());
-        return ResponseEntity.noContent().build();
+        try {
+            authoring.setChannelOffering(
+                    tenantId,
+                    brandId,
+                    channelId,
+                    variantId,
+                    request.locationId(),
+                    request.offered(),
+                    request.reasonCode() == null ? DEFAULT_EXCLUSION_REASON : request.reasonCode(),
+                    currentActor.get().subject());
+            return ResponseEntity.noContent().build();
+        } catch (CatalogAuthoringService.UnknownCatalogEntityException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
     }
 
     @PostMapping("/channels/{channelId}/exclusions/bulk")
@@ -837,16 +853,20 @@ public class CatalogAuthoringController {
             @PathVariable UUID brandId,
             @PathVariable UUID channelId,
             @Valid @RequestBody BulkChannelOfferingRequest request) {
-        int changed = authoring.bulkSetChannelOffering(
-                tenantId,
-                brandId,
-                channelId,
-                request.variantIds(),
-                request.locationId(),
-                request.offered(),
-                request.reasonCode() == null ? DEFAULT_EXCLUSION_REASON : request.reasonCode(),
-                currentActor.get().subject());
-        return ResponseEntity.ok(new BulkChannelOfferingResponse(changed));
+        try {
+            int changed = authoring.bulkSetChannelOffering(
+                    tenantId,
+                    brandId,
+                    channelId,
+                    request.variantIds(),
+                    request.locationId(),
+                    request.offered(),
+                    request.reasonCode() == null ? DEFAULT_EXCLUSION_REASON : request.reasonCode(),
+                    currentActor.get().subject());
+            return ResponseEntity.ok(new BulkChannelOfferingResponse(changed));
+        } catch (CatalogAuthoringService.UnknownCatalogEntityException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
     }
 
     @GetMapping("/channels/{channelId}/exclusions")

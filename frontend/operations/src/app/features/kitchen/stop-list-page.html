@@ -44,14 +44,17 @@
         <span class="q-caption">{{
           'kitchen.stopList.bulk.selected' | t: { count: selectedIds().size }
         }}</span>
-        <input
-          type="text"
+        <select
           class="stop-list__bulk-reason"
           [value]="bulkReason()"
-          (input)="onBulkReasonInput($any($event.target).value)"
-          [placeholder]="'kitchen.stopList.bulk.reasonPlaceholder' | t"
+          (change)="onBulkReasonInput($any($event.target).value)"
           data-testid="stop-list-bulk-reason"
-        />
+        >
+          <option value="" disabled>{{ 'kitchen.stopList.bulk.reasonPlaceholder' | t }}</option>
+          @for (code of bulkReasonCodes; track code) {
+            <option [value]="code">{{ bulkReasonLabel(code) }}</option>
+          }
+        </select>
       </div>
     }
   </div>

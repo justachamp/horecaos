@@ -38,6 +38,17 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
 const BULK_AVAILABILITY_MAX_ITEMS = 200;
 
 /**
+ * The bulk reason's own enumerated codes — `catalog.md`'s four-chip picker
+ * (`Закончилось` · `Нет продукта` · `Оборудование` · `Другое`), matching
+ * `InventoryController.BulkAvailabilityRequest.reasonCode`'s `@Pattern` and
+ * `CatalogAuthoringController`'s own channel-exclusion `reasonCode`
+ * convention: a short enumerated code an operator picks, never free text
+ * they typed, per ADR 0029 — it lands verbatim in the ADR 0027 audit trail
+ * and is echoed back on every read of this variant's stop reason.
+ */
+const BULK_REASON_CODES = ['OUT_OF_STOCK', 'NO_PRODUCT', 'EQUIPMENT', 'OTHER'] as const;
+
+/**
  * `q-data-table`'s `[(filters)]` model, so Save View / Apply View
  * (`X.18`) has a real effect on this screen: the active tab and the search
  * box are what this page's own filter bar controls.
@@ -157,6 +168,8 @@ export class StopListPage implements OnInit {
   });
 
   protected readonly rowIdFn = (row: VariantAvailabilityResponse): string => row.variantId;
+
+  protected readonly bulkReasonCodes = BULK_REASON_CODES;
 
   /** `q-data-table`'s `scopeKey` — so a shared terminal's persisted filters and saved views never leak from one location into another. */
   protected readonly scopeKey = computed<string | null>(() => {
@@ -299,10 +312,26 @@ export class StopListPage implements OnInit {
    * aggregate over the whole catalog, not a count over `items()` that
    * undercounts until every page is loaded (the trap this row's own gap-map
    * entry names). `null` renders as "…" rather than a wrong number.
+   *
+   * <p>{@link visibleItems} only ever filters the client-side page {@link
+   * items} has loaded so far — it has no server-side "on stop"/"available"
+   * fetch of its own. So while {@link hasMore} is still true, the AVAILABLE
+   * and ON_STOP badges would otherwise show an exact whole-catalog number
+   * next to a visible list that is only whatever slice of that subset
+   * happened to land in the pages loaded so far — the same "a real number
+   * next to a list it can't back up" trap this row's badge exists to avoid
+   * for the ALL tab. Those two badges stay "…" until the whole catalog is
+   * loaded and the visible list can actually back the number up; ALL's own
+   * badge is exempt because {@link visibleItems} for that tab is always
+   * exactly the page loaded so far — the same, expected "N of the total
+   * loaded" pagination story every list on this console tells.
    */
   protected tabCount(tab: StopTab): number | null {
     const counts = this.counts();
     if (!counts) {
+      return null;
+    }
+    if (tab !== 'ALL' && this.hasMore()) {
       return null;
     }
     switch (tab) {
@@ -334,6 +363,24 @@ export class StopListPage implements OnInit {
 
   protected onBulkReasonInput(value: string): void {
     this.bulkReason.set(value);
+  }
+
+  /**
+   * One literal `t` key per code, not a concatenated `'kitchen.stopList.bulk.reason.' +
+   * code` — `TPipe`'s `MessageKey` parameter type is what makes a typo in a
+   * template a build error, and only a literal key participates in that check.
+   */
+  protected bulkReasonLabel(code: (typeof BULK_REASON_CODES)[number]): string {
+    switch (code) {
+      case 'OUT_OF_STOCK':
+        return this.i18n.t('kitchen.stopList.bulk.reason.outOfStock');
+      case 'NO_PRODUCT':
+        return this.i18n.t('kitchen.stopList.bulk.reason.noProduct');
+      case 'EQUIPMENT':
+        return this.i18n.t('kitchen.stopList.bulk.reason.equipment');
+      case 'OTHER':
+        return this.i18n.t('kitchen.stopList.bulk.reason.other');
+    }
   }
 
   // -------------------------------------------------------- P16: stop source

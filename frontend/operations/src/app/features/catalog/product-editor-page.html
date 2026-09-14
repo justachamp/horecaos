@@ -726,6 +726,7 @@
                     <thead>
                       <tr>
                         <th>{{ 'catalog.editor.recommendations.column.target' | t }}</th>
+                        <th>{{ 'catalog.editor.recommendations.column.eligible' | t }}</th>
                         <th></th>
                       </tr>
                     </thead>
@@ -735,6 +736,15 @@
                           <td>
                             {{ item.targetProductName || item.targetVariantId }}
                             <span class="q-caption q-mono">{{ item.targetVariantId }}</span>
+                          </td>
+                          <td data-testid="editor-recommendation-eligible">
+                            @if (isEligibleHere(item)) {
+                              {{ 'catalog.editor.recommendations.eligible.yes' | t }}
+                            } @else {
+                              <span class="q-caption">{{
+                                'catalog.editor.recommendations.eligible.no' | t
+                              }}</span>
+                            }
                           </td>
                           <td>
                             <button
