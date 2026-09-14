@@ -965,10 +965,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.tab.templates': 'Shablonlar',
   'settings.notifications.tab.routing': 'Yoʻnaltirish',
   'settings.notifications.automation.title': 'Avtomatlashtirish',
-  'settings.notifications.field.paymentLinkAutoSend': 'Toʻlov havolasini mijozga avtomatik yuborish',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Toʻlov havolasini mijozga avtomatik yuborish',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Hali ishlamaydi: hech qanday jarayon bu tugmachani hali oʻqimaydi, shuning uchun yoqish faqat tanlovni saqlaydi.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Agregator smenasi ochilishi/yopilishi haqida xabar berish',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Agregator smenasi ochilishi/yopilishi haqida xabar berish',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Hali ishlamaydi: platformada bu xabarni ishga tushiradigan agregator-smena hodisasi hali yoʻq.',
   'settings.notifications.create.action': 'Yangi shablon',
@@ -1014,7 +1016,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.editor.subject': 'Mavzu',
   'settings.notifications.editor.body': 'Matn',
   'settings.notifications.editor.variables': 'Oʻzgaruvchi qoʻshish',
-  'settings.notifications.editor.variables.empty': 'Bu bildirishnoma sinfi uchun oʻzgaruvchilar taklif etilmagan.',
+  'settings.notifications.editor.variables.empty':
+    'Bu bildirishnoma sinfi uchun oʻzgaruvchilar taklif etilmagan.',
   'settings.notifications.editor.preview': 'Mijoz qanday koʻradi',
   'settings.notifications.editor.save': 'Qoralamani saqlash',
   'settings.notifications.editor.saving': 'Saqlanmoqda…',
@@ -1033,9 +1036,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.testSend.result.ACCEPTED': 'Provayder qabul qildi.',
   'settings.notifications.testSend.result.REJECTED': 'Provayder rad etdi.',
   'settings.notifications.testSend.result.RETRYABLE': 'Uzatish xatosi — qayta urinib koʻring.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Noaniq — provayder allaqachon yuborgan boʻlishi mumkin.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Noaniq — provayder allaqachon yuborgan boʻlishi mumkin.',
   'settings.notifications.activate.confirm.title': 'Bu versiya faollashtirilsinmi?',
-  'settings.notifications.activate.confirm.body': 'Bu shablon boʻyicha har bir xabar shu matndan foydalanadi.',
+  'settings.notifications.activate.confirm.body':
+    'Bu shablon boʻyicha har bir xabar shu matndan foydalanadi.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'Bu versiya SMS shlyuzida hali «{state}» holatida. Bu oʻzgarmaguncha faollashtirish uni yuborilishiga olib kelmaydi.',
   'settings.notifications.activate.confirm.confirm': 'Faollashtirish',
@@ -1056,9 +1061,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.routing.action.editTopic': 'Mavzuni oʻzgartirish',
   'settings.notifications.routing.action.unbind': 'Uzish',
   'settings.notifications.routing.unbind.confirm.title': 'Bu chat uzilsinmi?',
-  'settings.notifications.routing.unbind.confirm.body': 'U darhol barcha hodisa sinflarini olishni toʻxtatadi.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'U darhol barcha hodisa sinflarini olishni toʻxtatadi.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Uzish',
-  'settings.notifications.routing.topic.prompt': 'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
+  'settings.notifications.routing.topic.prompt':
+    'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
   'settings.notifications.routing.topic.save': 'Saqlash',
 
   // 10.10 Maʻlumotnoma maʻlumotlari
@@ -1213,12 +1220,34 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.locations.hours.schedulesTitle': 'Bogʻlangan jadvallar',
   'settings.locations.hours.shared': 'Bu jadvalni yana {count} ta filial ishlatadi',
   'settings.locations.hours.noBindings': 'Hech bir yetkazish turi uchun jadval hali bogʻlanmagan.',
+  'settings.locations.hours.editSchedule': 'Soatlarni tahrirlash',
+  'settings.locations.hours.rebind': 'Boshqa jadvalni bogʻlash',
+  'settings.locations.hours.notBound': 'jadval bogʻlanmagan',
+  'settings.locations.hours.pickSchedule': 'Jadvalni tanlang…',
+  'settings.locations.hours.bind': 'Bogʻlash',
+  'settings.locations.hours.exceptionRemoveNote':
+    'Bu yerda istisnoni oʻchirish uni faqat sahifa qayta yuklanguncha yashiradi — saqlash uni oʻchirmaydi. Buning oʻrniga uni tahrirlang yoki oʻchirish uchun muhandislikka murojaat qiling.',
+  'settings.locations.hours.exceptionFieldsRequired':
+    'Saqlashdan oldin har bir oʻzgartirilgan sana uchun nom va sabab kiriting.',
+  'settings.locations.hours.sharedConfirm':
+    '"{name}" ni yana {count} ta filial ishlatadi. Oʻzgartirish ularning barchasiga taʻsir qiladi. Davom etasizmi?',
   'settings.locations.load.capacityTitle': 'Bir vaqtdagi buyurtmalar chegarasi',
   'settings.locations.load.occupancy': 'Hozir {open} / {limit} buyurtma sigʻimni band qilmoqda',
   'settings.locations.load.maxConcurrentOrders': 'Maksimal bir vaqtdagi buyurtmalar',
   'settings.locations.load.bandsTitle': 'Tayyorlash intervallari',
   'settings.locations.load.minutes': 'daqiqa',
   'settings.locations.load.noBands': 'Tayyorlash intervallari sozlanmagan.',
+  'settings.locations.load.mode': 'Turi',
+  'settings.locations.load.day': 'Kun',
+  'settings.locations.load.from': 'Dan',
+  'settings.locations.load.to': 'Gacha',
+  'settings.locations.load.duration': 'Daqiqa',
+  'settings.locations.load.priority': 'Ustuvorlik',
+  'settings.locations.load.anyMode': 'Har qanday turi',
+  'settings.locations.load.anyDay': 'Har qanday kun',
+  'settings.locations.load.addBand': 'Interval qoʻshish',
+  'settings.locations.load.bandOvernight':
+    'Interval yarim tundan oʻtolmaydi — yarim tundan keyingi qismini alohida qator qilib kiriting.',
   'settings.locations.fiscal.note':
     'Yuridik shaxs va fiskal tayinlash Sozlamalar → Fiskalizatsiyada boshqariladi.',
   'settings.locations.channels.note':
@@ -1758,7 +1787,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.menus.filter.all': 'Barchasi',
   'catalog.menus.search.placeholder': 'Nomi yoki SKU boʻyicha qidirish',
   'catalog.menus.selectAll': 'Barcha qatorlarni tanlash',
-  'catalog.menus.selectionCapped': 'Faqat birinchi {cap} tasi — qo\'llang, so\'ng qolganlarini tanlang',
+  'catalog.menus.selectionCapped':
+    "Faqat birinchi {cap} tasi — qo'llang, so'ng qolganlarini tanlang",
   'catalog.menus.column.offering': 'Menyudagi holati',
   'catalog.menus.column.fulfillment': 'Buyurtma turlari',
   'catalog.menus.fulfillment.DELIVERY': 'Yetk',
@@ -2149,7 +2179,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.dispatch.hint':
     'Buyurtmani kuryer ustiga tashlab tayinlang. Uni orqaga, "Tayinlanmagan"ga tashlab, tayinlashni bekor qiling.',
   'delivery.dispatch.column.unassigned': 'Tayinlanmagan',
-  'delivery.dispatch.column.ineligible': 'Bu yerga tashlab bo\'lmaydi — {reason}',
+  'delivery.dispatch.column.ineligible': "Bu yerga tashlab bo'lmaydi — {reason}",
   'delivery.dispatch.action.unassign': 'Tayinlashni bekor qilish',
   'delivery.dispatch.status.PLANNED': 'Rejalashtirilgan',
   'delivery.dispatch.status.WAITING_TO_SOURCE': 'Kuryer izlanmoqda',
@@ -4188,6 +4218,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'ui.scheduleGrid.closedAllDay': 'Butun kun yopiq',
   'ui.scheduleGrid.addException': 'Istisno qoʻshish',
   'ui.scheduleGrid.noWindows': 'Soatlar belgilanmagan',
+  'ui.scheduleGrid.exceptionLabel': 'Nomi',
+  'ui.scheduleGrid.exceptionReason': 'Sababi',
   'ui.combobox.noResults': 'Mos kelishi topilmadi',
   'ui.combobox.loading': 'Qidirilmoqda…',
   'ui.combobox.createOption': '«{query}»ni yaratish',

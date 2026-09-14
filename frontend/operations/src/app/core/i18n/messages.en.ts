@@ -982,10 +982,12 @@ export const messagesEn = {
   'settings.notifications.tab.templates': 'Templates',
   'settings.notifications.tab.routing': 'Routing',
   'settings.notifications.automation.title': 'Automation',
-  'settings.notifications.field.paymentLinkAutoSend': 'Send the payment link to the customer automatically',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Send the payment link to the customer automatically',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Not yet enforced: no send trigger reads this switch yet, so turning it on records the choice without changing behaviour.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Notify on aggregator shift open/close',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Notify on aggregator shift open/close',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Not yet enforced: no aggregator-shift event exists in the platform yet to trigger this.',
   'settings.notifications.create.action': 'New template',
@@ -1031,7 +1033,8 @@ export const messagesEn = {
   'settings.notifications.editor.subject': 'Subject',
   'settings.notifications.editor.body': 'Text',
   'settings.notifications.editor.variables': 'Insert a variable',
-  'settings.notifications.editor.variables.empty': 'No merge variables are offered for this notification class.',
+  'settings.notifications.editor.variables.empty':
+    'No merge variables are offered for this notification class.',
   'settings.notifications.editor.preview': 'How the customer sees it',
   'settings.notifications.editor.save': 'Save draft',
   'settings.notifications.editor.saving': 'Saving…',
@@ -1050,15 +1053,18 @@ export const messagesEn = {
   'settings.notifications.testSend.result.ACCEPTED': 'Accepted by the provider.',
   'settings.notifications.testSend.result.REJECTED': 'Refused by the provider.',
   'settings.notifications.testSend.result.RETRYABLE': 'A transport error — try again.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Uncertain — the provider may already have sent it.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Uncertain — the provider may already have sent it.',
   'settings.notifications.activate.confirm.title': 'Activate this version?',
-  'settings.notifications.activate.confirm.body': 'Every message using this template will use this wording from now on.',
+  'settings.notifications.activate.confirm.body':
+    'Every message using this template will use this wording from now on.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'This version is still {state} with its SMS gateway. Activating it will not make it send until that changes.',
   'settings.notifications.activate.confirm.confirm': 'Activate',
   'settings.notifications.routing.lead':
     'Which of this brand’s bound Telegram chats hear about which events, and their forum topic.',
-  'settings.notifications.routing.empty': 'No chat is bound yet. Use "/link <code>" in a Telegram group to bind one.',
+  'settings.notifications.routing.empty':
+    'No chat is bound yet. Use "/link <code>" in a Telegram group to bind one.',
   'settings.notifications.routing.column.chat': 'Chat',
   'settings.notifications.routing.column.topic': 'Topic',
   'settings.notifications.routing.column.status': 'Status',
@@ -1072,7 +1078,8 @@ export const messagesEn = {
   'settings.notifications.routing.action.editTopic': 'Change topic',
   'settings.notifications.routing.action.unbind': 'Unbind',
   'settings.notifications.routing.unbind.confirm.title': 'Unbind this chat?',
-  'settings.notifications.routing.unbind.confirm.body': 'It stops receiving every event class immediately.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'It stops receiving every event class immediately.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Unbind',
   'settings.notifications.routing.topic.prompt': 'Forum topic id — leave empty for the flat chat',
   'settings.notifications.routing.topic.save': 'Save',
@@ -1226,12 +1233,34 @@ export const messagesEn = {
   'settings.locations.hours.schedulesTitle': 'Bound timetables',
   'settings.locations.hours.shared': 'Also used by {count} other locations',
   'settings.locations.hours.noBindings': 'No fulfilment mode has a bound timetable yet.',
+  'settings.locations.hours.editSchedule': 'Edit hours',
+  'settings.locations.hours.rebind': 'Bind a different timetable',
+  'settings.locations.hours.notBound': 'no timetable bound',
+  'settings.locations.hours.pickSchedule': 'Choose a timetable…',
+  'settings.locations.hours.bind': 'Bind',
+  'settings.locations.hours.exceptionRemoveNote':
+    'Removing a dated exception here only hides it until the page reloads — saving does not delete it. Edit it instead, or ask engineering for a delete.',
+  'settings.locations.hours.exceptionFieldsRequired':
+    'Give every changed date a label and a reason before saving.',
+  'settings.locations.hours.sharedConfirm':
+    '"{name}" is also used by {count} other locations. This change applies to all of them. Continue?',
   'settings.locations.load.capacityTitle': 'Concurrent order ceiling',
   'settings.locations.load.occupancy': '{open} / {limit} orders holding capacity right now',
   'settings.locations.load.maxConcurrentOrders': 'Maximum concurrent orders',
   'settings.locations.load.bandsTitle': 'Preparation bands',
   'settings.locations.load.minutes': 'min',
   'settings.locations.load.noBands': 'No preparation bands configured.',
+  'settings.locations.load.mode': 'Mode',
+  'settings.locations.load.day': 'Day',
+  'settings.locations.load.from': 'From',
+  'settings.locations.load.to': 'To',
+  'settings.locations.load.duration': 'Minutes',
+  'settings.locations.load.priority': 'Priority',
+  'settings.locations.load.anyMode': 'Any mode',
+  'settings.locations.load.anyDay': 'Any day',
+  'settings.locations.load.addBand': 'Add band',
+  'settings.locations.load.bandOvernight':
+    'A band cannot cross midnight — enter the after-midnight part as its own row.',
   'settings.locations.fiscal.note':
     'Legal entity and fiscal assignment are managed on Settings → Fiscalization.',
   'settings.locations.channels.note':
@@ -4184,6 +4213,8 @@ export const messagesEn = {
   'ui.scheduleGrid.closedAllDay': 'Closed all day',
   'ui.scheduleGrid.addException': 'Add exception',
   'ui.scheduleGrid.noWindows': 'No hours set',
+  'ui.scheduleGrid.exceptionLabel': 'Label',
+  'ui.scheduleGrid.exceptionReason': 'Reason',
   'ui.combobox.noResults': 'No matches',
   'ui.combobox.loading': 'Searching…',
   'ui.combobox.createOption': 'Create “{query}”',

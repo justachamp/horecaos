@@ -955,10 +955,12 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.tab.templates': 'Шаблоны',
   'settings.notifications.tab.routing': 'Маршрутизация',
   'settings.notifications.automation.title': 'Автоматизация',
-  'settings.notifications.field.paymentLinkAutoSend': 'Отправлять клиенту ссылку на оплату автоматически',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Отправлять клиенту ссылку на оплату автоматически',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Пока не действует: ни один сценарий ещё не читает этот переключатель, поэтому включение только сохраняет выбор.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Уведомлять об открытии/закрытии смены агрегатора',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Уведомлять об открытии/закрытии смены агрегатора',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Пока не действует: в платформе ещё нет самого события смены агрегатора, которое запускало бы это уведомление.',
   'settings.notifications.create.action': 'Новый шаблон',
@@ -1004,7 +1006,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.editor.subject': 'Тема',
   'settings.notifications.editor.body': 'Текст',
   'settings.notifications.editor.variables': 'Вставить переменную',
-  'settings.notifications.editor.variables.empty': 'Для этого класса уведомлений переменные не предложены.',
+  'settings.notifications.editor.variables.empty':
+    'Для этого класса уведомлений переменные не предложены.',
   'settings.notifications.editor.preview': 'Как увидит клиент',
   'settings.notifications.editor.save': 'Сохранить черновик',
   'settings.notifications.editor.saving': 'Сохранение…',
@@ -1023,15 +1026,18 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.testSend.result.ACCEPTED': 'Принято провайдером.',
   'settings.notifications.testSend.result.REJECTED': 'Отклонено провайдером.',
   'settings.notifications.testSend.result.RETRYABLE': 'Ошибка передачи — попробуйте ещё раз.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Неопределённо — провайдер, возможно, уже отправил.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Неопределённо — провайдер, возможно, уже отправил.',
   'settings.notifications.activate.confirm.title': 'Активировать эту версию?',
-  'settings.notifications.activate.confirm.body': 'Каждое сообщение по этому шаблону будет использовать этот текст.',
+  'settings.notifications.activate.confirm.body':
+    'Каждое сообщение по этому шаблону будет использовать этот текст.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'Эта версия пока «{state}» у SMS-шлюза. Активация не заставит её отправляться, пока это не изменится.',
   'settings.notifications.activate.confirm.confirm': 'Активировать',
   'settings.notifications.routing.lead':
     'Какие из привязанных Telegram-чатов этого бренда слышат какие события, и их форум-тема.',
-  'settings.notifications.routing.empty': 'Ни один чат ещё не привязан. Отправьте «/link <код>» в Telegram-группе, чтобы привязать её.',
+  'settings.notifications.routing.empty':
+    'Ни один чат ещё не привязан. Отправьте «/link <код>» в Telegram-группе, чтобы привязать её.',
   'settings.notifications.routing.column.chat': 'Чат',
   'settings.notifications.routing.column.topic': 'Тема',
   'settings.notifications.routing.column.status': 'Статус',
@@ -1045,9 +1051,11 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.routing.action.editTopic': 'Сменить тему',
   'settings.notifications.routing.action.unbind': 'Отвязать',
   'settings.notifications.routing.unbind.confirm.title': 'Отвязать этот чат?',
-  'settings.notifications.routing.unbind.confirm.body': 'Он сразу перестанет получать любые классы событий.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'Он сразу перестанет получать любые классы событий.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Отвязать',
-  'settings.notifications.routing.topic.prompt': 'ID темы форума — оставьте пустым для обычного чата',
+  'settings.notifications.routing.topic.prompt':
+    'ID темы форума — оставьте пустым для обычного чата',
   'settings.notifications.routing.topic.save': 'Сохранить',
 
   // 10.10 Справочные данные
@@ -1200,12 +1208,34 @@ export const messagesRu: MessageCatalogue = {
   'settings.locations.hours.shared': 'Это расписание используют ещё {count} филиалов',
   'settings.locations.hours.noBindings':
     'Ни для одного типа получения расписание ещё не привязано.',
+  'settings.locations.hours.editSchedule': 'Изменить часы',
+  'settings.locations.hours.rebind': 'Привязать другое расписание',
+  'settings.locations.hours.notBound': 'расписание не привязано',
+  'settings.locations.hours.pickSchedule': 'Выберите расписание…',
+  'settings.locations.hours.bind': 'Привязать',
+  'settings.locations.hours.exceptionRemoveNote':
+    'Удаление исключения здесь только скрывает его до перезагрузки страницы — сохранение его не удаляет. Отредактируйте запись вместо этого, либо обратитесь к разработке за удалением.',
+  'settings.locations.hours.exceptionFieldsRequired':
+    'Укажите название и причину для каждой изменённой даты перед сохранением.',
+  'settings.locations.hours.sharedConfirm':
+    '«{name}» используют ещё {count} филиалов. Изменение применится ко всем. Продолжить?',
   'settings.locations.load.capacityTitle': 'Лимит одновременных заказов',
   'settings.locations.load.occupancy': '{open} / {limit} заказов занимают ёмкость сейчас',
   'settings.locations.load.maxConcurrentOrders': 'Максимум одновременных заказов',
   'settings.locations.load.bandsTitle': 'Интервалы приготовления',
   'settings.locations.load.minutes': 'мин',
   'settings.locations.load.noBands': 'Интервалы приготовления не настроены.',
+  'settings.locations.load.mode': 'Способ получения',
+  'settings.locations.load.day': 'День',
+  'settings.locations.load.from': 'С',
+  'settings.locations.load.to': 'До',
+  'settings.locations.load.duration': 'Минут',
+  'settings.locations.load.priority': 'Приоритет',
+  'settings.locations.load.anyMode': 'Любой способ',
+  'settings.locations.load.anyDay': 'Любой день',
+  'settings.locations.load.addBand': 'Добавить интервал',
+  'settings.locations.load.bandOvernight':
+    'Интервал не может переходить через полночь — оформите часть после полуночи отдельной строкой.',
   'settings.locations.fiscal.note':
     'Юридическое лицо и фискальное назначение управляются в Настройки → Фискализация.',
   'settings.locations.channels.note':
@@ -4162,6 +4192,8 @@ export const messagesRu: MessageCatalogue = {
   'ui.scheduleGrid.closedAllDay': 'Закрыто весь день',
   'ui.scheduleGrid.addException': 'Добавить исключение',
   'ui.scheduleGrid.noWindows': 'Часы не заданы',
+  'ui.scheduleGrid.exceptionLabel': 'Название',
+  'ui.scheduleGrid.exceptionReason': 'Причина',
   'ui.combobox.noResults': 'Совпадений нет',
   'ui.combobox.loading': 'Поиск…',
   'ui.combobox.createOption': 'Создать «{query}»',

@@ -68,6 +68,39 @@
   margin: 2px 0 8px;
 }
 
+.schedule__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.schedule__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.schedule--unbound {
+  border-style: dashed;
+}
+
+.rebind {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  max-width: 420px;
+}
+
+.band-edit-start {
+  margin-top: 8px;
+}
+
+.band-number {
+  width: 80px;
+}
+
 .grid {
   width: 100%;
   border-collapse: collapse;
