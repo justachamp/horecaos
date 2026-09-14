@@ -287,4 +287,51 @@ describe('StaffPage', () => {
 
     expect(api.revokeStaffInvitation).toHaveBeenCalledWith('t1', 'inv-1', 'Changed their mind');
   });
+
+  it('shows the fresh one-time link a resend returns, reusing the invite dialog (S01 finding fix)', async () => {
+    const { fixture, api } = await setUp(
+      [grant({ principalSubject: 'staff-1', roleCode: 'location-staff' })],
+      'the-operator',
+      [
+        {
+          invitationId: 'inv-1',
+          principalSubject: 'staff-1',
+          state: 'SENT',
+          invitedAt: '2026-09-14T09:00:00Z',
+        },
+      ],
+    );
+
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="staff-row-resend-invite"]',
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    const reasonInput = fixture.nativeElement.querySelector(
+      '[data-testid="staff-access-dialog-reason"]',
+    ) as HTMLInputElement;
+    reasonInput.value = 'Lost the original link';
+    reasonInput.dispatchEvent(new Event('input'));
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="staff-access-dialog-confirm"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.resendStaffInvitation).toHaveBeenCalledWith('t1', 'inv-1', 'Lost the original link');
+    // Before this fix the returned link was discarded entirely and the
+    // operator had no way to see it -- the access-confirmation dialog
+    // simply closed. Now the invite dialog reopens showing it.
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-access-dialog-reason"]'),
+    ).toBeNull();
+    const linkField = fixture.nativeElement.querySelector(
+      '[data-testid="staff-invite-dialog-link"]',
+    ) as HTMLInputElement | null;
+    expect(linkField?.value).toBe('https://ops.example.uz/invite#token=fresh');
+  });
 });

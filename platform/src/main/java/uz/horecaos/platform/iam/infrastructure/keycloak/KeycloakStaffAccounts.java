@@ -132,6 +132,15 @@ class KeycloakStaffAccounts implements StaffAccounts {
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body)
                 .retrieve()
+                // Keycloak's own username-uniqueness constraint, surfaced as a
+                // named signal rather than the generic IllegalStateException
+                // below: the losing side of a race past the caller's
+                // findByPhone pre-check (two invitations for the same phone
+                // at once) must be handled, not just logged as a 500.
+                .onStatus(HttpStatus.CONFLICT::equals, (request, response) -> {
+                    throw new StaffAccounts.StaffAccountAlreadyExistsException(
+                            "Keycloak already has an account for this phone number");
+                })
                 .onStatus(HttpStatusCode::isError, (request, response) -> {
                     throw new IllegalStateException(
                             "Keycloak refused to create the staff account with " + response.getStatusCode());
@@ -145,6 +154,28 @@ class KeycloakStaffAccounts implements StaffAccounts {
         String path = location.getPath();
         String subjectId = path.substring(path.lastIndexOf('/') + 1);
         return new StaffAccount(subjectId, email, false, false, username);
+    }
+
+    /**
+     * Undoes {@link #create} (ADR 0116): the compensating action {@link
+     * uz.horecaos.platform.tenancy.application.invitations.StaffInvitationService#invite}
+     * takes when the account was created but its job grant was then refused,
+     * so the phone is not left claimed by an account nothing can ever grant.
+     *
+     * <p>A 404 is success, not failure -- the same stance {@link
+     * #logoutEverywhere}'s own consent delete takes, and for the same
+     * reason: "already gone" is exactly the state this call is for.
+     */
+    @Override
+    public void delete(String subjectId) {
+        try {
+            client.delete()
+                    .uri("/admin/realms/{realm}/users/{id}", realm, subjectId)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (HttpClientErrorException.NotFound alreadyGone) {
+            // Already the state this call is for.
+        }
     }
 
     /**

@@ -3087,6 +3087,7 @@ export const messagesRu: MessageCatalogue = {
   'staff.inviteDialog.submitting': 'Приглашаем…',
   'staff.inviteDialog.confirmClose': 'Отменить это приглашение?',
   'staff.inviteDialog.doneTitle': 'Приглашение создано',
+  'staff.inviteDialog.doneTitleResent': 'Новая ссылка готова',
   'staff.inviteDialog.doneBody':
     'Отправьте эту ссылку новому сотруднику любым удобным способом — Telegram, SMS, лично. Она действует один раз, в течение 72 часов.',
   'staff.inviteDialog.copy': 'Скопировать ссылку',

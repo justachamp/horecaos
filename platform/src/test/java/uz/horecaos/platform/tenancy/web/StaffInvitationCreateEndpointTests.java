@@ -2,7 +2,10 @@ package uz.horecaos.platform.tenancy.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -157,6 +160,44 @@ class StaffInvitationCreateEndpointTests {
                         .single())
                 .as("one grant, not two")
                 .isEqualTo(1L);
+    }
+
+    /**
+     * S05: {@link StaffInvitationController#resend}, {@link
+     * StaffInvitationController#revoke} and {@link
+     * StaffInvitationController#outstanding} each declare {@code
+     * @RequiresCapability(IAM_GRANT_MANAGE)}, but nothing exercised the
+     * refusal through MockMvc before this test -- only the public
+     * inspect/accept endpoints and this class's own {@code invite} were
+     * covered. The capability check runs ahead of the handler, so a real
+     * invitation id is not needed to prove the refusal.
+     */
+    @Test
+    @DisplayName("resend is refused with 403 for a caller holding no capability at all")
+    void resendIsRefusedWithoutTheCapability() throws Exception {
+        mvc.perform(post("/api/v1/operations/tenants/" + TENANT + "/staff/invitations/" + UUID.randomUUID() + "/resend")
+                        .with(tokenFor("no-grant-subject-resend"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"trying anyway\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("revoke is refused with 403 for a caller holding no capability at all")
+    void revokeIsRefusedWithoutTheCapability() throws Exception {
+        mvc.perform(delete("/api/v1/operations/tenants/" + TENANT + "/staff/invitations/" + UUID.randomUUID())
+                        .with(tokenFor("no-grant-subject-revoke"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"trying anyway\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("the outstanding-invitations list is refused with 403 for a caller holding no capability at all")
+    void outstandingIsRefusedWithoutTheCapability() throws Exception {
+        mvc.perform(get("/api/v1/operations/tenants/" + TENANT + "/staff/invitations")
+                        .with(tokenFor("no-grant-subject-outstanding")))
+                .andExpect(status().isForbidden());
     }
 
     private void tenant() {
