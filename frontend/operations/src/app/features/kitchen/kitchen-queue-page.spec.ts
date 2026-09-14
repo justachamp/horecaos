@@ -137,6 +137,23 @@ describe('KitchenQueuePage', () => {
     expect(host.textContent).toContain('telegram-bot');
   });
 
+  it('shows the courier ETA chip when the ticket carries one (wave P11, row 2.1a)', async () => {
+    const eta = new Date(Date.now() + 25 * 60 * 1000).toISOString();
+    await render(board([{ ...DELIVERY_TICKET, courierEtaAt: eta }]));
+    const host = fixture.nativeElement as HTMLElement;
+
+    const chip = host.querySelector('[data-testid="kitchen-ticket-courier-eta"]');
+    expect(chip).not.toBeNull();
+    expect(chip?.textContent).toContain('Courier ETA');
+  });
+
+  it('shows no courier ETA chip for a ticket the join gave none — a pickup ticket, or a plan an in-house courier carries', async () => {
+    await render(board([DELIVERY_TICKET]));
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="kitchen-ticket-courier-eta"]')).toBeNull();
+  });
+
   it('expands to show the item row once the ticket header is clicked', async () => {
     await render();
     const host = fixture.nativeElement as HTMLElement;
