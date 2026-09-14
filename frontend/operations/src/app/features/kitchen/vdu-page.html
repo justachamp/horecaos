@@ -13,7 +13,12 @@
           [class.vdu__card--warning]="severityTone(ticket) === 'warning'"
           data-testid="vdu-card"
         >
-          {{ ticket.sequenceLabel }}
+          <span class="vdu__sequence" data-testid="vdu-sequence">{{ ticket.sequenceLabel }}</span>
+          @if (ticket.externalReference) {
+            <span class="vdu__external-reference" data-testid="vdu-external-reference">
+              {{ ticket.externalReference }}
+            </span>
+          }
         </div>
       } @empty {
         <div class="vdu__empty" data-testid="vdu-empty">{{ 'kitchen.expo.empty' | t }}</div>

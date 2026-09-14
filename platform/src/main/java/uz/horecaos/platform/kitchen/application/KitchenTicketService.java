@@ -1001,6 +1001,11 @@ public class KitchenTicketService {
         return kitchen.channelSystemTypes(tenantId, channelCodes);
     }
 
+    /** The provider-assigned identifier for each of these orders, where one exists (gap map row 2.4, VDU). */
+    public Map<UUID, String> externalReferencesByOrder(UUID tenantId, Set<UUID> orderIds) {
+        return orders.externalReferences(tenantId, orderIds);
+    }
+
     public List<TicketItemRow> items(UUID tenantId, UUID ticketId) {
         return kitchen.itemsOf(tenantId, ticketId);
     }

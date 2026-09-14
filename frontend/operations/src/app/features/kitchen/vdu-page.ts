@@ -22,10 +22,19 @@ const POLL_INTERVAL_MS = 10_000;
  * IA 2.4 — Display board (VDU): a read-only wall display of the combined
  * queue, for customers or staff to glance at from across the room.
  *
- * **Same data as the KDS** (`stream=live` — FIRED/IN_PRODUCTION/READY), the
- * one thing IA 2.4 says by name to keep: "provider-assigned external
- * identifiers shown to humans" — `sequenceLabel` is exactly that. Read-only:
- * no start/ready/recall here.
+ * **Same data as the KDS** (`stream=live` — FIRED/IN_PRODUCTION/READY).
+ * Read-only: no start/ready/recall here.
+ *
+ * **`externalReference` (wave T02, gap map row 2.4) is IA 2.4's one named
+ * feature — "provider-assigned external identifiers shown to humans" —
+ * finally carried.** Before this wave `TicketResponse` carried none, and
+ * this page's own doc used to claim `sequenceLabel` filled that role; it
+ * does not — `sequenceLabel` is HorecaOS's own number, and a courier or
+ * customer reading an aggregator's code off their own app could not match
+ * it to the wall. Both numbers render now: `sequenceLabel` first, since it
+ * is what the kitchen itself calls the ticket, and `externalReference`
+ * beneath it when the order carries one — a direct order, or a partner
+ * order nobody has issued a reference for yet, shows only the first.
  *
  * **Reduced relative to the spec, deliberately, and named where it matters.**
  * IA Part 4's own component-gap list puts a TV-distance wallboard shell
@@ -34,6 +43,8 @@ const POLL_INTERVAL_MS = 10_000;
  * KDS's identical reduction). This renders inside the same operator console
  * shell, with its own oversized type rather than an off-scale invention, the
  * same trade-off `today-page.ts` documents for the live board's counters.
+ * The device class, a station filter, and a dedicated projection are ADR
+ * 0041 rollout step 4 — a separate, larger item this wave does not build.
  */
 @Component({
   selector: 'q-vdu-page',

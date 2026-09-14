@@ -114,17 +114,21 @@ public class KitchenBoardController {
                 .collect(Collectors.toSet());
         Map<String, String> channelSystemTypes = tickets.channelSystemTypes(tenantId, channelCodes);
 
-        // The courier ETA chip (gap map row 2.1a), the same batched-over-the-page
-        // shape as channelSystemTypes above: one read over every order id this
-        // page carries, not one dispatch lookup per ticket.
-        Map<UUID, Instant> courierEtaByOrder = courierEta.etaByOrders(
-                tenantId, ticketRows.stream().map(TicketRow::orderId).collect(Collectors.toSet()));
+        // One batch of order ids feeds both of the page's per-order joins
+        // below: the courier ETA chip (gap map row 2.1a) and the VDU's
+        // provider-assigned reference (gap map row 2.4). Each is a single
+        // read over every distinct order id this page carries, not one
+        // lookup per ticket.
+        Set<UUID> orderIds = ticketRows.stream().map(TicketRow::orderId).collect(Collectors.toSet());
+        Map<UUID, String> externalReferences = tickets.externalReferencesByOrder(tenantId, orderIds);
+        Map<UUID, Instant> courierEtaByOrder = courierEta.etaByOrders(tenantId, orderIds);
 
         List<TicketResponse> board = ticketRows.stream()
                 .map(ticket -> TicketResponse.of(
                         ticket,
                         tickets.items(tenantId, ticket.id()),
                         channelSystemTypes.get(ticket.channelCode()),
+                        externalReferences.get(ticket.orderId()),
                         courierEtaByOrder.get(ticket.orderId())))
                 .toList();
 
@@ -155,7 +159,7 @@ public class KitchenBoardController {
         Instant eta = courierEta.etaByOrders(tenantId, Set.of(ticket.orderId())).get(ticket.orderId());
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(ticket.version()))
-                .body(TicketResponse.of(ticket, tickets.items(tenantId, ticket.id()), null, eta));
+                .body(TicketResponse.of(ticket, tickets.items(tenantId, ticket.id()), null, null, eta));
     }
 
     /**
@@ -402,20 +406,28 @@ public class KitchenBoardController {
      * tenant.sales_channels.system_type} resolved off {@code channelCode} —
      * {@code AGGREGATOR} lets the client render a real aggregator tab instead
      * of the raw channel code as an unclassified chip (gap map row 2.1).
-     * {@code courierEtaAt} (wave P11) is the winning partner quote's own ETA,
-     * joined off {@code fulfillment.delivery_plans.courier_eta_at} by order
-     * id (gap map row 2.1a) — null for a pickup or dine-in ticket, a plan an
-     * in-house courier carries, or a partner that answered no ETA. Both are
-     * resolved only by {@link #board}, at the cost of one batch read each over
-     * the page's distinct codes and order ids; every mutation response below
-     * keeps the cheaper two-argument {@link #of(TicketRow, List)} overload — a
-     * client that already holds either value from its last board read loses
-     * nothing by a mutation response not repeating it.
+     *
+     * <p>{@code externalReference} (wave T02, gap map row 2.4) is the
+     * provider-assigned identifier a courier or a customer would actually
+     * quote — {@code sequenceLabel} is HorecaOS's own number, never that.
+     * {@code courierEtaAt} (wave P11, gap map row 2.1a) is the winning
+     * partner quote's own ETA, joined off {@code
+     * fulfillment.delivery_plans.courier_eta_at} by order id — null for a
+     * pickup or dine-in ticket, a plan an in-house courier carries, or a
+     * partner that answered no ETA. Both are resolved only by {@link #board},
+     * each at the cost of one batch read over the page's distinct order ids
+     * (sharing the same {@code orderIds} set); {@link #ticket} resolves only
+     * {@code courierEtaAt} (not {@code externalReference}), and every
+     * mutation response below keeps the cheaper two-argument {@link
+     * #of(TicketRow, List)} overload, carrying neither — a client that
+     * already holds either value from its last board read loses nothing by a
+     * mutation response not repeating it.
      */
     record TicketResponse(
             UUID ticketId,
             UUID orderId,
             String sequenceLabel,
+            @Nullable String externalReference,
             String fulfilmentMode,
             @Nullable String channelCode,
             @Nullable String channelSystemType,
@@ -433,18 +445,24 @@ public class KitchenBoardController {
             List<ItemView> items) {
 
         static TicketResponse of(TicketRow ticket, List<TicketItemRow> items) {
-            return of(ticket, items, null, null);
+            return of(ticket, items, null, null, null);
+        }
+
+        static TicketResponse of(TicketRow ticket, List<TicketItemRow> items, @Nullable String channelSystemType) {
+            return of(ticket, items, channelSystemType, null, null);
         }
 
         static TicketResponse of(
                 TicketRow ticket,
                 List<TicketItemRow> items,
                 @Nullable String channelSystemType,
+                @Nullable String externalReference,
                 @Nullable Instant courierEtaAt) {
             return new TicketResponse(
                     ticket.id(),
                     ticket.orderId(),
                     ticket.sequenceLabel(),
+                    externalReference,
                     ticket.fulfilmentMode(),
                     ticket.channelCode(),
                     channelSystemType,

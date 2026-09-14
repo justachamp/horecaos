@@ -3,6 +3,7 @@ import {
   Component,
   DestroyRef,
   OnInit,
+  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -25,18 +26,23 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
 /**
  * IA 2.2 — Buffer: tickets accepted but deliberately not yet on the line.
  *
- * `KitchenBoardController`'s `stream=buffer` (HELD tickets) and its
- * `/release` endpoint are both real — ADR 0041's own buffer, built alongside
- * the KDS but not yet reachable from any screen. This is that screen.
+ * `KitchenBoardController`'s `stream=buffer` (HELD tickets), `/release`
+ * (fire now) and `/release-schedule` (hold, or edit the fire time) are all
+ * real — ADR 0041's three buffer actions.
  *
  * **Owns, built**: the buffer list; the kitchen fire time (`releaseAt`) as a
- * field distinct from `createdAt` and `targetReadyAt`; manual release.
- * **Not built**: changing *when* a ticket fires (`release-schedule`,
- * `kitchen.ticket.release.override`) — this screen only fires a ticket now,
- * the same reduction `dispatch-board-page.ts` documents for drag-and-drop:
- * the one action operators need three hundred times a shift, not the rarer
- * one. **Paid-only hold** (orders.md nowhere specifies which payment fact
- * gates it, and ADR 0013's payment-method registry is itself not built) is
+ * field distinct from `createdAt` and `targetReadyAt`; manual release (fire
+ * now); placing a ticket on manual hold and editing its fire time (wave T02,
+ * gap map row 2.2), both through `/release-schedule` — the one endpoint ADR
+ * 0041 gives both acts. Pulling a fire time earlier needs no extra grant;
+ * pushing it later than the ticket's own promise, or holding a ticket that
+ * already has one, needs `kitchen.ticket.release.override` and a reason,
+ * enforced server-side — this screen shows the reason field whenever the
+ * edit would do either, but the server's refusal is what actually decides
+ * it, the same as every other capability-gated affordance in this console.
+ *
+ * **Paid-only hold** (orders.md nowhere specifies which payment fact gates
+ * it, and ADR 0013's payment-method registry is itself not built) is
  * therefore not modelled — every held ticket in the buffer is shown, and
  * release is offered unconditionally.
  */
@@ -59,6 +65,44 @@ export class BufferPage implements OnInit {
   protected readonly lastError = signal<ApiError | null>(null);
   protected readonly busyTicketIds = signal<ReadonlySet<string>>(new Set());
   protected readonly actionNotice = signal<string | null>(null);
+
+  /** The one row, if any, whose fire-time editor is open. */
+  protected readonly editingTicketId = signal<string | null>(null);
+  /** `<input type="datetime-local">`'s own value shape — empty means "no fire time yet". */
+  protected readonly editReleaseAtLocal = signal('');
+  protected readonly editReasonCode = signal('');
+  protected readonly editError = signal<string | null>(null);
+
+  protected readonly editingTicket = computed(() => {
+    const id = this.editingTicketId();
+    return id === null ? null : (this.tickets().find((row) => row.ticketId === id) ?? null);
+  });
+
+  /**
+   * Whether the edit in progress needs a reason: pushing the fire time later
+   * than the ticket's own promise, or holding (clearing the fire time
+   * entirely) a ticket that already has one — the same
+   * `KitchenBoardController.reschedule` rule the server enforces. Computed
+   * so the field only appears when it would actually be required, never as
+   * a permanent, mostly-irrelevant box on every row.
+   */
+  protected readonly editNeedsReason = computed(() => {
+    const ticket = this.editingTicket();
+    if (!ticket) {
+      return false;
+    }
+    const honestRelease = latestHonestRelease(ticket);
+    if (honestRelease === null) {
+      return false;
+    }
+    const editedAt = this.editReleaseAtLocal();
+    if (editedAt === '') {
+      // An explicit hold on a ticket that already has a promise pushes the
+      // fire time to never, which the endpoint bounds identically.
+      return true;
+    }
+    return new Date(editedAt).getTime() > honestRelease.getTime();
+  });
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
 
@@ -163,6 +207,107 @@ export class BufferPage implements OnInit {
     this.actionNotice.set(null);
   }
 
+  /** Opens the row's fire-time editor, pre-filled with its current `releaseAt`. */
+  protected startEdit(ticket: TicketResponse): void {
+    this.editingTicketId.set(ticket.ticketId);
+    this.editReleaseAtLocal.set(
+      ticket.releaseAt ? toDatetimeLocal(new Date(ticket.releaseAt)) : '',
+    );
+    this.editReasonCode.set('');
+    this.editError.set(null);
+  }
+
+  protected cancelEdit(): void {
+    this.editingTicketId.set(null);
+    this.editError.set(null);
+  }
+
+  protected setEditReleaseAt(value: string): void {
+    this.editReleaseAtLocal.set(value);
+  }
+
+  protected setEditReasonCode(value: string): void {
+    this.editReasonCode.set(value);
+  }
+
+  /** Places a ticket on manual hold outright — the buffer's own quick action, no time to type. */
+  protected async holdIndefinitely(ticket: TicketResponse): Promise<void> {
+    await this.applyReschedule(ticket, 'MANUAL_HOLD', null, this.holdReasonFor(ticket));
+  }
+
+  protected async submitEdit(): Promise<void> {
+    const ticket = this.editingTicket();
+    if (!ticket) {
+      return;
+    }
+    const local = this.editReleaseAtLocal();
+    const reason = this.editReasonCode().trim();
+    if (this.editNeedsReason() && !reason) {
+      this.editError.set(this.i18n.t('kitchen.buffer.edit.reasonRequired'));
+      return;
+    }
+    // The <input type="datetime-local">'s value has no timezone of its own;
+    // new Date(...) parses it as the browser's local time, the same honest
+    // reading campaigns-page.ts's identical scheduledAt field documents.
+    const releaseAt = local === '' ? null : new Date(local).toISOString();
+    const mode = releaseAt === null ? 'MANUAL_HOLD' : 'SCHEDULED';
+    const applied = await this.applyReschedule(ticket, mode, releaseAt, reason || undefined);
+    if (applied) {
+      this.editingTicketId.set(null);
+    }
+  }
+
+  /** A ticket with no promise yet needs no reason for an ordinary hold; one that does is bounded like a late fire time. */
+  private holdReasonFor(ticket: TicketResponse): string | undefined {
+    return latestHonestRelease(ticket) !== null ? 'OPERATIONS_BUFFER_HOLD' : undefined;
+  }
+
+  private async applyReschedule(
+    ticket: TicketResponse,
+    mode: 'MANUAL_HOLD' | 'SCHEDULED',
+    releaseAt: string | null,
+    reasonCode: string | undefined,
+  ): Promise<boolean> {
+    const scope = this.location.scope();
+    if (!scope || this.isBusy(ticket)) {
+      return false;
+    }
+    this.setBusy(ticket.ticketId, true);
+    this.editError.set(null);
+    try {
+      const updated = await firstValueFrom(
+        this.kitchen.reschedule(
+          scope,
+          ticket.ticketId,
+          ticket.version,
+          mode,
+          releaseAt,
+          reasonCode,
+        ),
+      );
+      this.tickets.update((current) =>
+        current.map((row) => (row.ticketId === updated.ticketId ? updated : row)),
+      );
+      return true;
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? describeApiError(error, (key, values) => this.i18n.t(key, values))
+          : this.i18n.t('error.unknown.noReference');
+      if (this.editingTicketId() === ticket.ticketId) {
+        this.editError.set(message);
+      } else {
+        this.actionNotice.set(message);
+      }
+      if (error instanceof ApiError) {
+        return false;
+      }
+      throw error;
+    } finally {
+      this.setBusy(ticket.ticketId, false);
+    }
+  }
+
   private setBusy(ticketId: string, busy: boolean): void {
     this.busyTicketIds.update((current) => {
       const next = new Set(current);
@@ -178,4 +323,27 @@ export class BufferPage implements OnInit {
 
 function releaseInstant(ticket: TicketResponse): number {
   return ticket.releaseAt ? new Date(ticket.releaseAt).getTime() : Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * `targetReadyAt - prepEstimateSeconds` — the same bound
+ * `KitchenBoardController.reschedule`'s own doc names for when a later fire
+ * time, or a hold at all, starts breaking a promise. Null exactly when the
+ * server's own check is a no-op: a ticket with no promise or no estimate has
+ * nothing yet to break.
+ */
+function latestHonestRelease(ticket: TicketResponse): Date | null {
+  if (!ticket.targetReadyAt || ticket.prepEstimateSeconds == null) {
+    return null;
+  }
+  return new Date(new Date(ticket.targetReadyAt).getTime() - ticket.prepEstimateSeconds * 1000);
+}
+
+/** `new Date()` in `<input type="datetime-local">`'s own value shape, in the browser's local time. */
+function toDatetimeLocal(date: Date): string {
+  const pad = (value: number): string => String(value).padStart(2, '0');
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  );
 }

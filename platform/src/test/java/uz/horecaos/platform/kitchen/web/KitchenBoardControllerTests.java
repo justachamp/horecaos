@@ -109,7 +109,7 @@ class KitchenBoardControllerTests {
     }
 
     @Test
-    void theFourArgumentOverloadCarriesTheResolvedChannelSystemTypeAndCourierEta() {
+    void theFiveArgumentOverloadCarriesTheResolvedChannelSystemTypeAndCourierEta() {
         // Only board() calls this overload (gap map rows 2.1 and 2.1a), after
         // resolving channelCode against tenant.sales_channels.system_type and
         // courierEtaAt against fulfillment.delivery_plans.courier_eta_at —
@@ -118,10 +118,67 @@ class KitchenBoardControllerTests {
         Instant eta = CREATED_AT.plusSeconds(1_200);
 
         KitchenBoardController.TicketResponse response =
-                KitchenBoardController.TicketResponse.of(ticket, List.of(), "AGGREGATOR", eta);
+                KitchenBoardController.TicketResponse.of(ticket, List.of(), "AGGREGATOR", null, eta);
 
         assertThat(response.channelSystemType()).isEqualTo("AGGREGATOR");
         assertThat(response.courierEtaAt()).isEqualTo(eta);
+    }
+
+    @Test
+    void theFiveArgumentOverloadCarriesBothTheExternalReferenceAndTheCourierEtaTogether() {
+        // board() resolves both joins off the same orderIds batch (gap map
+        // rows 2.1a and 2.4) and passes both through the one full overload —
+        // this asserts neither crowds out the other.
+        TicketRow ticket = ticketAt(TicketStatus.FIRED);
+        Instant eta = CREATED_AT.plusSeconds(1_200);
+
+        KitchenBoardController.TicketResponse response = KitchenBoardController.TicketResponse.of(
+                ticket, List.of(), "AGGREGATOR", "YE-2291-04", eta);
+
+        assertThat(response.externalReference()).isEqualTo("YE-2291-04");
+        assertThat(response.courierEtaAt()).isEqualTo(eta);
+    }
+
+    @Test
+    void neitherTheTwoNorTheThreeArgumentOverloadCarriesAnExternalReference() {
+        // The single-ticket read and every mutation response keep one of these
+        // two cheaper overloads (see TicketResponse's own doc) — externalReference
+        // stays null on both, the same as channelSystemType above.
+        TicketRow ticket = ticketAt(TicketStatus.FIRED);
+
+        assertThat(KitchenBoardController.TicketResponse.of(ticket, List.of()).externalReference())
+                .isNull();
+        assertThat(KitchenBoardController.TicketResponse.of(ticket, List.of(), "AGGREGATOR")
+                        .externalReference())
+                .isNull();
+    }
+
+    @Test
+    void theFiveArgumentOverloadCarriesTheExternalReference() {
+        // Only board() calls this overload (gap map row 2.4, wave T02): the
+        // provider-assigned identifier a courier or customer would quote —
+        // never sequenceLabel, HorecaOS's own number, which this test leaves
+        // unchanged to prove the two are not confused with one another.
+        TicketRow ticket = ticketAt(TicketStatus.FIRED);
+
+        KitchenBoardController.TicketResponse response =
+                KitchenBoardController.TicketResponse.of(ticket, List.of(), "AGGREGATOR", "YE-2291-04", null);
+
+        assertThat(response.externalReference()).isEqualTo("YE-2291-04");
+        assertThat(response.sequenceLabel()).isEqualTo(ticket.sequenceLabel());
+    }
+
+    @Test
+    void aTicketWithNoPartnerReferenceCarriesNullRatherThanAPlaceholder() {
+        // externalReference is honestly absent, not "", for the common case: a
+        // direct order, or an order from a partner nobody has issued a code for
+        // yet — a client must not render either as a real courier-facing code.
+        TicketRow ticket = ticketAt(TicketStatus.FIRED);
+
+        KitchenBoardController.TicketResponse response =
+                KitchenBoardController.TicketResponse.of(ticket, List.of(), "AGGREGATOR", null, null);
+
+        assertThat(response.externalReference()).isNull();
     }
 
     private static TicketRow ticketAt(TicketStatus status) {

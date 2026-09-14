@@ -83,10 +83,12 @@ public class KitchenStationService {
      * Sets one station's throughput ceiling for one weekday and one local time
      * window (frontend-information-architecture.md §2.6).
      *
-     * <p>Not consumed by the release scheduler — see V0144's own comment. This is
-     * the ceiling a manager sets and compares by eye against the board, which is
-     * a real reader even though {@code KitchenTicketService.decideRelease} is not
-     * one yet.
+     * <p>V0144 shipped this table unconsumed by the release scheduler, and its
+     * own comment says so; {@code KitchenTicketService.decideRelease} now reads
+     * it (see that method's {@code capacityOffsetSeconds}) and shifts a ticket's
+     * {@code release_at} earlier when a station's board is already committed
+     * past this ceiling for the slot. A manager comparing this against the
+     * board by eye is still a real reader beside that one.
      */
     @Transactional
     public StationCapacityRow createCapacityWindow(NewCapacityWindow command) {
@@ -134,6 +136,90 @@ public class KitchenStationService {
 
     public List<StationCapacityRow> listCapacityWindows(UUID tenantId, UUID locationId) {
         return stations.listStationCapacity(tenantId, locationId);
+    }
+
+    /**
+     * Corrects a throughput ceiling's window or rate (gap map row 2.6): before
+     * this, a mistyped 500 portions/hour was permanent — {@code
+     * KitchenStationController} exposed no update at all.
+     *
+     * <p>The overlap rule is the same one {@link #createCapacityWindow} enforces,
+     * checked against the window's own station and weekday and excluding the row
+     * being edited, so tightening or nudging a window never collides with itself.
+     */
+    @Transactional
+    public StationCapacityRow updateCapacityWindow(CapacityWindowEdit command) {
+        if (!command.windowEnd().isAfter(command.windowStart())) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A capacity window's end is after its start");
+        }
+        StationCapacityRow existing = stations.findStationCapacity(command.tenantId(), command.capacityWindowId())
+                .filter(row -> row.locationId().equals(command.locationId()))
+                .orElseThrow(() ->
+                        new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such throughput ceiling at this branch"));
+
+        if (existing.version() != command.expectedVersion()) {
+            throw ApiException.staleVersion(command.expectedVersion(), existing.version());
+        }
+
+        if (stations.overlapsExisting(
+                command.tenantId(),
+                existing.stationId(),
+                existing.weekday(),
+                command.windowStart(),
+                command.windowEnd(),
+                existing.id())) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "This station already has a throughput ceiling covering part of that window on that day");
+        }
+
+        Integer newVersion = stations.updateStationCapacity(
+                        command.tenantId(),
+                        existing.id(),
+                        command.windowStart(),
+                        command.windowEnd(),
+                        command.portionsPerHour(),
+                        command.expectedVersion(),
+                        clock.instant())
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_CONFLICT, "This ceiling was changed while this edit was being made"));
+
+        return new StationCapacityRow(
+                existing.id(),
+                existing.tenantId(),
+                existing.brandId(),
+                existing.locationId(),
+                existing.stationId(),
+                existing.weekday(),
+                command.windowStart(),
+                command.windowEnd(),
+                command.portionsPerHour(),
+                newVersion,
+                existing.createdAt());
+    }
+
+    /**
+     * Removes a throughput ceiling (gap map row 2.6): the other half of
+     * correcting one — a window nobody can edit or delete also blocks the
+     * correct window from ever being authored, since {@link #createCapacityWindow}
+     * refuses an overlap.
+     */
+    @Transactional
+    public void deleteCapacityWindow(UUID tenantId, UUID locationId, UUID capacityWindowId, int expectedVersion) {
+        StationCapacityRow existing = stations.findStationCapacity(tenantId, capacityWindowId)
+                .filter(row -> row.locationId().equals(locationId))
+                .orElseThrow(() ->
+                        new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such throughput ceiling at this branch"));
+
+        if (existing.version() != expectedVersion) {
+            throw ApiException.staleVersion(expectedVersion, existing.version());
+        }
+
+        boolean deleted = stations.deleteStationCapacity(tenantId, existing.id(), expectedVersion);
+        if (!deleted) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, "This ceiling was changed while this delete was being made");
+        }
     }
 
     /**
@@ -227,6 +313,19 @@ public class KitchenStationService {
             LocalTime windowStart,
             LocalTime windowEnd,
             int portionsPerHour) {}
+
+    /**
+     * A correction to a window already stored — the station and weekday are the
+     * existing row's own and never change; only the window and the rate can.
+     */
+    public record CapacityWindowEdit(
+            UUID tenantId,
+            UUID locationId,
+            UUID capacityWindowId,
+            LocalTime windowStart,
+            LocalTime windowEnd,
+            int portionsPerHour,
+            int expectedVersion) {}
 
     public record NewRoutingRule(
             UUID tenantId,

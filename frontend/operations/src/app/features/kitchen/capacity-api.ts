@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, firstValueFrom } from 'rxjs';
+import { Observable, firstValueFrom, map } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { command } from '../../core/api/idempotency';
@@ -29,6 +29,14 @@ export interface NewCapacityWindow {
   readonly portionsPerHour: number;
 }
 
+/** The station and weekday do not move — delete and re-create for that. */
+export interface CapacityWindowEdit {
+  readonly windowStart: string;
+  readonly windowEnd: string;
+  readonly portionsPerHour: number;
+  readonly expectedVersion: number;
+}
+
 /**
  * `KitchenStationController.RoutingRuleRequest`/`RoutingRuleResponse` — row
  * 4.2g's kitchen department. `stationId` names the location layer;
@@ -50,10 +58,11 @@ export interface RoutingRuleResponse {
 }
 
 /**
- * IA §2.6 — Capacity & buffer settings (`KitchenStationController`, new this
- * wave). Read today only by this settings screen: the release scheduler does
- * not shift on a ceiling yet — see `CapacityPage`'s own doc for the full
- * honesty accounting.
+ * IA §2.6 — Capacity & buffer settings (`KitchenStationController`).
+ * `KitchenTicketService.decideRelease` shifts a ticket's release earlier when
+ * a station's board is already committed past a ceiling for the slot — see
+ * `CapacityPage`'s own doc for the full honesty accounting on what else §2.6
+ * still does not build.
  */
 @Injectable({ providedIn: 'root' })
 export class CapacityApi {
@@ -68,12 +77,48 @@ export class CapacityApi {
     return result.value ?? [];
   }
 
-  /** Refused (409) when the window overlaps one already stored for that station and weekday. There is no edit or delete. */
+  /** Refused (409) when the window overlaps one already stored for that station and weekday. */
   create(scope: LocationScope, body: NewCapacityWindow): Observable<CapacityWindowResponse> {
     return this.api.post<NewCapacityWindow, CapacityWindowResponse>(
       operationsPaths.kitchenStationCapacity(scope),
       command(body),
     );
+  }
+
+  /**
+   * Corrects a stored window's own time range or rate (wave T02, gap map row
+   * 2.6). Refused (409) when the edit would overlap another window already
+   * stored for that station and weekday, the same rule {@link create}
+   * enforces — checked excluding this window's own row.
+   */
+  update(
+    scope: LocationScope,
+    capacityWindowId: string,
+    body: CapacityWindowEdit,
+  ): Observable<CapacityWindowResponse> {
+    return this.api.put<CapacityWindowEdit, CapacityWindowResponse>(
+      operationsPaths.kitchenStationCapacityWindow(scope, capacityWindowId),
+      command(body),
+    );
+  }
+
+  /**
+   * Removes a throughput ceiling (wave T02, gap map row 2.6) — the escape
+   * from a mistyped or overlapping window that used to be permanent, since
+   * {@link create} refuses a second window over the same slot.
+   */
+  remove(
+    scope: LocationScope,
+    capacityWindowId: string,
+    expectedVersion: number,
+  ): Observable<void> {
+    return this.api
+      .send<{ expectedVersion: number }, void>(
+        'DELETE',
+        operationsPaths.kitchenStationCapacityWindow(scope, capacityWindowId),
+        command({ expectedVersion }),
+      )
+      .pipe(map(() => undefined));
   }
 
   /**

@@ -31,6 +31,16 @@ export interface TicketResponse {
   readonly ticketId: string;
   readonly orderId: string;
   readonly sequenceLabel: string;
+  /**
+   * The provider-assigned identifier a courier or a customer would actually
+   * quote — never `sequenceLabel`, which is HorecaOS's own number (wave T02,
+   * gap map row 2.4, IA 2.4's "provider-assigned external identifiers shown
+   * to humans"). Present only on a board read (`KitchenApi.board`); absent on
+   * a mutation response, the same trade-off `channelSystemType` documents
+   * below — a client that already holds it from its last board read loses
+   * nothing.
+   */
+  readonly externalReference?: string | null;
   /** `DELIVERY` | `PICKUP` | `DINE_IN`. */
   readonly fulfilmentMode: string;
   readonly channelCode?: string | null;
@@ -179,6 +189,37 @@ export class KitchenApi {
     return this.api.post<{ expectedVersion: number; reasonCode: string }, TicketResponse>(
       operationsPaths.kitchenTicketRelease(scope, ticketId),
       command({ expectedVersion, reasonCode }),
+    );
+  }
+
+  /**
+   * Places a ticket on manual hold, or edits when a held ticket fires (§2.2's
+   * buffer, `PUT .../release-schedule`). `releaseMode` is `MANUAL_HOLD` (no
+   * `releaseAt`) or `SCHEDULED` (with one). Moving `releaseAt` later than the
+   * ticket's own promise — or holding a ticket that has one at all — needs a
+   * `reasonCode`; the server refuses with 403 when the caller lacks
+   * `kitchen.ticket.release.override` for that case. Moving it earlier, or an
+   * ordinary hold with no promise yet, needs neither.
+   */
+  reschedule(
+    scope: LocationScope,
+    ticketId: string,
+    expectedVersion: number,
+    releaseMode: 'MANUAL_HOLD' | 'SCHEDULED',
+    releaseAt: string | null,
+    reasonCode?: string,
+  ): Observable<TicketResponse> {
+    return this.api.put<
+      {
+        expectedVersion: number;
+        releaseMode: string;
+        releaseAt: string | null;
+        reasonCode?: string;
+      },
+      TicketResponse
+    >(
+      operationsPaths.kitchenTicketReleaseSchedule(scope, ticketId),
+      command({ expectedVersion, releaseMode, releaseAt, reasonCode }),
     );
   }
 

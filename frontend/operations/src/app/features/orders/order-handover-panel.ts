@@ -5,6 +5,7 @@ import {
   effect,
   inject,
   input,
+  output,
   signal,
 } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
@@ -63,6 +64,16 @@ export class OrderHandoverPanel {
   readonly scope = input.required<LocationScope>();
   readonly orderId = input.required<string>();
 
+  /**
+   * Fires whenever the challenge this panel is showing changes — on load,
+   * after a verification, and after a bypass (wave T02). A caller that must
+   * gate an action on "was this handover proven" — `ExpoPage`'s own
+   * hand-over button — reads this instead of duplicating `verify`/`bypass`
+   * itself; a caller that only shows the panel, like the order detail pane,
+   * simply never binds it.
+   */
+  readonly challengeChange = output<ChallengeState | null>();
+
   protected readonly loading = signal(true);
   protected readonly challenge = signal<ChallengeState | null>(null);
   protected readonly loadError = signal(false);
@@ -104,7 +115,9 @@ export class OrderHandoverPanel {
     this.loading.set(true);
     this.loadError.set(false);
     try {
-      this.challenge.set(await firstValueFrom(this.api.challenge(scope, orderId)));
+      const challenge = await firstValueFrom(this.api.challenge(scope, orderId));
+      this.challenge.set(challenge);
+      this.challengeChange.emit(challenge);
     } catch (error) {
       if (error instanceof ApiError) {
         this.loadError.set(true);
@@ -135,6 +148,7 @@ export class OrderHandoverPanel {
           ? { ...current, status: result.status, attemptsRemaining: result.attemptsRemaining }
           : current,
       );
+      this.challengeChange.emit(this.challenge());
       this.notice.set(
         result.verified
           ? this.i18n.t('orders.detail.handover.verified')

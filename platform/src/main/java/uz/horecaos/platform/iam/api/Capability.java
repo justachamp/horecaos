@@ -681,14 +681,30 @@ public enum Capability {
     MARKETPLACE_AVAILABILITY_PUSH("marketplace.availability.push", "marketplace", "availability.push"),
 
     /**
+     * ADR 0040/0041: comparing the code a courier or customer presents against
+     * the one the branch issued — the ordinary, many-times-a-shift half of a
+     * handover, done from expo (IA 2.3, gap map row 2.3).
+     *
+     * <p>Wave T02 registers this; {@code MarketplaceOperationsController.verify}
+     * held {@link Capability#ORDER_ADVANCE} as a placeholder until it existed,
+     * which the endpoint's own comment used to spell out. Kept separate from
+     * {@link #MARKETPLACE_HANDOVER_BYPASS} for the reason that capability's own
+     * doc gives: completing a handover is what everyone on the pass does all
+     * shift, while bypassing one is the rarer, higher-stakes act of skipping
+     * the compare rather than performing it.
+     */
+    MARKETPLACE_HANDOVER_VERIFY("marketplace.handover.verify", "marketplace", "handover.verify"),
+
+    /**
      * ADR 0040: overriding handover verification.
      *
-     * <p>Deliberately not folded into the capability that completes a handover.
-     * Completing one is a daily act at the pass and everyone who works it needs
-     * the grant; overriding verification is the decision to hand a bag over
-     * without proof, and one capability covering both would put the override in
-     * every expo bundle in the country. It always travels with a reason code and
-     * an ADR 0027 audit fact naming the supervisor.
+     * <p>Deliberately not folded into {@link #MARKETPLACE_HANDOVER_VERIFY}, the
+     * capability that completes a handover. Completing one is a daily act at
+     * the pass and everyone who works it needs the grant; overriding
+     * verification is the decision to hand a bag over without proof, and one
+     * capability covering both would put the override in every expo bundle in
+     * the country. It always travels with a reason code and an ADR 0027 audit
+     * fact naming the supervisor.
      */
     MARKETPLACE_HANDOVER_BYPASS("marketplace.handover.bypass", "marketplace", "handover.bypass"),
 

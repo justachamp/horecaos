@@ -3,8 +3,11 @@ package uz.horecaos.platform.kitchen.infrastructure.ordering;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -99,6 +102,40 @@ public class JdbcKitchenOrderSource implements KitchenOrderSource {
                 found.travelMinutes(),
                 found.version(),
                 lines));
+    }
+
+    @Override
+    public Map<UUID, String> externalReferences(UUID tenantId, Set<UUID> orderIds) {
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        // DISTINCT ON picks the first row per order under the ORDER BY below,
+        // which is the priority the class doc promises: a partner's own display
+        // code first, then its order id, then its venue order number, tied by
+        // whichever arrived first. issued_by = 'PARTNER' excludes DELIVERY_CLAIM_ID
+        // and POS_ORDER_ID rows outright — a HorecaOS- or POS-issued reference is
+        // never what a courier or customer is holding.
+        return jdbc
+                .sql("""
+                SELECT DISTINCT ON (order_id) order_id, reference_value
+                FROM ordering.order_external_references
+                WHERE tenant_id = :tenantId AND order_id IN (:orderIds) AND issued_by = 'PARTNER'
+                ORDER BY order_id,
+                    CASE reference_type
+                        WHEN 'PARTNER_DISPLAY_CODE' THEN 1
+                        WHEN 'PARTNER_ORDER_ID' THEN 2
+                        WHEN 'PARTNER_VENUE_ORDER_NO' THEN 3
+                        ELSE 4
+                    END,
+                    first_seen_at
+                """)
+                .param("tenantId", tenantId)
+                .param("orderIds", orderIds)
+                .query((row, number) ->
+                        Map.entry(row.getObject("order_id", UUID.class), row.getString("reference_value")))
+                .list()
+                .stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
