@@ -381,6 +381,51 @@ export const messagesRu: MessageCatalogue = {
   'orders.queue.denied': 'Нет доступа к заказам этого филиала',
   'orders.queue.error.retry': 'Повторить',
 
+  // --- orders.queue toolbar filters (orders.md §2.4, wave P07) -------------
+  'orders.queue.filter.search.placeholder': '№ заказа, ID агрегатора…',
+  'orders.queue.filter.search.ariaLabel': 'Поиск заказов',
+  'orders.queue.filter.period.label': 'Период',
+  'orders.queue.filter.channel.label': 'Канал',
+  'orders.queue.filter.channel.all': 'Все каналы',
+  'orders.queue.filter.fulfillmentMode.label': 'Тип',
+  'orders.queue.filter.fulfillmentMode.all': 'Все',
+  'orders.queue.filter.courier.label': 'Курьер',
+  'orders.queue.filter.courier.all': 'Все курьеры',
+  'orders.queue.filter.mine.label': 'Мои заказы',
+  'orders.queue.filter.paymentMethod.label': 'Способ оплаты',
+  'orders.queue.filter.paymentMethod.all': 'Все способы',
+  'orders.queue.filter.paymentMethod.CASH': 'Наличными',
+  'orders.queue.filter.paymentMethod.CLICK': 'Click',
+  'orders.queue.filter.paymentMethod.PAYME': 'Payme',
+
+  // --- orders.queue selection and bulk actions (orders.md §2.10, wave P07) -
+  'orders.queue.column.select': 'Выбор',
+  'orders.queue.selection.selectPage': 'Выбрать {count} на странице',
+  'orders.queue.selection.selected': 'Выбрано {count}',
+  'orders.queue.selection.clear': 'Снять выбор',
+  'orders.queue.selection.rowAriaLabel': 'Выбрать заказ {number}',
+  'orders.queue.bulk.advance': 'Продвинуть',
+  'orders.queue.bulk.advanceUnavailable':
+    '«Продвинуть» недоступно: выбранные заказы не на одном этапе',
+  'orders.queue.bulk.cancel': 'Отменить',
+  'orders.queue.bulk.cancelUnavailable':
+    '«Отменить» недоступно: {ineligible} из {total} заказов нельзя отменить',
+  'orders.queue.bulk.courierNote':
+    'Массовое назначение курьера пока недоступно — назначайте курьера по одному заказу.',
+  'orders.queue.bulk.cancelDialog.title': 'Отменить {count} заказов',
+  'orders.queue.bulk.cancelDialog.confirm': 'Отменить заказы',
+  'orders.queue.bulk.result.summary': '{applied} применено · {failed} проблем',
+  'orders.queue.bulk.result.allApplied': 'Применено все {count}',
+  'orders.queue.bulk.result.retry': 'Повторить проблемные',
+  'orders.queue.bulk.result.dismiss': 'Закрыть',
+  'orders.queue.bulk.problem.STALE_VERSION': 'Заказ изменился с момента выбора',
+  'orders.queue.bulk.problem.ILLEGAL_TRANSITION': 'Недоступно при текущем статусе',
+  'orders.queue.bulk.problem.CANCELLATION_NOT_PERMITTED': 'Отмена не разрешена',
+  'orders.queue.bulk.problem.REASON_NOT_FOUND': 'Причина больше не активна',
+  'orders.queue.bulk.problem.VALIDATION_FAILED': 'Отклонено как некорректное',
+  'orders.queue.bulk.problem.ORDER_NOT_FOUND_AT_LOCATION': 'Не найден в этом филиале',
+  'orders.queue.bulk.problem.UNEXPECTED_FAILURE': 'Что-то пошло не так',
+
   'inbox.title': 'Чаты',
   'inbox.denied': 'Нет доступа к чатам этого бренда',
   'inbox.list.empty': 'Пока нет ни одного чата',
@@ -955,10 +1000,12 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.tab.templates': 'Шаблоны',
   'settings.notifications.tab.routing': 'Маршрутизация',
   'settings.notifications.automation.title': 'Автоматизация',
-  'settings.notifications.field.paymentLinkAutoSend': 'Отправлять клиенту ссылку на оплату автоматически',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Отправлять клиенту ссылку на оплату автоматически',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Пока не действует: ни один сценарий ещё не читает этот переключатель, поэтому включение только сохраняет выбор.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Уведомлять об открытии/закрытии смены агрегатора',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Уведомлять об открытии/закрытии смены агрегатора',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Пока не действует: в платформе ещё нет самого события смены агрегатора, которое запускало бы это уведомление.',
   'settings.notifications.create.action': 'Новый шаблон',
@@ -1004,7 +1051,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.editor.subject': 'Тема',
   'settings.notifications.editor.body': 'Текст',
   'settings.notifications.editor.variables': 'Вставить переменную',
-  'settings.notifications.editor.variables.empty': 'Для этого класса уведомлений переменные не предложены.',
+  'settings.notifications.editor.variables.empty':
+    'Для этого класса уведомлений переменные не предложены.',
   'settings.notifications.editor.preview': 'Как увидит клиент',
   'settings.notifications.editor.save': 'Сохранить черновик',
   'settings.notifications.editor.saving': 'Сохранение…',
@@ -1023,15 +1071,18 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.testSend.result.ACCEPTED': 'Принято провайдером.',
   'settings.notifications.testSend.result.REJECTED': 'Отклонено провайдером.',
   'settings.notifications.testSend.result.RETRYABLE': 'Ошибка передачи — попробуйте ещё раз.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Неопределённо — провайдер, возможно, уже отправил.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Неопределённо — провайдер, возможно, уже отправил.',
   'settings.notifications.activate.confirm.title': 'Активировать эту версию?',
-  'settings.notifications.activate.confirm.body': 'Каждое сообщение по этому шаблону будет использовать этот текст.',
+  'settings.notifications.activate.confirm.body':
+    'Каждое сообщение по этому шаблону будет использовать этот текст.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'Эта версия пока «{state}» у SMS-шлюза. Активация не заставит её отправляться, пока это не изменится.',
   'settings.notifications.activate.confirm.confirm': 'Активировать',
   'settings.notifications.routing.lead':
     'Какие из привязанных Telegram-чатов этого бренда слышат какие события, и их форум-тема.',
-  'settings.notifications.routing.empty': 'Ни один чат ещё не привязан. Отправьте «/link <код>» в Telegram-группе, чтобы привязать её.',
+  'settings.notifications.routing.empty':
+    'Ни один чат ещё не привязан. Отправьте «/link <код>» в Telegram-группе, чтобы привязать её.',
   'settings.notifications.routing.column.chat': 'Чат',
   'settings.notifications.routing.column.topic': 'Тема',
   'settings.notifications.routing.column.status': 'Статус',
@@ -1045,9 +1096,11 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.routing.action.editTopic': 'Сменить тему',
   'settings.notifications.routing.action.unbind': 'Отвязать',
   'settings.notifications.routing.unbind.confirm.title': 'Отвязать этот чат?',
-  'settings.notifications.routing.unbind.confirm.body': 'Он сразу перестанет получать любые классы событий.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'Он сразу перестанет получать любые классы событий.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Отвязать',
-  'settings.notifications.routing.topic.prompt': 'ID темы форума — оставьте пустым для обычного чата',
+  'settings.notifications.routing.topic.prompt':
+    'ID темы форума — оставьте пустым для обычного чата',
   'settings.notifications.routing.topic.save': 'Сохранить',
 
   // 10.10 Справочные данные
@@ -4119,6 +4172,9 @@ export const messagesRu: MessageCatalogue = {
   'ui.locked.module': 'Модуль:',
   'ui.locked.ask': 'Владелец аккаунта может подключить его к тарифу.',
   'ui.alert.dismiss': 'Скрыть сообщение',
+  'ui.filterBar.primaryLabel': 'Фильтры',
+  'ui.filterBar.more': 'Ещё',
+  'ui.filterBar.reset': 'Сбросить фильтры',
   'ui.toast.dismiss': 'Скрыть',
   'ui.splitPane.handle': 'Изменить ширину панели',
   'ui.richText.kind.paragraph': 'Абзац',

@@ -1,0 +1,98 @@
+/* The chrome every filter bar in the console shares (orders.md §2.4) — rows,
+   the "more" toggle, chips, reset. Individual controls are the caller's own
+   projected content and carry their own styling. */
+.q-filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--q-canvas);
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.q-filter-bar__primary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.q-filter-bar__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.q-filter-bar__more {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-body-sm);
+  cursor: pointer;
+}
+
+.q-filter-bar__more--open,
+.q-filter-bar__more:hover {
+  border-color: var(--q-ink);
+  color: var(--q-ink);
+}
+
+.q-filter-bar__more:focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: 1px;
+}
+
+.q-filter-bar__chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.q-filter-bar__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--q-primary);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--q-primary);
+  font-size: var(--q-type-body-xs);
+  cursor: pointer;
+}
+
+.q-filter-bar__chip:focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: 1px;
+}
+
+.q-filter-bar__reset {
+  padding: 3px 8px;
+  border: none;
+  background: none;
+  color: var(--q-ink-subtle);
+  font-size: var(--q-type-body-xs);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.q-filter-bar__reset:focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: 1px;
+}
+
+.q-filter-bar__secondary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+  border-top: 1px dashed var(--q-hairline);
+}
