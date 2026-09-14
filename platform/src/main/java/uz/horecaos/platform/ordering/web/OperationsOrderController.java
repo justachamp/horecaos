@@ -2139,7 +2139,10 @@ public class OperationsOrderController {
             List<OrderMixSliceResponse> sourceMix,
             List<OrderMixSliceResponse> typeMix) {
 
-        static OrderCountsResponse of(LiveBoardQueryService.LocationLiveBoard board, OrderCountsPeriod period) {
+        // public: the ADR 0045 COUNTERS snapshot source (ordering.infrastructure.realtime)
+        // reuses this mapping rather than duplicating it, so the stream and the
+        // poll can never disagree about what the nine counters mean.
+        public static OrderCountsResponse of(LiveBoardQueryService.LocationLiveBoard board, OrderCountsPeriod period) {
             JdbcOrderStore.OrderCountsRow row = board.counts();
             return new OrderCountsResponse(
                     row.newOrders(),

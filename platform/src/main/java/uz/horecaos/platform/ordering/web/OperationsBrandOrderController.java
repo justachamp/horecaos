@@ -98,7 +98,10 @@ public class OperationsBrandOrderController {
             List<OrderMixSliceResponse> sourceMix,
             List<OrderMixSliceResponse> typeMix) {
 
-        static BrandOrderCountsResponse of(LiveBoardQueryService.BrandLiveBoard board, OrderCountsPeriod period) {
+        // public: the ADR 0045 COUNTERS snapshot source (ordering.infrastructure.realtime)
+        // reuses this mapping at BRAND scope rather than duplicating it.
+        public static BrandOrderCountsResponse of(
+                LiveBoardQueryService.BrandLiveBoard board, OrderCountsPeriod period) {
             List<BranchOrderCountsResponse> branches = board.locations().stream()
                     .map(row ->
                             new BranchOrderCountsResponse(row.locationId(), OrderCountTotalsResponse.of(row.counts())))
