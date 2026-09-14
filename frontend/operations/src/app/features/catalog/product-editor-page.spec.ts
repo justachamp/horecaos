@@ -722,16 +722,14 @@ describe('ProductEditorPage', () => {
   });
 
   it('attaches a recommendation, directional — the target must never appear as this product’s own source', async () => {
-    const attachRecommendation = vi
-      .fn()
-      .mockReturnValue(
-        of({
-          recommendationId: 'rec-1',
-          targetVariantId: 'variant-9',
-          targetProductName: null,
-          sortOrder: 0,
-        }),
-      );
+    const attachRecommendation = vi.fn().mockReturnValue(
+      of({
+        recommendationId: 'rec-1',
+        targetVariantId: 'variant-9',
+        targetProductName: null,
+        sortOrder: 0,
+      }),
+    );
     const listRecommendations = vi
       .fn()
       .mockReturnValueOnce(of({ items: [] }))

@@ -297,7 +297,15 @@ describe('NewOrderPage', () => {
     };
     const placeOrder = vi.fn().mockResolvedValue(result);
     const recordCallProvenance = vi.fn().mockResolvedValue(undefined);
-    await render({ placeOrder, recordCallProvenance }, { callEventId: 'call-9' });
+    await render(
+      { placeOrder, recordCallProvenance },
+      {},
+      [],
+      { paymentMethods: {} },
+      {
+        callEventId: 'call-9',
+      },
+    );
     vi.spyOn(router, 'navigate').mockResolvedValue(true);
 
     fixture.componentInstance['selectCandidate'](candidate());

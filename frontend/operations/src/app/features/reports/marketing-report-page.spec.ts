@@ -70,6 +70,8 @@ const CAMPAIGN: CampaignView = {
   approvedBy: null,
   blockedCount: 0,
   pausedAt: null,
+  scheduledAt: null,
+  isWired: true,
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-02T00:00:00Z',
   version: 1,

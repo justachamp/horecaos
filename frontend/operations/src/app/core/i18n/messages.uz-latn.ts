@@ -121,9 +121,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'reservations.detail.guestName': 'Mehmon ismi',
   'reservations.detail.guestPhone': 'Telefon',
   'reservations.detail.guestNote': 'Izoh',
-  'reservations.detail.revealGuest': 'Mehmon maʼlumotlarini koʻrsatish',
+  'reservations.detail.revealGuest': 'Mehmon maʻlumotlarini koʻrsatish',
   'reservations.detail.revealing': 'Yuklanmoqda…',
-  'reservations.detail.guestRevealError': 'Mehmon maʼlumotlarini yuklab boʻlmadi',
+  'reservations.detail.guestRevealError': 'Mehmon maʻlumotlarini yuklab boʻlmadi',
   'reservations.status.REQUESTED': 'Soʻralgan',
   'reservations.status.CONFIRMED': 'Tasdiqlangan',
   'reservations.status.REJECTED': 'Rad etilgan',
@@ -347,7 +347,7 @@ export const messagesUzLatn: MessageCatalogue = {
 
   'orders.detail.section.comments': 'Izohlar',
   'orders.detail.comments.privacyNotice':
-    'Mijozning oʻz soʻzlari shaxsiy maʼlumot va ochilmasdan koʻrsatilmaydi. Bizning soʻzlarimiz esa toʻliq koʻrsatiladi.',
+    'Mijozning oʻz soʻzlari shaxsiy maʻlumot va ochilmasdan koʻrsatilmaydi. Bizning soʻzlarimiz esa toʻliq koʻrsatiladi.',
   'orders.detail.comments.customerToOrder': 'Mijozning buyurtmaga izohi',
   'orders.detail.comments.customerToOrder.seeAddress':
     '«Manzil va yetkazib berish» boʻlimida koʻring',
@@ -3452,7 +3452,7 @@ export const messagesUzLatn: MessageCatalogue = {
 
   'marketing.audiences.detail.view': 'Koʻrish',
   'marketing.audiences.detail.title': 'Auditoriya shartlari',
-  'marketing.audiences.detail.version': 'Ta’rif versiyasi {version}',
+  'marketing.audiences.detail.version': 'Taʻrif versiyasi {version}',
   'marketing.audiences.detail.noPredicates': 'Shartlar yoʻq',
   'marketing.audiences.detail.edit': 'Shartlarni tahrirlash',
   'marketing.audiences.detail.save': 'Shartlarni saqlash',
@@ -4471,7 +4471,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.order.created': '{number}-buyurtma yaratildi',
   'orders.newOrder.order.unavailableCount': 'Savatdagi {count} ta taom endi mavjud emas',
   'orders.newOrder.order.branch': 'Filial',
-  'orders.newOrder.order.byZone': '(hudud bo’yicha)',
+  'orders.newOrder.order.byZone': '(hudud boʻyicha)',
   'orders.newOrder.order.promoCode': 'Promokod',
   'orders.newOrder.order.cashTendered': 'Berilgan pul',
   'orders.newOrder.order.changeDue': 'Qaytim',
@@ -4479,11 +4479,11 @@ export const messagesUzLatn: MessageCatalogue = {
   // wave P14: §5.4 manzil paneli (1.3b qatori)
   'orders.newOrder.address.title': 'Manzil',
   'orders.newOrder.address.loading': 'Manzillar yuklanmoqda…',
-  'orders.newOrder.address.denied': 'Mijozning saqlangan manzillariga ruxsat yo’q',
-  'orders.newOrder.address.empty': 'Saqlangan manzillar yo’q',
+  'orders.newOrder.address.denied': 'Mijozning saqlangan manzillariga ruxsat yoʻq',
+  'orders.newOrder.address.empty': 'Saqlangan manzillar yoʻq',
   'orders.newOrder.address.add': '+ Yangi manzil',
   'orders.newOrder.address.notLocated':
-    'Bu manzilda hali xaritada nuqta yo’q, shuning uchun yetkazib berish hisoblanmaydi — xarita va nuqta hali qurilmagan. Boshqa manzilni tanlang yoki telefon orqali aniqlashtiring.',
+    'Bu manzilda hali xaritada nuqta yoʻq, shuning uchun yetkazib berish hisoblanmaydi — xarita va nuqta hali qurilmagan. Boshqa manzilni tanlang yoki telefon orqali aniqlashtiring.',
   'orders.newOrder.address.notServiceable':
     'Bu manzil ushbu filial yetkazib berish hududidan tashqarida',
   'orders.newOrder.address.recipientName': 'Qabul qiluvchi',
@@ -4494,9 +4494,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.reorder.action': 'Takrorlash',
   'orders.newOrder.reorder.busy': 'Takrorlanmoqda…',
   'orders.newOrder.reorder.unavailable':
-    'Bu buyurtmadan hech nimani qayta buyurtma qilib bo’lmaydi',
+    'Bu buyurtmadan hech nimani qayta buyurtma qilib boʻlmaydi',
   'orders.newOrder.reorder.partial':
-    'Bu buyurtmaning ba’zi taomlari endi mavjud emas va o’tkazib yuborildi',
+    'Bu buyurtmaning baʻzi taomlari endi mavjud emas va oʻtkazib yuborildi',
 
   // wave P14: agregator buyurtmasini qo'lda kiritish (1.3g qatori)
   'orders.newOrder.aggregator.toggle': 'Agregator buyurtmasi',
@@ -4507,9 +4507,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.aggregator.subtotal': 'Oraliq summa',
   'orders.newOrder.aggregator.discount': 'Chegirma',
   'orders.newOrder.aggregator.fee': 'Komissiya',
-  'orders.newOrder.aggregator.total': 'Agregator yig’gan summa',
+  'orders.newOrder.aggregator.total': 'Agregator yigʻgan summa',
   'orders.newOrder.aggregator.hint':
-    'Agregator ko’rsatgan summa aynan shu holicha yozildi — HorecaOS uni qayta hisoblamaydi',
+    'Agregator koʻrsatgan summa aynan shu holicha yozildi — HorecaOS uni qayta hisoblamaydi',
 
   // --- shared/ui (ADR 0101) ----------------------------------------------
   'ui.denied.title': 'Bu boʻlimga kirish huquqingiz yoʻq',
