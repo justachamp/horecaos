@@ -37,18 +37,30 @@ const TAB_DEFINITIONS: readonly { readonly id: OrderReportTab; readonly labelKey
   { id: 'late', labelKey: 'reports.orders.tab.late' },
 ];
 
+/**
+ * «Этапы»: `ready` used to sit next to `confirm` and read as one "kitchen
+ * time" span — really CONFIRMED -> READY, wider than the spec's
+ * «Приготовлен». Wave P27 splits it into `accept` (CONFIRMED -> PREPARING,
+ * the branch-acceptance wait) and `cooking` (PREPARING -> READY, actual
+ * cooking) — see `order-rows-table.ts`'s own doc.
+ */
 const STAGE_COLUMNS: readonly OrderTableColumn[] = [
   'orderId',
   'channel',
   'confirm',
-  'ready',
+  'accept',
+  'cooking',
   'total',
 ];
+
+/** «Заказы»: wave P27 adds branch, «Предзаказ» and the public order number (via `orderId`'s own rendering). */
 const COMMERCIAL_COLUMNS: readonly OrderTableColumn[] = [
   'orderId',
   'businessDate',
+  'branch',
   'channel',
   'fulfilment',
+  'preorder',
   'status',
   'gross',
   'discount',
@@ -56,6 +68,7 @@ const COMMERCIAL_COLUMNS: readonly OrderTableColumn[] = [
   'net',
   'items',
 ];
+
 const LATE_COLUMNS: readonly OrderTableColumn[] = [
   'orderId',
   'late',
@@ -76,6 +89,14 @@ interface DailyRow {
   readonly byFulfilment: Readonly<
     Record<'DELIVERY' | 'PICKUP' | 'DINE_IN', { count: number; grossSom: number }>
   >;
+  /** Wave P27 (7.2b): per-3PL counts — one entry per aggregator channel code, keyed by `AggregatorChannel.code`. */
+  readonly byAggregator: Readonly<Record<string, { count: number; grossSom: number }>>;
+}
+
+/** Wave P27 (7.2b): one channel whose `systemType` marks it an aggregator — the «per-3PL counts» the IA names. */
+interface AggregatorChannel {
+  readonly code: string;
+  readonly displayName: string;
 }
 
 interface PivotBucket {
@@ -113,12 +134,28 @@ interface PivotRow {
  * that roll-up is arithmetic the registry already defines rather than a new
  * aggregate.
  *
+ * **Wave P27.** The fulfilment axis is now pushed into `/orders` and
+ * `/queries` themselves (`fulfilmentType`/`FULFILMENT_TYPE`) rather than
+ * filtered client-side over an already-fetched page — the exact bug this
+ * wave's brief names by name. Branch, channel and legal-entity filters from
+ * `ReportsFilterState` reach every read this page makes, and money queries
+ * always name `LEGAL_ENTITY` (ADR 0038; see `business-overview-page.ts`'s
+ * own doc for why). «Этапы» no longer conflates the branch-acceptance wait
+ * with cooking (`accept`/`cooking` columns, `order-rows-table.ts`'s own
+ * doc). «Заказы» stopped discarding the server's `maybeMore`, adds branch
+ * (`Филиал`), «Предзаказ» and the public order number, and pages past its
+ * 200-row cap with the server's own keyset cursor rather than a second,
+ * silently-incomplete fetch. «Посуточно» adds a per-aggregator column
+ * (`groupBy: ['CHANNEL']`, no new endpoint) for every channel whose
+ * `systemType` marks it an aggregator.
+ *
  * **«Сводка» is a flat branch×channel table for this wave, not the 2D pivot
  * grid statistics.md §2.2 draws** (rows = branch, columns = channel). The
  * measure and split selectors are real and reactive over one already-fetched,
  * correctly-summed dataset — no additional fetch on either control — only the
  * layout is simplified; a true grid is a template change over the same
- * `pivotRows()` data, not a new data model.
+ * `pivotRows()` data, not a new data model. Saved views and a column chooser
+ * are out of this wave's scope — noted rather than silently missing.
  */
 @Component({
   selector: 'q-order-reports-page',
@@ -143,27 +180,31 @@ export class OrderReportsPage {
   protected readonly provenance = signal<ProvenanceResponse | null>(null);
   protected readonly requestedTo = computed(() => this.filters.range().to);
 
-  private readonly stagesRowsRaw = signal<readonly OrderRowResponse[]>([]);
-  private readonly commercialRowsRaw = signal<readonly OrderRowResponse[]>([]);
-  private readonly lateRowsRaw = signal<readonly OrderRowResponse[]>([]);
+  private readonly stagesRows_ = signal<readonly OrderRowResponse[]>([]);
+  private readonly commercialRows_ = signal<readonly OrderRowResponse[]>([]);
+  private readonly lateRows_ = signal<readonly OrderRowResponse[]>([]);
   protected readonly lateMaybeMore = signal(false);
+  /** Wave P27: «Этапы» used to discard `maybeMore` entirely — now shown the same as «Опоздания» already was. */
+  protected readonly stagesMaybeMore = signal(false);
+  /** Wave P27 (7.2a): «Заказы»'s own bounded page, plus whether a cursor page beyond it exists. */
+  protected readonly commercialMaybeMore = signal(false);
+  private commercialCursor: { readonly occurredAt: string; readonly orderId: string } | null = null;
+  protected readonly commercialLoadingMore = signal(false);
 
   protected readonly stageColumns = STAGE_COLUMNS;
   protected readonly commercialColumns = COMMERCIAL_COLUMNS;
   protected readonly lateColumns = LATE_COLUMNS;
 
-  protected readonly stagesRows = computed(() =>
-    filterByFulfilment(this.stagesRowsRaw(), this.filters.fulfilmentType()),
-  );
-  protected readonly commercialRows = computed(() =>
-    filterByFulfilment(this.commercialRowsRaw(), this.filters.fulfilmentType()),
-  );
-  protected readonly lateRows = computed(() =>
-    filterByFulfilment(this.lateRowsRaw(), this.filters.fulfilmentType()),
-  );
+  // Wave P27: the fulfilment axis moved into the query itself (see
+  // `loadOrders` below); these are now the server's own rows, unfiltered a
+  // second time client-side.
+  protected readonly stagesRows = this.stagesRows_.asReadonly();
+  protected readonly commercialRows = this.commercialRows_.asReadonly();
+  protected readonly lateRows = this.lateRows_.asReadonly();
   protected readonly lateSummaryLine = computed(() => summariseLate(this.lateRows(), this.i18n));
 
   protected readonly dailyRows = signal<readonly DailyRow[]>([]);
+  protected readonly aggregatorChannels = signal<readonly AggregatorChannel[]>([]);
 
   private readonly pivotBuckets = signal<readonly PivotBucket[]>([]);
   protected readonly pivotMeasure = signal<PivotMeasure>('sum');
@@ -172,15 +213,25 @@ export class OrderReportsPage {
 
   private locations: readonly LocationView[] = [];
   private channels: readonly ChannelView[] = [];
+  /** Wave P27 (7.2a): «Филиал» — resolved once per load, from the same location list every other tab already fetches. */
+  protected readonly locationNames = signal<ReadonlyMap<string, string>>(new Map());
 
   constructor() {
-    // Re-fetches the active tab whenever the period changes. Switching tabs
-    // fetches on demand rather than pre-loading all five: a manager reading
-    // «Этапы» most days never opens «Сводка», and statistics.md §3 explicitly
-    // says only three of the ten views belong on the daily path.
+    // Re-fetches the active tab whenever the period or the shared filter
+    // state changes. Switching tabs fetches on demand rather than
+    // pre-loading all five: a manager reading «Этапы» most days never opens
+    // «Сводка», and statistics.md §3 explicitly says only three of the ten
+    // views belong on the daily path.
     effect(() => {
       const range = this.filters.range();
       const tab = this.activeTab();
+      // Read every slice axis so this effect re-fires when any of them
+      // changes — the whole point of "every page consumes the shared state".
+      this.filters.fulfilmentType();
+      this.filters.locationIds();
+      this.filters.channelCodes();
+      this.filters.legalEntityIds();
+      this.commercialCursor = null;
       void this.loadTab(tab, range);
     });
   }
@@ -191,6 +242,56 @@ export class OrderReportsPage {
 
   protected retry(): void {
     void this.loadTab(this.activeTab(), this.filters.range());
+  }
+
+  /** Wave P27 (7.2a): the server's own keyset cursor past «Заказы»'s 200-row cap. */
+  protected async loadMoreCommercial(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope || this.commercialCursor === null || this.commercialLoadingMore()) {
+      return;
+    }
+    this.commercialLoadingMore.set(true);
+    try {
+      const range = this.filters.range();
+      const result = await this.api.orders(scope.tenantId, {
+        from: range.from,
+        to: range.to,
+        sort: 'DATE_DESC',
+        limit: 200,
+        locationId: this.slice().locationId,
+        channelCode: this.slice().channelCode,
+        fulfilmentType: this.fulfilmentTypeParam(),
+        legalEntityId: this.slice().legalEntityId,
+        afterOccurredAt: this.commercialCursor.occurredAt,
+        afterOrderId: this.commercialCursor.orderId,
+      });
+      this.commercialRows_.update((existing) => [...existing, ...result.rows]);
+      this.commercialMaybeMore.set(result.maybeMore);
+      this.commercialCursor = cursorOf(result.rows);
+    } finally {
+      this.commercialLoadingMore.set(false);
+    }
+  }
+
+  /** Wave P27 (7.1d): branch/channel/legal-entity, in the shape every read on this page shares. */
+  private slice(): {
+    readonly locationId?: readonly string[];
+    readonly channelCode?: readonly string[];
+    readonly legalEntityId?: readonly string[];
+  } {
+    const locationIds = this.filters.locationIds();
+    const channelCodes = this.filters.channelCodes();
+    const legalEntityIds = this.filters.legalEntityIds();
+    return {
+      locationId: locationIds.length > 0 ? locationIds : undefined,
+      channelCode: channelCodes.length > 0 ? channelCodes : undefined,
+      legalEntityId: legalEntityIds.length > 0 ? legalEntityIds : undefined,
+    };
+  }
+
+  private fulfilmentTypeParam(): readonly string[] | undefined {
+    const type = this.filters.fulfilmentType();
+    return type === 'ALL' ? undefined : [type];
   }
 
   protected selectPivotMeasure(measure: PivotMeasure): void {
@@ -239,17 +340,36 @@ export class OrderReportsPage {
       if (this.locations.length === 0) {
         this.locations = await this.locationsApi.list(scope).catch(() => []);
         this.channels = await this.channelsApi.list(scope).catch(() => []);
+        this.locationNames.set(new Map(this.locations.map((loc) => [loc.id, loc.displayName])));
+        this.aggregatorChannels.set(
+          this.channels
+            .filter((channel) => channel.systemType.toUpperCase().includes('AGGREGATOR'))
+            .map((channel) => ({ code: channel.code, displayName: channel.displayName })),
+        );
       }
 
       switch (tab) {
         case 'stages':
-          await this.loadOrders(scope, range, 'DURATION_DESC', this.stagesRowsRaw);
+          await this.loadOrders(
+            scope,
+            range,
+            'DURATION_DESC',
+            this.stagesRows_,
+            this.stagesMaybeMore,
+          );
           break;
         case 'commercial':
-          await this.loadOrders(scope, range, 'DATE_DESC', this.commercialRowsRaw);
+          await this.loadOrders(
+            scope,
+            range,
+            'DATE_DESC',
+            this.commercialRows_,
+            this.commercialMaybeMore,
+          );
+          this.commercialCursor = cursorOf(this.commercialRows_());
           break;
         case 'late':
-          await this.loadOrders(scope, range, 'LATENESS_DESC', this.lateRowsRaw);
+          await this.loadOrders(scope, range, 'LATENESS_DESC', this.lateRows_, this.lateMaybeMore);
           break;
         case 'daily':
           await this.loadDaily(scope, range);
@@ -277,20 +397,27 @@ export class OrderReportsPage {
     range: DateRange,
     sort: 'DATE_DESC' | 'DURATION_DESC' | 'LATENESS_DESC',
     target: WritableSignal<readonly OrderRowResponse[]>,
+    maybeMoreTarget: WritableSignal<boolean>,
   ): Promise<void> {
+    const slice = this.slice();
     const result = await this.api.orders(scope.tenantId, {
       from: range.from,
       to: range.to,
       sort,
       limit: 200,
+      locationId: slice.locationId,
+      channelCode: slice.channelCode,
+      fulfilmentType: this.fulfilmentTypeParam(),
+      legalEntityId: slice.legalEntityId,
     });
     target.set(result.rows);
-    this.lateMaybeMore.set(sort === 'LATENESS_DESC' ? result.maybeMore : this.lateMaybeMore());
+    maybeMoreTarget.set(result.maybeMore);
     this.provenance.set(result.provenance);
   }
 
   private async loadDaily(scope: LocationScope, range: DateRange): Promise<void> {
-    const [totals, byFulfilment] = await Promise.all([
+    const slice = this.slice();
+    const [totals, byFulfilment, byChannel] = await Promise.all([
       this.api.query(scope.tenantId, {
         from: range.from,
         to: range.to,
@@ -301,45 +428,100 @@ export class OrderReportsPage {
           'orders.cancelled.v1',
           'average_check.v1',
         ],
+        // LEGAL_ENTITY is always named: this mixes money and count metrics,
+        // and a money metric queried without it on a two-entity tenant
+        // throws CombinedEntityTotalException (ADR 0038). Folded back into
+        // one figure by `byDate`'s own accumulation below, the same
+        // transparent fold `business-overview-page.ts` uses.
+        groupBy: ['LEGAL_ENTITY'],
+        ...slice,
       }),
       this.api.query(scope.tenantId, {
         from: range.from,
         to: range.to,
         metric: ['orders.count.v1', 'revenue.gross.v1'],
-        groupBy: ['FULFILMENT_TYPE'],
+        groupBy: ['FULFILMENT_TYPE', 'LEGAL_ENTITY'],
+        ...slice,
+      }),
+      // Wave P27 (7.2b): the per-3PL counts — no new endpoint, the same
+      // typed query grouped by CHANNEL instead of FULFILMENT_TYPE.
+      this.api.query(scope.tenantId, {
+        from: range.from,
+        to: range.to,
+        metric: ['orders.count.v1', 'revenue.gross.v1'],
+        groupBy: ['CHANNEL', 'LEGAL_ENTITY'],
+        ...slice,
       }),
     ]);
     this.provenance.set(totals.provenance);
 
+    // Every query above now also groups by LEGAL_ENTITY (ADR 0038), so a
+    // two-entity tenant returns more than one row per business date — sumAcrossDays
+    // folds those back into one figure per date, the same transparent fold
+    // `business-overview-page.ts` uses, rather than the last row silently
+    // overwriting the ones before it.
+    const totalsByDate = sumAcrossDays(totals.rows, (row) => row.businessDate, [
+      'revenue.gross.v1',
+      'revenue.net.v1',
+      'orders.count.v1',
+      'orders.cancelled.v1',
+    ]);
     const byDate = new Map<string, DailyRow>();
-    for (const row of totals.rows) {
-      byDate.set(row.businessDate, {
-        businessDate: row.businessDate,
-        grossSom: row.values['revenue.gross.v1'] ?? 0,
-        netSom: row.values['revenue.net.v1'] ?? 0,
-        orderCount: row.values['orders.count.v1'] ?? 0,
-        cancelledCount: row.values['orders.cancelled.v1'] ?? 0,
-        averageCheckSom: row.values['average_check.v1'] ?? null,
+    for (const [businessDate, values] of totalsByDate.entries()) {
+      byDate.set(businessDate, {
+        businessDate,
+        grossSom: values['revenue.gross.v1'],
+        netSom: values['revenue.net.v1'],
+        orderCount: values['orders.count.v1'],
+        cancelledCount: values['orders.cancelled.v1'],
+        averageCheckSom: deriveAverageCheck(values['revenue.gross.v1'], values['orders.count.v1']),
         byFulfilment: emptyFulfilmentBreakdown(),
+        byAggregator: {},
       });
     }
-    for (const row of byFulfilment.rows) {
-      const existing = byDate.get(row.businessDate);
-      if (!existing || row.fulfilmentType === null) {
+
+    const fulfilmentByDateAndType = sumAcrossDays(
+      byFulfilment.rows,
+      (row) => `${row.businessDate}|${row.fulfilmentType}`,
+      ['orders.count.v1', 'revenue.gross.v1'],
+    );
+    for (const [key, values] of fulfilmentByDateAndType.entries()) {
+      const [businessDate, fulfilmentType] = key.split('|');
+      const existing = byDate.get(businessDate);
+      if (!existing || fulfilmentType === 'null') {
         continue;
       }
-      const type = row.fulfilmentType as 'DELIVERY' | 'PICKUP' | 'DINE_IN';
-      byDate.set(row.businessDate, {
+      const type = fulfilmentType as 'DELIVERY' | 'PICKUP' | 'DINE_IN';
+      byDate.set(businessDate, {
         ...existing,
         byFulfilment: {
           ...existing.byFulfilment,
-          [type]: {
-            count: row.values['orders.count.v1'] ?? 0,
-            grossSom: row.values['revenue.gross.v1'] ?? 0,
-          },
+          [type]: { count: values['orders.count.v1'], grossSom: values['revenue.gross.v1'] },
         },
       });
     }
+
+    const aggregatorCodes = new Set(this.aggregatorChannels().map((channel) => channel.code));
+    const channelByDateAndCode = sumAcrossDays(
+      byChannel.rows,
+      (row) => `${row.businessDate}|${row.channelCode}`,
+      ['orders.count.v1', 'revenue.gross.v1'],
+    );
+    for (const [key, values] of channelByDateAndCode.entries()) {
+      const [businessDate, channelCode] = key.split('|');
+      const existing = byDate.get(businessDate);
+      if (!existing || !aggregatorCodes.has(channelCode)) {
+        continue;
+      }
+      byDate.set(businessDate, {
+        ...existing,
+        byAggregator: {
+          ...existing.byAggregator,
+          [channelCode]: { count: values['orders.count.v1'], grossSom: values['revenue.gross.v1'] },
+        },
+      });
+    }
+
     this.dailyRows.set(
       [...byDate.values()].sort((a, b) => (a.businessDate < b.businessDate ? 1 : -1)),
     );
@@ -350,7 +532,11 @@ export class OrderReportsPage {
       from: range.from,
       to: range.to,
       metric: ['revenue.gross.v1', 'orders.count.v1'],
-      groupBy: ['LOCATION', 'CHANNEL', 'FULFILMENT_TYPE'],
+      // LEGAL_ENTITY joins the other three axes for the same ADR 0038 reason
+      // every money query on this page names it now; sumAcrossDays below
+      // folds it back out since «Сводка» does not split by entity.
+      groupBy: ['LOCATION', 'CHANNEL', 'FULFILMENT_TYPE', 'LEGAL_ENTITY'],
+      ...this.slice(),
     });
     this.provenance.set(result.provenance);
 
@@ -415,11 +601,12 @@ export class OrderReportsPage {
   }
 }
 
-function filterByFulfilment(
+/** Wave P27 (7.2a): the keyset cursor for the next «Заказы» page — DATE_DESC's own sort key, off the last row. */
+function cursorOf(
   rows: readonly OrderRowResponse[],
-  filter: FulfilmentFilter,
-): readonly OrderRowResponse[] {
-  return filter === 'ALL' ? rows : rows.filter((row) => row.fulfilmentType === filter);
+): { readonly occurredAt: string; readonly orderId: string } | null {
+  const last = rows.at(-1);
+  return last ? { occurredAt: last.occurredAt, orderId: last.orderId } : null;
 }
 
 function summariseLate(rows: readonly OrderRowResponse[], i18n: I18n): string | null {

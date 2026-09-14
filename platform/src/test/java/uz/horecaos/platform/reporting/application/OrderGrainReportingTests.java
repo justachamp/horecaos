@@ -150,6 +150,104 @@ class OrderGrainReportingTests {
     }
 
     @Test
+    void fulfilmentTypeFilterNarrowsTheOrderListInTheQueryRatherThanClientSide() {
+        // Wave P27: fulfilmentType() used to be applied client-side over an
+        // already-fetched page (order-reports-page.ts's own filterByFulfilment).
+        // This proves the axis is now the query's own job.
+        insertOrderWithSlice("DEL-1", LOCATION_A, "DELIVERY", null);
+        insertOrderWithSlice("PICKUP-1", LOCATION_A, "PICKUP", null);
+        insertOrderWithSlice("DINE-1", LOCATION_A, "DINE_IN", null);
+
+        List<JdbcReportingStore.OrderRow> delivery = store.readOrders(
+                TENANT,
+                DAY,
+                DAY,
+                List.of(),
+                List.of(),
+                List.of("DELIVERY"),
+                List.of(),
+                JdbcReportingStore.OrderSort.DATE_DESC,
+                100,
+                null);
+        assertThat(delivery).extracting(JdbcReportingStore.OrderRow::orderId).containsExactly(orderId("DEL-1"));
+
+        List<JdbcReportingStore.OrderRow> pickupAndDineIn = store.readOrders(
+                TENANT,
+                DAY,
+                DAY,
+                List.of(),
+                List.of(),
+                List.of("PICKUP", "DINE_IN"),
+                List.of(),
+                JdbcReportingStore.OrderSort.DATE_DESC,
+                100,
+                null);
+        assertThat(pickupAndDineIn)
+                .extracting(JdbcReportingStore.OrderRow::orderId)
+                .containsExactlyInAnyOrder(orderId("PICKUP-1"), orderId("DINE-1"));
+    }
+
+    @Test
+    void legalEntityFilterNarrowsTheOrderList() {
+        UUID entityA = UUID.randomUUID();
+        UUID entityB = UUID.randomUUID();
+        insertOrderWithSlice("A-1", LOCATION_A, "DELIVERY", entityA);
+        insertOrderWithSlice("B-1", LOCATION_A, "DELIVERY", entityB);
+
+        List<JdbcReportingStore.OrderRow> rows = store.readOrders(
+                TENANT,
+                DAY,
+                DAY,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(entityA),
+                JdbcReportingStore.OrderSort.DATE_DESC,
+                100,
+                null);
+
+        assertThat(rows).extracting(JdbcReportingStore.OrderRow::orderId).containsExactly(orderId("A-1"));
+    }
+
+    @Test
+    void cursorPagingCoversEveryRowExactlyOnceAcrossPages() {
+        // Wave P27 (7.2a): «Заказы»'s cursor paging past the bounded read's cap.
+        insertOrderAt("C-1", LOCATION_A, "TELEGRAM", "COMPLETED", 600, tashkent(9, 0));
+        insertOrderAt("C-2", LOCATION_A, "TELEGRAM", "COMPLETED", 600, tashkent(10, 0));
+        insertOrderAt("C-3", LOCATION_A, "TELEGRAM", "COMPLETED", 600, tashkent(11, 0));
+
+        List<JdbcReportingStore.OrderRow> firstPage = store.readOrders(
+                TENANT,
+                DAY,
+                DAY,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                JdbcReportingStore.OrderSort.DATE_DESC,
+                2,
+                null);
+        assertThat(firstPage)
+                .extracting(JdbcReportingStore.OrderRow::orderId)
+                .containsExactly(orderId("C-3"), orderId("C-2"));
+
+        JdbcReportingStore.OrderRow last = firstPage.get(firstPage.size() - 1);
+        List<JdbcReportingStore.OrderRow> secondPage = store.readOrders(
+                TENANT,
+                DAY,
+                DAY,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                JdbcReportingStore.OrderSort.DATE_DESC,
+                2,
+                new JdbcReportingStore.OrderCursor(last.occurredAt(), last.orderId()));
+
+        assertThat(secondPage).extracting(JdbcReportingStore.OrderRow::orderId).containsExactly(orderId("C-1"));
+    }
+
+    @Test
     void orderRowsNeverCrossTenants() {
         insertOrder("MINE", LOCATION_A, "COMPLETED", 600, null);
         insertOrderForTenant(OTHER_TENANT, "THEIRS", LOCATION_A, "COMPLETED", 600, null);
@@ -284,7 +382,40 @@ class OrderGrainReportingTests {
             @Nullable OffsetDateTime occurredAt) {
         OffsetDateTime created = occurredAt != null ? occurredAt : tashkent(9, 0);
         OffsetDateTime closedAt = secondsTotal == null ? null : created.plusSeconds(secondsTotal);
-        insertRow(TENANT, seed, locationId, "TELEGRAM", status, created, closedAt, secondsTotal, null, null, null);
+        insertRow(
+                TENANT,
+                seed,
+                locationId,
+                "TELEGRAM",
+                status,
+                created,
+                closedAt,
+                secondsTotal,
+                null,
+                null,
+                null,
+                "DELIVERY",
+                null);
+    }
+
+    /** Wave P27: an order carrying a specific fulfilment type and/or legal entity. */
+    private void insertOrderWithSlice(
+            String seed, UUID locationId, String fulfilmentType, @Nullable UUID legalEntityId) {
+        OffsetDateTime created = tashkent(9, 0);
+        insertRow(
+                TENANT,
+                seed,
+                locationId,
+                "TELEGRAM",
+                "COMPLETED",
+                created,
+                created.plusSeconds(600),
+                600,
+                null,
+                null,
+                null,
+                fulfilmentType,
+                legalEntityId);
     }
 
     private void insertOrderAt(
@@ -305,6 +436,8 @@ class OrderGrainReportingTests {
                 secondsTotal,
                 null,
                 null,
+                null,
+                "DELIVERY",
                 null);
     }
 
@@ -317,7 +450,20 @@ class OrderGrainReportingTests {
             @Nullable OffsetDateTime occurredAt) {
         OffsetDateTime created = occurredAt != null ? occurredAt : tashkent(9, 0);
         OffsetDateTime closedAt = secondsTotal == null ? null : created.plusSeconds(secondsTotal);
-        insertRow(tenantId, seed, locationId, "TELEGRAM", status, created, closedAt, secondsTotal, null, null, null);
+        insertRow(
+                tenantId,
+                seed,
+                locationId,
+                "TELEGRAM",
+                status,
+                created,
+                closedAt,
+                secondsTotal,
+                null,
+                null,
+                null,
+                "DELIVERY",
+                null);
     }
 
     /** A closed order carrying a promise, late (or early) by {@code secondsLate}. */
@@ -336,17 +482,45 @@ class OrderGrainReportingTests {
                 900,
                 promisedAt,
                 secondsLate,
+                null,
+                "DELIVERY",
                 null);
     }
 
     private void insertCancelled(String seed, String reasonCode) {
         OffsetDateTime created = tashkent(9, 0);
-        insertRow(TENANT, seed, LOCATION_A, "TELEGRAM", "CANCELLED", created, null, null, null, null, reasonCode);
+        insertRow(
+                TENANT,
+                seed,
+                LOCATION_A,
+                "TELEGRAM",
+                "CANCELLED",
+                created,
+                null,
+                null,
+                null,
+                null,
+                reasonCode,
+                "DELIVERY",
+                null);
     }
 
     private void insertRejected(String seed, String reasonCode) {
         OffsetDateTime created = tashkent(9, 0);
-        insertRow(TENANT, seed, LOCATION_A, "TELEGRAM", "REJECTED", created, null, null, null, null, reasonCode);
+        insertRow(
+                TENANT,
+                seed,
+                LOCATION_A,
+                "TELEGRAM",
+                "REJECTED",
+                created,
+                null,
+                null,
+                null,
+                null,
+                reasonCode,
+                "DELIVERY",
+                null);
     }
 
     private void insertRow(
@@ -360,7 +534,9 @@ class OrderGrainReportingTests {
             @Nullable Integer secondsTotal,
             @Nullable OffsetDateTime promisedAt,
             @Nullable Integer secondsLate,
-            @Nullable String cancellationReasonCode) {
+            @Nullable String cancellationReasonCode,
+            String fulfilmentType,
+            @Nullable UUID legalEntityId) {
 
         OffsetDateTime created = occurredAt;
 
@@ -373,8 +549,9 @@ class OrderGrainReportingTests {
         params.put("closedAt", closedAt);
         params.put("brandId", BRAND);
         params.put("locationId", locationId);
+        params.put("legalEntityId", legalEntityId);
         params.put("channelCode", channelCode);
-        params.put("fulfilmentType", "DELIVERY");
+        params.put("fulfilmentType", fulfilmentType);
         params.put("terminalStatus", status);
         params.put("cancellationReasonCode", cancellationReasonCode);
         params.put("gross", 100_000L);
@@ -395,14 +572,14 @@ class OrderGrainReportingTests {
         jdbc.sql("""
                 INSERT INTO reporting.fact_order (
                     tenant_id, order_id, business_date, boundary_version, occurred_at, closed_at,
-                    brand_id, location_id, channel_code, fulfilment_type, terminal_status,
+                    brand_id, location_id, legal_entity_id, channel_code, fulfilment_type, terminal_status,
                     cancellation_reason_code, gross_revenue_som, discount_som, delivery_fee_som,
                     tax_som, net_revenue_som, line_count, item_count, seconds_to_confirm,
                     seconds_to_ready, seconds_total, promised_at, seconds_late,
                     metric_calculation_version, source_order_version)
                 VALUES (
                     :tenantId, :orderId, :businessDate, :boundaryVersion, :occurredAt, :closedAt,
-                    :brandId, :locationId, :channelCode, :fulfilmentType, :terminalStatus,
+                    :brandId, :locationId, :legalEntityId, :channelCode, :fulfilmentType, :terminalStatus,
                     :cancellationReasonCode, :gross, :discount, :deliveryFee,
                     :tax, :net, :lineCount, :itemCount, :secondsToConfirm,
                     :secondsToReady, :secondsTotal, :promisedAt, :secondsLate,

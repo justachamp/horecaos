@@ -4,6 +4,7 @@ import {
   dailyAverageCheck,
   dailySeries,
   deriveAverageCheck,
+  rollUpByGranularity,
   sumAcrossDays,
   sumTotal,
 } from './report-rollup';
@@ -113,5 +114,41 @@ describe('deriveAverageCheck', () => {
 
   it('is null with no completed orders — never a zero that reads as free food', () => {
     expect(deriveAverageCheck(0, 0)).toBeNull();
+  });
+});
+
+describe('rollUpByGranularity', () => {
+  const days = [
+    { date: '2026-08-17', value: 10 }, // Monday
+    { date: '2026-08-18', value: 20 }, // Tuesday
+    { date: '2026-08-19', value: 30 }, // Wednesday
+    { date: '2026-08-24', value: 5 }, // next Monday
+    { date: '2026-09-01', value: 7 }, // next month
+  ];
+
+  it('passes a day-grain series through unchanged', () => {
+    expect(rollUpByGranularity(days, 'day')).toEqual(days);
+  });
+
+  it('folds into ISO weeks (Monday start), each keyed by its own Monday', () => {
+    expect(rollUpByGranularity(days, 'week')).toEqual([
+      { date: '2026-08-17', value: 60 },
+      { date: '2026-08-24', value: 5 },
+      { date: '2026-08-31', value: 7 },
+    ]);
+  });
+
+  it('folds a Sunday into the ISO week that started the Monday before it', () => {
+    // 2026-08-17 is a Monday, so 2026-08-16 is the Sunday closing the ISO
+    // week that started 2026-08-10, not the one starting 2026-08-17.
+    const withSunday = [{ date: '2026-08-16', value: 100 }];
+    expect(rollUpByGranularity(withSunday, 'week')[0]).toEqual({ date: '2026-08-10', value: 100 });
+  });
+
+  it('folds into calendar months', () => {
+    expect(rollUpByGranularity(days, 'month')).toEqual([
+      { date: '2026-08-01', value: 65 },
+      { date: '2026-09-01', value: 7 },
+    ]);
   });
 });

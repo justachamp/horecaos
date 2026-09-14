@@ -14,11 +14,15 @@ import { OrderRowResponse } from './reporting-api';
 export type OrderTableColumn =
   | 'orderId'
   | 'businessDate'
+  | 'branch'
   | 'channel'
   | 'fulfilment'
+  | 'preorder'
   | 'status'
   | 'confirm'
   | 'ready'
+  | 'accept'
+  | 'cooking'
   | 'total'
   | 'late'
   | 'gross'
@@ -44,6 +48,16 @@ const SEVERITY_AMBER_SECONDS = 30 * 60;
  * `ordering.orders`, which the reporting read role cannot reach), so re-using
  * the platform's own fixed bucket boundaries is the closest honest severity
  * signal available rather than inventing a new one.
+ *
+ * **Wave P27.** `orderId` now prints the public order number
+ * (`row.publicOrderNumber`) when the fact carries one, falling back to the
+ * eight-character UUID fragment only for a row closed before that column
+ * existed — never both. `accept`/`cooking` split what `ready` used to
+ * conflate: `secondsToAccept` is CONFIRMED -> PREPARING (the branch-
+ * acceptance wait) and `secondsPreparing` is PREPARING -> READY (actual
+ * cooking, narrower than `ready`/`secondsToReady`). `branch` needs a
+ * `locationId` -> name lookup the caller supplies ({@link locationNames}) —
+ * this table has no location list of its own to fetch one from.
  */
 @Component({
   selector: 'q-order-rows-table',
@@ -58,13 +72,20 @@ export class OrderRowsTable {
   readonly rows = input.required<readonly OrderRowResponse[]>();
   readonly columns = input.required<readonly OrderTableColumn[]>();
   readonly emptyMessageKey = input<MessageKey>('reports.empty.period');
+  /** Wave P27 (7.2a): locationId -> display name, for the `branch` column. Empty when the caller has none. */
+  readonly locationNames = input<ReadonlyMap<string, string>>(new Map());
 
   protected hasColumn(column: OrderTableColumn): boolean {
     return this.columns().includes(column);
   }
 
-  protected shortId(orderId: string): string {
-    return orderId.slice(0, 8);
+  /** Wave P27 (7.2a): the public order number when the fact carries one — never eight characters of a UUID again. */
+  protected orderNumber(row: OrderRowResponse): string {
+    return row.publicOrderNumber ?? row.orderId.slice(0, 8);
+  }
+
+  protected branchName(row: OrderRowResponse): string {
+    return this.locationNames().get(row.locationId) ?? row.locationId;
   }
 
   protected statusLabel(status: string): string {

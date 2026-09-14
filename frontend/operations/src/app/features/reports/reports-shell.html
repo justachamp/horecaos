@@ -56,7 +56,156 @@
     >
   </nav>
 
-  <q-reports-filter-bar />
+  <q-filter-bar
+    [hasSecondary]="true"
+    [chips]="chips()"
+    [canReset]="state.hasAnySecondaryFilter()"
+    (chipRemoved)="onChipRemoved($event)"
+    (resetFilters)="onResetFilters()"
+    data-testid="reports-shell-filter-bar"
+  >
+    <div primary class="reports-filter-bar__rows">
+      <div
+        class="filter-bar__row filter-bar__row--period"
+        role="group"
+        [attr.aria-label]="'reports.filter.period.label' | t"
+        (keydown)="onPeriodRowKeydown($event)"
+      >
+        @for (option of periods; track option.id) {
+          <button
+            type="button"
+            class="pill"
+            [class.pill--active]="state.period() === option.id"
+            [attr.aria-pressed]="state.period() === option.id"
+            (click)="selectPeriod(option.id)"
+            [attr.data-testid]="'reports-filter-period-' + option.id"
+          >
+            {{ option.labelKey | t }}
+          </button>
+        }
+        @if (state.period() === 'custom') {
+          <input
+            type="date"
+            class="reports-filter-bar__date-input"
+            [value]="state.customRange().from"
+            (change)="onCustomFromChange($any($event.target).value)"
+            [attr.aria-label]="'reports.filter.period.customFrom' | t"
+            data-testid="reports-filter-custom-from"
+          />
+          <span class="reports-filter-bar__date-sep" aria-hidden="true">—</span>
+          <input
+            type="date"
+            class="reports-filter-bar__date-input"
+            [value]="state.customRange().to"
+            (change)="onCustomToChange($any($event.target).value)"
+            [attr.aria-label]="'reports.filter.period.customTo' | t"
+            data-testid="reports-filter-custom-to"
+          />
+        }
+      </div>
+
+      <div
+        class="filter-bar__segmented"
+        role="group"
+        [attr.aria-label]="'reports.filter.fulfilment.label' | t"
+      >
+        @for (option of fulfilmentTypes; track option.id) {
+          <button
+            type="button"
+            class="segment"
+            [class.segment--active]="state.fulfilmentType() === option.id"
+            [attr.aria-pressed]="state.fulfilmentType() === option.id"
+            (click)="selectFulfilmentType(option.id)"
+          >
+            {{ option.labelKey | t }}
+          </button>
+        }
+      </div>
+    </div>
+
+    <div secondary class="reports-filter-bar__secondary-grid">
+      @if (showLocationFilter()) {
+        <div class="reports-filter-bar__field">
+          <span class="q-caption reports-filter-bar__field-label">{{
+            'reports.filter.branch.label' | t
+          }}</span>
+          <q-combobox
+            [multiple]="true"
+            [options]="locationOptions()"
+            [selected]="selectedLocations()"
+            (selectedChange)="onLocationsChange($event)"
+            [attr.aria-label]="'reports.filter.branch.label' | t"
+            [placeholder]="'reports.filter.branch.placeholder' | t"
+          />
+        </div>
+      }
+
+      <div class="reports-filter-bar__field">
+        <span class="q-caption reports-filter-bar__field-label">{{
+          'reports.filter.channel.label' | t
+        }}</span>
+        <q-combobox
+          [multiple]="true"
+          [options]="channelOptions()"
+          [selected]="selectedChannels()"
+          (selectedChange)="onChannelsChange($event)"
+          [attr.aria-label]="'reports.filter.channel.label' | t"
+          [placeholder]="'reports.filter.channel.placeholder' | t"
+        />
+      </div>
+
+      @if (showLegalEntityFilter()) {
+        <div class="reports-filter-bar__field">
+          <span class="q-caption reports-filter-bar__field-label">{{
+            'reports.filter.legalEntity.label' | t
+          }}</span>
+          <q-combobox
+            [multiple]="true"
+            [options]="legalEntityOptions()"
+            [selected]="selectedLegalEntities()"
+            (selectedChange)="onLegalEntitiesChange($event)"
+            [attr.aria-label]="'reports.filter.legalEntity.label' | t"
+            [placeholder]="'reports.filter.legalEntity.placeholder' | t"
+          />
+        </div>
+      }
+
+      @if (paymentMethodOptions().length > 0) {
+        <div class="reports-filter-bar__field">
+          <span class="q-caption reports-filter-bar__field-label">{{
+            'reports.filter.paymentType.label' | t
+          }}</span>
+          <q-combobox
+            [multiple]="true"
+            [options]="paymentMethodOptions()"
+            [selected]="selectedPaymentMethods()"
+            (selectedChange)="onPaymentMethodsChange($event)"
+            [attr.aria-label]="'reports.filter.paymentType.label' | t"
+            [placeholder]="'reports.filter.paymentType.placeholder' | t"
+          />
+        </div>
+      }
+
+      <div class="reports-filter-bar__field">
+        <span class="q-caption reports-filter-bar__field-label">{{
+          'reports.filter.granularity.label' | t
+        }}</span>
+        <div class="filter-bar__segmented">
+          @for (option of granularities; track option.id) {
+            <button
+              type="button"
+              class="segment"
+              [class.segment--active]="state.granularity() === option.id"
+              [attr.aria-pressed]="state.granularity() === option.id"
+              (click)="selectGranularity(option.id)"
+            >
+              {{ option.labelKey | t }}
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+  </q-filter-bar>
 
   <div class="reports-shell__body">
     <router-outlet />

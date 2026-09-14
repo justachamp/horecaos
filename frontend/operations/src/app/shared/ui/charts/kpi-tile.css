@@ -8,10 +8,55 @@
   border-left: 3px solid var(--q-warning);
 }
 
+.q-kpi-tile__label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .q-kpi-tile__label {
   color: var(--q-ink-subtle);
   text-transform: uppercase;
   letter-spacing: 0.32px;
+}
+
+.q-kpi-tile__formula-toggle {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--q-hairline);
+  background: transparent;
+  color: var(--q-ink-subtle);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.q-kpi-tile__formula-toggle:hover,
+.q-kpi-tile__formula-toggle[aria-expanded='true'] {
+  border-color: var(--q-ink-subtle);
+  color: var(--q-ink);
+}
+
+.q-kpi-tile__formula-panel {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--q-surface-subtle, var(--q-canvas));
+  border: 1px solid var(--q-hairline);
+  color: var(--q-ink-muted);
+}
+
+.q-kpi-tile__formula-panel p {
+  margin: 0 0 4px;
+}
+
+.q-kpi-tile__formula-panel p:last-child {
+  margin-bottom: 0;
+}
+
+.q-kpi-tile__formula-definition {
+  color: var(--q-ink);
 }
 
 .q-kpi-tile__value-row {

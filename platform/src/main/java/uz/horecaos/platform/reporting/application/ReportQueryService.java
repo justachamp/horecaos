@@ -87,6 +87,8 @@ public class ReportQueryService {
                         || query.locationIds().contains(row.key().locationId()))
                 .filter(row -> query.channelCodes().isEmpty()
                         || query.channelCodes().contains(row.key().channelCode()))
+                .filter(row -> query.legalEntityIds().isEmpty()
+                        || query.legalEntityIds().contains(row.key().legalEntityId()))
                 .toList();
 
         refuseCombinedEntityTotal(query, metrics, rows);
@@ -197,6 +199,28 @@ public class ReportQueryService {
     }
 
     /**
+     * Wave P27 (7.1): the pickup/delivery elapsed-time tile — see {@code
+     * JdbcReportingStore#medianSecondsTotalByFulfilment}'s own doc for why
+     * this is a registry-and-endpoint gap over already-written data rather
+     * than a new fact.
+     */
+    @Transactional(readOnly = true)
+    public MedianResult fulfilmentTime(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, String fulfilmentType) {
+        Integer median = store.medianSecondsTotalByFulfilment(tenantId, from, to, locationIds, fulfilmentType);
+        String metricCode = "DELIVERY".equals(fulfilmentType) ? "delivery_time.median.v1" : "pickup_time.median.v1";
+        return new MedianResult(
+                median,
+                provenance(tenantId, List.of(MetricRegistry.require(metricCode)), businessDays.boundaryFor(tenantId)));
+    }
+
+    /** Wave P27 (7.1a): resolves a cancellation reason code to its tenant-chosen label. */
+    @Transactional(readOnly = true)
+    public List<JdbcReportingStore.CancellationReasonRow> cancellationReasons(UUID tenantId) {
+        return store.readCancellationReasons(tenantId);
+    }
+
+    /**
      * Order-grain rows for 7.2's per-order tables — «Этапы», «Заказы»,
      * «Опоздания» — none of which is a day-grain slice the typed {@link #run}
      * query can answer. See {@code JdbcReportingStore#readOrders}'s doc for why
@@ -211,12 +235,34 @@ public class ReportQueryService {
             List<String> channelCodes,
             JdbcReportingStore.OrderSort sort,
             int limit) {
+        return orders(tenantId, from, to, locationIds, channelCodes, List.of(), List.of(), sort, limit, null);
+    }
+
+    /**
+     * Wave P27 (7.2/7.2a): the fulfilment axis pushed into the query rather
+     * than filtered client-side over an already-fetched page, a legal-entity
+     * filter, and cursor paging for {@link JdbcReportingStore.OrderSort#DATE_DESC}
+     * — see {@code JdbcReportingStore#readOrders}'s own doc for what the
+     * cursor does on the other two sorts.
+     */
+    @Transactional(readOnly = true)
+    public OrderListResult orders(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> channelCodes,
+            List<String> fulfilmentTypes,
+            List<UUID> legalEntityIds,
+            JdbcReportingStore.OrderSort sort,
+            int limit,
+            JdbcReportingStore.@Nullable OrderCursor cursor) {
 
         validateRange(from, to);
         refuseMixedBoundaryRegime(tenantId, from, to);
 
-        List<JdbcReportingStore.OrderRow> rows =
-                store.readOrders(tenantId, from, to, locationIds, channelCodes, sort, limit);
+        List<JdbcReportingStore.OrderRow> rows = store.readOrders(
+                tenantId, from, to, locationIds, channelCodes, fulfilmentTypes, legalEntityIds, sort, limit, cursor);
         return new OrderListResult(
                 rows,
                 // A full page does not prove there is no next row, but it is

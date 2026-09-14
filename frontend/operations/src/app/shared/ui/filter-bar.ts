@@ -12,11 +12,10 @@ export interface FilterBarChip {
 /**
  * The filter-bar chrome (orders.md §2.4, wave P07) — lifted out of
  * `features/reports/reports-filter-bar` because §2.4 says the queue and the
- * order reports "share one filter component," and the decision that wave P07
- * owns is made here, not offered a second time: `q-reports-filter-bar` is now
- * a thin wrapper around this, and `order-queue.ts` builds its own toolbar
- * directly on it. Wave P27 re-points the report screens at this component
- * directly and deletes that wrapper — do not extract this a second time.
+ * order reports "share one filter component." `order-queue.ts` builds its own
+ * toolbar directly on it; wave P27 re-pointed `reports-shell.ts` at it the
+ * same way and deleted the `q-reports-filter-bar` wrapper this doc used to
+ * describe — do not extract this a second time.
  *
  * **What this owns, and what it does not.** This renders the shape every
  * filter bar in the console shares: a primary row, an optional secondary row

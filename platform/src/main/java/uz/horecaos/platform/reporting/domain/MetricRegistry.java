@@ -50,6 +50,10 @@ public final class MetricRegistry {
     /** P39 (7.1c/7.3b): when {@code reporting.fact_order_tender} started being written. */
     private static final LocalDate P39_TENDER_FACT = LocalDate.of(2026, 9, 14);
 
+    /** P27 (7.1): when this build started registering the elapsed-time metrics below — the source column (
+     * {@code fact_order.seconds_total}) is older, but no definition named it until this wave. */
+    private static final LocalDate P27_FULFILMENT_TIME = LocalDate.of(2026, 9, 14);
+
     private static final Map<String, MetricDefinition> BY_CODE = index(List.of(
             new MetricDefinition(
                     new MetricId("revenue.gross", 1),
@@ -193,6 +197,49 @@ public final class MetricRegistry {
                             + "kitchen.tickets.started_at and ready_at and need ADR 0041; a "
                             + "ticket sitting on the pass reads here as cooking time.",
                     PILOT),
+            // Wave P27 (7.1): the overview's pickup/delivery elapsed-time tiles —
+            // a registry-and-endpoint gap, not a data gap. fact_order.seconds_total
+            // and fulfilment_type have been written since V0031; nothing named
+            // "how long a delivery order actually took, door to door" until now.
+            // Answered by GET .../reporting/fulfilment-time, on the same footing
+            // as prep_time.median.v1 above: a median cannot be composed from
+            // per-slice medians, so this is its own endpoint rather than
+            // /queries.
+            new MetricDefinition(
+                    new MetricId("delivery_time.median", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_order.seconds_total, fulfilment_type = 'DELIVERY'",
+                    true,
+                    Aggregation.MEDIAN,
+                    "CLOSED_DELIVERY_ORDERS",
+                    CurrencyRule.NONE,
+                    "Seconds",
+                    MetricUnit.SECONDS,
+                    "Median seconds from order creation to close, over delivery orders only.",
+                    "Delivery orders with a closed_at.",
+                    "Pickup and dine-in orders; delivery orders still open.",
+                    "Not applicable.",
+                    "Door-to-door, not courier transit time: seconds_total starts at order "
+                            + "creation, before confirmation, dispatch or handoff, so this is not "
+                            + "yet the courier-leg-only figure 7.4's efficiency report (T11) would "
+                            + "want.",
+                    P27_FULFILMENT_TIME),
+            new MetricDefinition(
+                    new MetricId("pickup_time.median", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_order.seconds_total, fulfilment_type = 'PICKUP'",
+                    true,
+                    Aggregation.MEDIAN,
+                    "CLOSED_PICKUP_ORDERS",
+                    CurrencyRule.NONE,
+                    "Seconds",
+                    MetricUnit.SECONDS,
+                    "Median seconds from order creation to close, over pickup orders only.",
+                    "Pickup orders with a closed_at.",
+                    "Delivery and dine-in orders; pickup orders still open.",
+                    "Not applicable.",
+                    null,
+                    P27_FULFILMENT_TIME),
             new MetricDefinition(
                     new MetricId("sla_bucket_set", 1),
                     Grain.DAY_LOCATION,

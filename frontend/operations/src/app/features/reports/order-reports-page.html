@@ -49,12 +49,37 @@
       @switch (activeTab()) {
         @case ('stages') {
           <q-order-rows-table [rows]="stagesRows()" [columns]="stageColumns" />
+          @if (stagesMaybeMore()) {
+            <p class="order-reports__bounded-note q-caption">
+              {{ 'reports.orders.boundedNote' | t }}
+            </p>
+          }
         }
         @case ('commercial') {
           <p class="order-reports__pii-note q-caption">
             {{ 'reports.orders.commercial.piiNote' | t }}
           </p>
-          <q-order-rows-table [rows]="commercialRows()" [columns]="commercialColumns" />
+          <q-order-rows-table
+            [rows]="commercialRows()"
+            [columns]="commercialColumns"
+            [locationNames]="locationNames()"
+          />
+          @if (commercialMaybeMore()) {
+            <button
+              type="button"
+              class="order-reports__load-more q-body-sm"
+              [disabled]="commercialLoadingMore()"
+              (click)="loadMoreCommercial()"
+              data-testid="order-reports-load-more"
+            >
+              {{
+                (commercialLoadingMore()
+                  ? 'reports.orders.loadMore.loading'
+                  : 'reports.orders.loadMore'
+                ) | t
+              }}
+            </button>
+          }
         }
         @case ('late') {
           @if (lateSummaryLine(); as summary) {
@@ -90,6 +115,9 @@
                 </th>
                 <th class="q-caption daily-table__num">{{ 'reports.orders.daily.pickup' | t }}</th>
                 <th class="q-caption daily-table__num">{{ 'reports.orders.daily.dineIn' | t }}</th>
+                @for (aggregator of aggregatorChannels(); track aggregator.code) {
+                  <th class="q-caption daily-table__num">{{ aggregator.displayName }}</th>
+                }
               </tr>
             </thead>
             <tbody>
@@ -117,10 +145,19 @@
                     {{ count(row.byFulfilment.DINE_IN.count) }} /
                     {{ money(row.byFulfilment.DINE_IN.grossSom) }}
                   </td>
+                  @for (aggregator of aggregatorChannels(); track aggregator.code) {
+                    <td class="q-body-sm q-tnum daily-table__num">
+                      {{ count(row.byAggregator[aggregator.code]?.count ?? 0) }} /
+                      {{ money(row.byAggregator[aggregator.code]?.grossSom ?? 0) }}
+                    </td>
+                  }
                 </tr>
               } @empty {
                 <tr>
-                  <td class="daily-table__empty q-body-sm" colspan="9">
+                  <td
+                    class="daily-table__empty q-body-sm"
+                    [attr.colspan]="9 + aggregatorChannels().length"
+                  >
                     {{ 'reports.empty.period' | t }}
                   </td>
                 </tr>
