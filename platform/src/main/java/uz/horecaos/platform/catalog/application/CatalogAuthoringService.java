@@ -473,6 +473,15 @@ public class CatalogAuthoringService {
             boolean offered,
             @Nullable String reasonCode,
             String actorSubject) {
+        // Checked explicitly, like replaceItemSaleWindows/attachRecommendation
+        // do: the insert path's composite foreign key would refuse a
+        // cross-brand variant too, but as a raw DataIntegrityViolationException
+        // (RESOURCE_CONFLICT) rather than the clean RESOURCE_NOT_FOUND every
+        // other unknown-entity path in this class answers with, and the
+        // include path has no constraint backstop at all.
+        if (!store.entityExistsInBrand(tenantId, brandId, EntityType.VARIANT, variantId)) {
+            throw new UnknownCatalogEntityException(EntityType.VARIANT, variantId);
+        }
         // reasonCode only means something on the exclude path — the caller
         // including a variant back onto a channel has nothing to explain, so
         // it stays nullable rather than forcing every call site to invent a
@@ -535,6 +544,12 @@ public class CatalogAuthoringService {
         // free to pass null for the direction that has none.
         int changed = 0;
         for (UUID variantId : variantIds) {
+            // Same explicit brand-ownership check as the single-variant
+            // sibling above — see its own doc for why the insert path's
+            // foreign key is not enough on its own.
+            if (!store.entityExistsInBrand(tenantId, brandId, EntityType.VARIANT, variantId)) {
+                throw new UnknownCatalogEntityException(EntityType.VARIANT, variantId);
+            }
             boolean rowChanged = offered
                     ? store.includeInChannel(tenantId, brandId, channelId, variantId, locationId)
                     : store.excludeFromChannel(
@@ -1216,11 +1231,26 @@ public class CatalogAuthoringService {
      */
     @Transactional
     public void replaceItemSaleWindows(
-            UUID tenantId, UUID brandId, UUID locationId, UUID variantId, List<ItemSaleSchedule.Window> windows) {
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID variantId,
+            List<ItemSaleSchedule.Window> windows,
+            String actorSubject) {
         if (!store.entityExistsInBrand(tenantId, brandId, EntityType.VARIANT, variantId)) {
             throw new UnknownCatalogEntityException(EntityType.VARIANT, variantId);
         }
         store.replaceItemSaleWindows(tenantId, brandId, locationId, variantId, windows);
+        audit.record(AuditFact.of("catalog.itemSaleSchedule.replaced", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("ItemSaleSchedule", variantId)
+                .because("Replaced the weekly sale-window set")
+                .usingCapability(Capability.CATALOG_AUTHOR.code())
+                .changed(Map.of("locationId", locationId.toString(), "windowCount", windows.size()))
+                .correlatedBy(variantId.toString())
+                .occurredAt(clock.instant())
+                .build());
     }
 
     public List<ItemSaleSchedule.Window> itemSaleWindows(UUID tenantId, UUID locationId, UUID variantId) {
@@ -1266,7 +1296,12 @@ public class CatalogAuthoringService {
      */
     @Transactional
     public UUID attachRecommendation(
-            UUID tenantId, UUID brandId, UUID sourceProductId, UUID targetVariantId, int sortOrder) {
+            UUID tenantId,
+            UUID brandId,
+            UUID sourceProductId,
+            UUID targetVariantId,
+            int sortOrder,
+            String actorSubject) {
         if (!store.entityExistsInBrand(tenantId, brandId, EntityType.PRODUCT, sourceProductId)) {
             throw new UnknownProductException(sourceProductId);
         }
@@ -1283,13 +1318,41 @@ public class CatalogAuthoringService {
         if (targetProductId.equals(sourceProductId)) {
             throw new SelfRecommendationException(sourceProductId, targetVariantId);
         }
-        return store.upsertRecommendation(tenantId, brandId, sourceProductId, targetVariantId, sortOrder);
+        UUID recommendationId =
+                store.upsertRecommendation(tenantId, brandId, sourceProductId, targetVariantId, sortOrder);
+        audit.record(AuditFact.of("catalog.recommendation.attached", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("ProductRecommendation", sourceProductId)
+                .because("Attached a recommended variant")
+                .usingCapability(Capability.CATALOG_AUTHOR.code())
+                .changed(Map.of("targetVariantId", targetVariantId.toString(), "sortOrder", sortOrder))
+                .correlatedBy(sourceProductId.toString())
+                .occurredAt(clock.instant())
+                .build());
+        return recommendationId;
     }
 
     /** Idempotent — detaching a pair that was never attached, or is already gone, still resolves. */
     @Transactional
-    public void detachRecommendation(UUID tenantId, UUID brandId, UUID sourceProductId, UUID targetVariantId) {
-        store.deleteRecommendation(tenantId, brandId, sourceProductId, targetVariantId);
+    public void detachRecommendation(
+            UUID tenantId, UUID brandId, UUID sourceProductId, UUID targetVariantId, String actorSubject) {
+        boolean removed = store.deleteRecommendation(tenantId, brandId, sourceProductId, targetVariantId);
+        if (!removed) {
+            // Already gone: nothing changed for anyone to review, matching
+            // setChannelOffering's own no-op-writes-no-fact convention.
+            return;
+        }
+        audit.record(AuditFact.of("catalog.recommendation.detached", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("ProductRecommendation", sourceProductId)
+                .because("Detached a recommended variant")
+                .usingCapability(Capability.CATALOG_AUTHOR.code())
+                .changed(Map.of("targetVariantId", targetVariantId.toString()))
+                .correlatedBy(sourceProductId.toString())
+                .occurredAt(clock.instant())
+                .build());
     }
 
     /** Every recommendation attached to one product, unfiltered — the editor's own management list. */

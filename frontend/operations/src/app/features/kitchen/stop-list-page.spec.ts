@@ -214,11 +214,11 @@ describe('StopListPage', () => {
     ) as HTMLButtonElement;
     expect(stopButton.disabled).toBe(true);
 
-    const reasonInput = host.querySelector(
+    const reasonSelect = host.querySelector(
       '[data-testid="stop-list-bulk-reason"]',
-    ) as HTMLInputElement;
-    reasonInput.value = 'Списание партии';
-    reasonInput.dispatchEvent(new Event('input'));
+    ) as HTMLSelectElement;
+    reasonSelect.value = 'OUT_OF_STOCK';
+    reasonSelect.dispatchEvent(new Event('change'));
     fixture.detectChanges();
     expect(stopButton.disabled).toBe(false);
 
@@ -232,7 +232,7 @@ describe('StopListPage', () => {
     expect(post.mock.calls[0][1].body).toEqual({
       variantIds: ['v1', 'v2'],
       available: false,
-      reasonCode: 'Списание партии',
+      reasonCode: 'OUT_OF_STOCK',
     });
     expect(put).not.toHaveBeenCalled();
 
@@ -281,11 +281,11 @@ describe('StopListPage', () => {
     (host.querySelectorAll('[data-testid="dt-row-select"]')[0] as HTMLInputElement).click();
     (host.querySelectorAll('[data-testid="dt-row-select"]')[1] as HTMLInputElement).click();
     fixture.detectChanges();
-    const reasonInput = host.querySelector(
+    const reasonSelect = host.querySelector(
       '[data-testid="stop-list-bulk-reason"]',
-    ) as HTMLInputElement;
-    reasonInput.value = 'Reason';
-    reasonInput.dispatchEvent(new Event('input'));
+    ) as HTMLSelectElement;
+    reasonSelect.value = 'OUT_OF_STOCK';
+    reasonSelect.dispatchEvent(new Event('change'));
     fixture.detectChanges();
     (host.querySelector('[data-testid="dt-bulk-action-stop"]') as HTMLButtonElement).click();
     await flushMicrotasks();
@@ -328,12 +328,12 @@ describe('StopListPage', () => {
 
   // --------------------------------------------------- P16: server-side counts
 
-  it('renders the tab badges from the server-side counts endpoint, not a count over the loaded page', async () => {
+  it('renders the ALL badge from the server-side counts endpoint even with only one page loaded', async () => {
     const get = vi.fn().mockReturnValue(of({ value: { total: 250, available: 240, onStop: 10 } }));
     await render(
       vi.fn().mockReturnValue(
-        // Deliberately just one loaded row — asserts the badge reflects the
-        // counts endpoint, not `items().length`.
+        // Deliberately just one loaded row — asserts the ALL badge reflects
+        // the counts endpoint, not `items().length`.
         of({
           items: [
             {
@@ -354,8 +354,78 @@ describe('StopListPage', () => {
     expect(get).toHaveBeenCalledTimes(1);
     const tabs = [...host.querySelectorAll('.tab')] as HTMLButtonElement[];
     expect(tabs[0].querySelector('.tab__count')?.textContent?.trim()).toBe('250');
-    expect(tabs[1].querySelector('.tab__count')?.textContent?.trim()).toBe('240');
-    expect(tabs[2].querySelector('.tab__count')?.textContent?.trim()).toBe('10');
+  });
+
+  it('never shows an AVAILABLE/ON_STOP badge the visible list cannot back up while more of the catalog is still loading', async () => {
+    // gap map row 2.5's own trap, caught this time: a real total next to a
+    // list that has not loaded that many rows yet. counts() resolves
+    // instantly, but only one row (available) has been paged in — the
+    // ON_STOP tab's own visible list would show zero rows against a badge
+    // that claims 10, so both non-ALL badges must render "…" until the whole
+    // catalog is loaded, not just until the counts call resolves.
+    const get = vi.fn().mockReturnValue(of({ value: { total: 250, available: 240, onStop: 10 } }));
+    await render(
+      vi.fn().mockReturnValue(
+        of({
+          items: [
+            {
+              variantId: 'v1',
+              productName: 'Lagman',
+              category: 'Soups',
+              available: true,
+              stopSource: 'UNKNOWN',
+            },
+          ],
+          nextCursor: 'v2', // hasMore() stays true
+        }),
+      ),
+      { get },
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    const tabs = [...host.querySelectorAll('.tab')] as HTMLButtonElement[];
+    expect(tabs[0].querySelector('.tab__count')?.textContent?.trim()).toBe('250');
+    expect(tabs[1].querySelector('.tab__count')?.textContent?.trim()).toBe('…');
+    expect(tabs[2].querySelector('.tab__count')?.textContent?.trim()).toBe('…');
+  });
+
+  it('shows the real AVAILABLE/ON_STOP badges once the whole catalog is loaded, matching the visible list under each tab', async () => {
+    const get = vi.fn().mockReturnValue(of({ value: { total: 2, available: 1, onStop: 1 } }));
+    await render(
+      vi.fn().mockReturnValue(
+        of({
+          items: [
+            {
+              variantId: 'v1',
+              productName: 'Lagman',
+              category: 'Soups',
+              available: true,
+              stopSource: 'UNKNOWN',
+            },
+            {
+              variantId: 'v2',
+              productName: 'Somsa',
+              category: 'Bakery',
+              available: false,
+              stopSource: 'MANUAL',
+            },
+          ],
+          nextCursor: null, // hasMore() is false: the whole catalog is loaded
+        }),
+      ),
+      { get },
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    const tabs = [...host.querySelectorAll('.tab')] as HTMLButtonElement[];
+    expect(tabs[1].querySelector('.tab__count')?.textContent?.trim()).toBe('1');
+    expect(tabs[2].querySelector('.tab__count')?.textContent?.trim()).toBe('1');
+
+    tabs[2].click(); // ON_STOP
+    fixture.detectChanges();
+    const rows = host.querySelectorAll('[data-testid="dt-row"]');
+    expect(rows.length).toBe(1);
+    expect(host.textContent).toContain('Somsa');
   });
 
   // --------------------------------------------------- P16: search box

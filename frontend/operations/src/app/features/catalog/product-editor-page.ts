@@ -10,6 +10,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { formatMoney } from '../../core/format/money';
+import { BrandScope } from '../../core/api/catalog-paths';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
@@ -280,6 +281,15 @@ export class ProductEditorPage implements OnInit {
   protected readonly recommendations = signal<readonly RecommendationItem[]>([]);
   protected readonly recommendationSaving = signal(false);
   protected readonly recommendationNotice = signal<string | null>(null);
+  /**
+   * `CatalogApi.effectiveRecommendations`'s own real consumer — IA 4.2's
+   * active + in-menu + not-stopped filter, resolved at the operator's own
+   * current location, so the management list above can mark which attached
+   * targets `effectiveRecommendations` would actually hand a customer right
+   * now (not every attached target is: a stopped or un-offered one stays
+   * attached here on purpose, per {@link detachRecommendation}'s own doc).
+   */
+  protected readonly eligibleTargetVariantIds = signal<ReadonlySet<string>>(new Set());
 
   async ngOnInit(): Promise<void> {
     this.editingLocale.set(toCatalogLocale(this.i18n.locale()));
@@ -1258,11 +1268,41 @@ export class ProductEditorPage implements OnInit {
       const result = await firstValueFrom(this.api.listRecommendations(scope, product.productId));
       this.recommendations.set(result.items);
       this.recommendationsLoaded.set(true);
+      void this.loadEligibleRecommendations(scope, product.productId);
     } catch (error) {
       this.handleSaveError(error);
     } finally {
       this.recommendationsLoading.set(false);
     }
+  }
+
+  /**
+   * `GET .../recommendations/effective` at the operator's own current
+   * location — IA 4.2's own filter (active + in-menu + not-stopped),
+   * resolved fresh every time this tab (re)loads so a target stopped since
+   * the last visit stops showing as eligible without anyone re-attaching it.
+   * Best-effort: a denied or failed read leaves every row unmarked rather
+   * than blocking the management list itself, which does not depend on it.
+   */
+  private async loadEligibleRecommendations(scope: BrandScope, productId: string): Promise<void> {
+    await this.location.ensureLoaded();
+    const locationScope = this.location.scope();
+    if (!locationScope) {
+      this.eligibleTargetVariantIds.set(new Set());
+      return;
+    }
+    try {
+      const result = await firstValueFrom(
+        this.api.effectiveRecommendations(scope, productId, locationScope.locationId),
+      );
+      this.eligibleTargetVariantIds.set(new Set(result.items.map((item) => item.targetVariantId)));
+    } catch {
+      this.eligibleTargetVariantIds.set(new Set());
+    }
+  }
+
+  protected isEligibleHere(item: RecommendationItem): boolean {
+    return this.eligibleTargetVariantIds().has(item.targetVariantId);
   }
 
   /**

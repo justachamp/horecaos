@@ -88,6 +88,7 @@ function configure(
           variantsAtLocation: () => of({ items: [], nextCursor: null }),
           itemSaleSchedule: () => of({ windows: [] }),
           listRecommendations: () => of({ items: [] }),
+          effectiveRecommendations: () => of({ items: [] }),
           ...catalogApi,
         },
       },
@@ -805,5 +806,58 @@ describe('ProductEditorPage', () => {
 
     expect(detachRecommendation).toHaveBeenCalledWith(BRAND_SCOPE, 'product-1', 'variant-9');
     expect(host.querySelector('[data-testid="editor-recommendation-detach"]')).toBeNull();
+  });
+
+  it('marks an attached target eligible only once GET .../recommendations/effective confirms it (fix4 P47: a real caller)', async () => {
+    const effectiveRecommendations = vi.fn().mockReturnValue(
+      of({
+        items: [
+          {
+            recommendationId: 'rec-1',
+            targetVariantId: 'variant-9',
+            targetProductName: 'Fries',
+            sortOrder: 0,
+          },
+        ],
+      }),
+    );
+    configure({
+      productDetail: () => of(productDetail()),
+      listRecommendations: () =>
+        of({
+          items: [
+            {
+              recommendationId: 'rec-1',
+              targetVariantId: 'variant-9',
+              targetProductName: 'Fries',
+              sortOrder: 0,
+            },
+            {
+              recommendationId: 'rec-2',
+              targetVariantId: 'variant-10',
+              targetProductName: 'Cola',
+              sortOrder: 1,
+            },
+          ],
+        }),
+      effectiveRecommendations,
+    });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-RECOMMENDATIONS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(effectiveRecommendations).toHaveBeenCalledWith(BRAND_SCOPE, 'product-1', 'l1');
+    const eligibleCells = [
+      ...host.querySelectorAll('[data-testid="editor-recommendation-eligible"]'),
+    ];
+    expect(eligibleCells).toHaveLength(2);
+    // variant-9 came back from the effective read: eligible. variant-10 did
+    // not (stopped, unpublished, or never offered at this location): not.
+    // This suite runs in 'ru' (see configure()'s TestBed.inject(I18n).setLocale('ru')).
+    expect(eligibleCells[0].textContent).toContain('Да');
+    expect(eligibleCells[1].textContent).toContain('Пока нет');
   });
 });

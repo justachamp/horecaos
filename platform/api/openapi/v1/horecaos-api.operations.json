@@ -1231,6 +1231,7 @@
           "reasonCode" : {
             "maxLength" : 64,
             "minLength" : 0,
+            "pattern" : "^[A-Z_]{1,48}$",
             "type" : "string"
           }
         },
@@ -1998,6 +1999,7 @@
           "reasonCode" : {
             "maxLength" : 64,
             "minLength" : 0,
+            "pattern" : "^[A-Z_]{1,48}$",
             "type" : "string"
           },
           "variantIds" : {

@@ -1,6 +1,7 @@
 package uz.horecaos.platform.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
 import java.util.Set;
@@ -38,6 +39,7 @@ class ChannelOfferingExclusionWriteTests {
     private static final UUID OTHER_TENANT = UUID.randomUUID();
     private static final UUID BRAND = UUID.randomUUID();
     private static final UUID OTHER_BRAND = UUID.randomUUID();
+    private static final UUID SIBLING_BRAND = UUID.randomUUID();
     private static final UUID LOCATION_1 = UUID.randomUUID();
     private static final UUID LOCATION_2 = UUID.randomUUID();
     private static final String ACTOR = "channel-exclusion-writer-test";
@@ -52,6 +54,7 @@ class ChannelOfferingExclusionWriteTests {
     private UUID otherTenantChannel;
     private UUID variant1;
     private UUID variant2;
+    private UUID siblingBrandVariant;
 
     @BeforeAll
     static void startDatabase() {
@@ -93,6 +96,9 @@ class ChannelOfferingExclusionWriteTests {
 
         variant1 = seedProductAndVariant(TENANT, BRAND, "BURGER");
         variant2 = seedProductAndVariant(TENANT, BRAND, "PIZZA");
+
+        insertBrand(SIBLING_BRAND, TENANT, "SIBLING", "sibling");
+        siblingBrandVariant = seedProductAndVariant(TENANT, SIBLING_BRAND, "SIBLING_DISH");
 
         insertTenant(OTHER_TENANT, "channel-exclusion-other-tenant");
         insertBrand(OTHER_BRAND, OTHER_TENANT, "MAIN", "main");
@@ -210,6 +216,42 @@ class ChannelOfferingExclusionWriteTests {
         assertThat(store.channelExclusionsAtLocation(TENANT, BRAND, channel, LOCATION_1))
                 .as("this tenant's read must never see the other tenant's excluded variant id")
                 .doesNotContain(otherVariant);
+    }
+
+    @Test
+    @DisplayName("excluding a variant that belongs to a sibling brand under the same tenant is refused, not a raw 409")
+    void crossBrandExclusionIsRefused() {
+        assertThatThrownBy(() -> authoring.setChannelOffering(
+                        TENANT, BRAND, channel, siblingBrandVariant, null, false, "SEASONAL", ACTOR))
+                .isInstanceOf(CatalogAuthoringService.UnknownCatalogEntityException.class);
+
+        assertThat(store.channelExclusionsAtLocation(TENANT, SIBLING_BRAND, channel, LOCATION_1))
+                .as("the write must not have landed under either brand")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "including a variant that belongs to a sibling brand under the same tenant is refused, not a silent no-op")
+    void crossBrandInclusionIsRefused() {
+        assertThatThrownBy(() -> authoring.setChannelOffering(
+                        TENANT, BRAND, channel, siblingBrandVariant, null, true, null, ACTOR))
+                .isInstanceOf(CatalogAuthoringService.UnknownCatalogEntityException.class);
+    }
+
+    @Test
+    @DisplayName("bulk-excluding a mix that includes a sibling brand's variant is refused for the whole call")
+    void crossBrandBulkExclusionIsRefused() {
+        assertThatThrownBy(() -> authoring.bulkSetChannelOffering(
+                        TENANT,
+                        BRAND,
+                        channel,
+                        java.util.List.of(variant1, siblingBrandVariant),
+                        null,
+                        false,
+                        "SEASONAL",
+                        ACTOR))
+                .isInstanceOf(CatalogAuthoringService.UnknownCatalogEntityException.class);
     }
 
     // ---------------------------------------------------------------- fixtures

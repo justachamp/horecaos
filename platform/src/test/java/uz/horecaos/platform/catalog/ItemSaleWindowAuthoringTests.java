@@ -43,6 +43,7 @@ class ItemSaleWindowAuthoringTests {
     private static final UUID LOCATION = UUID.randomUUID();
     private static final String LOCALE = "uz";
     private static final UUID ACTOR = UUID.randomUUID();
+    private static final String ACTOR_SUBJECT = "item-sale-window-test";
     private static final FiscalClassification UNCLASSIFIED = FiscalClassification.unclassified();
 
     private static TestDatabase.Handle db;
@@ -105,7 +106,7 @@ class ItemSaleWindowAuthoringTests {
                 new Window(1, LocalTime.of(6, 0), LocalTime.of(11, 0)),
                 new Window(2, LocalTime.of(6, 0), LocalTime.of(11, 0)));
 
-        authoring.replaceItemSaleWindows(TENANT, BRAND, LOCATION, variantId, windows);
+        authoring.replaceItemSaleWindows(TENANT, BRAND, LOCATION, variantId, windows, ACTOR_SUBJECT);
 
         assertThat(authoring.itemSaleWindows(TENANT, LOCATION, variantId)).containsExactlyInAnyOrderElementsOf(windows);
     }
@@ -115,10 +116,20 @@ class ItemSaleWindowAuthoringTests {
     void aSecondSaveReplacesRatherThanAppends() {
         UUID variantId = createVariant();
         authoring.replaceItemSaleWindows(
-                TENANT, BRAND, LOCATION, variantId, List.of(new Window(1, LocalTime.of(6, 0), LocalTime.of(11, 0))));
+                TENANT,
+                BRAND,
+                LOCATION,
+                variantId,
+                List.of(new Window(1, LocalTime.of(6, 0), LocalTime.of(11, 0))),
+                ACTOR_SUBJECT);
 
         authoring.replaceItemSaleWindows(
-                TENANT, BRAND, LOCATION, variantId, List.of(new Window(3, LocalTime.of(18, 0), LocalTime.of(22, 0))));
+                TENANT,
+                BRAND,
+                LOCATION,
+                variantId,
+                List.of(new Window(3, LocalTime.of(18, 0), LocalTime.of(22, 0))),
+                ACTOR_SUBJECT);
 
         assertThat(authoring.itemSaleWindows(TENANT, LOCATION, variantId))
                 .containsExactly(new Window(3, LocalTime.of(18, 0), LocalTime.of(22, 0)));
@@ -132,8 +143,36 @@ class ItemSaleWindowAuthoringTests {
                         BRAND,
                         LOCATION,
                         UUID.randomUUID(),
-                        List.of(new Window(1, LocalTime.of(6, 0), LocalTime.of(11, 0)))))
+                        List.of(new Window(1, LocalTime.of(6, 0), LocalTime.of(11, 0))),
+                        ACTOR_SUBJECT))
                 .isInstanceOf(CatalogAuthoringService.UnknownCatalogEntityException.class);
+    }
+
+    @Test
+    @DisplayName("replacing a variant's sale schedule records an ADR 0027 audit fact")
+    void replacingTheScheduleIsAudited() {
+        UUID variantId = createVariant();
+        List<uz.horecaos.platform.audit.api.AuditFact> audited = new java.util.ArrayList<>();
+        CommercialDefaults.Wired commercial = CommercialDefaults.wire(jdbc, Clock.systemUTC());
+        CatalogAuthoringService capturing = new CatalogAuthoringService(
+                store,
+                audited::add,
+                commercial.entitlements(),
+                commercial.usage(),
+                Clock.systemUTC(),
+                new JdbcCatalogTenantContext(jdbc));
+
+        capturing.replaceItemSaleWindows(
+                TENANT,
+                BRAND,
+                LOCATION,
+                variantId,
+                List.of(new Window(1, LocalTime.of(6, 0), LocalTime.of(11, 0))),
+                ACTOR_SUBJECT);
+
+        assertThat(audited)
+                .extracting(uz.horecaos.platform.audit.api.AuditFact::actionCode)
+                .contains("catalog.itemSaleSchedule.replaced");
     }
 
     @Test
@@ -145,7 +184,12 @@ class ItemSaleWindowAuthoringTests {
         // if the resolver ever regressed to comparing against UTC directly.
         UUID variantId = createVariant();
         authoring.replaceItemSaleWindows(
-                TENANT, BRAND, LOCATION, variantId, List.of(new Window(1, LocalTime.of(6, 0), LocalTime.of(11, 0))));
+                TENANT,
+                BRAND,
+                LOCATION,
+                variantId,
+                List.of(new Window(1, LocalTime.of(6, 0), LocalTime.of(11, 0))),
+                ACTOR_SUBJECT);
 
         // 2026-09-14T02:00:00Z is Monday 07:00 in Asia/Tashkent — inside the
         // window in local time, but 02:00 falls outside 06:00-11:00 if read as
