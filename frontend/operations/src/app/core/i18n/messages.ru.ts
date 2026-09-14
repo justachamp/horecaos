@@ -509,6 +509,7 @@ export const messagesRu: MessageCatalogue = {
   'invite.loading': 'Проверяем приглашение…',
   'invite.title': 'Настройте учётную запись',
   'invite.lead': '{tenant} работает в HorecaOS, и вы — его владелец.',
+  'invite.leadStaff': '{tenant} пригласил вас на должность «{job}».',
   'invite.sentTo': 'Приглашение отправлено на {email}',
   'invite.firstName': 'Имя',
   'invite.lastName': 'Фамилия',
@@ -2956,6 +2957,8 @@ export const messagesRu: MessageCatalogue = {
   'staff.action.addJob': 'Изменить должность',
   'staff.action.suspend': 'Приостановить доступ',
   'staff.action.restore': 'Вернуть доступ',
+  'staff.action.resendInvite': 'Отправить приглашение повторно',
+  'staff.action.revokeInvite': 'Отозвать приглашение',
   'staff.action.remove': 'Убрать',
 
   'staff.chip.you': 'Вы',
@@ -2983,10 +2986,12 @@ export const messagesRu: MessageCatalogue = {
   'staff.status.ok': 'Всё в порядке',
   'staff.status.revoked': 'Доступ отозван',
   'staff.status.expiring': 'Заканчивается',
+  'staff.status.invited': 'Приглашён',
 
   'staff.row.revoked.reason': 'Доступ отозван: {reason}',
   'staff.row.revoked.noReason': 'Доступ отозван',
   'staff.row.expiring': 'Заканчивается {date}',
+  'staff.row.invited': 'Ещё не настроил учётную запись',
 
   'staff.telegram.linked': 'Telegram привязан',
   'staff.telegram.notLinked': 'Telegram не привязан',
@@ -3033,12 +3038,39 @@ export const messagesRu: MessageCatalogue = {
   'staff.accessDialog.reason.label': 'Почему?',
   'staff.accessDialog.reason.placeholder': 'Например: перевод в Юнусабад',
   'staff.accessDialog.reason.required': 'Причина обязательна',
+  'staff.accessDialog.resendInvite.title': 'Отправить приглашение повторно',
+  'staff.accessDialog.resendInvite.body':
+    'Будет создана новая ссылка; уже отправленная перестанет работать.',
+  'staff.accessDialog.resendInvite.confirm': 'Отправить',
+  'staff.accessDialog.revokeInvite.title': 'Отозвать приглашение',
+  'staff.accessDialog.revokeInvite.body':
+    'Приглашение будет отменено, а должность, для которой оно было создано, — отозвана. Уже отправленная ссылка перестанет работать.',
+  'staff.accessDialog.revokeInvite.confirm': 'Отозвать',
 
   'staff.inviteDialog.title': 'Пригласить',
   'staff.inviteDialog.body':
     'Самостоятельное приглашение по телефону пока не построено: платформа умеет создавать учётную запись только для владельца компании при подключении, а не для рядового сотрудника.',
   'staff.inviteDialog.workaround':
     'Чтобы дать доступ человеку, у которого уже есть учётная запись, откройте его карточку и добавьте должность.',
+  'staff.inviteDialog.rule':
+    'У человека одна или несколько должностей, и каждая должность даётся где-то — на всю компанию, один бренд или один филиал. Должность, данная в одном филиале, работает только там.',
+  'staff.inviteDialog.name.label': 'Имя и фамилия',
+  'staff.inviteDialog.name.required': 'Укажите имя',
+  'staff.inviteDialog.phone.label': 'Телефон',
+  'staff.inviteDialog.phone.required': 'Укажите полный номер телефона',
+  'staff.inviteDialog.phone.duplicate': 'У этого человека уже есть доступ.',
+  'staff.inviteDialog.phone.duplicateLink': 'Открыть карточку',
+  'staff.inviteDialog.email.label': 'Email (необязательно)',
+  'staff.inviteDialog.confirm': 'Пригласить',
+  'staff.inviteDialog.submitting': 'Приглашаем…',
+  'staff.inviteDialog.confirmClose': 'Отменить это приглашение?',
+  'staff.inviteDialog.doneTitle': 'Приглашение создано',
+  'staff.inviteDialog.doneBody':
+    'Отправьте эту ссылку новому сотруднику любым удобным способом — Telegram, SMS, лично. Она действует один раз, в течение 72 часов.',
+  'staff.inviteDialog.copy': 'Скопировать ссылку',
+  'staff.inviteDialog.copied': 'Скопировано',
+  'staff.inviteDialog.done': 'Готово',
+  'staff.inviteDialog.toast': 'Приглашение создано',
 
   'staff.detail.back': 'Назад к списку',
   'staff.detail.notFound': 'Такого сотрудника нет',

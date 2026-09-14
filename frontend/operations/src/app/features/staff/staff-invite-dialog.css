@@ -12,8 +12,10 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: 400px;
+  width: 560px;
   max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
   padding: 20px;
   background: var(--q-canvas);
   border: 1px solid var(--q-hairline);
@@ -24,22 +26,143 @@
   margin: 0;
 }
 
-.invite-dialog__hint {
-  margin: 0;
+.invite-dialog__rule {
+  margin: -6px 0 4px;
   color: var(--q-ink-muted);
 }
 
-.invite-dialog__actions {
+.invite-dialog__field {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 4px;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.invite-dialog__dismiss {
+.invite-dialog__select,
+.invite-dialog__input {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+  font-size: var(--q-type-body-sm);
+}
+
+.invite-dialog__phoneRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.invite-dialog__phonePrefix {
+  padding: 8px 0;
+  color: var(--q-ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.invite-dialog__phoneInput {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.invite-dialog__staticScope {
+  padding: 8px 0;
+  color: var(--q-ink-muted);
+}
+
+.invite-dialog__hint,
+.invite-dialog__roleDescription {
+  color: var(--q-ink-muted);
+}
+
+.invite-dialog__roleDescription {
+  margin: -6px 0 0;
+}
+
+.invite-dialog__preview {
+  padding: 10px 12px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+}
+
+.invite-dialog__previewLabel {
+  margin: 0 0 4px;
+  color: var(--q-ink-muted);
+  text-transform: uppercase;
+}
+
+.invite-dialog__previewLabel:not(:first-child) {
+  margin-top: 10px;
+}
+
+.invite-dialog__list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.invite-dialog__list--muted {
+  color: var(--q-ink-muted);
+}
+
+.invite-dialog__error {
+  color: var(--q-error-text, var(--q-error));
+}
+
+.invite-dialog__link {
+  color: var(--q-primary);
+}
+
+.invite-dialog__linkRow {
+  display: flex;
+  gap: 8px;
+}
+
+.invite-dialog__linkField {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+  font-family: var(--q-font-mono, var(--q-font-sans));
+  font-size: var(--q-type-body-sm);
+}
+
+.invite-dialog__copy {
   padding: 6px 14px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   background: var(--q-canvas);
   cursor: pointer;
   font-size: var(--q-type-body-sm);
+  white-space: nowrap;
+}
+
+.invite-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.invite-dialog__dismiss,
+.invite-dialog__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.invite-dialog__confirm {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: #fff;
+}
+
+.invite-dialog__confirm:disabled,
+.invite-dialog__dismiss:disabled {
+  opacity: 0.6;
+  cursor: default;
 }

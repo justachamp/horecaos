@@ -9203,7 +9203,7 @@
         "required" : [ "firstName", "lastName", "password", "token" ],
         "type" : "object"
       },
-      "InvitationAccepted" : {
+      "InvitationAcceptResponse" : {
         "properties" : {
           "signInName" : {
             "type" : "string"
@@ -9211,12 +9211,15 @@
         },
         "type" : "object"
       },
-      "InvitationInspection" : {
+      "InvitationInspectionResponse" : {
         "properties" : {
           "emailMasked" : {
             "type" : "string"
           },
           "expiresAt" : {
+            "type" : "string"
+          },
+          "jobName" : {
             "type" : "string"
           },
           "locale" : {
@@ -13063,6 +13066,24 @@
             "type" : "integer"
           },
           "terminalStatus" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "Outstanding" : {
+        "properties" : {
+          "invitationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "invitedAt" : {
+            "type" : "string"
+          },
+          "principalSubject" : {
+            "type" : "string"
+          },
+          "state" : {
             "type" : "string"
           }
         },
@@ -19613,6 +19634,96 @@
         },
         "type" : "object"
       },
+      "StaffInvitationControllerReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "StaffInvitationCreatedResponse" : {
+        "properties" : {
+          "grantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "invitationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "inviteLink" : {
+            "type" : "string"
+          },
+          "principalSubject" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "StaffInvitationLinkResponse" : {
+        "properties" : {
+          "inviteLink" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "StaffInvitationRequest" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "email" : {
+            "format" : "email",
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "firstName" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "lastName" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "phone" : {
+            "maxLength" : 20,
+            "minLength" : 9,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "roleCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "validUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [ "firstName", "lastName", "phone", "reason", "roleCode" ],
+        "type" : "object"
+      },
       "StaffLinkView" : {
         "properties" : {
           "id" : {
@@ -23712,7 +23823,7 @@
     "/api/v1/control-plane/grants/{grantId}" : {
       "delete" : {
         "description" : "Subject to the same ADR 0027 approval gate as granting one.",
-        "operationId" : "revoke_3",
+        "operationId" : "revoke_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "grantId",
@@ -30026,7 +30137,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/grants/{grantId}" : {
       "delete" : {
         "description" : "Takes effect immediately; the cached grant is evicted rather than left to expire.",
-        "operationId" : "revoke_2",
+        "operationId" : "revoke_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -31703,7 +31814,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/owner-invitation/resend" : {
       "post" : {
         "description" : "With a new link: one already sent stops working at once. For a tenant onboarded before invitations existed, sends the first one to the owner its onboarding linked. Refused once the owner has set up their account.",
-        "operationId" : "resend",
+        "operationId" : "resend_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -34173,7 +34284,7 @@
     },
     "/api/v1/operations/invitations/accept" : {
       "post" : {
-        "description" : "Sets the owner's name and password at the identity provider, marks their address verified and spends the link. The realm's password policy applies; a refusal names the rule.",
+        "description" : "Sets the person's name and password at the identity provider and spends the link. The realm's password policy applies; a refusal names the rule.",
         "operationId" : "accept_2",
         "requestBody" : {
           "content" : {
@@ -34190,7 +34301,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/InvitationAccepted"
+                  "$ref" : "#/components/schemas/InvitationAcceptResponse"
                 }
               }
             },
@@ -34203,7 +34314,7 @@
     },
     "/api/v1/operations/invitations/inspect" : {
       "post" : {
-        "description" : "Whose invitation it is and where it was sent, masked. Answers not-found with a reason of INVALID or EXPIRED for a link that cannot be used.",
+        "description" : "Whose invitation it is and, for a staff invitation, the job it names -- never the phone or email either way. Answers not-found with a reason of INVALID or EXPIRED for a link that cannot be used.",
         "operationId" : "inspect",
         "requestBody" : {
           "content" : {
@@ -34220,7 +34331,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/InvitationInspection"
+                  "$ref" : "#/components/schemas/InvitationInspectionResponse"
                 }
               }
             },
@@ -41205,7 +41316,7 @@
     "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/partner-clients/{clientId}" : {
       "delete" : {
         "description" : "Disables the Keycloak client so no new token can ever be minted for it, then retires the row. There is no DELETED status (ADR 0040): the record that a credential once existed survives, only its authority does not.",
-        "operationId" : "revoke_1",
+        "operationId" : "revoke_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -43777,6 +43888,170 @@
         },
         "summary" : "Remedy totals, per type, split by who moved the money",
         "tags" : [ "Order remedies" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/staff/invitations" : {
+      "get" : {
+        "description" : "Not accepted, not cancelled -- the People screen's «Приглашён» pill and filter.",
+        "operationId" : "outstanding",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/Outstanding"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every staff invitation this tenant has open",
+        "tags" : [ "Staff invitations" ]
+      },
+      "post" : {
+        "description" : "Creates the account, links the tenant's organization, and grants the chosen job through the same path the People screen's Add-job uses -- a granter may only confer a job whose capabilities it already holds, at a scope it already covers (staff-and-access.md §0). The response carries the invite link once, for the toast's copy button; it is delivered by email too when one was given.",
+        "operationId" : "invite",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StaffInvitationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StaffInvitationCreatedResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Invite a colleague with a job",
+        "tags" : [ "Staff invitations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/staff/invitations/{invitationId}" : {
+      "delete" : {
+        "description" : "Cancels the invitation and revokes the job it was for, one audit fact each.",
+        "operationId" : "revoke_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "invitationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StaffInvitationControllerReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Revoke a staff invitation",
+        "tags" : [ "Staff invitations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/staff/invitations/{invitationId}/resend" : {
+      "post" : {
+        "description" : "A fresh link on the same invitation; the one already out stops working. Refused once the person has set up their account, or the invitation was revoked.",
+        "operationId" : "resend",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "invitationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StaffInvitationControllerReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StaffInvitationLinkResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Resend a staff invitation",
+        "tags" : [ "Staff invitations" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/support-sessions" : {
@@ -58557,6 +58832,9 @@
     "description" : "ADR 0058 stage 1: operations groups",
     "name" : "Telegram operations linking"
   }, {
+    "description" : "Invite a colleague, and either side of accepting it (ADR 0097, ADR 0116)",
+    "name" : "Staff invitations"
+  }, {
     "description" : "The merchant's own plan, entitlements, and usage",
     "name" : "Commercial"
   }, {
@@ -58598,9 +58876,6 @@
   }, {
     "description" : "Pairing HorecaOS's own records with a provider's external ids",
     "name" : "POS entity mappings"
-  }, {
-    "description" : "An invited owner sets up their account (ADR 0097)",
-    "name" : "Staff invitations"
   }, {
     "description" : "The ADR 0065 write-only door: values enter, only references leave",
     "name" : "Secret ingress"

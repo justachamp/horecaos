@@ -5,18 +5,227 @@
     aria-modal="true"
     [attr.aria-label]="'staff.inviteDialog.title' | t"
   >
-    <h2 class="q-emphasis invite-dialog__title">{{ 'staff.inviteDialog.title' | t }}</h2>
-    <p class="q-body-sm">{{ 'staff.inviteDialog.body' | t }}</p>
-    <p class="q-caption invite-dialog__hint">{{ 'staff.inviteDialog.workaround' | t }}</p>
-    <div class="invite-dialog__actions">
-      <button
-        type="button"
-        class="invite-dialog__dismiss"
-        (click)="close()"
-        data-testid="staff-invite-dialog-close"
-      >
-        {{ 'staff.dialog.close' | t }}
-      </button>
-    </div>
+    @if (createdLink(); as link) {
+      <h2 class="q-emphasis invite-dialog__title">{{ 'staff.inviteDialog.doneTitle' | t }}</h2>
+      <p class="q-body-sm">{{ 'staff.inviteDialog.doneBody' | t }}</p>
+      <div class="invite-dialog__linkRow">
+        <input
+          class="invite-dialog__linkField"
+          type="text"
+          readonly
+          [value]="link"
+          data-testid="staff-invite-dialog-link"
+          (focus)="$any($event.target).select()"
+        />
+        <button
+          type="button"
+          class="invite-dialog__copy"
+          (click)="copyLink()"
+          data-testid="staff-invite-dialog-copy"
+        >
+          {{ (copied() ? 'staff.inviteDialog.copied' : 'staff.inviteDialog.copy') | t }}
+        </button>
+      </div>
+      <div class="invite-dialog__actions">
+        <button
+          type="button"
+          class="invite-dialog__confirm"
+          (click)="dismiss.emit()"
+          data-testid="staff-invite-dialog-done"
+        >
+          {{ 'staff.inviteDialog.done' | t }}
+        </button>
+      </div>
+    } @else {
+      <h2 class="q-emphasis invite-dialog__title">{{ 'staff.inviteDialog.title' | t }}</h2>
+      <p class="q-caption invite-dialog__rule">{{ 'staff.inviteDialog.rule' | t }}</p>
+
+      <label class="invite-dialog__field">
+        <span class="q-body-sm">{{ 'staff.inviteDialog.name.label' | t }}</span>
+        <input
+          type="text"
+          class="invite-dialog__input"
+          [value]="fullName()"
+          (input)="setFullName($any($event.target).value)"
+          [disabled]="busy()"
+          [attr.aria-invalid]="nameMissing() ? 'true' : null"
+          data-testid="staff-invite-dialog-name"
+        />
+        @if (nameMissing()) {
+          <span class="q-caption invite-dialog__error">{{
+            'staff.inviteDialog.name.required' | t
+          }}</span>
+        }
+      </label>
+
+      <label class="invite-dialog__field">
+        <span class="q-body-sm">{{ 'staff.inviteDialog.phone.label' | t }}</span>
+        <div class="invite-dialog__phoneRow">
+          <span class="invite-dialog__phonePrefix">+998</span>
+          <input
+            type="tel"
+            class="invite-dialog__input invite-dialog__phoneInput"
+            [value]="phoneDisplay()"
+            (input)="setPhone($any($event.target).value)"
+            [disabled]="busy()"
+            placeholder="90 123 45 67"
+            [attr.aria-invalid]="phoneMissing() ? 'true' : null"
+            data-testid="staff-invite-dialog-phone"
+          />
+        </div>
+        @if (phoneMissing()) {
+          <span class="q-caption invite-dialog__error">{{
+            'staff.inviteDialog.phone.required' | t
+          }}</span>
+        }
+        @if (duplicatePhoneSubject(); as subject) {
+          <span class="q-caption invite-dialog__error" data-testid="staff-invite-dialog-duplicate">
+            {{ 'staff.inviteDialog.phone.duplicate' | t }}
+            <a class="invite-dialog__link" [routerLink]="['/staff', subject]">{{
+              'staff.inviteDialog.phone.duplicateLink' | t
+            }}</a>
+          </span>
+        }
+      </label>
+
+      <label class="invite-dialog__field">
+        <span class="q-body-sm">{{ 'staff.inviteDialog.email.label' | t }}</span>
+        <input
+          type="email"
+          class="invite-dialog__input"
+          [value]="email()"
+          (input)="setEmail($any($event.target).value)"
+          [disabled]="busy()"
+          data-testid="staff-invite-dialog-email"
+        />
+      </label>
+
+      <label class="invite-dialog__field">
+        <span class="q-body-sm">{{ 'staff.jobDialog.role.label' | t }}</span>
+        <select
+          class="invite-dialog__select"
+          [value]="selectedRoleCode() ?? ''"
+          (change)="selectRole($any($event.target).value)"
+          [disabled]="busy()"
+          data-testid="staff-invite-dialog-role"
+        >
+          <option value="" disabled selected hidden>
+            {{ 'staff.jobDialog.role.placeholder' | t }}
+          </option>
+          @for (role of grantableRoles(); track role.code) {
+            <option [value]="role.code">{{ roleLabel(role.code) }}</option>
+          }
+        </select>
+        <span class="q-caption invite-dialog__hint">{{ 'staff.jobDialog.role.hint' | t }}</span>
+      </label>
+
+      @if (selectedRole(); as role) {
+        @if (roleDescription(role.code); as description) {
+          <p class="q-caption invite-dialog__roleDescription">{{ description }}</p>
+        }
+        <label class="invite-dialog__field">
+          <span class="q-body-sm">{{ 'staff.jobDialog.scope.label' | t }}</span>
+          @if (role.scopeType === 'TENANT') {
+            <span class="q-body-sm invite-dialog__staticScope">{{
+              'staff.scope.company' | t
+            }}</span>
+          } @else if (scopeIsFixed()) {
+            <span class="q-body-sm invite-dialog__staticScope">{{ scopeOptions()[0].label }}</span>
+          } @else {
+            <select
+              class="invite-dialog__select"
+              (change)="selectScope($any($event.target).value)"
+              [disabled]="busy()"
+              data-testid="staff-invite-dialog-scope"
+            >
+              <option value="" disabled selected hidden>
+                {{ 'staff.jobDialog.scope.placeholder' | t }}
+              </option>
+              @for (option of scopeOptions(); track option.label; let i = $index) {
+                <option [value]="i">{{ option.label }}</option>
+              }
+            </select>
+          }
+        </label>
+
+        <div class="invite-dialog__preview" data-testid="staff-invite-dialog-preview">
+          <p class="q-caption invite-dialog__previewLabel">{{ 'staff.jobDialog.canDo' | t }}</p>
+          <ul class="q-body-sm invite-dialog__list">
+            @for (sentence of grantedSentences(); track sentence) {
+              <li>{{ sentence }}</li>
+            }
+          </ul>
+          @if (cannotSentences().length > 0) {
+            <p class="q-caption invite-dialog__previewLabel">
+              {{ 'staff.jobDialog.cannotDo' | t }}
+            </p>
+            <ul class="q-body-sm invite-dialog__list invite-dialog__list--muted">
+              @for (sentence of cannotSentences(); track sentence) {
+                <li>{{ sentence }}</li>
+              }
+            </ul>
+          }
+        </div>
+      }
+
+      <label class="invite-dialog__field">
+        <span class="q-body-sm">{{ 'staff.jobDialog.validUntil.label' | t }}</span>
+        <input
+          type="date"
+          class="invite-dialog__input"
+          [value]="validUntil()"
+          (input)="setValidUntil($any($event.target).value)"
+          [disabled]="busy()"
+          data-testid="staff-invite-dialog-validUntil"
+        />
+        <span class="q-caption invite-dialog__hint">{{
+          'staff.jobDialog.validUntil.hint' | t
+        }}</span>
+      </label>
+
+      <label class="invite-dialog__field">
+        <span class="q-body-sm">{{ 'staff.jobDialog.reason.label' | t }}</span>
+        <input
+          type="text"
+          class="invite-dialog__input"
+          [value]="reason()"
+          (input)="setReason($any($event.target).value)"
+          [disabled]="busy()"
+          maxlength="1000"
+          [attr.aria-invalid]="reasonMissing() ? 'true' : null"
+          data-testid="staff-invite-dialog-reason"
+        />
+        @if (reasonMissing()) {
+          <span class="q-caption invite-dialog__error">{{
+            'staff.jobDialog.reason.required' | t
+          }}</span>
+        }
+      </label>
+
+      @if (serverError(); as message) {
+        <p
+          class="q-body-sm invite-dialog__error"
+          role="alert"
+          data-testid="staff-invite-dialog-serverError"
+        >
+          {{ message }}
+        </p>
+      }
+
+      <div class="invite-dialog__actions">
+        <button type="button" class="invite-dialog__dismiss" (click)="close()" [disabled]="busy()">
+          {{ 'staff.dialog.cancel' | t }}
+        </button>
+        <button
+          type="button"
+          class="invite-dialog__confirm"
+          (click)="submit()"
+          [disabled]="busy() || !canSubmit()"
+          data-testid="staff-invite-dialog-confirm"
+        >
+          {{ (busy() ? 'staff.inviteDialog.submitting' : 'staff.inviteDialog.confirm') | t }}
+        </button>
+      </div>
+    }
   </div>
 </div>

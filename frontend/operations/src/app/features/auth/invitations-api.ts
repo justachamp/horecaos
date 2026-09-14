@@ -8,10 +8,15 @@ import { command } from '../../core/api/idempotency';
 const INSPECT_PATH = '/api/v1/operations/invitations/inspect';
 const ACCEPT_PATH = '/api/v1/operations/invitations/accept';
 
-/** `OwnerInvitationService.Inspection`. */
+/**
+ * `StaffInvitationController.InvitationInspectionResponse` — either kind of
+ * token (ADR 0097, ADR 0116). `emailMasked` is present only for an owner's
+ * invitation; `jobName` only for a staff member's, never the phone or email.
+ */
 export interface InvitationInspection {
   readonly tenantName: string;
   readonly emailMasked: string | null;
+  readonly jobName: string | null;
   readonly expiresAt: string;
   readonly locale: 'uz' | 'ru' | 'en' | (string & {});
 }

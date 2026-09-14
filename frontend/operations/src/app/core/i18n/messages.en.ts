@@ -528,6 +528,7 @@ export const messagesEn = {
   'invite.loading': 'Checking your invitation…',
   'invite.title': 'Set up your account',
   'invite.lead': '{tenant} uses HorecaOS, and you are its owner.',
+  'invite.leadStaff': '{tenant} invited you to work as {job}.',
   'invite.sentTo': 'Invitation sent to {email}',
   'invite.firstName': 'First name',
   'invite.lastName': 'Last name',
@@ -2985,6 +2986,8 @@ export const messagesEn = {
   'staff.action.addJob': 'Change job',
   'staff.action.suspend': 'Suspend access',
   'staff.action.restore': 'Restore access',
+  'staff.action.resendInvite': 'Resend invitation',
+  'staff.action.revokeInvite': 'Revoke invitation',
   'staff.action.remove': 'Remove',
 
   'staff.chip.you': 'You',
@@ -3012,10 +3015,12 @@ export const messagesEn = {
   'staff.status.ok': 'All fine',
   'staff.status.revoked': 'Access revoked',
   'staff.status.expiring': 'Expiring soon',
+  'staff.status.invited': 'Invited',
 
   'staff.row.revoked.reason': 'Access revoked: {reason}',
   'staff.row.revoked.noReason': 'Access revoked',
   'staff.row.expiring': 'Expires {date}',
+  'staff.row.invited': 'Has not set up their account yet',
 
   'staff.telegram.linked': 'Telegram linked',
   'staff.telegram.notLinked': 'Telegram not linked',
@@ -3062,12 +3067,39 @@ export const messagesEn = {
   'staff.accessDialog.reason.label': 'Why?',
   'staff.accessDialog.reason.placeholder': 'For example: moved to the Yunusobod branch',
   'staff.accessDialog.reason.required': 'A reason is required',
+  'staff.accessDialog.resendInvite.title': 'Resend the invitation',
+  'staff.accessDialog.resendInvite.body':
+    'A fresh link will be created; the one already sent stops working.',
+  'staff.accessDialog.resendInvite.confirm': 'Resend',
+  'staff.accessDialog.revokeInvite.title': 'Revoke the invitation',
+  'staff.accessDialog.revokeInvite.body':
+    'This cancels the invitation and revokes the job it was for. The link already sent stops working.',
+  'staff.accessDialog.revokeInvite.confirm': 'Revoke',
 
   'staff.inviteDialog.title': 'Invite',
   'staff.inviteDialog.body':
     'Self-service invitation by phone is not built yet: the platform can only create an account for the tenant owner during onboarding, not for an ordinary staff member.',
   'staff.inviteDialog.workaround':
     'To give access to someone who already has an account, open their record and add a job.',
+  'staff.inviteDialog.rule':
+    'A person has one or more jobs, and each job is given somewhere — the whole company, one brand, or one branch. A job given at one branch works only at that branch.',
+  'staff.inviteDialog.name.label': 'Full name',
+  'staff.inviteDialog.name.required': 'A name is required',
+  'staff.inviteDialog.phone.label': 'Phone',
+  'staff.inviteDialog.phone.required': 'A complete phone number is required',
+  'staff.inviteDialog.phone.duplicate': 'This person already has access.',
+  'staff.inviteDialog.phone.duplicateLink': 'Open their record',
+  'staff.inviteDialog.email.label': 'Email (optional)',
+  'staff.inviteDialog.confirm': 'Invite',
+  'staff.inviteDialog.submitting': 'Inviting…',
+  'staff.inviteDialog.confirmClose': 'Discard this invitation?',
+  'staff.inviteDialog.doneTitle': 'Invitation created',
+  'staff.inviteDialog.doneBody':
+    'Send this link to the new colleague however you reach them — Telegram, SMS, in person. It works once, for 72 hours.',
+  'staff.inviteDialog.copy': 'Copy link',
+  'staff.inviteDialog.copied': 'Copied',
+  'staff.inviteDialog.done': 'Done',
+  'staff.inviteDialog.toast': 'Invitation created',
 
   'staff.detail.back': 'Back to the list',
   'staff.detail.notFound': 'No such person',

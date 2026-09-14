@@ -6,7 +6,7 @@ import { CurrentTenant } from '../../core/auth/current-tenant';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
-import { ApiError } from '../../core/api/problem-details';
+import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { formatDate } from '../../core/format/datetime';
 import { describeApiError } from '../orders/order-errors';
 import { StaffAccessDialog, StaffAccessDialogMode } from './staff-access-dialog';
@@ -16,6 +16,8 @@ import {
   RoleDescriptor,
   ScopeDirectory,
   StaffApi,
+  StaffInvitationOutstanding,
+  StaffInvitationRequest,
   TelegramStaffLinkView,
 } from './staff-api';
 import { StaffInviteDialog } from './staff-invite-dialog';
@@ -81,6 +83,8 @@ export class StaffPage {
   protected readonly roles = signal<readonly RoleDescriptor[]>([]);
   protected readonly directory = signal<ScopeDirectory>({ brands: [], locations: [] });
   private readonly telegramLinks = signal<readonly TelegramStaffLinkView[]>([]);
+  /** Open (not accepted, not cancelled) staff invitations — the «Приглашён» pill and staff-access-dialog's resend/revoke. */
+  private readonly invitations = signal<readonly StaffInvitationOutstanding[]>([]);
   /** Captured once at load, not recomputed on a timer — a `computed()` never re-evaluates from wall-clock time alone. */
   private readonly loadedAt = signal(new Date());
 
@@ -101,11 +105,21 @@ export class StaffPage {
   protected readonly accessDialogError = signal<string | null>(null);
 
   protected readonly inviteDialogOpen = signal(false);
+  protected readonly inviteDialogBusy = signal(false);
+  protected readonly inviteDialogError = signal<string | null>(null);
+  protected readonly inviteDuplicateSubject = signal<string | null>(null);
+  protected readonly inviteCreatedLink = signal<string | null>(null);
 
   protected readonly notice = signal<string | null>(null);
 
   private readonly people = computed(() => groupIntoPeople(this.grants()));
-  private readonly sortedPeople = computed(() => sortByAttention(this.people(), this.loadedAt()));
+  /** Every subject with an open staff invitation — staff-row.ts's `INVITED` status (ADR 0116). */
+  private readonly invitedSubjects = computed(
+    () => new Set(this.invitations().map((invitation) => invitation.principalSubject)),
+  );
+  private readonly sortedPeople = computed(() =>
+    sortByAttention(this.people(), this.loadedAt(), this.invitedSubjects()),
+  );
 
   protected readonly effectiveViewMode = computed<ViewMode>(
     () => this.viewMode() ?? (this.directory().locations.length > 1 ? 'byBranch' : 'flat'),
@@ -215,7 +229,7 @@ export class StaffPage {
   }
 
   protected statusOfPerson(person: StaffPerson) {
-    return statusOf(person, this.loadedAt());
+    return statusOf(person, this.loadedAt(), this.invitedSubjects().has(person.principalSubject));
   }
 
   /** The caption under a flagged row's name — §2's "the reason text is the point, a bare badge is not". */
@@ -235,6 +249,9 @@ export class StaffPage {
       return this.i18n.t('staff.row.expiring', {
         date: formatDate(new Date(status.validUntil), 'UTC'),
       });
+    }
+    if (status.kind === 'INVITED') {
+      return this.i18n.t('staff.row.invited');
     }
     return null;
   }
@@ -336,6 +353,21 @@ export class StaffPage {
     this.accessDialogTarget.set({ subject, mode: 'restore' });
   }
 
+  /** The one open invitation this subject was created under, if any — resend/revoke's own lookup. */
+  protected pendingInvitationOf(subject: string): StaffInvitationOutstanding | null {
+    return this.invitations().find((invitation) => invitation.principalSubject === subject) ?? null;
+  }
+
+  protected openResendInviteDialog(subject: string): void {
+    this.accessDialogError.set(null);
+    this.accessDialogTarget.set({ subject, mode: 'resendInvite' });
+  }
+
+  protected openRevokeInviteDialog(subject: string): void {
+    this.accessDialogError.set(null);
+    this.accessDialogTarget.set({ subject, mode: 'revokeInvite' });
+  }
+
   protected closeAccessDialog(): void {
     this.accessDialogTarget.set(null);
   }
@@ -347,7 +379,9 @@ export class StaffPage {
     }
     return target.mode === 'suspend'
       ? this.grantsToSuspend(target.subject).length
-      : this.grantsToRestore(target.subject).length;
+      : target.mode === 'restore'
+        ? this.grantsToRestore(target.subject).length
+        : 1;
   }
 
   protected async confirmAccess({ reason }: { reason: string }): Promise<void> {
@@ -361,8 +395,18 @@ export class StaffPage {
     try {
       if (target.mode === 'suspend') {
         await this.suspend(tenantId, target.subject, reason);
-      } else {
+      } else if (target.mode === 'restore') {
         await this.restore(tenantId, target.subject, reason);
+      } else {
+        const invitation = this.pendingInvitationOf(target.subject);
+        if (!invitation) {
+          throw new Error('This invitation is no longer open');
+        }
+        if (target.mode === 'resendInvite') {
+          await this.api.resendStaffInvitation(tenantId, invitation.invitationId, reason);
+        } else {
+          await this.api.revokeStaffInvitation(tenantId, invitation.invitationId, reason);
+        }
       }
       this.accessDialogTarget.set(null);
       await this.reload();
@@ -463,11 +507,46 @@ export class StaffPage {
   // ---------------------------------------------------------- invite dialog
 
   protected openInviteDialog(): void {
+    this.inviteDialogError.set(null);
+    this.inviteDuplicateSubject.set(null);
+    this.inviteCreatedLink.set(null);
     this.inviteDialogOpen.set(true);
   }
 
   protected closeInviteDialog(): void {
     this.inviteDialogOpen.set(false);
+    // A completed invite already refreshed the list on submit; closing from
+    // the success state must not lose that state before the reset.
+    this.inviteCreatedLink.set(null);
+    this.inviteDuplicateSubject.set(null);
+    this.inviteDialogError.set(null);
+  }
+
+  protected async submitInvite(request: StaffInvitationRequest): Promise<void> {
+    const tenantId = this.tenant.tenantId();
+    if (!tenantId) {
+      return;
+    }
+    this.inviteDialogBusy.set(true);
+    this.inviteDialogError.set(null);
+    this.inviteDuplicateSubject.set(null);
+    try {
+      const created = await this.api.invite(tenantId, request);
+      this.inviteCreatedLink.set(created.inviteLink);
+      this.notice.set(this.i18n.t('staff.inviteDialog.toast'));
+      await this.reload();
+    } catch (error) {
+      if (error instanceof ApiError && error.code === ApiErrorCode.RESOURCE_CONFLICT) {
+        const existingSubjectId = error.problem?.['existingSubjectId'];
+        if (typeof existingSubjectId === 'string') {
+          this.inviteDuplicateSubject.set(existingSubjectId);
+          return;
+        }
+      }
+      this.inviteDialogError.set(this.describeError(error));
+    } finally {
+      this.inviteDialogBusy.set(false);
+    }
   }
 
   // ----------------------------------------------------------------- load
@@ -477,7 +556,12 @@ export class StaffPage {
     if (!tenantId) {
       return;
     }
-    this.grants.set(await this.api.listGrants(tenantId, true));
+    const [grants, invitations] = await Promise.all([
+      this.api.listGrants(tenantId, true),
+      this.api.staffInvitations(tenantId).catch(() => []),
+    ]);
+    this.grants.set(grants);
+    this.invitations.set(invitations);
     this.loadedAt.set(new Date());
   }
 
@@ -491,16 +575,18 @@ export class StaffPage {
       return;
     }
     try {
-      const [grants, roles, directory, telegramLinks] = await Promise.all([
+      const [grants, roles, directory, telegramLinks, invitations] = await Promise.all([
         this.api.listGrants(tenantId, true),
         this.api.roles(tenantId),
         this.api.scopeDirectory(tenantId),
         this.api.telegramLinks(tenantId).catch(() => []),
+        this.api.staffInvitations(tenantId).catch(() => []),
       ]);
       this.grants.set(grants);
       this.roles.set(roles);
       this.directory.set(directory);
       this.telegramLinks.set(telegramLinks);
+      this.invitations.set(invitations);
       this.loadedAt.set(new Date());
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {

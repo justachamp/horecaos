@@ -514,6 +514,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'invite.loading': 'Taklifnoma tekshirilmoqda…',
   'invite.title': 'Hisobingizni sozlang',
   'invite.lead': '{tenant} HorecaOSʻdan foydalanadi va siz uning egasisiz.',
+  'invite.leadStaff': '{tenant} sizni "{job}" lavozimiga taklif qildi.',
   'invite.sentTo': 'Taklifnoma {email} manziliga yuborildi',
   'invite.firstName': 'Ism',
   'invite.lastName': 'Familiya',
@@ -2976,6 +2977,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.action.addJob': 'Lavozimni oʻzgartirish',
   'staff.action.suspend': 'Kirish huquqini toʻxtatish',
   'staff.action.restore': 'Kirish huquqini qaytarish',
+  'staff.action.resendInvite': 'Taklifni qayta yuborish',
+  'staff.action.revokeInvite': 'Taklifni bekor qilish',
   'staff.action.remove': 'Olib tashlash',
 
   'staff.chip.you': 'Siz',
@@ -3003,10 +3006,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.status.ok': 'Hammasi joyida',
   'staff.status.revoked': 'Kirish huquqi bekor qilingan',
   'staff.status.expiring': 'Muddati tugamoqda',
+  'staff.status.invited': 'Taklif qilingan',
 
   'staff.row.revoked.reason': 'Kirish huquqi bekor qilingan: {reason}',
   'staff.row.revoked.noReason': 'Kirish huquqi bekor qilingan',
   'staff.row.expiring': 'Muddati {date} da tugaydi',
+  'staff.row.invited': 'Hali hisobini sozlamagan',
 
   'staff.telegram.linked': 'Telegram bogʻlangan',
   'staff.telegram.notLinked': 'Telegram bogʻlanmagan',
@@ -3054,12 +3059,39 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.accessDialog.reason.label': 'Nima uchun?',
   'staff.accessDialog.reason.placeholder': 'Masalan: Yunusobod filialiga koʻchirildi',
   'staff.accessDialog.reason.required': 'Sabab kiritilishi shart',
+  'staff.accessDialog.resendInvite.title': 'Taklifni qayta yuborish',
+  'staff.accessDialog.resendInvite.body':
+    'Yangi havola yaratiladi; allaqachon yuborilgani ishlamay qoladi.',
+  'staff.accessDialog.resendInvite.confirm': 'Yuborish',
+  'staff.accessDialog.revokeInvite.title': 'Taklifni bekor qilish',
+  'staff.accessDialog.revokeInvite.body':
+    'Bu taklifni bekor qiladi va u uchun berilgan lavozimni qaytarib oladi. Allaqachon yuborilgan havola ishlamay qoladi.',
+  'staff.accessDialog.revokeInvite.confirm': 'Bekor qilish',
 
   'staff.inviteDialog.title': 'Taklif qilish',
   'staff.inviteDialog.body':
     'Telefon orqali mustaqil taklif qilish hali qurilmagan: platforma faqat kompaniyani ulash jarayonida egasi uchun hisob yarata oladi, oddiy xodim uchun emas.',
   'staff.inviteDialog.workaround':
     'Allaqachon hisobi bor odamga kirish huquqi berish uchun uning kartasini oching va lavozim qoʻshing.',
+  'staff.inviteDialog.rule':
+    'Har bir xodimning bir yoki bir nechta lavozimi bor, va har bir lavozim biror joyda beriladi — butun kompaniyaga, bitta brendga yoki bitta filialga. Bitta filialda berilgan lavozim faqat oʻsha filialda ishlaydi.',
+  'staff.inviteDialog.name.label': 'Ism va familiya',
+  'staff.inviteDialog.name.required': 'Ismni kiriting',
+  'staff.inviteDialog.phone.label': 'Telefon',
+  'staff.inviteDialog.phone.required': 'Toʻliq telefon raqamini kiriting',
+  'staff.inviteDialog.phone.duplicate': 'Bu odamning allaqachon kirish huquqi bor.',
+  'staff.inviteDialog.phone.duplicateLink': 'Profilini ochish',
+  'staff.inviteDialog.email.label': 'Email (ixtiyoriy)',
+  'staff.inviteDialog.confirm': 'Taklif qilish',
+  'staff.inviteDialog.submitting': 'Taklif qilinmoqda…',
+  'staff.inviteDialog.confirmClose': 'Bu taklifni bekor qilasizmi?',
+  'staff.inviteDialog.doneTitle': 'Taklif yaratildi',
+  'staff.inviteDialog.doneBody':
+    'Bu havolani yangi hodimga qulay usulda yuboring — Telegram, SMS yoki shaxsan. U bir marta, 72 soat davomida ishlaydi.',
+  'staff.inviteDialog.copy': 'Havolani nusxalash',
+  'staff.inviteDialog.copied': 'Nusxalandi',
+  'staff.inviteDialog.done': 'Tayyor',
+  'staff.inviteDialog.toast': 'Taklif yaratildi',
 
   'staff.detail.back': 'Roʻyxatga qaytish',
   'staff.detail.notFound': 'Bunday xodim yoʻq',

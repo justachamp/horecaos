@@ -53,6 +53,36 @@ export interface RoleDescriptor {
   readonly capabilities: readonly string[];
 }
 
+/** Mirrors `StaffInvitationController.StaffInvitationRequest` (ADR 0116, staff-and-access.md §4). */
+export interface StaffInvitationRequest {
+  readonly firstName: string;
+  readonly lastName: string;
+  readonly phone: string;
+  readonly email?: string;
+  readonly roleCode: string;
+  readonly brandId?: string;
+  readonly locationId?: string;
+  readonly reason: string;
+  readonly validUntil?: string;
+  readonly locale?: 'uz' | 'ru' | 'en';
+}
+
+/** Mirrors `StaffInvitationController.StaffInvitationCreatedResponse`. */
+export interface StaffInvitationCreated {
+  readonly invitationId: string;
+  readonly principalSubject: string;
+  readonly grantId: string;
+  readonly inviteLink: string;
+}
+
+/** Mirrors `StaffInvitationService.Outstanding` — the People screen's «Приглашён» pill and filter. */
+export interface StaffInvitationOutstanding {
+  readonly invitationId: string;
+  readonly principalSubject: string;
+  readonly state: 'QUEUED' | 'SENT' | 'OPENED' | 'EXPIRED' | (string & {});
+  readonly invitedAt: string;
+}
+
 /** Mirrors `TelegramStaffLinkService.StaffLinkView`. */
 export interface TelegramStaffLinkView {
   readonly id: string;
@@ -209,6 +239,59 @@ export class StaffApi {
     );
 
     return { brands, locations: perBrand.flat() };
+  }
+
+  /**
+   * `StaffInvitationController.invite` — staff-and-access.md §4. Creates the
+   * account, the membership and the grant, and returns the invite link once
+   * (never stored, never fetchable again after this call — the manager
+   * copies it now or resends later for a fresh one).
+   */
+  async invite(tenantId: string, request: StaffInvitationRequest): Promise<StaffInvitationCreated> {
+    return firstValueFrom(
+      this.api.post<StaffInvitationRequest, StaffInvitationCreated>(
+        staffPaths.staffInvitations(tenantId),
+        command(request),
+      ),
+    );
+  }
+
+  /** `StaffInvitationController.resend` — a fresh link; the one already out stops working. */
+  async resendStaffInvitation(
+    tenantId: string,
+    invitationId: string,
+    reason: string,
+  ): Promise<{ inviteLink: string }> {
+    return firstValueFrom(
+      this.api.post<ReasonRequest, { inviteLink: string }>(
+        staffPaths.staffInvitationResend(tenantId, invitationId),
+        command({ reason }),
+      ),
+    );
+  }
+
+  /** `StaffInvitationController.revoke` — cancels the invitation and revokes the job it was for. */
+  async revokeStaffInvitation(
+    tenantId: string,
+    invitationId: string,
+    reason: string,
+  ): Promise<{ changed: boolean }> {
+    const response = await firstValueFrom(
+      this.api.send<ReasonRequest, { changed: boolean }>(
+        'DELETE',
+        staffPaths.staffInvitation(tenantId, invitationId),
+        command({ reason }),
+      ),
+    );
+    return response.body as { changed: boolean };
+  }
+
+  /** `StaffInvitationController.outstanding` — every invitation this tenant has open. */
+  async staffInvitations(tenantId: string): Promise<readonly StaffInvitationOutstanding[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly StaffInvitationOutstanding[]>(staffPaths.staffInvitations(tenantId)),
+    );
+    return result.value ?? [];
   }
 }
 
