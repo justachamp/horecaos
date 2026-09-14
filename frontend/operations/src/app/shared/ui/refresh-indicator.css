@@ -1,0 +1,22 @@
+.q-refresh-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.q-refresh-indicator__stamp {
+  color: var(--q-ink-subtle);
+}
+
+.q-refresh-indicator__stamp--pulse {
+  opacity: 0.6;
+}
+
+.q-refresh-indicator__button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+}

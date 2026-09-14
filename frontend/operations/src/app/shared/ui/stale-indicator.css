@@ -1,0 +1,13 @@
+.q-stale-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--q-warning-text);
+}
+
+.q-stale-indicator__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--q-warning-text);
+}

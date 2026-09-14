@@ -4529,6 +4529,13 @@ export const messagesUzLatn: MessageCatalogue = {
   'ui.locked.module': 'Modul:',
   'ui.locked.ask': 'Uni tarifga hisob egasi qoʻsha oladi.',
   'ui.alert.dismiss': 'Xabarni yopish',
+  'ui.liveBadge.live': 'Onlayn',
+  'ui.refreshIndicator.updated': 'Yangilandi {time}',
+  'ui.refreshIndicator.refresh': 'Hozir yangilash',
+  'ui.staleIndicator.stale': 'Eskirgan bo‘lishi mumkin',
+  'ui.connectionState.reconnecting': 'Qayta ulanmoqda…',
+  'ui.connectionState.unavailable':
+    'Jonli yangilanishlar mavjud emas — har 10 soniyada yangilanadi',
   'ui.filterBar.primaryLabel': 'Filtrlar',
   'ui.filterBar.more': 'Yana',
   'ui.filterBar.reset': 'Filtrlarni tozalash',
