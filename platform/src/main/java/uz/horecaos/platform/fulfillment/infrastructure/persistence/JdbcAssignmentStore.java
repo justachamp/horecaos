@@ -411,24 +411,14 @@ public class JdbcAssignmentStore {
         Map<UUID, Shipment> byPlan = new HashMap<>();
         jdbc.sql("""
                 SELECT delivery_plan_id, id, order_id, status, source_type, courier_id,
-                       provider_binding_id, provider_type, external_shipment_id, version
+                       provider_binding_id, provider_type, external_shipment_id,
+                       assigned_at, picked_up_at, delivered_at, version
                 FROM fulfillment.shipments
                 WHERE tenant_id = :tenantId AND delivery_plan_id IN (:planIds) AND status <> 'CANCELLED'
                 """)
                 .param("tenantId", tenantId)
                 .param("planIds", planIds)
-                .query((row, number) -> Map.entry(
-                        row.getObject("delivery_plan_id", UUID.class),
-                        new Shipment(
-                                row.getObject("id", UUID.class),
-                                row.getObject("order_id", UUID.class),
-                                ShipmentStatus.valueOf(row.getString("status")),
-                                SourceType.valueOf(row.getString("source_type")),
-                                row.getObject("courier_id", UUID.class),
-                                row.getObject("provider_binding_id", UUID.class),
-                                row.getString("provider_type"),
-                                row.getString("external_shipment_id"),
-                                row.getInt("version"))))
+                .query((row, number) -> Map.entry(row.getObject("delivery_plan_id", UUID.class), mapShipment(row)))
                 .list()
                 .forEach(entry -> byPlan.put(entry.getKey(), entry.getValue()));
         return byPlan;
@@ -437,23 +427,31 @@ public class JdbcAssignmentStore {
     public Optional<Shipment> findShipment(UUID tenantId, UUID planId) {
         return jdbc.sql("""
                 SELECT id, order_id, status, source_type, courier_id, provider_binding_id,
-                       provider_type, external_shipment_id, version
+                       provider_type, external_shipment_id, assigned_at, picked_up_at,
+                       delivered_at, version
                 FROM fulfillment.shipments
                 WHERE tenant_id = :tenantId AND delivery_plan_id = :planId AND status <> 'CANCELLED'
                 """)
                 .param("tenantId", tenantId)
                 .param("planId", planId)
-                .query((row, number) -> new Shipment(
-                        row.getObject("id", UUID.class),
-                        row.getObject("order_id", UUID.class),
-                        ShipmentStatus.valueOf(row.getString("status")),
-                        SourceType.valueOf(row.getString("source_type")),
-                        row.getObject("courier_id", UUID.class),
-                        row.getObject("provider_binding_id", UUID.class),
-                        row.getString("provider_type"),
-                        row.getString("external_shipment_id"),
-                        row.getInt("version")))
+                .query((row, number) -> mapShipment(row))
                 .optional();
+    }
+
+    private static Shipment mapShipment(java.sql.ResultSet row) throws java.sql.SQLException {
+        return new Shipment(
+                row.getObject("id", UUID.class),
+                row.getObject("order_id", UUID.class),
+                ShipmentStatus.valueOf(row.getString("status")),
+                SourceType.valueOf(row.getString("source_type")),
+                row.getObject("courier_id", UUID.class),
+                row.getObject("provider_binding_id", UUID.class),
+                row.getString("provider_type"),
+                row.getString("external_shipment_id"),
+                instant(row, "assigned_at"),
+                instant(row, "picked_up_at"),
+                instant(row, "delivered_at"),
+                row.getInt("version"));
     }
 
     // --------------------------------------------------------------- row types
@@ -506,6 +504,13 @@ public class JdbcAssignmentStore {
             UUID providerBindingId,
             String providerType,
             String externalShipmentId,
+            // V0054:135-137, unread until the order-keyed delivery read (gap map
+            // row 1.2n) — the courier physically taking custody, taking the bag,
+            // and handing it over, none of which DispatchController.ShipmentView
+            // has ever needed for the dispatch board's own queue.
+            @Nullable Instant assignedAt,
+            @Nullable Instant pickedUpAt,
+            @Nullable Instant deliveredAt,
             int version) {}
 
     private record AttemptRow(

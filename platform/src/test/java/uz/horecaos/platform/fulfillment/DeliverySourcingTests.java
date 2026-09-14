@@ -162,7 +162,8 @@ class DeliverySourcingTests {
                 assignmentStore,
                 new JdbcDeliveryQuoteStore(jdbc, JsonMapper.builder().build()),
                 exceptionStore,
-                subsidyStore);
+                subsidyStore,
+                planStore);
 
         JdbcDispatchBranchStore branches = new JdbcDispatchBranchStore(jdbc);
         orders = new ConfigurableOrders();

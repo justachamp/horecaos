@@ -104,10 +104,10 @@ public interface ShipmentBookingPort {
         public static QuoteOutcome priced(
                 long priceMinor,
                 String currency,
-                Integer pickupEtaSeconds,
-                Integer deliveryEtaSeconds,
-                Integer distanceMeters,
-                Integer deadHeadMeters) {
+                @Nullable Integer pickupEtaSeconds,
+                @Nullable Integer deliveryEtaSeconds,
+                @Nullable Integer distanceMeters,
+                @Nullable Integer deadHeadMeters) {
             return new QuoteOutcome(
                     priceMinor,
                     currency,
