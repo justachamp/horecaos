@@ -132,6 +132,11 @@ class DayAggregatorTests {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 1,
                 1);
 
@@ -197,6 +202,11 @@ class DayAggregatorTests {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 1,
                 1);
 
@@ -236,6 +246,11 @@ class DayAggregatorTests {
                 placed.plusSeconds(2400),
                 null,
                 1200,
+                null,
+                null,
+                null,
+                null,
+                null,
                 1,
                 1);
         OrderFact neverPromised = new OrderFact(
@@ -265,6 +280,11 @@ class DayAggregatorTests {
                 60,
                 1800,
                 7200,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -311,6 +331,11 @@ class DayAggregatorTests {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 1,
                 1);
     }
@@ -344,6 +369,11 @@ class DayAggregatorTests {
                 60,
                 1200,
                 seconds,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,

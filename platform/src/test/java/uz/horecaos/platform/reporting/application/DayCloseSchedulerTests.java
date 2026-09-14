@@ -133,8 +133,8 @@ class DayCloseSchedulerTests {
 
         // The exact gap ADR 0043 names: "every query answers empty". Prove it does not.
         ReportQueryService queries = new ReportQueryService(store, businessDays, Clock.fixed(now, ZoneOffset.UTC));
-        ReportQueryService.ReportResult result = queries.run(
-                new ReportQuery(TENANT, DAY, DAY, List.of("orders.count.v1"), List.of(), List.of(), List.of()));
+        ReportQueryService.ReportResult result = queries.run(new ReportQuery(
+                TENANT, DAY, DAY, List.of("orders.count.v1"), List.of(), List.of(), List.of(), List.of()));
         long orders = result.rows().stream()
                 .map(row -> row.values().get("orders.count.v1"))
                 .filter(java.util.Objects::nonNull)

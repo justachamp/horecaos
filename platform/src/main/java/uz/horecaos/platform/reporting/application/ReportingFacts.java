@@ -36,6 +36,22 @@ public final class ReportingFacts {
      * @param secondsLate         signed seconds past the promise; null when there
      *                            was no promise or the order never closed, which
      *                            is a third state and not a zero
+     * @param secondsToAccept     wave P27 (7.2): CONFIRMED -> PREPARING, the
+     *                            "branch acceptance" wait — null until the order
+     *                            reaches PREPARING
+     * @param secondsPreparing    wave P27 (7.2): PREPARING -> READY, actual
+     *                            cooking time, narrower than {@code
+     *                            secondsToReady} — null until the order reaches
+     *                            READY from PREPARING
+     * @param publicOrderNumber   wave P27 (7.2a): snapshotted from {@code
+     *                            ordering.orders.public_order_number} — the short
+     *                            number a receipt and a kitchen ticket both print
+     * @param stockDisposition    ADR 0039's {@code ordering.order_outcomes},
+     *                            copied when a terminal outcome was recorded for
+     *                            this order. Null on an order with no outcome row
+     *                            yet (still open) or closed before ADR 0039
+     * @param liabilityParty      see {@code stockDisposition} — the two travel
+     *                            together from the same outcome row
      */
     public record OrderFact(
             UUID tenantId,
@@ -67,6 +83,11 @@ public final class ReportingFacts {
             @Nullable Instant promisedAt,
             @Nullable Integer promiseTravelMinutes,
             @Nullable Integer secondsLate,
+            @Nullable Integer secondsToAccept,
+            @Nullable Integer secondsPreparing,
+            @Nullable String publicOrderNumber,
+            @Nullable String stockDisposition,
+            @Nullable String liabilityParty,
             int metricCalculationVersion,
             int sourceOrderVersion) {
 

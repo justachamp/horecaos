@@ -17,8 +17,11 @@ import uz.horecaos.platform.reporting.domain.Grain;
  * @param metricCodes  the metrics to return, as {@code revenue.gross.v1}
  * @param groupBy      the axes to break the answer down by. A metric may be
  *                     rolled up from its own grain but never claim a finer one
- * @param locationIds  empty means every location the caller may read
- * @param channelCodes empty means every channel
+ * @param locationIds    empty means every location the caller may read
+ * @param channelCodes   empty means every channel
+ * @param legalEntityIds wave P27: empty means every legal entity. Previously
+ *                       named only as a {@code groupBy} dimension with no
+ *                       filter to go with it
  */
 public record ReportQuery(
         UUID tenantId,
@@ -27,7 +30,8 @@ public record ReportQuery(
         List<String> metricCodes,
         List<Grain.Dimension> groupBy,
         List<UUID> locationIds,
-        List<String> channelCodes) {
+        List<String> channelCodes,
+        List<UUID> legalEntityIds) {
 
     /** The widest range one request may cover, so a typo cannot scan every partition. */
     public static final int MAX_DAYS = 400;
@@ -41,6 +45,7 @@ public record ReportQuery(
         groupBy = List.copyOf(groupBy);
         locationIds = List.copyOf(locationIds);
         channelCodes = List.copyOf(channelCodes);
+        legalEntityIds = List.copyOf(legalEntityIds);
 
         if (metricCodes.isEmpty()) {
             throw new IllegalArgumentException("Name at least one metric");

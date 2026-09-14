@@ -348,6 +348,10 @@ public class DayCloseService {
         Integer secondsToConfirm = elapsed(source.createdAt(), source.confirmedAt());
         Integer secondsToReady = elapsed(source.confirmedAt(), source.readyAt());
         Integer secondsTotal = elapsed(source.createdAt(), source.closedAt());
+        // Wave P27 (7.2): splits secondsToReady into the wait for the branch to
+        // actually start the order and the cooking that follows it.
+        Integer secondsToAccept = elapsed(source.confirmedAt(), source.preparingAt());
+        Integer secondsPreparing = elapsed(source.preparingAt(), source.readyAt());
 
         // Lateness is a closed order's settled fact and is known only when a
         // promise was made. Null is the third state — no promise, or still open —
@@ -399,6 +403,11 @@ public class DayCloseService {
                 source.promisedAt(),
                 source.promiseTravelMinutes(),
                 secondsLate,
+                secondsToAccept,
+                secondsPreparing,
+                source.publicOrderNumber(),
+                source.stockDisposition(),
+                source.liabilityParty(),
                 MetricRegistry.CALCULATION_VERSION,
                 source.version());
     }

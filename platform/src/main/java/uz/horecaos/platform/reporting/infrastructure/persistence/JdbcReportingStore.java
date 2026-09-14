@@ -228,6 +228,7 @@ public class JdbcReportingStore {
                        o.promised_at, o.promise_travel_minutes, o.version,
                        o.created_by_actor_type, o.created_by_actor_id,
                        o.accepted_by_actor_type, o.accepted_by_actor_id,
+                       o.public_order_number,
                        (SELECT i.legal_entity_id
                           FROM payments.payment_intents i
                          WHERE i.tenant_id = o.tenant_id AND i.order_id = o.id
@@ -238,12 +239,27 @@ public class JdbcReportingStore {
                           FROM ordering.order_state_history h
                          WHERE h.tenant_id = o.tenant_id AND h.order_id = o.id
                            AND h.to_status = 'READY') AS ready_at,
+                       -- Wave P27 (7.2): the same mining as ready_at above, one
+                       -- status earlier, so the "branch acceptance" wait
+                       -- (CONFIRMED -> PREPARING) can be told apart from actual
+                       -- cooking (PREPARING -> READY) without a new source.
+                       (SELECT min(h.occurred_at)
+                          FROM ordering.order_state_history h
+                         WHERE h.tenant_id = o.tenant_id AND h.order_id = o.id
+                           AND h.to_status = 'PREPARING') AS preparing_at,
                        (SELECT h.reason_code
                           FROM ordering.order_state_history h
                          WHERE h.tenant_id = o.tenant_id AND h.order_id = o.id
                            AND h.to_status IN ('CANCELLED', 'REJECTED', 'EXPIRED')
                          ORDER BY h.sequence_number DESC
                          LIMIT 1) AS cancellation_reason_code,
+                       -- Wave P27 (7.1): ADR 0039's terminal-outcome row, written
+                       -- in the same transaction as the cancellation. Left-joined
+                       -- rather than required: an order still open, or closed
+                       -- before ADR 0039 shipped, has no outcome row and both
+                       -- columns stay null — never NO_EFFECT, which would claim a
+                       -- disposition nobody recorded.
+                       oo.stock_disposition, oo.liability_party,
                        (o.customer_account_id IS NOT NULL AND NOT EXISTS (
                             SELECT 1 FROM ordering.orders e
                              WHERE e.tenant_id = o.tenant_id
@@ -251,6 +267,8 @@ public class JdbcReportingStore {
                                AND e.status = 'COMPLETED'
                                AND e.created_at < o.created_at)) AS is_first_order
                   FROM ordering.orders o
+                  LEFT JOIN ordering.order_outcomes oo
+                    ON oo.tenant_id = o.tenant_id AND oo.order_id = o.id
                  WHERE o.tenant_id = :tenantId
                    AND o.created_at >= :from AND o.created_at < :to
                  ORDER BY o.created_at, o.id
@@ -462,7 +480,14 @@ public class JdbcReportingStore {
             @Nullable String createdByActorType,
             @Nullable String createdByActorId,
             @Nullable String acceptedByActorType,
-            @Nullable String acceptedByActorId) {}
+            @Nullable String acceptedByActorId,
+            /** Wave P27 (7.2): CONFIRMED -> PREPARING, mined from {@code order_state_history} the same way {@code readyAt} already is. */
+            @Nullable Instant preparingAt,
+            /** Wave P27 (7.2a): {@code ordering.orders.public_order_number} — the short number a receipt prints. */
+            String publicOrderNumber,
+            /** Wave P27 (7.1): ADR 0039's {@code order_outcomes.stock_disposition}, null until a terminal outcome is recorded. */
+            @Nullable String stockDisposition,
+            @Nullable String liabilityParty) {}
 
     public record SourceLine(
             UUID lineId,
@@ -647,6 +672,11 @@ public class JdbcReportingStore {
         params.put("promisedAt", utc(fact.promisedAt()));
         params.put("promiseTravelMinutes", fact.promiseTravelMinutes());
         params.put("secondsLate", fact.secondsLate());
+        params.put("secondsToAccept", fact.secondsToAccept());
+        params.put("secondsPreparing", fact.secondsPreparing());
+        params.put("publicOrderNumber", fact.publicOrderNumber());
+        params.put("stockDisposition", fact.stockDisposition());
+        params.put("liabilityParty", fact.liabilityParty());
         params.put("calculationVersion", fact.metricCalculationVersion());
         params.put("sourceOrderVersion", fact.sourceOrderVersion());
 
@@ -659,6 +689,8 @@ public class JdbcReportingStore {
                     is_first_order, gross_revenue_som, discount_som, delivery_fee_som, tax_som,
                     net_revenue_som, line_count, item_count, seconds_to_confirm, seconds_to_ready,
                     seconds_total, promised_at, promise_travel_minutes, seconds_late,
+                    seconds_to_accept, seconds_preparing, public_order_number,
+                    stock_disposition, liability_party,
                     metric_calculation_version, source_order_version)
                 VALUES (
                     :tenantId, :orderId, :businessDate, :boundaryVersion, :occurredAt, :closedAt,
@@ -668,6 +700,8 @@ public class JdbcReportingStore {
                     :isFirstOrder, :gross, :discount, :deliveryFee, :tax,
                     :net, :lineCount, :itemCount, :secondsToConfirm, :secondsToReady,
                     :secondsTotal, :promisedAt, :promiseTravelMinutes, :secondsLate,
+                    :secondsToAccept, :secondsPreparing, :publicOrderNumber,
+                    :stockDisposition, :liabilityParty,
                     :calculationVersion, :sourceOrderVersion)
                 """).params(params).update();
     }
@@ -965,6 +999,46 @@ public class JdbcReportingStore {
     }
 
     /**
+     * Wave P27 (7.1): median {@code seconds_total} for one fulfilment type —
+     * the pickup/delivery elapsed-time tiles the overview never had a
+     * registry entry or endpoint for. Not a data gap: {@code
+     * fact_order.seconds_total} and {@code fulfilment_type} are both already
+     * written by every close run; this is the same "median cannot be
+     * composed from per-slice medians" reasoning {@link #medianSecondsToReady}
+     * documents, one column and one extra filter over.
+     *
+     * @return null when no order of this fulfilment type closed in range,
+     *         which is not a zero-second delivery
+     */
+    public @Nullable Integer medianSecondsTotalByFulfilment(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, String fulfilmentType) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+        params.put("fulfilmentType", fulfilmentType);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        Double median = jdbc.sql("""
+                SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY seconds_total)
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND fulfilment_type = :fulfilmentType AND seconds_total IS NOT NULL
+                """ + locationFilter)
+                .params(params)
+                .query(Double.class)
+                .optional()
+                .orElse(null);
+
+        return median == null ? null : (int) Math.round(median);
+    }
+
+    /**
      * Order-grain rows straight off {@code fact_order}, for the three 7.2 tables
      * that are genuinely per-order rather than day-grain (ADR 0043's own
      * {@code sla-buckets}/{@code preparation-time} endpoints already establish
@@ -991,6 +1065,34 @@ public class JdbcReportingStore {
             List<String> channelCodes,
             OrderSort sort,
             int limit) {
+        return readOrders(tenantId, from, to, locationIds, channelCodes, List.of(), List.of(), sort, limit, null);
+    }
+
+    /**
+     * Wave P27 (7.2/7.2a): adds a fulfilment-type filter (previously applied
+     * client-side over an already-fetched page — the exact axis-in-the-query
+     * fix this wave's brief calls for), a legal-entity filter, and an
+     * optional keyset {@code cursor} for {@link OrderSort#DATE_DESC} — «Заказы»'s
+     * cursor paging, past the 200-row cap a single bounded read otherwise
+     * hides behind. The other two sorts stay a single bounded page: {@code
+     * cursor} is accepted for them without error but has nothing to compare
+     * against ({@link OrderSort#DURATION_DESC}/{@link OrderSort#LATENESS_DESC}
+     * order by a duration, not the {@code (occurredAt, orderId)} pair a
+     * cursor names), so it is silently ignored there rather than refused —
+     * the two per-tab views a manager pages through today are «Заказы»
+     * only.
+     */
+    public List<OrderRow> readOrders(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> channelCodes,
+            List<String> fulfilmentTypes,
+            List<UUID> legalEntityIds,
+            OrderSort sort,
+            int limit,
+            @Nullable OrderCursor cursor) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -1000,48 +1102,76 @@ public class JdbcReportingStore {
 
         StringBuilder filter = new StringBuilder();
         if (!locationIds.isEmpty()) {
-            filter.append(" AND location_id IN (:locations)");
+            filter.append(" AND fo.location_id IN (:locations)");
             params.put("locations", locationIds);
         }
         if (!channelCodes.isEmpty()) {
-            filter.append(" AND channel_code IN (:channels)");
+            filter.append(" AND fo.channel_code IN (:channels)");
             params.put("channels", channelCodes);
+        }
+        if (!fulfilmentTypes.isEmpty()) {
+            filter.append(" AND fo.fulfilment_type IN (:fulfilmentTypes)");
+            params.put("fulfilmentTypes", fulfilmentTypes);
+        }
+        if (!legalEntityIds.isEmpty()) {
+            filter.append(" AND fo.legal_entity_id IN (:legalEntities)");
+            params.put("legalEntities", legalEntityIds);
         }
 
         String orderClause =
                 switch (sort) {
                     // «Заказы»: every order in range, newest first — a commercial
                     // log is read chronologically.
-                    case DATE_DESC -> "ORDER BY occurred_at DESC, order_id DESC";
+                    case DATE_DESC -> {
+                        if (cursor != null) {
+                            filter.append(" AND (fo.occurred_at, fo.order_id) < (:afterOccurredAt, :afterOrderId)");
+                            params.put("afterOccurredAt", utc(cursor.occurredAt()));
+                            params.put("afterOrderId", cursor.orderId());
+                        }
+                        yield "ORDER BY fo.occurred_at DESC, fo.order_id DESC";
+                    }
                     // «Этапы»: only orders with a total elapsed time to audit. An
                     // order still open has nothing to measure, and NULLS would
                     // otherwise sort ahead of every real duration.
                     case DURATION_DESC -> {
-                        filter.append(" AND seconds_total IS NOT NULL");
-                        yield "ORDER BY seconds_total DESC, order_id DESC";
+                        filter.append(" AND fo.seconds_total IS NOT NULL");
+                        yield "ORDER BY fo.seconds_total DESC, fo.order_id DESC";
                     }
                     // «Опоздания»: only orders that were actually late. Sorted by
                     // severity, matching the spec's own "the queue exists for the
                     // worst case" — never by time.
                     case LATENESS_DESC -> {
-                        filter.append(" AND seconds_late IS NOT NULL AND seconds_late > 0");
-                        yield "ORDER BY seconds_late DESC, order_id DESC";
+                        filter.append(" AND fo.seconds_late IS NOT NULL AND fo.seconds_late > 0");
+                        yield "ORDER BY fo.seconds_late DESC, fo.order_id DESC";
                     }
                 };
 
         return jdbc.sql("""
-                SELECT order_id, business_date, location_id, legal_entity_id, channel_code,
-                       fulfilment_type, terminal_status, gross_revenue_som, discount_som,
-                       delivery_fee_som, tax_som, net_revenue_som, item_count, occurred_at,
-                       closed_at, seconds_to_confirm, seconds_to_ready, seconds_total,
-                       seconds_late, cancellation_reason_code
-                  FROM reporting.fact_order
-                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                SELECT fo.order_id, fo.business_date, fo.location_id, fo.legal_entity_id, fo.channel_code,
+                       fo.fulfilment_type, fo.terminal_status, fo.gross_revenue_som, fo.discount_som,
+                       fo.delivery_fee_som, fo.tax_som, fo.net_revenue_som, fo.item_count, fo.occurred_at,
+                       fo.closed_at, fo.seconds_to_confirm, fo.seconds_to_ready, fo.seconds_total,
+                       fo.seconds_late, fo.cancellation_reason_code, fo.seconds_to_accept,
+                       fo.seconds_preparing, fo.public_order_number,
+                       -- Wave P27 (7.2a): "Предзаказ" — the closest signal this
+                       -- schema carries for "placed ahead of when it is wanted"
+                       -- is a kitchen ticket released on a schedule rather than
+                       -- fired on confirm (kitchen.tickets.release_mode, ADR 0041).
+                       EXISTS (
+                           SELECT 1 FROM kitchen.tickets t
+                            WHERE t.tenant_id = fo.tenant_id AND t.order_id = fo.order_id
+                              AND t.release_mode = 'SCHEDULED'
+                       ) AS is_preorder
+                  FROM reporting.fact_order fo
+                 WHERE fo.tenant_id = :tenantId AND fo.business_date BETWEEN :from AND :to
                 """ + filter + " " + orderClause + " LIMIT :limit")
                 .params(params)
                 .query(JdbcReportingStore::orderRow)
                 .list();
     }
+
+    /** A keyset cursor for {@link OrderSort#DATE_DESC} — the last row of the previous page. */
+    public record OrderCursor(Instant occurredAt, UUID orderId) {}
 
     /**
      * Every terminal status in range, split by cancellation reason where one was
@@ -1076,20 +1206,50 @@ public class JdbcReportingStore {
         }
 
         return jdbc.sql("""
-                SELECT terminal_status, cancellation_reason_code, count(*) AS order_count
+                SELECT terminal_status, cancellation_reason_code, stock_disposition, liability_party,
+                       count(*) AS order_count
                   FROM reporting.fact_order
                  WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
                 """ + filter + """
-                 GROUP BY terminal_status, cancellation_reason_code
+                 GROUP BY terminal_status, cancellation_reason_code, stock_disposition, liability_party
                  ORDER BY order_count DESC, terminal_status, cancellation_reason_code NULLS FIRST
                 """)
                 .params(params)
                 .query((ResultSet row, int number) -> new OutcomeRow(
                         row.getString("terminal_status"),
                         row.getString("cancellation_reason_code"),
+                        row.getString("stock_disposition"),
+                        row.getString("liability_party"),
                         row.getInt("order_count")))
                 .list();
     }
+
+    /**
+     * Wave P27 (7.1a): the tenant's cancellation-reason registry, so the
+     * funnel can resolve {@code cancellation_reason_code} — a CANCEL action's
+     * reason is {@code order_outcome_reasons.id} as a string, and this is the
+     * one place that table is read from — to the {@code internal_name} an
+     * operator actually picked, instead of printing the machine id.
+     *
+     * <p>A REJECTED or EXPIRED order's reason code names a different,
+     * platform-fixed registry ({@code ordering.order_reject_reasons}) this
+     * read does not cover; a code this map has no entry for is left for the
+     * caller to render as-is rather than guessed at.
+     */
+    public List<CancellationReasonRow> readCancellationReasons(UUID tenantId) {
+        return jdbc.sql("""
+                SELECT id, internal_name
+                  FROM ordering.order_outcome_reasons
+                 WHERE tenant_id = :tenantId AND kind = 'CANCELLATION'
+                """)
+                .param("tenantId", tenantId)
+                .query((ResultSet row, int number) -> new CancellationReasonRow(
+                        row.getObject("id", UUID.class).toString(), row.getString("internal_name")))
+                .list();
+    }
+
+    /** One tenant cancellation reason — see {@link #readCancellationReasons}. */
+    public record CancellationReasonRow(String reasonCode, String internalName) {}
 
     /**
      * Per-variant sales, summed over the range — Reports 7.7's «Продажи» tab.
@@ -1317,7 +1477,15 @@ public class JdbcReportingStore {
         LATENESS_DESC
     }
 
-    /** One order, straight off {@code fact_order} — see {@link #readOrders}. */
+    /** One order, straight off {@code fact_order} — see {@link #readOrders}.
+     *
+     * @param secondsToAccept  wave P27: CONFIRMED -> PREPARING, "branch acceptance"
+     * @param secondsPreparing wave P27: PREPARING -> READY, actual cooking — narrower than {@code secondsToReady}
+     * @param publicOrderNumber wave P27: the short number a receipt prints, null on a row closed before it was added
+     * @param isPreorder       wave P27: whether any kitchen ticket for this order was released on a schedule
+     *                         ({@code kitchen.tickets.release_mode = 'SCHEDULED'}) rather than fired on confirm —
+     *                         the closest signal this schema carries for "placed ahead of when it is wanted"
+     */
     public record OrderRow(
             UUID orderId,
             LocalDate businessDate,
@@ -1338,11 +1506,26 @@ public class JdbcReportingStore {
             @Nullable Integer secondsToReady,
             @Nullable Integer secondsTotal,
             @Nullable Integer secondsLate,
-            @Nullable String cancellationReasonCode) {}
+            @Nullable String cancellationReasonCode,
+            @Nullable Integer secondsToAccept,
+            @Nullable Integer secondsPreparing,
+            @Nullable String publicOrderNumber,
+            boolean isPreorder) {}
 
-    /** One (status, reason) bucket — see {@link #readOrderOutcomes}. */
+    /**
+     * One (status, reason, disposition, liability) bucket — see {@link #readOrderOutcomes}.
+     *
+     * @param stockDisposition wave P27 (7.1): ADR 0039's cancellation cost — what a cancellation cost the
+     *                         tenant's stock. Null on a row with no recorded outcome (still open, or closed
+     *                         before ADR 0039), never a fifth "no effect" reading
+     * @param liabilityParty   see {@code stockDisposition} — travels with it from the same outcome row
+     */
     public record OutcomeRow(
-            String terminalStatus, @Nullable String cancellationReasonCode, int count) {}
+            String terminalStatus,
+            @Nullable String cancellationReasonCode,
+            @Nullable String stockDisposition,
+            @Nullable String liabilityParty,
+            int count) {}
 
     private static OrderRow orderRow(ResultSet row, int number) throws SQLException {
         return new OrderRow(
@@ -1365,7 +1548,11 @@ public class JdbcReportingStore {
                 row.getObject("seconds_to_ready", Integer.class),
                 row.getObject("seconds_total", Integer.class),
                 row.getObject("seconds_late", Integer.class),
-                row.getString("cancellation_reason_code"));
+                row.getString("cancellation_reason_code"),
+                row.getObject("seconds_to_accept", Integer.class),
+                row.getObject("seconds_preparing", Integer.class),
+                row.getString("public_order_number"),
+                row.getBoolean("is_preorder"));
     }
 
     /** The boundary versions present in a range, so a mixed range can be refused. */
@@ -1737,7 +1924,11 @@ public class JdbcReportingStore {
                 row.getString("created_by_actor_type"),
                 row.getString("created_by_actor_id"),
                 row.getString("accepted_by_actor_type"),
-                row.getString("accepted_by_actor_id"));
+                row.getString("accepted_by_actor_id"),
+                instantOrNull(row, "preparing_at"),
+                row.getString("public_order_number"),
+                row.getString("stock_disposition"),
+                row.getString("liability_party"));
     }
 
     private static BranchDayAggregate aggregate(ResultSet row, int number) throws SQLException {

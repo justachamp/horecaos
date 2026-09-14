@@ -26,6 +26,8 @@ class MetricRegistryTests {
                 "orders.cancelled.v1",
                 "orders.late.v1",
                 "prep_time.median.v1",
+                "delivery_time.median.v1",
+                "pickup_time.median.v1",
                 "sla_bucket_set.v1",
                 "channel_mix.count.v1",
                 "receipt_depth.v1",
