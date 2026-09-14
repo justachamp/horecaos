@@ -23,6 +23,7 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
@@ -78,6 +79,7 @@ public class StaffInvitationService {
     private final StaffAccounts accounts;
     private final OrganizationProvisioner organizations;
     private final GrantManagementService grants;
+    private final AuthorizationService authorization;
     private final PlatformMailer mailer;
     private final AuditRecorder audit;
     private final TransactionTemplate transactions;
@@ -89,6 +91,7 @@ public class StaffInvitationService {
             StaffAccounts accounts,
             OrganizationProvisioner organizations,
             GrantManagementService grants,
+            AuthorizationService authorization,
             PlatformMailer mailer,
             AuditRecorder audit,
             TransactionTemplate transactions,
@@ -98,6 +101,7 @@ public class StaffInvitationService {
         this.accounts = accounts;
         this.organizations = organizations;
         this.grants = grants;
+        this.authorization = authorization;
         this.mailer = mailer;
         this.audit = audit;
         this.transactions = transactions;
@@ -113,13 +117,30 @@ public class StaffInvitationService {
      * linked yet would be authority resting on nothing, and an invitation row
      * for a grant that was never made would offer a link to nobody's job.
      *
+     * <p>The coarse half of {@link GrantManagementService#grant}'s own
+     * authorization check -- does the actor hold {@code IAM_GRANT_MANAGE} at
+     * the chosen scope at all -- is repeated here, first, before any Keycloak
+     * account exists: without it, a manager who holds the capability only at
+     * BRAND scope trying to invite someone at TENANT scope would already have
+     * a new, grant-less Keycloak account by the time {@code grant} refused
+     * them. The finer half -- whether the actor's own capabilities cover
+     * every capability the chosen job carries ({@code requireGrantable}) --
+     * is not duplicated and still runs only inside {@code grant} itself,
+     * after the account exists; a role-specific escalation attempt is refused
+     * there, at the cost of an orphaned, grant-less account for that one
+     * refused case.
+     *
+     * @throws AuthorizationService.AccessDeniedException when the actor does
+     *                      not hold {@code IAM_GRANT_MANAGE} at the chosen scope
      * @throws ApiException {@code RESOURCE_CONFLICT} naming the existing
      *                      subject when the phone is already registered;
      *                      whatever {@link GrantManagementService#grant}
-     *                      throws when the actor cannot confer this job at
-     *                      this scope (staff-and-access.md §0's corollary)
+     *                      throws when the actor cannot confer this specific
+     *                      job at this scope (staff-and-access.md §0's corollary)
      */
     public Created invite(UUID tenantId, InviteCommand command, ActorRef actor, String correlationId) {
+        authorization.require(actor.subject(), Capability.IAM_GRANT_MANAGE, command.scope());
+
         Optional<StaffAccount> duplicate = accounts.findByPhone(command.phone());
         if (duplicate.isPresent()) {
             throw new ApiException(

@@ -37,7 +37,10 @@ CREATE TABLE tenant.staff_invitations (
     grant_id uuid NOT NULL,
     locale varchar(8) NOT NULL,
     status varchar(16) NOT NULL,
-    token_hash varchar(64) NOT NULL,
+    -- Nullable, not NOT NULL: markAccepted/markCancelled clear it, the same
+    -- way tenant.owner_invitations.token_hash goes NULL on acceptance -- a
+    -- spent or revoked link must not still verify against anything.
+    token_hash varchar(64),
     expires_at timestamptz NOT NULL,
     email_given boolean NOT NULL,
     invited_by varchar(255) NOT NULL,
@@ -60,7 +63,11 @@ CREATE TABLE tenant.staff_invitations (
     CONSTRAINT ck_staff_invitation_status CHECK (
         status IN ('QUEUED', 'SENT', 'OPENED', 'ACCEPTED', 'CANCELLED')),
     CONSTRAINT ck_staff_invitation_locale CHECK (locale IN ('uz', 'ru', 'en')),
-    CONSTRAINT ck_staff_invitation_hash CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+    CONSTRAINT ck_staff_invitation_hash CHECK (token_hash IS NULL OR token_hash ~ '^[0-9a-f]{64}$'),
+    -- Only a live invitation carries a link -- the same rule
+    -- tenant.owner_invitations.ck_owner_invitation_link states for its table.
+    CONSTRAINT ck_staff_invitation_link CHECK (
+        status IN ('ACCEPTED', 'CANCELLED') OR token_hash IS NOT NULL),
     CONSTRAINT ck_staff_invitation_accepted CHECK (status <> 'ACCEPTED' OR accepted_at IS NOT NULL),
     CONSTRAINT ck_staff_invitation_cancelled CHECK (
         status <> 'CANCELLED' OR (cancelled_at IS NOT NULL AND cancelled_by IS NOT NULL))
