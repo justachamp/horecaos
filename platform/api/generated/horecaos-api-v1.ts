@@ -1096,9 +1096,12 @@ export interface CashDeclarationRequest {
 }
 
 export interface CashHandoverResponse {
+  bonusPaidMinor?: number;
+  cashDeliveredCount?: number;
   confirmedAt?: string;
   confirmedBy?: string;
   confirmedMinor?: number;
+  courierDisplayReference?: string;
   courierId?: string;
   currency?: string;
   declaredAt?: string;
@@ -1106,6 +1109,8 @@ export interface CashHandoverResponse {
   expectedMinor?: number;
   handoverId?: string;
   locationId?: string;
+  nonCashDeliveredCount?: number;
+  nonCashEarningsMinor?: number;
   reasonCode?: string;
   shiftId?: string;
   status?: string;
@@ -2322,6 +2327,10 @@ export interface DispatchResponse {
   shipmentId?: string;
 }
 
+export interface DisputeInvoiceRequest {
+  reason: string;
+}
+
 export interface Divergence {
   entitlementKey?: string;
   periodKey?: string;
@@ -3095,6 +3104,7 @@ export interface LedgerLine {
 
 export interface LedgerResponse {
   balanceMinor?: number;
+  currency?: string;
   entries?: Array<LedgerLine>;
 }
 
@@ -4500,6 +4510,7 @@ export interface PartnerInvoiceLineResponse {
   reasonCode?: string;
   shipmentId?: string;
   varianceMinor?: number;
+  varianceResolution?: string;
 }
 
 export interface PartnerInvoiceResponse {
@@ -6268,14 +6279,18 @@ export interface SettingsResponse {
 export interface SettlementPeriodResponse {
   adjustmentsMinor?: number;
   amountPayableMinor?: number;
+  bonusMinor?: number;
   cashHeldMinor?: number;
   closedAt?: string;
   complianceFlag?: boolean;
   courierId?: string;
   currency?: string;
   deliveredCount?: number;
+  distanceMeters?: number;
   grossEarningsMinor?: number;
   onTimeCount?: number;
+  paidSeconds?: number;
+  penaltyMinor?: number;
   periodEnd?: string;
   periodId?: string;
   periodStart?: string;
@@ -7256,6 +7271,11 @@ export interface VariableCatalogueVariable {
   name?: string;
 }
 
+export interface VarianceAcceptanceRequest {
+  accept?: boolean;
+  reason: string;
+}
+
 export interface VariantAvailabilityCountsResponse {
   available?: number;
   onStop?: number;
@@ -7927,6 +7947,8 @@ export interface Operations {
   "partnerInvoices": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices"; request: { parameters: { path: { tenantId: string }; query: { limit?: number; status?: string } } }; responses: { "200": Array<PartnerInvoiceResponse> } };
   "importInvoice": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices"; request: { parameters: { path: { tenantId: string } }; body: ImportInvoiceRequest }; responses: { "200": { [key: string]: string } } };
   "partnerInvoiceDetail": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices/{invoiceId}"; request: { parameters: { path: { invoiceId: string; tenantId: string } } }; responses: { "200": PartnerInvoiceDetailResponse } };
+  "disputeInvoice": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices/{invoiceId}/dispute"; request: { parameters: { path: { invoiceId: string; tenantId: string } }; body: DisputeInvoiceRequest }; responses: { "200": unknown } };
+  "resolveVariance": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices/{invoiceId}/lines/{lineId}/variance-acceptance"; request: { parameters: { path: { invoiceId: string; lineId: string; tenantId: string } }; body: VarianceAcceptanceRequest }; responses: { "200": PartnerInvoiceLineResponse } };
   "match": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices/{invoiceId}/match"; request: { parameters: { path: { invoiceId: string; tenantId: string } }; body: MatchRequest }; responses: { "200": MatchReport } };
   "list_9": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/payment-methods"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<PaymentMethodView> } };
   "create_4": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/payment-methods"; request: { parameters: { path: { tenantId: string } }; body: CreatePaymentMethodRequest }; responses: { "200": PaymentMethodView } };
