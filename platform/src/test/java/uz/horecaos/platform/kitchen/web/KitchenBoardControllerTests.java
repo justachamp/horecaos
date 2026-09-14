@@ -94,4 +94,53 @@ class KitchenBoardControllerTests {
         assertThat(response.fulfilmentMode()).isEqualTo("PICKUP");
         assertThat(response.channelCode()).isEqualTo("kiosk");
     }
+
+    @Test
+    void theTwoArgumentOverloadCarriesNoChannelSystemType() {
+        // The single-ticket read and every mutation response keep the cheaper
+        // overload (see TicketResponse's own doc) — this asserts that choice
+        // actually means what it claims rather than silently resolving one.
+        TicketRow ticket = ticketAt(TicketStatus.FIRED);
+
+        KitchenBoardController.TicketResponse response = KitchenBoardController.TicketResponse.of(ticket, List.of());
+
+        assertThat(response.channelSystemType()).isNull();
+    }
+
+    @Test
+    void theThreeArgumentOverloadCarriesTheResolvedChannelSystemType() {
+        // Only board() calls this overload (gap map row 2.1), after
+        // resolving channelCode against tenant.sales_channels.system_type —
+        // this asserts the mapping itself, not the resolution.
+        TicketRow ticket = ticketAt(TicketStatus.FIRED);
+
+        KitchenBoardController.TicketResponse response =
+                KitchenBoardController.TicketResponse.of(ticket, List.of(), "AGGREGATOR");
+
+        assertThat(response.channelSystemType()).isEqualTo("AGGREGATOR");
+    }
+
+    private static TicketRow ticketAt(TicketStatus status) {
+        return new TicketRow(
+                UUID.randomUUID(),
+                TENANT,
+                BRAND,
+                LOCATION,
+                UUID.randomUUID(),
+                "A-020",
+                "DELIVERY",
+                "yandex-eats",
+                status,
+                ReleaseMode.AUTO_ON_CONFIRM,
+                null,
+                CREATED_AT,
+                180,
+                CREATED_AT.plusSeconds(180),
+                null,
+                null,
+                null,
+                1,
+                1,
+                CREATED_AT);
+    }
 }

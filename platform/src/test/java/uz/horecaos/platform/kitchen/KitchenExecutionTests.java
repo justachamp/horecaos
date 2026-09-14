@@ -1168,6 +1168,104 @@ class KitchenExecutionTests {
                 .isEqualTo(TicketStatus.IN_PRODUCTION);
     }
 
+    // ---------------------------------------------------------- gap map row 2.1
+
+    @Test
+    @DisplayName("the board's counts are exact over every matching ticket, per fulfilment mode")
+    void countsAreExactPerFulfilmentMode() {
+        UUID deliveryOrder = seedConfirmedOrder("D-001", null, null, null, burger);
+        jdbc.sql("UPDATE ordering.orders SET fulfillment_mode = 'DELIVERY' WHERE id = :id")
+                .param("id", deliveryOrder)
+                .update();
+        UUID pickupOrder = seedConfirmedOrder("P-001", null, null, null, burger);
+        UUID dineInOrder = seedConfirmedOrder("H-001", null, null, null, burger);
+        jdbc.sql("UPDATE ordering.orders SET fulfillment_mode = 'DINE_IN' WHERE id = :id")
+                .param("id", dineInOrder)
+                .update();
+
+        tickets.open(TENANT, deliveryOrder, ReleaseMode.AUTO_ON_CONFIRM);
+        tickets.open(TENANT, pickupOrder, ReleaseMode.AUTO_ON_CONFIRM);
+        tickets.open(TENANT, dineInOrder, ReleaseMode.AUTO_ON_CONFIRM);
+
+        JdbcKitchenStore.TicketCountsRow counts =
+                store.counts(TENANT, branch, List.of("FIRED", "IN_PRODUCTION", "READY"));
+
+        assertThat(counts.total()).isEqualTo(3);
+        assertThat(counts.delivery()).isEqualTo(1);
+        assertThat(counts.pickup()).isEqualTo(1);
+        assertThat(counts.dineIn()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("counts stay exact past the page limit the board itself caps at")
+    void countsAreNotLimitedByThePageSizeTheBoardReads() {
+        for (int i = 0; i < 3; i++) {
+            UUID orderId = seedConfirmedOrder("N-00" + i, null, null, null, burger);
+            tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+        }
+
+        // A page of 2 is fewer rows than exist; the count must not be capped
+        // by it the way the client-side tab count used to be (gap map row
+        // 2.1's own finding: fulfilmentMode counted over the same <=200-row
+        // page the board paginates).
+        List<TicketRow> page = store.board(TENANT, branch, List.of("FIRED", "IN_PRODUCTION", "READY"), 2);
+        JdbcKitchenStore.TicketCountsRow counts =
+                store.counts(TENANT, branch, List.of("FIRED", "IN_PRODUCTION", "READY"));
+
+        assertThat(page).hasSize(2);
+        assertThat(counts.total()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("a channel's system_type resolves off the ticket's own channel_code, typed rather than guessed")
+    void channelSystemTypeResolvesOffTheRegistry() {
+        UUID aggregatorChannel = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name, status)
+                VALUES (:id, :tenantId, 'YANDEX_EATS', 'AGGREGATOR', 'Yandex Eats', 'ACTIVE')
+                """).param("id", aggregatorChannel).param("tenantId", TENANT).update();
+
+        UUID aggregatorOrder = seedConfirmedOrder("A-001", null, null, null, burger);
+        jdbc.sql("UPDATE ordering.orders SET channel_code_snapshot = 'YANDEX_EATS' WHERE id = :id")
+                .param("id", aggregatorOrder)
+                .update();
+        UUID directOrder = seedConfirmedOrder("W-001", null, null, null, burger);
+
+        TicketRow aggregatorTicket = tickets.open(TENANT, aggregatorOrder, ReleaseMode.AUTO_ON_CONFIRM);
+        TicketRow directTicket = tickets.open(TENANT, directOrder, ReleaseMode.AUTO_ON_CONFIRM);
+
+        Map<String, String> resolved =
+                store.channelSystemTypes(TENANT, Set.of(aggregatorTicket.channelCode(), directTicket.channelCode()));
+
+        assertThat(resolved.get(aggregatorTicket.channelCode())).isEqualTo("AGGREGATOR");
+        assertThat(resolved.get(directTicket.channelCode())).isEqualTo("WEB");
+    }
+
+    @Test
+    @DisplayName("the aggregator count follows the same registry, never a raw string match on channel_code")
+    void aggregatorCountIsTypedOffTheChannelRegistry() {
+        UUID aggregatorChannel = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name, status)
+                VALUES (:id, :tenantId, 'UZUM_TEZKOR', 'AGGREGATOR', 'Uzum Tezkor', 'ACTIVE')
+                """).param("id", aggregatorChannel).param("tenantId", TENANT).update();
+
+        UUID aggregatorOrder = seedConfirmedOrder("AG-001", null, null, null, burger);
+        jdbc.sql("UPDATE ordering.orders SET channel_code_snapshot = 'UZUM_TEZKOR' WHERE id = :id")
+                .param("id", aggregatorOrder)
+                .update();
+        UUID directOrder = seedConfirmedOrder("W-002", null, null, null, burger);
+
+        tickets.open(TENANT, aggregatorOrder, ReleaseMode.AUTO_ON_CONFIRM);
+        tickets.open(TENANT, directOrder, ReleaseMode.AUTO_ON_CONFIRM);
+
+        JdbcKitchenStore.TicketCountsRow counts =
+                store.counts(TENANT, branch, List.of("FIRED", "IN_PRODUCTION", "READY"));
+
+        assertThat(counts.aggregator()).isEqualTo(1);
+        assertThat(counts.total()).isEqualTo(2);
+    }
+
     // -------------------------------------------------------------------- fixture
 
     private Resolution resolve(Catalogue node) {

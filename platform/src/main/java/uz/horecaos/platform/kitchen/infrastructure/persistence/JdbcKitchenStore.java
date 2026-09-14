@@ -10,7 +10,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -487,6 +489,71 @@ public class JdbcKitchenStore {
     }
 
     /**
+     * The board's own tab badges (gap map row 2.1), one aggregate over every
+     * matching ticket rather than the client counting a page that may have
+     * been cut at {@code limit}. The aggregator count is typed off {@code
+     * tenant.sales_channels.system_type} through the same join {@link
+     * #channelSystemTypes} uses for the per-ticket chip, rather than pattern
+     * -matching {@code channel_code} — the free string it is is exactly what
+     * this wave's own gap-map row says a client must not classify by itself.
+     */
+    public TicketCountsRow counts(UUID tenantId, UUID locationId, List<String> statuses) {
+        return jdbc.sql("""
+                SELECT
+                    COUNT(*) AS total,
+                    COUNT(*) FILTER (WHERE t.fulfilment_mode = 'DELIVERY') AS delivery,
+                    COUNT(*) FILTER (WHERE t.fulfilment_mode = 'PICKUP') AS pickup,
+                    COUNT(*) FILTER (WHERE t.fulfilment_mode = 'DINE_IN') AS dine_in,
+                    COUNT(*) FILTER (WHERE sc.system_type = 'AGGREGATOR') AS aggregator
+                FROM kitchen.tickets t
+                LEFT JOIN tenant.sales_channels sc
+                    ON sc.tenant_id = t.tenant_id AND sc.code = t.channel_code
+                WHERE t.tenant_id = :tenantId AND t.location_id = :locationId
+                  AND t.status IN (:statuses)
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("statuses", statuses)
+                .query((row, number) -> new TicketCountsRow(
+                        row.getLong("total"),
+                        row.getLong("delivery"),
+                        row.getLong("pickup"),
+                        row.getLong("dine_in"),
+                        row.getLong("aggregator")))
+                .single();
+    }
+
+    /**
+     * A ticket's {@code channel_code} is a free string on the wire (ADR 0036:
+     * {@code tenant.sales_channels.code} is tenant-chosen), not the typed
+     * {@code system_type} a client needs to tell an aggregator ticket from a
+     * direct one — gap map row 2.1's own finding. One batch read over every
+     * distinct code the caller's board page actually carries, rather than one
+     * lookup per ticket.
+     *
+     * @return every code that resolved, absent for a code no longer registered
+     *         (an archived or renamed channel) — the caller renders the raw
+     *         code in that case, the same honest fallback {@code
+     *         kitchen-queue-page.ts} already gives an unresolved station id
+     */
+    public Map<String, String> channelSystemTypes(UUID tenantId, Set<String> channelCodes) {
+        if (channelCodes.isEmpty()) {
+            return Map.of();
+        }
+        return jdbc
+                .sql("""
+                SELECT code, system_type FROM tenant.sales_channels
+                WHERE tenant_id = :tenantId AND code IN (:codes)
+                """)
+                .param("tenantId", tenantId)
+                .param("codes", channelCodes)
+                .query((row, number) -> Map.entry(row.getString("code"), row.getString("system_type")))
+                .list()
+                .stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    /**
      * Claims tickets whose scheduled release has come due.
      *
      * <p>{@code FOR UPDATE SKIP LOCKED}, like every other durable timer in this
@@ -887,6 +954,9 @@ public class JdbcKitchenStore {
             int routingVersion,
             int version,
             Instant createdAt) {}
+
+    /** {@link #counts}'s own aggregate — gap map row 2.1's exact, server-side tab badges. */
+    public record TicketCountsRow(long total, long delivery, long pickup, long dineIn, long aggregator) {}
 
     public record TicketItemRow(
             UUID id,
