@@ -198,7 +198,7 @@ class DayCloseTenderFactTests {
 
         close.close(TENANT, DAY);
 
-        List<JdbcReportingStore.PaymentMixRow> mix = store.readPaymentMix(TENANT, DAY, DAY, List.of());
+        List<JdbcReportingStore.PaymentMixRow> mix = store.readPaymentMix(TENANT, DAY, DAY, List.of(), List.of());
 
         assertThat(mix).hasSize(1);
         assertThat(mix.getFirst().amountSom())
@@ -219,7 +219,7 @@ class DayCloseTenderFactTests {
 
         close.close(TENANT, DAY);
 
-        var result = queries.paymentMix(TENANT, DAY, DAY, List.of());
+        var result = queries.paymentMix(TENANT, DAY, DAY, List.of(), List.of());
 
         assertThat(result.overview()).hasSize(2);
         assertThat(result.byLocation()).hasSize(2);
@@ -238,6 +238,44 @@ class DayCloseTenderFactTests {
         assertThat(result.byLocation())
                 .allSatisfy(row -> assertThat(row.locationId()).isEqualTo(LOCATION));
         assertThat(result.provenance().metricVersions()).contains("payment_mix.amount.v1");
+    }
+
+    @Test
+    @DisplayName("P39 fix4: paymentMix's paymentMethodCodes narrows the read to the requested methods,"
+            + " end to end through JdbcReportingStore and ReportQueryService")
+    void paymentMixNarrowsToTheRequestedPaymentMethodCodes() {
+        UUID orderId = insertOrder("MIX-FILTER", 100_000);
+        insertSettlement(
+                orderId,
+                100_000,
+                tender(1, CASH_METHOD, 70_000, 0, "SETTLED"),
+                tender(2, CARD_METHOD, 30_000, 0, "SETTLED"));
+
+        close.close(TENANT, DAY);
+
+        List<JdbcReportingStore.PaymentMixRow> unfiltered =
+                store.readPaymentMix(TENANT, DAY, DAY, List.of(), List.of());
+        assertThat(unfiltered)
+                .as("sanity check: both methods are present before any filter is applied")
+                .hasSize(2);
+
+        List<JdbcReportingStore.PaymentMixRow> cashOnly =
+                store.readPaymentMix(TENANT, DAY, DAY, List.of(), List.of("CASH"));
+        assertThat(cashOnly)
+                .as("a manager reconciling cash must see only CASH rows, not the full mix")
+                .hasSize(1);
+        assertThat(cashOnly.getFirst().paymentMethodCode()).isEqualTo("CASH");
+        assertThat(cashOnly.getFirst().amountSom()).isEqualTo(70_000L);
+
+        var filteredResult = queries.paymentMix(TENANT, DAY, DAY, List.of(), List.of("CASH"));
+        assertThat(filteredResult.overview())
+                .as("ReportQueryService.paymentMix must propagate the same filter to its overview")
+                .hasSize(1);
+        assertThat(filteredResult.overview().getFirst().paymentMethodCode()).isEqualTo("CASH");
+        assertThat(filteredResult.byLocation())
+                .as("and to its byLocation split")
+                .hasSize(1);
+        assertThat(filteredResult.byLocation().getFirst().paymentMethodCode()).isEqualTo("CASH");
     }
 
     // ---------------------------------------------------------------- setup

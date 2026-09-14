@@ -59037,6 +59037,16 @@
             },
             "type" : "array"
           }
+        }, {
+          "in" : "query",
+          "name" : "paymentMethodCode",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
         } ],
         "responses" : {
           "200" : {

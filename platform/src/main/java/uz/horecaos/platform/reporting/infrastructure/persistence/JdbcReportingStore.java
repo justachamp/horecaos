@@ -873,17 +873,26 @@ public class JdbcReportingStore {
      * payment_mix.amount.v1} declares (P39): a {@code PLANNED} or {@code
      * FAILED} tender never collected money and would overstate takings if
      * counted here.
+     *
+     * <p>{@code paymentMethodCodes} narrows to those {@code
+     * payments.payment_methods.code} values only — empty means every method,
+     * matching {@code locationIds}' own empty-means-all convention below.
      */
-    public List<PaymentMixRow> readPaymentMix(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+    public List<PaymentMixRow> readPaymentMix(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<String> paymentMethodCodes) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
         params.put("from", from);
         params.put("to", to);
 
-        String filter = "";
+        StringBuilder filter = new StringBuilder();
         if (!locationIds.isEmpty()) {
-            filter = " AND location_id IN (:locations)";
+            filter.append(" AND location_id IN (:locations)");
             params.put("locations", locationIds);
+        }
+        if (!paymentMethodCodes.isEmpty()) {
+            filter.append(" AND payment_method_code IN (:methods)");
+            params.put("methods", paymentMethodCodes);
         }
 
         return jdbc.sql("""
