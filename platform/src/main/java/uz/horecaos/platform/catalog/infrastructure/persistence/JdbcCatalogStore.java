@@ -1937,6 +1937,115 @@ public class JdbcCatalogStore {
                 .list());
     }
 
+    /**
+     * The control-plane twin of {@link #channelExcludedVariantIds}: the same
+     * question, asked by channel id rather than channel code, because an
+     * authoring caller already holds the id (it came from the sales-channel
+     * list) and resolving it to a code first would be an extra round trip for
+     * nothing this query needs. No join to {@code tenant.sales_channels} is
+     * required — {@code channel_offering_exclusions.channel_id} already names
+     * the channel directly.
+     *
+     * @see #excludeFromChannel wave P45's writer
+     */
+    public Set<UUID> channelExclusionsAtLocation(UUID tenantId, UUID brandId, UUID channelId, UUID locationId) {
+        return new java.util.HashSet<>(jdbc.sql("""
+                SELECT variant_id
+                FROM catalog.channel_offering_exclusions
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND channel_id = :channelId
+                  AND (location_id IS NULL OR location_id = :locationId)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("channelId", channelId)
+                .param("locationId", locationId)
+                .query(UUID.class)
+                .list());
+    }
+
+    /**
+     * Hides a variant from a channel (ADR 0036 Layer B, wave P45) — the write
+     * half {@link #channelExcludedVariantIds} has read since V0175, with no
+     * writer anywhere until this wave: an operator could not say "this dish
+     * is not on Uzum Tezkor" from any screen.
+     *
+     * <p>{@code locationId} null excludes the variant brand-wide, across every
+     * location on this channel; naming one narrows the exclusion to that
+     * branch only — the same two independent states the reader's own Javadoc
+     * describes. {@code ON CONFLICT DO NOTHING} against whichever of the
+     * table's two partial unique indexes this call's nullability of {@code
+     * locationId} targets ({@code ux_channel_exclusion_brand_wide} or {@code
+     * ux_channel_exclusion_at_location}) makes re-excluding an already-hidden
+     * variant idempotent rather than a duplicate row or a refusal — two
+     * separate {@code INSERT} statements because Postgres requires the
+     * conflict target's predicate to name one specific partial index, not a
+     * column list that could match either.
+     *
+     * @return whether this call created the row (false when it was already excluded)
+     */
+    public boolean excludeFromChannel(
+            UUID tenantId, UUID brandId, UUID channelId, UUID variantId, @Nullable UUID locationId, String reasonCode) {
+        if (locationId == null) {
+            return jdbc.sql("""
+                            INSERT INTO catalog.channel_offering_exclusions (
+                                id, tenant_id, brand_id, location_id, variant_id, channel_id, reason_code)
+                            VALUES (:id, :tenantId, :brandId, NULL, :variantId, :channelId, :reasonCode)
+                            ON CONFLICT (channel_id, variant_id) WHERE location_id IS NULL DO NOTHING
+                            """)
+                            .param("id", Ids.newId())
+                            .param("tenantId", tenantId)
+                            .param("brandId", brandId)
+                            .param("variantId", variantId)
+                            .param("channelId", channelId)
+                            .param("reasonCode", reasonCode)
+                            .update()
+                    == 1;
+        }
+        return jdbc.sql("""
+                        INSERT INTO catalog.channel_offering_exclusions (
+                            id, tenant_id, brand_id, location_id, variant_id, channel_id, reason_code)
+                        VALUES (:id, :tenantId, :brandId, :locationId, :variantId, :channelId, :reasonCode)
+                        ON CONFLICT (channel_id, variant_id, location_id) WHERE location_id IS NOT NULL DO NOTHING
+                        """)
+                        .param("id", Ids.newId())
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
+                        .param("locationId", locationId)
+                        .param("variantId", variantId)
+                        .param("channelId", channelId)
+                        .param("reasonCode", reasonCode)
+                        .update()
+                == 1;
+    }
+
+    /**
+     * Reveals a variant back onto a channel — {@link #excludeFromChannel}'s
+     * exact inverse: deletes the exclusion row naming this {@code locationId}
+     * (null for the brand-wide row), leaving any other exclusion — a
+     * different location's, or the brand-wide one when this call names a
+     * location — untouched. {@code IS NOT DISTINCT FROM} rather than {@code =}
+     * because {@code locationId} is itself the null-or-not fork here, the same
+     * reason {@code JdbcCustomerStore.findLinkedAccount} uses it for a
+     * nullable partition.
+     *
+     * @return whether a row was actually removed
+     */
+    public boolean includeInChannel(
+            UUID tenantId, UUID brandId, UUID channelId, UUID variantId, @Nullable UUID locationId) {
+        return jdbc.sql("""
+                        DELETE FROM catalog.channel_offering_exclusions
+                        WHERE tenant_id = :tenantId AND brand_id = :brandId AND channel_id = :channelId
+                          AND variant_id = :variantId AND location_id IS NOT DISTINCT FROM :locationId
+                        """)
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
+                        .param("channelId", channelId)
+                        .param("variantId", variantId)
+                        .param("locationId", locationId)
+                        .update()
+                > 0;
+    }
+
     /** Reads a published snapshot. The storefront's only source. */
     public List<PublicationItem> publicationItems(UUID publicationId, EntityType entityType) {
         return jdbc.sql("""

@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
@@ -58,6 +59,15 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 @RequestMapping("/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog")
 @Tag(name = "Catalog authoring", description = "Draft menu authoring; never visible to customers")
 public class CatalogAuthoringController {
+
+    /**
+     * The exclusion reason a caller did not name one for — {@code
+     * reason_code} is {@code NOT NULL varchar(48)} and every write here
+     * accepts an enumerated code (uppercase and underscores, never free
+     * text an operator typed, per ADR 0029), so a client that only wants
+     * "hide this" needs something to send.
+     */
+    private static final String DEFAULT_EXCLUSION_REASON = "OPERATOR_DISABLED";
 
     private final CatalogAuthoringService authoring;
     private final CurrentActor currentActor;
@@ -637,6 +647,80 @@ public class CatalogAuthoringController {
         return ResponseEntity.ok(new BulkOfferingStatusResponse(updated));
     }
 
+    @PutMapping("/channels/{channelId}/exclusions/variants/{variantId}")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Sets whether a variant is offered on one sales channel",
+            description = "ADR 0036 Layer B (gap map row 4.4b): catalog.channel_offering_exclusions "
+                    + "had a reader and no writer until this wave, so an operator could not say "
+                    + "\"this dish is not on Uzum Tezkor\" from any screen. offered=false inserts a "
+                    + "sparse exclusion row (idempotent — hiding an already-hidden variant changes "
+                    + "nothing); offered=true deletes it. request.locationId narrows the exclusion to "
+                    + "one branch; omitted, it applies brand-wide across every location on this "
+                    + "channel. Deliberately separate from price_on_channel "
+                    + "(PriceAuthoringController.assignToChannel) — catalog.md's own warning against "
+                    + "the Delever conflation of availability and price behind one toggle.")
+    public ResponseEntity<Void> setChannelOffering(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID channelId,
+            @PathVariable UUID variantId,
+            @Valid @RequestBody SetChannelOfferingRequest request) {
+        authoring.setChannelOffering(
+                tenantId,
+                brandId,
+                channelId,
+                variantId,
+                request.locationId(),
+                request.offered(),
+                request.reasonCode() == null ? DEFAULT_EXCLUSION_REASON : request.reasonCode(),
+                currentActor.get().subject());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/channels/{channelId}/exclusions/bulk")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Sets many variants' channel offering in one gesture",
+            description = "The mass-enable an aggregator onboarding needs (gap map row 4.4b): "
+                    + "enabling 600 items one at a time is what makes an aggregator launch take a "
+                    + "week. Same shape as bulk-offering-status: capped at 200 items per call, and "
+                    + "one changed count rather than one outcome per item, because every item in the "
+                    + "batch shares the same target state.")
+    public ResponseEntity<BulkChannelOfferingResponse> bulkSetChannelOffering(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID channelId,
+            @Valid @RequestBody BulkChannelOfferingRequest request) {
+        int changed = authoring.bulkSetChannelOffering(
+                tenantId,
+                brandId,
+                channelId,
+                request.variantIds(),
+                request.locationId(),
+                request.offered(),
+                request.reasonCode() == null ? DEFAULT_EXCLUSION_REASON : request.reasonCode(),
+                currentActor.get().subject());
+        return ResponseEntity.ok(new BulkChannelOfferingResponse(changed));
+    }
+
+    @GetMapping("/channels/{channelId}/exclusions")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "The variants currently hidden from one channel at one location",
+            description = "ADR 0036 Layer B's read (gap map row 4.4b): catalog.channel_offering_exclusions, "
+                    + "joined the same way the live storefront path already reads it "
+                    + "(JdbcCatalogStore.channelExcludedVariantIds) — a brand-wide exclusion (no "
+                    + "locationId on the row) applies here too, not only a row naming this location.")
+    public ChannelExclusionsResponse channelExclusions(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID channelId,
+            @RequestParam UUID locationId) {
+        return new ChannelExclusionsResponse(
+                List.copyOf(authoring.channelExclusionsAtLocation(tenantId, brandId, channelId, locationId)));
+    }
+
     /**
      * Actor attribution for a classification (ADR 0038).
      *
@@ -901,6 +985,30 @@ public class CatalogAuthoringController {
 
     /** How many offerings a {@link BulkOfferingStatusRequest} actually changed. */
     public record BulkOfferingStatusResponse(int updatedCount) {}
+
+    /**
+     * ADR 0036 Layer B's single-item write (wave P45). {@code locationId} null
+     * means brand-wide; {@code reasonCode} is a short enumerated code — never
+     * free text an operator typed, per ADR 0029 — and defaults server-side
+     * when the caller omits it.
+     */
+    public record SetChannelOfferingRequest(
+            boolean offered,
+            @Nullable UUID locationId,
+            @Pattern(regexp = "^[A-Z_]{1,48}$") @Nullable String reasonCode) {}
+
+    /** The mass-enable/mass-disable gesture (gap map row 4.4b) — at least one variant, at most one page of the matrix. */
+    public record BulkChannelOfferingRequest(
+            @NotEmpty @Size(max = 200) List<UUID> variantIds,
+            boolean offered,
+            @Nullable UUID locationId,
+            @Pattern(regexp = "^[A-Z_]{1,48}$") @Nullable String reasonCode) {}
+
+    /** How many rows {@link #bulkSetChannelOffering} actually changed. */
+    public record BulkChannelOfferingResponse(int changedCount) {}
+
+    /** ADR 0036 Layer B's read: which variants are currently hidden from one channel at one location. */
+    public record ChannelExclusionsResponse(List<UUID> excludedVariantIds) {}
 
     public record IdResponse(UUID id) {}
 
