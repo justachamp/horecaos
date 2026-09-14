@@ -30,11 +30,11 @@ re-reading the evidence.
 
 | | BUILT | PARTIAL | NOT BUILT | BLOCKED | Total |
 |---|---|---|---|---|---|
-| **P** — pilot | 64 | 64 | 22 | 1 | **151** |
+| **P** — pilot | 65 | 63 | 22 | 1 | **151** |
 | **2** — parity | 30 | 38 | 29 | 3 | **100** |
 | **3** — tail | 6 | 11 | 11 | 2 | **30** |
 | **?** — no IA row | 1 | 2 | 4 | 0 | **7** |
-| **Total** | **101** | **115** | **66** | **6** | **288** |
+| **Total** | **102** | **114** | **66** | **6** | **288** |
 
 **Re-audited 2026-09-13 after batches 1 and 2 merged; 46 rows changed status.** (27 waves,
 main at `99f4af70` — see the wave index for which.)
@@ -63,8 +63,24 @@ PART B's deferred table this round: ADR 0097's still-unconfigured sending provid
 *owner*-invitation email, not the staff-invite flow `S01` built, which hands the operator a
 copyable one-time link instead of sending anything.)
 
-101 rows of 288 are finished. The pilot tier alone carries 86 rows that are neither
-built nor blocked, and **64 of them are PARTIAL** — a real screen against a real endpoint
+**Re-audited 2026-09-14 after `fix4-settings-marketing` and `fix4-staff-iam` merged; 1 row
+changed status.** (`wave138-integration` at `8483ef25` — `c3037246` merges
+`fix4-settings-marketing`, `8483ef25` merges `fix4-staff-iam` — merged into this branch at
+`48f21987`. Re-checked only the rows those two branches could move under THE RULE: `9.1a`
+now moves PARTIAL → BUILT, matching `S01`'s original claim — `staff-page.ts`'s resend branch
+captures `resendStaffInvitation`'s response and reopens the invite dialog to show the fresh
+link, tested in both `staff-page.spec.ts` and `staff-invite-dialog.spec.ts`'s `resent` input,
+closing the one gap that held it at PARTIAL. `6.4`'s note is corrected, not its status:
+`CampaignScheduledSendScheduler.runOnce` now disarms a due-but-unwired campaign after one
+refusal (`clearFailedSchedule`, proven by a test that a second sweep pass no longer re-selects
+it) instead of retrying forever — the row stays PARTIAL because no console screen surfaces
+`haltedReason` yet. The brand-scope isolation fixes in `LoyaltyPolicyAuthoringService`,
+`AttributionLinkService` and `ServiceScheduleService.bind()` are security/correctness fixes on
+already-wired features — none of `6.3`, `6.4b`, `6.6a` or `10.2c`'s notes named that gap, so
+none of those rows change.)
+
+102 rows of 288 are finished. The pilot tier alone carries 85 rows that are neither
+built nor blocked, and **63 of them are PARTIAL** — a real screen against a real endpoint
 with one named capability missing. That ratio is still the single most useful fact in this
 document: the pilot is not a greenfield build, it is a finishing job, and most of the
 remaining finishing is frontend wiring over endpoints that already answer — the same
@@ -324,7 +340,7 @@ cannot do today, not a restatement of the row title.
 | `6.3` | Loyalty — accrual rate, redemption cap, point expiry | 3 | PARTIAL | `expiryWarningDays` now fires a real pre-expiry warning (`LoyaltyMaintenanceService.warnExpiringLots`, logged until ADR 0020's template exists) before `LoyaltySweeper.expireLots` destroys the lot, and a LOCATION/CHANNEL accrual rule with a bad `scopeId` is refused (422) instead of silently falling back to the brand rule. Deposit accounts and POS balance sync remain not built (out of this wave's scope; see PART B `6.3a`/`6.3b`). | M | — | T18 |  |
 | `6.3a` | Loyalty — deposit accounts (customer stored value) | 3 | BLOCKED | An operator cannot top up, refund or spend a customer cash balance, and deposit is not selectable as a payment method on an order — the Депозит half of the Delever loyalty pair simply does not exist. | XL | A Central Bank of Uzbekistan e-money authorisation (or the owner's decision to hold funds under a tenant's own licence). ADR 0046 §'What would bring stored value back' requires a new ADR, not an implementation task. | deferred |  |
 | `6.3b` | Loyalty — POS balance sync | 3 | NOT BUILT | A tenant whose till also holds bonus balances runs two ledgers: points earned or spent at the POS terminal never reach the platform, and a platform redemption is invisible to the till, so a cashier and the app disagree about what a customer has. | XL | No ADR covers which side owns the balance; each POS vendor (iiko, R-Keeper) needs its own capability adapter. | deferred |  |
-| `6.4` | Campaigns — lifecycle, audience targeting, suppression | 2 | PARTIAL | `isWired` now gates the channel picker and every transition into SENDING (a 422 rather than a silent stall); `APPROVED → SCHEDULED → SENDING` is writable and scheduler-driven (`CampaignScheduledSendScheduler`); `POST /suppressions` and `getAudience`/`redefineAudience` now have real console callers. A scheduled campaign whose channel is still unwired at its due moment is refused and logged by the sweep but stays `SCHEDULED` — the sweep retries it every ~15s tick with no terminal state, rather than failing once (verified in `CampaignScheduledSendScheduler.runOnce`; a fix exists on an unmerged branch). Campaign history/statistics view and the audience-snapshot CSV export UI remain unbuilt (not named in this wave's own brief). | M | — | T18 |  |
+| `6.4` | Campaigns — lifecycle, audience targeting, suppression | 2 | PARTIAL | `isWired` now gates the channel picker and every transition into SENDING (a 422 rather than a silent stall); `APPROVED → SCHEDULED → SENDING` is writable and scheduler-driven (`CampaignScheduledSendScheduler`); `POST /suppressions` and `getAudience`/`redefineAudience` now have real console callers. A scheduled campaign whose channel is still unwired at its due moment is disarmed after one refusal, not retried forever (fix4: `runOnce`'s `catch (ApiException)` branch clears `scheduled_at` and records `halted_reason` via `clearFailedSchedule` — proven by a test that shows a second sweep pass no longer re-selects it); status stays `SCHEDULED` with no `scheduledAt` rather than a new terminal state, and no console screen surfaces `haltedReason` to the operator yet. Campaign history/statistics view and the audience-snapshot CSV export UI remain unbuilt (not named in this wave's own brief). | M | — | T18 |  |
 | `6.4a` | Campaigns — SMS, email and push delivery channels | 2 | NOT BUILT | A marketer choosing SMS, email or push gets a campaign that drafts, estimates and passes approval and then cannot launch; the IA row's push cover (3:1, scheduled send, recipient and read counts) and SMS per-recipient delivery receipts have nowhere to come from. | L | A real SMS gateway contract — integration/camel/notification/SmsGatewayAdapter.java is deliberately generic because 'no SMS contract exists yet'; email and push have no provider named at all. | deferred |  |
 | `6.4b` | Campaigns — couriers as a separate SMS audience | 2 | PARTIAL | A dispatcher can now draft and target a courier SMS broadcast (`marketing.courier_broadcasts`, V0307) — every active courier or one group — from the console, with a real recipient count resolved at send. Actual delivery is refused visibly: no ADR 0020 SMS adapter exists anywhere in this build (`isWired("SMS")` is false everywhere), a platform-wide gap this wave made visible rather than caused. | M | — | T18 |  |
 | `6.5` | Automations — birthday, cashback change, late-order apology, inactivity/abandonment triggers | 2 | NOT BUILT | Nothing sends without a human. A marketer can hand-build a BIRTHDAY_WITHIN_DAYS audience (marketing/domain/PredicateType.java:53) and launch a manual campaign each morning, but birthdays, cashback accrual/debit messages, the late-order apology with its minted code, and inactivity or cart-abandonment follow-ups (with cancellation when the action completes) never fire on their own. | XL | — | deferred |  |
@@ -400,12 +416,12 @@ cannot do today, not a restatement of the row title.
 
 ## §9 — Staff: grants, roles, telegram links, shifts
 
-20 rows — 7 built · 8 partial · 5 not built
+20 rows — 8 built · 7 partial · 5 not built
 
 | # | Row | Tier | Status | What is missing | Size | Blocked by | Wave | Reader said |
 |---|---|---|---|---|---|---|---|---|
 | `9.1 †` | Users & roles — accounts and role assignment (grants) | P | PARTIAL | Capability search and the dead holder-count button are now real, so a manager can find a grant by name or role — but the TENANT-scope `IAM_GRANT_MANAGE` limit that keeps this screen unreachable by a branch manager is only raised as a proposal in ADR 0103, not fixed: the spec's «Chilonzor manager sees Chilonzor's team» view is still unreachable by the person it was designed for. | S | — | P30 | BUILT |
-| `9.1a` | Users & roles — accounts: invite a staff member (Пригласить) | P | PARTIAL | Invite is built end to end: `POST .../staff/invitations` creates a Keycloak account (phone-first, `StaffAccounts#create`), links the tenant, grants the chosen job, and returns a one-time link the console shows with a copy button — no email/SMS sending required, sidestepping ADR 0097's still-unconfigured sending provider entirely. Duplicate phone is refused (409). Resend and revoke are also wired (`POST .../resend`, `DELETE .../{id}`) and the «Приглашён» pill shows on `staff-page.ts`. Held at PARTIAL: resend mints a fresh one-time link, but the console discards the response without displaying it (`staff-page.ts`'s `resendInvite` branch closes the dialog and reloads) — an operator has no way to hand the resent link to the candidate, and no test exercises the resend button at all (a fix exists on an unmerged branch, `fix4-staff-iam`). | L | — | S01 |  |
+| `9.1a` | Users & roles — accounts: invite a staff member (Пригласить) | P | BUILT | `POST .../staff/invitations` creates a Keycloak account (phone-first, `StaffAccounts#create`), links the tenant, grants the chosen job, and returns a one-time link the console shows with a copy button — no email/SMS sending required, sidestepping ADR 0097's still-unconfigured sending provider entirely. Duplicate phone is refused (409, tenant-scoped — fix4). Resend now captures its own response and reopens the invite dialog to show the fresh link (`staff-page.ts`'s `resentLink`, tested in `staff-page.spec.ts`'s "shows the fresh one-time link a resend returns" and `staff-invite-dialog.spec.ts`'s `resent` input) — before fix4 the link was discarded and never shown. Revoke and the outstanding list are wired too, each with its own capability-refusal HTTP test; the «Приглашён» pill shows on `staff-page.ts`. | L | — | S01 |  |
 | `9.1b` | Users & roles — capability grid, capability search, role templates (Должности) | P | PARTIAL | An owner cannot author a job of her own, cannot tick or untick a single permission, and cannot search the permission list — she can only read what the eight fixed jobs happen to carry and pick the nearest one. | L | ADR 0025 closed input: «no tenant-defined roles in v1» — reopening that decision is the trigger for the permission grid. | deferred |  |
 | `9.1c †` | Users & roles — permission-gated navigation | P | BUILT | — | M | — | P30 | NOT BUILT |
 | `9.1d †` | Users & roles — locked-by-plan vs denied-by-permission, with inline upsell | P | BUILT | — | M | — | P30 | NOT BUILT |
