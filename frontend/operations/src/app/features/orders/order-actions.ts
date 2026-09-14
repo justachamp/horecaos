@@ -14,8 +14,22 @@ import { MessageKey } from '../../core/i18n/messages.en';
  * prefers `COMPLETE` and hides the redundant `ADVANCE` entry; `order-queue.ts`
  * does not know about `COMPLETE` yet and keeps using `ADVANCE`, which the
  * server still emits for exactly that reason.
+ *
+ * `AMEND` (ADR 0039/0105/0113, wave P10, gap map `1.2h`/`1.1e`) opens the
+ * amendment submenu (orders.md §4.4). `OrderActionsPolicy.AMEND_EMISSION_ENABLED`
+ * held its emission back until this wave gave it a translated label here and
+ * a real handler; `order-detail-pane.ts`'s `onActionClick` opens
+ * `q-order-amend-menu`, and `order-queue.ts`'s opens the order itself, since
+ * the menu's five dialogs live on the detail pane, not the row.
  */
-export const ORDER_ACTION_CODES = ['APPROVE', 'REJECT', 'ADVANCE', 'CANCEL', 'COMPLETE'] as const;
+export const ORDER_ACTION_CODES = [
+  'APPROVE',
+  'REJECT',
+  'ADVANCE',
+  'CANCEL',
+  'COMPLETE',
+  'AMEND',
+] as const;
 export type OrderActionCode = (typeof ORDER_ACTION_CODES)[number];
 
 /**
@@ -87,6 +101,8 @@ export function actionLabel(
       return fulfillmentMode === 'DELIVERY'
         ? translate('orders.action.advance.completedDelivery')
         : translate('orders.action.advance.completedPickup');
+    case 'AMEND':
+      return translate('orders.action.amend');
     case 'ADVANCE': {
       const target = action.targetStatus ?? '';
       if (target === 'COMPLETED') {

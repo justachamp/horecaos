@@ -194,6 +194,7 @@ export const messagesEn = {
   'orders.action.reject': 'Reject',
   'orders.action.cancel': 'Cancel',
   'orders.action.complete': 'Complete',
+  'orders.action.amend': 'Amend',
   'orders.action.advance.PREPARING': 'Send to kitchen',
   'orders.action.advance.READY': 'Ready',
   'orders.action.advance.FULFILLING': 'Send out for delivery',
@@ -220,6 +221,8 @@ export const messagesEn = {
   'orders.dialog.reject.note.label': 'Note',
   'orders.dialog.reject.note.requiredLabel': 'Note (required for this reason)',
   'orders.dialog.reject.note.missing': 'This reason needs a short note',
+  'orders.dialog.note.save': 'Save',
+  'orders.dialog.amendMenu.title': 'What would you like to change?',
 
   'orders.dialog.outcome.stockDisposition.RELEASE': 'Reservation released',
   'orders.dialog.outcome.stockDisposition.RETURN_TO_STOCK': 'Returned to stock',
@@ -338,6 +341,29 @@ export const messagesEn = {
   'orders.detail.details.callback.resolved': 'Resolved at {at}',
   'orders.detail.details.cashTendered': 'Cash tendered',
   'orders.detail.details.changeDue': 'Change due',
+
+  'orders.detail.section.comments': 'Comments',
+  'orders.detail.comments.privacyNotice':
+    'The customer’s own words are personal data and are never shown unrevealed. Ours are not, and render in full.',
+  'orders.detail.comments.customerToOrder': 'Customer’s note to the order',
+  'orders.detail.comments.customerToOrder.seeAddress': 'see “Address and delivery”',
+  'orders.detail.comments.customerToLine': 'Customer’s note per item',
+  'orders.detail.comments.customerToLine.seeLines': 'see the note icon beside each item, above',
+  'orders.detail.comments.courier': 'Note to the courier',
+  'orders.detail.comments.courier.none': 'None yet — see history',
+  'orders.detail.comments.internal': 'Internal note',
+  'orders.detail.comments.internal.none': 'None yet — see history',
+  'orders.detail.comments.edit': 'Edit',
+  'orders.detail.comments.add': 'Add',
+  'orders.detail.comments.callback.request': 'Request a callback',
+  'orders.detail.comments.callback.clear': 'Clear the callback',
+  'orders.detail.comments.history.open': 'Amendment history',
+  'orders.detail.comments.history.hide': 'Hide history',
+  'orders.detail.comments.history.error': 'The amendment history could not be loaded',
+  'orders.detail.comments.history.empty': 'No amendments yet',
+  'orders.amendment.warning.CASH_TENDERED_INSUFFICIENT':
+    'Change due is now short of the total — the customer can hand over more.',
+  'orders.amendment.warning.acknowledge': 'Got it',
 
   'orders.detail.section.revisions': 'Revisions ({count})',
   'orders.detail.revisions.show': 'Show revisions',
@@ -982,10 +1008,12 @@ export const messagesEn = {
   'settings.notifications.tab.templates': 'Templates',
   'settings.notifications.tab.routing': 'Routing',
   'settings.notifications.automation.title': 'Automation',
-  'settings.notifications.field.paymentLinkAutoSend': 'Send the payment link to the customer automatically',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Send the payment link to the customer automatically',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Not yet enforced: no send trigger reads this switch yet, so turning it on records the choice without changing behaviour.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Notify on aggregator shift open/close',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Notify on aggregator shift open/close',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Not yet enforced: no aggregator-shift event exists in the platform yet to trigger this.',
   'settings.notifications.create.action': 'New template',
@@ -1031,7 +1059,8 @@ export const messagesEn = {
   'settings.notifications.editor.subject': 'Subject',
   'settings.notifications.editor.body': 'Text',
   'settings.notifications.editor.variables': 'Insert a variable',
-  'settings.notifications.editor.variables.empty': 'No merge variables are offered for this notification class.',
+  'settings.notifications.editor.variables.empty':
+    'No merge variables are offered for this notification class.',
   'settings.notifications.editor.preview': 'How the customer sees it',
   'settings.notifications.editor.save': 'Save draft',
   'settings.notifications.editor.saving': 'Saving…',
@@ -1050,15 +1079,18 @@ export const messagesEn = {
   'settings.notifications.testSend.result.ACCEPTED': 'Accepted by the provider.',
   'settings.notifications.testSend.result.REJECTED': 'Refused by the provider.',
   'settings.notifications.testSend.result.RETRYABLE': 'A transport error — try again.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Uncertain — the provider may already have sent it.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Uncertain — the provider may already have sent it.',
   'settings.notifications.activate.confirm.title': 'Activate this version?',
-  'settings.notifications.activate.confirm.body': 'Every message using this template will use this wording from now on.',
+  'settings.notifications.activate.confirm.body':
+    'Every message using this template will use this wording from now on.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'This version is still {state} with its SMS gateway. Activating it will not make it send until that changes.',
   'settings.notifications.activate.confirm.confirm': 'Activate',
   'settings.notifications.routing.lead':
     'Which of this brand’s bound Telegram chats hear about which events, and their forum topic.',
-  'settings.notifications.routing.empty': 'No chat is bound yet. Use "/link <code>" in a Telegram group to bind one.',
+  'settings.notifications.routing.empty':
+    'No chat is bound yet. Use "/link <code>" in a Telegram group to bind one.',
   'settings.notifications.routing.column.chat': 'Chat',
   'settings.notifications.routing.column.topic': 'Topic',
   'settings.notifications.routing.column.status': 'Status',
@@ -1072,7 +1104,8 @@ export const messagesEn = {
   'settings.notifications.routing.action.editTopic': 'Change topic',
   'settings.notifications.routing.action.unbind': 'Unbind',
   'settings.notifications.routing.unbind.confirm.title': 'Unbind this chat?',
-  'settings.notifications.routing.unbind.confirm.body': 'It stops receiving every event class immediately.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'It stops receiving every event class immediately.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Unbind',
   'settings.notifications.routing.topic.prompt': 'Forum topic id — leave empty for the flat chat',
   'settings.notifications.routing.topic.save': 'Save',

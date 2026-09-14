@@ -182,6 +182,7 @@ export const messagesRu: MessageCatalogue = {
   'orders.action.reject': 'Отклонить',
   'orders.action.cancel': 'Отменить',
   'orders.action.complete': 'Завершить',
+  'orders.action.amend': 'Изменить',
   'orders.action.advance.PREPARING': 'На кухню',
   'orders.action.advance.READY': 'Готов',
   'orders.action.advance.FULFILLING': 'На доставку',
@@ -208,6 +209,8 @@ export const messagesRu: MessageCatalogue = {
   'orders.dialog.reject.note.label': 'Комментарий',
   'orders.dialog.reject.note.requiredLabel': 'Комментарий (обязателен для этой причины)',
   'orders.dialog.reject.note.missing': 'Для этой причины нужен короткий комментарий',
+  'orders.dialog.note.save': 'Сохранить',
+  'orders.dialog.amendMenu.title': 'Что нужно изменить?',
 
   'orders.dialog.outcome.stockDisposition.RELEASE': 'Резерв освобождён',
   'orders.dialog.outcome.stockDisposition.RETURN_TO_STOCK': 'Возврат на склад',
@@ -324,6 +327,29 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.details.callback.resolved': 'Выполнен в {at}',
   'orders.detail.details.cashTendered': 'Сдача с',
   'orders.detail.details.changeDue': 'Сдача',
+
+  'orders.detail.section.comments': 'Комментарии',
+  'orders.detail.comments.privacyNotice':
+    'Слова клиента — персональные данные и не показываются без раскрытия. Наши слова — нет, и показаны полностью.',
+  'orders.detail.comments.customerToOrder': 'Комментарий клиента к заказу',
+  'orders.detail.comments.customerToOrder.seeAddress': 'см. раздел «Адрес и доставка»',
+  'orders.detail.comments.customerToLine': 'Комментарий клиента к позиции',
+  'orders.detail.comments.customerToLine.seeLines': 'см. значок комментария у позиции выше',
+  'orders.detail.comments.courier': 'Комментарий курьеру',
+  'orders.detail.comments.courier.none': 'Пока нет — см. историю',
+  'orders.detail.comments.internal': 'Внутренняя заметка',
+  'orders.detail.comments.internal.none': 'Пока нет — см. историю',
+  'orders.detail.comments.edit': 'Изменить',
+  'orders.detail.comments.add': 'Добавить',
+  'orders.detail.comments.callback.request': 'Отметить «Требуется звонок»',
+  'orders.detail.comments.callback.clear': 'Снять «Требуется звонок»',
+  'orders.detail.comments.history.open': 'История изменений',
+  'orders.detail.comments.history.hide': 'Скрыть историю',
+  'orders.detail.comments.history.error': 'Не удалось загрузить историю изменений',
+  'orders.detail.comments.history.empty': 'Пока нет изменений',
+  'orders.amendment.warning.CASH_TENDERED_INSUFFICIENT':
+    '«Сдача с» теперь меньше итоговой суммы — клиент может доплатить.',
+  'orders.amendment.warning.acknowledge': 'Понятно',
 
   'orders.detail.section.revisions': 'Ревизии ({count})',
   'orders.detail.revisions.show': 'Показать ревизии',
@@ -955,10 +981,12 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.tab.templates': 'Шаблоны',
   'settings.notifications.tab.routing': 'Маршрутизация',
   'settings.notifications.automation.title': 'Автоматизация',
-  'settings.notifications.field.paymentLinkAutoSend': 'Отправлять клиенту ссылку на оплату автоматически',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Отправлять клиенту ссылку на оплату автоматически',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Пока не действует: ни один сценарий ещё не читает этот переключатель, поэтому включение только сохраняет выбор.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Уведомлять об открытии/закрытии смены агрегатора',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Уведомлять об открытии/закрытии смены агрегатора',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Пока не действует: в платформе ещё нет самого события смены агрегатора, которое запускало бы это уведомление.',
   'settings.notifications.create.action': 'Новый шаблон',
@@ -1004,7 +1032,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.editor.subject': 'Тема',
   'settings.notifications.editor.body': 'Текст',
   'settings.notifications.editor.variables': 'Вставить переменную',
-  'settings.notifications.editor.variables.empty': 'Для этого класса уведомлений переменные не предложены.',
+  'settings.notifications.editor.variables.empty':
+    'Для этого класса уведомлений переменные не предложены.',
   'settings.notifications.editor.preview': 'Как увидит клиент',
   'settings.notifications.editor.save': 'Сохранить черновик',
   'settings.notifications.editor.saving': 'Сохранение…',
@@ -1023,15 +1052,18 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.testSend.result.ACCEPTED': 'Принято провайдером.',
   'settings.notifications.testSend.result.REJECTED': 'Отклонено провайдером.',
   'settings.notifications.testSend.result.RETRYABLE': 'Ошибка передачи — попробуйте ещё раз.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Неопределённо — провайдер, возможно, уже отправил.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Неопределённо — провайдер, возможно, уже отправил.',
   'settings.notifications.activate.confirm.title': 'Активировать эту версию?',
-  'settings.notifications.activate.confirm.body': 'Каждое сообщение по этому шаблону будет использовать этот текст.',
+  'settings.notifications.activate.confirm.body':
+    'Каждое сообщение по этому шаблону будет использовать этот текст.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'Эта версия пока «{state}» у SMS-шлюза. Активация не заставит её отправляться, пока это не изменится.',
   'settings.notifications.activate.confirm.confirm': 'Активировать',
   'settings.notifications.routing.lead':
     'Какие из привязанных Telegram-чатов этого бренда слышат какие события, и их форум-тема.',
-  'settings.notifications.routing.empty': 'Ни один чат ещё не привязан. Отправьте «/link <код>» в Telegram-группе, чтобы привязать её.',
+  'settings.notifications.routing.empty':
+    'Ни один чат ещё не привязан. Отправьте «/link <код>» в Telegram-группе, чтобы привязать её.',
   'settings.notifications.routing.column.chat': 'Чат',
   'settings.notifications.routing.column.topic': 'Тема',
   'settings.notifications.routing.column.status': 'Статус',
@@ -1045,9 +1077,11 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.routing.action.editTopic': 'Сменить тему',
   'settings.notifications.routing.action.unbind': 'Отвязать',
   'settings.notifications.routing.unbind.confirm.title': 'Отвязать этот чат?',
-  'settings.notifications.routing.unbind.confirm.body': 'Он сразу перестанет получать любые классы событий.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'Он сразу перестанет получать любые классы событий.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Отвязать',
-  'settings.notifications.routing.topic.prompt': 'ID темы форума — оставьте пустым для обычного чата',
+  'settings.notifications.routing.topic.prompt':
+    'ID темы форума — оставьте пустым для обычного чата',
   'settings.notifications.routing.topic.save': 'Сохранить',
 
   // 10.10 Справочные данные

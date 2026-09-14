@@ -478,6 +478,15 @@ export class OrderQueue implements OnInit {
           );
         }
         return;
+      case 'AMEND':
+        // The amendment submenu's five dialogs live on the order detail pane
+        // (wave P10), not the row — the same reason `order-detail-pane.ts`
+        // prefers `COMPLETE` over the generic `ADVANCE` while this list keeps
+        // using the simpler entry. Opening the order is a real, working
+        // action rather than the silent no-op the `default` case below would
+        // otherwise give a code `ORDER_AMEND` already reaches five roles for.
+        this.openOrder(order.orderId);
+        return;
       default:
       // An action code this client does not recognise yet — §4.2 says render
       // it, but there is nothing this client knows how to invoke for it.
