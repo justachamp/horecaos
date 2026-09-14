@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -36,6 +37,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.courier.application.CourierAdjustmentService;
 import uz.horecaos.platform.courier.application.CourierCashService;
 import uz.horecaos.platform.courier.application.CourierEngagementService;
+import uz.horecaos.platform.courier.application.CourierPolicies;
 import uz.horecaos.platform.courier.application.CourierPolicyResolver;
 import uz.horecaos.platform.courier.application.CourierRateCardService;
 import uz.horecaos.platform.courier.application.CourierRosterQueryService;
@@ -58,8 +60,10 @@ import uz.horecaos.platform.courier.domain.PayoutMethod;
 import uz.horecaos.platform.courier.domain.RateCard;
 import uz.horecaos.platform.courier.domain.RateComponent;
 import uz.horecaos.platform.courier.domain.RateComponentType;
+import uz.horecaos.platform.courier.domain.RevealTiming;
 import uz.horecaos.platform.courier.domain.SettlementPeriodStatus;
 import uz.horecaos.platform.courier.domain.ShiftActor;
+import uz.horecaos.platform.courier.domain.ShiftEnforcement;
 import uz.horecaos.platform.courier.domain.VerificationMethod;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierRateCardStore;
@@ -78,6 +82,7 @@ import uz.horecaos.platform.courier.infrastructure.persistence.JdbcPlannedShiftS
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.tenancy.api.PolicyAuthor;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -113,6 +118,7 @@ public class OperationsCourierController {
     private final JdbcCourierRateCardStore rateCardStore;
     private final JdbcCourierShiftStore shiftStore;
     private final CourierPolicyResolver policyResolver;
+    private final PolicyAuthor policyAuthor;
     private final JdbcDeliveryCostStore deliveryCostStore;
     private final PlannedShiftService plannedShifts;
     private final CurrentActor currentActor;
@@ -134,6 +140,7 @@ public class OperationsCourierController {
             JdbcCourierRateCardStore rateCardStore,
             JdbcCourierShiftStore shiftStore,
             CourierPolicyResolver policyResolver,
+            PolicyAuthor policyAuthor,
             JdbcDeliveryCostStore deliveryCostStore,
             PlannedShiftService plannedShifts,
             CurrentActor currentActor) {
@@ -153,6 +160,7 @@ public class OperationsCourierController {
         this.rateCardStore = rateCardStore;
         this.shiftStore = shiftStore;
         this.policyResolver = policyResolver;
+        this.policyAuthor = policyAuthor;
         this.deliveryCostStore = deliveryCostStore;
         this.plannedShifts = plannedShifts;
         this.currentActor = currentActor;
@@ -659,24 +667,56 @@ public class OperationsCourierController {
     // ------------------------------------------------------------------- policy
 
     @GetMapping("/courier-policy")
-    @RequiresCapability(Capability.COURIER_READ)
+    @RequiresCapability(Capability.DELIVERY_POLICY_READ)
     @Operation(
-            summary = "The courier compensation policy in force (IA 3.9)",
+            summary = "The courier compensation policy in force (IA 3.9, settings.md §10.13/§16)",
             description = "Omit brandId/locationId for the tenant-wide resolution; supply either "
-                    + "to see what a specific brand or location actually resolves. Read-only this "
-                    + "wave — couriers.md §16 also names GPS gates, the kitchen-ready-only toggle, "
-                    + "reveal-location timing and the telemetry gate default, none of which any "
-                    + "policy document backs yet.")
+                    + "to see what a specific brand or location actually resolves. Wave P38 gave "
+                    + "this document a writer beside this read (see PUT of the same path) and "
+                    + "five new fields couriers.md §16 always named: the GPS master toggle with "
+                    + "its accept and status-change radii, the kitchen-ready-only gate, when the "
+                    + "customer's exact location is revealed, and the post-delivery payment "
+                    + "check. Courier billing mode stays refused by ADR 0042 and has no field "
+                    + "here; the telemetry collection gate is a separate, PLATFORM_ADMIN-only "
+                    + "ADR 0030 key and is not part of this document.")
     public ResponseEntity<CourierPolicyResponse> courierPolicy(
             @PathVariable UUID tenantId,
             @RequestParam(required = false) UUID brandId,
             @RequestParam(required = false) UUID locationId) {
 
-        ResourceScope scope = locationId != null && brandId != null
+        ResourceScope scope = policyScope(tenantId, brandId, locationId);
+        return ResponseEntity.ok(CourierPolicyResponse.of(policyResolver.resolveWithIdentity(scope)));
+    }
+
+    @PutMapping("/courier-policy")
+    @RequiresCapability(value = Capability.DELIVERY_POLICY_WRITE, mutating = true)
+    @Operation(
+            summary = "Publish the next version of the courier compensation policy",
+            description = "Whole-document replace: every field is required, because ADR 0030 "
+                    + "versions the document as one unit rather than merging a partial write "
+                    + "over the version it replaces. Omit brandId/locationId to publish the "
+                    + "tenant-wide default; supply either to publish a brand or location "
+                    + "override. The version this replaces is never touched — PolicyResolver.pinned "
+                    + "keeps answering with it for whatever already resolved it.")
+    public ResponseEntity<CourierPolicyResponse> writeCourierPolicy(
+            @PathVariable UUID tenantId,
+            @RequestParam(required = false) UUID brandId,
+            @RequestParam(required = false) UUID locationId,
+            @Valid @RequestBody CourierPolicyWriteRequest body) {
+
+        ResourceScope scope = policyScope(tenantId, brandId, locationId);
+        CourierCompensationPolicy document = body.toDocument();
+        ResolvedPolicy<CourierCompensationPolicy> published =
+                policyAuthor.author(CourierPolicies.COMPENSATION, scope, document, actor(), body.reason());
+
+        return ResponseEntity.ok(CourierPolicyResponse.of(published));
+    }
+
+    /** Omit brandId/locationId for the tenant-wide scope; supply either for a brand or location override. */
+    private static ResourceScope policyScope(UUID tenantId, @Nullable UUID brandId, @Nullable UUID locationId) {
+        return locationId != null && brandId != null
                 ? ResourceScope.location(tenantId, brandId, locationId)
                 : brandId != null ? ResourceScope.brand(tenantId, brandId) : ResourceScope.tenant(tenantId);
-
-        return ResponseEntity.ok(CourierPolicyResponse.of(policyResolver.resolveWithIdentity(scope)));
     }
 
     // ------------------------------------------------------------- engagement
@@ -1795,6 +1835,12 @@ public class OperationsCourierController {
             String shiftEnforcement,
             int graceSeconds,
             int confirmationPointRetentionDays,
+            boolean gpsVerificationEnabled,
+            int gpsAcceptRadiusMeters,
+            int gpsStatusChangeRadiusMeters,
+            boolean kitchenReadyOnly,
+            String revealCustomerLocationTiming,
+            boolean postDeliveryPaymentCheckRequired,
             String winningScope,
             UUID policyId,
             int policyVersion) {
@@ -1810,9 +1856,77 @@ public class OperationsCourierController {
                     doc.shiftEnforcement().name(),
                     doc.graceSeconds(),
                     doc.confirmationPointRetentionDays(),
+                    doc.gpsVerificationEnabled(),
+                    doc.gpsAcceptRadiusMeters(),
+                    doc.gpsStatusChangeRadiusMeters(),
+                    doc.kitchenReadyOnly(),
+                    doc.revealCustomerLocationTiming().name(),
+                    doc.postDeliveryPaymentCheckRequired(),
                     resolved.winningScope().name(),
                     resolved.policyId(),
                     resolved.policyVersion());
+        }
+    }
+
+    /**
+     * The whole-document write body for {@code PUT .../courier-policy}. Every
+     * field is required — ADR 0030 versions this document as one unit, not a
+     * partial merge over the version it replaces, so a caller reads the
+     * current {@link CourierPolicyResponse} first and sends every field back,
+     * changed or not.
+     */
+    record CourierPolicyWriteRequest(
+            @Min(1) int reverificationDays,
+            @Min(1) int warningDays,
+            @Min(1) int settlementPeriodDays,
+            @PositiveOrZero long cashCeilingMinor,
+            @PositiveOrZero long penaltyApprovalThresholdMinor,
+            @NotBlank String shiftEnforcement,
+            @PositiveOrZero int graceSeconds,
+            @Min(1) int confirmationPointRetentionDays,
+            boolean gpsVerificationEnabled,
+            @Positive int gpsAcceptRadiusMeters,
+            @Positive int gpsStatusChangeRadiusMeters,
+            boolean kitchenReadyOnly,
+            @NotBlank String revealCustomerLocationTiming,
+            boolean postDeliveryPaymentCheckRequired,
+            @NotBlank @Size(max = 500) String reason) {
+
+        CourierCompensationPolicy toDocument() {
+            return new CourierCompensationPolicy(
+                    reverificationDays,
+                    warningDays,
+                    settlementPeriodDays,
+                    cashCeilingMinor,
+                    penaltyApprovalThresholdMinor,
+                    parseShiftEnforcement(),
+                    graceSeconds,
+                    confirmationPointRetentionDays,
+                    gpsVerificationEnabled,
+                    gpsAcceptRadiusMeters,
+                    gpsStatusChangeRadiusMeters,
+                    kitchenReadyOnly,
+                    parseRevealTiming(),
+                    postDeliveryPaymentCheckRequired);
+        }
+
+        private ShiftEnforcement parseShiftEnforcement() {
+            try {
+                return ShiftEnforcement.valueOf(shiftEnforcement);
+            } catch (IllegalArgumentException unknown) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED, "Unknown shiftEnforcement \"%s\"".formatted(shiftEnforcement));
+            }
+        }
+
+        private RevealTiming parseRevealTiming() {
+            try {
+                return RevealTiming.valueOf(revealCustomerLocationTiming);
+            } catch (IllegalArgumentException unknown) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "Unknown revealCustomerLocationTiming \"%s\"".formatted(revealCustomerLocationTiming));
+            }
         }
     }
 

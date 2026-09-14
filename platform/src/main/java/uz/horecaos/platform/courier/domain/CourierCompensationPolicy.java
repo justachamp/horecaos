@@ -9,6 +9,15 @@ package uz.horecaos.platform.courier.domain;
  * operations — and a settlement period length that disagrees with a payout
  * calendar is a mistake made by changing one of a pair.
  *
+ * <p><strong>Wave P38 (gap map row {@code 10.13}, couriers.md §16)</strong>
+ * added the six fields below {@code confirmationPointRetentionDays}: the GPS
+ * master toggle and its two radii, the kitchen-ready-only gate, when the
+ * customer's exact location is revealed, and the post-delivery payment check.
+ * All six land in this document rather than as separate ADR 0030 keys for the
+ * same reason as the original five — a GPS gate that is on but carries a
+ * radius nobody set is a courier locked out by a field left blank, not two
+ * independent decisions.
+ *
  * @param reverificationDays        how long a manual attestation stands before it
  *                                  must be repeated. Provisional default 180
  * @param warningDays               the window in which a registration is EXPIRING
@@ -25,6 +34,24 @@ package uz.horecaos.platform.courier.domain;
  * @param graceSeconds              added to the promise before a delivery is late
  * @param confirmationPointRetentionDays days after a period reaches SETTLED that
  *                                  the two confirmation coordinates are deleted
+ * @param gpsVerificationEnabled    the GPS master toggle. Off by default: today
+ *                                  nothing checks a courier's position against
+ *                                  either radius below, and turning this on is
+ *                                  an active tenant choice, not a silent
+ *                                  tightening of an existing rule
+ * @param gpsAcceptRadiusMeters     how far a courier's reported position may be
+ *                                  from the branch when accepting an offer.
+ *                                  couriers.md §16 calls this gate "hard,
+ *                                  always" once the master toggle is on
+ * @param gpsStatusChangeRadiusMeters how far a courier's reported position may
+ *                                  be from the pickup or drop-off point when
+ *                                  advancing a delivery's status
+ * @param kitchenReadyOnly          when true, a courier sees and may take only
+ *                                  orders the kitchen has already marked ready
+ * @param revealCustomerLocationTiming when the customer's exact address becomes
+ *                                  visible to the assigned courier
+ * @param postDeliveryPaymentCheckRequired when true, an order may not close
+ *                                  until payment is confirmed
  */
 public record CourierCompensationPolicy(
         int reverificationDays,
@@ -34,11 +61,30 @@ public record CourierCompensationPolicy(
         long penaltyApprovalThresholdMinor,
         ShiftEnforcement shiftEnforcement,
         int graceSeconds,
-        int confirmationPointRetentionDays) {
+        int confirmationPointRetentionDays,
+        boolean gpsVerificationEnabled,
+        int gpsAcceptRadiusMeters,
+        int gpsStatusChangeRadiusMeters,
+        boolean kitchenReadyOnly,
+        RevealTiming revealCustomerLocationTiming,
+        boolean postDeliveryPaymentCheckRequired) {
 
     /** ADR 0042's provisional values, in force until finance and operations answer. */
-    public static final CourierCompensationPolicy DEFAULTS =
-            new CourierCompensationPolicy(180, 30, 14, 5_000_000L, 200_000L, ShiftEnforcement.ADVISORY, 300, 30);
+    public static final CourierCompensationPolicy DEFAULTS = new CourierCompensationPolicy(
+            180,
+            30,
+            14,
+            5_000_000L,
+            200_000L,
+            ShiftEnforcement.ADVISORY,
+            300,
+            30,
+            false,
+            1000,
+            150,
+            false,
+            RevealTiming.AFTER_ACCEPT,
+            false);
 
     public CourierCompensationPolicy {
         if (reverificationDays < 1 || warningDays < 1 || settlementPeriodDays < 1) {
@@ -46,6 +92,9 @@ public record CourierCompensationPolicy(
         }
         if (confirmationPointRetentionDays < 1) {
             throw new IllegalArgumentException("A retention window of zero days is a deletion");
+        }
+        if (gpsAcceptRadiusMeters < 1 || gpsStatusChangeRadiusMeters < 1) {
+            throw new IllegalArgumentException("A GPS radius of zero or less accepts nothing");
         }
     }
 }

@@ -1131,7 +1131,13 @@ class CourierDispatchPortTests {
                     CourierCompensationPolicy.DEFAULTS.penaltyApprovalThresholdMinor(),
                     enforcement,
                     CourierCompensationPolicy.DEFAULTS.graceSeconds(),
-                    CourierCompensationPolicy.DEFAULTS.confirmationPointRetentionDays());
+                    CourierCompensationPolicy.DEFAULTS.confirmationPointRetentionDays(),
+                    CourierCompensationPolicy.DEFAULTS.gpsVerificationEnabled(),
+                    CourierCompensationPolicy.DEFAULTS.gpsAcceptRadiusMeters(),
+                    CourierCompensationPolicy.DEFAULTS.gpsStatusChangeRadiusMeters(),
+                    CourierCompensationPolicy.DEFAULTS.kitchenReadyOnly(),
+                    CourierCompensationPolicy.DEFAULTS.revealCustomerLocationTiming(),
+                    CourierCompensationPolicy.DEFAULTS.postDeliveryPaymentCheckRequired());
 
             return Optional.of((ResolvedPolicy<P>) new ResolvedPolicy<>(
                     key.code(),
