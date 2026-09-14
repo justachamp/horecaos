@@ -4126,8 +4126,27 @@ export const messagesRu: MessageCatalogue = {
   'finance.subscription.statements.lineQuantity': 'Кол-во',
   'finance.subscription.statements.lineAmount': 'Сумма',
   'finance.subscription.statements.lineEmpty': 'В этой выписке нет строк.',
+  'finance.subscription.arrears.title': 'Статус счёта',
+  'finance.subscription.arrears.restricted':
+    'Пока подписка в этом статусе, новые модули и точки добавить нельзя.',
+  'finance.subscription.arrears.since': 'С',
+  'finance.subscription.arrears.days': '{days} дн.',
+  'finance.subscription.arrears.latestStatement': 'Последняя выписка',
+  'finance.subscription.modules.title': 'Модули для покупки',
+  'finance.subscription.modules.name': 'Модуль',
+  'finance.subscription.modules.billingUnit': 'Тариф',
+  'finance.subscription.modules.price': 'Цена',
+  'finance.subscription.modules.add': 'Добавить',
+  'finance.subscription.modules.added': 'Добавлен',
+  'finance.subscription.modules.empty': 'Сейчас ничего не продаётся.',
+  'finance.subscription.modules.quantityLabel': 'Количество',
+  'finance.subscription.modules.billingUnit.PER_TENANT': 'За тенанта',
+  'finance.subscription.modules.billingUnit.PER_BRAND': 'За бренд',
+  'finance.subscription.modules.billingUnit.PER_LOCATION': 'За точку',
+  'finance.subscription.modules.billingUnit.PER_UNIT': 'За единицу',
+  'finance.subscription.modules.billingUnit.ONE_OFF': 'Разово',
   'finance.subscription.notBuiltNote':
-    'Закрытие периода и предоплаченный баланс пока не реализованы (ADR 0021); каталог покупаемых модулей и баннер ограничений — тоже.',
+    'Закрытие периода — задача сотрудников HorecaOS (месяц закрывается выставлением выписки, ADR 0088); предоплаченный баланс пока не реализован (ADR 0095).',
 
   // ---------------------------------------------------------------- staff 9.3 (wave 39)
   'staff.shell.activity': 'Активность',

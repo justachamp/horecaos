@@ -4151,8 +4151,27 @@ export const messagesUzLatn: MessageCatalogue = {
   'finance.subscription.statements.lineQuantity': 'Soni',
   'finance.subscription.statements.lineAmount': 'Summa',
   'finance.subscription.statements.lineEmpty': 'Bu hisobda qatorlar yoʻq.',
+  'finance.subscription.arrears.title': 'Hisob holati',
+  'finance.subscription.arrears.restricted':
+    'Obuna shu holatda ekan, yangi modul va filiallarni qoʻshib boʻlmaydi.',
+  'finance.subscription.arrears.since': 'Qachondan',
+  'finance.subscription.arrears.days': '{days} kun',
+  'finance.subscription.arrears.latestStatement': 'Oxirgi hisob',
+  'finance.subscription.modules.title': 'Sotib olish mumkin boʻlgan modullar',
+  'finance.subscription.modules.name': 'Modul',
+  'finance.subscription.modules.billingUnit': 'Toʻlov',
+  'finance.subscription.modules.price': 'Narx',
+  'finance.subscription.modules.add': 'Qoʻshish',
+  'finance.subscription.modules.added': 'Qoʻshilgan',
+  'finance.subscription.modules.empty': 'Hozircha hech narsa sotilmayapti.',
+  'finance.subscription.modules.quantityLabel': 'Soni',
+  'finance.subscription.modules.billingUnit.PER_TENANT': 'Tenant uchun',
+  'finance.subscription.modules.billingUnit.PER_BRAND': 'Brend uchun',
+  'finance.subscription.modules.billingUnit.PER_LOCATION': 'Filial uchun',
+  'finance.subscription.modules.billingUnit.PER_UNIT': 'Birlik uchun',
+  'finance.subscription.modules.billingUnit.ONE_OFF': 'Bir martalik',
   'finance.subscription.notBuiltNote':
-    'Davrni yopish va oldindan toʻlangan balans hali yaratilmagan (ADR 0021); sotib olinadigan modullar katalogi va cheklov bannerlari ham hali yoʻq.',
+    'Davrni yopish HorecaOS xodimlari ishi (oy hisobotini chiqarish orqali yopiladi, ADR 0088); oldindan toʻlangan balans hali yaratilmagan (ADR 0095).',
 
   // ---------------------------------------------------------------- staff 9.3 (wave 39)
   'staff.shell.activity': 'Faollik',
