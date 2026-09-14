@@ -437,6 +437,26 @@ public class JdbcDineInStore {
                 .optional();
     }
 
+    /**
+     * The same lookup, additionally scoped to one branch.
+     *
+     * <p>A reservation id is a UUID a client supplies on a path already scoped to
+     * {@code tenantId}/{@code locationId}; a lookup that ignored the path's own
+     * {@code locationId} would serve — and let a location-scoped operator read or
+     * amend — a booking belonging to a branch they hold no grant over. Callers
+     * that already know they are inside the right branch (an internal re-read
+     * after a write this same request already validated) may still use the
+     * two-argument overload above.
+     */
+    public Optional<ReservationRow> findReservationAtLocation(UUID tenantId, UUID locationId, UUID reservationId) {
+        return jdbc.sql(SELECT_RESERVATION + " WHERE tenant_id = :tenantId AND location_id = :locationId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("id", reservationId)
+                .query(JdbcDineInStore::mapReservation)
+                .optional();
+    }
+
     public List<UUID> tablesForReservation(UUID tenantId, UUID reservationId) {
         return jdbc.sql("""
                 SELECT table_id FROM dinein.reservation_tables

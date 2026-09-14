@@ -264,7 +264,7 @@ class DineInTests {
 
         ReservationRow confirmed = store.findReservation(TENANT, booking).orElseThrow();
         transactions.executeWithoutResult(status -> reservations.move(
-                TENANT, booking, ReservationStatus.CANCELLED, confirmed.version(), "host", "Guest rang back"));
+                TENANT, branch, booking, ReservationStatus.CANCELLED, confirmed.version(), "host", "Guest rang back"));
 
         assertThat(heldTables()).isEmpty();
 
@@ -295,7 +295,13 @@ class DineInTests {
         UUID cancelled = book(tableTwo, DINNER.plus(Duration.ofMinutes(30)), DINNER.plus(Duration.ofHours(2)));
         ReservationRow requested = store.findReservation(TENANT, cancelled).orElseThrow();
         transactions.executeWithoutResult(status -> reservations.move(
-                TENANT, cancelled, ReservationStatus.CANCELLED, requested.version(), "host", "Guest rang back"));
+                TENANT,
+                branch,
+                cancelled,
+                ReservationStatus.CANCELLED,
+                requested.version(),
+                "host",
+                "Guest rang back"));
 
         List<ReservationRow> day = transactions.execute(status -> reservations.listForDay(
                 TENANT, branch, DINNER.minus(Duration.ofHours(1)), DINNER.plus(Duration.ofHours(4))));
@@ -338,6 +344,7 @@ class DineInTests {
         Instant newTo = DINNER.plus(Duration.ofHours(3));
         transactions.executeWithoutResult(status -> reservations.amend(
                 TENANT,
+                branch,
                 booking,
                 6,
                 newFrom,
@@ -380,6 +387,7 @@ class DineInTests {
 
         Throwable failure = catchThrowable(() -> transactions.executeWithoutResult(status -> reservations.amend(
                 TENANT,
+                branch,
                 second,
                 4,
                 DINNER,
@@ -414,6 +422,7 @@ class DineInTests {
         ReservationRow seated = store.findReservation(TENANT, booking).orElseThrow();
         Throwable failure = catchThrowable(() -> transactions.executeWithoutResult(status -> reservations.amend(
                 TENANT,
+                branch,
                 booking,
                 4,
                 DINNER,
@@ -442,7 +451,8 @@ class DineInTests {
         assertThat(row.guestNameEncrypted()).isNotEqualTo("Dilnoza");
         assertThat(row.guestPhoneEncrypted()).isNotEqualTo("998901234567");
 
-        ReservationService.GuestDetails guest = reservations.revealGuest(TENANT, booking, "walk-in match", "host");
+        ReservationService.GuestDetails guest =
+                reservations.revealGuest(TENANT, branch, booking, "walk-in match", "host");
         assertThat(guest.guestName()).isEqualTo("Dilnoza");
         assertThat(guest.guestPhone()).isEqualTo("998901234567");
         assertThat(guest.note()).isEqualTo("Window if possible");
@@ -455,7 +465,7 @@ class DineInTests {
         UUID booking = book(tableOne, DINNER, DINNER.plus(Duration.ofHours(2)));
         audit.facts.clear();
 
-        reservations.revealGuest(TENANT, booking, "walk-in match", "host");
+        reservations.revealGuest(TENANT, branch, booking, "walk-in match", "host");
 
         assertThat(audit.facts).hasSize(1);
         AuditFact fact = audit.facts.get(0);
@@ -473,6 +483,7 @@ class DineInTests {
 
         transactions.executeWithoutResult(status -> reservations.amend(
                 TENANT,
+                branch,
                 booking,
                 4,
                 DINNER,
@@ -485,7 +496,8 @@ class DineInTests {
                 "host",
                 "Guest corrected the spelling and gave a better number"));
 
-        ReservationService.GuestDetails guest = reservations.revealGuest(TENANT, booking, "audit check", "host");
+        ReservationService.GuestDetails guest =
+                reservations.revealGuest(TENANT, branch, booking, "audit check", "host");
         assertThat(guest.guestName()).isEqualTo("Dilnoza Karimova");
         assertThat(guest.guestPhone()).isEqualTo("998907654321");
         // The note was left blank on the amendment, so it survives untouched.
@@ -501,6 +513,7 @@ class DineInTests {
 
         transactions.executeWithoutResult(status -> reservations.amend(
                 TENANT,
+                branch,
                 booking,
                 6,
                 DINNER.plus(Duration.ofHours(1)),
@@ -513,7 +526,8 @@ class DineInTests {
                 "host",
                 "Party grew, moved to a bigger table"));
 
-        ReservationService.GuestDetails guest = reservations.revealGuest(TENANT, booking, "audit check", "host");
+        ReservationService.GuestDetails guest =
+                reservations.revealGuest(TENANT, branch, booking, "audit check", "host");
         assertThat(guest.guestName()).isEqualTo("Dilnoza");
         assertThat(guest.guestPhone()).isEqualTo("998901234567");
         assertThat(guest.note()).isEqualTo("Window if possible");
@@ -924,7 +938,7 @@ class DineInTests {
     private void confirm(UUID reservationId) {
         ReservationRow row = store.findReservation(TENANT, reservationId).orElseThrow();
         transactions.executeWithoutResult(status -> reservations.move(
-                TENANT, reservationId, ReservationStatus.CONFIRMED, row.version(), "host", "Table available"));
+                TENANT, branch, reservationId, ReservationStatus.CONFIRMED, row.version(), "host", "Table available"));
     }
 
     /** Confirms on one specific connection, so two can be raced against each other. */

@@ -202,13 +202,14 @@ public class ReservationService {
     @Transactional
     public ReservationRow move(
             UUID tenantId,
+            UUID locationId,
             UUID reservationId,
             ReservationStatus to,
             int expectedVersion,
             String actorSubject,
             String reason) {
 
-        ReservationRow reservation = store.findReservation(tenantId, reservationId)
+        ReservationRow reservation = store.findReservationAtLocation(tenantId, locationId, reservationId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such booking"));
 
         if (!DineInStateMachine.permits(reservation.status(), to)) {
@@ -308,6 +309,7 @@ public class ReservationService {
     @Transactional
     public ReservationRow amend(
             UUID tenantId,
+            UUID locationId,
             UUID reservationId,
             int partySize,
             Instant requestedFrom,
@@ -327,7 +329,7 @@ public class ReservationService {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "A booking's end is after its start");
         }
 
-        ReservationRow reservation = store.findReservation(tenantId, reservationId)
+        ReservationRow reservation = store.findReservationAtLocation(tenantId, locationId, reservationId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such booking"));
 
         if (reservation.status() != ReservationStatus.REQUESTED
@@ -456,8 +458,9 @@ public class ReservationService {
      * screen this reveal exists for.
      */
     @Transactional
-    public GuestDetails revealGuest(UUID tenantId, UUID reservationId, String purpose, String actorSubject) {
-        ReservationRow reservation = store.findReservation(tenantId, reservationId)
+    public GuestDetails revealGuest(
+            UUID tenantId, UUID locationId, UUID reservationId, String purpose, String actorSubject) {
+        ReservationRow reservation = store.findReservationAtLocation(tenantId, locationId, reservationId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such booking"));
 
         String guestName = protection.reveal(
@@ -521,8 +524,8 @@ public class ReservationService {
         return store.tableAvailability(tenantId, locationId, from, to);
     }
 
-    public ReservationRow find(UUID tenantId, UUID reservationId) {
-        return store.findReservation(tenantId, reservationId)
+    public ReservationRow find(UUID tenantId, UUID locationId, UUID reservationId) {
+        return store.findReservationAtLocation(tenantId, locationId, reservationId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such booking"));
     }
 
