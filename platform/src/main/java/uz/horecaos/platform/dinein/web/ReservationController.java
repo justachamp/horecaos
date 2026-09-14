@@ -13,6 +13,7 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -40,11 +41,16 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * only books tables is useful on its own and exercises the exclusion constraint
  * under real Friday load before any money depends on it.
  *
- * <p>No response here carries a guest's name, phone number, or note. Those are
- * ADR 0029 personal data, encrypted at rest and revealed only through the customer
- * module's audited reveal path with a stated purpose. A booking list that rendered
- * two hundred phone numbers to build a screen would be exactly the bulk exposure
- * that control exists to prevent.
+ * <p>No response here carries a guest's name, phone number, or note by default.
+ * Those are ADR 0029 personal data, encrypted at rest, and revealed only one
+ * booking at a time through {@link #find} with a stated {@code purpose} —
+ * the same reveal-with-a-reason-and-an-audit-fact shape Customers §5 uses,
+ * gated here by {@code RESERVATION_READ} rather than {@code
+ * CUSTOMER_PII_REVEAL} so the host stand itself can use it (see {@link
+ * ReservationService#revealGuest}'s own doc). A booking list that rendered
+ * two hundred phone numbers to build a screen would be exactly the bulk
+ * exposure that control exists to prevent, so {@link #list} never reveals
+ * regardless of purpose.
  */
 @RestController
 @RequestMapping("/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}")
@@ -134,15 +140,30 @@ public class ReservationController {
 
     @GetMapping("/reservations/{reservationId}")
     @RequiresCapability(value = Capability.RESERVATION_READ, scope = ScopeType.LOCATION)
-    @Operation(summary = "One booking, without the guest's details")
+    @Operation(
+            summary = "One booking, with the guest's details behind a stated purpose",
+            description = "Omit `purpose` for the plain booking — no name, phone or note. Name one "
+                    + "(\"matching a walk-in\", say) and the three fields decrypt, recorded as an "
+                    + "ADR 0027 audit fact against that purpose. The audited reveal, not a second "
+                    + "endpoint, is what a host stand actually needs.")
     public ResponseEntity<ReservationResponse> find(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
-            @PathVariable UUID reservationId) {
+            @PathVariable UUID reservationId,
+            @RequestParam(required = false) String purpose) {
 
         ReservationRow reservation = reservations.find(tenantId, reservationId);
-        return ResponseEntity.ok(ReservationResponse.of(reservation, reservations.tablesFor(tenantId, reservationId)));
+        List<UUID> tableIds = reservations.tablesFor(tenantId, reservationId);
+
+        if (purpose == null || purpose.isBlank()) {
+            return ResponseEntity.ok(ReservationResponse.of(reservation, tableIds));
+        }
+
+        ReservationService.GuestDetails guest = reservations.revealGuest(
+                tenantId, reservationId, purpose, currentActor.get().subject());
+        return ResponseEntity.ok(
+                ReservationResponse.of(reservation, tableIds, guest.guestName(), guest.guestPhone(), guest.note()));
     }
 
     @PostMapping("/reservations/{reservationId}/state-actions")
@@ -188,10 +209,13 @@ public class ReservationController {
     @PostMapping("/reservations/{reservationId}/amendments")
     @RequiresCapability(value = Capability.RESERVATION_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
-            summary = "Change the party size, the time, or the tables of a booking not yet seated",
-            description = "The guest's name, phone and note are not writable here — a host "
-                    + "correcting a table or a time has no need to re-type a number, and a wrong "
-                    + "one is a cancel-and-rebook. Refused once the booking is SEATED or terminal.")
+            summary = "Change the party size, the time, the tables, or the guest's own details of "
+                    + "a booking not yet seated",
+            description = "`guestName`/`guestPhone`/`note` are optional — blank or omitted leaves "
+                    + "whatever the booking already has. A host moving a table or a time has no "
+                    + "need to re-type a number; one correcting a mistyped name or number now can, "
+                    + "instead of only cancelling and rebooking. Refused once the booking is "
+                    + "SEATED or terminal.")
     public ResponseEntity<ReservationResponse> amend(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -209,6 +233,9 @@ public class ReservationController {
                 body.requestedFrom(),
                 body.requestedTo(),
                 body.tableIds(),
+                body.guestName(),
+                body.guestPhone(),
+                body.note(),
                 (int) expected,
                 currentActor.get().subject(),
                 body.reason());
@@ -239,9 +266,12 @@ public class ReservationController {
             @NotNull UUID sourceChannelId) {}
 
     /**
-     * No name, no phone, no note. What a host stand renders is a time, a party
-     * size, and which tables; the guest's details are revealed one booking at a
-     * time through the audited ADR 0029 path when somebody actually needs them.
+     * No name, no phone, no note — unless {@link #find} was asked with a
+     * purpose. Every other caller ({@link #list}, {@link #request}, {@link
+     * #stateAction}, {@link #amend}) uses the null-guest overload below: a
+     * host stand renders a time, a party size and which tables from those,
+     * and the guest's details arrive only through the audited reveal, never
+     * as a side effect of creating or moving a booking.
      */
     record ReservationResponse(
             UUID reservationId,
@@ -251,9 +281,21 @@ public class ReservationController {
             int turnaroundMinutes,
             String status,
             List<UUID> tableIds,
-            int version) {
+            int version,
+            @Nullable String guestName,
+            @Nullable String guestPhone,
+            @Nullable String note) {
 
         static ReservationResponse of(ReservationRow row, List<UUID> tableIds) {
+            return of(row, tableIds, null, null, null);
+        }
+
+        static ReservationResponse of(
+                ReservationRow row,
+                List<UUID> tableIds,
+                @Nullable String guestName,
+                @Nullable String guestPhone,
+                @Nullable String note) {
             return new ReservationResponse(
                     row.id(),
                     row.partySize(),
@@ -262,7 +304,10 @@ public class ReservationController {
                     row.turnaroundMinutes(),
                     row.status().name(),
                     tableIds,
-                    row.version());
+                    row.version(),
+                    guestName,
+                    guestPhone,
+                    note);
         }
     }
 
@@ -284,5 +329,11 @@ public class ReservationController {
             @NotNull Instant requestedFrom,
             @NotNull Instant requestedTo,
             @NotEmpty List<UUID> tableIds,
+            /** Optional — blank or omitted leaves the booking's stored name unchanged. */
+            @Size(max = 200) @Nullable String guestName,
+            /** Optional — blank or omitted leaves the booking's stored phone unchanged. */
+            @Size(max = 32) @Nullable String guestPhone,
+            /** Optional — blank or omitted leaves the booking's stored note unchanged. */
+            @Size(max = 500) @Nullable String note,
             @NotBlank @Size(max = 500) String reason) {}
 }

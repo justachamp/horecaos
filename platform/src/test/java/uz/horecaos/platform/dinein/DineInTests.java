@@ -337,7 +337,18 @@ class DineInTests {
         Instant newFrom = DINNER.plus(Duration.ofHours(1));
         Instant newTo = DINNER.plus(Duration.ofHours(3));
         transactions.executeWithoutResult(status -> reservations.amend(
-                TENANT, booking, 6, newFrom, newTo, List.of(tableTwo), before.version(), "host", "Guest moved seats"));
+                TENANT,
+                booking,
+                6,
+                newFrom,
+                newTo,
+                List.of(tableTwo),
+                null,
+                null,
+                null,
+                before.version(),
+                "host",
+                "Guest moved seats"));
 
         ReservationRow after = store.findReservation(TENANT, booking).orElseThrow();
         assertThat(after.partySize()).isEqualTo(6);
@@ -374,6 +385,9 @@ class DineInTests {
                 DINNER,
                 DINNER.plus(Duration.ofHours(2)),
                 List.of(tableOne),
+                null,
+                null,
+                null,
                 confirmedSecond.version(),
                 "host",
                 "Wrong table")));
@@ -405,12 +419,104 @@ class DineInTests {
                 DINNER,
                 DINNER.plus(Duration.ofHours(2)),
                 List.of(tableOne),
+                null,
+                null,
+                null,
                 seated.version(),
                 "host",
                 "Too late")));
 
         assertThat(failure).isInstanceOf(ApiException.class);
         assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.INVALID_REQUEST);
+    }
+
+    // ------------------------------------------------------------------- guest reveal
+
+    @Test
+    @DisplayName("a fresh booking's guest name, phone and note stay encrypted until revealGuest "
+            + "decrypts them, and every field is what the host actually typed")
+    void revealGuestDecryptsWhatWasTyped() {
+        UUID booking = book(tableOne, DINNER, DINNER.plus(Duration.ofHours(2)));
+
+        ReservationRow row = store.findReservation(TENANT, booking).orElseThrow();
+        assertThat(row.guestNameEncrypted()).isNotEqualTo("Dilnoza");
+        assertThat(row.guestPhoneEncrypted()).isNotEqualTo("998901234567");
+
+        ReservationService.GuestDetails guest = reservations.revealGuest(TENANT, booking, "walk-in match", "host");
+        assertThat(guest.guestName()).isEqualTo("Dilnoza");
+        assertThat(guest.guestPhone()).isEqualTo("998901234567");
+        assertThat(guest.note()).isEqualTo("Window if possible");
+    }
+
+    @Test
+    @DisplayName("revealing a booking's guest details writes one audit fact naming the purpose, "
+            + "with no guest value in its changed document")
+    void revealGuestAudits() {
+        UUID booking = book(tableOne, DINNER, DINNER.plus(Duration.ofHours(2)));
+        audit.facts.clear();
+
+        reservations.revealGuest(TENANT, booking, "walk-in match", "host");
+
+        assertThat(audit.facts).hasSize(1);
+        AuditFact fact = audit.facts.get(0);
+        assertThat(fact.actionCode()).isEqualTo("dinein.reservation.guest_revealed");
+        assertThat(fact.reason()).isEqualTo("walk-in match");
+        assertThat(fact.changeDocument().values()).doesNotContain("Dilnoza", "998901234567", "Window if possible");
+    }
+
+    @Test
+    @DisplayName("amending a booking's guest name and phone corrects them, leaving a note the "
+            + "host did not retype exactly as it was")
+    void amendingCorrectsGuestDetails() {
+        UUID booking = book(tableOne, DINNER, DINNER.plus(Duration.ofHours(2)));
+        ReservationRow before = store.findReservation(TENANT, booking).orElseThrow();
+
+        transactions.executeWithoutResult(status -> reservations.amend(
+                TENANT,
+                booking,
+                4,
+                DINNER,
+                DINNER.plus(Duration.ofHours(2)),
+                List.of(tableOne),
+                "Dilnoza Karimova",
+                "998907654321",
+                null,
+                before.version(),
+                "host",
+                "Guest corrected the spelling and gave a better number"));
+
+        ReservationService.GuestDetails guest = reservations.revealGuest(TENANT, booking, "audit check", "host");
+        assertThat(guest.guestName()).isEqualTo("Dilnoza Karimova");
+        assertThat(guest.guestPhone()).isEqualTo("998907654321");
+        // The note was left blank on the amendment, so it survives untouched.
+        assertThat(guest.note()).isEqualTo("Window if possible");
+    }
+
+    @Test
+    @DisplayName("amending a booking with every guest field blank leaves its stored name, phone "
+            + "and note exactly as they were — the ordinary table-or-time correction")
+    void amendingWithBlankGuestFieldsChangesNothingAboutTheGuest() {
+        UUID booking = book(tableOne, DINNER, DINNER.plus(Duration.ofHours(2)));
+        ReservationRow before = store.findReservation(TENANT, booking).orElseThrow();
+
+        transactions.executeWithoutResult(status -> reservations.amend(
+                TENANT,
+                booking,
+                6,
+                DINNER.plus(Duration.ofHours(1)),
+                DINNER.plus(Duration.ofHours(3)),
+                List.of(tableTwo),
+                "",
+                "   ",
+                null,
+                before.version(),
+                "host",
+                "Party grew, moved to a bigger table"));
+
+        ReservationService.GuestDetails guest = reservations.revealGuest(TENANT, booking, "audit check", "host");
+        assertThat(guest.guestName()).isEqualTo("Dilnoza");
+        assertThat(guest.guestPhone()).isEqualTo("998901234567");
+        assertThat(guest.note()).isEqualTo("Window if possible");
     }
 
     // ---------------------------------------------------------------- sessions
