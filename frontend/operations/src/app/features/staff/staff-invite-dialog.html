@@ -6,7 +6,9 @@
     [attr.aria-label]="'staff.inviteDialog.title' | t"
   >
     @if (createdLink(); as link) {
-      <h2 class="q-emphasis invite-dialog__title">{{ 'staff.inviteDialog.doneTitle' | t }}</h2>
+      <h2 class="q-emphasis invite-dialog__title">
+        {{ (resent() ? 'staff.inviteDialog.doneTitleResent' : 'staff.inviteDialog.doneTitle') | t }}
+      </h2>
       <p class="q-body-sm">{{ 'staff.inviteDialog.doneBody' | t }}</p>
       <div class="invite-dialog__linkRow">
         <input

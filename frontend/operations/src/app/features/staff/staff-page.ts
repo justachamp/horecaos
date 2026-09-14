@@ -109,6 +109,8 @@ export class StaffPage {
   protected readonly inviteDialogError = signal<string | null>(null);
   protected readonly inviteDuplicateSubject = signal<string | null>(null);
   protected readonly inviteCreatedLink = signal<string | null>(null);
+  /** Whether `inviteCreatedLink` is showing a freshly-resent link rather than a just-created one — see `confirmAccess`. */
+  protected readonly inviteLinkResent = signal(false);
 
   protected readonly notice = signal<string | null>(null);
 
@@ -393,6 +395,7 @@ export class StaffPage {
     this.accessDialogBusy.set(true);
     this.accessDialogError.set(null);
     try {
+      let resentLink: string | null = null;
       if (target.mode === 'suspend') {
         await this.suspend(tenantId, target.subject, reason);
       } else if (target.mode === 'restore') {
@@ -403,13 +406,29 @@ export class StaffPage {
           throw new Error('This invitation is no longer open');
         }
         if (target.mode === 'resendInvite') {
-          await this.api.resendStaffInvitation(tenantId, invitation.invitationId, reason);
+          const resent = await this.api.resendStaffInvitation(
+            tenantId,
+            invitation.invitationId,
+            reason,
+          );
+          resentLink = resent.inviteLink;
         } else {
           await this.api.revokeStaffInvitation(tenantId, invitation.invitationId, reason);
         }
       }
       this.accessDialogTarget.set(null);
       await this.reload();
+      if (resentLink) {
+        // Resend mints a fresh one-time link and invalidates the old one
+        // (StaffInvitationService#resend) — for a phone-only colleague it
+        // is the only way to reach them, so the console has to show it
+        // here rather than discard it. Reuses the invite dialog's own
+        // success/copy-link view rather than a bespoke one.
+        this.inviteDuplicateSubject.set(null);
+        this.inviteCreatedLink.set(resentLink);
+        this.inviteLinkResent.set(true);
+        this.inviteDialogOpen.set(true);
+      }
     } catch (error) {
       this.accessDialogError.set(this.describeError(error));
     } finally {
@@ -510,6 +529,7 @@ export class StaffPage {
     this.inviteDialogError.set(null);
     this.inviteDuplicateSubject.set(null);
     this.inviteCreatedLink.set(null);
+    this.inviteLinkResent.set(false);
     this.inviteDialogOpen.set(true);
   }
 
@@ -518,6 +538,7 @@ export class StaffPage {
     // A completed invite already refreshed the list on submit; closing from
     // the success state must not lose that state before the reset.
     this.inviteCreatedLink.set(null);
+    this.inviteLinkResent.set(false);
     this.inviteDuplicateSubject.set(null);
     this.inviteDialogError.set(null);
   }

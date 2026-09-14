@@ -182,9 +182,14 @@ class StaffInvitationFlowTests {
     }
 
     @Test
-    @DisplayName("a duplicate phone is refused with the existing subject id, never the phone, in the error")
+    @DisplayName("a duplicate phone already in this tenant's own organization is refused with its subject id")
     void aDuplicatePhoneNamesTheExistingSubject() {
         accounts.seedExistingPhone("+998901234567", "already-here-1");
+        // Confirmed a member of THIS tenant's own organization -- the fact
+        // that lets the subject id be disclosed at all (see
+        // aDuplicatePhoneOutsideTheTenantsOrganizationIsRefusedWithoutASubject
+        // for the cross-tenant case, where it must not be).
+        organizations.addMember(ORGANIZATION_ID, "already-here-1");
         StaffInvitationService.InviteCommand command = new StaffInvitationService.InviteCommand(
                 "Aziza",
                 "Karimova",
@@ -202,6 +207,77 @@ class StaffInvitationFlowTests {
         assertThat(failure.errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT);
         assertThat(failure.properties()).containsEntry("existingSubjectId", "already-here-1");
         assertThat(failure.getMessage()).as("the message names no phone number").doesNotContain("998901234567");
+    }
+
+    /**
+     * S02: {@code findByPhone} searches the whole shared Keycloak realm,
+     * with no tenant filter -- so a phone belonging to a colleague at an
+     * unrelated tenant must never be confirmed to exist, or named by
+     * subject id, to a manager who has only proven authority over their own
+     * tenant (tenant isolation is the platform's primary security boundary).
+     */
+    @Test
+    @DisplayName("a duplicate phone belonging to a DIFFERENT tenant's organization is refused without a subject id")
+    void aDuplicatePhoneOutsideTheTenantsOrganizationIsRefusedWithoutASubject() {
+        accounts.seedExistingPhone("+998901234567", "someone-elses-staff-1");
+        // Deliberately NOT added as a member of ORGANIZATION_ID: this subject
+        // belongs to a different tenant's own organization.
+        StaffInvitationService.InviteCommand command = new StaffInvitationService.InviteCommand(
+                "Aziza",
+                "Karimova",
+                "+998901234567",
+                null,
+                "location-staff",
+                ResourceScope.location(TENANT, BRAND, BRAND),
+                "new hire",
+                null,
+                "ru");
+
+        ApiException failure = (ApiException)
+                catchThrowable(() -> service.invite(TENANT, command, ActorRef.user(OWNER, null), "corr-cross-tenant"));
+
+        assertThat(failure.errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT);
+        assertThat(failure.properties())
+                .as("a cross-tenant match's subject id must never be disclosed")
+                .doesNotContainKey("existingSubjectId");
+        assertThat(failure.getMessage()).as("the message names no phone number").doesNotContain("998901234567");
+        assertThat(accounts.created)
+                .as("no account is created for an already-taken phone")
+                .isEmpty();
+    }
+
+    /**
+     * S01: two invitations for the same phone can both pass the
+     * synchronous {@code findByPhone} pre-check before either calls {@code
+     * create} -- Keycloak's own username-uniqueness constraint is the real
+     * arbiter, and the losing side must get the identical, tenant-scoped
+     * {@code RESOURCE_CONFLICT} the winner's pre-check would have thrown,
+     * never an unhandled 500.
+     */
+    @Test
+    @DisplayName("the losing side of a create-time race gets the same tenant-scoped conflict as the pre-check")
+    void aRaceOnCreateStillGetsTheTenantScopedConflict() {
+        accounts.loseRaceOn("+998901234567", "race-winner-1");
+        organizations.addMember(ORGANIZATION_ID, "race-winner-1");
+        StaffInvitationService.InviteCommand command = new StaffInvitationService.InviteCommand(
+                "Aziza",
+                "Karimova",
+                "+998901234567",
+                null,
+                "location-staff",
+                ResourceScope.location(TENANT, BRAND, BRAND),
+                "new hire",
+                null,
+                "ru");
+
+        ApiException failure = (ApiException)
+                catchThrowable(() -> service.invite(TENANT, command, ActorRef.user(OWNER, null), "corr-race"));
+
+        assertThat(failure.errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT);
+        assertThat(failure.properties()).containsEntry("existingSubjectId", "race-winner-1");
+        assertThat(accounts.created)
+                .as("the loser's own account is never left behind")
+                .isEmpty();
     }
 
     @Test
@@ -373,6 +449,191 @@ class StaffInvitationFlowTests {
                 .isEqualTo(1L);
     }
 
+    /**
+     * S04: {@code aBrandScopedManagerIsRefusedATenantScopeInvitation} above
+     * proves only that {@code BRAND_MANAGER} lacks {@code IAM_GRANT_MANAGE}
+     * everywhere -- it would pass identically if {@link StaffInvitationService#invite}'s
+     * scope-aware {@code authorization.require} were replaced by any
+     * fixed-scope or scope-blind check. No {@link PlatformRole} grants
+     * {@code IAM_GRANT_MANAGE} below TENANT scope, so this fixture inserts a
+     * raw grant naming {@code TENANT_ADMIN}'s role id -- bypassing the
+     * normal catalog wiring, the only way to put the capability at BRAND
+     * scope at all -- to prove actual scope narrowing: refused reaching
+     * upward to TENANT, allowed at the actor's own scope.
+     */
+    @Test
+    @DisplayName(
+            "an actor genuinely holding IAM_GRANT_MANAGE only at BRAND scope is refused upward and allowed at its own scope")
+    void aGenuinelyBrandScopedGrantManagerIsRefusedUpwardAndAllowedAtItsOwnScope() {
+        String actor = "brand-scoped-grant-manager-1";
+        insertGrant(actor, PlatformRole.TENANT_ADMIN, "BRAND", BRAND);
+
+        StaffInvitationService.InviteCommand tenantScopeAttempt = new StaffInvitationService.InviteCommand(
+                "Aziza",
+                "Karimova",
+                "+998901112200",
+                null,
+                "location-staff",
+                ResourceScope.tenant(TENANT),
+                "new hire",
+                null,
+                "ru");
+        assertThatThrownBy(
+                        () -> service.invite(TENANT, tenantScopeAttempt, ActorRef.user(actor, null), "corr-narrow-up"))
+                .as("holding the capability only at BRAND scope must not reach upward to TENANT")
+                .isInstanceOf(AuthorizationService.AccessDeniedException.class);
+        assertThat(accounts.created)
+                .as("nothing is created for the refused attempt")
+                .isEmpty();
+
+        StaffInvitationService.InviteCommand ownScopeAttempt = new StaffInvitationService.InviteCommand(
+                "Aziza",
+                "Karimova",
+                "+998901112200",
+                null,
+                "location-staff",
+                ResourceScope.location(TENANT, BRAND, BRAND),
+                "new hire",
+                null,
+                "ru");
+        StaffInvitationService.Created created =
+                service.invite(TENANT, ownScopeAttempt, ActorRef.user(actor, null), "corr-narrow-own");
+        assertThat(created.principalSubject())
+                .as("the same actor is allowed at a scope its own BRAND grant actually covers")
+                .isNotBlank();
+    }
+
+    /**
+     * S03: {@code grants.grant}'s finer {@code requireGrantable} check --
+     * whether the actor's own capabilities cover every capability the
+     * chosen job carries -- can still refuse after the Keycloak account and
+     * organization membership already exist. Before this test, that left a
+     * permanent orphan: {@code accounts.findByPhone}'s duplicate check would
+     * find it forever, blocking every future invitation for that phone, by
+     * anybody, even a correctly-authorized actor.
+     */
+    @Test
+    @DisplayName("a refused grant cleans up the orphaned account, so the same phone can be invited again")
+    void aRefusedGrantDoesNotPermanentlyBlockThePhone() {
+        // A tenant-defined role holding IAM_GRANT_MANAGE and nothing else:
+        // no PlatformRole combines the coarse capability with a narrow
+        // operational set, so requireGrantable needs a role built for
+        // exactly this refusal, the same way GrantManagementServiceTests
+        // builds one of its own for the identical reason.
+        UUID narrowRoleId = UUID.fromString("018f9a20-1000-7000-8000-0000000000e1");
+        insertCustomRole(narrowRoleId, TENANT, "grant-manager-only");
+        jdbc.sql("INSERT INTO iam.role_capabilities (role_id, capability_code) VALUES (:roleId, :capability)")
+                .param("roleId", narrowRoleId)
+                .param("capability", Capability.IAM_GRANT_MANAGE.code())
+                .update();
+        String narrowActor = "narrow-grant-manager-1";
+        jdbc.sql("""
+                        INSERT INTO iam.grants
+                            (id, tenant_id, principal_subject, role_id, role_is_platform,
+                             scope_type, scope_id, status, granted_by, reason, valid_from)
+                        VALUES (:id, :tenantId, :subject, :roleId, false, 'BRAND', :scopeId,
+                                'ACTIVE', 'fixture', 'fixture', :validFrom)
+                        """)
+                .param("id", UUID.randomUUID())
+                .param("validFrom", CLOCK_INSTANT.minusSeconds(3600).atOffset(ZoneOffset.UTC))
+                .param("tenantId", TENANT)
+                .param("subject", narrowActor)
+                .param("roleId", narrowRoleId)
+                .param("scopeId", BRAND)
+                .update();
+
+        StaffInvitationService.InviteCommand command = new StaffInvitationService.InviteCommand(
+                "Aziza",
+                "Karimova",
+                "+998901112299",
+                null,
+                "location-staff",
+                ResourceScope.location(TENANT, BRAND, BRAND),
+                "new hire",
+                null,
+                "ru");
+
+        assertThatThrownBy(
+                        () -> service.invite(TENANT, command, ActorRef.user(narrowActor, null), "corr-orphan-refused"))
+                .as("the actor holds IAM_GRANT_MANAGE but not every capability location-staff carries")
+                .isInstanceOf(AuthorizationService.AccessDeniedException.class);
+
+        assertThat(accounts.created)
+                .as("the account was created before the grant was refused")
+                .hasSize(1);
+        assertThat(accounts.deleted)
+                .as("the orphaned account is cleaned up rather than left behind")
+                .isEqualTo(accounts.created);
+        assertThat(accounts.findByPhone("+998901112299"))
+                .as("the phone is free again once the orphan is cleaned up")
+                .isEmpty();
+
+        StaffInvitationService.Created retried =
+                service.invite(TENANT, command, ActorRef.user(OWNER, null), "corr-orphan-retry");
+        assertThat(retried.principalSubject())
+                .as("a correctly-authorized actor can invite the same phone afterwards")
+                .isNotBlank();
+    }
+
+    /**
+     * S05: {@code JdbcStaffInvitationStore#byId} filters by {@code (id,
+     * tenant_id)} correctly by inspection, but nothing exercised it against
+     * a second tenant before this test -- an invitation created under one
+     * tenant must be invisible, never actionable, from another.
+     */
+    @Test
+    @DisplayName("an invitation is invisible and unactionable from a different tenant")
+    void anInvitationIsIsolatedFromADifferentTenant() {
+        // No fixture row for this tenant is needed: store.byId's WHERE
+        // clause filters on tenant_id alone, so any tenant id this
+        // invitation was not created under proves the same isolation --
+        // this is simply one nobody at TENANT can reach it from.
+        UUID tenantB = UUID.fromString("018f9a20-1000-7000-8000-0000000000b1");
+        String ownerB = "invite-owner-b-1";
+
+        StaffInvitationService.InviteCommand command = new StaffInvitationService.InviteCommand(
+                "Aziza",
+                "Karimova",
+                "+998901112277",
+                null,
+                "location-staff",
+                ResourceScope.location(TENANT, BRAND, BRAND),
+                "new hire",
+                null,
+                "ru");
+        StaffInvitationService.Created created =
+                service.invite(TENANT, command, ActorRef.user(OWNER, null), "corr-isolation-invite");
+
+        assertThat(store.byId(tenantB, created.invitationId()))
+                .as("a store lookup under a different tenant id finds nothing")
+                .isEmpty();
+        assertThatThrownBy(() -> service.resend(
+                        tenantB,
+                        created.invitationId(),
+                        ActorRef.user(ownerB, null),
+                        "trying another tenant's id",
+                        "corr-isolation-resend"))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        failure -> assertThat(failure.errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND));
+        assertThatThrownBy(() -> service.revoke(
+                        tenantB,
+                        created.invitationId(),
+                        ActorRef.user(ownerB, null),
+                        "trying another tenant's id",
+                        "corr-isolation-revoke"))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        failure -> assertThat(failure.errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND));
+
+        assertThat(jdbc.sql("SELECT status FROM tenant.staff_invitations WHERE id = :id")
+                        .param("id", created.invitationId())
+                        .query(String.class)
+                        .single())
+                .as("the invitation under its own tenant is left completely unaffected")
+                .isEqualTo("QUEUED");
+    }
+
     private static Throwable catchThrowable(org.assertj.core.api.ThrowableAssert.ThrowingCallable callable) {
         return org.assertj.core.api.Assertions.catchThrowable(callable);
     }
@@ -422,12 +683,29 @@ class StaffInvitationFlowTests {
                 .update();
     }
 
+    /** A tenant-defined role with no capabilities of its own yet -- the caller adds them via {@code iam.role_capabilities}. */
+    private void insertCustomRole(UUID roleId, UUID tenantId, String code) {
+        jdbc.sql("""
+                        INSERT INTO iam.roles (id, tenant_id, code, name, scope_type, status, is_platform_defined)
+                        VALUES (:id, :tenantId, :code, :code, 'TENANT', 'ACTIVE', false)
+                        """)
+                .param("id", roleId)
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .update();
+    }
+
     /** In-memory: no real Keycloak. Records whether a transaction was active on each external call. */
     private static final class FakeStaffAccounts implements StaffAccounts {
 
         private final Map<String, StaffAccount> byId = new HashMap<>();
         private final Map<String, String> phoneToSubject = new HashMap<>();
+
+        /** {@code phone (normalised) -> winning subject id} -- see {@link #loseRaceOn}. */
+        private final Map<String, String> pendingRaceWinners = new HashMap<>();
+
         final List<String> created = new ArrayList<>();
+        final List<String> deleted = new ArrayList<>();
         final List<Boolean> transactionActiveDuringCreate = new ArrayList<>();
 
         void seedExistingPhone(String phone, String subjectId) {
@@ -435,6 +713,20 @@ class StaffInvitationFlowTests {
             byId.put(
                     subjectId,
                     new StaffAccount(subjectId, null, false, false, KeycloakStaffAccountsPhone.normalize(phone)));
+        }
+
+        /**
+         * Makes the next {@link #create} for this phone throw {@link
+         * StaffAccountAlreadyExistsException} once, simulating the losing
+         * side of a check-then-act race past a caller's own {@code
+         * findByPhone} pre-check: the winning account is invisible to {@link
+         * #findByPhone} until {@link #create} is actually called for this
+         * phone -- exactly when Keycloak's own username-uniqueness
+         * constraint would first be discovered -- and only then becomes
+         * visible, the same way a concurrent request's write would.
+         */
+        void loseRaceOn(String phone, String winningSubjectId) {
+            pendingRaceWinners.put(KeycloakStaffAccountsPhone.normalize(phone), winningSubjectId);
         }
 
         @Override
@@ -446,12 +738,25 @@ class StaffInvitationFlowTests {
         public StaffAccount create(String firstName, String lastName, String phone, @Nullable String email) {
             transactionActiveDuringCreate.add(TransactionSynchronizationManager.isActualTransactionActive());
             String username = KeycloakStaffAccountsPhone.normalize(phone);
+            String winner = pendingRaceWinners.remove(username);
+            if (winner != null) {
+                byId.put(winner, new StaffAccount(winner, null, false, false, username));
+                phoneToSubject.put(username, winner);
+                throw new StaffAccountAlreadyExistsException("lost the race for " + username);
+            }
             String subjectId = "staff-" + UUID.randomUUID();
             StaffAccount account = new StaffAccount(subjectId, email, false, false, username);
             byId.put(subjectId, account);
             phoneToSubject.put(username, subjectId);
             created.add(subjectId);
             return account;
+        }
+
+        @Override
+        public void delete(String subjectId) {
+            byId.remove(subjectId);
+            phoneToSubject.values().removeIf(id -> id.equals(subjectId));
+            deleted.add(subjectId);
         }
 
         @Override
@@ -502,6 +807,15 @@ class StaffInvitationFlowTests {
 
         final List<Boolean> transactionActiveDuringEnsureMembership = new ArrayList<>();
 
+        /** {@code organizationId -> member subject ids}, for {@link #isMember}. */
+        private final java.util.Map<String, java.util.Set<String>> members = new HashMap<>();
+
+        /** Seeds a subject as an already-confirmed member of this organization (never through {@link #ensureMembership}). */
+        void addMember(String organizationId, String subjectId) {
+            members.computeIfAbsent(organizationId, ignored -> new java.util.HashSet<>())
+                    .add(subjectId);
+        }
+
         @Override
         public OrganizationRef ensureOrganization(EnsureOrganization command) {
             throw new UnsupportedOperationException("not part of this fixture");
@@ -515,16 +829,20 @@ class StaffInvitationFlowTests {
         @Override
         public MembershipRef ensureMembership(EnsureMembership command) {
             transactionActiveDuringEnsureMembership.add(TransactionSynchronizationManager.isActualTransactionActive());
-            return new MembershipRef(
-                    command.organizationId(),
-                    java.util.Objects.requireNonNull(
-                            command.existingSubjectId(), "this fixture is only called with an existing subject"),
-                    false);
+            String subjectId = java.util.Objects.requireNonNull(
+                    command.existingSubjectId(), "this fixture is only called with an existing subject");
+            addMember(command.organizationId(), subjectId);
+            return new MembershipRef(command.organizationId(), subjectId, false);
         }
 
         @Override
         public void setOrganizationEnabled(String organizationId, boolean enabled) {
             throw new UnsupportedOperationException("not part of this fixture");
+        }
+
+        @Override
+        public boolean isMember(String organizationId, String subjectId) {
+            return members.getOrDefault(organizationId, java.util.Set.of()).contains(subjectId);
         }
     }
 

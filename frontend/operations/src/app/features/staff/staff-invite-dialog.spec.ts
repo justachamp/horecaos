@@ -234,6 +234,17 @@ describe('StaffInviteDialog', () => {
     expect(linkField.value).toBe('https://ops.example.uz/invite#token=abc123');
   });
 
+  it('titles the success view as a fresh link, not a new invitation, when `resent` is set', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('createdLink', 'https://ops.example.uz/invite#token=fresh');
+    fixture.componentRef.setInput('resent', true);
+    fixture.detectChanges();
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Новая ссылка готова');
+    expect(text).not.toContain('Приглашение создано');
+  });
+
   it('closes without confirming when nothing was typed', () => {
     const confirmSpy = vi.spyOn(window, 'confirm');
     const fixture = render();

@@ -149,6 +149,72 @@ class KeycloakStaffAccountsWriteTests {
     }
 
     /**
+     * The check-then-act race (ADR 0116): two invitations for the same phone
+     * both pass a caller's own {@code findByPhone} pre-check, and Keycloak's
+     * own username-uniqueness constraint is what actually decides the
+     * loser. Before this test, the loser's create() call turned that 409
+     * into a bare {@code IllegalStateException} -- an unhandled 500 -- with
+     * no way for {@code StaffInvitationService} to recognise the race and
+     * answer the documented {@code RESOURCE_CONFLICT} instead.
+     */
+    @Test
+    @DisplayName("a 409 from creating an account is a named conflict signal, not a bare IllegalStateException")
+    void aConflictOnCreateIsANamedSignal() {
+        keycloak.expect(ExpectedCount.once(), requestTo("http://keycloak.test/admin/realms/horecaos/users"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.CONFLICT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"errorMessage\":\"User exists with same username\"}"));
+
+        assertThatThrownBy(() -> accounts.create("Aziza", "Karimova", "+998901234567", null))
+                .isInstanceOf(StaffAccounts.StaffAccountAlreadyExistsException.class);
+
+        keycloak.verify();
+    }
+
+    @Test
+    @DisplayName("any other error creating an account is still the generic refusal, never the conflict signal")
+    void aNonConflictErrorOnCreateIsNotMistakenForADuplicate() {
+        keycloak.expect(ExpectedCount.once(), requestTo("http://keycloak.test/admin/realms/horecaos/users"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+        assertThatThrownBy(() -> accounts.create("Aziza", "Karimova", "+998901234567", null))
+                .isNotInstanceOf(StaffAccounts.StaffAccountAlreadyExistsException.class)
+                .isInstanceOf(IllegalStateException.class);
+
+        keycloak.verify();
+    }
+
+    /**
+     * {@code StaffInvitationService#invite}'s compensating action after a
+     * refused grant, so a mid-flow failure never leaves an account that
+     * blocks every future invite for that phone forever.
+     */
+    @Test
+    @DisplayName("deleting an account is one call, and a 404 there is success")
+    void deletingAnAccountIsOneCallAndA404IsSuccess() {
+        keycloak.expect(ExpectedCount.once(), requestTo("http://keycloak.test/admin/realms/horecaos/users/" + SUBJECT))
+                .andExpect(method(HttpMethod.DELETE))
+                .andRespond(withNoContent());
+
+        accounts.delete(SUBJECT);
+
+        keycloak.verify();
+
+        buildAdapter();
+        keycloak.expect(ExpectedCount.once(), requestTo("http://keycloak.test/admin/realms/horecaos/users/" + SUBJECT))
+                .andExpect(method(HttpMethod.DELETE))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThatCode(() -> accounts.delete(SUBJECT))
+                .as("an account already gone is the state a delete is trying to reach")
+                .doesNotThrowAnyException();
+
+        keycloak.verify();
+    }
+
+    /**
      * The distinction a spent link's fate turns on (ADR 0098).
      *
      * <p>A reset spends its one-time link before this call, and puts it back

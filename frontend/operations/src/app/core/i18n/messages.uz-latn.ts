@@ -3116,6 +3116,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.inviteDialog.submitting': 'Taklif qilinmoqda…',
   'staff.inviteDialog.confirmClose': 'Bu taklifni bekor qilasizmi?',
   'staff.inviteDialog.doneTitle': 'Taklif yaratildi',
+  'staff.inviteDialog.doneTitleResent': 'Yangi havola tayyor',
   'staff.inviteDialog.doneBody':
     'Bu havolani yangi hodimga qulay usulda yuboring — Telegram, SMS yoki shaxsan. U bir marta, 72 soat davomida ishlaydi.',
   'staff.inviteDialog.copy': 'Havolani nusxalash',

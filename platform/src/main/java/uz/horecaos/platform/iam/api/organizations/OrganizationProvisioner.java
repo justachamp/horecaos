@@ -80,6 +80,25 @@ public interface OrganizationProvisioner {
      */
     void setOrganizationEnabled(String organizationId, boolean enabled);
 
+    /**
+     * Whether the subject is already a member of this organization.
+     *
+     * <p>{@code StaffInvitationService}'s duplicate-phone check uses this to
+     * decide whether an account found by phone may ever be disclosed to the
+     * inviting tenant: tenant isolation is the platform's primary security
+     * boundary, and an account belonging to a different tenant's organization
+     * must never be confirmed to exist, or named by subject id, to a manager
+     * who only proved authority over their own tenant.
+     *
+     * <p>Default {@code false} -- not "unknown" -- so an implementation that
+     * does not override this never accidentally discloses a cross-tenant
+     * account: the safe default is "not proven a member," never "assume it
+     * is."
+     */
+    default boolean isMember(String organizationId, String subjectId) {
+        return false;
+    }
+
     record EnsureOrganization(
             UUID tenantId,
             String alias,

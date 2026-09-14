@@ -116,9 +116,46 @@ public interface StaffAccounts {
      * @param email optional and never required (staff-and-access.md §4);
      *              when null, the account is reached only by phone
      * @return the new account, {@link StaffAccount#hasPassword()} false
+     * @throws StaffAccountAlreadyExistsException when the identity provider's
+     *                      own username-uniqueness constraint already holds
+     *                      this phone -- the losing side of a race past a
+     *                      caller's own {@link #findByPhone} pre-check
      */
     default StaffAccount create(String firstName, String lastName, String phone, @Nullable String email) {
         throw new UnsupportedOperationException("this StaffAccounts implementation does not create accounts");
+    }
+
+    /**
+     * Removes the account entirely -- the only way to undo {@link #create}.
+     *
+     * <p>Used for exactly one thing today: unwinding a staff invitation whose
+     * account was created but whose job grant was then refused ({@link
+     * uz.horecaos.platform.tenancy.application.invitations.StaffInvitationService#invite}),
+     * so the phone is not left claimed forever by an account nothing can ever
+     * grant -- {@link #findByPhone} would otherwise find it, unconditionally,
+     * for good.
+     *
+     * <p>Idempotent: removing an account already gone is success, not
+     * failure, the same stance {@link #logoutEverywhere}'s consent delete
+     * takes on its own 404.
+     */
+    default void delete(String subjectId) {
+        throw new UnsupportedOperationException("this StaffAccounts implementation does not delete accounts");
+    }
+
+    /**
+     * {@link #create} could not create the account because the identity
+     * provider's own username-uniqueness constraint already holds this
+     * phone number -- the losing side of a race between two invitations for
+     * the same phone (a double-submit within one tenant, or two different
+     * tenants inviting the same phone at once), since a staff account is one
+     * global identity keyed by normalised phone, never tenant-scoped.
+     */
+    final class StaffAccountAlreadyExistsException extends RuntimeException {
+
+        public StaffAccountAlreadyExistsException(String message) {
+            super(message);
+        }
     }
 
     /**
