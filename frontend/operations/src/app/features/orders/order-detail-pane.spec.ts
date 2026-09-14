@@ -1498,14 +1498,12 @@ describe('OrderDetailPane: assign/unassign courier (wave P11, row 1.2e)', () => 
   });
 
   it('surfaces a refused assign (ALREADY_ASSIGNED, a lost race) as a notice, never a thrown error', async () => {
-    const assign = vi
-      .fn()
-      .mockResolvedValue({
-        applied: false,
-        planStatus: 'ASSIGNED',
-        planVersion: 3,
-        reason: 'ALREADY_ASSIGNED',
-      });
+    const assign = vi.fn().mockResolvedValue({
+      applied: false,
+      planStatus: 'ASSIGNED',
+      planVersion: 3,
+      reason: 'ALREADY_ASSIGNED',
+    });
     configure({
       get: apiGet({ value: detail(), version: 3 }),
       deliveryApi: { delivery: () => Promise.resolve(deliveryResponse()) },

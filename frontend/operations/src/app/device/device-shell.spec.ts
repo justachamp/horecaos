@@ -49,7 +49,9 @@ describe('DeviceShell', () => {
         }),
       pollOnce:
         overrides.pollOnce ??
-        vi.fn<DeviceSession['pollOnce']>().mockResolvedValue({ status: 'PENDING', credential: null }),
+        vi
+          .fn<DeviceSession['pollOnce']>()
+          .mockResolvedValue({ status: 'PENDING', credential: null }),
     };
   }
 

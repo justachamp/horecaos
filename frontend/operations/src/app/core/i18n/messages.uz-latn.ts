@@ -2200,7 +2200,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.buffer.edit.clearForHold': 'Buyurtmani vaqtsiz ushlab turish uchun boʻsh qoldiring',
   'kitchen.buffer.edit.reason': 'Sabab',
   'kitchen.buffer.edit.reasonRequired':
-    'Sabab talab qilinadi — bu ishga tushirishni buyurtmaning oʻz vaʼdasidan keyinga suradi',
+    'Sabab talab qilinadi — bu ishga tushirishni buyurtmaning oʻz vaʻdasidan keyinga suradi',
   'kitchen.buffer.edit.save': 'Saqlash',
   'kitchen.buffer.edit.cancel': 'Bekor qilish',
 
@@ -3494,7 +3494,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.overview.funnel.disposition.RELEASE': 'Band qilish bekor qilindi',
   'reports.overview.funnel.disposition.RETURN_TO_STOCK': 'Omborga qaytarildi',
   'reports.overview.funnel.disposition.WRITE_OFF': 'Hisobdan chiqarildi',
-  'reports.overview.funnel.disposition.NO_EFFECT': 'Taʼsiri yoʻq',
+  'reports.overview.funnel.disposition.NO_EFFECT': 'Taʻsiri yoʻq',
   'reports.overview.funnel.liability.TENANT': 'Tenant',
   'reports.overview.funnel.liability.CUSTOMER': 'Mijoz',
   'reports.overview.funnel.liability.COURIER_PARTNER': 'Kuryer hamkori',
@@ -4891,7 +4891,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'ui.liveBadge.live': 'Onlayn',
   'ui.refreshIndicator.updated': 'Yangilandi {time}',
   'ui.refreshIndicator.refresh': 'Hozir yangilash',
-  'ui.staleIndicator.stale': 'Eskirgan bo‘lishi mumkin',
+  'ui.staleIndicator.stale': 'Eskirgan boʻlishi mumkin',
   'ui.connectionState.reconnecting': 'Qayta ulanmoqda…',
   'ui.connectionState.unavailable':
     'Jonli yangilanishlar mavjud emas — har 10 soniyada yangilanadi',
