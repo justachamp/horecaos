@@ -28,14 +28,14 @@ package uz.horecaos.platform.ordering.application;
  *       codes are offered together deliberately — see {@code
  *       OrderActionsPolicy}'s own doc on the pair — so a client built before
  *       this wave keeps working against the {@code ADVANCE} entry.
- *   <li>{@link #AMEND} is the one exception with a built, tested gate ({@code
- *       ORDER_AMEND} plus {@code OrderActionsPolicy.canAmend}) — this wave
- *       built it, then held it back behind {@code
- *       OrderActionsPolicy.AMEND_EMISSION_ENABLED} after an adversarial
- *       review found {@code order-actions.ts} has no translated label or
- *       click handler for it and {@code ORDER_AMEND} already reaches five
- *       real {@code PlatformRole}s. Wave {@code P10} ships the amendment
- *       client and flips the constant; see ADR 0105.
+ *   <li>{@link #AMEND} has a built, tested gate ({@code ORDER_AMEND} plus
+ *       {@code OrderActionsPolicy.canAmend}) — wave P05 built it, then held it
+ *       back behind {@code OrderActionsPolicy.AMEND_EMISSION_ENABLED} after an
+ *       adversarial review found {@code order-actions.ts} had no translated
+ *       label or click handler for it and {@code ORDER_AMEND} already reaches
+ *       five real {@code PlatformRole}s. Wave {@code P10} shipped the
+ *       amendment client and flipped the constant to {@code true}; see ADR
+ *       0105 and ADR 0113.
  *   <li>{@link #RESOLVE} targets {@code POST .../amendments/{id}/confirmation}
  *       and only makes sense while a specific amendment is {@code
  *       AWAITING_CUSTOMER_CONFIRMATION} — a fact {@link OrderActionsPolicy}
@@ -71,8 +71,8 @@ public enum OrderActionCode {
     /**
      * {@code POST .../amendments}, opening the amendment submenu (orders.md
      * §4.4). The gate is built (whenever the order has not ended and the
-     * principal holds {@code ORDER_AMEND}) but not yet emitted — see the
-     * class doc and {@code OrderActionsPolicy.AMEND_EMISSION_ENABLED}.
+     * principal holds {@code ORDER_AMEND}) and, as of wave P10, emitted — see
+     * the class doc and {@code OrderActionsPolicy.AMEND_EMISSION_ENABLED}.
      */
     AMEND,
 

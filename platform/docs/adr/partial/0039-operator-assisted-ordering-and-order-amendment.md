@@ -103,6 +103,16 @@
   `OrderOutcomeService.reject` (OTHER requires an encrypted note), with the
   operations reject dialog a picker over `GET .../orders/reject-reasons`
   instead of free text; covered by `OrderAmendmentAndOutcomeTests`.
+  **Wave P10 ([ADR 0113](../partial/0113-wave-p10-operator-notes-and-the-amendment-client.md))
+  adds the two note commands §11 flagged as unowned** — `SET_COURIER_NOTE` and
+  `SET_INTERNAL_NOTE`, both non-financial and built like `SET_KITCHEN_NOTE`,
+  taking `AmendmentCommandType`'s built set from three to five and its closed
+  set from ten to twelve — and gives the console its first amendment client at
+  all: `OrderAmendmentsApi` (`Idempotency-Key`, `If-Match`) wires all five built
+  commands from the order detail pane's new §3.6 «Комментарии» block, including
+  the acknowledgeable `CASH_TENDERED_INSUFFICIENT` notice, and a history view
+  over `GET .../amendments`. See this record's own dated status addition below
+  for what ADR 0113 did and did not change here.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-21
 - Deciders: Ayubkhon Abbosov (platform architecture), product, finance, legal
@@ -457,3 +467,40 @@ address, and afterwards the order shows every revision with its own reproducible
 total; every closed order carries one outcome row naming the reason, the stock
 disposition, and the liable party; a re-run bulk action changes nothing; and an
 operator-created customer receives no marketing message.
+
+### Amended 2026-09-14 (ADR 0113, wave P10): operator-to-courier and internal notes
+
+This record's own command table above named three note-shaped commands and left
+two channels the legacy dashboard had — `courier_note`, operator to courier, and
+`internal_note`, operator to operator — with, in orders.md §11's own words,
+"no owning decision at all," closing the sentence "adding two commands is a
+one-line ADR amendment." [ADR 0113](../partial/0113-wave-p10-operator-notes-and-the-amendment-client.md)
+is that amendment: `AmendmentCommandType` gains `SET_COURIER_NOTE` and
+`SET_INTERNAL_NOTE`, both non-financial and `built = true` from the day they are
+declared — the closed set this record fixed at ten commands is from this date
+**twelve**, and a request fitting none of them still needs an ADR entry rather
+than a configuration change, exactly as the Accepted trade-offs above already
+said. Both take the identical shape `SET_KITCHEN_NOTE` already has — a free-text
+payload, no reprice, no reservation, no payment, no fiscal consequence, no POS
+consequence — with one difference wave P10's own zero migration-number
+allocation forced: neither has an `ordering.orders` column to land in the way
+`kitchen_note` does, so `OrderAmendmentService#patchOf` folds neither into the
+order's own fields, and the note lives only in
+`order_amendment_commands.payload_json`, read back through a new
+`OrderAmendmentService#noteOf` and a new read endpoint shape,
+`AmendmentHistoryEntryResponse`, distinct from the `AmendmentResponse`
+`amend`/`confirmAmendment` answer with for exactly the reason `SET_KITCHEN_NOTE`
+avoided a "note"-named field on that shared, idempotency-tracked type. **What
+that allocation did not anticipate**, and what a failing test caught the first
+time either command tried to insert a row, is that `ck_amendment_command_type`
+(V0029) is a closed value list naming exactly ten commands — Java accepting an
+eleventh and twelfth is not the database accepting them, and `built()`'s own
+contract ("whether the application can actually carry this command out today")
+is broken by a command that is `true` in Java and a constraint violation in
+Postgres. `V0290` widens the constraint to twelve, following the drop-and-
+recreate rule `V0172` already states for one; it spends the migration number
+this wave's allocation said it would not need, and ADR 0113 records that
+discovery and the choice to spend it rather than ship a command that crashes on
+first use. ADR 0113 carries the full decision, alternatives and consequences;
+this note only records that the two channels §11 named now have an owner and
+points there rather than restating it here.

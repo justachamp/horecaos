@@ -184,6 +184,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.action.reject': 'Rad etish',
   'orders.action.cancel': 'Bekor qilish',
   'orders.action.complete': 'Yakunlash',
+  'orders.action.amend': 'Oʻzgartirish',
   'orders.action.advance.PREPARING': 'Oshxonaga',
   'orders.action.advance.READY': 'Tayyor',
   'orders.action.advance.FULFILLING': 'Yetkazishga',
@@ -210,6 +211,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.dialog.reject.note.label': 'Izoh',
   'orders.dialog.reject.note.requiredLabel': 'Izoh (bu sabab uchun majburiy)',
   'orders.dialog.reject.note.missing': 'Bu sabab uchun qisqa izoh kerak',
+  'orders.dialog.note.save': 'Saqlash',
+  'orders.dialog.amendMenu.title': 'Nimani oʻzgartirmoqchisiz?',
 
   'orders.dialog.outcome.stockDisposition.RELEASE': 'Rezerv boʻshatildi',
   'orders.dialog.outcome.stockDisposition.RETURN_TO_STOCK': 'Omborga qaytarildi',
@@ -328,6 +331,30 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.details.callback.resolved': '{at} da bajarildi',
   'orders.detail.details.cashTendered': 'Qancha pul bilan keladi',
   'orders.detail.details.changeDue': 'Qaytim',
+
+  'orders.detail.section.comments': 'Izohlar',
+  'orders.detail.comments.privacyNotice':
+    'Mijozning oʻz soʻzlari shaxsiy maʼlumot va ochilmasdan koʻrsatilmaydi. Bizning soʻzlarimiz esa toʻliq koʻrsatiladi.',
+  'orders.detail.comments.customerToOrder': 'Mijozning buyurtmaga izohi',
+  'orders.detail.comments.customerToOrder.seeAddress':
+    '«Manzil va yetkazib berish» boʻlimida koʻring',
+  'orders.detail.comments.customerToLine': 'Mijozning taomga izohi',
+  'orders.detail.comments.customerToLine.seeLines': 'yuqorida taom yonidagi izoh belgisini koʻring',
+  'orders.detail.comments.courier': 'Kuryerga izoh',
+  'orders.detail.comments.courier.none': 'Hali yoʻq — tarixni koʻring',
+  'orders.detail.comments.internal': 'Ichki eslatma',
+  'orders.detail.comments.internal.none': 'Hali yoʻq — tarixni koʻring',
+  'orders.detail.comments.edit': 'Oʻzgartirish',
+  'orders.detail.comments.add': 'Qoʻshish',
+  'orders.detail.comments.callback.request': '«Qoʻngʻiroq kerak» deb belgilash',
+  'orders.detail.comments.callback.clear': '«Qoʻngʻiroq kerak»ni olib tashlash',
+  'orders.detail.comments.history.open': 'Oʻzgarishlar tarixi',
+  'orders.detail.comments.history.hide': 'Tarixni yashirish',
+  'orders.detail.comments.history.error': 'Oʻzgarishlar tarixini yuklab boʻlmadi',
+  'orders.detail.comments.history.empty': 'Hali oʻzgarish yoʻq',
+  'orders.amendment.warning.CASH_TENDERED_INSUFFICIENT':
+    '«Qancha pul bilan keladi» endi umumiy summadan kam — mijoz qoʻshib toʻlashi mumkin.',
+  'orders.amendment.warning.acknowledge': 'Tushunarli',
 
   'orders.detail.section.revisions': 'Revizialar ({count})',
   'orders.detail.revisions.show': 'Revizialarni koʻrsatish',

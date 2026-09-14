@@ -1,0 +1,46 @@
+/* Chrome is `q-modal` (ADR 0101); this styles the one field it projects — see
+ * `order-reason-dialog.css`'s identical note for why encapsulation still
+ * reaches projected content from the declaring component. */
+
+.note-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.note-dialog__textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+  resize: vertical;
+}
+
+.note-dialog__count {
+  align-self: flex-end;
+  color: var(--q-ink-muted);
+}
+
+.note-dialog__dismiss,
+.note-dialog__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.note-dialog__confirm {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.note-dialog__confirm:disabled,
+.note-dialog__dismiss:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

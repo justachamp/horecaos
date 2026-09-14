@@ -137,6 +137,32 @@ export const operationsPaths = {
    * append-only chain `orderQuery.revisions` already serves and no screen has
    * read before now.
    */
+  /**
+   * ADR 0039 amendment (wave P10, gap map `1.2h`): `POST` proposes and, with
+   * `applyImmediately`, applies in the same call; `GET` is the history view
+   * over every amendment the order has ever had. Mutation: `Idempotency-Key`
+   * and `If-Match` required.
+   */
+  orderAmendments(scope: LocationScope, orderId: string): string {
+    return `${this.order(scope, orderId)}/amendments`;
+  },
+
+  /**
+   * Records the customer's recorded agreement to an amendment that raises the
+   * total (orders.md §4.4). None of wave P10's five built commands reach this
+   * — all five take `PRICED -> APPLIED` directly — but the path is real:
+   * `OperationsOrderController.confirmAmendment` already serves it for the
+   * day a financial command needs it. Mutation: `If-Match` required.
+   */
+  orderAmendmentConfirmation(scope: LocationScope, orderId: string, amendmentId: string): string {
+    return `${this.orderAmendments(scope, orderId)}/${encodeURIComponent(amendmentId)}/confirmation`;
+  },
+
+  /**
+   * Every revision of this order (ADR 0039, wave P09/gap map `1.2p`) — the
+   * append-only chain `orderQuery.revisions` already serves and no screen has
+   * read before now.
+   */
   orderRevisions(scope: LocationScope, orderId: string): string {
     return `${this.order(scope, orderId)}/revisions`;
   },

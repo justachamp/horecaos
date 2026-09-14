@@ -1030,7 +1030,13 @@ public class OperationsOrderController {
 
     @GetMapping("/{orderId}/amendments")
     @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.LOCATION)
-    @Operation(summary = "Every amendment on this order, applied or not")
+    @Operation(
+            summary = "Every amendment on this order, applied or not",
+            description = "orders.md §3.6/§3.10's history view -- AmendmentResponse.commandDetails "
+                    + "is what a courier or internal note's own text reads back through "
+                    + "(OrderAmendmentService#noteOf); amend/confirmAmendment populate the same "
+                    + "field with an empty list, since neither answers with an existing "
+                    + "amendment's full command history.")
     public ResponseEntity<List<AmendmentResponse>> listAmendments(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -1040,12 +1046,19 @@ public class OperationsOrderController {
         requireOrderAtLocation(tenantId, orderId, locationId);
 
         return ResponseEntity.ok(amendments.forOrder(tenantId, orderId).stream()
-                .map(row -> AmendmentResponse.of(
-                        row,
-                        List.of(),
-                        amendments.commands(tenantId, row.id()).stream()
-                                .map(command -> command.commandType().name())
-                                .toList()))
+                .map(row -> {
+                    List<JdbcOrderAmendmentStore.CommandRow> commandRows = amendments.commands(tenantId, row.id());
+                    return AmendmentResponse.of(
+                            row,
+                            List.of(),
+                            commandRows.stream()
+                                    .map(c -> c.commandType().name())
+                                    .toList(),
+                            commandRows.stream()
+                                    .map(c -> new AmendmentCommandDetail(
+                                            c.commandType().name(), amendments.noteOf(c)))
+                                    .toList());
+                })
                 .toList());
     }
 
@@ -1457,7 +1470,9 @@ public class OperationsOrderController {
             @NotNull AmendmentCommandType type,
             @Size(max = 1000) String kitchenNote,
             Boolean callbackRequested,
-            @jakarta.validation.constraints.PositiveOrZero Long cashTenderedMinor) {
+            @jakarta.validation.constraints.PositiveOrZero Long cashTenderedMinor,
+            @Size(max = 1000) String courierNote,
+            @Size(max = 1000) String internalNote) {
 
         OrderAmendmentService.AmendmentCommand toCommand() {
             return switch (type) {
@@ -1471,6 +1486,9 @@ public class OperationsOrderController {
                     }
                     yield OrderAmendmentService.AmendmentCommand.cashTendered(cashTenderedMinor);
                 }
+                // ADR 0113 (wave P10).
+                case SET_COURIER_NOTE -> OrderAmendmentService.AmendmentCommand.courierNote(courierNote);
+                case SET_INTERNAL_NOTE -> OrderAmendmentService.AmendmentCommand.internalNote(internalNote);
                 // Declared by ADR 0039 and not built. Refused here as well as in
                 // the service, so the failure arrives before anything is written.
                 default ->
@@ -1484,11 +1502,37 @@ public class OperationsOrderController {
             @NotBlank @Size(max = 24) String channel) {}
 
     /**
-     * One amendment, as the operator's screen renders it.
+     * One amendment, as the operator's screen renders it — both the summary
+     * {@code amend}/{@code confirmAmendment} answer with and the history view
+     * {@code GET} answers with (orders.md §3.6/§3.10).
      *
-     * @param warnings things the operator is told and not blocked by, such as
-     *                 change-due now short of the total — the customer can hand
-     *                 over more, and refusing the order over a hint would be worse
+     * @param warnings       things the operator is told and not blocked by, such
+     *                       as change-due now short of the total — the customer
+     *                       can hand over more, and refusing the order over a
+     *                       hint would be worse
+     * @param commandDetails each command this amendment carried, each with the
+     *                       free text it set where it set one — additive over
+     *                       {@code commands}' own type-name list, and the only
+     *                       read path for a courier or internal note's own text
+     *                       (ADR 0113: neither has an {@code ordering.orders}
+     *                       column the way {@code kitchenNote} does). Named
+     *                       {@code text}, not {@code note}, on the nested
+     *                       record: {@code amend}/{@code confirmAmendment} are
+     *                       idempotency-tracked (ADR 0031), so
+     *                       {@code IdempotentResponseClassificationTests} scans
+     *                       whatever this whole record carries and would
+     *                       encrypt a "note"-named field for storage under ADR
+     *                       0029's name heuristic — safe, but a false positive
+     *                       for text that is never a fact about a customer
+     *                       (§3.6), and a needless cost this naming avoids
+     *                       rather than accepts
+     * @param createdAt        when this amendment was proposed — the history
+     *                         view's own "when" column
+     * @param createdByActorType who proposed it, the same bare wire tag
+     *                           {@code createdByActorType} elsewhere on this
+     *                           controller carries with no resolvable name
+     *                           behind it (see {@code actorDisplay} on the
+     *                           Angular side)
      */
     public record AmendmentResponse(
             UUID amendmentId,
@@ -1504,15 +1548,22 @@ public class OperationsOrderController {
             int orderVersion,
             List<String> commands,
             List<String> warnings,
-            boolean replayed) {
+            boolean replayed,
+            List<AmendmentCommandDetail> commandDetails,
+            Instant createdAt,
+            String createdByActorType,
+            @Nullable String createdByActorId) {
 
         static AmendmentResponse of(OrderAmendmentService.AmendmentResult result) {
-            return of(result.amendment(), result.warnings(), List.of())
+            return of(result.amendment(), result.warnings(), List.of(), List.of())
                     .withOrderVersion(result.orderVersion(), result.replayed());
         }
 
         static AmendmentResponse of(
-                JdbcOrderAmendmentStore.AmendmentRow row, List<String> warnings, List<String> commands) {
+                JdbcOrderAmendmentStore.AmendmentRow row,
+                List<String> warnings,
+                List<String> commands,
+                List<AmendmentCommandDetail> commandDetails) {
             return new AmendmentResponse(
                     row.id(),
                     row.orderId(),
@@ -1527,7 +1578,11 @@ public class OperationsOrderController {
                     0,
                     commands,
                     warnings,
-                    false);
+                    false,
+                    commandDetails,
+                    row.createdAt(),
+                    row.createdByActorType(),
+                    row.createdByActorId());
         }
 
         AmendmentResponse withOrderVersion(int version, boolean wasReplayed) {
@@ -1545,9 +1600,23 @@ public class OperationsOrderController {
                     version,
                     commands,
                     warnings,
-                    wasReplayed);
+                    wasReplayed,
+                    commandDetails,
+                    createdAt,
+                    createdByActorType,
+                    createdByActorId);
         }
     }
+
+    /**
+     * @param text the free text a kitchen/courier/internal-note command set —
+     *             {@code null} for every other command type, including the
+     *             two that also touch an order field. See
+     *             {@link AmendmentResponse#commandDetails} for why this is
+     *             {@code text} rather than {@code note}.
+     */
+    public record AmendmentCommandDetail(
+            String type, @Nullable String text) {}
 
     /**
      * One revision, as the operator's timeline renders it.

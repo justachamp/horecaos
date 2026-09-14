@@ -49,10 +49,12 @@ import uz.horecaos.platform.tenancy.api.TenantId;
  * its own complete total; revision N−1 is left byte-identical, and there is never
  * a second order for one meal the customer ordered once.
  *
- * <p>Three of the ten commands are carried out. They are the three that change no
- * money — the kitchen note, the callback flag and the change-due figure — which
- * is deliberately the order ADR 0039's rollout puts them in: they exercise the
- * revision machinery with nothing at risk. Every other command is refused by name
+ * <p>Five of the now-twelve commands are carried out. Three change no money — the
+ * kitchen note, the callback flag and the change-due figure — which is
+ * deliberately the order ADR 0039's rollout puts them in: they exercise the
+ * revision machinery with nothing at risk. ADR 0113 (wave P10) adds two more of
+ * the same non-financial shape, the courier note and the internal note, once the
+ * three had proved the machinery out. Every other command is refused by name
  * rather than accepted and half-performed, because a command carried out in the
  * quote and forgotten in the fiscal receipt is the failure the whole design
  * exists to prevent.
@@ -492,6 +494,32 @@ public class OrderAmendmentService {
         return amendments.commands(tenantId, amendmentId);
     }
 
+    /**
+     * The free-text note a kitchen/courier/internal-note command carries, for
+     * the amendment history view (orders.md §3.6) — {@code null} for every
+     * other command type.
+     *
+     * <p>{@code SET_COURIER_NOTE} and {@code SET_INTERNAL_NOTE} (ADR 0113,
+     * wave P10) have no order column to be read back from the way {@code
+     * kitchenNote} is on {@code OrderDetailResponse} — this method, and the
+     * history view built on it, is their only read path. {@code
+     * SET_KITCHEN_NOTE} answers here too, for the same history, even though
+     * its current value also has a column: the two are not required to agree
+     * mid-amendment, and a history entry should show what that command
+     * actually said rather than the order's value as of the read.
+     */
+    public @Nullable String noteOf(JdbcOrderAmendmentStore.CommandRow command) {
+        if (command.commandType() != AmendmentCommandType.SET_KITCHEN_NOTE
+                && command.commandType() != AmendmentCommandType.SET_COURIER_NOTE
+                && command.commandType() != AmendmentCommandType.SET_INTERNAL_NOTE) {
+            return null;
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload = objectMapper.readValue(command.payloadJson(), Map.class);
+        Object note = payload.get("note");
+        return note == null ? null : String.valueOf(note);
+    }
+
     // ------------------------------------------------------------------ rules
 
     private void requireBuilt(List<AmendmentCommand> issued) {
@@ -555,6 +583,17 @@ public class OrderAmendmentService {
                     cashTendered = ((Number) Objects.requireNonNull(
                                     payload.get("amountMinor"), "cashTendered command has no amount"))
                             .longValue();
+                // ADR 0113 (wave P10): neither touches an order field. This wave
+                // carries no migration number, so there is no column for either
+                // note to land in — the payload above is the only copy, and
+                // {@link #noteOf} is what the amendment history (§3.6) reads it
+                // back through. Falling into patchOf at all, rather than being
+                // filtered out before the loop, is deliberate: it is what keeps
+                // this switch exhaustive over every built command type, the
+                // same guarantee the default branch below exists to enforce.
+                case SET_COURIER_NOTE, SET_INTERNAL_NOTE -> {
+                    // Intentionally no-op.
+                }
                 default -> throw new IllegalStateException("No built handler for " + command.commandType());
             }
         }
@@ -639,6 +678,20 @@ public class OrderAmendmentService {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("amountMinor", amountMinor);
             return new AmendmentCommand(AmendmentCommandType.SET_CASH_TENDERED, payload);
+        }
+
+        /** ADR 0113 (wave P10): operator to courier. Never rendered to the customer. */
+        public static AmendmentCommand courierNote(String note) {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("note", note == null ? "" : note);
+            return new AmendmentCommand(AmendmentCommandType.SET_COURIER_NOTE, payload);
+        }
+
+        /** ADR 0113 (wave P10): operator to operator. Same shape as {@link #courierNote}. */
+        public static AmendmentCommand internalNote(String note) {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("note", note == null ? "" : note);
+            return new AmendmentCommand(AmendmentCommandType.SET_INTERNAL_NOTE, payload);
         }
     }
 

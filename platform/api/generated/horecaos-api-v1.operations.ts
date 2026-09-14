@@ -125,11 +125,18 @@ export interface AmendRequest {
   reasonCode: string;
 }
 
+export interface AmendmentCommandDetail {
+  text?: string;
+  type?: string;
+}
+
 export interface AmendmentCommandRequest {
   callbackRequested?: boolean;
   cashTenderedMinor?: number;
+  courierNote?: string;
+  internalNote?: string;
   kitchenNote?: string;
-  type: "ADD_LINES" | "CHANGE_LINE_QUANTITY" | "REMOVE_LINES" | "CHANGE_PAYMENT_METHOD" | "CHANGE_DELIVERY_ADDRESS" | "CHANGE_FULFILLMENT_TIME" | "CHANGE_CONTACT" | "SET_KITCHEN_NOTE" | "SET_CALLBACK_REQUESTED" | "SET_CASH_TENDERED";
+  type: "ADD_LINES" | "CHANGE_LINE_QUANTITY" | "REMOVE_LINES" | "CHANGE_PAYMENT_METHOD" | "CHANGE_DELIVERY_ADDRESS" | "CHANGE_FULFILLMENT_TIME" | "CHANGE_CONTACT" | "SET_KITCHEN_NOTE" | "SET_CALLBACK_REQUESTED" | "SET_CASH_TENDERED" | "SET_COURIER_NOTE" | "SET_INTERNAL_NOTE";
 }
 
 export interface AmendmentRequest {
@@ -145,8 +152,12 @@ export interface AmendmentResponse {
   amendmentVersion?: number;
   appliedRevision?: number;
   baseRevision?: number;
+  commandDetails?: Array<AmendmentCommandDetail>;
   commands?: Array<string>;
   confirmationChannel?: string;
+  createdAt?: string;
+  createdByActorId?: string;
+  createdByActorType?: string;
   deltaTotalMinor?: number;
   expiresAt?: string;
   orderId?: string;

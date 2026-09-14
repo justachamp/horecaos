@@ -1,0 +1,35 @@
+<q-modal
+  [title]="'orders.detail.details.cashTendered' | t"
+  [dismissible]="!busy()"
+  (dismiss)="dismiss.emit()"
+  data-testid="order-cash-tendered-dialog"
+>
+  <label class="cash-tendered-dialog__field">
+    <span class="q-body-sm">{{ 'orders.detail.details.cashTendered' | t }} ({{ currency() }})</span>
+    <q-money-input
+      [valueMinor]="amountMinor()"
+      (valueMinorChange)="amountMinor.set($event)"
+      data-testid="order-cash-tendered-dialog-amount"
+    />
+  </label>
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="cash-tendered-dialog__dismiss q-body-sm"
+      (click)="dismiss.emit()"
+      [disabled]="busy()"
+    >
+      {{ 'orders.dialog.dismiss' | t }}
+    </button>
+    <button
+      type="button"
+      class="cash-tendered-dialog__confirm q-body-sm"
+      (click)="submit()"
+      [disabled]="busy()"
+      data-testid="order-cash-tendered-dialog-confirm"
+    >
+      {{ 'orders.dialog.note.save' | t }}
+    </button>
+  </ng-container>
+</q-modal>

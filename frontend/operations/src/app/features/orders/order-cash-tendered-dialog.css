@@ -1,0 +1,29 @@
+/* Chrome is `q-modal` (ADR 0101); see `order-note-dialog.css`'s identical note. */
+
+.cash-tendered-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cash-tendered-dialog__dismiss,
+.cash-tendered-dialog__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.cash-tendered-dialog__confirm {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.cash-tendered-dialog__confirm:disabled,
+.cash-tendered-dialog__dismiss:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

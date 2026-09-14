@@ -1045,6 +1045,66 @@ class OrderAmendmentAndOutcomeTests {
     }
 
     @Test
+    @DisplayName("ADR 0113 (wave P10): the courier and internal notes are built, and touch no order field")
+    void courierAndInternalNotesApplyAndTouchNoOrderField() {
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
+
+        var courierResult = amend("k-courier", OrderAmendmentService.AmendmentCommand.courierNote("Позвонить у ворот"));
+        assertThat(courierResult.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+        var courierCommand =
+                amendments.commands(TENANT, courierResult.amendment().id()).getFirst();
+        assertThat(courierCommand.commandType()).isEqualTo(AmendmentCommandType.SET_COURIER_NOTE);
+        assertThat(amendments.noteOf(courierCommand)).isEqualTo("Позвонить у ворот");
+
+        var internalResult = amend("k-internal", OrderAmendmentService.AmendmentCommand.internalNote("VIP клиент"));
+        assertThat(internalResult.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+        var internalCommand =
+                amendments.commands(TENANT, internalResult.amendment().id()).getFirst();
+        assertThat(amendments.noteOf(internalCommand)).isEqualTo("VIP клиент");
+
+        // Neither command has an order column to land in — this wave carries no
+        // migration number, unlike SET_KITCHEN_NOTE's — so patchOf folds neither
+        // into the order, and every other built command's own field stays
+        // exactly where it started.
+        var order = orderStore.find(TENANT, orderId).orElseThrow();
+        assertThat(order.kitchenNote()).isNull();
+        assertThat(order.callbackRequested()).isFalse();
+        assertThat(order.cashTenderedExpectedMinor()).isNull();
+        assertThat(order.currentRevision())
+                .as("both still append a revision, exactly like every other built command")
+                .isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("ADR 0113: a courier-note amendment against a stale version is refused — the "
+            + "service-level compare-and-set an HTTP request without If-Match ultimately relies on")
+    void courierNoteAmendmentRefusesAStaleVersion() {
+        UUID orderId = orderIdOf(placeOrder("idem-1"));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                propose("k-1", version, OrderAmendmentService.AmendmentCommand.courierNote("Позвонить у ворот"))));
+
+        // The second call still names the version read before the first
+        // amendment applied — what a client that dropped `If-Match` off a
+        // retried request would send. `OperationsOrderController`'s own
+        // `AggregateVersion.requireIfMatch` is the HTTP-layer refusal for a
+        // request that carries no header at all; this is the compare-and-set
+        // underneath it that makes that refusal correct rather than decorative,
+        // proved here the same way `twoAmendmentsOnOneOrderSettleAtOne` proves
+        // it for the three commands ADR 0039 itself built.
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        propose("k-2", version, OrderAmendmentService.AmendmentCommand.internalNote("VIP клиент")))))
+                .isInstanceOf(OrderStateService.StaleOrderException.class);
+
+        assertThat(orderQuery.revisions(TENANT, orderId)).hasSize(2);
+    }
+
+    @Test
     @DisplayName("change-due short of the total warns the operator rather than refusing the order")
     void changeDueShortOfTheTotalIsAWarning() {
         UUID orderId = orderIdOf(placeOrder("idem-1"));

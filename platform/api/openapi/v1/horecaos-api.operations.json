@@ -393,6 +393,17 @@
         "required" : [ "commands", "reasonCode" ],
         "type" : "object"
       },
+      "AmendmentCommandDetail" : {
+        "properties" : {
+          "text" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "AmendmentCommandRequest" : {
         "properties" : {
           "callbackRequested" : {
@@ -403,13 +414,23 @@
             "minimum" : 0,
             "type" : "integer"
           },
+          "courierNote" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "internalNote" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "kitchenNote" : {
             "maxLength" : 1000,
             "minLength" : 0,
             "type" : "string"
           },
           "type" : {
-            "enum" : [ "ADD_LINES", "CHANGE_LINE_QUANTITY", "REMOVE_LINES", "CHANGE_PAYMENT_METHOD", "CHANGE_DELIVERY_ADDRESS", "CHANGE_FULFILLMENT_TIME", "CHANGE_CONTACT", "SET_KITCHEN_NOTE", "SET_CALLBACK_REQUESTED", "SET_CASH_TENDERED" ],
+            "enum" : [ "ADD_LINES", "CHANGE_LINE_QUANTITY", "REMOVE_LINES", "CHANGE_PAYMENT_METHOD", "CHANGE_DELIVERY_ADDRESS", "CHANGE_FULFILLMENT_TIME", "CHANGE_CONTACT", "SET_KITCHEN_NOTE", "SET_CALLBACK_REQUESTED", "SET_CASH_TENDERED", "SET_COURIER_NOTE", "SET_INTERNAL_NOTE" ],
             "type" : "string"
           }
         },
@@ -467,6 +488,12 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "commandDetails" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AmendmentCommandDetail"
+            },
+            "type" : "array"
+          },
           "commands" : {
             "items" : {
               "type" : "string"
@@ -474,6 +501,16 @@
             "type" : "array"
           },
           "confirmationChannel" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "createdByActorId" : {
+            "type" : "string"
+          },
+          "createdByActorType" : {
             "type" : "string"
           },
           "deltaTotalMinor" : {
@@ -26599,6 +26636,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/amendments" : {
       "get" : {
+        "description" : "orders.md §3.6/§3.10's history view -- AmendmentResponse.commandDetails is what a courier or internal note's own text reads back through (OrderAmendmentService#noteOf); amend/confirmAmendment populate the same field with an empty list, since neither answers with an existing amendment's full command history.",
         "operationId" : "listAmendments",
         "parameters" : [ {
           "in" : "path",
