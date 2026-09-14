@@ -32,6 +32,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.fulfillment.api.CourierEtaPort;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.AuthorizationService;
@@ -523,6 +524,67 @@ class KitchenExecutionTests {
         assertThat(tickets.require(TENANT, ticket.id()).status()).isNotEqualTo(TicketStatus.HANDED_OVER);
     }
 
+    // -------------------------------------------- order-keyed events (gap map row 1.2b, wave P11)
+
+    @Test
+    @DisplayName("a HANDED_OVER ticket's events are read by order id even though board() never returns it")
+    void completedOrdersEventsSurviveOffTheBoard() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        UUID orderId = seedConfirmedOrder("A-060", null, null, null, burger);
+        TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+        TicketItemRow item = store.itemsOf(TENANT, ticket.id()).getFirst();
+        tickets.start(TENANT, item.id(), "cook", null);
+        tickets.ready(TENANT, item.id(), "cook", null);
+        tickets.handOver(TENANT, ticket.id(), "expo", null);
+
+        // The gap this closes, stated as an assertion: the live board itself
+        // never answers for this ticket once it is HANDED_OVER.
+        assertThat(tickets.board(TENANT, branch, List.of("FIRED", "IN_PRODUCTION", "READY"), 200))
+                .noneMatch(row -> row.id().equals(ticket.id()));
+
+        KitchenBoardController board =
+                new KitchenBoardController(tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas());
+
+        KitchenBoardController.KitchenEventsResponse response = Objects.requireNonNull(
+                board.eventsForOrder(TENANT, BRAND, branch, orderId).getBody());
+
+        assertThat(response.ticketId()).isEqualTo(ticket.id());
+        assertThat(response.ticketStatus()).isEqualTo("HANDED_OVER");
+        assertThat(response.events())
+                .as("every ticket-level transition this ticket made, in order")
+                .extracting(KitchenBoardController.KitchenEventResponse::toStatus)
+                .contains("FIRED", "IN_PRODUCTION", "READY", "HANDED_OVER");
+    }
+
+    @Test
+    @DisplayName("an order that never opened a ticket answers empty, not an error")
+    void anOrderWithNoTicketAnswersEmptyEvents() {
+        KitchenBoardController board =
+                new KitchenBoardController(tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas());
+
+        KitchenBoardController.KitchenEventsResponse response = Objects.requireNonNull(
+                board.eventsForOrder(TENANT, BRAND, branch, UUID.randomUUID()).getBody());
+
+        assertThat(response.ticketId()).isNull();
+        assertThat(response.ticketStatus()).isNull();
+        assertThat(response.events()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a ticket at a sibling branch answers not found, not somebody else's production events")
+    void aTicketAtASiblingBranchIsNotFoundForEvents() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        UUID orderId = seedConfirmedOrder("A-061", null, null, null, burger);
+        tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+
+        KitchenBoardController board =
+                new KitchenBoardController(tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas());
+
+        Throwable refusal = catchThrowable(() -> board.eventsForOrder(TENANT, BRAND, siblingBranch, orderId));
+
+        assertThat(refusal).isInstanceOf(ApiException.class);
+    }
+
     // ------------------------------------------------------------------- release
 
     @Test
@@ -799,7 +861,8 @@ class KitchenExecutionTests {
         TicketItemRow item = store.itemsOf(TENANT, ticket.id()).getFirst();
         TicketItemStatus before = item.status();
 
-        KitchenBoardController board = new KitchenBoardController(tickets, cookAtSiblingBranch(), refusesEverything());
+        KitchenBoardController board =
+                new KitchenBoardController(tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas());
 
         Throwable refusal = catchThrowable(() -> board.start(TENANT, BRAND, siblingBranch, item.id()));
 
@@ -820,6 +883,11 @@ class KitchenExecutionTests {
 
     private CurrentActor cookAtSiblingBranch() {
         return () -> new AuthenticatedActor(UUID.randomUUID().toString(), Set.of(), Map.of());
+    }
+
+    /** No item here has a delivery plan at all, so the join has nothing to answer. */
+    private CourierEtaPort noCourierEtas() {
+        return (tenantId, orderIds) -> java.util.Map.of();
     }
 
     /**
