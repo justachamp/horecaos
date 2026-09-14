@@ -1029,6 +1029,11 @@ export interface CampaignResponse {
   version?: number;
 }
 
+export interface CancellationReasonResponse {
+  internalName?: string;
+  reasonCode?: string;
+}
+
 export interface CandidateView {
   correlationEchoed?: boolean;
   externalCreatedAt?: string;
@@ -4158,13 +4163,17 @@ export interface OrderRowResponse {
   discountSom?: number;
   fulfilmentType?: string;
   grossRevenueSom?: number;
+  isPreorder?: boolean;
   itemCount?: number;
   legalEntityId?: string;
   locationId?: string;
   netRevenueSom?: number;
   occurredAt?: string;
   orderId?: string;
+  publicOrderNumber?: string;
   secondsLate?: number;
+  secondsPreparing?: number;
+  secondsToAccept?: number;
   secondsToConfirm?: number;
   secondsToReady?: number;
   secondsTotal?: number;
@@ -4226,6 +4235,8 @@ export interface OutcomeResponse {
 export interface OutcomeRowResponse {
   cancellationReasonCode?: string;
   count?: number;
+  liabilityParty?: string;
+  stockDisposition?: string;
   terminalStatus?: string;
 }
 
@@ -8248,15 +8259,17 @@ export interface Operations {
   "detail": { method: "GET"; path: "/api/v1/tenants/{tenantId}/notifications/{notificationId}"; request: { parameters: { path: { notificationId: string; tenantId: string } } }; responses: { "200": NotificationResponse } };
   "retry": { method: "POST"; path: "/api/v1/tenants/{tenantId}/notifications/{notificationId}/retry"; request: { parameters: { path: { notificationId: string; tenantId: string } }; body: RetryRequest }; responses: { "200": unknown } };
   "byNumber": { method: "GET"; path: "/api/v1/tenants/{tenantId}/orders/by-number"; request: { parameters: { path: { tenantId: string }; query: { publicOrderNumber: string } } }; responses: { "200": OrderNumberLookupResponse } };
+  "cancellationReasons": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/cancellation-reasons"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<CancellationReasonResponse> } };
   "demandHistory": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/demand-history"; request: { parameters: { path: { tenantId: string }; query: { locationId: string; sampleSize?: number; weekday: number } } }; responses: { "200": DemandHistoryResponse } };
+  "fulfilmentTime": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/fulfilment-time"; request: { parameters: { path: { tenantId: string }; query: { from: string; fulfilmentType: string; locationId?: Array<string>; to: string } } }; responses: { "200": MedianResponse } };
   "metrics": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/metrics"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<MetricResponse> } };
   "operatorLeaderboard": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/operator-leaderboard"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": OperatorLeaderboardResponse } };
   "operatorProducts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/operator-products"; request: { parameters: { path: { tenantId: string }; query: { from: string; limit?: number; locationId?: Array<string>; operatorPrincipalId: string; to: string } } }; responses: { "200": OperatorProductListResponse } };
   "orderOutcomes": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/order-outcomes"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; locationId?: Array<string>; to: string } } }; responses: { "200": OutcomeListResponse } };
-  "orders": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/orders"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; limit?: number; locationId?: Array<string>; sort?: string; to: string } } }; responses: { "200": OrderListResponse } };
+  "orders": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/orders"; request: { parameters: { path: { tenantId: string }; query: { afterOccurredAt?: string; afterOrderId?: string; channelCode?: Array<string>; from: string; fulfilmentType?: Array<string>; legalEntityId?: Array<string>; limit?: number; locationId?: Array<string>; sort?: string; to: string } } }; responses: { "200": OrderListResponse } };
   "paymentMix": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/payment-mix"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; paymentMethodCode?: Array<string>; to: string } } }; responses: { "200": PaymentMixResponse } };
   "preparationTime": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/preparation-time"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": MedianResponse } };
-  "query": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/queries"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; groupBy?: Array<string>; locationId?: Array<string>; metric: Array<string>; to: string } } }; responses: { "200": QueryResponse } };
+  "query": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/queries"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; groupBy?: Array<string>; legalEntityId?: Array<string>; locationId?: Array<string>; metric: Array<string>; to: string } } }; responses: { "200": QueryResponse } };
   "slaBucketSet": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/sla-bucket-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": SlaBuckets } };
   "slaBuckets": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/sla-buckets"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": SlaResponse } };
   "variantSales": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/variant-sales"; request: { parameters: { path: { tenantId: string }; query: { from: string; limit?: number; locationId?: Array<string>; to: string } } }; responses: { "200": VariantSalesListResponse } };

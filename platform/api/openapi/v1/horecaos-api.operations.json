@@ -2300,6 +2300,17 @@
         },
         "type" : "object"
       },
+      "CancellationReasonResponse" : {
+        "properties" : {
+          "internalName" : {
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "CapabilityView" : {
         "properties" : {
           "activeTenantId" : {
@@ -8363,6 +8374,9 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "isPreorder" : {
+            "type" : "boolean"
+          },
           "itemCount" : {
             "format" : "int32",
             "type" : "integer"
@@ -8387,7 +8401,18 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "publicOrderNumber" : {
+            "type" : "string"
+          },
           "secondsLate" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "secondsPreparing" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "secondsToAccept" : {
             "format" : "int32",
             "type" : "integer"
           },
@@ -8470,6 +8495,12 @@
           "count" : {
             "format" : "int32",
             "type" : "integer"
+          },
+          "liabilityParty" : {
+            "type" : "string"
+          },
+          "stockDisposition" : {
+            "type" : "string"
           },
           "terminalStatus" : {
             "type" : "string"
@@ -33490,6 +33521,38 @@
         "tags" : [ "Order lookup" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/reporting/cancellation-reasons" : {
+      "get" : {
+        "description" : "Resolves a CANCELLED order's cancellationReasonCode (order_outcome_reasons.id, as a string) to the internal_name an operator actually picked, so the funnel's cancellation panel prints a name rather than a UUID. REJECTED/EXPIRED reason codes name a different, platform-fixed registry this does not cover.",
+        "operationId" : "cancellationReasons",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/CancellationReasonResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant's cancellation-reason registry (7.1a)",
+        "tags" : [ "Reporting" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/reporting/demand-history" : {
       "get" : {
         "description" : "Not a forecast (the owner's 2026-09-05 decision, ADR 0043's implementation status): an average of completed orders in each hour, over the location's most recent occurrences of the requested weekday. Below minimumSampleSize qualifying dates, averageOrders is null on every hour and ordersByDate carries the raw per-date counts instead, so a sample too thin to mean anything is never shown as a confident number.",
@@ -33540,6 +33603,69 @@
           }
         },
         "summary" : "Historical average order count by hour, for one location and weekday",
+        "tags" : [ "Reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/fulfilment-time" : {
+      "get" : {
+        "description" : "delivery_time.median.v1 / pickup_time.median.v1 — the overview's pickup/delivery elapsed-time tiles. Null when nothing of that fulfilment type closed in range, which is not a zero-second delivery.",
+        "operationId" : "fulfilmentTime",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "fulfilmentType",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MedianResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Median seconds from order creation to close, for one fulfilment type (7.1)",
         "tags" : [ "Reporting" ]
       }
     },
@@ -33819,6 +33945,27 @@
           }
         }, {
           "in" : "query",
+          "name" : "fulfilmentType",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "legalEntityId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
           "name" : "sort",
           "required" : false,
           "schema" : {
@@ -33832,6 +33979,22 @@
           "schema" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "afterOccurredAt",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "afterOrderId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         } ],
         "responses" : {
@@ -34037,6 +34200,17 @@
           "required" : false,
           "schema" : {
             "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "legalEntityId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
               "type" : "string"
             },
             "type" : "array"
