@@ -198,6 +198,15 @@ public class PricingEngine {
 
         long orderDiscountTotal = offers.orderDiscountMinor();
         long discountTotal = Math.addExact(lineDiscountTotal, orderDiscountTotal);
+        // Kept apart from grossTotal, which stage 8 below discounts, because
+        // subtotal is reported gross of the discount (the receipt convention —
+        // subtotal, then discount, then tax/fee, then total — and
+        // ck_order_total_reconciles's: total = subtotal + tax + fee -
+        // discount). Tax is still extracted from, or added onto, the
+        // *discounted* amount below: VAT is owed on what the customer actually
+        // pays, and discounting after extraction would charge tax on money
+        // nobody handed over.
+        long preDiscountGrossTotal = grossTotal;
         grossTotal = Math.subtractExact(grossTotal, discountTotal);
 
         // Stage 7. Rounding happens exactly once here, on the total — apportion()
@@ -280,16 +289,23 @@ public class PricingEngine {
                 offers.deliveryBenefitMinor(),
                 offers);
 
-        // Stage 8. INCLUSIVE: tax is already inside grossTotal, so it is
-        // subtracted to report the net subtotal a fiscal receipt shows
-        // separately, and the customer-facing total adds only the delivery fee.
-        // EXCLUSIVE: grossTotal is already the net subtotal (nothing to
-        // subtract), and the customer-facing total adds both the tax just
-        // computed and the delivery fee. Either way the delivery fee sits
-        // outside both figures, in its own column, for the reason given in
-        // applyDelivery — its tax treatment is a separate, open question, not
-        // this mode switch.
-        long subtotal = inputs.taxMode() == TaxMode.INCLUSIVE ? Math.subtractExact(grossTotal, totalTax) : grossTotal;
+        // Stage 8. subtotal is reported gross of the discount — derived from
+        // preDiscountGrossTotal, not from the discounted grossTotal below —
+        // while tax, delivery and the total keep discounting exactly as
+        // before. INCLUSIVE: tax is already inside preDiscountGrossTotal, so
+        // it is subtracted to report the net-of-tax, gross-of-discount
+        // subtotal a receipt shows on its own line; the customer-facing total
+        // still comes from the *discounted* grossTotal, adding only the
+        // delivery fee. EXCLUSIVE: preDiscountGrossTotal is already net of tax
+        // (nothing to subtract), and the total still adds both the tax just
+        // computed on the discounted amount and the delivery fee. Either way
+        // the delivery fee sits outside both figures, in its own column, for
+        // the reason given in applyDelivery — its tax treatment is a separate,
+        // open question, not this mode switch. The identity this leaves in
+        // both modes: total = subtotal + tax + fee - discount.
+        long subtotal = inputs.taxMode() == TaxMode.INCLUSIVE
+                ? Math.subtractExact(preDiscountGrossTotal, totalTax)
+                : preDiscountGrossTotal;
         long total = inputs.taxMode() == TaxMode.INCLUSIVE
                 ? Math.addExact(grossTotal, delivery.feeMinor())
                 : Math.addExact(Math.addExact(grossTotal, totalTax), delivery.feeMinor());
