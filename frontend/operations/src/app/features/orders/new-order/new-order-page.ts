@@ -218,6 +218,16 @@ export class NewOrderPage implements OnInit {
    */
   private readonly callEventId = this.route.snapshot.queryParamMap.get('callEventId');
 
+  /**
+   * Row 5.2d: set when the customer detail pane's own «Повторить» sent the
+   * operator here (`customer-detail-pane.ts`'s `reorder`) — both read
+   * together in {@link ngOnInit} to pre-select the customer and resolve the
+   * same reorder plan the history popover's own {@link reorder} calls, so
+   * the operator lands with the basket already filled.
+   */
+  private readonly reorderAccountId = this.route.snapshot.queryParamMap.get('reorderAccountId');
+  private readonly reorderOrderId = this.route.snapshot.queryParamMap.get('reorderOrderId');
+
   // ------------------------------------------------------------- bootstrap
 
   protected readonly locationDenied = signal(false);
@@ -270,7 +280,37 @@ export class NewOrderPage implements OnInit {
       this.menuLoading.set(false);
     }
 
-    queueMicrotask(() => this.phoneInput()?.nativeElement.focus());
+    if (this.reorderAccountId && this.reorderOrderId) {
+      await this.bootstrapReorder(scope, this.reorderAccountId, this.reorderOrderId);
+    } else {
+      queueMicrotask(() => this.phoneInput()?.nativeElement.focus());
+    }
+  }
+
+  /**
+   * Row 5.2d: pre-selects the customer the detail pane's own «Повторить»
+   * named, then resolves the same reorder plan the history popover's own
+   * {@link reorder} does — the operator lands here with the basket already
+   * filled rather than retyping it from the phone call.
+   */
+  private async bootstrapReorder(
+    scope: LocationScope,
+    accountId: string,
+    orderId: string,
+  ): Promise<void> {
+    try {
+      const profile = await this.customersApi.profile(scope, accountId);
+      this.selectedCustomer.set({
+        accountId,
+        label: profile.value.displayName ?? this.i18n.t('orders.newOrder.customer.unnamed'),
+      });
+    } catch {
+      // The account may have been merged or erased since the link was made;
+      // an empty customer picker lets the operator look the caller up again
+      // by phone rather than blocking the whole screen on a stale deep link.
+      return;
+    }
+    await this.applyReorderPlan(accountId, orderId);
   }
 
   private menuLocale(): string {
@@ -480,17 +520,29 @@ export class NewOrderPage implements OnInit {
    */
   protected async reorder(order: CustomerOrderSummary): Promise<void> {
     const selected = this.selectedCustomer();
-    const scope = this.location.scope();
-    if (!selected || !scope || this.reorderBusy() !== null) {
+    if (!selected || this.reorderBusy() !== null) {
       return;
     }
-    this.reorderBusy.set(order.orderId);
+    await this.applyReorderPlan(selected.accountId, order.orderId);
+  }
+
+  /**
+   * The shared body {@link reorder} and row 5.2d's own deep-link bootstrap
+   * (`ngOnInit`, `reorderAccountId`/`reorderOrderId`) both call — the only
+   * difference between the two call sites is where the order id comes from.
+   */
+  private async applyReorderPlan(accountId: string, orderId: string): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope || this.reorderBusy() !== null) {
+      return;
+    }
+    this.reorderBusy.set(orderId);
     this.reorderError.set(null);
     try {
       const plan: ReorderPlan | null = await this.customersApi.reorderPlan(
         scope,
-        selected.accountId,
-        order.orderId,
+        accountId,
+        orderId,
       );
       if (!plan || plan.verdict === 'UNAVAILABLE') {
         this.reorderError.set(this.i18n.t('orders.newOrder.reorder.unavailable'));
