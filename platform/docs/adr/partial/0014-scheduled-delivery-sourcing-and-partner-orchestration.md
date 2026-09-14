@@ -87,6 +87,25 @@
   sandbox-verified, Noor's own create-idempotency still an open input, and no
   live installation binding to route a push to, would be exactly the endpoint
   nothing calls that an honest gap is better than.
+  **A per-order ETA now exists — added 2026-09-14, gap map row 2.1a.**
+  `YandexDeliveryAdapter`'s `/check-price` and `NoorDeliveryAdapter`'s
+  `/orders/eval` both answer an `etaMinutes` figure that had nowhere to go:
+  `CamelShipmentBookingPort` never overrode `ShipmentBookingPort.quote()`, so
+  `DeliverySourcingService` always saw `QUOTE_NOT_WIRED` and the figure was
+  computed and discarded at the adapter's own return statement, every time.
+  `CamelShipmentBookingPort.quote()` now translates the provider's ETA into
+  `QuoteOutcome.deliveryEtaSeconds`, `DeliverySourcingService.execute` captures
+  it onto `fulfillment.delivery_plans.courier_eta_at` (V0319) the instant the
+  quote it came from wins the plan, and `fulfillment.api.CourierEtaPort` — a
+  new named-interface port over `JdbcDeliveryPlanStore`, the same shape
+  `OrderProgressPort` already gives the kitchen module — lets
+  `KitchenBoardController` join it onto `TicketResponse.courierEtaAt` by order
+  id, batched over a whole board page. This is the plan's own captured
+  estimate from the quote that won, not a live tracking feed: it does not
+  move again once set, and a plan an in-house courier carries — or a partner
+  quote that answered no ETA at all — leaves it null rather than a fabricated
+  figure. Live, moving ETAs and the partner tracking callbacks above are the
+  same still-open gap.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture), operations, legal
@@ -637,6 +656,7 @@ reconciliation evidence.
 - [ ] Implement or explicitly defer the internal courier model and legacy courier disposition. The courier model is built by ADR 0042/0045 (V0040, V0041, the `courier` and `telemetry` modules) and the seam is now closed: `courier.infrastructure.dispatch.InternalFleetAdapter` implements `fulfillment.api.InternalFleetPort`, so `SourcingPlanner`'s in-house branch is taken in production and a courier on shift is offered the order before any partner is called. What remains open under this box is the fleet's reach — a courier is enumerated only through an open shift at the branch, since ADR 0042's roster and availability tables are not built — and the legacy courier disposition, still neither built nor explicitly deferred.
 - [x] Implement first real partner adapter with uncertainty reconciliation. `NoorDeliveryAdapter` and `YandexDeliveryAdapter` classify a request that reached the partner as `UNCERTAIN` and resolve by query rather than retry. Production code now reaches both: `DeliveryPlanTrigger` opens the plan, `DeliverySourcingScheduler` claims the job, and `DeliverySourcingService` books through `CamelShipmentBookingPort`, against an `integration.bindings` row `ProviderInstallationController` can author.
 - [ ] Implement Operations APIs, tracking, recovery triggers, audit, metrics, and alerts. `fulfillment.web`'s `DispatchController` now holds a sourcing Operations API beside the ADR 0037 tariff, fee and zone controllers: the dispatch queue, audited manual assign/unassign (`ManualDispatchService`, `fulfillment.dispatch.assign`/`.unassign` ADR 0027 facts), and a read over the `fulfillment.delivery_exceptions` row a failed sourcing pass already opens. `ProviderCircuitMetrics` and ADR 0045's courier tracking endpoints exist. Still missing: an operator-triggered `source`/`reschedule`/`reconcile`, a shipment `cancel` independent of unassign, `GET .../tracking`, a partner tracking callback (see the Implementation status line above), and any sourcing-specific alert.
+- [x] Capture a per-order courier ETA from the winning quote and expose it to the kitchen and the order detail (gap map rows 2.1a/1.2n). `CamelShipmentBookingPort.quote()`, `fulfillment.delivery_plans.courier_eta_at` (V0319), `fulfillment.api.CourierEtaPort`, and the join onto `KitchenBoardController.TicketResponse` and `fulfillment.web.OrderDeliveryController` — see the Implementation status line above. Not a live tracking feed; that gap and the partner tracking callbacks are the same open item, still unchecked below.
 - [x] Add timing, duplicate, uncertainty, cost, fallback, restart, and isolation tests. `DeliverySourcingTests` covers timing (a job before its due time is not claimed; a revised estimate moves it), duplicate (a replayed tick does not book twice; two bookings produce one shipment; an answered attempt is never resent), fallback (the cheapest quoting partner wins; a partner that refuses a quote is not booked), restart (a dead worker loses its lease and a lost lease cannot finish somebody else's job), isolation (a plan is not readable by another tenant), and now cost (`thecheapestQuotedPartnerWins` asserts the `DELIVERY_COST_SUBSIDY` row and its amount; `aCheaperPartnerRecordsNoSubsidy` proves a cheaper winning quote writes none); uncertainty and gateway classification are covered by the adapter tests.
 
 ## Exit criteria
