@@ -31,10 +31,11 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * not create a handover model of its own.
  *
  * <p>The capability split is deliberate and stands on a difference in frequency.
- * {@code kitchen.handover.complete} closes a challenge and is a daily act at the
- * pass, held by everyone who works it. {@code marketplace.handover.bypass}
- * overrides verification, is not daily, and one capability covering both would
- * put the override in every expo bundle in the country.
+ * {@code marketplace.handover.verify} (wave T02) settles a challenge and is a
+ * daily act at the pass, held by everyone who works it. {@code
+ * marketplace.handover.bypass} overrides verification, is not daily, and one
+ * capability covering both would put the override in every expo bundle in the
+ * country.
  *
  * <p>Nothing here ever returns, logs, or traces the expected value. The response
  * to a wrong code says how many attempts remain and nothing else, because a

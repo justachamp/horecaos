@@ -272,6 +272,7 @@ public enum PlatformRole {
                     MARKETPLACE_MENU_PUSH,
                     MARKETPLACE_AVAILABILITY_PUSH,
                     MARKETPLACE_ORDER_CREATE_MANUAL,
+                    MARKETPLACE_HANDOVER_VERIFY,
                     MARKETPLACE_HANDOVER_BYPASS,
                     MARKETPLACE_LIVENESS_READ,
                     CUSTOMER_READ,
@@ -435,6 +436,7 @@ public enum PlatformRole {
                     MARKETPLACE_MENU_PUSH,
                     MARKETPLACE_AVAILABILITY_PUSH,
                     MARKETPLACE_ORDER_CREATE_MANUAL,
+                    MARKETPLACE_HANDOVER_VERIFY,
                     MARKETPLACE_HANDOVER_BYPASS,
                     MARKETPLACE_LIVENESS_READ,
                     CUSTOMER_READ,
@@ -637,6 +639,10 @@ public enum PlatformRole {
                     KITCHEN_TICKET_RELEASE,
                     KITCHEN_TICKET_RELEASE_OVERRIDE,
                     KITCHEN_TICKET_HANDOVER,
+                    // ADR 0040, wave T02: comparing a marketplace handover code, held by
+                    // the same bundle as the KITCHEN_TICKET_HANDOVER it gates — a manager
+                    // who cannot complete a hand-over has no use for verifying one either.
+                    MARKETPLACE_HANDOVER_VERIFY,
                     // ADR 0047: the floor plan is the physical property of this branch,
                     // and a walkout is this shift's cash shortfall.
                     DINEIN_FLOORPLAN_MANAGE,

@@ -577,6 +577,12 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     uz: 'Taomlar mavjudligini agregatorga yuborish',
     en: 'Push availability to a marketplace',
   },
+  'marketplace.handover.verify': {
+    area: 'marketplace',
+    ru: 'Проверять код передачи заказа курьеру агрегатора',
+    uz: 'Agregator kuryeriga topshirish kodini tekshirish',
+    en: 'Verify a marketplace handover code',
+  },
   'marketplace.handover.bypass': {
     area: 'marketplace',
     ru: 'Пропускать код передачи заказа курьеру агрегатора',

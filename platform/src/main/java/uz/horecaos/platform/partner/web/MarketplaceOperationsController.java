@@ -110,7 +110,7 @@ public class MarketplaceOperationsController {
     }
 
     @PostMapping("/orders/{orderId}/handover-verifications")
-    @RequiresCapability(value = Capability.ORDER_ADVANCE, scope = ScopeType.TENANT, mutating = true)
+    @RequiresCapability(value = Capability.MARKETPLACE_HANDOVER_VERIFY, scope = ScopeType.TENANT, mutating = true)
     @Operation(
             summary = "Verify a handover code",
             description = "Consumes one attempt whether or not the code matches. The response says "
@@ -118,11 +118,6 @@ public class MarketplaceOperationsController {
     public ResponseEntity<VerificationResponse> verify(
             @PathVariable UUID tenantId, @PathVariable UUID orderId, @Valid @RequestBody VerificationRequest body) {
 
-        // Declared against ORDER_ADVANCE rather than ADR 0040's stated
-        // kitchen.handover.complete, which ADR 0041 owns and has not registered.
-        // Advancing an order along the kitchen path is the closest existing
-        // grant and is held by the same people; this moves to the narrower code
-        // the moment ADR 0041 declares it, and the ADR records that.
         HandoverVerificationService.Verification result = handovers.verify(
                 tenantId, orderId, body.code(), currentActor.get().subject());
 
