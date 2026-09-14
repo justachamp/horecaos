@@ -82,6 +82,32 @@ export interface MedianResponse {
 }
 
 /**
+ * One payment-mix row — mirrors `ReportingController.PaymentMixRowResponse`.
+ *
+ * @property locationId null on an `overview` row (folded across every branch
+ *   in range, never across legal entities), set on a `byLocation` row.
+ */
+export interface PaymentMixRowResponse {
+  readonly locationId: string | null;
+  readonly legalEntityId: string | null;
+  readonly paymentMethodCode: string;
+  readonly settlesFromBalance: boolean;
+  readonly tenderCount: number;
+  readonly amountSom: number;
+}
+
+/**
+ * P39 (7.1c/7.3b): `payment_mix.amount.v1` — the cash-collection control
+ * figure. `overview` is what the business-overview card renders; `byLocation`
+ * is what a future branch report (7.3b) would split by.
+ */
+export interface PaymentMixResponse {
+  readonly overview: readonly PaymentMixRowResponse[];
+  readonly byLocation: readonly PaymentMixRowResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/**
  * One order, straight off {@code reporting.fact_order}. No name, phone,
  * operator, or courier: reporting has no {@code PERSONAL} field at all
  * (ADR 0029), so a commercial log built from this is honestly short of them
@@ -306,6 +332,19 @@ export class ReportingApi {
   async preparationTime(tenantId: string, params: RangeParams): Promise<MedianResponse> {
     const result = await firstValueFrom(
       this.api.get<MedianResponse>(reportsPaths.preparationTime(tenantId), {
+        params: { from: params.from, to: params.to, locationId: params.locationId },
+      }),
+    );
+    return result.value;
+  }
+
+  /** P39 (7.1c/7.3b): takings split by payment method. */
+  async paymentMix(
+    tenantId: string,
+    params: { readonly from: string; readonly to: string; readonly locationId?: readonly string[] },
+  ): Promise<PaymentMixResponse> {
+    const result = await firstValueFrom(
+      this.api.get<PaymentMixResponse>(reportsPaths.paymentMix(tenantId), {
         params: { from: params.from, to: params.to, locationId: params.locationId },
       }),
     );

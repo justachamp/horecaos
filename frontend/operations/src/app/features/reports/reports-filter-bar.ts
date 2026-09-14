@@ -1,7 +1,13 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 
+import { CurrentLocation } from '../../core/auth/current-location';
+import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import {
+  PaymentMethodView,
+  PaymentMethodsApi,
+} from '../settings/payment-methods/payment-methods-api';
 import { PeriodPreset, ReportsFilterState } from './reports-filter-state';
 
 /**
@@ -9,10 +15,13 @@ import { PeriodPreset, ReportsFilterState } from './reports-filter-state';
  * — see {@link ReportsFilterState}'s own doc for what row 2 (branch, legal
  * entity, custom date range, granularity) is deliberately short of, and why.
  *
- * **Тип оплаты renders locked, not hidden** (§1.1): `fact_order_tender`
- * (ADR 0046) is one of the fact families ADR 0043's own status line names as
- * not built, so a manager who goes looking for the payment filter is told why
- * it is missing rather than concluding it does not exist anywhere.
+ * **Тип оплаты is unlocked (P39).** It used to render a locked notice naming
+ * `fact_order_tender` as the reason — ADR 0043's own status line listed it as
+ * not built. Now it reads the tenant's `payments.payment_methods` registry
+ * (ADR 0038, seeded by wave P33) the same way the settings screen does, and
+ * toggles `ReportsFilterState.paymentMethodCodes` — a multiselect, because a
+ * manager reconciling cash legitimately wants "cash and card, not online"
+ * rather than one method at a time.
  */
 @Component({
   selector: 'q-reports-filter-bar',
@@ -21,8 +30,11 @@ import { PeriodPreset, ReportsFilterState } from './reports-filter-state';
   styleUrl: './reports-filter-bar.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ReportsFilterBar {
+export class ReportsFilterBar implements OnInit {
   protected readonly state = inject(ReportsFilterState);
+  private readonly location = inject(CurrentLocation);
+  private readonly paymentMethodsApi = inject(PaymentMethodsApi);
+  private readonly i18n = inject(I18n);
 
   protected readonly periods: readonly {
     readonly id: PeriodPreset;
@@ -44,11 +56,48 @@ export class ReportsFilterBar {
     { id: 'DINE_IN', labelKey: 'reports.filter.fulfilment.dineIn' },
   ];
 
+  protected readonly paymentMethods = signal<readonly PaymentMethodView[]>([]);
+
+  ngOnInit(): void {
+    void this.loadPaymentMethods();
+  }
+
   protected selectPeriod(period: PeriodPreset): void {
     this.state.setPeriod(period);
   }
 
   protected selectFulfilmentType(type: 'ALL' | 'DELIVERY' | 'PICKUP' | 'DINE_IN'): void {
     this.state.setFulfilmentType(type);
+  }
+
+  protected paymentMethodLabel(method: PaymentMethodView): string {
+    return method.localizedNames[this.i18n.locale()] ?? method.displayName;
+  }
+
+  protected paymentMethodActive(code: string): boolean {
+    return this.state.paymentMethodCodes().includes(code);
+  }
+
+  protected togglePaymentMethod(code: string): void {
+    const current = this.state.paymentMethodCodes();
+    this.state.setPaymentMethodCodes(
+      current.includes(code) ? current.filter((existing) => existing !== code) : [...current, code],
+    );
+  }
+
+  private async loadPaymentMethods(): Promise<void> {
+    await this.location.ensureLoaded();
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    const methods = await this.paymentMethodsApi
+      .list(scope)
+      .catch(() => [] as readonly PaymentMethodView[]);
+    this.paymentMethods.set(
+      methods
+        .filter((method) => method.status === 'ACTIVE')
+        .sort((a, b) => a.sortOrder - b.sortOrder),
+    );
   }
 }

@@ -40,13 +40,24 @@
       }
     </div>
 
-    <div
-      class="filter-bar__locked"
-      [attr.aria-label]="'reports.filter.paymentType.label' | t"
-      [attr.title]="'reports.filter.paymentType.locked' | t"
-    >
-      <span class="filter-bar__locked-glyph" aria-hidden="true"><span></span></span>
-      <span class="q-body-sm">{{ 'reports.filter.paymentType.label' | t }}</span>
-    </div>
+    @if (paymentMethods().length > 0) {
+      <div
+        class="filter-bar__segmented"
+        role="group"
+        [attr.aria-label]="'reports.filter.paymentType.label' | t"
+      >
+        @for (method of paymentMethods(); track method.id) {
+          <button
+            type="button"
+            class="segment"
+            [class.segment--active]="paymentMethodActive(method.code)"
+            [attr.aria-pressed]="paymentMethodActive(method.code)"
+            (click)="togglePaymentMethod(method.code)"
+          >
+            {{ paymentMethodLabel(method) }}
+          </button>
+        }
+      </div>
+    }
   </div>
 </div>

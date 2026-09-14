@@ -70,35 +70,3 @@
   outline: 2px solid var(--q-primary);
   outline-offset: -2px;
 }
-
-/* Локed, not hidden (§1.1): a manager who cannot find the payment filter must
-   see that it exists and why, not conclude it was never built. */
-.filter-bar__locked {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border: 1px dashed var(--q-ink-subtle);
-  color: var(--q-ink-subtle);
-  cursor: help;
-}
-
-.filter-bar__locked-glyph {
-  display: inline-block;
-  width: 8px;
-  height: 6px;
-  border: 1px solid var(--q-ink-subtle);
-  border-bottom: none;
-  border-radius: 4px 4px 0 0;
-  position: relative;
-  top: 3px;
-}
-
-.filter-bar__locked-glyph span {
-  display: block;
-  width: 12px;
-  height: 8px;
-  margin-left: -2.5px;
-  margin-top: 5px;
-  background: var(--q-ink-subtle);
-}
