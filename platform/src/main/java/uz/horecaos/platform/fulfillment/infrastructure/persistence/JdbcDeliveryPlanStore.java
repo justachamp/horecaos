@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -190,6 +191,64 @@ public class JdbcDeliveryPlanStore {
                         .param("now", utc(now))
                         .update()
                 == 1;
+    }
+
+    /**
+     * The winning partner quote's own ETA, captured once at booking (V0319, gap
+     * map row 2.1a). Kept off {@link DeliveryPlan} deliberately — that record is
+     * constructed in a great many places this column has nothing to do with, and
+     * every one of the two callers that need this value (the order-keyed
+     * delivery read and the kitchen board's ticket join) already has the plan or
+     * the order id in hand and wants one column, not the whole aggregate.
+     */
+    public void updateCourierEta(UUID tenantId, UUID planId, Instant etaAt) {
+        jdbc.sql("""
+                UPDATE fulfillment.delivery_plans
+                SET courier_eta_at = :etaAt
+                WHERE tenant_id = :tenantId AND id = :planId
+                """)
+                .param("tenantId", tenantId)
+                .param("planId", planId)
+                .param("etaAt", utc(etaAt))
+                .update();
+    }
+
+    /** The courier ETA for one order's live plan, if a winning quote ever carried one. */
+    public Optional<Instant> courierEtaByOrder(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT courier_eta_at FROM fulfillment.delivery_plans
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                  AND status <> 'CANCELLED' AND courier_eta_at IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> Objects.requireNonNull(instant(row, "courier_eta_at")))
+                .optional();
+    }
+
+    /**
+     * The same read, batched over a page of orders — the kitchen board's join
+     * (gap map row 2.1a), one round trip per board read rather than one per
+     * ticket. Absent for an order with no live plan, or a plan whose {@code
+     * courier_eta_at} was never set.
+     */
+    public Map<UUID, Instant> courierEtaByOrders(UUID tenantId, Collection<UUID> orderIds) {
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Instant> byOrder = new HashMap<>();
+        jdbc.sql("""
+                SELECT order_id, courier_eta_at FROM fulfillment.delivery_plans
+                WHERE tenant_id = :tenantId AND order_id IN (:orderIds)
+                  AND status <> 'CANCELLED' AND courier_eta_at IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("orderIds", orderIds)
+                .query((row, number) -> Map.entry(
+                        row.getObject("order_id", UUID.class), Objects.requireNonNull(instant(row, "courier_eta_at"))))
+                .list()
+                .forEach(entry -> byOrder.put(entry.getKey(), entry.getValue()));
+        return byOrder;
     }
 
     private static final String SELECT = """

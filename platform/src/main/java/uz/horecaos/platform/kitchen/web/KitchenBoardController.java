@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.fulfillment.api.CourierEtaPort;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
@@ -65,12 +67,17 @@ public class KitchenBoardController {
     private final KitchenTicketService tickets;
     private final CurrentActor currentActor;
     private final AuthorizationService authorization;
+    private final CourierEtaPort courierEta;
 
     public KitchenBoardController(
-            KitchenTicketService tickets, CurrentActor currentActor, AuthorizationService authorization) {
+            KitchenTicketService tickets,
+            CurrentActor currentActor,
+            AuthorizationService authorization,
+            CourierEtaPort courierEta) {
         this.tickets = tickets;
         this.currentActor = currentActor;
         this.authorization = authorization;
+        this.courierEta = courierEta;
     }
 
     @GetMapping("/tickets")
@@ -107,9 +114,18 @@ public class KitchenBoardController {
                 .collect(Collectors.toSet());
         Map<String, String> channelSystemTypes = tickets.channelSystemTypes(tenantId, channelCodes);
 
+        // The courier ETA chip (gap map row 2.1a), the same batched-over-the-page
+        // shape as channelSystemTypes above: one read over every order id this
+        // page carries, not one dispatch lookup per ticket.
+        Map<UUID, Instant> courierEtaByOrder = courierEta.etaByOrders(
+                tenantId, ticketRows.stream().map(TicketRow::orderId).collect(Collectors.toSet()));
+
         List<TicketResponse> board = ticketRows.stream()
                 .map(ticket -> TicketResponse.of(
-                        ticket, tickets.items(tenantId, ticket.id()), channelSystemTypes.get(ticket.channelCode())))
+                        ticket,
+                        tickets.items(tenantId, ticket.id()),
+                        channelSystemTypes.get(ticket.channelCode()),
+                        courierEtaByOrder.get(ticket.orderId())))
                 .toList();
 
         // The gap travels on every response rather than in a startup log. A branch
@@ -136,9 +152,51 @@ public class KitchenBoardController {
             @PathVariable UUID ticketId) {
 
         TicketRow ticket = atLocation(tenantId, ticketId, locationId);
+        Instant eta = courierEta.etaByOrders(tenantId, Set.of(ticket.orderId())).get(ticket.orderId());
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(ticket.version()))
-                .body(TicketResponse.of(ticket, tickets.items(tenantId, ticket.id())));
+                .body(TicketResponse.of(ticket, tickets.items(tenantId, ticket.id()), null, eta));
+    }
+
+    /**
+     * The production lane of the order detail's timeline (gap map row 1.2b):
+     * every {@code kitchen.ticket_events} row for the ticket this order
+     * opened, whatever the ticket's own status — including {@code
+     * HANDED_OVER} and {@code VOIDED}, which {@link #board} never returns and
+     * which is exactly the case the gap map calls out: "a finished order's
+     * ticket falls off the board entirely."
+     *
+     * <p>{@code ORDER_READ} rather than {@code KITCHEN_TICKET_READ} —
+     * deliberately, per the wave's own brief: the order detail pane's
+     * operator has the former and not necessarily the latter, and this
+     * endpoint exists for that pane, not for the kitchen board.
+     */
+    @GetMapping("/orders/{orderId}/events")
+    @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "This order's kitchen production events, if it ever opened a ticket",
+            description = "Empty when the order never opened a ticket at all — an ordinary state, "
+                    + "not an error. A ticket that opened at a different branch answers not found, "
+                    + "the same rule every other order-keyed read in this console follows.")
+    public ResponseEntity<KitchenEventsResponse> eventsForOrder(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID orderId) {
+
+        Optional<TicketRow> ticket = tickets.byOrder(tenantId, orderId);
+        if (ticket.isPresent() && !ticket.get().locationId().equals(locationId)) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such ticket");
+        }
+        if (ticket.isEmpty()) {
+            return ResponseEntity.ok(new KitchenEventsResponse(null, null, List.of()));
+        }
+        List<JdbcKitchenStore.TicketEventRow> events =
+                tickets.events(tenantId, ticket.get().id());
+        return ResponseEntity.ok(new KitchenEventsResponse(
+                ticket.get().id(),
+                ticket.get().status().name(),
+                events.stream().map(KitchenEventResponse::of).toList()));
     }
 
     @PostMapping("/tickets/{ticketId}/release")
@@ -343,12 +401,16 @@ public class KitchenBoardController {
      * <p>{@code channelSystemType} (wave P16) is {@code
      * tenant.sales_channels.system_type} resolved off {@code channelCode} —
      * {@code AGGREGATOR} lets the client render a real aggregator tab instead
-     * of the raw channel code as an unclassified chip (gap map row 2.1). Only
-     * {@link #board} resolves it, at the cost of one batch read over the
-     * page's distinct codes; the single-ticket read and every mutation
-     * response below keep the cheaper two-argument {@link #of(TicketRow,
-     * List)} overload; a client that already holds the chip from its last
-     * board read loses nothing by a mutation response not repeating it.
+     * of the raw channel code as an unclassified chip (gap map row 2.1).
+     * {@code courierEtaAt} (wave P11) is the winning partner quote's own ETA,
+     * joined off {@code fulfillment.delivery_plans.courier_eta_at} by order
+     * id (gap map row 2.1a) — null for a pickup or dine-in ticket, a plan an
+     * in-house courier carries, or a partner that answered no ETA. Both are
+     * resolved only by {@link #board}, at the cost of one batch read each over
+     * the page's distinct codes and order ids; every mutation response below
+     * keeps the cheaper two-argument {@link #of(TicketRow, List)} overload — a
+     * client that already holds either value from its last board read loses
+     * nothing by a mutation response not repeating it.
      */
     record TicketResponse(
             UUID ticketId,
@@ -367,13 +429,18 @@ public class KitchenBoardController {
             @Nullable Instant readyAt,
             int version,
             Instant createdAt,
+            @Nullable Instant courierEtaAt,
             List<ItemView> items) {
 
         static TicketResponse of(TicketRow ticket, List<TicketItemRow> items) {
-            return of(ticket, items, null);
+            return of(ticket, items, null, null);
         }
 
-        static TicketResponse of(TicketRow ticket, List<TicketItemRow> items, @Nullable String channelSystemType) {
+        static TicketResponse of(
+                TicketRow ticket,
+                List<TicketItemRow> items,
+                @Nullable String channelSystemType,
+                @Nullable Instant courierEtaAt) {
             return new TicketResponse(
                     ticket.id(),
                     ticket.orderId(),
@@ -391,6 +458,7 @@ public class KitchenBoardController {
                     ticket.readyAt(),
                     ticket.version(),
                     ticket.createdAt(),
+                    courierEtaAt,
                     items.stream().map(ItemView::of).toList());
         }
     }
@@ -424,6 +492,50 @@ public class KitchenBoardController {
                     ItemView.of(outcome.item()),
                     outcome.ticket().status().name(),
                     outcome.ticket().version());
+        }
+    }
+
+    /**
+     * {@link #eventsForOrder}'s response. {@code ticketId}/{@code
+     * ticketStatus} are null exactly when {@code events} is empty. {@code
+     * public} — unlike this controller's other payload records — because the
+     * order-keyed production lane (gap map row 1.2b) is tested from {@code
+     * KitchenExecutionTests}, which needs its own package's seeding
+     * infrastructure this class does not have.
+     */
+    public record KitchenEventsResponse(
+            @Nullable UUID ticketId, @Nullable String ticketStatus, List<KitchenEventResponse> events) {}
+
+    /**
+     * One {@code kitchen.ticket_events} row. {@code ticketItemId} is null for a
+     * ticket-level transition (FIRED, IN_PRODUCTION, READY, HANDED_OVER) and set
+     * for a per-line station advance — the order detail's production lane (gap
+     * map row 1.2b) uses the former to build its stage steps and elapsed
+     * durations, ignoring the latter the same way the kitchen board itself
+     * never names a dish (ADR 0041).
+     */
+    public record KitchenEventResponse(
+            UUID id,
+            @Nullable UUID ticketItemId,
+            @Nullable String fromStatus,
+            String toStatus,
+            String trigger,
+            String actorType,
+            String actorId,
+            @Nullable String reasonCode,
+            Instant occurredAt) {
+
+        static KitchenEventResponse of(JdbcKitchenStore.TicketEventRow row) {
+            return new KitchenEventResponse(
+                    row.id(),
+                    row.ticketItemId(),
+                    row.fromStatus(),
+                    row.toStatus(),
+                    row.trigger(),
+                    row.actorType(),
+                    row.actorId(),
+                    row.reasonCode(),
+                    row.occurredAt());
         }
     }
 

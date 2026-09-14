@@ -134,6 +134,44 @@ class DeliverySourcingServiceTests {
     }
 
     @Test
+    @DisplayName("the winning partner's own ETA is captured onto the plan the instant it wins (gap map row 2.1a)")
+    void theWinningQuotesEtaIsCapturedAtBooking() {
+        ShipmentBookingPort.PartnerOption second = new ShipmentBookingPort.PartnerOption(
+                UUID.fromString("aaaaaaaa-0000-0000-0000-000000000004"), "yandex-delivery", true, true);
+        RecordingBookingPort bookings = new RecordingBookingPort(List.of(NOOR, second));
+        // 25 minutes -- the provider's own etaMinutes, already translated to
+        // seconds by CamelShipmentBookingPort.quote() at the real adapter
+        // boundary this fake stands in for.
+        bookings.quoteOutcome = ShipmentBookingPort.QuoteOutcome.priced(9_000L, "UZS", null, 25 * 60, null, null);
+        RecordingSourcingJournal journal = new RecordingSourcingJournal();
+        Instant now = sourceAt();
+        DeliverySourcingService service = service(emptyFleet(), bookings, now, journal);
+
+        DeliverySourcingService.Outcome outcome = service.source(request(SourcingMode.FLEET_FIRST));
+
+        assertThat(outcome.won()).isTrue();
+        assertThat(journal.courierEtas)
+                .as("captured against the plan the instant the booking settles: now + 25 minutes")
+                .containsValue(now.plusSeconds(25 * 60));
+    }
+
+    @Test
+    @DisplayName("a quote with no price at all leaves no ETA to capture")
+    void anUnquotedWinLeavesNoEtaCaptured() {
+        RecordingBookingPort bookings = new RecordingBookingPort(List.of(NOOR));
+        RecordingSourcingJournal journal = new RecordingSourcingJournal();
+        DeliverySourcingService service = service(emptyFleet(), bookings, sourceAt(), journal);
+
+        DeliverySourcingService.Outcome outcome = service.source(request(SourcingMode.FLEET_FIRST));
+
+        assertThat(outcome.won()).isTrue();
+        assertThat(journal.courierEtas)
+                .as("a single-partner run is never quoted at all (quoteAndScore's own doc: asking one "
+                        + "configured partner cannot change who is booked), so there is nothing to capture")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("nothing configured resolves to ADR 0014's provisional timings under a stable id")
     void unconfiguredPolicyIsRecordedAsDefaults() {
         DeliverySourcingService service = service(emptyFleet(), new RecordingBookingPort(List.of(NOOR)), sourceAt());
@@ -231,6 +269,9 @@ class DeliverySourcingServiceTests {
         private final List<BookingCommand> booked = new ArrayList<>();
         private BookingStatus status = BookingStatus.BOOKED;
 
+        /** Answered to every {@link #quote}, the default's own "nothing wired" — set to price a run for {@link #theWinningQuotesEtaIsCapturedAtBooking}. */
+        private QuoteOutcome quoteOutcome = QuoteOutcome.unavailable(QUOTE_NOT_WIRED);
+
         RecordingBookingPort(List<PartnerOption> options) {
             this.options = options;
         }
@@ -238,6 +279,11 @@ class DeliverySourcingServiceTests {
         @Override
         public List<PartnerOption> partners(UUID tenantId, UUID brandId, UUID locationId) {
             return options;
+        }
+
+        @Override
+        public QuoteOutcome quote(BookingCommand command) {
+            return quoteOutcome;
         }
 
         @Override

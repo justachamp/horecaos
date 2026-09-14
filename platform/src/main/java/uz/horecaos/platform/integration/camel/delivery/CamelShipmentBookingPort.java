@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort;
 import uz.horecaos.platform.integration.api.delivery.DeliveryCapability;
@@ -91,6 +92,80 @@ public class CamelShipmentBookingPort implements ShipmentBookingPort {
                     gateway.supports(binding, DeliveryCapability.SCHEDULE_SHIPMENT)));
         }
         return List.copyOf(options);
+    }
+
+    /**
+     * A non-binding price and ETA from one partner (ADR 0014's {@code quote}).
+     *
+     * <p>Before this override, {@code ShipmentBookingPort}'s default answered
+     * {@code QUOTE_NOT_WIRED} on every call: {@link DeliveryGateway#quote} and
+     * the {@code QUOTE_DELIVERY} route arm have existed since the adapters were
+     * verified, but nothing on the {@code fulfillment} side of the boundary ever
+     * asked for a quote through them, so every partner's own {@code etaMinutes}
+     * — {@code YandexDeliveryAdapter}'s {@code /check-price}, {@code
+     * NoorDeliveryAdapter}'s {@code /orders/eval} — was computed and discarded
+     * at the adapter's own return statement (gap map row 2.1a). {@link #book}'s
+     * pattern is reused exactly: resolve the binding against this command's own
+     * tenant/brand/location rather than trust the id, send the operation down
+     * the same route, translate the outcome.
+     */
+    @Override
+    public QuoteOutcome quote(BookingCommand command) {
+        Optional<BindingRef> resolved = binding(command);
+        if (resolved.isEmpty()) {
+            return QuoteOutcome.unavailable("BINDING_UNAVAILABLE");
+        }
+        BindingRef binding = resolved.get();
+
+        ProviderOutcome outcome = send(new DeliveryOperation(
+                command.commandId(),
+                command.tenantId(),
+                binding,
+                DeliveryCapability.QUOTE_DELIVERY,
+                request(command),
+                null,
+                null,
+                command.correlationId()));
+
+        if (outcome.status() != ProviderOutcome.Status.SUCCESS) {
+            return QuoteOutcome.unavailable(outcome.errorCode() == null ? "QUOTE_FAILED" : outcome.errorCode());
+        }
+
+        Map<String, Object> normalized = outcome.normalized();
+        Long priceMinor = asLong(normalized.get("priceMinor"));
+        Object currency = normalized.get("currency");
+        if (priceMinor == null || currency == null) {
+            // A quote with a price but no currency, or vice versa, is not a
+            // partner answer QuoteOutcome's own compact constructor will accept
+            // (ADR 0038 refuses a number nobody can compare) -- treated the same
+            // as a refusal rather than thrown, for the same reason `book`'s own
+            // translate never throws for one: a partner returning something
+            // unusable is an ordinary sourcing outcome, not an incident.
+            return QuoteOutcome.unavailable("QUOTE_UNPRICED");
+        }
+
+        // etaMinutes is the one figure neither adapter's own quote path
+        // documents a contract for -- Yandex and Noor both simply omit the key
+        // when they have nothing to say, which is why this is asLong rather
+        // than a requireNonNull: an absent ETA is a partner that priced the
+        // journey without estimating it, not a malformed response.
+        Long etaMinutes = asLong(normalized.get("etaMinutes"));
+        Integer deliveryEtaSeconds = etaMinutes == null ? null : Math.toIntExact(etaMinutes * 60);
+
+        return QuoteOutcome.priced(priceMinor, String.valueOf(currency), null, deliveryEtaSeconds, null, null);
+    }
+
+    /**
+     * The adapters hand back whatever numeric type their JSON library produced
+     * for a provider figure — an {@code Integer}, a {@code Long}, a {@code
+     * Double} for one that happened to be written with a decimal point — and
+     * {@code ProviderOutcome.normalized()} is declared {@code Map<String,
+     * Object>} precisely because the adapter, not this boundary, owns that
+     * shape. A blind cast to {@code Long} throws on the first partner whose
+     * response quotes a plain JSON integer.
+     */
+    private static @Nullable Long asLong(@Nullable Object value) {
+        return value instanceof Number number ? number.longValue() : null;
     }
 
     @Override

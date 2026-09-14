@@ -46,16 +46,19 @@ public class JdbcSourcingJournal implements SourcingJournal {
     private final JdbcDeliveryQuoteStore quotes;
     private final JdbcDeliveryExceptionStore exceptions;
     private final JdbcDeliveryCostSubsidyStore subsidies;
+    private final JdbcDeliveryPlanStore plans;
 
     public JdbcSourcingJournal(
             JdbcAssignmentStore assignments,
             JdbcDeliveryQuoteStore quotes,
             JdbcDeliveryExceptionStore exceptions,
-            JdbcDeliveryCostSubsidyStore subsidies) {
+            JdbcDeliveryCostSubsidyStore subsidies,
+            JdbcDeliveryPlanStore plans) {
         this.assignments = assignments;
         this.quotes = quotes;
         this.exceptions = exceptions;
         this.subsidies = subsidies;
+        this.plans = plans;
     }
 
     @Override
@@ -220,6 +223,11 @@ public class JdbcSourcingJournal implements SourcingJournal {
                     subsidy.currency(),
                     subsidy.bearer());
         }
+    }
+
+    @Override
+    public void recordCourierEta(UUID tenantId, UUID planId, Instant etaAt) {
+        plans.updateCourierEta(tenantId, planId, etaAt);
     }
 
     /**

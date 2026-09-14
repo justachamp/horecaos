@@ -197,6 +197,65 @@ class CamelShipmentBookingPortTests {
     }
 
     @Test
+    @DisplayName(
+            "the provider's own etaMinutes survives the adapter boundary into a priced QuoteOutcome (gap map row 2.1a)")
+    void theProviderEtaSurvivesIntoAQuoteOutcome() throws Exception {
+        ScriptedPartner noor = onePhase();
+        ShipmentBookingPort port = port(noor);
+
+        ShipmentBookingPort.QuoteOutcome outcome = port.quote(command(ONE_PHASE_BINDING, BookingIntent.BOOK_NOW));
+
+        // Before this override, ShipmentBookingPort's own default answered
+        // QUOTE_NOT_WIRED on every call -- this is the adapter boundary the gap
+        // map row names: etaMinutes computed by the adapter and thrown away
+        // because nothing on the fulfillment side ever asked.
+        assertThat(outcome.hasPrice()).isTrue();
+        assertThat(outcome.priceMinor()).isEqualTo(12_000L);
+        assertThat(outcome.currency()).isEqualTo("UZS");
+        assertThat(outcome.deliveryEtaSeconds()).isEqualTo(18 * 60);
+        assertThat(noor.quotes).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a partner that prices a journey without estimating it answers a priced quote with no ETA")
+    void aQuoteWithNoEtaMinutesAnswersNoDeliveryEta() throws Exception {
+        ScriptedPartner noor = onePhase();
+        noor.quoteOutcome = ProviderOutcome.success(Map.of("priceMinor", 9_000L, "currency", "UZS"), null);
+        ShipmentBookingPort port = port(noor);
+
+        ShipmentBookingPort.QuoteOutcome outcome = port.quote(command(ONE_PHASE_BINDING, BookingIntent.BOOK_NOW));
+
+        assertThat(outcome.hasPrice()).isTrue();
+        assertThat(outcome.deliveryEtaSeconds()).isNull();
+    }
+
+    @Test
+    @DisplayName("a partner's business refusal to quote answers unavailable, never thrown")
+    void aRefusedQuoteAnswersUnavailable() throws Exception {
+        ScriptedPartner noor = onePhase();
+        noor.quoteOutcome = ProviderOutcome.rejected("OUT_OF_ZONE", "no coverage");
+        ShipmentBookingPort port = port(noor);
+
+        ShipmentBookingPort.QuoteOutcome outcome = port.quote(command(ONE_PHASE_BINDING, BookingIntent.BOOK_NOW));
+
+        assertThat(outcome.hasPrice()).isFalse();
+        assertThat(outcome.failureCode()).isEqualTo("OUT_OF_ZONE");
+    }
+
+    @Test
+    @DisplayName("a binding this branch does not hold refuses a quote before any partner is called")
+    void anUnresolvableBindingRefusesQuoteWithoutCallingAnybody() throws Exception {
+        ScriptedPartner noor = onePhase();
+        ShipmentBookingPort port = port(noor);
+
+        ShipmentBookingPort.QuoteOutcome outcome = port.quote(command(UUID.randomUUID(), BookingIntent.BOOK_NOW));
+
+        assertThat(outcome.hasPrice()).isFalse();
+        assertThat(outcome.failureCode()).isEqualTo("BINDING_UNAVAILABLE");
+        assertThat(noor.quotes).isZero();
+    }
+
+    @Test
     @DisplayName("a prepaid order reaches the partner as prepaid")
     void prepaidTravelsUnchanged() throws Exception {
         ScriptedPartner noor = onePhase();
@@ -387,9 +446,11 @@ class CamelShipmentBookingPortTests {
 
         private ProviderOutcome createOutcome;
         private ProviderOutcome confirmOutcome;
+        private ProviderOutcome quoteOutcome;
         private @Nullable DeliveryRequest lastRequest;
         private int creates;
         private int confirms;
+        private int quotes;
 
         ScriptedPartner(
                 String providerType, String reference, Set<DeliveryCapability> capabilities, boolean createIsLive) {
@@ -399,6 +460,8 @@ class CamelShipmentBookingPortTests {
             this.createIsLive = createIsLive;
             this.createOutcome = ProviderOutcome.success(Map.of("live", createIsLive), reference);
             this.confirmOutcome = ProviderOutcome.success(Map.of("live", true), reference);
+            this.quoteOutcome =
+                    ProviderOutcome.success(Map.of("priceMinor", 12_000L, "currency", "UZS", "etaMinutes", 18L), null);
         }
 
         @Override
@@ -413,7 +476,9 @@ class CamelShipmentBookingPortTests {
 
         @Override
         public ProviderOutcome quote(DeliveryRequest request, ProviderCall call) {
-            return ProviderOutcome.success(Map.of(), null);
+            quotes++;
+            lastRequest = request;
+            return quoteOutcome;
         }
 
         @Override

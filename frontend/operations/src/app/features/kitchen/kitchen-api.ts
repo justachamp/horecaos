@@ -55,6 +55,14 @@ export interface TicketResponse {
   readonly readyAt?: string | null;
   readonly version: number;
   readonly createdAt: string;
+  /**
+   * The winning partner quote's own delivery ETA (wave P11, gap map row
+   * 2.1a) — absent for a pickup/dine-in ticket, a plan an in-house courier
+   * carries, or a partner that answered no ETA. Only `board()` resolves this;
+   * a mutation response keeps whichever value the last board read gave, the
+   * same rule `channelSystemType` already follows.
+   */
+  readonly courierEtaAt?: string | null;
   readonly items: readonly TicketItemView[];
 }
 
@@ -89,6 +97,36 @@ export interface ItemResponse {
   readonly item: TicketItemView;
   readonly ticketStatus: string;
   readonly ticketVersion: number;
+}
+
+/**
+ * `KitchenBoardController.KitchenEventResponse` — one `kitchen.ticket_events`
+ * row (wave P11, gap map row 1.2b). `ticketItemId` absent means a
+ * ticket-level transition; present means a per-line station advance.
+ */
+export interface KitchenEventResponse {
+  readonly id: string;
+  readonly ticketItemId?: string | null;
+  /** `HELD` | `FIRED` | `IN_PRODUCTION` | `READY` | `HANDED_OVER` | `VOIDED`, absent for a ticket's own opening event. */
+  readonly fromStatus?: string | null;
+  readonly toStatus: string;
+  readonly trigger: string;
+  readonly actorType: string;
+  readonly actorId: string;
+  readonly reasonCode?: string | null;
+  readonly occurredAt: string;
+}
+
+/**
+ * `KitchenBoardController.KitchenEventsResponse` — `GET
+ * .../kitchen/orders/{orderId}/events`, the order detail's production lane
+ * (wave P11, gap map row 1.2b). `ticketId`/`ticketStatus` are `null` exactly
+ * when `events` is empty — an order that never opened a ticket, not an error.
+ */
+export interface KitchenEventsResponse {
+  readonly ticketId?: string | null;
+  readonly ticketStatus?: string | null;
+  readonly events: readonly KitchenEventResponse[];
 }
 
 export interface StationResponse {
@@ -153,6 +191,18 @@ export class KitchenApi {
       operationsPaths.kitchenTicketHandOver(scope, ticketId),
       command({}),
     );
+  }
+
+  /**
+   * The production lane of the order detail's timeline (wave P11, gap map row
+   * 1.2b) — `ORDER_READ`, not `KITCHEN_TICKET_READ`: this call is made from
+   * the order detail pane, whose operator holds the former.
+   */
+  async eventsForOrder(scope: LocationScope, orderId: string): Promise<KitchenEventsResponse> {
+    const result = await firstValueFrom(
+      this.api.get<KitchenEventsResponse>(operationsPaths.kitchenEventsByOrder(scope, orderId)),
+    );
+    return result.value;
   }
 
   async stations(scope: LocationScope): Promise<readonly StationResponse[]> {

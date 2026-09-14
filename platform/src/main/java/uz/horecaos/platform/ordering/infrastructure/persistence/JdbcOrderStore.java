@@ -1477,8 +1477,8 @@ public class JdbcOrderStore {
             String action,
             String decisionChannel,
             String actorType,
-            String actorId,
-            String reasonCode,
+            @Nullable String actorId,
+            @Nullable String reasonCode,
             Instant issuedAt) {
         jdbc.sql("""
                 INSERT INTO ordering.approval_decisions (
@@ -1512,6 +1512,27 @@ public class JdbcOrderStore {
                 .param("decisionId", decisionId)
                 .query(JdbcOrderStore::mapDecision)
                 .optional();
+    }
+
+    /**
+     * Every decision this order ever received, winner and losers alike (gap
+     * map row 1.2b) — the timeline's own question, "who tried to reject this
+     * and when", that {@link #findEffectiveDecision} alone cannot answer:
+     * V0022's own comment on this table says storing only the winner "would
+     * make an operator's rejected click invisible".
+     */
+    public List<ApprovalDecisionRow> decisionsOf(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT id, decision_id, action, decision_channel, actor_type, actor_id,
+                       reason_code, effective, issued_at
+                FROM ordering.approval_decisions
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                ORDER BY issued_at
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(JdbcOrderStore::mapDecision)
+                .list();
     }
 
     public Optional<ApprovalDecisionRow> findEffectiveDecision(UUID tenantId, UUID orderId) {

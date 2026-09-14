@@ -101,6 +101,11 @@
                   'kitchen.ticket.targetReady' | t: { time: target }
                 }}</span>
               }
+              @if (courierEtaLabel(ticket); as eta) {
+                <span class="q-caption chip chip--muted" data-testid="kitchen-ticket-courier-eta">{{
+                  eta
+                }}</span>
+              }
               <span class="status-badge">{{ ticketStatusLabel(ticket.status) }}</span>
             </div>
           </div>

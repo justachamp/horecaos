@@ -14,16 +14,22 @@ import { Versioned } from '../../core/api/aggregate-version';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
-import { TimeZone, formatDateTime } from '../../core/format/datetime';
+import { TimeZone, formatDateTime, formatDuration } from '../../core/format/datetime';
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
 import { StepItem, Steps } from '../../shared/ui/steps';
 import { Timeline, TimelineEntry } from '../../shared/ui/timeline';
 import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
+import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
+import { DispatchApi } from '../delivery/dispatch-api';
+import { KitchenApi, KitchenEventResponse, KitchenEventsResponse } from '../kitchen/kitchen-api';
+import { deliveryLifecycleSteps } from './delivery-lifecycle-steps';
+import { kitchenLifecycleSteps } from './kitchen-lifecycle-steps';
 import {
   DecisionIdRegistry,
   OrderActionResponse,
@@ -41,11 +47,14 @@ import { OrderAmendmentsApi } from './order-amendments-api';
 import { OrderCashTenderedDialog } from './order-cash-tendered-dialog';
 import {
   OrderAddressReveal,
+  OrderApprovalDecision,
+  OrderDeliveryResponse,
   OrderDetailResponse,
   OrderLine,
   OrderTimelineEntry,
   RevisionResponse,
 } from './order-detail';
+import { OrderDeliveryApi } from './order-delivery-api';
 import { describeApiError, mutationErrorNotice } from './order-errors';
 import { OrderHandoverPanel } from './order-handover-panel';
 import { orderLifecycleSteps } from './order-lifecycle-steps';
@@ -86,6 +95,14 @@ const REVEAL_PURPOSE = {
   lineNote: 'Operations console: view a line note',
 } as const;
 
+/**
+ * `DispatchApi.assign`/`unassign`'s own reason codes from this pane, distinct
+ * from the kitchen board's `OPERATIONS_KDS_ASSIGN` and the dispatch board's
+ * own manual-assign reason — an auditor can tell the three surfaces apart.
+ */
+const ORDER_DETAIL_ASSIGN_REASON = 'OPERATIONS_ORDER_DETAIL_ASSIGN';
+const ORDER_DETAIL_UNASSIGN_REASON = 'OPERATIONS_ORDER_DETAIL_UNASSIGN';
+
 /** Which reason dialog is open, if any. */
 type DialogKind =
   | 'reject'
@@ -106,14 +123,17 @@ type DialogKind =
  * detail in a fixed-width column beside the queue instead (`orders-page.css`),
  * so every section here stacks in one column rather than two. Content-wise:
  * the lines table, the money panel with its §1.3 reconciliation guard, the
- * customer and address panels behind their ADR 0029 reveal calls, the
- * commercial timeline lane, and — as of wave P10 — the §3.6 «Комментарии»
- * block and its amendment history are built. Оплата, Фискализация and
- * Интеграции (§3.9/§3.11) still need tables that do not exist yet (§11) and
- * are not here. The production and delivery timeline lanes render, greyed,
- * naming the ADRs that own them (ADR 0041, ADR 0014) — never silently
- * dropped, the same rule `not-built-page.ts` follows for a whole screen,
- * applied here to two lanes of one.
+ * customer and address panels behind their ADR 0029 reveal calls, and — as of
+ * wave P10 — the §3.6 «Комментарии» block and its amendment history are
+ * built. Оплата, Фискализация and Интеграции (§3.9/§3.11) still need tables
+ * that do not exist yet (§11) and are not here. As of wave P11, all three
+ * timeline lanes render: commercial (`GET .../timeline`'s `transitions`),
+ * production (`kitchen.ticket_events`, joined by order id for the first time
+ * outside a test) and delivery (`fulfillment.shipments`' own custody
+ * timestamps, joined the same way) — plus the Money panel's two Доставка
+ * rows, the assign/unassign control against `ManualDispatchService`, and the
+ * losing side of an approval decision the commercial lane's own transitions
+ * cannot show.
  */
 @Component({
   selector: 'q-order-detail-pane',
@@ -127,6 +147,7 @@ type DialogKind =
     OrderHandoverPanel,
     Steps,
     Timeline,
+    Combobox,
   ],
   templateUrl: './order-detail-pane.html',
   styleUrl: './order-detail-pane.css',
@@ -141,6 +162,10 @@ export class OrderDetailPane {
   private readonly referenceDataApi = inject(ReferenceDataApi);
   private readonly revealApi = inject(OrderRevealApi);
   private readonly latenessPolicyApi = inject(LatenessPolicyApi);
+  private readonly deliveryApi = inject(OrderDeliveryApi);
+  private readonly dispatchApi = inject(DispatchApi);
+  private readonly couriersApi = inject(CouriersApi);
+  private readonly kitchenApi = inject(KitchenApi);
   private readonly i18n = inject(I18n);
 
   /** Bound from the route parameter by `withComponentInputBinding()`. */
@@ -154,6 +179,27 @@ export class OrderDetailPane {
 
   protected readonly timeline = signal<readonly OrderTimelineEntry[] | null>(null);
   protected readonly timelineError = signal(false);
+  /** `GET .../timeline`'s own `decisions` (wave P11, row `1.2b`) — winner and losers alike; the losing ones are what the pane shows here that nothing else in this console does. */
+  protected readonly decisions = signal<readonly OrderApprovalDecision[]>([]);
+
+  /**
+   * `GET .../orders/{orderId}/delivery` (wave P11, rows `1.2e`/`1.2n`/`2.1a`)
+   * — `null` both before the fetch settles and for an order fulfilled some
+   * other way; {@link deliveryError} is what tells the two apart when it
+   * matters (the Money panel and the assign control render nothing either
+   * way, but the delivery timeline lane needs to say which).
+   */
+  protected readonly delivery = signal<OrderDeliveryResponse | null>(null);
+  protected readonly deliveryError = signal(false);
+
+  /** The production lane's own read (wave P11, row `1.2b`) — `null` before it settles or on a non-critical failure, exactly like {@link timeline}. */
+  protected readonly kitchenEvents = signal<KitchenEventsResponse | null>(null);
+  protected readonly kitchenEventsError = signal(false);
+
+  /** The order detail's own assign/unassign control (wave P11, row `1.2e`) — reuses `DispatchApi` exactly as the kitchen pass's own picker does. */
+  protected readonly courierRoster = signal<readonly RosterEntryResponse[]>([]);
+  protected readonly courierPickerOpen = signal(false);
+  protected readonly assigningCourier = signal(false);
 
   /**
    * `q-timeline`'s own shape, row `X.26` — the same idea as the staff
@@ -206,6 +252,46 @@ export class OrderDetailPane {
       this.statusLabel(status),
     );
   });
+
+  /**
+   * The production lane (wave P11, row `1.2b`) — filled/hollow/muted marks
+   * via `q-steps`, the same primitive {@link lifecycleSteps} already renders
+   * the commercial lifecycle rail with. `null` before {@link kitchenEvents}
+   * settles; `[]` is a real answer (the order never opened a ticket, or
+   * opened one that is still buffered).
+   */
+  protected readonly productionTimelineSteps = computed<readonly StepItem[] | null>(() => {
+    const events = this.kitchenEvents();
+    if (!events) {
+      return null;
+    }
+    return kitchenLifecycleSteps(
+      events.ticketStatus ?? null,
+      events.events,
+      (stage) => this.kitchenStageLabel(stage),
+      (from, to) => this.formatElapsed(from, to),
+    );
+  });
+
+  /** The delivery lane (wave P11, row `1.2b`) — `null` before {@link delivery} settles. */
+  protected readonly deliveryTimelineSteps = computed<readonly StepItem[] | null>(() => {
+    const delivery = this.delivery();
+    if (!delivery && !this.deliveryError()) {
+      return null;
+    }
+    return deliveryLifecycleSteps(
+      delivery?.shipment ?? null,
+      (stage) => this.deliveryStageLabel(stage),
+      (from, to) => this.formatElapsed(from, to),
+    );
+  });
+
+  /** The margin: the customer's fee minus what the provider billed — negative whenever `fulfillment.delivery_cost_subsidies` recorded a gap, because that row is only ever written for a loss. */
+  protected deliveryMarginMinor(delivery: OrderDeliveryResponse): number | null {
+    return delivery.providerCostMinor == null
+      ? null
+      : delivery.customerDeliveryFeeMinor - delivery.providerCostMinor;
+  }
 
   /** §4.1/§4.3: STALE_VERSION, a lost approval race, and a refused transition all surface here. */
   protected readonly notice = signal<string | null>(null);
@@ -283,6 +369,12 @@ export class OrderDetailPane {
     this.notFound.set(false);
     this.timeline.set(null);
     this.timelineError.set(false);
+    this.decisions.set([]);
+    this.delivery.set(null);
+    this.deliveryError.set(false);
+    this.kitchenEvents.set(null);
+    this.kitchenEventsError.set(false);
+    this.courierPickerOpen.set(false);
     this.revealedPhone.set(null);
     this.revealedAddress.set(null);
     this.revealedNotes.set(new Map());
@@ -310,6 +402,9 @@ export class OrderDetailPane {
       );
       this.order.set(result);
       void this.loadTimeline(orderId);
+      void this.loadDecisions(orderId);
+      void this.loadDelivery(orderId);
+      void this.loadKitchenEvents(orderId);
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.code === ApiErrorCode.RESOURCE_NOT_FOUND) {
@@ -341,6 +436,49 @@ export class OrderDetailPane {
       // not. §2.11's "previously loaded rows stay" applies here too — the
       // rest of the detail is still shown.
       this.timelineError.set(true);
+    }
+  }
+
+  /** The losing side of a decision (wave P11, row 1.2b) — a separate call from {@link loadTimeline}; see `operationsPaths.orderDecisions`'s own doc for why. */
+  private async loadDecisions(orderId: string): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      const result = await firstValueFrom(
+        this.api.get<OrderApprovalDecision[]>(operationsPaths.orderDecisions(scope, orderId)),
+      );
+      this.decisions.set(result.value ?? []);
+    } catch {
+      // Non-critical panel, exactly like loadTimeline: the losing-decisions
+      // list simply stays empty rather than failing the whole pane.
+    }
+  }
+
+  /** The order-to-fulfilment seam (wave P11, rows `1.2e`/`1.2n`/`2.1a`) — fire-and-forget, exactly like {@link loadTimeline}. */
+  private async loadDelivery(orderId: string): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      this.delivery.set(await this.deliveryApi.delivery(scope, orderId));
+    } catch {
+      this.deliveryError.set(true);
+    }
+  }
+
+  /** The production timeline lane's own read (wave P11, row `1.2b`) — fire-and-forget, exactly like {@link loadTimeline}. */
+  private async loadKitchenEvents(orderId: string): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      this.kitchenEvents.set(await this.kitchenApi.eventsForOrder(scope, orderId));
+    } catch {
+      this.kitchenEventsError.set(true);
     }
   }
 
@@ -1087,6 +1225,148 @@ export class OrderDetailPane {
       : this.i18n.t('orders.detail.timeline.gap', { sequence: missing });
   }
 
+  /** `TicketStatus`'s own four stages, for the production lane's `q-steps`. */
+  protected kitchenStageLabel(stage: string): string {
+    const key = KITCHEN_STAGE_LABEL_KEYS[stage];
+    return key ? this.i18n.t(key) : stage;
+  }
+
+  /** `ShipmentStatus`'s custody milestones, for the delivery lane's `q-steps`. */
+  protected deliveryStageLabel(stage: string): string {
+    const key = DELIVERY_STAGE_LABEL_KEYS[stage];
+    return key ? this.i18n.t(key) : stage;
+  }
+
+  /** `formatDuration`'s own `hour`/`minute` units, applied to the gap between two ISO instants — the production/delivery lanes' own "elapsed durations between stages". */
+  protected formatElapsed(fromIso: string, toIso: string): string {
+    const minutes = (new Date(toIso).getTime() - new Date(fromIso).getTime()) / 60_000;
+    return formatDuration(minutes, {
+      hour: this.i18n.t('orders.duration.hour'),
+      minute: this.i18n.t('orders.duration.minute'),
+    });
+  }
+
+  /**
+   * Every decision that did not settle the order (wave P11, row `1.2b`) — the
+   * one thing no other screen in this console shows. At most one decision per
+   * order is ever `effective`; every other row here is a click that lost the
+   * compare-and-set, a duplicate, or arrived after the order was already
+   * decided.
+   */
+  protected readonly losingDecisions = computed<readonly OrderApprovalDecision[]>(() =>
+    this.decisions().filter((decision) => !decision.effective),
+  );
+
+  /** {@link losingDecisions} as `q-timeline`'s own `TimelineEntry[]`, exactly the mapping {@link commercialTimelineEntries} does for the transitions above it. */
+  protected readonly losingDecisionEntries = computed<readonly TimelineEntry[]>(() =>
+    this.losingDecisions().map((decision) => ({
+      id: decision.decisionId,
+      timestamp: this.formatOccurredAt(decision.issuedAt),
+      actor: { kind: decision.actorType, displayName: null, subject: decision.actorId ?? null },
+      title: this.decisionOutcomeLabel(decision.action),
+      detail: decision.reasonCode
+        ? `${decision.decisionChannel} · ${decision.reasonCode}`
+        : decision.decisionChannel,
+      selectable: false,
+    })),
+  );
+
+  protected decisionOutcomeLabel(action: string): string {
+    return decisionOutcomeLabel(action, (key) => this.i18n.t(key));
+  }
+
+  // ------------------------------------------------------------ §1.2e assign/unassign courier
+
+  protected canManageCourier(): boolean {
+    return this.isDeliveryOrder() && this.delivery() !== null;
+  }
+
+  /** The roster entry's own `displayReference` — there is no name to resolve, the same limitation `CouriersApi.roster`'s own doc states. */
+  protected courierDisplayReference(courierId: string): string {
+    return (
+      this.courierRoster().find((courier) => courier.courierId === courierId)?.displayReference ??
+      courierId
+    );
+  }
+
+  protected async toggleCourierPicker(): Promise<void> {
+    const opening = !this.courierPickerOpen();
+    this.courierPickerOpen.set(opening);
+    if (!opening || this.courierRoster().length > 0) {
+      return;
+    }
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    this.courierRoster.set(await this.couriersApi.roster(scope.tenantId));
+  }
+
+  protected courierOptions(): readonly ComboboxOption[] {
+    return this.courierRoster().map((courier) => ({
+      id: courier.courierId,
+      label: courier.displayReference,
+    }));
+  }
+
+  protected async assignCourier(option: ComboboxOption): Promise<void> {
+    const scope = this.location.scope();
+    const plan = this.delivery();
+    const orderId = this.order()?.value.summary.orderId;
+    if (!scope || !plan || !orderId) {
+      return;
+    }
+    this.assigningCourier.set(true);
+    try {
+      const result = await this.dispatchApi.assign(
+        scope,
+        plan.planId,
+        option.id,
+        plan.planVersion,
+        ORDER_DETAIL_ASSIGN_REASON,
+      );
+      if (!result.applied) {
+        this.notice.set(
+          this.i18n.t('orders.detail.courier.refused', { reason: result.reason ?? '' }),
+        );
+      }
+      this.courierPickerOpen.set(false);
+      await this.loadDelivery(orderId);
+    } catch (error) {
+      this.noticeFromRevealError(error);
+    } finally {
+      this.assigningCourier.set(false);
+    }
+  }
+
+  protected async unassignCourier(): Promise<void> {
+    const scope = this.location.scope();
+    const plan = this.delivery();
+    const orderId = this.order()?.value.summary.orderId;
+    if (!scope || !plan?.shipment || !orderId) {
+      return;
+    }
+    this.assigningCourier.set(true);
+    try {
+      const result = await this.dispatchApi.unassign(
+        scope,
+        plan.planId,
+        plan.shipment.version,
+        ORDER_DETAIL_UNASSIGN_REASON,
+      );
+      if (!result.applied) {
+        this.notice.set(
+          this.i18n.t('orders.detail.courier.refused', { reason: result.reason ?? '' }),
+        );
+      }
+      await this.loadDelivery(orderId);
+    } catch (error) {
+      this.noticeFromRevealError(error);
+    } finally {
+      this.assigningCourier.set(false);
+    }
+  }
+
   // ------------------------------------------------------------ §3.9 revisions (row 1.2p)
 
   /**
@@ -1164,6 +1444,21 @@ export class OrderDetailPane {
     return actorId ? `${actorType} · ${actorId}` : actorType;
   }
 }
+
+const KITCHEN_STAGE_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
+  FIRED: 'orders.detail.timeline.kitchen.FIRED',
+  IN_PRODUCTION: 'orders.detail.timeline.kitchen.IN_PRODUCTION',
+  READY: 'orders.detail.timeline.kitchen.READY',
+  HANDED_OVER: 'orders.detail.timeline.kitchen.HANDED_OVER',
+  HELD: 'orders.detail.timeline.kitchen.HELD',
+  VOIDED: 'orders.detail.timeline.kitchen.VOIDED',
+};
+
+const DELIVERY_STAGE_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
+  ASSIGNED: 'orders.detail.timeline.delivery.ASSIGNED',
+  PICKED_UP: 'orders.detail.timeline.delivery.PICKED_UP',
+  DELIVERED: 'orders.detail.timeline.delivery.DELIVERED',
+};
 
 const TRIGGER_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
   CHECKOUT: 'orders.detail.timeline.trigger.CHECKOUT',

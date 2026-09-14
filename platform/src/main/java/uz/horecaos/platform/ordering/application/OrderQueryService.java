@@ -459,6 +459,12 @@ public class OrderQueryService implements OrderCountsQuery {
         return orders.history(tenantId, orderId);
     }
 
+    /** Every approve/reject decision this order ever received, winner and losers alike (gap map row 1.2b). */
+    @Transactional(readOnly = true)
+    public List<JdbcOrderStore.ApprovalDecisionRow> decisions(UUID tenantId, UUID orderId) {
+        return orders.decisionsOf(tenantId, orderId);
+    }
+
     /**
      * Every revision of one order, with the delta each one carried (ADR 0039).
      *

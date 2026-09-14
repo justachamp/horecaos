@@ -96,7 +96,7 @@ class KitchenBoardControllerTests {
     }
 
     @Test
-    void theTwoArgumentOverloadCarriesNoChannelSystemType() {
+    void theTwoArgumentOverloadCarriesNoChannelSystemTypeOrCourierEta() {
         // The single-ticket read and every mutation response keep the cheaper
         // overload (see TicketResponse's own doc) — this asserts that choice
         // actually means what it claims rather than silently resolving one.
@@ -105,19 +105,23 @@ class KitchenBoardControllerTests {
         KitchenBoardController.TicketResponse response = KitchenBoardController.TicketResponse.of(ticket, List.of());
 
         assertThat(response.channelSystemType()).isNull();
+        assertThat(response.courierEtaAt()).isNull();
     }
 
     @Test
-    void theThreeArgumentOverloadCarriesTheResolvedChannelSystemType() {
-        // Only board() calls this overload (gap map row 2.1), after
-        // resolving channelCode against tenant.sales_channels.system_type —
-        // this asserts the mapping itself, not the resolution.
+    void theFourArgumentOverloadCarriesTheResolvedChannelSystemTypeAndCourierEta() {
+        // Only board() calls this overload (gap map rows 2.1 and 2.1a), after
+        // resolving channelCode against tenant.sales_channels.system_type and
+        // courierEtaAt against fulfillment.delivery_plans.courier_eta_at —
+        // this asserts the mapping itself, not either resolution.
         TicketRow ticket = ticketAt(TicketStatus.FIRED);
+        Instant eta = CREATED_AT.plusSeconds(1_200);
 
         KitchenBoardController.TicketResponse response =
-                KitchenBoardController.TicketResponse.of(ticket, List.of(), "AGGREGATOR");
+                KitchenBoardController.TicketResponse.of(ticket, List.of(), "AGGREGATOR", eta);
 
         assertThat(response.channelSystemType()).isEqualTo("AGGREGATOR");
+        assertThat(response.courierEtaAt()).isEqualTo(eta);
     }
 
     private static TicketRow ticketAt(TicketStatus status) {
