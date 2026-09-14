@@ -333,6 +333,59 @@ public class PartnerInvoiceService {
                 .orElseThrow();
     }
 
+    /**
+     * T11 (7.4c, ADR 0125): the per-line reconcile action the external-
+     * delivery-cost report names — an operator confirming, by hand, that a
+     * {@code VARIANCE} or {@code UNMATCHED_LINE} row is settled, or noting an
+     * {@code UNBILLED} shipment has been checked and is being watched for
+     * rather than acted on again. Distinct from {@link #match}'s own bulk
+     * sweep: that runs once per imported invoice against every one of its
+     * lines; this runs once, by a person, against exactly the shipment a
+     * report row named.
+     *
+     * @return {@code true} when a real invoice line was found and marked
+     *         {@code MATCHED}; {@code false} for a shipment with no invoice
+     *         line at all — genuinely {@code UNBILLED}, nothing to
+     *         reconcile against yet, and the acknowledgement is recorded on
+     *         the audit trail alone
+     */
+    @Transactional
+    public boolean reconcileShipment(UUID tenantId, UUID shipmentId, ActorRef actor, String reason) {
+        Optional<InvoiceLineRow> line = costs.deliveryLineForShipment(tenantId, shipmentId);
+
+        if (line.isEmpty()) {
+            audit.record(AuditFact.of("partner.invoice.line.acknowledged-unbilled", AuditClass.BUSINESS)
+                    .by(actor)
+                    .at(ResourceScope.tenant(tenantId))
+                    .target("shipment", shipmentId)
+                    .because(reason)
+                    .changed(Map.of())
+                    .usingCapability("partner.invoice.manage")
+                    .correlatedBy("partner-invoice")
+                    .occurredAt(clock.instant())
+                    .build());
+            return false;
+        }
+
+        costs.matchLine(tenantId, line.get().id(), shipmentId, MatchStatus.MATCHED, null, "OPERATOR_RECONCILED");
+
+        audit.record(AuditFact.of("partner.invoice.line.reconciled", AuditClass.BUSINESS)
+                .by(actor)
+                .at(ResourceScope.tenant(tenantId))
+                .target("partner_delivery_invoice_line", line.get().id())
+                .because(reason)
+                .changed(Map.of(
+                        "shipmentId",
+                        shipmentId,
+                        "previousStatus",
+                        line.get().matchStatus().name()))
+                .usingCapability("partner.invoice.manage")
+                .correlatedBy("partner-invoice")
+                .occurredAt(clock.instant())
+                .build());
+        return true;
+    }
+
     /** What the booking said this partner delivery would cost, if anything did. */
     private Optional<Long> accruedPartnerAmount(UUID tenantId, UUID shipmentId) {
         return costs.linesOfShipment(tenantId, shipmentId).stream()

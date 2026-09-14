@@ -1,0 +1,228 @@
+<div class="couriers">
+  <div class="header">
+    <h1 class="q-title">{{ 'reports.couriers.title' | t }}</h1>
+    <q-provenance-banner [provenance]="provenance()" [requestedTo]="requestedTo()" />
+  </div>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'reports.couriers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'reports.denied.notGranted' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <!-- 7.4 -->
+      <h2 class="q-subhead">{{ 'reports.couriers.leaderboard.title' | t }}</h2>
+      @if (leaderboardRows().length === 0) {
+        <p class="q-body-sm muted">{{ 'reports.couriers.empty' | t }}</p>
+      } @else {
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'reports.couriers.column.name' | t }}</th>
+              <th class="q-caption num">{{ 'reports.couriers.column.deliveries' | t }}</th>
+              <th class="q-caption num">{{ 'reports.couriers.column.minDistance' | t }}</th>
+              <th class="q-caption num">{{ 'reports.couriers.column.avgDistance' | t }}</th>
+              <th class="q-caption num">{{ 'reports.couriers.column.maxDistance' | t }}</th>
+              <th class="q-caption num">{{ 'reports.couriers.column.totalDistance' | t }}</th>
+              <th class="q-caption num">{{ 'reports.couriers.column.avgTransit' | t }}</th>
+              <th class="q-caption num">{{ 'reports.couriers.column.onTime' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of leaderboardRows(); track row.courierId) {
+              <tr>
+                <td class="q-body-sm">{{ row.name }}</td>
+                <td class="q-body-sm q-tnum num">{{ formatCountValue(row.deliveryCount) }}</td>
+                <td class="q-body-sm q-tnum num">
+                  {{ formatDistanceValue(row.minDistanceMeters) }}
+                </td>
+                <td class="q-body-sm q-tnum num">
+                  {{ formatDistanceValue(row.avgDistanceMeters) }}
+                </td>
+                <td class="q-body-sm q-tnum num">
+                  {{ formatDistanceValue(row.maxDistanceMeters) }}
+                </td>
+                <td class="q-body-sm q-tnum num">
+                  {{ formatDistanceValue(row.totalDistanceMeters) }}
+                </td>
+                <td class="q-body-sm q-tnum num">{{ formatDuration(row.avgTransitSeconds) }}</td>
+                <td class="q-body-sm q-tnum num">{{ formatOnTimeShare(row.onTimeShare) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+
+      <!-- 7.4a -->
+      <h2 class="q-subhead section-gap">{{ 'reports.couriers.sla.title' | t }}</h2>
+      @if (slaRows().length === 0) {
+        <p class="q-body-sm muted">{{ 'reports.couriers.empty' | t }}</p>
+      } @else {
+        <q-histogram-chart
+          [buckets]="slaHistogram()"
+          [ariaLabel]="'reports.couriers.sla.title' | t"
+        />
+        <table class="table sla-table">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'reports.couriers.column.name' | t }}</th>
+              @for (bucket of slaBucketCodes; track bucket) {
+                <th class="q-caption num">{{ bucketLabel(bucket) }}</th>
+              }
+              <th class="q-caption num">{{ 'reports.branches.sla.total' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of slaRows(); track row.courierId) {
+              <tr>
+                <td class="q-body-sm">{{ row.name }}</td>
+                @for (bucket of slaBucketCodes; track bucket) {
+                  <td
+                    class="q-body-sm q-tnum num sla-cell"
+                    [class]="'sla-cell--' + bucket.toLowerCase()"
+                  >
+                    {{ row.buckets[bucket].count }}
+                    <span class="sla-cell__share q-caption"
+                      >{{ row.buckets[bucket].sharePercent }}%</span
+                    >
+                  </td>
+                }
+                <td class="q-body-sm q-tnum num">{{ formatCountValue(row.total) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        <p class="q-caption bucket-version">
+          {{ 'reports.branches.sla.version' | t: { version: slaBucketSetVersion } }}
+        </p>
+      }
+
+      <!-- 7.4b -->
+      <h2 class="q-subhead section-gap">{{ 'reports.couriers.tariffAudit.title' | t }}</h2>
+      @if (tariffRows().length === 0) {
+        <p class="q-body-sm muted">{{ 'reports.couriers.empty' | t }}</p>
+      } @else {
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'reports.couriers.column.tariff' | t }}</th>
+              <th class="q-caption">{{ 'reports.couriers.column.zone' | t }}</th>
+              <th class="q-caption num">{{ 'reports.couriers.column.band' | t }}</th>
+              <th class="q-caption">{{ 'reports.couriers.column.name' | t }}</th>
+              <th class="q-caption num">{{ 'reports.couriers.column.resolutions' | t }}</th>
+              <th class="q-caption num">{{ 'reports.couriers.column.totalFee' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of tariffRows(); track row.key) {
+              <tr>
+                <td class="q-body-sm">{{ row.tariffName }}</td>
+                <td class="q-body-sm">{{ row.zoneName }}</td>
+                <td class="q-body-sm q-tnum num">{{ row.bandSequence ?? '—' }}</td>
+                <td class="q-body-sm">{{ row.courierName }}</td>
+                <td class="q-body-sm q-tnum num">{{ formatCountValue(row.resolutionCount) }}</td>
+                <td class="q-body-sm q-tnum num">
+                  {{ formatMoneyValue(row.totalFinalFeeMinor, row.currency) }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+
+      <!-- 7.4c -->
+      <h2 class="q-subhead section-gap">{{ 'reports.couriers.externalCost.title' | t }}</h2>
+      @if (costRows().length === 0) {
+        <p class="q-body-sm muted">{{ 'reports.couriers.empty' | t }}</p>
+      } @else {
+        <p class="q-body-sm total-variance">
+          {{
+            'reports.couriers.externalCost.totalVariance'
+              | t: { amount: formatMoneyValue(costTotalVarianceMinor(), costRows()[0].currency) }
+          }}
+        </p>
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'reports.couriers.column.order' | t }}</th>
+              <th class="q-caption">{{ 'reports.couriers.column.provider' | t }}</th>
+              <th class="q-caption num">{{ 'reports.couriers.column.orderTotal' | t }}</th>
+              <th class="q-caption num">{{ 'reports.couriers.column.chargedDelivery' | t }}</th>
+              <th class="q-caption num">{{ 'reports.couriers.column.providerBilled' | t }}</th>
+              <th class="q-caption num">{{ 'reports.couriers.column.variance' | t }}</th>
+              <th class="q-caption">{{ 'reports.couriers.column.status' | t }}</th>
+              <th class="q-caption"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of costRows(); track row.orderId) {
+              <tr>
+                <td class="q-body-sm">{{ row.publicOrderNumber }}</td>
+                <td class="q-body-sm">{{ row.providerType ?? '—' }}</td>
+                <td class="q-body-sm q-tnum num">
+                  {{ formatMoneyValue(row.orderTotalMinor, row.currency) }}
+                </td>
+                <td class="q-body-sm q-tnum num">
+                  {{ formatMoneyValue(row.chargedDeliveryMinor, row.currency) }}
+                </td>
+                <td class="q-body-sm q-tnum num">
+                  {{
+                    row.providerBilledMinor === null
+                      ? '—'
+                      : formatMoneyValue(row.providerBilledMinor, row.currency)
+                  }}
+                </td>
+                <td class="q-body-sm q-tnum num">
+                  {{
+                    row.varianceMinor === null
+                      ? '—'
+                      : formatMoneyValue(row.varianceMinor, row.currency)
+                  }}
+                </td>
+                <td class="q-body-sm">
+                  <span
+                    class="status-pill"
+                    [class]="'status-pill--' + row.reconciliationStatus.toLowerCase()"
+                  >
+                    {{ reconciliationLabel(row.reconciliationStatus) }}
+                  </span>
+                </td>
+                <td class="q-body-sm">
+                  @if (row.reconcileActionAvailable) {
+                    <button type="button" class="secondary" (click)="askReconcile(row)">
+                      {{ 'reports.couriers.externalCost.reconcile' | t }}
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    }
+  }
+</div>
+
+@if (reconcileTarget(); as target) {
+  <q-confirm-dialog
+    [title]="'reports.couriers.externalCost.reconcileConfirm.title' | t"
+    [body]="
+      'reports.couriers.externalCost.reconcileConfirm.body' | t: { order: target.publicOrderNumber }
+    "
+    [confirmLabel]="'reports.couriers.externalCost.reconcile' | t"
+    [cancelLabel]="'reports.couriers.externalCost.reconcileConfirm.cancel' | t"
+    [busy]="reconcileBusy()"
+    (confirm)="confirmReconcile()"
+    (cancel)="cancelReconcile()"
+  />
+}

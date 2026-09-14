@@ -78,6 +78,16 @@ export function formatAverage(value: number | null): string {
   return value.toFixed(1);
 }
 
+/**
+ * T11: whole metres rendered as kilometres to one decimal place — `4.2 km`,
+ * the unit every distance column in the courier reports (7.4/7.4b) uses.
+ * Never rounds to a bare kilometre count, the same reasoning
+ * {@link formatAverage} gives for not rounding an hourly average away.
+ */
+export function formatDistanceKm(meters: number): string {
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
 /** The median of a list of numbers, or null for an empty list — never zero. */
 export function median(values: readonly number[]): number | null {
   if (values.length === 0) {

@@ -425,6 +425,11 @@ export interface CourierPolicyWriteInput {
   readonly reason: string;
 }
 
+/** T11 7.4c: mirrors `OperationsCourierController.ReconcileShipmentResponse`. */
+export interface ReconcileShipmentResponse {
+  readonly reconciled: boolean;
+}
+
 /**
  * The in-house roster (operations §3.3 Couriers) — `OperationsCourierController`
  * (ADR 0042), tenant-scoped.
@@ -893,6 +898,27 @@ export class CouriersApi {
         courierPaths.courierPolicy(tenantId),
         command(input),
         { params: { ...(brandId ? { brandId } : {}), ...(locationId ? { locationId } : {}) } },
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------ T11 7.4c
+
+  /**
+   * The external-delivery-cost report's per-line reconcile action. `reconciled`
+   * is `false` for a genuinely `UNBILLED` shipment — nothing to reconcile
+   * against yet, and the acknowledgement was recorded on the audit trail
+   * alone.
+   */
+  async reconcileExternalDeliveryCost(
+    tenantId: string,
+    shipmentId: string,
+    reason: string,
+  ): Promise<ReconcileShipmentResponse> {
+    return firstValueFrom(
+      this.api.post<{ reason: string }, ReconcileShipmentResponse>(
+        courierPaths.externalDeliveryCostReconcile(tenantId, shipmentId),
+        command({ reason }),
       ),
     );
   }

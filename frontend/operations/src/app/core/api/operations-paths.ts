@@ -996,6 +996,16 @@ export const courierPaths = {
   courierPolicy(tenantId: string): string {
     return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-policy`;
   },
+
+  /**
+   * T11 7.4c (ADR 0125): the per-line reconcile action the external-
+   * delivery-cost report names (`POST`). Mutation: key required. Lives beside
+   * the invoice-line endpoints it mutates, not under `reportsPaths` — that
+   * tree only ever reads.
+   */
+  externalDeliveryCostReconcile(tenantId: string, shipmentId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/shipments/${encodeURIComponent(shipmentId)}/external-delivery-cost/reconcile`;
+  },
 } as const;
 
 /**

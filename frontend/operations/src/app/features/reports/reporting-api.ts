@@ -287,6 +287,95 @@ export interface OperatorProductListResponse {
   readonly provenance: ProvenanceResponse;
 }
 
+/**
+ * T11 (7.4, ADR 0125): one courier's totals across the range. Mirrors
+ * `CourierReportController.LeaderboardRowResponse`. Never a courier's
+ * protected name — resolve display through {@code CouriersApi.roster}'s own
+ * `displayReference`, keyed on `courierId`, exactly as P19 already does
+ * everywhere else in this console.
+ *
+ * @property onTimeShare null when no delivery in range recorded a promise —
+ *   never a zero that would read as "missed every delivery".
+ */
+export interface CourierLeaderboardRowResponse {
+  readonly courierId: string;
+  readonly deliveryCount: number;
+  readonly minDistanceMeters: number;
+  readonly maxDistanceMeters: number;
+  readonly avgDistanceMeters: number;
+  readonly totalDistanceMeters: number;
+  readonly avgTransitHours: number;
+  readonly totalTransitSeconds: number;
+  readonly onTimeShare: number | null;
+}
+
+export interface CourierLeaderboardResponse {
+  readonly rows: readonly CourierLeaderboardRowResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/** T11 (7.4a): the `COURIER` scope of the fixed SLA distribution. Mirrors `CourierBucketResponse`. */
+export interface CourierBucketResponse {
+  readonly businessDate: string;
+  readonly courierId: string;
+  readonly bucketCode: string;
+  readonly orderCount: number;
+  readonly shareBasisPoints: number;
+}
+
+export interface CourierSlaResponse {
+  readonly buckets: readonly CourierBucketResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/** T11 (7.4b): one (tariff, courier) group over the audit range. Mirrors `TariffAuditRowResponse`. */
+export interface TariffAuditRowResponse {
+  readonly tariffId: string;
+  readonly tariffVersion: number;
+  readonly zoneId: string | null;
+  readonly bandSequence: number | null;
+  readonly courierId: string | null;
+  readonly resolutionCount: number;
+  readonly totalFinalFeeMinor: number;
+  readonly currency: string;
+}
+
+export interface TariffAuditResponse {
+  readonly rows: readonly TariffAuditRowResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/**
+ * T11 (7.4c): one order's external-delivery cost cut. Mirrors
+ * `ExternalDeliveryCostRowResponse`.
+ *
+ * @property reconciliationStatus `UNBILLED` when no invoice line exists at
+ *   all yet — never `PENDING`, which means a line was imported and not yet
+ *   matched.
+ * @property reconcileActionAvailable false for a genuinely `UNBILLED` row:
+ *   there is no invoice line yet to reconcile against.
+ */
+export interface ExternalDeliveryCostRowResponse {
+  readonly orderId: string;
+  readonly publicOrderNumber: string;
+  readonly orderTotalMinor: number;
+  readonly currency: string;
+  readonly chargedDeliveryMinor: number;
+  readonly shipmentId: string;
+  readonly providerType: string | null;
+  readonly providerEstimatedMinor: number | null;
+  readonly providerBilledMinor: number | null;
+  readonly varianceMinor: number | null;
+  readonly reconciliationStatus: string;
+  readonly reconcileActionAvailable: boolean;
+}
+
+export interface ExternalDeliveryCostResponse {
+  readonly rows: readonly ExternalDeliveryCostRowResponse[];
+  readonly totalVarianceMinor: number;
+  readonly provenance: ProvenanceResponse;
+}
+
 export interface QueryParams {
   readonly from: string;
   readonly to: string;
@@ -517,6 +606,58 @@ export class ReportingApi {
           limit: params.limit,
         },
       }),
+    );
+    return result.value;
+  }
+
+  /** T11 (7.4): the courier leaderboard, courierId only — resolve display through `CouriersApi.roster`. */
+  async courierLeaderboard(
+    tenantId: string,
+    params: { readonly from: string; readonly to: string },
+  ): Promise<CourierLeaderboardResponse> {
+    const result = await firstValueFrom(
+      this.api.get<CourierLeaderboardResponse>(reportsPaths.courierLeaderboard(tenantId), {
+        params: { from: params.from, to: params.to },
+      }),
+    );
+    return result.value;
+  }
+
+  /** T11 (7.4a): the `COURIER` scope of the fixed SLA distribution. */
+  async courierSlaBuckets(
+    tenantId: string,
+    params: { readonly from: string; readonly to: string },
+  ): Promise<CourierSlaResponse> {
+    const result = await firstValueFrom(
+      this.api.get<CourierSlaResponse>(reportsPaths.courierSlaBuckets(tenantId), {
+        params: { from: params.from, to: params.to },
+      }),
+    );
+    return result.value;
+  }
+
+  /** T11 (7.4b): the delivery-sum-by-tariff audit. */
+  async courierTariffAudit(tenantId: string, params: RangeParams): Promise<TariffAuditResponse> {
+    const result = await firstValueFrom(
+      this.api.get<TariffAuditResponse>(reportsPaths.courierTariffAudit(tenantId), {
+        params: { from: params.from, to: params.to, locationId: params.locationId },
+      }),
+    );
+    return result.value;
+  }
+
+  /** T11 (7.4c): per-order external-delivery cost — the one courier report that finds money. */
+  async courierExternalDeliveryCost(
+    tenantId: string,
+    params: RangeParams,
+  ): Promise<ExternalDeliveryCostResponse> {
+    const result = await firstValueFrom(
+      this.api.get<ExternalDeliveryCostResponse>(
+        reportsPaths.courierExternalDeliveryCost(tenantId),
+        {
+          params: { from: params.from, to: params.to, locationId: params.locationId },
+        },
+      ),
     );
     return result.value;
   }
