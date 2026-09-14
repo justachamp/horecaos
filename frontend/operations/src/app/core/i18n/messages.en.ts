@@ -2139,11 +2139,22 @@ export const messagesEn = {
   'kitchen.buffer.releaseMode.MANUAL_HOLD': 'Manual hold',
   'kitchen.buffer.releaseMode.SCHEDULED': 'Scheduled',
   'kitchen.buffer.releaseMode.AUTO_ON_CONFIRM': 'Fires on confirm',
+  'kitchen.buffer.editFireTime': 'Edit fire time',
+  'kitchen.buffer.hold': 'Hold',
+  'kitchen.buffer.edit.releaseAt': 'Fires at',
+  'kitchen.buffer.edit.clearForHold': 'Leave blank to hold the ticket with no fire time set',
+  'kitchen.buffer.edit.reason': 'Reason',
+  'kitchen.buffer.edit.reasonRequired':
+    'A reason is required — this pushes the fire time past the ticket’s own promise',
+  'kitchen.buffer.edit.save': 'Save',
+  'kitchen.buffer.edit.cancel': 'Cancel',
 
   'kitchen.expo.handOver': 'Hand over',
   'kitchen.expo.empty': 'Nothing ready for handover',
   'kitchen.expo.noCodeVerification':
     'No provider handover-code check yet — this button only records custody transfer.',
+  'kitchen.expo.packedConfirm': 'Packed and ready to hand over',
+  'kitchen.expo.packedWaiting': 'Waiting for every line to be ready before it can be packed',
 
   'kitchen.stopList.tab.all': 'All',
   'kitchen.stopList.tab.available': 'Available',
@@ -2185,7 +2196,7 @@ export const messagesEn = {
   'kitchen.capacity.loadError': 'Could not load throughput ceilings',
   'kitchen.capacity.card1.title': 'Throughput ceilings',
   'kitchen.capacity.card1.hint':
-    'Portions per hour, per station, per weekday and time window. Not yet wired into kitchen release timing — a manager compares this against the board by eye.',
+    'Portions per hour, per station, per weekday and time window. A ticket’s kitchen fire time shifts earlier once a station is already committed past its ceiling for the slot — a manager also compares this against the board by eye.',
   'kitchen.capacity.noStations':
     'No stations are configured at this location yet. Station authoring has no screen in this console yet — see the kitchen station API.',
   'kitchen.capacity.column.station': 'Station',
@@ -2202,6 +2213,11 @@ export const messagesEn = {
     'A station, a valid window, and a positive ceiling are required',
   'kitchen.capacity.form.saving': 'Saving…',
   'kitchen.capacity.form.save': 'Add ceiling',
+  'kitchen.capacity.edit.button': 'Edit',
+  'kitchen.capacity.edit.save': 'Save',
+  'kitchen.capacity.edit.cancel': 'Cancel',
+  'kitchen.capacity.delete.button': 'Delete',
+  'kitchen.capacity.delete.confirm': 'Delete this throughput ceiling?',
   'kitchen.capacity.card2.title': 'Cook headcount output',
   'kitchen.capacity.card2.body':
     'Not built. Computing how many cooks a shift needs takes a demand forecast and a portions-per-cook policy, and neither exists anywhere in this platform yet — see frontend-information-architecture.md §2.6 and ADR 0041.',

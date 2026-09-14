@@ -2112,11 +2112,22 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.buffer.releaseMode.MANUAL_HOLD': 'Ручной буфер',
   'kitchen.buffer.releaseMode.SCHEDULED': 'По расписанию',
   'kitchen.buffer.releaseMode.AUTO_ON_CONFIRM': 'Запуск при подтверждении',
+  'kitchen.buffer.editFireTime': 'Изменить время запуска',
+  'kitchen.buffer.hold': 'Отложить',
+  'kitchen.buffer.edit.releaseAt': 'Запуск в',
+  'kitchen.buffer.edit.clearForHold': 'Оставьте пустым, чтобы отложить заказ без времени запуска',
+  'kitchen.buffer.edit.reason': 'Причина',
+  'kitchen.buffer.edit.reasonRequired':
+    'Требуется причина — это откладывает запуск позже обещанного времени заказа',
+  'kitchen.buffer.edit.save': 'Сохранить',
+  'kitchen.buffer.edit.cancel': 'Отмена',
 
   'kitchen.expo.handOver': 'Передать',
   'kitchen.expo.empty': 'Нечего передавать',
   'kitchen.expo.noCodeVerification':
     'Проверка кода передачи от службы доставки не реализована — кнопка только фиксирует передачу.',
+  'kitchen.expo.packedConfirm': 'Упаковано и готово к передаче',
+  'kitchen.expo.packedWaiting': 'Ожидание готовности всех позиций перед упаковкой',
 
   'kitchen.stopList.tab.all': 'Все',
   'kitchen.stopList.tab.available': 'В продаже',
@@ -2158,7 +2169,7 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.capacity.loadError': 'Не удалось загрузить потолки пропускной способности',
   'kitchen.capacity.card1.title': 'Потолки пропускной способности',
   'kitchen.capacity.card1.hint':
-    'Порций в час по станции, дню недели и временному окну. Пока не влияет на время запуска на кухне — менеджер сверяет это с доской на глаз.',
+    'Порций в час по станции, дню недели и временному окну. Время запуска на кухне сдвигается раньше, если станция уже загружена сверх этого потолка — менеджер также сверяет это с доской на глаз.',
   'kitchen.capacity.noStations':
     'В этом филиале пока не настроены станции. Экрана для создания станций в этой консоли пока нет — см. API кухонных станций.',
   'kitchen.capacity.column.station': 'Станция',
@@ -2174,6 +2185,11 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.capacity.form.incomplete': 'Укажите станцию, корректное окно и положительный потолок',
   'kitchen.capacity.form.saving': 'Сохранение…',
   'kitchen.capacity.form.save': 'Добавить потолок',
+  'kitchen.capacity.edit.button': 'Изменить',
+  'kitchen.capacity.edit.save': 'Сохранить',
+  'kitchen.capacity.edit.cancel': 'Отмена',
+  'kitchen.capacity.delete.button': 'Удалить',
+  'kitchen.capacity.delete.confirm': 'Удалить этот потолок пропускной способности?',
   'kitchen.capacity.card2.title': 'Расчёт числа поваров',
   'kitchen.capacity.card2.body':
     'Не реализовано. Расчёт нужного числа поваров требует прогноза спроса и норматива порций на повара — ни того, ни другого в платформе пока нет, см. frontend-information-architecture.md §2.6 и ADR 0041.',

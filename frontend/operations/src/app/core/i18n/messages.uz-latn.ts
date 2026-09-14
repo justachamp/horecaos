@@ -2129,11 +2129,22 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.buffer.releaseMode.MANUAL_HOLD': 'Qoʻlda ushlab turilgan',
   'kitchen.buffer.releaseMode.SCHEDULED': 'Rejalashtirilgan',
   'kitchen.buffer.releaseMode.AUTO_ON_CONFIRM': 'Tasdiqlanganda ishga tushadi',
+  'kitchen.buffer.editFireTime': 'Ishga tushirish vaqtini oʻzgartirish',
+  'kitchen.buffer.hold': 'Ushlab turish',
+  'kitchen.buffer.edit.releaseAt': 'Ishga tushadi',
+  'kitchen.buffer.edit.clearForHold': 'Buyurtmani vaqtsiz ushlab turish uchun boʻsh qoldiring',
+  'kitchen.buffer.edit.reason': 'Sabab',
+  'kitchen.buffer.edit.reasonRequired':
+    'Sabab talab qilinadi — bu ishga tushirishni buyurtmaning oʻz vaʼdasidan keyinga suradi',
+  'kitchen.buffer.edit.save': 'Saqlash',
+  'kitchen.buffer.edit.cancel': 'Bekor qilish',
 
   'kitchen.expo.handOver': 'Topshirish',
   'kitchen.expo.empty': 'Topshirish uchun hech narsa yoʻq',
   'kitchen.expo.noCodeVerification':
     'Yetkazib beruvchi topshirish kodini tekshirish hali yoʻq — bu tugma faqat topshirishni qayd etadi.',
+  'kitchen.expo.packedConfirm': 'Qadoqlangan va topshirishga tayyor',
+  'kitchen.expo.packedWaiting': 'Qadoqlashdan oldin barcha qatorlar tayyor boʻlishi kutilmoqda',
 
   'kitchen.stopList.tab.all': 'Barchasi',
   'kitchen.stopList.tab.available': 'Sotuvda',
@@ -2176,7 +2187,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.capacity.loadError': 'Oʻtkazuvchanlik chegaralarini yuklab boʻlmadi',
   'kitchen.capacity.card1.title': 'Oʻtkazuvchanlik chegaralari',
   'kitchen.capacity.card1.hint':
-    'Stansiya, hafta kuni va vaqt oynasi boʻyicha soatiga porsiyalar soni. Hali oshxona chiqarish vaqtiga taʻsir qilmaydi — menejer buni taxta bilan koʻz bilan solishtiradi.',
+    'Stansiya, hafta kuni va vaqt oynasi boʻyicha soatiga porsiyalar soni. Stansiya shu chegaradan ortiq band boʻlsa, buyurtmaning oshxonada ishga tushirish vaqti oldinroqqa suriladi — menejer ham buni taxta bilan koʻz bilan solishtiradi.',
   'kitchen.capacity.noStations':
     'Bu filialda hali stansiyalar sozlanmagan. Stansiya yaratish uchun bu konsolda hali ekran yoʻq — oshxona stansiyalari APIʻsiga qarang.',
   'kitchen.capacity.column.station': 'Stansiya',
@@ -2192,6 +2203,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.capacity.form.incomplete': 'Stansiya, toʻgʻri oyna va musbat chegara kiritilishi kerak',
   'kitchen.capacity.form.saving': 'Saqlanmoqda…',
   'kitchen.capacity.form.save': 'Chegara qoʻshish',
+  'kitchen.capacity.edit.button': 'Tahrirlash',
+  'kitchen.capacity.edit.save': 'Saqlash',
+  'kitchen.capacity.edit.cancel': 'Bekor qilish',
+  'kitchen.capacity.delete.button': 'Oʻchirish',
+  'kitchen.capacity.delete.confirm': 'Bu oʻtkazuvchanlik chegarasi oʻchirilsinmi?',
   'kitchen.capacity.card2.title': 'Oshpazlar sonini hisoblash',
   'kitchen.capacity.card2.body':
     'Qurilmagan. Kerakli oshpazlar sonini hisoblash uchun talab prognozi va bir oshpazga porsiya normativi kerak — bularning ikkalasi ham platformada hali yoʻq, qarang: frontend-information-architecture.md §2.6 va ADR 0041.',

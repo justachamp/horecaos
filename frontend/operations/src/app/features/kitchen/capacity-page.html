@@ -28,19 +28,85 @@
               <th>{{ 'kitchen.capacity.column.weekday' | t }}</th>
               <th>{{ 'kitchen.capacity.column.window' | t }}</th>
               <th>{{ 'kitchen.capacity.column.portionsPerHour' | t }}</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             @for (window of sortedWindows(); track window.capacityWindowId) {
-              <tr>
-                <td>{{ stationLabel(window.stationId) }}</td>
-                <td>{{ weekdayLabel(window.weekday) }}</td>
-                <td>{{ windowLabel(window) }}</td>
-                <td class="q-tnum">{{ window.portionsPerHour }}</td>
-              </tr>
+              @if (isEditing(window)) {
+                <tr data-testid="capacity-edit-row">
+                  <td>{{ stationLabel(window.stationId) }}</td>
+                  <td>{{ weekdayLabel(window.weekday) }}</td>
+                  <td>
+                    <div class="capacity__edit-fields">
+                      <q-time-input [value]="editFrom()" (valueChange)="editFrom.set($event)" />
+                      <q-time-input [value]="editTo()" (valueChange)="editTo.set($event)" />
+                    </div>
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100000"
+                      class="capacity__edit-portions"
+                      [value]="editPortionsPerHour()"
+                      (input)="editPortionsPerHour.set(+$any($event.target).value)"
+                      data-testid="capacity-edit-portions"
+                    />
+                  </td>
+                  <td class="capacity__row-actions">
+                    <button
+                      type="button"
+                      class="primary"
+                      [disabled]="editSubmitting() || !editValid()"
+                      (click)="submitEditWindow(window)"
+                      data-testid="capacity-edit-save"
+                    >
+                      {{ 'kitchen.capacity.edit.save' | t }}
+                    </button>
+                    <button
+                      type="button"
+                      (click)="cancelEditWindow()"
+                      data-testid="capacity-edit-cancel"
+                    >
+                      {{ 'kitchen.capacity.edit.cancel' | t }}
+                    </button>
+                  </td>
+                </tr>
+                @if (editError(); as error) {
+                  <tr>
+                    <td colspan="5" class="capacity__error" data-testid="capacity-edit-error">
+                      {{ error }}
+                    </td>
+                  </tr>
+                }
+              } @else {
+                <tr>
+                  <td>{{ stationLabel(window.stationId) }}</td>
+                  <td>{{ weekdayLabel(window.weekday) }}</td>
+                  <td>{{ windowLabel(window) }}</td>
+                  <td class="q-tnum">{{ window.portionsPerHour }}</td>
+                  <td class="capacity__row-actions">
+                    <button
+                      type="button"
+                      (click)="startEditWindow(window)"
+                      data-testid="capacity-row-edit"
+                    >
+                      {{ 'kitchen.capacity.edit.button' | t }}
+                    </button>
+                    <button
+                      type="button"
+                      (click)="deleteWindow(window)"
+                      data-testid="capacity-row-delete"
+                    >
+                      {{ 'kitchen.capacity.delete.button' | t }}
+                    </button>
+                  </td>
+                </tr>
+              }
             } @empty {
               <tr>
-                <td colspan="4" class="capacity__empty">{{ 'kitchen.capacity.empty' | t }}</td>
+                <td colspan="5" class="capacity__empty">{{ 'kitchen.capacity.empty' | t }}</td>
               </tr>
             }
           </tbody>

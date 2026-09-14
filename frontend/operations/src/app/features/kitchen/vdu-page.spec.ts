@@ -81,6 +81,26 @@ describe('VduPage', () => {
     expect(cards[1].textContent?.trim()).toBe('A-002');
   });
 
+  it('shows the provider-assigned reference beside sequenceLabel, when the order carries one (gap map row 2.4)', async () => {
+    await render({
+      tickets: [
+        ticket({ ticketId: 'a', sequenceLabel: 'A-002', externalReference: 'YE-2291-04' }),
+        ticket({ ticketId: 'b', sequenceLabel: 'A-003' }),
+      ],
+      warnings: [],
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    const sequences = Array.from(host.querySelectorAll('[data-testid="vdu-sequence"]')).map((el) =>
+      el.textContent?.trim(),
+    );
+    expect(sequences).toEqual(['A-002', 'A-003']);
+
+    const references = host.querySelectorAll('[data-testid="vdu-external-reference"]');
+    expect(references).toHaveLength(1);
+    expect(references[0].textContent?.trim()).toBe('YE-2291-04');
+  });
+
   it('shows the denied state when the location grant is missing', async () => {
     await TestBed.configureTestingModule({
       imports: [VduPage],

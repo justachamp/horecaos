@@ -15,7 +15,12 @@ import { ApiError } from '../../core/api/problem-details';
 import { DayOfWeekToggle } from '../../shared/ui/day-of-week-toggle';
 import { TimeInput } from '../../shared/ui/time-input';
 import { describeApiError } from '../orders/order-errors';
-import { CapacityApi, CapacityWindowResponse, NewCapacityWindow } from './capacity-api';
+import {
+  CapacityApi,
+  CapacityWindowEdit,
+  CapacityWindowResponse,
+  NewCapacityWindow,
+} from './capacity-api';
 import { KitchenApi, StationResponse } from './kitchen-api';
 
 /**
@@ -23,17 +28,22 @@ import { KitchenApi, StationResponse } from './kitchen-api';
  * describes the row as "max preparations per hour per product per branch;
  * cook headcount output"; ADR 0041 had already decided a coarser, station-level
  * shape (`kitchen.station_capacity` — station, weekday, local time window,
- * portions per hour) and deliberately left it unbuilt: "Configuration no code
- * reads is worse than no configuration." That objection was about one specific
- * reader — the release scheduler's `station_queue_offset`, which this wave
- * still does not build (see `KitchenStationService.createCapacityWindow`'s own
- * doc) — not about this screen, which is itself a real reader: a manager
- * comparing a station's ceiling against the board by eye.
+ * portions per hour) and deliberately left it unbuilt at the time: "Configuration
+ * no code reads is worse than no configuration." That objection was about one
+ * specific reader — the release scheduler's own offset — which
+ * `KitchenTicketService.decideRelease`/`capacityOffsetSeconds` now is: a
+ * ticket's `release_at` shifts earlier when a station's board is already
+ * committed past its ceiling for the slot. A manager comparing a station's
+ * ceiling against the board by eye is a second, real reader beside that one,
+ * not the only one this screen serves.
  *
- * **Built (Card 1)**: throughput ceilings — create and list, per station, per
- * weekday, per local time window, in portions per hour. There is no edit or
- * delete in this release, the same discipline `kitchen-station-service.ts`'s
- * `routing-rules` already keeps: nothing here is ever removed once created.
+ * **Built (Card 1)**: throughput ceilings — create, list, edit and delete
+ * (wave T02, gap map row 2.6), per station, per weekday, per local time
+ * window, in portions per hour. Before this wave there was no edit or
+ * delete at all: a mistyped 500 portions/hour was permanent, and because a
+ * second overlapping window is refused, a typo also blocked the correct
+ * window from ever being authored — deleting the wrong one is what frees
+ * the slot.
  *
  * **Not built (Card 2), and named rather than faked**: "cook headcount
  * output." Computing a cook count needs two things nothing in this build
@@ -87,6 +97,18 @@ export class CapacityPage implements OnInit {
       this.formStationId() !== '' &&
       this.formPortionsPerHour() > 0 &&
       this.formTo() > this.formFrom(),
+  );
+
+  /** The one window, if any, being corrected in place (wave T02, gap map row 2.6). */
+  protected readonly editingWindowId = signal<string | null>(null);
+  protected readonly editFrom = signal('09:00');
+  protected readonly editTo = signal('12:00');
+  protected readonly editPortionsPerHour = signal(20);
+  protected readonly editSubmitting = signal(false);
+  protected readonly editError = signal<string | null>(null);
+
+  protected readonly editValid = computed(
+    () => this.editPortionsPerHour() > 0 && this.editTo() > this.editFrom(),
   );
 
   async ngOnInit(): Promise<void> {
@@ -207,6 +229,83 @@ export class CapacityPage implements OnInit {
       );
     } finally {
       this.formSubmitting.set(false);
+    }
+  }
+
+  protected isEditing(window: CapacityWindowResponse): boolean {
+    return this.editingWindowId() === window.capacityWindowId;
+  }
+
+  protected startEditWindow(window: CapacityWindowResponse): void {
+    this.editingWindowId.set(window.capacityWindowId);
+    this.editFrom.set(window.windowStart.slice(0, 5));
+    this.editTo.set(window.windowEnd.slice(0, 5));
+    this.editPortionsPerHour.set(window.portionsPerHour);
+    this.editError.set(null);
+  }
+
+  protected cancelEditWindow(): void {
+    this.editingWindowId.set(null);
+    this.editError.set(null);
+  }
+
+  protected async submitEditWindow(window: CapacityWindowResponse): Promise<void> {
+    if (!this.editValid()) {
+      return;
+    }
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    const body: CapacityWindowEdit = {
+      windowStart: `${this.editFrom()}:00`,
+      windowEnd: `${this.editTo()}:00`,
+      portionsPerHour: this.editPortionsPerHour(),
+      expectedVersion: window.version,
+    };
+    this.editSubmitting.set(true);
+    this.editError.set(null);
+    try {
+      const updated = await firstValueFrom(
+        this.capacityApi.update(scope, window.capacityWindowId, body),
+      );
+      this.windows.update((current) =>
+        current.map((row) => (row.capacityWindowId === updated.capacityWindowId ? updated : row)),
+      );
+      this.editingWindowId.set(null);
+    } catch (error) {
+      this.editError.set(
+        error instanceof ApiError
+          ? describeApiError(error, (key, values) => this.i18n.t(key, values))
+          : this.i18n.t('error.unknown.noReference'),
+      );
+    } finally {
+      this.editSubmitting.set(false);
+    }
+  }
+
+  protected async deleteWindow(window: CapacityWindowResponse): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    if (!confirm(this.i18n.t('kitchen.capacity.delete.confirm'))) {
+      return;
+    }
+    try {
+      await firstValueFrom(this.capacityApi.remove(scope, window.capacityWindowId, window.version));
+      this.windows.update((current) =>
+        current.filter((row) => row.capacityWindowId !== window.capacityWindowId),
+      );
+      if (this.editingWindowId() === window.capacityWindowId) {
+        this.editingWindowId.set(null);
+      }
+    } catch (error) {
+      this.formError.set(
+        error instanceof ApiError
+          ? describeApiError(error, (key, values) => this.i18n.t(key, values))
+          : this.i18n.t('error.unknown.noReference'),
+      );
     }
   }
 }
