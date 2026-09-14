@@ -34,7 +34,20 @@ public enum Grain {
      * order- and variant-grain reports beside it), never the typed {@code
      * /queries} pipeline, so nothing here needs {@link Dimension#LEGAL_ENTITY}.
      */
-    DAY_LOCATION_OPERATOR(List.of(Dimension.LOCATION, Dimension.OPERATOR));
+    DAY_LOCATION_OPERATOR(List.of(Dimension.LOCATION, Dimension.OPERATOR)),
+
+    /**
+     * P39 (7.1c/7.3b): the payment-mix grain, over {@code fact_order_tender}.
+     * Money, so {@link Dimension#LEGAL_ENTITY} has to be named here too —
+     * {@link uz.horecaos.platform.reporting.domain.MetricDefinition}'s own
+     * constructor refuses a {@code UZS_SOM} metric at a grain that omits it.
+     * Answered by its own {@code GET .../reporting/payment-mix}, not the typed
+     * {@code /queries} pipeline: a share-per-method breakdown is several rows
+     * per slice, the same reason {@link #DAY_LOCATION} gets one for
+     * {@code sla_bucket_set.v1}.
+     */
+    DAY_LOCATION_LEGAL_ENTITY_PAYMENT_METHOD(
+            List.of(Dimension.LOCATION, Dimension.LEGAL_ENTITY, Dimension.PAYMENT_METHOD));
 
     /** The axes a reporting query may group by. */
     public enum Dimension {
@@ -48,7 +61,14 @@ public enum Grain {
          * channel when no human touched the order. See {@code
          * reporting.application.OperatorAttribution}.
          */
-        OPERATOR
+        OPERATOR,
+
+        /**
+         * P39: {@code reporting.fact_order_tender.payment_method_code} — the
+         * ADR 0038 tenant payment-method registry code, snapshotted onto the
+         * tender. Never a second enum of payment types.
+         */
+        PAYMENT_METHOD
     }
 
     // ImmutableEnumChecker judges by the field's declared type, which is the

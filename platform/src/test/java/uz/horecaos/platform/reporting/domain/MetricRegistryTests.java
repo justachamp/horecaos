@@ -28,7 +28,8 @@ class MetricRegistryTests {
                 "prep_time.median.v1",
                 "sla_bucket_set.v1",
                 "channel_mix.count.v1",
-                "receipt_depth.v1");
+                "receipt_depth.v1",
+                "payment_mix.amount.v1");
 
         assertThat(named)
                 .allSatisfy(
@@ -83,6 +84,25 @@ class MetricRegistryTests {
                 .as("an item count is never money, so it carries no legal-entity-grain obligation")
                 .isFalse();
         assertThat(receiptDepth.effectiveFrom()).isEqualTo(LocalDate.of(2026, 9, 13));
+    }
+
+    @Test
+    void paymentMixIsBuiltAtThePaymentMethodGrainAndIsMoney() {
+        // P39 (7.1c/7.3b): declared here for provenance even though it is
+        // answered by GET .../reporting/payment-mix rather than /queries — a
+        // share-per-method breakdown is several rows per slice, the same move
+        // sla_bucket_set.v1 already makes for a shape /queries cannot express.
+        MetricDefinition paymentMix = MetricRegistry.require("payment_mix.amount.v1");
+
+        assertThat(paymentMix.sourceAvailable()).isTrue();
+        assertThat(paymentMix.grain()).isEqualTo(Grain.DAY_LOCATION_LEGAL_ENTITY_PAYMENT_METHOD);
+        assertThat(paymentMix.grain().dimensions()).contains(Grain.Dimension.PAYMENT_METHOD);
+        assertThat(paymentMix.isMoney())
+                .as("this is the cash-collection control figure — it has to be money")
+                .isTrue();
+        assertThat(paymentMix.grain().namesLegalEntity()).isTrue();
+        assertThat(paymentMix.aggregation()).isEqualTo(MetricDefinition.Aggregation.DISTRIBUTION);
+        assertThat(paymentMix.effectiveFrom()).isEqualTo(LocalDate.of(2026, 9, 14));
     }
 
     @Test

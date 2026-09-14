@@ -80,6 +80,17 @@ export const reportsPaths = {
   slaBucketSet(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/sla-bucket-set`;
   },
+
+  /**
+   * P39 (7.1c/7.3b): takings split by payment method —
+   * `payment_mix.amount.v1` over `reporting.fact_order_tender`. Its own
+   * endpoint, like `/sla-buckets`: a share-per-method breakdown is several
+   * rows per slice, not the typed `/queries` pipeline's one-value-per-cell
+   * shape.
+   */
+  paymentMix(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/payment-mix`;
+  },
 } as const;
 
 /**

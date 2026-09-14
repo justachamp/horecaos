@@ -21,6 +21,7 @@ import uz.horecaos.platform.reporting.application.ReportingFacts.CallHourFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.OrderFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.OrderLineFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.RefundFact;
+import uz.horecaos.platform.reporting.application.ReportingFacts.TenderFact;
 import uz.horecaos.platform.reporting.domain.BusinessDayBoundary;
 import uz.horecaos.platform.reporting.domain.MetricRegistry;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
@@ -28,6 +29,7 @@ import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingSt
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceLine;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceOrder;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceRefund;
+import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceTender;
 
 /**
  * Builds a business day's facts, and later checks that they were right
@@ -94,6 +96,14 @@ public class DayCloseService {
                 tenantId, derived.orders().stream().map(OrderFact::orderId).toList(), businessDate);
 
         derived.orders().forEach(store::insertOrderFact);
+        // P39: the tender producer, right beside the order-fact write and inside
+        // the same transaction as everything else in this method. A tender fact
+        // that failed to write would otherwise leave fact_order_tender half
+        // populated for a day whose fact_order rows all committed — exactly the
+        // "partially written day is worse than an unwritten one" the class doc
+        // above already argues for orders, and there is nothing tender-specific
+        // about that argument.
+        derived.tenders().forEach(store::insertTenderFact);
         derived.lines().forEach(store::insertLineFact);
         derived.refunds().forEach(store::insertRefundFact);
         derived.aggregates().forEach(store::insertAggregate);
@@ -103,11 +113,12 @@ public class DayCloseService {
         store.completeRun(runId, derived.orders().size(), derived.lines().size(), 0, clock.instant());
 
         log.info(
-                "Closed business day {} for tenant {}: {} orders, {} lines, {} refunds, {} call-hours",
+                "Closed business day {} for tenant {}: {} orders, {} lines, {} tenders, {} refunds, {} call-hours",
                 businessDate,
                 tenantId,
                 derived.orders().size(),
                 derived.lines().size(),
+                derived.tenders().size(),
                 derived.refunds().size(),
                 derived.callHours().size());
 
@@ -220,6 +231,7 @@ public class DayCloseService {
 
         List<SourceOrder> sourceOrders = store.readSourceOrders(tenantId, from, to);
         List<SourceLine> sourceLines = store.readSourceLines(tenantId, from, to);
+        List<SourceTender> sourceTenders = store.readSourceTenders(tenantId, from, to);
         List<SourceRefund> sourceRefunds = store.readSourceRefunds(tenantId, from, to);
         var sourceCallEvents = store.readSourceCallEvents(tenantId, from, to);
 
@@ -227,15 +239,23 @@ public class DayCloseService {
         sourceLines.forEach(line -> linesByOrder
                 .computeIfAbsent(line.orderId(), ignored -> new ArrayList<>())
                 .add(line));
+        Map<UUID, List<SourceTender>> tendersByOrder = new HashMap<>();
+        sourceTenders.forEach(tender -> tendersByOrder
+                .computeIfAbsent(tender.orderId(), ignored -> new ArrayList<>())
+                .add(tender));
 
         List<OrderFact> orders = new ArrayList<>(sourceOrders.size());
         List<OrderLineFact> lines = new ArrayList<>(sourceLines.size());
+        List<TenderFact> tenders = new ArrayList<>(sourceTenders.size());
 
         for (SourceOrder source : sourceOrders) {
             List<SourceLine> orderLines = linesByOrder.getOrDefault(source.orderId(), List.of());
             orders.add(toFact(tenantId, businessDate, boundary, source, orderLines));
             for (SourceLine line : orderLines) {
                 lines.add(toFact(tenantId, businessDate, source, line));
+            }
+            for (SourceTender tender : tendersByOrder.getOrDefault(source.orderId(), List.of())) {
+                tenders.add(toFact(tenantId, businessDate, boundary, source, tender));
             }
         }
 
@@ -275,10 +295,41 @@ public class DayCloseService {
         return new DerivedDay(
                 orders,
                 lines,
+                tenders,
                 refunds,
                 DayAggregator.branchDay(
                         businessDate, orders, refunds, boundary.version(), MetricRegistry.CALCULATION_VERSION),
                 callHours);
+    }
+
+    /**
+     * P39: one tender, on its order's business date — see {@link TenderFact}'s
+     * own doc for why this is not the refund's grain. {@code source} is the
+     * same {@link SourceOrder} {@link #toFact(UUID, LocalDate,
+     * BusinessDayBoundary, SourceOrder, List)} above already turned into this
+     * order's {@link OrderFact}, so the location and legal entity are read
+     * from it rather than re-resolved: two facts for one order must never
+     * disagree about which branch or which taxpayer it belongs to.
+     */
+    private static TenderFact toFact(
+            UUID tenantId,
+            LocalDate businessDate,
+            BusinessDayBoundary boundary,
+            SourceOrder source,
+            SourceTender tender) {
+        return new TenderFact(
+                tenantId,
+                businessDate,
+                source.orderId(),
+                tender.sequence(),
+                boundary.version(),
+                source.locationId(),
+                source.legalEntityId(),
+                tender.paymentMethodCode(),
+                tender.settlesFromBalance(),
+                tender.status(),
+                tender.amountMinor(),
+                MetricRegistry.CALCULATION_VERSION);
     }
 
     private OrderFact toFact(
@@ -402,6 +453,7 @@ public class DayCloseService {
     private record DerivedDay(
             List<OrderFact> orders,
             List<OrderLineFact> lines,
+            List<TenderFact> tenders,
             List<RefundFact> refunds,
             List<BranchDayAggregate> aggregates,
             List<CallHourFact> callHours) {}

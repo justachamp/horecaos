@@ -64,4 +64,10 @@ describe('ReportsFilterState', () => {
     state.setFulfilmentType('DELIVERY');
     expect(state.fulfilmentType()).toBe('DELIVERY');
   });
+
+  it('carries the payment-method filter, empty meaning every method (P39)', () => {
+    expect(state.paymentMethodCodes()).toEqual([]);
+    state.setPaymentMethodCodes(['CASH', 'CARD']);
+    expect(state.paymentMethodCodes()).toEqual(['CASH', 'CARD']);
+  });
 });

@@ -26,6 +26,7 @@ import uz.horecaos.platform.reporting.application.ReportingFacts.OrderFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.OrderLineFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.RefundFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.SlaBucketAggregate;
+import uz.horecaos.platform.reporting.application.ReportingFacts.TenderFact;
 import uz.horecaos.platform.reporting.domain.BusinessDayBoundary;
 import uz.horecaos.platform.reporting.domain.MetricDefinition;
 
@@ -317,6 +318,50 @@ public class JdbcReportingStore {
     }
 
     /**
+     * P39: every tender behind one business day's orders — {@code
+     * payments.tenders} joined through its settlement to the order it belongs
+     * to, windowed by the order's own {@code created_at} exactly the way
+     * {@link #readSourceLines} already is. This is the one statement in the
+     * reporting module besides {@link #readSourceRefunds} that reaches
+     * {@code payments}, and it is read-only: {@code horecaos_reporting_read}
+     * has no {@code USAGE} on that schema at all (ADR 0023), so a report can
+     * never take this path — only the close job, inside {@link
+     * uz.horecaos.platform.reporting.application.DayCloseService}, can.
+     *
+     * <p>{@code amount_minor - refunded_minor} is computed here rather than
+     * carried as two columns: a tender's net amount is what {@code
+     * fact_order_tender.amount_som} stores, and there is exactly one caller of
+     * this method.
+     */
+    public List<SourceTender> readSourceTenders(UUID tenantId, Instant from, Instant to) {
+        return jdbc.sql("""
+                SELECT os.order_id, t.sequence, pm.code AS payment_method_code,
+                       t.settles_from_balance, t.status,
+                       (t.amount_minor - t.refunded_minor) AS amount_minor
+                  FROM payments.tenders t
+                  JOIN payments.order_settlements os
+                    ON os.id = t.settlement_id AND os.tenant_id = t.tenant_id
+                  JOIN payments.payment_methods pm
+                    ON pm.id = t.payment_method_id AND pm.tenant_id = t.tenant_id
+                  JOIN ordering.orders o ON o.id = os.order_id AND o.tenant_id = os.tenant_id
+                 WHERE t.tenant_id = :tenantId
+                   AND o.created_at >= :from AND o.created_at < :to
+                 ORDER BY os.order_id, t.sequence
+                """)
+                .param("tenantId", tenantId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query((ResultSet row, int number) -> new SourceTender(
+                        row.getObject("order_id", UUID.class),
+                        row.getInt("sequence"),
+                        row.getString("payment_method_code"),
+                        row.getBoolean("settles_from_balance"),
+                        row.getString("status"),
+                        row.getLong("amount_minor")))
+                .list();
+    }
+
+    /**
      * ADR 0064: the call events behind one business day's call facts.
      *
      * <p>{@code occurred_at} is the provider's own event timestamp, exactly the
@@ -430,6 +475,21 @@ public class JdbcReportingStore {
 
     public record SourceRefund(UUID refundId, UUID orderId, long amountMinor, Instant occurredAt) {}
 
+    /**
+     * One {@code payments.tenders} row behind {@link #readSourceTenders}.
+     *
+     * @param amountMinor already net of {@code refunded_minor} — see that
+     *                    method's own doc for why the subtraction happens in
+     *                    the query rather than being carried as two columns
+     */
+    public record SourceTender(
+            UUID orderId,
+            int sequence,
+            String paymentMethodCode,
+            boolean settlesFromBalance,
+            String status,
+            long amountMinor) {}
+
     public record RefundedOrder(
             UUID locationId, UUID legalEntityId, String channelCode, String fulfilmentMode, Instant createdAt) {}
 
@@ -454,6 +514,7 @@ public class JdbcReportingStore {
     public void clearDay(UUID tenantId, LocalDate businessDate) {
         for (String table : List.of(
                 "fact_order_line",
+                "fact_order_tender",
                 "fact_order",
                 "fact_refund",
                 "agg_branch_day",
@@ -540,6 +601,11 @@ public class JdbcReportingStore {
 
         jdbc.sql("""
                 DELETE FROM reporting.fact_order_line
+                 WHERE tenant_id = :tenantId AND order_id IN (:orderIds)
+                   AND business_date <> :keep
+                """).params(params).update();
+        jdbc.sql("""
+                DELETE FROM reporting.fact_order_tender
                  WHERE tenant_id = :tenantId AND order_id IN (:orderIds)
                    AND business_date <> :keep
                 """).params(params).update();
@@ -659,6 +725,34 @@ public class JdbcReportingStore {
                 """).params(params).update();
     }
 
+    /** P39: one row of {@link #readSourceTenders}, turned into {@code reporting.fact_order_tender}. */
+    public void insertTenderFact(TenderFact fact) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", fact.tenantId());
+        params.put("businessDate", fact.businessDate());
+        params.put("orderId", fact.orderId());
+        params.put("tenderSequence", fact.tenderSequence());
+        params.put("boundaryVersion", fact.boundaryVersion());
+        params.put("locationId", fact.locationId());
+        params.put("legalEntityId", fact.legalEntityId());
+        params.put("paymentMethodCode", fact.paymentMethodCode());
+        params.put("settlesFromBalance", fact.settlesFromBalance());
+        params.put("tenderStatus", fact.tenderStatus());
+        params.put("amount", fact.amountSom());
+        params.put("calculationVersion", fact.metricCalculationVersion());
+
+        jdbc.sql("""
+                INSERT INTO reporting.fact_order_tender (
+                    tenant_id, business_date, order_id, tender_sequence, boundary_version,
+                    location_id, legal_entity_id, payment_method_code, settles_from_balance,
+                    tender_status, amount_som, metric_calculation_version)
+                VALUES (
+                    :tenantId, :businessDate, :orderId, :tenderSequence, :boundaryVersion,
+                    :locationId, :legalEntityId, :paymentMethodCode, :settlesFromBalance,
+                    :tenderStatus, :amount, :calculationVersion)
+                """).params(params).update();
+    }
+
     public void insertAggregate(BranchDayAggregate row) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", row.key().tenantId());
@@ -766,6 +860,61 @@ public class JdbcReportingStore {
                         row.getInt("share_basis_points")))
                 .list();
     }
+
+    /**
+     * P39 (7.1c/7.3b): takings summed per (location, legal entity, payment
+     * method), over tenders that actually moved money. Grouped in SQL rather
+     * than in Java — the same choice {@link #readAggregates} already makes —
+     * because a date range folds many tender rows into few (location, entity,
+     * method) cells and there is no reason to move the unfold rows across the
+     * wire only to fold them back in {@link ReportQueryService#paymentMix}.
+     *
+     * <p>{@code SETTLED, REVERSED} is the inclusion rule {@code
+     * payment_mix.amount.v1} declares (P39): a {@code PLANNED} or {@code
+     * FAILED} tender never collected money and would overstate takings if
+     * counted here.
+     */
+    public List<PaymentMixRow> readPaymentMix(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        String filter = "";
+        if (!locationIds.isEmpty()) {
+            filter = " AND location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT location_id, legal_entity_id, payment_method_code, settles_from_balance,
+                       count(*) AS tender_count, sum(amount_som) AS amount_som
+                  FROM reporting.fact_order_tender
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND tender_status IN ('SETTLED', 'REVERSED')
+                """ + filter + """
+                 GROUP BY location_id, legal_entity_id, payment_method_code, settles_from_balance
+                 ORDER BY location_id, legal_entity_id, payment_method_code
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new PaymentMixRow(
+                        row.getObject("location_id", UUID.class),
+                        row.getObject("legal_entity_id", UUID.class),
+                        row.getString("payment_method_code"),
+                        row.getBoolean("settles_from_balance"),
+                        row.getInt("tender_count"),
+                        row.getLong("amount_som")))
+                .list();
+    }
+
+    /** One (location, legal entity, payment method) cell of {@link #readPaymentMix}. */
+    public record PaymentMixRow(
+            UUID locationId,
+            @Nullable UUID legalEntityId,
+            String paymentMethodCode,
+            boolean settlesFromBalance,
+            int tenderCount,
+            long amountSom) {}
 
     /**
      * The median preparation time, computed in the database.

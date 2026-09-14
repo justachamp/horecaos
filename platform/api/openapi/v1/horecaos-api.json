@@ -14103,6 +14103,53 @@
         },
         "type" : "object"
       },
+      "PaymentMixResponse" : {
+        "properties" : {
+          "byLocation" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PaymentMixRowResponse"
+            },
+            "type" : "array"
+          },
+          "overview" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PaymentMixRowResponse"
+            },
+            "type" : "array"
+          },
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          }
+        },
+        "type" : "object"
+      },
+      "PaymentMixRowResponse" : {
+        "properties" : {
+          "amountSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "legalEntityId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "paymentMethodCode" : {
+            "type" : "string"
+          },
+          "settlesFromBalance" : {
+            "type" : "boolean"
+          },
+          "tenderCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "PaymentSessionRequest" : {
         "properties" : {
           "language" : {
@@ -57974,6 +58021,62 @@
           }
         },
         "summary" : "Order-grain rows behind 7.2's per-stage, commercial-log, and late-order tables",
+        "tags" : [ "Reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/payment-mix" : {
+      "get" : {
+        "description" : "payment_mix.amount.v1, over reporting.fact_order_tender: net tendered amount per payment method, from tenders that reached SETTLED or REVERSED. \"overview\" folds every branch into one row per method and legal entity (ADR 0038: never across two, since this is money); \"byLocation\" keeps the branch split so 7.3b's cash reconciliation can answer from the same read.",
+        "operationId" : "paymentMix",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentMixResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Takings split by payment method — the cash-collection control figure (7.1c/7.3b)",
         "tags" : [ "Reporting" ]
       }
     },

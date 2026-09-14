@@ -8,8 +8,15 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { LocationsApi } from '../settings/locations/locations-api';
 import { SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
+import { PaymentMethodsApi } from '../settings/payment-methods/payment-methods-api';
 import { BusinessOverviewPage } from './business-overview-page';
-import { QueryParams, QueryResponse, ReportingApi, RowResponse } from './reporting-api';
+import {
+  PaymentMixResponse,
+  QueryParams,
+  QueryResponse,
+  ReportingApi,
+  RowResponse,
+} from './reporting-api';
 import { ReportsFilterState } from './reports-filter-state';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
@@ -106,6 +113,32 @@ function queryStub(): (tenantId: string, params: QueryParams) => Promise<QueryRe
   };
 }
 
+/** P39 (7.1c): a two-method payment mix — 70% cash, 30% card, by revenue. */
+function paymentMixResponse(): PaymentMixResponse {
+  return {
+    overview: [
+      {
+        locationId: null,
+        legalEntityId: 'e1',
+        paymentMethodCode: 'CASH',
+        settlesFromBalance: false,
+        tenderCount: 7,
+        amountSom: 700_000,
+      },
+      {
+        locationId: null,
+        legalEntityId: 'e1',
+        paymentMethodCode: 'CARD',
+        settlesFromBalance: false,
+        tenderCount: 3,
+        amountSom: 300_000,
+      },
+    ],
+    byLocation: [],
+    provenance: provenance(),
+  };
+}
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -140,10 +173,12 @@ describe('BusinessOverviewPage', () => {
             orders: vi
               .fn()
               .mockResolvedValue({ rows: [], maybeMore: false, provenance: provenance() }),
+            paymentMix: vi.fn().mockResolvedValue(paymentMixResponse()),
           },
         },
         { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
         { provide: SalesChannelsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
+        { provide: PaymentMethodsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -180,6 +215,17 @@ describe('BusinessOverviewPage', () => {
     const host = fixture.nativeElement as HTMLElement;
     expect(host.querySelector('[data-testid="q-stacked-bar-chart"]')).not.toBeNull();
     expect(host.querySelector('.stacked-bar')).toBeNull();
+  });
+
+  it('renders the payment mix as a donut, not the retired locked notice (P39)', async () => {
+    await render();
+    const host = fixture.nativeElement as HTMLElement;
+    const donuts = host.querySelectorAll('[data-testid="q-donut-chart"]');
+    // The channel mix already renders one; the payment mix is the second.
+    expect(donuts.length).toBe(2);
+    expect(host.textContent).not.toContain('ADR 0013');
+    expect(host.textContent).toContain('CASH');
+    expect(host.textContent).toContain('70%');
   });
 
   it('renders the daily revenue and orders trend as line charts over the per-day rows Band A already fetched', async () => {
