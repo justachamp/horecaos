@@ -13,19 +13,20 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { TimeZone, formatClock, formatDateTime } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { RealtimeClient } from '../../core/realtime/realtime-client';
+import { startVisibilityPoll } from '../../core/realtime/visibility-poll';
 import { BarChart } from '../../shared/ui/charts/bar-chart';
 import { ChartCategory } from '../../shared/ui/charts/chart-model';
+import { ConnectionStateBanner } from '../../shared/ui/connection-state-banner';
+import { StaleIndicator } from '../../shared/ui/stale-indicator';
 import { describeApiError, errorReference } from '../orders/order-errors';
 import { BranchLoad, LiveBoard, LiveBoardSnapshot, MixSlice } from './live-board';
 
 /**
- * §1.6's polling fallback, at the order board's interval.
- *
- * ADR 0045's `COUNTERS` stream is built on the server and has no client — it is
- * not missing, it is unwired, and wave `P08` wires it (IA 0.1f). Until then a
- * number on this board can be up to ten seconds old and nothing distinguishes a
- * quiet branch from a broken connection; the staleness indicator belongs to that
- * wave, not this one.
+ * §1.6's polling fallback, at the order board's interval — the unconditional
+ * floor `RealtimeClient`'s own doc describes. `COUNTERS`'s snapshot frame
+ * now accelerates this board (wave P08, row 0.1f); this interval is what
+ * still runs it when the accelerator cannot connect.
  */
 const POLL_INTERVAL_MS = 10_000;
 
@@ -75,7 +76,7 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  */
 @Component({
   selector: 'q-today-page',
-  imports: [TPipe, RouterLink, BarChart],
+  imports: [TPipe, RouterLink, BarChart, ConnectionStateBanner, StaleIndicator],
   templateUrl: './today-page.html',
   styleUrl: './today-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -85,6 +86,7 @@ export class TodayPage implements OnInit {
   private readonly liveBoard = inject(LiveBoard);
   private readonly i18n = inject(I18n);
   private readonly destroyRef = inject(DestroyRef);
+  protected readonly realtime = inject(RealtimeClient);
 
   protected readonly snapshot = signal<LiveBoardSnapshot | null>(null);
   protected readonly lastUpdatedAt = signal<Date | null>(null);
@@ -93,28 +95,24 @@ export class TodayPage implements OnInit {
   protected readonly lastError = signal<ApiError | null>(null);
   protected readonly denied = signal(false);
 
-  private pollHandle: ReturnType<typeof setInterval> | null = null;
-  private readonly onVisibilityChange = (): void => {
-    if (document.visibilityState === 'visible') {
-      void this.refresh();
-    }
-  };
-
   ngOnInit(): void {
-    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    // §1.6's own fallback, extracted — see `visibility-poll.ts`'s doc.
+    // `immediate: false` because {@link start} below does the real first
+    // fetch after `CurrentLocation.ensureLoaded()`.
+    startVisibilityPoll(() => void this.refresh(), POLL_INTERVAL_MS, this.destroyRef, {
+      immediate: false,
+    });
 
-    this.pollHandle = setInterval(() => {
-      if (document.visibilityState === 'visible') {
+    // The accelerator: this board is exactly what `COUNTERS` was built to
+    // push (IA 0.1a/0.1b). `RealtimeClient` carries other channels' frames
+    // on the same connection; only a `counters` snapshot is worth an
+    // immediate re-fetch here.
+    const unsubscribeRealtime = this.realtime.onFrame((frame) => {
+      if ((frame.kind === 'snapshot' && frame.channel === 'counters') || frame.kind === 'resync') {
         void this.refresh();
       }
-    }, POLL_INTERVAL_MS);
-
-    this.destroyRef.onDestroy(() => {
-      document.removeEventListener('visibilitychange', this.onVisibilityChange);
-      if (this.pollHandle !== null) {
-        clearInterval(this.pollHandle);
-      }
     });
+    this.destroyRef.onDestroy(unsubscribeRealtime);
 
     void this.start();
   }

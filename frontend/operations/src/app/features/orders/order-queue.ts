@@ -23,9 +23,13 @@ import { TimeZone, formatClock, formatTime } from '../../core/format/datetime';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { RealtimeClient } from '../../core/realtime/realtime-client';
+import { startVisibilityPoll } from '../../core/realtime/visibility-poll';
 import { ServiceStatus } from '../../shell/service-status';
+import { ConnectionStateBanner } from '../../shared/ui/connection-state-banner';
 import { DateRange, DateRangePicker } from '../../shared/ui/date-range-picker';
 import { FilterBar, FilterBarChip } from '../../shared/ui/filter-bar';
+import { StaleIndicator } from '../../shared/ui/stale-indicator';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { Toasts } from '../../shared/ui/toast';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
@@ -87,7 +91,13 @@ import {
   isOrderTabMember,
 } from './order-tabs';
 
-/** §1.6: poll every 10s while the tab is visible, until ADR 0045 live updates exist. */
+/**
+ * §1.6: poll every 10s while the tab is visible — the fallback ADR 0045
+ * itself requires every live surface to keep, unconditionally, whether or
+ * not the accelerator below is connected. `RealtimeClient`'s own `ORDER_QUEUE`
+ * signal shortens the *usual* wait to under a second; this interval is what
+ * still runs the shift if it cannot.
+ */
 const POLL_INTERVAL_MS = 10_000;
 
 /**
@@ -188,6 +198,8 @@ interface RowDialogState {
     StatusPill,
     FilterBar,
     DateRangePicker,
+    ConnectionStateBanner,
+    StaleIndicator,
   ],
   templateUrl: './order-queue.html',
   styleUrl: './order-queue.css',
@@ -206,6 +218,7 @@ export class OrderQueue implements OnInit {
   private readonly referenceDataApi = inject(ReferenceDataApi);
   private readonly couriersApi = inject(CouriersApi);
   private readonly serviceStatus = inject(ServiceStatus);
+  protected readonly realtime = inject(RealtimeClient);
   private readonly toasts = inject(Toasts);
   private readonly i18n = inject(I18n);
   private readonly route = inject(ActivatedRoute);
@@ -265,13 +278,6 @@ export class OrderQueue implements OnInit {
    */
   private latenessPolicy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
 
-  private pollHandle: ReturnType<typeof setInterval> | null = null;
-  private readonly onVisibilityChange = (): void => {
-    if (document.visibilityState === 'visible') {
-      void this.refresh();
-    }
-  };
-
   /** Guards the tab-change refetch below from also firing on the very first route resolution — {@link start} already fetches once. */
   private hasStarted = false;
 
@@ -290,20 +296,34 @@ export class OrderQueue implements OnInit {
       }
     });
 
-    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    // §1.6's own fallback, extracted — see `visibility-poll.ts`'s doc.
+    // `immediate: false` because {@link start} below does the real first
+    // fetch after its own async prerequisites resolve.
+    startVisibilityPoll(() => void this.refresh(), POLL_INTERVAL_MS, this.destroyRef, {
+      immediate: false,
+    });
 
-    this.pollHandle = setInterval(() => {
-      if (document.visibilityState === 'visible') {
+    // The accelerator: `ORDER_QUEUE` and `COUNTERS` both change when this
+    // board's rows or tab badges do, so either one is worth an immediate
+    // re-fetch rather than waiting up to `POLL_INTERVAL_MS` for the poll
+    // above to notice. Every frame on this connection is filtered by scope
+    // already (`RealtimeClient` reconnects on the operator's own branch);
+    // this only additionally checks the channel, since the same connection
+    // also carries `ORDER_DETAIL` and `DISPATCH_BOARD` frames this screen
+    // does not care about.
+    const unsubscribeRealtime = this.realtime.onFrame((frame) => {
+      if (
+        (frame.kind === 'signal' && frame.channel === 'order_queue') ||
+        (frame.kind === 'snapshot' && frame.channel === 'counters') ||
+        frame.kind === 'resync'
+      ) {
         void this.refresh();
       }
-    }, POLL_INTERVAL_MS);
+    });
 
     this.destroyRef.onDestroy(() => {
       querySub.unsubscribe();
-      document.removeEventListener('visibilitychange', this.onVisibilityChange);
-      if (this.pollHandle !== null) {
-        clearInterval(this.pollHandle);
-      }
+      unsubscribeRealtime();
       if (this.searchDebounceHandle !== null) {
         clearTimeout(this.searchDebounceHandle);
       }
