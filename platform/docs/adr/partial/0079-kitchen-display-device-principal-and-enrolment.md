@@ -10,9 +10,17 @@
   endpoints; `kitchen.application.KitchenDeviceService` and
   `kitchen.web.KitchenDeviceController` carry the capability-gated approve,
   list and revoke surface under `kitchen.station.manage`; `PlatformRole.KITCHEN_DEVICE`
-  is the narrow bundle a device is granted. A kitchen device can enrol, read the
-  board, and mark a line ready today. Not built: any device class other than the
-  one kitchen display this ADR names (`KITCHEN_KDS`) — a VDU or an expo screen
+  is the narrow bundle a device is granted. **A kitchen device can enrol,
+  read the board, and mark a line ready today through the API** — true since
+  this ADR's own implementation checklist closed, and, as of 2026-09-14
+  (wave P17), also true through a real client: `frontend/operations`'s
+  `/device` shell (ADR 0119) is the fullscreen application a tablet actually
+  runs, and Kitchen → Devices
+  (`frontend/operations/src/app/features/kitchen/devices-page.ts`) is the
+  console screen that approves the pairing code it shows — this record's own
+  prose used to claim the client existed when only the endpoints did; it
+  does not any more. Not built: any device class other than the one kitchen
+  display this ADR names (`KITCHEN_KDS`) — a VDU or an expo screen
   under ADR 0041's own rollout step 4 would reuse this primitive with its own
   role bundle, not reopen this one; per-action attribution below the device
   (badge or PIN); and automatic secret rotation on a timer (rotation today is
@@ -478,3 +486,4 @@ takes effect on its very next request, not at its token's expiry.
 - [ADR 0041: Kitchen execution, production routing, and kitchen release](../partial/0041-kitchen-execution-and-production-routing.md)
 - [ADR 0045: Real-time operational push and field telemetry](../partial/0045-realtime-operational-push-and-field-telemetry.md)
 - [ADR 0049: Non-staff principal authorization](../built/0049-non-staff-principal-authorization.md)
+- [ADR 0119: Wave P17 — device-shell authentication, credential storage, and QR pairing display](../not-started/0119-wave-p17-device-shell-auth-and-qr-pairing.md)
