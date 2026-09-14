@@ -4396,6 +4396,21 @@ export interface PaymentMethodsResponse {
   warnings?: Array<string>;
 }
 
+export interface PaymentMixResponse {
+  byLocation?: Array<PaymentMixRowResponse>;
+  overview?: Array<PaymentMixRowResponse>;
+  provenance?: ProvenanceResponse;
+}
+
+export interface PaymentMixRowResponse {
+  amountSom?: number;
+  legalEntityId?: string;
+  locationId?: string;
+  paymentMethodCode?: string;
+  settlesFromBalance?: boolean;
+  tenderCount?: number;
+}
+
 export interface PaymentSessionRequest {
   language?: string;
   presentation?: string;
@@ -7947,6 +7962,7 @@ export interface Operations {
   "operatorProducts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/operator-products"; request: { parameters: { path: { tenantId: string }; query: { from: string; limit?: number; locationId?: Array<string>; operatorPrincipalId: string; to: string } } }; responses: { "200": OperatorProductListResponse } };
   "orderOutcomes": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/order-outcomes"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; locationId?: Array<string>; to: string } } }; responses: { "200": OutcomeListResponse } };
   "orders": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/orders"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; limit?: number; locationId?: Array<string>; sort?: string; to: string } } }; responses: { "200": OrderListResponse } };
+  "paymentMix": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/payment-mix"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": PaymentMixResponse } };
   "preparationTime": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/preparation-time"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": MedianResponse } };
   "query": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/queries"; request: { parameters: { path: { tenantId: string }; query: { channelCode?: Array<string>; from: string; groupBy?: Array<string>; locationId?: Array<string>; metric: Array<string>; to: string } } }; responses: { "200": QueryResponse } };
   "slaBucketSet": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/sla-bucket-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": SlaBuckets } };
