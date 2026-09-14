@@ -486,4 +486,4 @@ takes effect on its very next request, not at its token's expiry.
 - [ADR 0041: Kitchen execution, production routing, and kitchen release](../partial/0041-kitchen-execution-and-production-routing.md)
 - [ADR 0045: Real-time operational push and field telemetry](../partial/0045-realtime-operational-push-and-field-telemetry.md)
 - [ADR 0049: Non-staff principal authorization](../built/0049-non-staff-principal-authorization.md)
-- [ADR 0119: Wave P17 — device-shell authentication, credential storage, and QR pairing display](../not-started/0119-wave-p17-device-shell-auth-and-qr-pairing.md)
+- [ADR 0119: Wave P17 — device-shell authentication, credential storage, and QR pairing display](../partial/0119-wave-p17-device-shell-auth-and-qr-pairing.md)
