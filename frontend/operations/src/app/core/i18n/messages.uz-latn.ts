@@ -607,6 +607,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.nav.integrations': 'Integratsiyalar',
   'settings.nav.referenceData': 'Maʻlumotnoma maʻlumotlari',
   'settings.nav.catalogBaseSettings': 'Katalogning bazaviy sozlamalari',
+  'settings.nav.deliveryPolicy': 'Yetkazib berish siyosati',
 
   'settings.home.title': 'Sozlamalar',
   'settings.home.lead':
@@ -650,6 +651,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.home.description.orderPolicy': 'Har bir buyurtma solishtiriladigan qoidalar toʻplami.',
   'settings.home.description.catalogBaseSettings':
     'Butun kompaniya uchun qoldiq logikasi va QR/kiosk narxlash almashtirgichlari.',
+  'settings.home.description.deliveryPolicy':
+    'Zonadan tashqaridagi manzillar, kuryer nimani koʻradi va qila oladi, GPS boʻyicha tekshiruvlar.',
   'settings.home.description.paymentMethods': 'Tenantning oʻz toʻlov usullari roʻyxati.',
   'settings.home.description.fiscalization': 'Restoran soliq uchun kimning nomidan savdo qiladi.',
   'settings.home.description.notifications':
@@ -1293,6 +1296,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.locations.tab.fiscal': 'Fiskal maʻlumotlar',
   'settings.locations.tab.channels': 'Kanallar',
   'settings.locations.tab.notifications': 'Bildirishnomalar',
+  'settings.locations.tab.floorPlan': 'Zal rejasi',
   'settings.locations.edit': 'Tahrirlash',
   'settings.locations.cancel': 'Bekor qilish',
   'settings.locations.save': 'Saqlash',
@@ -1340,6 +1344,41 @@ export const messagesUzLatn: MessageCatalogue = {
     'Bu filialdan qaysi kanallar sotishi Sozlamalar → Sotuv kanallarida boshqariladi.',
   'settings.locations.notifications.note':
     'Bu filialning ogohlantirish yoʻnaltirishi Sozlamalar → Bildirishnomalarda boshqariladi.',
+
+  // ---- "Zal rejasi" boʻlimi (10.2d/X.36/10.5b qatorlari, P38 toʻlqini) ----
+  'settings.locations.floorPlan.settingsTitle': 'Zal uchun QR sozlamalari',
+  'settings.locations.floorPlan.edit': 'Tahrirlash',
+  'settings.locations.floorPlan.cancel': 'Bekor qilish',
+  'settings.locations.floorPlan.save': 'Saqlash',
+  'settings.locations.floorPlan.saving': 'Saqlanmoqda…',
+  'settings.locations.floorPlan.loading': 'Yuklanmoqda…',
+  'settings.locations.floorPlan.reason': 'Sabab',
+  'settings.locations.floorPlan.field.qrMode': 'Skanerlangan kod bu yerda nima qiladi',
+  'settings.locations.floorPlan.field.turnaround': 'Aylanish bufer vaqti (daqiqa)',
+  'settings.locations.floorPlan.field.guestSessionTtl': 'Mehmon sessiyasi davomiyligi (daqiqa)',
+  'settings.locations.floorPlan.field.serviceCharge': 'Xizmat haqi (%)',
+  'settings.locations.floorPlan.qrMode.VIEW_ONLY': 'Faqat menyuni koʻrish',
+  'settings.locations.floorPlan.qrMode.ORDER_AND_PAY': 'Buyurtma va toʻlov',
+  'settings.locations.floorPlan.qrMode.SETTLE_OPEN_TICKET': 'Ochiq hisobni yopish',
+  'settings.locations.floorPlan.qrMode.SETTLE_OPEN_TICKET.reason':
+    'Oʻchirilgan: ochiq hisobni oʻqish va yopishni eʻlon qiladigan POS adapteri kerak, hozircha bunday adapter yoʻq (ADR 0011/0047). Bu ekranning kamchiligi emas — rejim atayin sozlash bosqichida ham, maʻlumotlar bazasi darajasida ham rad etiladi.',
+  'settings.locations.floorPlan.roomTitle': 'Boʻlimlar va stollar',
+  'settings.locations.floorPlan.addSection': 'Boʻlim qoʻshish',
+  'settings.locations.floorPlan.sectionCodePlaceholder': 'Kod (masalan, MAIN)',
+  'settings.locations.floorPlan.sectionNamePlaceholder': 'Nomi (masalan, Asosiy zal)',
+  'settings.locations.floorPlan.noSections':
+    'Hali boʻlimlar yoʻq — stollarni joylashtirishdan oldin kamida bittasini qoʻshing. Boʻlimsiz stol hech qaysi joyga tegishli boʻlmaydi.',
+  'settings.locations.floorPlan.addTable': 'Stol qoʻshish',
+  'settings.locations.floorPlan.tableCodePlaceholder': 'Kod (masalan, T1)',
+  'settings.locations.floorPlan.tableNamePlaceholder': 'Nomi (masalan, 1-stol)',
+  'settings.locations.floorPlan.moveReason': 'Zal rejasi doskasida koʻchirildi',
+  'settings.locations.floorPlan.close': 'Yopish',
+  'settings.locations.floorPlan.tableSeats': '{count} oʻrin',
+  'settings.locations.floorPlan.issueQr': 'QR kod chiqarish',
+  'settings.locations.floorPlan.rotateQr': 'QR kodni yangilash',
+  'settings.locations.floorPlan.rotating': 'Yangilanmoqda…',
+  'settings.locations.floorPlan.revokedGuestSessions':
+    'Eski kod boʻyicha {count} mehmon sessiyasi uzildi.',
 
   'finance.scope.denied': 'Bu hisobga Moliya boʻlimiga ruxsat berilmagan.',
 
@@ -2812,9 +2851,49 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.policy.confirmationPointRetentionDays': 'Tasdiqlash nuqtalarini saqlash (kun)',
   'delivery.policy.consequence.confirmationPointRetentionDays':
     'Yetkazib berishni tasdiqlovchi fotosurat va imzolar shuncha kun saqlanadi, keyin oʻchiriladi.',
-  'delivery.policy.notBuilt':
-    'Bu yerda hali koʻrsatilmagan: GPS chegaralari, faqat oshxona tayyorlagan buyurtmalarni koʻrsatish, manzilni ochish vaqti, standart telemetriya toʻplash rejimi va yetkazishdan keyingi toʻlovni tekshirish — ular uchun siyosat hujjati yoʻq.',
-  'delivery.policy.readOnly': 'Bu toʻlqinda faqat oʻqish uchun — tahrirlash hali qoʻshilmagan.',
+  'delivery.policy.card.courier': 'Kuryer nimani koʻradi va nima qila oladi',
+  'delivery.policy.kitchenReadyOnly': 'Faqat tayyor buyurtmalarni koʻrsatish',
+  'delivery.policy.consequence.kitchenReadyOnly':
+    'Kuryer faqat oshxona allaqachon tayyor deb belgilagan buyurtmalarni koʻradi va ola oladi.',
+  'delivery.policy.revealCustomerLocationTiming': 'Mijoz manzilini ochish',
+  'delivery.policy.revealCustomerLocationTiming.BEFORE_ACCEPT': 'Qabul qilishdan oldin',
+  'delivery.policy.revealCustomerLocationTiming.AFTER_ACCEPT': 'Qabul qilgandan keyin',
+  'delivery.policy.consequence.revealCustomerLocationTiming':
+    '«Qabul qilishdan oldin» aniq manzilni taklifni koʻrgan har bir kuryerga koʻrsatadi; «qabul qilgandan keyin» — faqat qabul qilgan kuryerga.',
+  'delivery.policy.postDeliveryPaymentCheckRequired':
+    'Yetkazishdan keyin toʻlov holatini tekshirish',
+  'delivery.policy.consequence.postDeliveryPaymentCheckRequired':
+    'Toʻlov tasdiqlanmaguncha buyurtma yopilmaydi.',
+  'delivery.policy.gpsVerificationEnabled': 'Kuryer harakatlarini GPS radiusi boʻyicha tekshirish',
+  'delivery.policy.consequence.gpsVerificationEnabled':
+    'Standart holatda oʻchirilgan. Yoqilsa, kuryerning holati quyidagi ikkala radius boʻyicha tekshirila boshlaydi.',
+  'delivery.policy.gpsAcceptRadiusKm': 'Qabul qilish radiusi (km, olib ketish nuqtasidan)',
+  'delivery.policy.gpsStatusChangeRadiusMeters': 'Holat oʻzgarish radiusi (m, mijoz nuqtasidan)',
+  'delivery.policy.billingMode': 'Kuryerlar billingi (shaxsiy balans)',
+  'delivery.policy.billingMode.refused': 'ADR 0042 tomonidan rad etilgan',
+  'delivery.policy.billingMode.reason':
+    'HorecaOS ishchilardan depozit olmaydi. Kuryer toʻldirishi shart boʻlgan shaxsiy balans ish haqi muammosini qarz undirish muammosiga aylantiradi — bu tugma shu sababli ataylab yoʻq, unutilgani uchun emas.',
+  'delivery.policy.telemetryGate': 'Telemetriya toʻplash rejimi',
+  'delivery.policy.telemetryGate.platformOnly': 'Faqat platforma',
+  'delivery.policy.telemetryGate.reason':
+    'Roʻyxatdan oʻtgan (ADR 0045), lekin faqat platforma boshqaruvi sirtidan yozish mumkin — ijarachi buni bu yerda oʻrnata olmaydi.',
+  'delivery.policy.edit': 'Tahrirlash',
+  'delivery.policy.cancel': 'Bekor qilish',
+  'delivery.policy.publish': 'Eʻlon qilish',
+  'delivery.policy.saving': 'Eʻlon qilinmoqda…',
+  'delivery.policy.reason': 'Sabab',
+  'delivery.policy.reasonPlaceholder': 'Nega oʻzgartirilmoqda?',
+  'delivery.policy.yes': 'Ha',
+  'delivery.policy.no': 'Yoʻq',
+  'delivery.policy.outOfZone.title': 'Har qanday zonadan tashqaridagi manzillar',
+  'delivery.policy.outOfZone.field': 'Zonadan tashqaridagi manzil bilan nima qilish kerak',
+  'delivery.policy.outOfZone.option.REJECT': 'Rad etish',
+  'delivery.policy.outOfZone.option.OFFER_PICKUP': 'Olib ketishni taklif qilish',
+  'delivery.policy.outOfZone.option.MANUAL_REVIEW': 'Qoʻlda koʻrib chiqishga qoldirish',
+  'delivery.policy.outOfZone.hint':
+    'Hali kuchga kiritilmagan: qiymatidan qatʻi nazar, buyurtma berish zonadan tashqaridagi manzilni baribir rad etadi — bu yerda faqat ijarachining niyati keyingi isteʻmolchi uchun qayd etiladi.',
+  'delivery.policy.outOfZone.catchmentNote':
+    'Filialning oʻz qamrov zonasidan tashqaridagi buyurtmalar allaqachon rad etiladi — bu shu ekrandagi tugma emas, qamrov zonasi sozlanganligi bilan belgilanadi.',
 
   // ---------------------------------------------------------------- customers (wave 31)
   'customers.title': 'Mijozlar',
@@ -4760,6 +4839,9 @@ export const messagesUzLatn: MessageCatalogue = {
   // shared/ui — q-drag-drop-assign (X.22)
   'shared.dragDropAssign.rejected': 'Koʻchirib boʻlmadi: {reason}',
   'shared.dragDropAssign.rejectedUnknown': 'Koʻchirib boʻlmadi — qayta urinib koʻring.',
+  // shared/ui — q-table-print-card (X.36, P38 toʻlqini)
+  'shared.tablePrintCard.tokenLabel': 'Kod (skanerlash ishlamasa, qoʻlda kiriting)',
+  'shared.tablePrintCard.none': 'Bu stol uchun hali kod berilmagan.',
   // --- shared/ui q-secret-input (ADR 0106, gap-map row X.14) --------------
   'secretInput.reveal': 'Koʻrsatish',
   'secretInput.hide': 'Yashirish',

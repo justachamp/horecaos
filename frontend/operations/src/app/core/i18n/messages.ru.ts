@@ -601,6 +601,7 @@ export const messagesRu: MessageCatalogue = {
   'settings.nav.integrations': 'Интеграции',
   'settings.nav.referenceData': 'Справочные данные',
   'settings.nav.catalogBaseSettings': 'Базовые настройки каталога',
+  'settings.nav.deliveryPolicy': 'Политика доставки',
 
   'settings.home.title': 'Настройки',
   'settings.home.lead':
@@ -643,6 +644,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.home.description.orderPolicy': 'Свод правил, по которым оценивается каждый заказ.',
   'settings.home.description.catalogBaseSettings':
     'Переключатели логики остатков и цен QR/киоска — общие для всей компании.',
+  'settings.home.description.deliveryPolicy':
+    'Адреса вне зоны, что видит и может курьер, проверка действий по GPS.',
   'settings.home.description.paymentMethods': 'Собственный список способов оплаты тенанта.',
   'settings.home.description.fiscalization': 'От чьего имени торгует ресторан для налоговой.',
   'settings.home.description.notifications':
@@ -1279,6 +1282,7 @@ export const messagesRu: MessageCatalogue = {
   'settings.locations.tab.fiscal': 'Фискальные данные',
   'settings.locations.tab.channels': 'Каналы',
   'settings.locations.tab.notifications': 'Уведомления',
+  'settings.locations.tab.floorPlan': 'План зала',
   'settings.locations.edit': 'Изменить',
   'settings.locations.cancel': 'Отмена',
   'settings.locations.save': 'Сохранить',
@@ -1327,6 +1331,41 @@ export const messagesRu: MessageCatalogue = {
     'Какие каналы продают из этого филиала — настраивается в Настройки → Каналы продаж.',
   'settings.locations.notifications.note':
     'Маршрутизация уведомлений этого филиала настраивается в Настройки → Уведомления.',
+
+  // ---- Вкладка «План зала» (строки 10.2d/X.36/10.5b, волна P38) ----------
+  'settings.locations.floorPlan.settingsTitle': 'Настройки QR для зала',
+  'settings.locations.floorPlan.edit': 'Изменить',
+  'settings.locations.floorPlan.cancel': 'Отмена',
+  'settings.locations.floorPlan.save': 'Сохранить',
+  'settings.locations.floorPlan.saving': 'Сохранение…',
+  'settings.locations.floorPlan.loading': 'Загрузка…',
+  'settings.locations.floorPlan.reason': 'Причина',
+  'settings.locations.floorPlan.field.qrMode': 'Что делает отсканированный код здесь',
+  'settings.locations.floorPlan.field.turnaround': 'Буфер оборота стола (минут)',
+  'settings.locations.floorPlan.field.guestSessionTtl': 'Длительность гостевой сессии (минут)',
+  'settings.locations.floorPlan.field.serviceCharge': 'Сервисный сбор (%)',
+  'settings.locations.floorPlan.qrMode.VIEW_ONLY': 'Только просмотр меню',
+  'settings.locations.floorPlan.qrMode.ORDER_AND_PAY': 'Заказ и оплата',
+  'settings.locations.floorPlan.qrMode.SETTLE_OPEN_TICKET': 'Закрытие открытого чека',
+  'settings.locations.floorPlan.qrMode.SETTLE_OPEN_TICKET.reason':
+    'Отключено: нужен POS-адаптер, объявляющий и чтение открытого чека, и его закрытие, — пока такого нет (ADR 0011/0047). Это не пробел экрана: режим намеренно отклонён на этапе настройки, как и на уровне базы данных.',
+  'settings.locations.floorPlan.roomTitle': 'Секции и столы',
+  'settings.locations.floorPlan.addSection': 'Добавить секцию',
+  'settings.locations.floorPlan.sectionCodePlaceholder': 'Код (напр. MAIN)',
+  'settings.locations.floorPlan.sectionNamePlaceholder': 'Название (напр. Главный зал)',
+  'settings.locations.floorPlan.noSections':
+    'Секций пока нет — добавьте хотя бы одну, прежде чем размещать столы. У стола без секции нет места, к которому он относится.',
+  'settings.locations.floorPlan.addTable': 'Добавить стол',
+  'settings.locations.floorPlan.tableCodePlaceholder': 'Код (напр. T1)',
+  'settings.locations.floorPlan.tableNamePlaceholder': 'Название (напр. Стол 1)',
+  'settings.locations.floorPlan.moveReason': 'Перемещён на плане зала',
+  'settings.locations.floorPlan.close': 'Закрыть',
+  'settings.locations.floorPlan.tableSeats': 'Мест: {count}',
+  'settings.locations.floorPlan.issueQr': 'Выпустить QR-код',
+  'settings.locations.floorPlan.rotateQr': 'Перевыпустить QR-код',
+  'settings.locations.floorPlan.rotating': 'Перевыпуск…',
+  'settings.locations.floorPlan.revokedGuestSessions':
+    'Отключено гостевых сессий по старому коду: {count}.',
 
   'finance.scope.denied': 'Этому аккаунту не разрешён раздел «Финансы».',
 
@@ -2792,9 +2831,48 @@ export const messagesRu: MessageCatalogue = {
   'delivery.policy.confirmationPointRetentionDays': 'Хранение точек подтверждения (дней)',
   'delivery.policy.consequence.confirmationPointRetentionDays':
     'Фото и подписи подтверждения доставки хранятся это число дней, затем удаляются.',
-  'delivery.policy.notBuilt':
-    'Здесь пока не показаны: GPS-ограничения, показ только готовых кухней заказов, момент раскрытия адреса, режим сбора телеметрии по умолчанию и проверка оплаты после доставки — для них нет документа политики.',
-  'delivery.policy.readOnly': 'В этой волне — только чтение, редактирование ещё не реализовано.',
+  'delivery.policy.card.courier': 'Что видит и может курьер',
+  'delivery.policy.kitchenReadyOnly': 'Показывать только готовые заказы',
+  'delivery.policy.consequence.kitchenReadyOnly':
+    'Курьер видит и может взять только заказы, которые кухня уже отметила готовыми.',
+  'delivery.policy.revealCustomerLocationTiming': 'Раскрытие адреса клиента',
+  'delivery.policy.revealCustomerLocationTiming.BEFORE_ACCEPT': 'До принятия',
+  'delivery.policy.revealCustomerLocationTiming.AFTER_ACCEPT': 'После принятия',
+  'delivery.policy.consequence.revealCustomerLocationTiming':
+    '«До принятия» показывает точный адрес каждому курьеру, видящему предложение; «после принятия» — только тому, кто его принял.',
+  'delivery.policy.postDeliveryPaymentCheckRequired': 'Проверять статус оплаты после доставки',
+  'delivery.policy.consequence.postDeliveryPaymentCheckRequired':
+    'Заказ не может закрыться, пока оплата не подтверждена.',
+  'delivery.policy.gpsVerificationEnabled': 'Проверять действия курьера по радиусу GPS',
+  'delivery.policy.consequence.gpsVerificationEnabled':
+    'По умолчанию отключено. Включение начинает проверять положение курьера по обоим радиусам ниже.',
+  'delivery.policy.gpsAcceptRadiusKm': 'Радиус принятия (км, от точки выдачи)',
+  'delivery.policy.gpsStatusChangeRadiusMeters': 'Радиус смены статуса (м, от точки клиента)',
+  'delivery.policy.billingMode': 'Биллинг курьеров (личный баланс)',
+  'delivery.policy.billingMode.refused': 'Отклонено ADR 0042',
+  'delivery.policy.billingMode.reason':
+    'HorecaOS не берёт депозиты с исполнителей. Личный баланс, который курьер обязан пополнять, превращает проблему зарплаты в проблему взыскания долга — этого переключателя здесь нет намеренно, а не по недосмотру.',
+  'delivery.policy.telemetryGate': 'Режим сбора телеметрии',
+  'delivery.policy.telemetryGate.platformOnly': 'Только платформа',
+  'delivery.policy.telemetryGate.reason':
+    'Зарегистрирован (ADR 0045), но доступен для записи только с административной панели платформы — арендатор не может задать это здесь.',
+  'delivery.policy.edit': 'Изменить',
+  'delivery.policy.cancel': 'Отмена',
+  'delivery.policy.publish': 'Опубликовать',
+  'delivery.policy.saving': 'Публикация…',
+  'delivery.policy.reason': 'Причина',
+  'delivery.policy.reasonPlaceholder': 'Почему меняется?',
+  'delivery.policy.yes': 'Да',
+  'delivery.policy.no': 'Нет',
+  'delivery.policy.outOfZone.title': 'Адреса вне всех зон',
+  'delivery.policy.outOfZone.field': 'Что делать с адресом вне зоны',
+  'delivery.policy.outOfZone.option.REJECT': 'Отклонять',
+  'delivery.policy.outOfZone.option.OFFER_PICKUP': 'Предложить самовывоз',
+  'delivery.policy.outOfZone.option.MANUAL_REVIEW': 'На ручную проверку',
+  'delivery.policy.outOfZone.hint':
+    'Пока не применяется: оформление заказа всё равно отклоняет адрес вне зоны, независимо от значения — здесь фиксируется намерение арендатора для будущего потребителя этого значения.',
+  'delivery.policy.outOfZone.catchmentNote':
+    'Заказы за пределами собственной зоны охвата филиала уже отклоняются — это определяется наличием настроенной зоны охвата, а не переключателем на этом экране.',
 
   // ---------------------------------------------------------------- customers (wave 31)
   'customers.title': 'Клиенты',
@@ -4728,6 +4806,9 @@ export const messagesRu: MessageCatalogue = {
   // shared/ui — q-drag-drop-assign (X.22)
   'shared.dragDropAssign.rejected': 'Не удалось перенести: {reason}',
   'shared.dragDropAssign.rejectedUnknown': 'Не удалось перенести — попробуйте ещё раз.',
+  // shared/ui — q-table-print-card (X.36, волна P38)
+  'shared.tablePrintCard.tokenLabel': 'Код (введите вручную, если скан не сработал)',
+  'shared.tablePrintCard.none': 'Для этого стола код ещё не выпущен.',
   // --- shared/ui q-secret-input (ADR 0106, gap-map row X.14) --------------
   'secretInput.reveal': 'Показать',
   'secretInput.hide': 'Скрыть',
