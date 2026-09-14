@@ -1079,6 +1079,37 @@ public enum Capability {
     COMMERCIAL_WALLET_MANAGE("commercial.wallet.manage", "commercial", "wallet.manage"),
 
     /**
+     * ADR 0127: browsing the modules HorecaOS sells, from the tenant's own
+     * console.
+     *
+     * <p>The tenant-scoped mirror of {@link #COMMERCIAL_PLAN_READ}'s
+     * {@code control-plane/modules} read (ADR 0087) — {@code
+     * CommercialModuleController.onSale} declares that read at {@code
+     * ScopeType.PLATFORM}, which no tenant grant can satisfy, so a tenant
+     * that could not yet see the price list could not be shown an "inline
+     * purchase" catalogue without one. Composed into tenant roles, like
+     * {@link #COMMERCIAL_PLAN_READ}: seeing what is for sale is not itself a
+     * commitment of money, which is {@link #COMMERCIAL_SUBSCRIPTION_MANAGE}'s.
+     */
+    COMMERCIAL_MODULE_READ("commercial.module.read", "commercial", "module.read"),
+
+    /**
+     * ADR 0127: this tenant's own place in the arrears lifecycle — past due,
+     * suspended, or in good standing — and what that stage restricts.
+     *
+     * <p>The tenant-scoped mirror of {@code ArrearsController.board}'s
+     * {@code commercial.usage.read} read (ADR 0089), which spans every tenant
+     * at once and so stays platform-only; a tenant is owed its own row of
+     * that board, not the whole board, which is why this is a separate
+     * capability rather than a {@code ScopeType.TENANT} declaration reusing
+     * {@link #COMMERCIAL_USAGE_READ} — that capability already means "my
+     * metered usage" to a tenant, and overloading it with "am I suspended"
+     * would make one grant answer two unrelated questions with no way to
+     * hold one without the other.
+     */
+    COMMERCIAL_ARREARS_READ("commercial.arrears.read", "commercial", "arrears.read"),
+
+    /**
      * ADR 0046: reading a customer's points balance, their movements, and the
      * brand's outstanding liability.
      *
