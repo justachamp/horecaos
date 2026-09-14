@@ -29,11 +29,19 @@
         </label>
         <label class="field">
           <span class="q-caption">{{ 'finance.deliveryCost.from' | t }}</span>
-          <input type="date" [value]="from()" (change)="from.set($any($event.target).value); reloadRange()" />
+          <input
+            type="date"
+            [value]="from()"
+            (change)="from.set($any($event.target).value); reloadRange()"
+          />
         </label>
         <label class="field">
           <span class="q-caption">{{ 'finance.deliveryCost.to' | t }}</span>
-          <input type="date" [value]="to()" (change)="to.set($any($event.target).value); reloadRange()" />
+          <input
+            type="date"
+            [value]="to()"
+            (change)="to.set($any($event.target).value); reloadRange()"
+          />
         </label>
       </div>
 
@@ -51,6 +59,13 @@
             <span class="q-caption">{{ 'finance.deliveryCost.total' | t }}</span>
             <span class="q-data-lg q-tnum">{{ money(r.totalMinor, 'UZS') }}</span>
           </div>
+          @if (marginMinor(); as margin) {
+            <div class="total-tile" [class.total-tile--warning]="margin > 0">
+              <span class="q-caption">{{ 'finance.deliveryCost.margin' | t }}</span>
+              <span class="q-data-lg q-tnum">{{ money(margin, 'UZS') }}</span>
+              <span class="q-caption">{{ 'finance.deliveryCost.marginHint' | t }}</span>
+            </div>
+          }
         </div>
         @if (r.shipmentsWithoutThisBasis > 0) {
           <p class="q-caption note">
@@ -59,7 +74,163 @@
         }
       }
 
-      <h2 class="q-subhead invoices-title">{{ 'finance.deliveryCost.invoices.title' | t }}</h2>
+      <div class="invoices-header">
+        <h2 class="q-subhead">{{ 'finance.deliveryCost.invoices.title' | t }}</h2>
+        <button type="button" class="secondary" (click)="toggleImportForm()">
+          {{
+            importOpen()
+              ? ('finance.deliveryCost.import.cancel' | t)
+              : ('finance.deliveryCost.import.action' | t)
+          }}
+        </button>
+      </div>
+
+      @if (importOpen()) {
+        <div class="panel import-panel">
+          <h3 class="q-subhead">{{ 'finance.deliveryCost.import.title' | t }}</h3>
+          <div class="import-grid">
+            <label class="field">
+              <span class="q-caption">{{ 'finance.deliveryCost.import.provider' | t }}</span>
+              <input
+                type="text"
+                [value]="importProviderCode()"
+                (input)="importProviderCode.set($any($event.target).value)"
+              />
+            </label>
+            <label class="field">
+              <span class="q-caption">{{ 'finance.deliveryCost.import.reference' | t }}</span>
+              <input
+                type="text"
+                [value]="importInvoiceRef()"
+                (input)="importInvoiceRef.set($any($event.target).value)"
+              />
+            </label>
+            <label class="field">
+              <span class="q-caption">{{ 'finance.deliveryCost.import.currency' | t }}</span>
+              <input
+                type="text"
+                [value]="importCurrency()"
+                (input)="importCurrency.set($any($event.target).value)"
+              />
+            </label>
+            <label class="field">
+              <span class="q-caption">{{ 'finance.deliveryCost.import.totalMinor' | t }}</span>
+              <input
+                type="number"
+                [value]="importTotalMinor()"
+                (input)="importTotalMinor.set($any($event.target).value)"
+              />
+            </label>
+            <label class="field">
+              <span class="q-caption">{{ 'finance.deliveryCost.import.periodStart' | t }}</span>
+              <input
+                type="date"
+                [value]="importPeriodStart()"
+                (change)="importPeriodStart.set($any($event.target).value)"
+              />
+            </label>
+            <label class="field">
+              <span class="q-caption">{{ 'finance.deliveryCost.import.periodEnd' | t }}</span>
+              <input
+                type="date"
+                [value]="importPeriodEnd()"
+                (change)="importPeriodEnd.set($any($event.target).value)"
+              />
+            </label>
+          </div>
+
+          <h4 class="q-caption">{{ 'finance.deliveryCost.import.lines' | t }}</h4>
+          <table class="lines-table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'finance.deliveryCost.lines.shipmentRef' | t }}</th>
+                <th class="q-caption num">{{ 'finance.deliveryCost.lines.amount' | t }}</th>
+                <th class="q-caption">{{ 'finance.deliveryCost.import.chargeType' | t }}</th>
+                <th class="q-caption"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (line of importLines(); track line.domId) {
+                <tr>
+                  <td>
+                    <input
+                      type="text"
+                      [value]="line.providerShipmentRef"
+                      (input)="
+                        updateImportLine(line.domId, {
+                          providerShipmentRef: $any($event.target).value,
+                        })
+                      "
+                    />
+                  </td>
+                  <td class="num">
+                    <input
+                      type="number"
+                      [value]="line.amountMinor"
+                      (input)="
+                        updateImportLine(line.domId, { amountMinor: $any($event.target).value })
+                      "
+                    />
+                  </td>
+                  <td>
+                    <select
+                      [value]="line.chargeType"
+                      (change)="
+                        updateImportLine(line.domId, { chargeType: $any($event.target).value })
+                      "
+                    >
+                      <option value="DELIVERY">{{ chargeTypeLabel('DELIVERY') }}</option>
+                      <option value="CANCELLATION">{{ chargeTypeLabel('CANCELLATION') }}</option>
+                      <option value="WAITING">{{ chargeTypeLabel('WAITING') }}</option>
+                      <option value="SURCHARGE">{{ chargeTypeLabel('SURCHARGE') }}</option>
+                      <option value="ADJUSTMENT">{{ chargeTypeLabel('ADJUSTMENT') }}</option>
+                    </select>
+                  </td>
+                  <td>
+                    <button type="button" class="secondary" (click)="removeImportLine(line.domId)">
+                      {{ 'finance.deliveryCost.import.removeLine' | t }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          <button type="button" class="secondary" (click)="addImportLine()">
+            {{ 'finance.deliveryCost.import.addLine' | t }}
+          </button>
+
+          <label class="field">
+            <span class="q-caption">{{ 'finance.deliveryCost.import.reason' | t }}</span>
+            <input
+              type="text"
+              [value]="importReason()"
+              (input)="importReason.set($any($event.target).value)"
+            />
+          </label>
+
+          @if (importError(); as message) {
+            <p class="q-body-sm error-text" role="alert">{{ message }}</p>
+          }
+          <div class="panel__actions">
+            <button type="button" class="secondary" (click)="toggleImportForm()">
+              {{ 'customers.segments.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              class="primary"
+              [disabled]="!canSubmitImport()"
+              (click)="submitImport()"
+            >
+              {{
+                importBusy()
+                  ? ('customers.segments.builder.saving' | t)
+                  : ('finance.deliveryCost.import.submit' | t)
+              }}
+            </button>
+          </div>
+        </div>
+      }
+
       <table class="table">
         <thead>
           <tr>
@@ -67,41 +238,118 @@
             <th class="q-caption">{{ 'finance.deliveryCost.invoices.reference' | t }}</th>
             <th class="q-caption num">{{ 'finance.deliveryCost.invoices.total' | t }}</th>
             <th class="q-caption">{{ 'finance.deliveryCost.invoices.status' | t }}</th>
+            <th class="q-caption"></th>
           </tr>
         </thead>
         <tbody>
           @for (invoice of invoices(); track invoice.invoiceId) {
-            <tr class="row" (click)="toggleInvoice(invoice)">
-              <td class="q-body-sm">{{ invoice.providerCode }}</td>
-              <td class="q-body-sm q-mono">{{ invoice.providerInvoiceRef }}</td>
-              <td class="q-body-sm q-tnum num">{{ money(invoice.totalMinor, invoice.currency) }}</td>
-              <td class="q-body-sm">
-                <span class="status-badge" [class]="'status-badge--' + invoice.status.toLowerCase()">
+            <tr class="row">
+              <td class="q-body-sm" (click)="toggleInvoice(invoice)">{{ invoice.providerCode }}</td>
+              <td class="q-body-sm q-mono" (click)="toggleInvoice(invoice)">
+                {{ invoice.providerInvoiceRef }}
+              </td>
+              <td class="q-body-sm q-tnum num" (click)="toggleInvoice(invoice)">
+                {{ money(invoice.totalMinor, invoice.currency) }}
+              </td>
+              <td class="q-body-sm" (click)="toggleInvoice(invoice)">
+                <span
+                  class="status-badge"
+                  [class]="'status-badge--' + invoice.status.toLowerCase()"
+                >
                   {{ invoiceStatusLabel(invoice.status) }}
                 </span>
+              </td>
+              <td class="q-body-sm actions">
+                @if (invoice.status === 'IMPORTED' || invoice.status === 'MATCHED') {
+                  <button
+                    type="button"
+                    class="secondary"
+                    (click)="startDisputeInvoice(invoice.invoiceId)"
+                  >
+                    {{ 'finance.deliveryCost.dispute.action' | t }}
+                  </button>
+                }
               </td>
             </tr>
             @if (openInvoiceId() === invoice.invoiceId) {
               <tr class="detail-row">
-                <td colspan="4">
+                <td colspan="5">
                   @if (openInvoiceDetail(); as detail) {
                     <table class="lines-table">
                       <thead>
                         <tr>
-                          <th class="q-caption">{{ 'finance.deliveryCost.lines.shipmentRef' | t }}</th>
-                          <th class="q-caption num">{{ 'finance.deliveryCost.lines.amount' | t }}</th>
-                          <th class="q-caption">{{ 'finance.deliveryCost.lines.matchStatus' | t }}</th>
-                          <th class="q-caption num">{{ 'finance.deliveryCost.lines.variance' | t }}</th>
+                          <th class="q-caption">
+                            {{ 'finance.deliveryCost.lines.shipmentRef' | t }}
+                          </th>
+                          <th class="q-caption num">
+                            {{ 'finance.deliveryCost.lines.amount' | t }}
+                          </th>
+                          <th class="q-caption">
+                            {{ 'finance.deliveryCost.lines.matchStatus' | t }}
+                          </th>
+                          <th class="q-caption num">
+                            {{ 'finance.deliveryCost.lines.variance' | t }}
+                          </th>
+                          <th class="q-caption"></th>
                         </tr>
                       </thead>
                       <tbody>
                         @for (line of detail.lines; track line.lineId) {
                           <tr>
                             <td class="q-body-sm q-mono">{{ line.providerShipmentRef }}</td>
-                            <td class="q-body-sm q-tnum num">{{ money(line.amountMinor, line.currency) }}</td>
-                            <td class="q-body-sm">{{ line.matchStatus }}</td>
                             <td class="q-body-sm q-tnum num">
-                              {{ line.varianceMinor === null ? '—' : money(line.varianceMinor, line.currency) }}
+                              {{ money(line.amountMinor, line.currency) }}
+                            </td>
+                            <td class="q-body-sm">
+                              <span
+                                class="match-status"
+                                [class]="'match-status--' + line.matchStatus.toLowerCase()"
+                              >
+                                {{ matchStatusLabel(line.matchStatus) }}
+                              </span>
+                              @if (line.varianceResolution) {
+                                <span class="q-caption resolution-badge">
+                                  {{ varianceResolutionLabel(line.varianceResolution) }}
+                                </span>
+                              }
+                            </td>
+                            <td class="q-body-sm q-tnum num">
+                              {{
+                                line.varianceMinor === null
+                                  ? '—'
+                                  : money(line.varianceMinor, line.currency)
+                              }}
+                            </td>
+                            <td class="q-body-sm actions">
+                              @if (line.matchStatus === 'UNMATCHED_LINE') {
+                                <button
+                                  type="button"
+                                  class="secondary"
+                                  (click)="startResolveUnmatched(invoice.invoiceId, line.lineId)"
+                                >
+                                  {{ 'finance.deliveryCost.resolve.action' | t }}
+                                </button>
+                              }
+                              @if (line.matchStatus === 'VARIANCE' && !line.varianceResolution) {
+                                <button
+                                  type="button"
+                                  class="secondary"
+                                  (click)="
+                                    startVarianceResolution(invoice.invoiceId, line.lineId, true)
+                                  "
+                                >
+                                  {{ 'finance.deliveryCost.variance.accept' | t }}
+                                </button>
+                                <button
+                                  type="button"
+                                  class="secondary"
+                                  (click)="
+                                    startVarianceResolution(invoice.invoiceId, line.lineId, false)
+                                  "
+                                >
+                                  {{ 'finance.deliveryCost.variance.dispute' | t }}
+                                </button>
+                              }
                             </td>
                           </tr>
                         }
@@ -115,11 +363,72 @@
             }
           } @empty {
             <tr>
-              <td class="q-body-sm empty" colspan="4">{{ 'finance.deliveryCost.invoices.empty' | t }}</td>
+              <td class="q-body-sm empty" colspan="5">
+                {{ 'finance.deliveryCost.invoices.empty' | t }}
+              </td>
             </tr>
           }
         </tbody>
       </table>
     }
+  }
+
+  @if (actionKind()) {
+    <div class="panel">
+      <h2 class="q-subhead">
+        @switch (actionKind()) {
+          @case ('resolve-unmatched') {
+            {{ 'finance.deliveryCost.resolve.title' | t }}
+          }
+          @case ('accept-variance') {
+            {{ 'finance.deliveryCost.variance.acceptTitle' | t }}
+          }
+          @case ('dispute-variance') {
+            {{ 'finance.deliveryCost.variance.disputeTitle' | t }}
+          }
+          @case ('dispute-invoice') {
+            {{ 'finance.deliveryCost.dispute.title' | t }}
+          }
+        }
+      </h2>
+      @if (actionKind() === 'resolve-unmatched') {
+        <label class="field">
+          <span class="q-caption">{{ 'finance.deliveryCost.resolve.shipmentId' | t }}</span>
+          <input
+            type="text"
+            [value]="actionShipmentId()"
+            (input)="actionShipmentId.set($any($event.target).value)"
+          />
+        </label>
+      }
+      <label class="field">
+        <span class="q-caption">{{ 'finance.payouts.reason' | t }}</span>
+        <input
+          type="text"
+          [value]="actionReason()"
+          (input)="actionReason.set($any($event.target).value)"
+        />
+      </label>
+      @if (actionError(); as message) {
+        <p class="q-body-sm error-text" role="alert">{{ message }}</p>
+      }
+      <div class="panel__actions">
+        <button type="button" class="secondary" (click)="cancelAction()">
+          {{ 'customers.segments.cancel' | t }}
+        </button>
+        <button
+          type="button"
+          class="primary"
+          [disabled]="!canSubmitAction()"
+          (click)="submitAction()"
+        >
+          {{
+            actionBusy()
+              ? ('customers.segments.builder.saving' | t)
+              : ('finance.payouts.confirm' | t)
+          }}
+        </button>
+      </div>
+    </div>
   }
 </div>

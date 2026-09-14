@@ -230,6 +230,38 @@ public class JdbcDeliveryCostStore {
                 """).param("tenantId", tenantId).param("id", invoiceId).update();
     }
 
+    /**
+     * Flags an invoice for pushback to the partner. Refused from {@code PAID}:
+     * a paid invoice is disputed by other means, not by this workflow.
+     */
+    public boolean markInvoiceDisputed(UUID tenantId, UUID invoiceId) {
+        return jdbc.sql("""
+                UPDATE fulfillment.partner_delivery_invoices
+                   SET status = 'DISPUTED', version = version + 1
+                 WHERE tenant_id = :tenantId AND id = :id AND status IN ('IMPORTED', 'MATCHED')
+                """).param("tenantId", tenantId).param("id", invoiceId).update() == 1;
+    }
+
+    /**
+     * An operator's disposition of one {@code VARIANCE} line — accept the
+     * partner's charge as invoiced, or flag it disputed. Refused on any other
+     * {@code match_status}; {@code ck_partner_line_resolution_status} says the
+     * same thing at the database.
+     */
+    public boolean resolveVarianceLine(UUID tenantId, UUID lineId, String resolution, String resolvedBy) {
+        return jdbc.sql("""
+                UPDATE fulfillment.partner_delivery_invoice_lines
+                   SET variance_resolution = :resolution, resolved_by = :resolvedBy, resolved_at = now()
+                 WHERE tenant_id = :tenantId AND id = :id AND match_status = 'VARIANCE'
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", lineId)
+                        .param("resolution", resolution)
+                        .param("resolvedBy", resolvedBy)
+                        .update()
+                == 1;
+    }
+
     public List<InvoiceLineRow> linesOfInvoice(UUID tenantId, UUID invoiceId) {
         return jdbc.sql(SELECT_INVOICE_LINE + """
                  WHERE tenant_id = :tenantId AND invoice_id = :invoiceId
@@ -331,7 +363,8 @@ public class JdbcDeliveryCostStore {
      *
      * <p>{@code shipmentId} is null until matching resolves the partner's own
      * reference, and stays null on an {@code UNMATCHED_LINE}; the variance and
-     * its reason exist only where matching found one.
+     * its reason exist only where matching found one; {@code varianceResolution}
+     * only on a {@code VARIANCE} line an operator has since accepted or disputed.
      */
     public record InvoiceLineRow(
             UUID id,
@@ -344,7 +377,10 @@ public class JdbcDeliveryCostStore {
             PartnerChargeType chargeType,
             MatchStatus matchStatus,
             @Nullable Long varianceMinor,
-            @Nullable String reasonCode) {}
+            @Nullable String reasonCode,
+            @Nullable String varianceResolution,
+            @Nullable String resolvedBy,
+            @Nullable Instant resolvedAt) {}
 
     // ----------------------------------------------------------------- mapping
 
@@ -359,7 +395,8 @@ public class JdbcDeliveryCostStore {
 
     private static final String SELECT_INVOICE_LINE = """
             SELECT id, tenant_id, invoice_id, provider_shipment_ref, shipment_id, amount_minor,
-                   currency, charge_type, match_status, variance_minor, reason_code
+                   currency, charge_type, match_status, variance_minor, reason_code,
+                   variance_resolution, resolved_by, resolved_at
               FROM fulfillment.partner_delivery_invoice_lines
             """;
 
@@ -420,6 +457,9 @@ public class JdbcDeliveryCostStore {
                 // Null on every line that is not a variance, and getLong would
                 // answer zero — a variance of nothing, which is a matched line.
                 rs.getObject("variance_minor", Long.class),
-                rs.getString("reason_code"));
+                rs.getString("reason_code"),
+                rs.getString("variance_resolution"),
+                rs.getString("resolved_by"),
+                JdbcCourierStore.instant(rs.getObject("resolved_at", OffsetDateTime.class)));
     }
 }

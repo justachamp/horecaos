@@ -18,24 +18,99 @@
       </div>
     }
     @case ('ready') {
+      <div class="controls">
+        <label class="field">
+          <span class="q-caption">{{ 'finance.cash.filter.status' | t }}</span>
+          <select
+            [value]="statusFilter()"
+            (change)="onStatusFilterChange($any($event.target).value)"
+          >
+            <option value="">{{ 'finance.cash.filter.allStatuses' | t }}</option>
+            <option value="PENDING">{{ statusLabel('PENDING') }}</option>
+            <option value="DECLARED">{{ statusLabel('DECLARED') }}</option>
+            <option value="CONFIRMED">{{ statusLabel('CONFIRMED') }}</option>
+            <option value="VARIANCE_RAISED">{{ statusLabel('VARIANCE_RAISED') }}</option>
+            <option value="OVERRIDDEN">{{ statusLabel('OVERRIDDEN') }}</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="q-caption">{{ 'finance.cash.filter.location' | t }}</span>
+          <input
+            type="text"
+            [value]="locationFilter()"
+            [placeholder]="'finance.cash.filter.locationPlaceholder' | t"
+            (change)="onLocationFilterChange($any($event.target).value)"
+          />
+        </label>
+      </div>
+
+      <div class="totals">
+        <div class="total-tile">
+          <span class="q-caption">{{ 'finance.cash.totals.cash' | t }}</span>
+          <span class="q-data-lg q-tnum">
+            {{ money(paymentMethodTotals().cashCollectedMinor, paymentMethodTotals().currency) }}
+          </span>
+          <span class="q-caption">
+            {{
+              'finance.cash.totals.deliveries'
+                | t: { count: paymentMethodTotals().cashDeliveredCount }
+            }}
+          </span>
+        </div>
+        <div class="total-tile">
+          <span class="q-caption">{{ 'finance.cash.totals.nonCash' | t }}</span>
+          <span class="q-data-lg q-tnum">
+            {{ money(paymentMethodTotals().nonCashEarningsMinor, paymentMethodTotals().currency) }}
+          </span>
+          <span class="q-caption">
+            {{
+              'finance.cash.totals.deliveries'
+                | t: { count: paymentMethodTotals().nonCashDeliveredCount }
+            }}
+          </span>
+        </div>
+        <div class="total-tile total-tile--primary">
+          <span class="q-caption">{{ 'finance.cash.totals.bonusPaid' | t }}</span>
+          <span class="q-data-lg q-tnum">
+            {{ money(paymentMethodTotals().bonusPaidMinor, paymentMethodTotals().currency) }}
+          </span>
+        </div>
+      </div>
+
       <table class="table">
         <thead>
           <tr>
+            <th class="q-caption">{{ 'finance.cash.column.courier' | t }}</th>
+            <th class="q-caption">{{ 'finance.cash.column.shift' | t }}</th>
+            <th class="q-caption">{{ 'finance.cash.column.location' | t }}</th>
+            <th class="q-caption">{{ 'finance.cash.column.declaredAt' | t }}</th>
             <th class="q-caption">{{ 'finance.cash.column.status' | t }}</th>
+            <th class="q-caption">{{ 'finance.cash.column.byPaymentMethod' | t }}</th>
             <th class="q-caption num">{{ 'finance.cash.column.expected' | t }}</th>
             <th class="q-caption num">{{ 'finance.cash.column.declared' | t }}</th>
             <th class="q-caption num">{{ 'finance.cash.column.confirmed' | t }}</th>
             <th class="q-caption num">{{ 'finance.cash.column.variance' | t }}</th>
+            <th class="q-caption num">{{ 'finance.cash.column.bonusPaid' | t }}</th>
             <th class="q-caption"></th>
           </tr>
         </thead>
         <tbody>
           @for (row of handovers(); track row.handoverId) {
             <tr>
+              <td class="q-body-sm">{{ row.courierDisplayReference ?? shortId(row.courierId) }}</td>
+              <td class="q-body-sm q-mono">{{ shortId(row.shiftId) }}</td>
+              <td class="q-body-sm q-mono">{{ shortId(row.locationId) }}</td>
+              <td class="q-body-sm q-tnum">{{ row.declaredAt ?? '—' }}</td>
               <td class="q-body-sm">
                 <span class="status-badge" [class]="'status-badge--' + row.status.toLowerCase()">
                   {{ statusLabel(row.status) }}
                 </span>
+              </td>
+              <td class="q-body-sm q-tnum">
+                {{
+                  'finance.cash.byPaymentMethod'
+                    | t: { cash: row.cashDeliveredCount, nonCash: row.nonCashDeliveredCount }
+                }}
               </td>
               <td class="q-body-sm q-tnum num">{{ money(row.expectedMinor, row.currency) }}</td>
               <td class="q-body-sm q-tnum num">
@@ -47,6 +122,7 @@
               <td class="q-body-sm q-tnum num">
                 {{ row.varianceMinor === null ? '—' : money(row.varianceMinor, row.currency) }}
               </td>
+              <td class="q-body-sm q-tnum num">{{ money(row.bonusPaidMinor, row.currency) }}</td>
               <td class="q-body-sm actions">
                 @if (row.status === 'DECLARED' || row.status === 'PENDING') {
                   <button type="button" class="secondary" (click)="startConfirm(row)">
@@ -57,7 +133,7 @@
             </tr>
           } @empty {
             <tr>
-              <td class="q-body-sm empty" colspan="6">{{ 'finance.cash.empty' | t }}</td>
+              <td class="q-body-sm empty" colspan="12">{{ 'finance.cash.empty' | t }}</td>
             </tr>
           }
         </tbody>
@@ -93,7 +169,9 @@
         </button>
         <button type="button" class="primary" [disabled]="!canConfirm()" (click)="submitConfirm()">
           {{
-            confirmBusy() ? ('customers.segments.builder.saving' | t) : ('finance.cash.confirm.submit' | t)
+            confirmBusy()
+              ? ('customers.segments.builder.saving' | t)
+              : ('finance.cash.confirm.submit' | t)
           }}
         </button>
       </div>

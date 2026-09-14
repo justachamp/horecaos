@@ -22,6 +22,10 @@ function period(overrides: Partial<SettlementPeriodView> = {}): SettlementPeriod
     amountPayableMinor: 500_000,
     deliveredCount: 42,
     onTimeCount: 40,
+    distanceMeters: 128_000,
+    paidSeconds: 144_000,
+    bonusMinor: 20_000,
+    penaltyMinor: -5_000,
     complianceFlag: false,
     statementHash: null,
     closedAt: null,
@@ -48,6 +52,7 @@ describe('CourierPayoutsPage', () => {
     closeSettlementPeriod: ReturnType<typeof vi.fn>;
     authorisePayout: ReturnType<typeof vi.fn>;
     courierLedger: ReturnType<typeof vi.fn>;
+    settlementStatement: ReturnType<typeof vi.fn>;
   };
 
   async function render(
@@ -61,6 +66,7 @@ describe('CourierPayoutsPage', () => {
       closeSettlementPeriod: vi.fn().mockResolvedValue(undefined),
       authorisePayout: vi.fn().mockResolvedValue(undefined),
       courierLedger: vi.fn(),
+      settlementStatement: vi.fn(),
     };
     // Some tests call render() more than once (a fresh scope, a fresh
     // status) to compare states side by side, so each call gets its own
@@ -278,11 +284,63 @@ describe('CourierPayoutsPage', () => {
     });
   });
 
+  describe('downloading a statement — wave T07: the endpoint existed, nothing called it', () => {
+    it('offers the download only once the period carries a statement hash', async () => {
+      await render([period({ status: 'CLOSED', statementHash: null })]);
+      expect(host().textContent).not.toContain('Download statement');
+
+      await render([period({ status: 'CLOSED', statementHash: 'a'.repeat(64), periodId: 'p2' })]);
+      expect(host().textContent).toContain('Download statement');
+    });
+
+    it('reads the statement back for exactly this period and triggers a download, never recomputing it', async () => {
+      await render([period({ status: 'CLOSED', statementHash: 'a'.repeat(64) })]);
+      api.settlementStatement.mockResolvedValue({ periodId: 'period-1', grossTotalMinor: 500_000 });
+
+      const buttons = Array.from(
+        host().querySelectorAll('td.actions button'),
+      ) as HTMLButtonElement[];
+      const downloadButton = buttons.find((button) =>
+        button.textContent?.includes('Download statement'),
+      );
+      expect(downloadButton).toBeDefined();
+      downloadButton?.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(api.settlementStatement).toHaveBeenCalledWith('tenant-1', 'period-1');
+      // The read succeeded and left no error band behind.
+      expect(host().querySelector('.error-text')).toBeNull();
+    });
+
+    it('surfaces a statement read failure honestly rather than a silent no-op', async () => {
+      await render([period({ status: 'CLOSED', statementHash: 'a'.repeat(64) })]);
+      api.settlementStatement.mockRejectedValue(
+        new ApiError(ApiErrorCode.RESOURCE_NOT_FOUND, 404, null, null),
+      );
+
+      const buttons = Array.from(
+        host().querySelectorAll('td.actions button'),
+      ) as HTMLButtonElement[];
+      const downloadButton = buttons.find((button) =>
+        button.textContent?.includes('Download statement'),
+      );
+      downloadButton?.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      const message = host().querySelector('.error-text')?.textContent ?? '';
+      expect(message.length).toBeGreaterThan(0);
+      expect(message).not.toContain('RESOURCE_NOT_FOUND');
+    });
+  });
+
   describe('the courier ledger lookup', () => {
     it('looks up exactly the typed courier id under the operator’s own tenant', async () => {
       await render([]);
       const ledger: CourierLedgerView = {
         balanceMinor: 75_000,
+        currency: 'UZS',
         entries: [
           {
             entryId: 'entry-1',

@@ -2432,6 +2432,14 @@
       },
       "CashHandoverResponse" : {
         "properties" : {
+          "bonusPaidMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cashDeliveredCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
           "confirmedAt" : {
             "type" : "string"
           },
@@ -2441,6 +2449,9 @@
           "confirmedMinor" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "courierDisplayReference" : {
+            "type" : "string"
           },
           "courierId" : {
             "format" : "uuid",
@@ -2467,6 +2478,14 @@
           "locationId" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "nonCashDeliveredCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "nonCashEarningsMinor" : {
+            "format" : "int64",
+            "type" : "integer"
           },
           "reasonCode" : {
             "type" : "string"
@@ -4839,6 +4858,16 @@
         },
         "type" : "object"
       },
+      "DisputeInvoiceRequest" : {
+        "properties" : {
+          "reason" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "DownloadResponse" : {
         "properties" : {
           "url" : {
@@ -6124,6 +6153,9 @@
           "balanceMinor" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
           },
           "entries" : {
             "items" : {
@@ -8982,6 +9014,9 @@
           "varianceMinor" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "varianceResolution" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -12344,6 +12379,10 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "bonusMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "cashHeldMinor" : {
             "format" : "int64",
             "type" : "integer"
@@ -12365,12 +12404,24 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "distanceMeters" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "grossEarningsMinor" : {
             "format" : "int64",
             "type" : "integer"
           },
           "onTimeCount" : {
             "format" : "int32",
+            "type" : "integer"
+          },
+          "paidSeconds" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "penaltyMinor" : {
+            "format" : "int64",
             "type" : "integer"
           },
           "periodEnd" : {
@@ -14109,6 +14160,19 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "VarianceAcceptanceRequest" : {
+        "properties" : {
+          "accept" : {
+            "type" : "boolean"
+          },
+          "reason" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
         "type" : "object"
       },
       "VariantSalesListResponse" : {
@@ -23791,6 +23855,101 @@
           }
         },
         "summary" : "One partner invoice, with its lines and their match state",
+        "tags" : [ "Courier operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices/{invoiceId}/dispute" : {
+      "post" : {
+        "description" : "Refused once the invoice is PAID. Disputing records the operator's decision; it settles nothing with the partner itself.",
+        "operationId" : "disputeInvoice",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "invoiceId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DisputeInvoiceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Flag an invoice for pushback to the partner — the акт сверки dispute path",
+        "tags" : [ "Courier operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices/{invoiceId}/lines/{lineId}/variance-acceptance" : {
+      "post" : {
+        "description" : "The only two dispositions a VARIANCE row can carry: pay the partner's charge as invoiced, or flag it disputed. match_status stays VARIANCE either way — it is a fact about the money — only variance_resolution changes.",
+        "operationId" : "resolveVariance",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "invoiceId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "lineId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VarianceAcceptanceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PartnerInvoiceLineResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Accept or dispute one VARIANCE line",
         "tags" : [ "Courier operations" ]
       }
     },
