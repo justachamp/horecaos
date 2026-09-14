@@ -48,6 +48,7 @@ class ProductRecommendationTests {
     private JdbcClient jdbc;
     private JdbcCatalogStore store;
     private CatalogAuthoringService authoring;
+    private UUID catalogId;
 
     @BeforeAll
     static void startDatabase() {
@@ -83,6 +84,7 @@ class ProductRecommendationTests {
                 commercial.entitlements(),
                 commercial.usage(),
                 Clock.systemUTC());
+        catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy", LOCALE);
     }
 
     @Test
@@ -234,7 +236,6 @@ class ProductRecommendationTests {
     }
 
     private ProductCreated createProduct(String code, String name) {
-        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy", LOCALE);
         return authoring.createProduct(
                 TENANT, BRAND, catalogId, code, name, null, LOCALE, "SKU-" + code, "PIECE", UNCLASSIFIED, ACTOR);
     }
