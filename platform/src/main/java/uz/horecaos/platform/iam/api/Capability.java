@@ -93,6 +93,15 @@ public enum Capability {
     INVENTORY_READ("inventory.read", "inventory", "read"),
     INVENTORY_ADJUST("inventory.adjust", "inventory", "adjust"),
 
+    /**
+     * Wave P16: the stop list's batch stop/unstop (`InventoryController
+     * #bulkSetAvailability`), named separately from {@link #INVENTORY_ADJUST}
+     * because a bulk toggle's blast radius is a whole selection rather than
+     * one dish — the same reasoning that keeps {@code ORDER_BULK_ACTION} apart
+     * from a single order's own state-action capability.
+     */
+    INVENTORY_AVAILABILITY_MANAGE("inventory.availability.manage", "inventory", "availability.manage"),
+
     PRICING_READ("pricing.read", "pricing", "read"),
     PRICING_AUTHOR("pricing.author", "pricing", "author"),
     PRICING_ACTIVATE("pricing.activate", "pricing", "activate"),
