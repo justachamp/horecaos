@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { I18n } from '../../core/i18n/i18n';
-import { OrderRowsTable } from './order-rows-table';
+import { OrderRowsTable, OrderTableColumn } from './order-rows-table';
 import { OrderRowResponse } from './reporting-api';
 
 function row(overrides: Partial<OrderRowResponse> = {}): OrderRowResponse {
@@ -27,17 +27,25 @@ function row(overrides: Partial<OrderRowResponse> = {}): OrderRowResponse {
     secondsTotal: 2_400,
     secondsLate: null,
     cancellationReasonCode: null,
+    secondsToAccept: 660,
+    secondsPreparing: 540,
+    publicOrderNumber: '0042',
+    isPreorder: false,
     ...overrides,
   };
 }
 
 function render(
   rows: readonly OrderRowResponse[],
-  columns: readonly ('orderId' | 'total' | 'late')[],
+  columns: readonly OrderTableColumn[],
+  locationNames?: ReadonlyMap<string, string>,
 ) {
   const fixture = TestBed.createComponent(OrderRowsTable);
   fixture.componentRef.setInput('rows', rows);
   fixture.componentRef.setInput('columns', columns);
+  if (locationNames) {
+    fixture.componentRef.setInput('locationNames', locationNames);
+  }
   fixture.detectChanges();
   return fixture;
 }
@@ -94,5 +102,60 @@ describe('OrderRowsTable', () => {
     const fixture = render([row({ secondsLate: 840 })], ['orderId', 'late']);
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('+14 min');
+  });
+
+  // ----------------------------------------------------------- wave P27 (7.2/7.2a)
+
+  it('prints the public order number instead of a UUID fragment when the fact carries one', () => {
+    const fixture = render([row({ publicOrderNumber: '0137' })], ['orderId']);
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('0137');
+    expect(text).not.toContain('018f6f4e');
+  });
+
+  it('falls back to the eight-character UUID fragment when a row has no public order number', () => {
+    const fixture = render([row({ publicOrderNumber: null })], ['orderId']);
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('018f6f4e');
+  });
+
+  it('splits branch acceptance (accept) from actual cooking (cooking), never the conflated seconds_to_ready', () => {
+    const fixture = render(
+      [row({ secondsToAccept: 11 * 60, secondsPreparing: 9 * 60, secondsToReady: 20 * 60 })],
+      ['orderId', 'accept', 'cooking'],
+    );
+    const headerText =
+      (fixture.nativeElement as HTMLElement).querySelector('thead')!.textContent ?? '';
+    expect(headerText).toContain('Branch accepted in');
+    expect(headerText).toContain('Cooked in');
+
+    const bodyText =
+      (fixture.nativeElement as HTMLElement).querySelector('tbody')!.textContent ?? '';
+    expect(bodyText).toContain('11'); // 11 minutes waiting for the branch
+    expect(bodyText).toContain('9'); // 9 minutes actually cooking
+  });
+
+  it('resolves the branch column from the caller-supplied locationId -> name map', () => {
+    const fixture = render(
+      [row({ locationId: 'loc-42' })],
+      ['orderId', 'branch'],
+      new Map([['loc-42', 'Chorsu']]),
+    );
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Chorsu');
+  });
+
+  it('falls back to the raw locationId when the caller has no name for it', () => {
+    const fixture = render([row({ locationId: 'loc-unknown' })], ['orderId', 'branch']);
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('loc-unknown');
+  });
+
+  it('marks a pre-order row and renders a dash for every other one', () => {
+    const withPreorder = render([row({ isPreorder: true })], ['orderId', 'preorder']);
+    expect(
+      withPreorder.nativeElement.querySelector('[data-testid="order-row-preorder"]'),
+    ).not.toBeNull();
+
+    const without = render([row({ isPreorder: false })], ['orderId', 'preorder']);
+    expect(without.nativeElement.querySelector('[data-testid="order-row-preorder"]')).toBeNull();
   });
 });

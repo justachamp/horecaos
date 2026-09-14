@@ -134,6 +134,14 @@ export interface OrderRowResponse {
   readonly secondsTotal: number | null;
   readonly secondsLate: number | null;
   readonly cancellationReasonCode: string | null;
+  /** Wave P27 (7.2): CONFIRMED -> PREPARING, "branch acceptance". */
+  readonly secondsToAccept: number | null;
+  /** Wave P27 (7.2): PREPARING -> READY, actual cooking — narrower than secondsToReady. */
+  readonly secondsPreparing: number | null;
+  /** Wave P27 (7.2a): the short number a receipt prints. */
+  readonly publicOrderNumber: string | null;
+  /** Wave P27 (7.2a): «Предзаказ». */
+  readonly isPreorder: boolean;
 }
 
 export interface OrderListResponse {
@@ -146,7 +154,16 @@ export interface OrderListResponse {
 export interface OutcomeRowResponse {
   readonly terminalStatus: string;
   readonly cancellationReasonCode: string | null;
+  /** Wave P27 (7.1): what the cancellation cost the tenant's stock — ADR 0039. */
+  readonly stockDisposition: string | null;
+  readonly liabilityParty: string | null;
   readonly count: number;
+}
+
+/** Wave P27 (7.1a): one tenant cancellation reason. Mirrors `ReportingController.CancellationReasonResponse`. */
+export interface CancellationReasonResponse {
+  readonly reasonCode: string;
+  readonly internalName: string;
 }
 
 export interface OutcomeListResponse {
@@ -277,6 +294,8 @@ export interface QueryParams {
   readonly groupBy?: readonly string[];
   readonly locationId?: readonly string[];
   readonly channelCode?: readonly string[];
+  /** Wave P27: previously only a groupBy dimension with no filter to go with it. */
+  readonly legalEntityId?: readonly string[];
 }
 
 export interface RangeParams {
@@ -314,6 +333,7 @@ export class ReportingApi {
           groupBy: params.groupBy,
           locationId: params.locationId,
           channelCode: params.channelCode,
+          legalEntityId: params.legalEntityId,
         },
       }),
     );
@@ -363,7 +383,16 @@ export class ReportingApi {
 
   async orders(
     tenantId: string,
-    params: RangeParams & { readonly sort: OrderSort; readonly limit?: number },
+    params: RangeParams & {
+      readonly sort: OrderSort;
+      readonly limit?: number;
+      /** Wave P27: pushed into the query — previously filtered client-side over an already-fetched page. */
+      readonly fulfilmentType?: readonly string[];
+      readonly legalEntityId?: readonly string[];
+      /** Wave P27 (7.2a): cursor paging past the bounded read — both present or both absent. */
+      readonly afterOccurredAt?: string;
+      readonly afterOrderId?: string;
+    },
   ): Promise<OrderListResponse> {
     const result = await firstValueFrom(
       this.api.get<OrderListResponse>(reportsPaths.orders(tenantId), {
@@ -372,12 +401,44 @@ export class ReportingApi {
           to: params.to,
           locationId: params.locationId,
           channelCode: params.channelCode,
+          fulfilmentType: params.fulfilmentType,
+          legalEntityId: params.legalEntityId,
           sort: params.sort,
           limit: params.limit,
+          afterOccurredAt: params.afterOccurredAt,
+          afterOrderId: params.afterOrderId,
         },
       }),
     );
     return result.value;
+  }
+
+  /** Wave P27 (7.1): the overview's pickup/delivery elapsed-time tile. */
+  async fulfilmentTime(
+    tenantId: string,
+    params: RangeParams & { readonly fulfilmentType: 'DELIVERY' | 'PICKUP' },
+  ): Promise<MedianResponse> {
+    const result = await firstValueFrom(
+      this.api.get<MedianResponse>(reportsPaths.fulfilmentTime(tenantId), {
+        params: {
+          from: params.from,
+          to: params.to,
+          locationId: params.locationId,
+          fulfilmentType: params.fulfilmentType,
+        },
+      }),
+    );
+    return result.value;
+  }
+
+  /** Wave P27 (7.1a): resolves a cancellation reason code to its tenant-chosen label. */
+  async cancellationReasons(tenantId: string): Promise<readonly CancellationReasonResponse[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly CancellationReasonResponse[]>(
+        reportsPaths.cancellationReasons(tenantId),
+      ),
+    );
+    return result.value ?? [];
   }
 
   async orderOutcomes(tenantId: string, params: RangeParams): Promise<OutcomeListResponse> {

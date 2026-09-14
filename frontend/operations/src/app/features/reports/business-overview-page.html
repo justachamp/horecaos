@@ -42,6 +42,11 @@
             [provisional]="tile.provisional"
             [provisionalNote]="tile.provisionalNote"
             [sparklinePoints]="tile.sparklinePoints"
+            [formula]="tile.formula"
+            [formulaAriaLabel]="'reports.overview.formula.ariaLabel' | t"
+            [formulaIncludesLabel]="'reports.overview.formula.includes' | t"
+            [formulaExcludesLabel]="'reports.overview.formula.excludes' | t"
+            [formulaUnitLabel]="'reports.overview.formula.unit' | t"
           />
         }
       </div>
@@ -80,18 +85,42 @@
               {{ 'reports.overview.timing.medianCaption' | t }}
             </div>
           </div>
-          <div class="gauge gauge--not-built">
-            <div class="gauge__label q-body-sm">{{ 'reports.overview.timing.delivery' | t }}</div>
-            <div class="gauge__not-built q-caption">
-              {{ 'reports.overview.timing.delivery.notBuilt' | t }}
+          @if (deliveryTimeBuilt()) {
+            <div class="gauge">
+              <div class="gauge__label q-body-sm">{{ 'reports.overview.timing.delivery' | t }}</div>
+              <div class="gauge__value q-data-lg q-tnum">
+                {{ deliveryTimeSeconds() === null ? '—' : formatDuration(deliveryTimeSeconds()!) }}
+              </div>
+              <div class="gauge__caption q-caption">
+                {{ 'reports.overview.timing.medianCaption' | t }}
+              </div>
             </div>
-          </div>
-          <div class="gauge gauge--not-built">
-            <div class="gauge__label q-body-sm">{{ 'reports.overview.timing.pickup' | t }}</div>
-            <div class="gauge__not-built q-caption">
-              {{ 'reports.overview.timing.pickup.notBuilt' | t }}
+          } @else {
+            <div class="gauge gauge--not-built">
+              <div class="gauge__label q-body-sm">{{ 'reports.overview.timing.delivery' | t }}</div>
+              <div class="gauge__not-built q-caption">
+                {{ 'reports.overview.timing.delivery.notBuilt' | t }}
+              </div>
             </div>
-          </div>
+          }
+          @if (pickupTimeBuilt()) {
+            <div class="gauge">
+              <div class="gauge__label q-body-sm">{{ 'reports.overview.timing.pickup' | t }}</div>
+              <div class="gauge__value q-data-lg q-tnum">
+                {{ pickupTimeSeconds() === null ? '—' : formatDuration(pickupTimeSeconds()!) }}
+              </div>
+              <div class="gauge__caption q-caption">
+                {{ 'reports.overview.timing.medianCaption' | t }}
+              </div>
+            </div>
+          } @else {
+            <div class="gauge gauge--not-built">
+              <div class="gauge__label q-body-sm">{{ 'reports.overview.timing.pickup' | t }}</div>
+              <div class="gauge__not-built q-caption">
+                {{ 'reports.overview.timing.pickup.notBuilt' | t }}
+              </div>
+            </div>
+          }
         </div>
       </div>
 
@@ -178,6 +207,8 @@
               <tr>
                 <th class="q-caption">{{ 'reports.overview.funnel.status' | t }}</th>
                 <th class="q-caption">{{ 'reports.overview.funnel.reason' | t }}</th>
+                <th class="q-caption">{{ 'reports.overview.funnel.disposition' | t }}</th>
+                <th class="q-caption">{{ 'reports.overview.funnel.liability' | t }}</th>
                 <th class="q-caption outcome-table__num">
                   {{ 'reports.overview.funnel.count' | t }}
                 </th>
@@ -191,8 +222,10 @@
                 <tr>
                   <td class="q-body-sm">{{ statusLabel(row.status) }}</td>
                   <td class="q-body-sm">
-                    {{ row.reasonCode ?? ('reports.overview.funnel.reasonUnknown' | t) }}
+                    {{ row.reasonLabel ?? ('reports.overview.funnel.reasonUnknown' | t) }}
                   </td>
+                  <td class="q-body-sm">{{ dispositionLabel(row.stockDisposition) ?? '—' }}</td>
+                  <td class="q-body-sm">{{ liabilityLabel(row.liabilityParty) ?? '—' }}</td>
                   <td class="q-body-sm q-tnum outcome-table__num">
                     {{ formatCountValue(row.count) }}
                   </td>
@@ -201,7 +234,6 @@
               }
             </tbody>
           </table>
-          <p class="q-caption">{{ 'reports.overview.funnel.costNotBuilt' | t }}</p>
         }
 
         @if (multiLocation()) {

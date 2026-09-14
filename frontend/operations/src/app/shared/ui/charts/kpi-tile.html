@@ -1,11 +1,44 @@
 <div class="q-kpi-tile" [class.q-kpi-tile--provisional]="provisional()" data-testid="q-kpi-tile">
-  <div class="q-kpi-tile__label q-caption">{{ label() }}</div>
+  <div class="q-kpi-tile__label-row">
+    <div class="q-kpi-tile__label q-caption">{{ label() }}</div>
+    @if (formula(); as f) {
+      <button
+        type="button"
+        class="q-kpi-tile__formula-toggle"
+        [attr.aria-label]="formulaAriaLabel()"
+        [attr.aria-expanded]="formulaOpen()"
+        (click)="toggleFormula()"
+      >
+        ?
+      </button>
+    }
+  </div>
   <div class="q-kpi-tile__value-row">
     <div class="q-kpi-tile__value q-data-lg q-tnum">{{ value() }}</div>
     @if (sparklinePoints(); as points) {
       <q-sparkline [points]="points" />
     }
   </div>
+  @if (formulaOpen() && formula(); as f) {
+    <div class="q-kpi-tile__formula-panel q-caption" data-testid="q-kpi-tile-formula-panel">
+      <p class="q-kpi-tile__formula-definition">{{ f.definition }}</p>
+      @if (formulaIncludesLabel(); as label) {
+        <p>
+          <strong>{{ label }}:</strong> {{ f.inclusion }}
+        </p>
+      }
+      @if (formulaExcludesLabel(); as label) {
+        <p>
+          <strong>{{ label }}:</strong> {{ f.exclusion }}
+        </p>
+      }
+      @if (formulaUnitLabel(); as label) {
+        <p>
+          <strong>{{ label }}:</strong> {{ f.unit }}
+        </p>
+      }
+    </div>
+  }
   @if (deltaText(); as delta) {
     <div
       class="q-kpi-tile__delta q-caption"

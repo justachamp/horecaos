@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
 
-import { KpiTile, deltaOf } from './kpi-tile';
+import { KpiTile, KpiTileFormula, deltaOf } from './kpi-tile';
 
 describe('deltaOf', () => {
   it('computes a signed percentage change', () => {
@@ -36,6 +36,7 @@ describe('KpiTile', () => {
     provisional?: boolean;
     provisionalNote?: string | null;
     sparklinePoints?: readonly (number | null)[] | null;
+    formula?: KpiTileFormula | null;
   }) {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({ imports: [KpiTile] });
@@ -55,6 +56,13 @@ describe('KpiTile', () => {
     }
     if (inputs.sparklinePoints !== undefined) {
       fixture.componentRef.setInput('sparklinePoints', inputs.sparklinePoints);
+    }
+    if (inputs.formula !== undefined) {
+      fixture.componentRef.setInput('formula', inputs.formula);
+      fixture.componentRef.setInput('formulaAriaLabel', 'Formula');
+      fixture.componentRef.setInput('formulaIncludesLabel', 'Includes');
+      fixture.componentRef.setInput('formulaExcludesLabel', 'Excludes');
+      fixture.componentRef.setInput('formulaUnitLabel', 'Unit');
     }
     fixture.detectChanges();
     return fixture;
@@ -98,5 +106,34 @@ describe('KpiTile', () => {
 
     const withoutSeries = render({});
     expect(withoutSeries.nativeElement.querySelector('[data-testid="q-sparkline"]')).toBeNull();
+  });
+
+  it('renders no "?" at all when the caller has not wired a formula', () => {
+    const fixture = render({});
+    expect(fixture.nativeElement.querySelector('.q-kpi-tile__formula-toggle')).toBeNull();
+  });
+
+  it('reveals the published-formula panel only after the "?" is toggled open', () => {
+    const formula: KpiTileFormula = {
+      definition: 'Sum of order value before discount.',
+      inclusion: 'Completed orders.',
+      exclusion: 'Cancelled orders.',
+      unit: 'Whole som',
+    };
+    const fixture = render({ formula });
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="q-kpi-tile-formula-panel"]'),
+    ).toBeNull();
+
+    const toggle = fixture.nativeElement.querySelector(
+      '.q-kpi-tile__formula-toggle',
+    ) as HTMLButtonElement;
+    expect(toggle).not.toBeNull();
+    toggle.click();
+    fixture.detectChanges();
+
+    const panel = fixture.nativeElement.querySelector('[data-testid="q-kpi-tile-formula-panel"]');
+    expect(panel).not.toBeNull();
+    expect(panel.textContent).toContain('Sum of order value before discount.');
   });
 });

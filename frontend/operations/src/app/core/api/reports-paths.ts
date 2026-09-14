@@ -91,6 +91,16 @@ export const reportsPaths = {
   paymentMix(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/payment-mix`;
   },
+
+  /** Wave P27 (7.1): the overview's pickup/delivery elapsed-time tile. */
+  fulfilmentTime(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/fulfilment-time`;
+  },
+
+  /** Wave P27 (7.1a): the tenant's cancellation-reason registry. */
+  cancellationReasons(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/cancellation-reasons`;
+  },
 } as const;
 
 /**
