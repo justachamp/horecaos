@@ -61,6 +61,20 @@ public class LoyaltySweeper {
     }
 
     /**
+     * Hourly, alongside {@link #expireLots} rather than ahead of it on its own
+     * cadence: the warning has to reach an account before the same pass some
+     * day destroys the lot it was about, and a shared interval is what keeps
+     * that ordering obviously true rather than a coincidence of two configured
+     * numbers agreeing.
+     */
+    @Scheduled(
+            initialDelayString = "${horecaos.loyalty.sweeper.initial-delay:PT1M}",
+            fixedDelayString = "${horecaos.loyalty.sweeper.expiry-warning-interval:PT1H}")
+    public void warnExpiringLots() {
+        run("expiry warning", maintenance::warnExpiringLots);
+    }
+
+    /**
      * Frequent, because a stale hold is a customer's own points locked away from
      * their own next attempt, and the second attempt usually happens within
      * minutes of the first one failing.

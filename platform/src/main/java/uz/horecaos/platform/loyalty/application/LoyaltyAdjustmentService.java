@@ -246,6 +246,9 @@ public class LoyaltyAdjustmentService {
                     now,
                     now.plus(Duration.ofDays(180)),
                     LotStatus.ACTIVE,
+                    // A manual adjustment carries no accrual rule to snapshot a
+                    // warning window from. Zero is "no warning configured".
+                    0,
                     now);
         } else {
             consumeFromOldestLots(command.tenantId(), account.id(), -command.amountMinor(), now);
@@ -616,6 +619,10 @@ public class LoyaltyAdjustmentService {
                     lot.earnsAt(),
                     lot.expiresAt(),
                     lot.earnsAt().isAfter(now) ? LotStatus.PENDING : LotStatus.ACTIVE,
+                    // Carried forward from the lot being moved, not re-resolved —
+                    // a merge changes which account holds the lot, never the
+                    // terms it was granted under.
+                    lot.expiryWarningDays(),
                     now);
             moved += remaining;
         }

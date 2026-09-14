@@ -54,6 +54,7 @@ public class JdbcCampaignStore {
         parameters.put("benefitOfferId", campaign.benefitOfferId());
         parameters.put("accrualRuleId", campaign.loyaltyAccrualRuleId());
         parameters.put("createdBy", campaign.createdBy());
+        parameters.put("scheduledAt", utc(campaign.scheduledAt()));
         parameters.put("now", utc(campaign.createdAt()));
 
         jdbc.sql("""
@@ -61,11 +62,11 @@ public class JdbcCampaignStore {
                     id, tenant_id, brand_id, name, channel, consent_purpose, status,
                     audience_id, template_key, recipient_cap, cost_ceiling_minor, currency,
                     timezone, benefit_offer_id, loyalty_accrual_rule_id, created_by,
-                    created_at, updated_at)
+                    scheduled_at, created_at, updated_at)
                 VALUES (:id, :tenantId, :brandId, :name, :channel, :consentPurpose, 'DRAFT',
                     :audienceId, :templateKey, :recipientCap, :ceiling, :currency,
                     :timezone, :benefitOfferId, :accrualRuleId, :createdBy,
-                    :now, :now)
+                    :scheduledAt, :now, :now)
                 """).params(parameters).update();
     }
 
@@ -77,7 +78,7 @@ public class JdbcCampaignStore {
             estimated_cost_high_minor, estimated_delivery_seconds, cost_ceiling_minor,
             reserved_cost_minor, spent_cost_minor, reserved_recipients, currency,
             benefit_offer_id, loyalty_accrual_rule_id, created_by, approved_by,
-            blocked_count, paused_at, created_at, updated_at, version
+            blocked_count, paused_at, scheduled_at, created_at, updated_at, version
             """;
 
     public Optional<CampaignRow> find(UUID tenantId, UUID campaignId) {
@@ -121,6 +122,31 @@ public class JdbcCampaignStore {
                  ORDER BY started_at NULLS LAST
                  LIMIT :limit
                 """)
+                .param("limit", limit)
+                .query((ResultSet row, int number) ->
+                        new CampaignRef(row.getObject("tenant_id", UUID.class), row.getObject("id", UUID.class)))
+                .list();
+    }
+
+    /**
+     * Every campaign currently {@code SCHEDULED} whose {@code scheduled_at}
+     * has arrived, across every tenant.
+     *
+     * <p>{@code CampaignScheduledSendScheduler}'s own sweep, reading {@code
+     * ix_campaigns_scheduled} (V0307) — the same cross-tenant-by-design shape
+     * {@link #sendingCampaigns} already gives {@code
+     * CampaignExpansionScheduler}. A campaign whose moment has not yet arrived
+     * is deliberately not returned: it is not this sweep's job to decide
+     * early.
+     */
+    public List<CampaignRef> dueScheduledCampaigns(Instant asOf, int limit) {
+        return jdbc.sql("""
+                SELECT id, tenant_id FROM marketing.campaigns
+                 WHERE status = 'SCHEDULED' AND scheduled_at <= :asOf
+                 ORDER BY scheduled_at
+                 LIMIT :limit
+                """)
+                .param("asOf", utc(asOf))
                 .param("limit", limit)
                 .query((ResultSet row, int number) ->
                         new CampaignRef(row.getObject("tenant_id", UUID.class), row.getObject("id", UUID.class)))
@@ -581,6 +607,7 @@ public class JdbcCampaignStore {
                 row.getObject("approved_by", UUID.class),
                 row.getInt("blocked_count"),
                 instant(row.getObject("paused_at", OffsetDateTime.class)),
+                instant(row.getObject("scheduled_at", OffsetDateTime.class)),
                 // Both NOT NULL DEFAULT now() (V0043), read directly rather than
                 // through the null-forwarding instant() helper.
                 row.getObject("created_at", OffsetDateTime.class).toInstant(),
@@ -612,6 +639,7 @@ public class JdbcCampaignStore {
             @Nullable UUID benefitOfferId,
             @Nullable UUID loyaltyAccrualRuleId,
             UUID createdBy,
+            @Nullable Instant scheduledAt,
             Instant createdAt) {}
 
     public record CampaignRow(
@@ -642,6 +670,7 @@ public class JdbcCampaignStore {
             UUID approvedBy,
             int blockedCount,
             @Nullable Instant pausedAt,
+            @Nullable Instant scheduledAt,
             Instant createdAt,
             Instant updatedAt,
             int version) {}

@@ -202,9 +202,17 @@ public class SchedulingConfiguration {
      * number written here. ADR 0098 added the last one so far: {@code
      * PasswordResetRelay.sweepOnce}, the sibling of ADR 0097's invitation
      * relay — without it a staff member who forgot their password could ask
-     * for a reset and no email would ever leave.
+     * for a reset and no email would ever leave. T18 added two more, closing
+     * two gaps operations §6.3/§6.4 named by row: {@code
+     * CampaignScheduledSendScheduler.sweepOnce}, which promotes {@code
+     * APPROVED -> SCHEDULED -> SENDING} — {@code marketing.campaigns.scheduled_at}
+     * has existed since V0043 with nothing that ever read it, so a campaign
+     * could only ever be armed for a future moment by an operator watching
+     * the clock — and {@code LoyaltySweeper.warnExpiringLots}, the pre-expiry
+     * warning ADR 0046's own {@code expiryWarningDays} has been authorable,
+     * validated, and persisted since V0042 while nothing ever sent it.
      */
-    static final int DEFAULT_POOL_SIZE = 60;
+    static final int DEFAULT_POOL_SIZE = 62;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

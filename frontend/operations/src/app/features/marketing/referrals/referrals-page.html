@@ -204,12 +204,63 @@
       </table>
     </section>
 
-    <section
-      class="referrals__section referrals__not-built"
-      data-testid="referrals-links-not-built"
-    >
-      <h2 class="q-body referrals__section-title">{{ 'marketing.referrals.links.title' | t }}</h2>
-      <p class="q-body-sm">{{ 'marketing.referrals.links.body' | t }}</p>
+    <section class="referrals__section" data-testid="attribution-links-section">
+      <div class="referrals__section-head">
+        <h2 class="q-body referrals__section-title">
+          {{ 'marketing.attributionLinks.title' | t }}
+        </h2>
+        <button type="button" data-testid="attribution-link-create-action" (click)="openLinkForm()">
+          {{ 'marketing.attributionLinks.create.action' | t }}
+        </button>
+      </div>
+      <p class="q-body-sm">{{ 'marketing.attributionLinks.intro' | t }}</p>
+
+      @if (linksError(); as error) {
+        <div class="error-band" role="alert">
+          <span class="q-body-sm">{{ error }}</span>
+        </div>
+      }
+
+      <table class="referrals__table">
+        <thead>
+          <tr>
+            <th>{{ 'marketing.attributionLinks.column.label' | t }}</th>
+            <th>{{ 'marketing.attributionLinks.column.link' | t }}</th>
+            <th>{{ 'marketing.attributionLinks.column.clicks' | t }}</th>
+            <th>{{ 'marketing.attributionLinks.column.status' | t }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (link of links(); track link.linkId) {
+            <tr data-testid="attribution-link-row">
+              <td>{{ link.label }}</td>
+              <td class="q-tnum">{{ renderedLink(link) }}</td>
+              <td class="q-tnum">{{ link.clickCount }}</td>
+              <td>{{ link.status }}</td>
+              <td>
+                @if (link.status === 'ACTIVE') {
+                  <button
+                    type="button"
+                    [disabled]="linksActingId() === link.linkId"
+                    (click)="archiveLink(link)"
+                  >
+                    {{ 'marketing.attributionLinks.action.archive' | t }}
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="5">
+                <p class="q-body-sm" data-testid="attribution-links-empty">
+                  {{ 'marketing.attributionLinks.empty' | t }}
+                </p>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
     </section>
   }
 
@@ -308,6 +359,91 @@
           </button>
           <button type="button" [disabled]="!canSubmit()" (click)="submitForm()">
             {{ 'marketing.referrals.program.create.submit' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showLinkForm()) {
+    <div class="dialog-backdrop" (click)="closeLinkForm()">
+      <div class="dialog" (click)="$event.stopPropagation()">
+        <h2 class="q-subhead">{{ 'marketing.attributionLinks.create.title' | t }}</h2>
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.attributionLinks.create.label' | t }}</span>
+          <input
+            type="text"
+            data-testid="attribution-link-label"
+            [value]="linkFormLabel()"
+            (input)="linkFormLabel.set($any($event.target).value)"
+          />
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.attributionLinks.create.ownerNote' | t }}</span>
+          <input
+            type="text"
+            [value]="linkFormOwnerNote()"
+            (input)="linkFormOwnerNote.set($any($event.target).value)"
+          />
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.attributionLinks.create.channel' | t }}</span>
+          <select
+            [value]="linkFormChannel()"
+            (change)="linkFormChannel.set($any($event.target).value)"
+          >
+            @for (channel of linkChannels; track channel) {
+              <option [value]="channel">{{ linkChannelLabelKey(channel) | t }}</option>
+            }
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{
+            'marketing.attributionLinks.create.destinationType' | t
+          }}</span>
+          <select
+            [value]="linkFormDestinationType()"
+            (change)="linkFormDestinationType.set($any($event.target).value)"
+          >
+            @for (destinationType of linkDestinationTypes; track destinationType) {
+              <option [value]="destinationType">
+                {{ linkDestinationTypeLabelKey(destinationType) | t }}
+              </option>
+            }
+          </select>
+        </label>
+
+        @if (linkFormDestinationType() === 'CAMPAIGN') {
+          <label class="field">
+            <span class="q-caption">{{
+              'marketing.attributionLinks.create.destinationId' | t
+            }}</span>
+            <input
+              type="text"
+              [value]="linkFormDestinationId()"
+              (input)="linkFormDestinationId.set($any($event.target).value)"
+            />
+          </label>
+        }
+
+        @if (linkFormError(); as error) {
+          <p class="dialog__error q-body-sm">{{ error }}</p>
+        }
+        <div class="dialog__actions">
+          <button type="button" (click)="closeLinkForm()">
+            {{ 'marketing.referrals.dialog.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            data-testid="attribution-link-submit"
+            [disabled]="!canSubmitLinkForm()"
+            (click)="submitLinkForm()"
+          >
+            {{ 'marketing.attributionLinks.create.submit' | t }}
           </button>
         </div>
       </div>

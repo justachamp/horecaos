@@ -557,6 +557,9 @@ public enum PlatformRole {
                     // signal, the same class of read as the referral line above it.
                     REVIEW_READ,
                     CAMPAIGN_AUTHOR,
+                    // T18: minting the brand's own trackable acquisition links,
+                    // beside the campaign-authoring power immediately above it.
+                    MARKETING_LINK_MANAGE,
                     // ADR 0042: delivery cost is a brand's own operating number.
                     DELIVERY_COST_READ,
                     BRAND_READ,
@@ -838,6 +841,9 @@ public enum PlatformRole {
                     // it a deliberate, audited grant rather than a standing one.
                     COURIER_POSITION_READ,
                     COURIER_DUTY_MANAGE,
+                    // T18: the operational blast a dispatcher sends the roster it
+                    // already runs -- shift change, weather, a route closure.
+                    COURIER_BROADCAST_MANAGE,
                     // A courier is sent to an address, so the one role whose entire job
                     // is sending them needs the reveal rather than the masked view.
                     CUSTOMER_READ,

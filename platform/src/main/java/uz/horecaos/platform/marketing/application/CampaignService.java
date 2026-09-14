@@ -25,6 +25,8 @@ import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignSto
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignStore.CampaignRow;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignStore.NewCampaign;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcEngagementStore;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * The campaign lifecycle: authoring, estimating, approving, and stopping
@@ -85,6 +87,11 @@ public class CampaignService {
      *                       invent one
      * @param loyaltyAccrualRuleId an existing ADR 0046 accrual rule, or null when
      *                             this campaign grants no points
+     * @param scheduledAt when {@link #start} should open the send, or null to
+     *                    launch immediately on an operator's word. Must be
+     *                    strictly in the future: a scheduled moment already
+     *                    past is not a schedule, it is a launch that forgot
+     *                    to say so
      */
     @Transactional
     public UUID create(
@@ -100,12 +107,16 @@ public class CampaignService {
             String currency,
             @Nullable UUID benefitOfferId,
             @Nullable UUID loyaltyAccrualRuleId,
+            @Nullable Instant scheduledAt,
             UUID authorId) {
 
         if (channel.carriesMarginalCost() && costCeilingMinor == null) {
             throw new IllegalArgumentException(
                     "A %s campaign needs a cost ceiling: this channel bills per segment and the ".formatted(channel)
                             + "mistake is unrecoverable");
+        }
+        if (scheduledAt != null && !scheduledAt.isAfter(clock.instant())) {
+            throw new IllegalArgumentException("scheduledAt must be in the future, not " + scheduledAt);
         }
 
         EngagementPolicy policy = engagement.resolvePolicy(tenantId, brandId);
@@ -127,6 +138,7 @@ public class CampaignService {
                 benefitOfferId,
                 loyaltyAccrualRuleId,
                 authorId,
+                scheduledAt,
                 clock.instant()));
         return id;
     }
@@ -256,26 +268,68 @@ public class CampaignService {
     }
 
     /**
-     * Opens the send. Nothing reaches {@code SENDING} except from an approval.
+     * Opens the send, or arms it for later. Nothing reaches {@code SENDING}
+     * except from an {@code APPROVED} or {@code SCHEDULED} campaign.
      *
      * <p>The one place ADR 0059 stage 4's Telegram entitlement is checked. A
      * campaign may be authored, estimated, reviewed, and approved for a tenant
      * whose plan does not include broadcasts — none of that spends anything —
      * but launching is the "activation" {@link
      * EntitlementService#requireFeature}'s own contract describes, so it is
-     * refused here rather than discovered as a silent {@code isWired(channel) ==
-     * false} refusal three steps later in {@code CampaignSendService}.
+     * refused here.
+     *
+     * <p><strong>Two callers, one method.</strong> An operator calling this on
+     * an {@code APPROVED} campaign with {@code scheduledAt} still in the
+     * future arms {@code SCHEDULED} rather than sending immediately;
+     * {@code CampaignScheduledSendScheduler} calls this same method once that
+     * moment arrives, and by then {@code scheduledAt} is no longer in the
+     * future, so the same branch below promotes {@code SCHEDULED ->
+     * SENDING}. A second, parallel "promote" method would have to reimplement
+     * the entitlement check and the {@code isWired} refusal identically; this
+     * way there is exactly one place either can drift.
+     *
+     * <p><strong>{@code isWired} is checked here, not only inside {@code
+     * CampaignSendService}.</strong> Before this wave, a campaign whose
+     * channel had no ADR 0020 delivery path reached {@code SENDING} anyway —
+     * {@code CampaignExpansionScheduler} then tried to expand it, {@code
+     * CampaignSendService#expandNextBatch} threw, and the sweeper's own
+     * {@code catch (RuntimeException)} logged it and moved on, forever. An
+     * approver's second signature had been spent on a campaign that could
+     * never send, and nothing told them. Refusing the transition to {@code
+     * SENDING} here means that failure is now a 422 an operator sees at the
+     * moment they press launch (or, for a scheduled campaign, the moment the
+     * scheduler tries to promote it — visible in that sweep's own log rather
+     * than three frames deeper inside the expansion path).
+     *
+     * @return false only when the campaign's current status cannot reach the
+     *         computed target at all (already sending, already terminal) —
+     *         the entitlement and {@code isWired} refusals above throw
+     *         instead, because both name a reason worth surfacing rather than
+     *         a bare conflict
      */
     @Transactional
     public boolean start(UUID tenantId, UUID campaignId) {
         CampaignRow campaign = require(tenantId, campaignId);
-        if (MarketingChannel.valueOf(campaign.channel()) == MarketingChannel.MESSAGING_APP) {
+        MarketingChannel channel = MarketingChannel.valueOf(campaign.channel());
+        if (channel == MarketingChannel.MESSAGING_APP) {
             entitlements.requireFeature(tenantId, EntitlementKeys.TELEGRAM_BROADCASTS_ENABLED);
         }
-        if (!campaign.status().canTransitionTo(CampaignStatus.SENDING)) {
+
+        Instant now = clock.instant();
+        boolean momentHasArrived =
+                campaign.scheduledAt() == null || !campaign.scheduledAt().isAfter(now);
+        CampaignStatus target = momentHasArrived ? CampaignStatus.SENDING : CampaignStatus.SCHEDULED;
+
+        if (target == CampaignStatus.SENDING && !messages.isWired(channel.name())) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "No ADR 0020 delivery path is wired for %s yet; this campaign cannot be launched"
+                            .formatted(channel));
+        }
+        if (!campaign.status().canTransitionTo(target)) {
             return false;
         }
-        return campaigns.transition(tenantId, campaignId, campaign.status(), CampaignStatus.SENDING, clock.instant());
+        return campaigns.transition(tenantId, campaignId, campaign.status(), target, now);
     }
 
     /**

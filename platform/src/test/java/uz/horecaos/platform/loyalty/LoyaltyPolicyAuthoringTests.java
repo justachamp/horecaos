@@ -249,6 +249,71 @@ class LoyaltyPolicyAuthoringTests {
     }
 
     @Test
+    @DisplayName("a LOCATION rule whose scopeId names no real location is refused, not silently persisted")
+    void refusesALocationRuleWhoseLocationDoesNotExist() {
+        UUID noSuchLocation = UUID.randomUUID();
+        assertThatThrownBy(() -> authoring.draftAccrualRule(
+                        TENANT,
+                        BRAND,
+                        new AccrualRuleDraft("LOCATION", noSuchLocation, 300, null, 24, 180, 14, null, null)))
+                .as("before this wave, a bad scopeId persisted and the resolver's own "
+                        + "narrowest-first query simply never matched it — every order at that "
+                        + "location silently fell back to the brand rule with no error anywhere")
+                .isInstanceOf(ApiException.class);
+        assertThat(authoring.listAccrualRules(TENANT, BRAND))
+                .as("nothing was persisted for the refusal to leave behind")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a CHANNEL rule whose scopeId names no real sales channel is refused the same way")
+    void refusesAChannelRuleWhoseChannelDoesNotExist() {
+        UUID noSuchChannel = UUID.randomUUID();
+        assertThatThrownBy(() -> authoring.draftAccrualRule(
+                        TENANT,
+                        BRAND,
+                        new AccrualRuleDraft("CHANNEL", noSuchChannel, 300, null, 24, 180, 14, null, null)))
+                .isInstanceOf(ApiException.class);
+        assertThat(authoring.listAccrualRules(TENANT, BRAND)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a LOCATION rule naming a real location of a sibling tenant is refused — existence is tenant-scoped")
+    void refusesALocationBelongingToAnotherTenant() {
+        UUID otherTenant = UUID.randomUUID();
+        UUID otherTenantLocation = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.tenants (id, slug, legal_name, display_name, default_currency,
+                    default_timezone, status, version)
+                VALUES (:id, 'other-tenant', 'Legal', 'Display', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
+                """).param("id", otherTenant).update();
+        UUID otherTenantBrand = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'MAIN', 'main', 'MAIN', 'ACTIVE', 0)
+                """)
+                .param("id", otherTenantBrand)
+                .param("tenantId", otherTenant)
+                .update();
+        jdbc.sql("""
+                INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
+                    timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, 'LOC1', 'loc-1', 'Location One',
+                        'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", otherTenantLocation)
+                .param("tenantId", otherTenant)
+                .param("brandId", otherTenantBrand)
+                .update();
+
+        assertThatThrownBy(() -> authoring.draftAccrualRule(
+                        TENANT,
+                        BRAND,
+                        new AccrualRuleDraft("LOCATION", otherTenantLocation, 300, null, 24, 180, 14, null, null)))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
     @DisplayName(
             "scopeType is one of BRAND, LOCATION or CHANNEL — nothing else, even bypassing the controller's own pattern check")
     void scopeTypeMustBeOneOfTheThreeKnownValues() {
@@ -391,6 +456,27 @@ class LoyaltyPolicyAuthoringTests {
 
         insertBrand(BRAND, "MAIN", "main");
         insertBrand(OTHER_BRAND, "SECOND", "second");
+
+        // T18: draftAccrualRule now checks a LOCATION/CHANNEL scopeId against a
+        // real row (JdbcLoyaltyStore#locationExists/channelExists) rather than
+        // only its shape, so a scope-narrowed rule needs one of each to exist —
+        // see refusesALocationRuleWhoseLocationDoesNotExist and its CHANNEL
+        // sibling below for the case where it deliberately does not.
+        jdbc.sql("""
+                INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
+                    timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, 'LOC1', 'loc-1', 'Location One',
+                        'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
+        jdbc.sql("""
+                INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name,
+                    status, version)
+                VALUES (:id, :tenantId, 'WEB1', 'WEB', 'Web', 'ACTIVE', 1)
+                """).param("id", CHANNEL).param("tenantId", TENANT).update();
     }
 
     private void insertBrand(UUID id, String code, String slug) {

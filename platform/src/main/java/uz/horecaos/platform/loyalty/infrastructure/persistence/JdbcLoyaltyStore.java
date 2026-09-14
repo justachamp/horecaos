@@ -587,7 +587,8 @@ public class JdbcLoyaltyStore {
             long remainingMinor,
             Instant earnsAt,
             Instant expiresAt,
-            LotStatus status) {}
+            LotStatus status,
+            int expiryWarningDays) {}
 
     public void insertLot(
             UUID id,
@@ -598,14 +599,15 @@ public class JdbcLoyaltyStore {
             Instant earnsAt,
             Instant expiresAt,
             LotStatus status,
+            int expiryWarningDays,
             Instant now) {
         jdbc.sql("""
                 INSERT INTO loyalty.lots (
                     id, tenant_id, account_id, source_entry_id, granted_minor, remaining_minor,
-                    earns_at, expires_at, status, version, created_at, updated_at)
+                    earns_at, expires_at, status, expiry_warning_days, version, created_at, updated_at)
                 VALUES (
                     :id, :tenantId, :accountId, :sourceEntryId, :granted, :granted,
-                    :earnsAt, :expiresAt, :status, 1, :now, :now)
+                    :earnsAt, :expiresAt, :status, :expiryWarningDays, 1, :now, :now)
                 """)
                 .param("id", id)
                 .param("tenantId", tenantId)
@@ -615,6 +617,7 @@ public class JdbcLoyaltyStore {
                 .param("earnsAt", utc(earnsAt))
                 .param("expiresAt", utc(expiresAt))
                 .param("status", status.name())
+                .param("expiryWarningDays", expiryWarningDays)
                 .param("now", utc(now))
                 .update();
     }
@@ -879,6 +882,45 @@ public class JdbcLoyaltyStore {
                 .param("limit", limit)
                 .query(JdbcLoyaltyStore::toLot)
                 .list();
+    }
+
+    /**
+     * Active lots inside their own warning window that have not been warned
+     * about yet -- {@link LoyaltyMaintenanceService#warnExpiringLots}'s own
+     * worklist, read off {@code ix_loyalty_lot_expiry_warning_due} (V0308).
+     *
+     * <p>{@code expiry_warning_days > 0} excludes a lot granted with no
+     * warning configured (the column's own zero default, for a lot older
+     * than this column or a rule authored with no warning) -- zero must never
+     * be read as "warn immediately".
+     */
+    public List<LotRow> lotsNeedingExpiryWarning(Instant asOf, int limit) {
+        return jdbc.sql("""
+                SELECT * FROM loyalty.lots
+                 WHERE status = 'ACTIVE'
+                   AND expiry_warning_sent_at IS NULL
+                   AND expiry_warning_days > 0
+                   AND expires_at <= :asOf + (expiry_warning_days * INTERVAL '1 day')
+                 ORDER BY expires_at
+                 LIMIT :limit
+                """)
+                .param("asOf", utc(asOf))
+                .param("limit", limit)
+                .query(JdbcLoyaltyStore::toLot)
+                .list();
+    }
+
+    /** Records that the warning sweep has told {@code LoyaltyExpiryWarningPort} about this lot, once. */
+    public void markExpiryWarningSent(UUID tenantId, UUID lotId, Instant now) {
+        jdbc.sql("""
+                UPDATE loyalty.lots
+                   SET expiry_warning_sent_at = :now, version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id AND expiry_warning_sent_at IS NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("id", lotId)
+                .param("now", utc(now))
+                .update();
     }
 
     /**
@@ -1303,6 +1345,35 @@ public class JdbcLoyaltyStore {
                 .optional();
     }
 
+    /**
+     * Whether {@code locationId} is a real location of this tenant — the check
+     * {@link uz.horecaos.platform.loyalty.application.LoyaltyPolicyAuthoringService}
+     * runs before persisting a LOCATION-scoped rule, so a bad id is refused as
+     * a clean 422 rather than persisting and silently never matching
+     * {@link #accrualRule}'s own resolver. V0308's trigger is the backstop for
+     * every writer that does not run this check first.
+     */
+    public boolean locationExists(UUID tenantId, UUID locationId) {
+        Boolean exists = jdbc.sql(
+                        "SELECT EXISTS (SELECT 1 FROM tenant.locations WHERE tenant_id = :tenantId AND id = :id)")
+                .param("tenantId", tenantId)
+                .param("id", locationId)
+                .query(Boolean.class)
+                .single();
+        return Boolean.TRUE.equals(exists);
+    }
+
+    /** The CHANNEL-scoped sibling of {@link #locationExists}, against {@code tenant.sales_channels}. */
+    public boolean channelExists(UUID tenantId, UUID channelId) {
+        Boolean exists = jdbc.sql(
+                        "SELECT EXISTS (SELECT 1 FROM tenant.sales_channels WHERE tenant_id = :tenantId AND id = :id)")
+                .param("tenantId", tenantId)
+                .param("id", channelId)
+                .query(Boolean.class)
+                .single();
+        return Boolean.TRUE.equals(exists);
+    }
+
     /** Drafts a rule. Never DEFAULT ACTIVE — an operator's own {@link #activateAccrualRule} says so. */
     public void insertAccrualRuleDraft(
             UUID id,
@@ -1681,7 +1752,8 @@ public class JdbcLoyaltyStore {
                 row.getLong("remaining_minor"),
                 requiredInstant(row, "earns_at"),
                 requiredInstant(row, "expires_at"),
-                LotStatus.valueOf(row.getString("status")));
+                LotStatus.valueOf(row.getString("status")),
+                row.getInt("expiry_warning_days"));
     }
 
     private static ReservationRow toReservation(ResultSet row, int number) throws SQLException {
