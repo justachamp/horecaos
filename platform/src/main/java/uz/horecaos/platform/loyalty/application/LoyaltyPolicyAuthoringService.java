@@ -81,7 +81,7 @@ public class LoyaltyPolicyAuthoringService {
     @Transactional
     public AccrualRuleAuthoringRow draftAccrualRule(UUID tenantId, UUID brandId, AccrualRuleDraft draft) {
         validateAccrualDraft(draft);
-        validateAccrualScope(tenantId, draft);
+        validateAccrualScope(tenantId, brandId, draft);
         Instant now = clock.instant();
         Instant validFrom = draft.validFrom() != null ? draft.validFrom() : now;
         UUID id = UUID.randomUUID();
@@ -188,17 +188,28 @@ public class LoyaltyPolicyAuthoringService {
      * brand's rule with no error anywhere — the failure V0308's trigger also
      * guards, this being the one an operator actually sees as a clean 422
      * instead of a raw {@code foreign_key_violation}.
+     *
+     * <p>LOCATION is checked against {@code brandId} as well as {@code
+     * tenantId}: a location belongs to exactly one brand (V0003's own {@code
+     * fk_locations_brand_scope}), so a same-tenant sibling brand's location
+     * id is a real row that a tenant-only check cannot tell apart from this
+     * brand's own — and {@link uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore#accrualRule}
+     * resolves by this rule's own {@code brand_id}, so a rule scoped to
+     * another brand's location can never match a real order either way; it
+     * would just fail silently, which is exactly the bug this whole check
+     * exists to catch. CHANNEL stays tenant-only: {@code tenant.sales_channels}
+     * has no brand_id column — a channel is deliberately tenant-level.
      */
-    private void validateAccrualScope(UUID tenantId, AccrualRuleDraft draft) {
+    private void validateAccrualScope(UUID tenantId, UUID brandId, AccrualRuleDraft draft) {
         // validateAccrualDraft already refused a LOCATION/CHANNEL rule
         // carrying a null scopeId, so a non-null read here is a re-statement
         // of that check, not a new assumption.
         if ("LOCATION".equals(draft.scopeType())) {
             UUID scopeId = Objects.requireNonNull(draft.scopeId(), "shape-checked: a LOCATION rule names a scopeId");
-            if (!store.locationExists(tenantId, scopeId)) {
+            if (!store.locationExists(tenantId, brandId, scopeId)) {
                 throw new ApiException(
                         ErrorCode.VALIDATION_FAILED,
-                        "No location %s belongs to this tenant; a LOCATION rule must scope to a real location"
+                        "No location %s belongs to this brand; a LOCATION rule must scope to a real location of it"
                                 .formatted(scopeId));
             }
         }

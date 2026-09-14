@@ -314,6 +314,24 @@ class LoyaltyPolicyAuthoringTests {
     }
 
     @Test
+    @DisplayName("a LOCATION rule naming a real location of a sibling brand in the SAME tenant is refused too")
+    void refusesALocationBelongingToAnotherBrand() {
+        // LOCATION (seeded in setUp) belongs to BRAND. Authoring as OTHER_BRAND
+        // and naming it must be refused exactly like the cross-tenant case above
+        // — a location belongs to exactly one brand (V0003's own
+        // fk_locations_brand_scope), so this is a real row a tenant-only check
+        // could not tell apart from OTHER_BRAND's own.
+        assertThatThrownBy(() -> authoring.draftAccrualRule(
+                        TENANT,
+                        OTHER_BRAND,
+                        new AccrualRuleDraft("LOCATION", LOCATION, 300, null, 24, 180, 14, null, null)))
+                .isInstanceOf(ApiException.class);
+        assertThat(authoring.listAccrualRules(TENANT, OTHER_BRAND))
+                .as("nothing was persisted for the refusal to leave behind")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName(
             "scopeType is one of BRAND, LOCATION or CHANNEL — nothing else, even bypassing the controller's own pattern check")
     void scopeTypeMustBeOneOfTheThreeKnownValues() {

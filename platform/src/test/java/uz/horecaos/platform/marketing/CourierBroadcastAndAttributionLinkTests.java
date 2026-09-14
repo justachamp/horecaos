@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
@@ -18,10 +19,13 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.marketing.application.AttributionLinkService;
 import uz.horecaos.platform.marketing.application.CourierBroadcastService;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAttributionLinkStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAttributionLinkStore.AttributionLinkRow;
+import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCourierBroadcastStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCourierBroadcastStore.CourierBroadcastRow;
 import uz.horecaos.platform.support.TestDatabase;
@@ -42,6 +46,7 @@ class CourierBroadcastAndAttributionLinkTests {
 
     private static final UUID TENANT = UUID.randomUUID();
     private static final UUID BRAND = UUID.randomUUID();
+    private static final UUID OTHER_BRAND = UUID.randomUUID();
     private static final UUID AUTHOR = UUID.randomUUID();
 
     private static final Instant NOW = Instant.parse("2026-09-14T09:00:00Z");
@@ -53,6 +58,7 @@ class CourierBroadcastAndAttributionLinkTests {
     private CourierBroadcastService broadcasts;
     private AttributionLinkService links;
     private FakeCampaignMessagePort port;
+    private RecordingAuditRecorder audit;
 
     private UUID courierType;
     private UUID groupId;
@@ -77,6 +83,8 @@ class CourierBroadcastAndAttributionLinkTests {
         jdbc = JdbcClient.create(dataSource);
         jdbc.sql("TRUNCATE TABLE marketing.courier_broadcasts, marketing.attribution_links CASCADE")
                 .update();
+        jdbc.sql("TRUNCATE TABLE marketing.campaigns, marketing.audiences CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE fulfillment.couriers, fulfillment.courier_groups CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
@@ -84,8 +92,10 @@ class CourierBroadcastAndAttributionLinkTests {
         seedTenancy();
 
         port = new FakeCampaignMessagePort();
-        broadcasts = new CourierBroadcastService(new JdbcCourierBroadcastStore(jdbc), port, CLOCK);
-        links = new AttributionLinkService(new JdbcAttributionLinkStore(jdbc), CLOCK);
+        audit = new RecordingAuditRecorder();
+        broadcasts = new CourierBroadcastService(new JdbcCourierBroadcastStore(jdbc), port, audit, CLOCK);
+        links = new AttributionLinkService(
+                new JdbcAttributionLinkStore(jdbc), new JdbcCampaignStore(jdbc), audit, CLOCK);
     }
 
     // ------------------------------------------------------------ courier broadcasts
@@ -97,7 +107,7 @@ class CourierBroadcastAndAttributionLinkTests {
         insertCourier("K-002", "ACTIVE");
         insertCourier("K-003", "ARCHIVED");
         UUID broadcastId = broadcasts.draft(TENANT, BRAND, "ALL_ACTIVE", null, "Shift change at 18:00", AUTHOR);
-        CourierBroadcastRow sent = broadcasts.send(TENANT, broadcastId);
+        CourierBroadcastRow sent = broadcasts.send(TENANT, broadcastId, AUTHOR);
 
         assertThat(sent.status()).isEqualTo("SENT");
         assertThat(sent.recipientCount()).isEqualTo(2);
@@ -114,7 +124,7 @@ class CourierBroadcastAndAttributionLinkTests {
         addToGroup(inGroup2);
 
         UUID broadcastId = broadcasts.draft(TENANT, BRAND, "GROUP", groupId, "Route closure on Amir Temur", AUTHOR);
-        CourierBroadcastRow sent = broadcasts.send(TENANT, broadcastId);
+        CourierBroadcastRow sent = broadcasts.send(TENANT, broadcastId, AUTHOR);
 
         assertThat(sent.recipientCount())
                 .as("K-012 is active but not in the targeted group, so it is not counted")
@@ -142,7 +152,8 @@ class CourierBroadcastAndAttributionLinkTests {
         UUID broadcastId = broadcasts.draft(TENANT, BRAND, "ALL_ACTIVE", null, "Weather closure", AUTHOR);
         port.unwire();
 
-        ApiException failure = catchThrowableOfType(() -> broadcasts.send(TENANT, broadcastId), ApiException.class);
+        ApiException failure =
+                catchThrowableOfType(() -> broadcasts.send(TENANT, broadcastId, AUTHOR), ApiException.class);
         assertThat(failure.errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
 
         CourierBroadcastRow row = broadcasts.require(TENANT, broadcastId);
@@ -156,6 +167,20 @@ class CourierBroadcastAndAttributionLinkTests {
         String tooLong = "x".repeat(481);
         assertThatThrownBy(() -> broadcasts.draft(TENANT, BRAND, "ALL_ACTIVE", null, tooLong, AUTHOR))
                 .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    @DisplayName("drafting and sending a broadcast each write an ADR 0027 audit fact in the same transaction")
+    void draftAndSendAreAudited() {
+        insertCourier("K-020", "ACTIVE");
+        UUID broadcastId = broadcasts.draft(TENANT, BRAND, "ALL_ACTIVE", null, "Shift change", AUTHOR);
+        broadcasts.send(TENANT, broadcastId, AUTHOR);
+
+        assertThat(audit.facts)
+                .as("a dispatcher's own courier SMS blast is an operator-initiated action "
+                        + "ADR 0027 requires evidence for")
+                .extracting(AuditFact::actionCode)
+                .contains("MARKETING_COURIER_BROADCAST_DRAFTED", "MARKETING_COURIER_BROADCAST_SENT");
     }
 
     // ------------------------------------------------------------ attribution links
@@ -202,14 +227,65 @@ class CourierBroadcastAndAttributionLinkTests {
     }
 
     @Test
+    @DisplayName("a CAMPAIGN destination naming a sibling brand's campaign is refused, not minted")
+    void aCrossBrandCampaignDestinationIsRefused() {
+        UUID otherBrandCampaign = insertCampaign(OTHER_BRAND, "Other brand's campaign");
+
+        assertThatThrownBy(
+                        () -> links.mint(TENANT, BRAND, "x", null, "WEB", "CAMPAIGN", otherBrandCampaign, null, AUTHOR))
+                .as("V0309's own FK only constrains tenant_id, not brand_id — the service is the only guard")
+                .isInstanceOf(ApiException.class);
+        assertThat(links.list(TENANT, BRAND))
+                .as("nothing was minted for the refusal to leave behind")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a CAMPAIGN destination naming this brand's own campaign is accepted")
+    void aSameBrandCampaignDestinationIsAccepted() {
+        UUID ownCampaign = insertCampaign(BRAND, "This brand's campaign");
+
+        UUID id = links.mint(TENANT, BRAND, "x", null, "WEB", "CAMPAIGN", ownCampaign, null, AUTHOR);
+
+        assertThat(links.require(TENANT, id).destinationId()).isEqualTo(ownCampaign);
+    }
+
+    @Test
+    @DisplayName("a CAMPAIGN destination naming no real campaign at all is refused the same way")
+    void aNonExistentCampaignDestinationIsRefused() {
+        assertThatThrownBy(
+                        () -> links.mint(TENANT, BRAND, "x", null, "WEB", "CAMPAIGN", UUID.randomUUID(), null, AUTHOR))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    @DisplayName("minting and archiving a link each write an ADR 0027 audit fact in the same transaction")
+    void mintAndArchiveAreAudited() {
+        UUID id = links.mint(TENANT, BRAND, "x", null, "WEB", "STOREFRONT_HOME", null, null, AUTHOR);
+        links.archive(TENANT, id, AUTHOR);
+
+        assertThat(audit.facts)
+                .as("a marketer minting or archiving a trackable link is an operator-initiated "
+                        + "action ADR 0027 requires evidence for")
+                .extracting(AuditFact::actionCode)
+                .contains("MARKETING_LINK_MINTED", "MARKETING_LINK_ARCHIVED");
+        AuditFact minted = audit.facts.stream()
+                .filter(fact -> fact.actionCode().equals("MARKETING_LINK_MINTED"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(minted.targetId()).isEqualTo(id);
+        assertThat(minted.scope().tenantId()).isEqualTo(TENANT);
+    }
+
+    @Test
     @DisplayName("archiving a link stops it from listing as ACTIVE, and archiving it twice is refused")
     void archiveIsOnceOnly() {
         UUID id = links.mint(TENANT, BRAND, "Influencer link", null, "TELEGRAM_BOT", "INFLUENCER", null, null, AUTHOR);
 
-        links.archive(TENANT, id);
+        links.archive(TENANT, id, AUTHOR);
         assertThat(links.require(TENANT, id).status()).isEqualTo("ARCHIVED");
 
-        assertThatThrownBy(() -> links.archive(TENANT, id)).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> links.archive(TENANT, id, AUTHOR)).isInstanceOf(ApiException.class);
     }
 
     @Test
@@ -236,6 +312,10 @@ class CourierBroadcastAndAttributionLinkTests {
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                 VALUES (:id, :tenantId, 'MAIN', 'main', 'MAIN', 'ACTIVE', 0)
                 """).param("id", BRAND).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'SECOND', 'second', 'SECOND', 'ACTIVE', 0)
+                """).param("id", OTHER_BRAND).param("tenantId", TENANT).update();
 
         courierType = UUID.randomUUID();
         jdbc.sql("""
@@ -276,5 +356,50 @@ class CourierBroadcastAndAttributionLinkTests {
                 .param("groupId", groupId)
                 .param("courierId", courierId)
                 .update();
+    }
+
+    /**
+     * A minimal, real campaign row — just enough to satisfy
+     * {@code marketing.campaigns}' NOT NULL columns and its audience FK —
+     * for the CAMPAIGN-destination brand-ownership check under test.
+     */
+    private UUID insertCampaign(UUID brandId, String name) {
+        UUID audienceId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO marketing.audiences (id, tenant_id, brand_id, name, created_by)
+                VALUES (:id, :tenantId, :brandId, :name, :createdBy)
+                """)
+                .param("id", audienceId)
+                .param("tenantId", TENANT)
+                .param("brandId", brandId)
+                .param("name", name + " audience")
+                .param("createdBy", AUTHOR)
+                .update();
+
+        UUID campaignId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO marketing.campaigns (id, tenant_id, brand_id, name, channel, consent_purpose,
+                    audience_id, template_key, recipient_cap, created_by)
+                VALUES (:id, :tenantId, :brandId, :name, 'SMS', 'MARKETING', :audienceId, 'tmpl', 100, :createdBy)
+                """)
+                .param("id", campaignId)
+                .param("tenantId", TENANT)
+                .param("brandId", brandId)
+                .param("name", name)
+                .param("audienceId", audienceId)
+                .param("createdBy", AUTHOR)
+                .update();
+        return campaignId;
+    }
+
+    /** Captures every fact recorded, so a test can assert on what ADR 0027 requires. */
+    private static final class RecordingAuditRecorder implements AuditRecorder {
+
+        private final List<AuditFact> facts = new CopyOnWriteArrayList<>();
+
+        @Override
+        public void record(AuditFact fact) {
+            facts.add(fact);
+        }
     }
 }

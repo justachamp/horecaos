@@ -963,6 +963,83 @@ class MarketingCampaignTests {
         assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status()).isEqualTo(CampaignStatus.SENDING);
     }
 
+    /**
+     * T18: before this fix, {@code CampaignScheduledSendScheduler} caught the
+     * {@code UNPROCESSABLE_STATE} an unwired channel throws, logged it, and left
+     * {@code scheduled_at} untouched — so the very next sweep (15s later in
+     * production) selected the same campaign and refused it again, forever, with
+     * no terminal state and no visible sign anything was wrong beyond a growing
+     * log. This proves the second sweep finds nothing left to retry.
+     */
+    @Test
+    @DisplayName("a due SCHEDULED campaign whose channel is unwired is disarmed, not retried on every future sweep")
+    void scheduledSendWithAnUnwiredChannelIsDisarmedNotRetriedForever() {
+        Instant scheduledAt = NOW.plus(Duration.ofHours(2));
+        UUID audience = everybodyRegistered();
+        UUID campaign = campaigns.create(
+                TENANT,
+                BRAND,
+                "Scheduled, unwired " + UUID.randomUUID(),
+                MarketingChannel.SMS,
+                PURPOSE,
+                audience,
+                "MARKETING_PROMOTION",
+                100,
+                10_000_000L,
+                "UZS",
+                null,
+                null,
+                scheduledAt,
+                UUID.fromString(author.subject()));
+        campaigns.prepare(TENANT, campaign, author, "corr");
+        campaigns.submitForReview(TENANT, campaign);
+        campaigns.approve(
+                TENANT,
+                campaign,
+                UUID.fromString(approver.subject()),
+                UUID.randomUUID(),
+                approver,
+                "Reviewed the copy and the reach",
+                "corr");
+        assertThat(campaigns.start(TENANT, campaign)).isTrue();
+        assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status()).isEqualTo(CampaignStatus.SCHEDULED);
+
+        // Past the moment, and unwired: wire() rebuilds campaigns/sends on a
+        // clock fixed at that moment, over the same port — the fake's own
+        // unwire() flips a shared answer, so it must be set before or after
+        // indifferently, but before the scheduler's own sweep is what matters.
+        port().unwire();
+        wire(scheduledAt.plusSeconds(1));
+        var dueScheduler = new CampaignScheduledSendScheduler(
+                campaignStore, campaigns, Clock.fixed(scheduledAt.plusSeconds(1), ZoneOffset.UTC), 50);
+
+        // First pass: due, tried, refused — and disarmed, rather than left due.
+        assertThat(dueScheduler.runOnce()).isEqualTo(1);
+        var afterFirstPass = campaignStore.find(TENANT, campaign).orElseThrow();
+        assertThat(afterFirstPass.status())
+                .as("no FAILED-to-send terminal state exists today; SCHEDULED with no scheduledAt "
+                        + "is the disarmed state, the same shape a fresh launch call reads as "
+                        + "'ready to send now'")
+                .isEqualTo(CampaignStatus.SCHEDULED);
+        assertThat(afterFirstPass.scheduledAt())
+                .as("cleared so dueScheduledCampaigns' own scheduled_at <= :asOf predicate never selects it again")
+                .isNull();
+        assertThat(jdbc.sql("SELECT halted_reason FROM marketing.campaigns WHERE tenant_id = :t AND id = :c")
+                        .param("t", TENANT)
+                        .param("c", campaign)
+                        .query(String.class)
+                        .single())
+                .as("why it stopped is recorded, not just that it did")
+                .contains("SMS");
+
+        // Second pass, same due-scheduler instance, same moment: before this fix
+        // this returned 1 again — the whole point being proven here.
+        assertThat(dueScheduler.runOnce())
+                .as("disarmed once, this campaign is not selected by a later sweep")
+                .isZero();
+        assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status()).isEqualTo(CampaignStatus.SCHEDULED);
+    }
+
     /** Draft, estimate, submit, approve — everything short of the launch call itself. */
     private UUID readyToLaunch(UUID campaign) {
         campaigns.prepare(TENANT, campaign, author, "corr");

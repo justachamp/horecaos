@@ -3,11 +3,18 @@ package uz.horecaos.platform.marketing.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCourierBroadcastStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCourierBroadcastStore.CourierBroadcastRow;
@@ -31,11 +38,14 @@ public class CourierBroadcastService {
 
     private final JdbcCourierBroadcastStore store;
     private final CampaignMessagePort messages;
+    private final AuditRecorder audit;
     private final Clock clock;
 
-    public CourierBroadcastService(JdbcCourierBroadcastStore store, CampaignMessagePort messages, Clock clock) {
+    public CourierBroadcastService(
+            JdbcCourierBroadcastStore store, CampaignMessagePort messages, AuditRecorder audit, Clock clock) {
         this.store = store;
         this.messages = messages;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -62,7 +72,18 @@ public class CourierBroadcastService {
         }
 
         UUID id = Ids.newId();
-        store.insert(id, tenantId, brandId, targetKind, targetGroupId, message, authorId, clock.instant());
+        Instant now = clock.instant();
+        store.insert(id, tenantId, brandId, targetKind, targetGroupId, message, authorId, now);
+
+        audit.record(AuditFact.of("MARKETING_COURIER_BROADCAST_DRAFTED", AuditClass.BUSINESS)
+                .by(ActorRef.user(authorId.toString(), null))
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("CourierBroadcast", id)
+                .because("Drafted a courier broadcast")
+                .changed(Map.of("targetKind", targetKind))
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
         return id;
     }
 
@@ -74,7 +95,7 @@ public class CourierBroadcastService {
      * were told.
      */
     @Transactional
-    public CourierBroadcastRow send(UUID tenantId, UUID broadcastId) {
+    public CourierBroadcastRow send(UUID tenantId, UUID broadcastId, UUID actorId) {
         CourierBroadcastRow broadcast = require(tenantId, broadcastId);
         if (!"DRAFT".equals(broadcast.status())) {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This broadcast is not a draft, so it cannot be sent");
@@ -86,6 +107,15 @@ public class CourierBroadcastService {
         if (!messages.isWired(CHANNEL)) {
             String reason = "No ADR 0020 delivery path is wired for SMS yet";
             store.recordFailed(tenantId, broadcastId, reason, now);
+            audit.record(AuditFact.of("MARKETING_COURIER_BROADCAST_SEND_FAILED", AuditClass.BUSINESS)
+                    .by(ActorRef.user(actorId.toString(), null))
+                    .at(ResourceScope.brand(tenantId, broadcast.brandId()))
+                    .target("CourierBroadcast", broadcastId)
+                    .outcome(AuditFact.Outcome.FAILED)
+                    .because(reason)
+                    .correlatedBy(correlationId())
+                    .occurredAt(now)
+                    .build());
             throw new ApiException(ErrorCode.UNPROCESSABLE_STATE, reason);
         }
 
@@ -95,6 +125,16 @@ public class CourierBroadcastService {
         // recordSent is written so the shape is complete and testable ahead
         // of that wiring, not left as a TODO with nothing behind it.
         store.recordSent(tenantId, broadcastId, recipientCount, now);
+
+        audit.record(AuditFact.of("MARKETING_COURIER_BROADCAST_SENT", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorId.toString(), null))
+                .at(ResourceScope.brand(tenantId, broadcast.brandId()))
+                .target("CourierBroadcast", broadcastId)
+                .because("Sent a courier broadcast")
+                .changed(Map.of("recipientCount", recipientCount))
+                .correlatedBy(correlationId())
+                .occurredAt(now)
+                .build());
         return require(tenantId, broadcastId);
     }
 
@@ -108,5 +148,13 @@ public class CourierBroadcastService {
                 .orElseThrow(() -> new ApiException(
                         ErrorCode.RESOURCE_NOT_FOUND,
                         "No courier broadcast %s belongs to this tenant".formatted(broadcastId)));
+    }
+
+    /** Same MDC-or-random fallback {@code ServiceScheduleService} uses for an audit fact with no request-scoped id. */
+    private static String correlationId() {
+        String correlationId = MDC.get("correlationId");
+        return correlationId == null || correlationId.isBlank()
+                ? UUID.randomUUID().toString()
+                : correlationId;
     }
 }
