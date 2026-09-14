@@ -6,6 +6,10 @@ import { CurrentLocation, LocationOption } from '../core/auth/current-location';
 import { SessionCapabilities } from '../core/auth/session-capabilities';
 import { I18n, LOCALES, Locale, isLocale } from '../core/i18n/i18n';
 import { TPipe } from '../core/i18n/t.pipe';
+import { RealtimeClient } from '../core/realtime/realtime-client';
+import { ConnectionStateBanner } from '../shared/ui/connection-state-banner';
+import { LiveBadge } from '../shared/ui/live-badge';
+import { RefreshIndicator } from '../shared/ui/refresh-indicator';
 import { Toasts } from '../shared/ui/toast';
 import { ToastHost } from '../shared/ui/toast-host';
 import { CallBar } from './call-bar';
@@ -50,7 +54,18 @@ import { VoicePresence } from './voice-presence';
  */
 @Component({
   selector: 'q-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, TPipe, SupportBanner, ToastHost, CallBar],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    TPipe,
+    SupportBanner,
+    ToastHost,
+    CallBar,
+    ConnectionStateBanner,
+    LiveBadge,
+    RefreshIndicator,
+  ],
   templateUrl: './shell.html',
   styleUrl: './shell.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -63,6 +78,12 @@ export class Shell {
   private readonly voicePresence = inject(VoicePresence);
   protected readonly auth = inject(Auth);
   protected readonly status = inject(ServiceStatus);
+  // Field injection, not a call inside the constructor body: this is what
+  // guarantees the connection is opened by the time the shell mounts,
+  // mirroring `voicePresence`/`status` above — see `RealtimeClient`'s own
+  // doc for why it connects from its constructor rather than behind a
+  // `start()` a caller might forget.
+  protected readonly realtime = inject(RealtimeClient);
   private readonly toasts = inject(Toasts);
 
   /**
@@ -115,6 +136,11 @@ export class Shell {
     // shape as `ensureLoaded` above; `call-centre-page.ts` calls it again
     // for the case where that page is opened directly.
     this.voicePresence.start();
+    // Wave P08, row 0.1f: the rail's own open/late badges get their own
+    // fetch here, rather than reading zero until an operator opens Orders
+    // and freezing the moment they leave it — see `service-status.ts`'s own
+    // doc. Idempotent, the same shape as every `start()` above.
+    this.status.start();
   }
 
   /**
