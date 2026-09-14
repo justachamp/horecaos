@@ -1,0 +1,65 @@
+.token {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  border: 2px solid var(--q-primary);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
+}
+
+.token--dragging {
+  cursor: grabbing;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 25%);
+  z-index: 10;
+}
+
+.token--outOfService {
+  border-color: var(--q-warning, #b58900);
+  background: var(--q-warning-tint, #fdf6e3);
+}
+
+.token--archived {
+  border-color: var(--q-hairline);
+  background: var(--q-surface-1);
+  color: var(--q-ink-subtle);
+  opacity: 0.6;
+}
+
+.token--disabled {
+  cursor: default;
+  pointer-events: none;
+}
+
+.token__code {
+  font-weight: 600;
+}
+
+.token__seats {
+  color: var(--q-ink-muted);
+}
+
+.token__qr {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}

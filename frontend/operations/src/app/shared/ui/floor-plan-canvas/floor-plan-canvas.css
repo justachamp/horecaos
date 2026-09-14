@@ -1,0 +1,10 @@
+.canvas {
+  position: relative;
+  border: 1px dashed var(--q-hairline);
+  border-radius: var(--q-radius);
+  background:
+    linear-gradient(var(--q-surface-1) 1px, transparent 1px),
+    linear-gradient(90deg, var(--q-surface-1) 1px, transparent 1px);
+  background-size: 40px 40px;
+  overflow: hidden;
+}
