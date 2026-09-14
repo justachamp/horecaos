@@ -109,18 +109,28 @@ public class DayCloseService {
         derived.aggregates().forEach(store::insertAggregate);
         DayAggregator.slaBuckets(tenantId, businessDate, derived.orders()).forEach(store::insertSlaBucket);
         derived.callHours().forEach(store::insertCallHourFact);
+        // T11 / ADR 0125: fact_delivery and the COURIER scope of
+        // agg_sla_bucket_day, right beside the order-side producers and inside
+        // the same transaction, for the reason the P39 comment above already
+        // gives for tenders — a fact half-written for a day whose other facts
+        // all committed is worse than one never written.
+        derived.deliveries().forEach(store::insertDeliveryFact);
+        DayAggregator.courierSlaBuckets(tenantId, businessDate, derived.deliveries())
+                .forEach(store::insertSlaBucket);
 
         store.completeRun(runId, derived.orders().size(), derived.lines().size(), 0, clock.instant());
 
         log.info(
-                "Closed business day {} for tenant {}: {} orders, {} lines, {} tenders, {} refunds, {} call-hours",
+                "Closed business day {} for tenant {}: {} orders, {} lines, {} tenders, {} refunds, "
+                        + "{} call-hours, {} deliveries",
                 businessDate,
                 tenantId,
                 derived.orders().size(),
                 derived.lines().size(),
                 derived.tenders().size(),
                 derived.refunds().size(),
-                derived.callHours().size());
+                derived.callHours().size(),
+                derived.deliveries().size());
 
         return new CloseResult(
                 runId,
@@ -292,6 +302,32 @@ public class DayCloseService {
                 boundary.version(),
                 MetricRegistry.CALCULATION_VERSION);
 
+        // T11 / ADR 0125. Read by the earning's own business_date rather than
+        // by the [from, to) instant range every order-side source above uses:
+        // CourierAccrualService already computed that date once, correctly, at
+        // the moment of accrual, and re-deriving it from delivered_at here
+        // would be a second place that computation lives.
+        List<uz.horecaos.platform.reporting.application.ReportingFacts.DeliveryFact> deliveries =
+                store.readSourceDeliveries(tenantId, businessDate).stream()
+                        .map(source -> new uz.horecaos.platform.reporting.application.ReportingFacts.DeliveryFact(
+                                tenantId,
+                                source.earningId(),
+                                businessDate,
+                                boundary.version(),
+                                MetricRegistry.CALCULATION_VERSION,
+                                source.courierId(),
+                                source.locationId(),
+                                source.shipmentId(),
+                                source.assignmentAttemptId(),
+                                source.distanceMeters(),
+                                source.distanceSource(),
+                                source.onTimeOutcome(),
+                                source.acceptedAt(),
+                                source.deliveredAt(),
+                                Math.toIntExact(Duration.between(source.acceptedAt(), source.deliveredAt())
+                                        .getSeconds())))
+                        .toList();
+
         return new DerivedDay(
                 orders,
                 lines,
@@ -299,7 +335,8 @@ public class DayCloseService {
                 refunds,
                 DayAggregator.branchDay(
                         businessDate, orders, refunds, boundary.version(), MetricRegistry.CALCULATION_VERSION),
-                callHours);
+                callHours,
+                deliveries);
     }
 
     /**
@@ -456,7 +493,8 @@ public class DayCloseService {
             List<TenderFact> tenders,
             List<RefundFact> refunds,
             List<BranchDayAggregate> aggregates,
-            List<CallHourFact> callHours) {}
+            List<CallHourFact> callHours,
+            List<uz.horecaos.platform.reporting.application.ReportingFacts.DeliveryFact> deliveries) {}
 
     /**
      * One slice whose re-derived figure disagrees with the stored one.

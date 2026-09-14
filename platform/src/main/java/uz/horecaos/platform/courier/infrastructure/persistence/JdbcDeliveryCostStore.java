@@ -241,6 +241,23 @@ public class JdbcDeliveryCostStore {
                 .list();
     }
 
+    /**
+     * T11 (7.4c, ADR 0125): the one {@code DELIVERY}-charge invoice line for a
+     * shipment, if a partner has ever billed one — what the per-order
+     * external-delivery-cost report's reconcile action operates on.
+     * {@code uq_partner_line_ref} allows more than one line per shipment only
+     * across different {@code charge_type}s, so this is at most one row.
+     */
+    public Optional<InvoiceLineRow> deliveryLineForShipment(UUID tenantId, UUID shipmentId) {
+        return jdbc.sql(SELECT_INVOICE_LINE + """
+                 WHERE tenant_id = :tenantId AND shipment_id = :shipmentId AND charge_type = 'DELIVERY'
+                """)
+                .param("tenantId", tenantId)
+                .param("shipmentId", shipmentId)
+                .query(JdbcDeliveryCostStore::mapInvoiceLine)
+                .optional();
+    }
+
     public Optional<InvoiceRow> findInvoice(UUID tenantId, UUID invoiceId) {
         return jdbc.sql(SELECT_INVOICE + " WHERE tenant_id = :tenantId AND id = :id")
                 .param("tenantId", tenantId)

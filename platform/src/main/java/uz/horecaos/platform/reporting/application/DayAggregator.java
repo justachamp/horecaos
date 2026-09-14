@@ -120,6 +120,50 @@ public final class DayAggregator {
     }
 
     /**
+     * T11 / ADR 0125: the fixed SLA distribution per courier for one business
+     * date — the {@code COURIER} scope {@code ck_agg_sla_scope_kind} (V0031)
+     * has allowed since before this fact existed. Same six buckets, same
+     * shares-in-basis-points math as {@link #slaBuckets}; the only
+     * difference is the elapsed time bucketed ({@code transitSeconds}, a
+     * courier's acceptance-to-delivery span) and the key it is bucketed by
+     * (courier, not location).
+     */
+    public static List<SlaBucketAggregate> courierSlaBuckets(
+            UUID tenantId, LocalDate businessDate, List<ReportingFacts.DeliveryFact> deliveries) {
+
+        Map<UUID, Map<String, Integer>> counts = new LinkedHashMap<>();
+        for (ReportingFacts.DeliveryFact delivery : deliveries) {
+            counts.computeIfAbsent(delivery.courierId(), ignored -> new LinkedHashMap<>())
+                    .merge(SlaBucketSet.bucketFor(delivery.transitSeconds()).code(), 1, Integer::sum);
+        }
+
+        List<SlaBucketAggregate> rows = new ArrayList<>();
+        counts.forEach((courierId, byBucket) -> {
+            int total = byBucket.values().stream().mapToInt(Integer::intValue).sum();
+            List<Integer> ordered = SlaBucketSet.buckets().stream()
+                    .map(bucket -> byBucket.getOrDefault(bucket.code(), 0))
+                    .toList();
+            List<Integer> shares = sharesInBasisPoints(ordered, total);
+
+            for (int index = 0; index < SlaBucketSet.buckets().size(); index++) {
+                if (ordered.get(index) == 0) {
+                    continue;
+                }
+                rows.add(new SlaBucketAggregate(
+                        tenantId,
+                        businessDate,
+                        "COURIER",
+                        courierId,
+                        SlaBucketSet.VERSION,
+                        SlaBucketSet.buckets().get(index).code(),
+                        ordered.get(index),
+                        shares.get(index)));
+            }
+        });
+        return rows;
+    }
+
+    /**
      * Shares that actually sum to the whole.
      *
      * <p>Largest remainder, not plain truncation. Six truncated shares can leave

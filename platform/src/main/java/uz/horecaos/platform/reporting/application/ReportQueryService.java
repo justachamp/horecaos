@@ -125,6 +125,83 @@ public class ReportQueryService {
     }
 
     /**
+     * T11 (7.4, ADR 0125): the courier leaderboard — one row per courier
+     * across the range, straight off {@code reporting.fact_delivery}. Never
+     * a courier's protected name: {@link JdbcReportingStore.CourierLeaderboardRow}
+     * carries {@code courierId} alone, and the caller resolves display
+     * through P19's reveal.
+     */
+    @Transactional(readOnly = true)
+    public CourierLeaderboardResult courierLeaderboard(UUID tenantId, LocalDate from, LocalDate to) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        List<JdbcReportingStore.CourierLeaderboardRow> rows = store.readCourierLeaderboard(tenantId, from, to);
+        return new CourierLeaderboardResult(rows, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    /**
+     * T11 (7.4a, ADR 0125): the {@code COURIER} scope of the fixed SLA
+     * distribution — same shape {@link #slaBuckets} returns for {@code
+     * LOCATION}, narrowed to the courier scope at the store layer rather
+     * than filtered here, so a courier row is never accidentally mixed into
+     * a location caller's read or vice versa.
+     */
+    @Transactional(readOnly = true)
+    public SlaResult courierSlaBuckets(UUID tenantId, LocalDate from, LocalDate to) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        return new SlaResult(
+                store.readCourierSlaBuckets(tenantId, from, to),
+                provenance(
+                        tenantId,
+                        List.of(MetricRegistry.require("sla_bucket_set.v1")),
+                        businessDays.boundaryFor(tenantId)));
+    }
+
+    /**
+     * T11 (7.4b, ADR 0125): the delivery-sum-by-tariff audit — see {@link
+     * JdbcReportingStore#readTariffAudit}. Reads the tenant's own business
+     * day boundary purely to turn the caller's date range into the instant
+     * range {@code delivery_fee_resolutions.created_at} is compared against;
+     * unlike every other method here this is not itself a business-day-grain
+     * fact, so there is no recut frontier to refuse crossing.
+     */
+    @Transactional(readOnly = true)
+    public TariffAuditResult tariffAudit(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        validateRange(from, to);
+        BusinessDayBoundary boundary = businessDays.boundaryFor(tenantId);
+        List<JdbcReportingStore.TariffAuditRow> rows =
+                store.readTariffAudit(tenantId, boundary.startOf(from), boundary.endOf(to), locationIds);
+        return new TariffAuditResult(rows, provenance(tenantId, List.of(), boundary));
+    }
+
+    /**
+     * T11 (7.4c, ADR 0125): per-order external-delivery cost — the one
+     * courier report that finds money. See {@link
+     * JdbcReportingStore#readExternalDeliveryCost} for {@code UNBILLED}'s
+     * derivation and why it is never folded into {@code PENDING}.
+     */
+    @Transactional(readOnly = true)
+    public ExternalDeliveryCostResult externalDeliveryCost(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        validateRange(from, to);
+        List<JdbcReportingStore.ExternalDeliveryCostRow> rows =
+                store.readExternalDeliveryCost(tenantId, from, to, locationIds);
+        return new ExternalDeliveryCostResult(
+                rows, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    public record CourierLeaderboardResult(
+            List<JdbcReportingStore.CourierLeaderboardRow> rows, Provenance provenance) {}
+
+    public record TariffAuditResult(List<JdbcReportingStore.TariffAuditRow> rows, Provenance provenance) {}
+
+    public record ExternalDeliveryCostResult(
+            List<JdbcReportingStore.ExternalDeliveryCostRow> rows, Provenance provenance) {}
+
+    /**
      * P39 (7.1c/7.3b): takings split by payment method — the cash-collection
      * control figure. Its own method rather than the typed {@link #run}: a
      * share-per-method breakdown is several rows per slice, the same reason

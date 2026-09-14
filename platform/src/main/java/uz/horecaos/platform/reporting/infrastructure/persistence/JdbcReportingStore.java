@@ -19,6 +19,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.reporting.application.ReportingFacts;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayKey;
 import uz.horecaos.platform.reporting.application.ReportingFacts.CallHourFact;
@@ -519,7 +520,8 @@ public class JdbcReportingStore {
                 "fact_refund",
                 "agg_branch_day",
                 "agg_sla_bucket_day",
-                "fact_call_hour")) {
+                "fact_call_hour",
+                "fact_delivery")) {
             jdbc.sql("DELETE FROM reporting.%s WHERE tenant_id = :tenantId AND business_date = :day".formatted(table))
                     .param("tenantId", tenantId)
                     .param("day", businessDate)
@@ -790,6 +792,338 @@ public class JdbcReportingStore {
                     :newCustomers)
                 """).params(params).update();
     }
+
+    /**
+     * T11 / ADR 0125: one business date's internal deliveries, straight off
+     * {@code fulfillment.courier_assignment_earnings} — the fact {@link
+     * uz.horecaos.platform.courier.application.DeliveryAccrualOrderCompletionTrigger}
+     * now writes on every real delivery. Joined to {@code
+     * fulfillment.assignment_attempts} for {@code accepted_at}, which the
+     * earning row itself does not carry (ADR 0042 never needed it).
+     *
+     * <p>Read by {@code business_date} — already computed once, correctly, by
+     * {@code CourierAccrualService} at the moment of accrual — rather than by
+     * an instant range, the same choice every other {@code readSource*} here
+     * makes over {@code fact_order}'s own snapshotted date.
+     */
+    public List<SourceDelivery> readSourceDeliveries(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT earning.id AS earning_id, earning.courier_id, earning.location_id,
+                       earning.shipment_id, earning.assignment_attempt_id, earning.distance_meters,
+                       earning.distance_source, earning.on_time_outcome, earning.delivered_at,
+                       attempt.accepted_at
+                  FROM fulfillment.courier_assignment_earnings earning
+                  JOIN fulfillment.assignment_attempts attempt
+                    ON attempt.tenant_id = earning.tenant_id AND attempt.id = earning.assignment_attempt_id
+                 WHERE earning.tenant_id = :tenantId AND earning.business_date = :businessDate
+                """)
+                .param("tenantId", tenantId)
+                .param("businessDate", businessDate)
+                .query((ResultSet row, int number) -> new SourceDelivery(
+                        Objects.requireNonNull(row.getObject("earning_id", UUID.class)),
+                        Objects.requireNonNull(row.getObject("courier_id", UUID.class)),
+                        Objects.requireNonNull(row.getObject("location_id", UUID.class)),
+                        Objects.requireNonNull(row.getObject("shipment_id", UUID.class)),
+                        Objects.requireNonNull(row.getObject("assignment_attempt_id", UUID.class)),
+                        row.getInt("distance_meters"),
+                        Objects.requireNonNull(row.getString("distance_source")),
+                        Objects.requireNonNull(row.getString("on_time_outcome")),
+                        requireInstant(row, "accepted_at"),
+                        requireInstant(row, "delivered_at")))
+                .list();
+    }
+
+    /** One row {@link #readSourceDeliveries} produced — the source for {@code ReportingFacts.DeliveryFact}. */
+    public record SourceDelivery(
+            UUID earningId,
+            UUID courierId,
+            UUID locationId,
+            UUID shipmentId,
+            UUID assignmentAttemptId,
+            int distanceMeters,
+            String distanceSource,
+            String onTimeOutcome,
+            Instant acceptedAt,
+            Instant deliveredAt) {}
+
+    public void insertDeliveryFact(ReportingFacts.DeliveryFact fact) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", fact.tenantId());
+        params.put("earningId", fact.courierAssignmentEarningId());
+        params.put("businessDate", fact.businessDate());
+        params.put("boundaryVersion", fact.boundaryVersion());
+        params.put("calculationVersion", fact.metricCalculationVersion());
+        params.put("courierId", fact.courierId());
+        params.put("locationId", fact.locationId());
+        params.put("shipmentId", fact.shipmentId());
+        params.put("assignmentAttemptId", fact.assignmentAttemptId());
+        params.put("distanceMeters", fact.distanceMeters());
+        params.put("distanceSource", fact.distanceSource());
+        params.put("onTimeOutcome", fact.onTimeOutcome());
+        params.put("acceptedAt", utc(fact.acceptedAt()));
+        params.put("deliveredAt", utc(fact.deliveredAt()));
+        params.put("transitSeconds", fact.transitSeconds());
+
+        jdbc.sql("""
+                INSERT INTO reporting.fact_delivery (
+                    tenant_id, courier_assignment_earning_id, business_date, boundary_version,
+                    metric_calculation_version, courier_id, location_id, shipment_id,
+                    assignment_attempt_id, distance_meters, distance_source, on_time_outcome,
+                    accepted_at, delivered_at, transit_seconds)
+                VALUES (
+                    :tenantId, :earningId, :businessDate, :boundaryVersion, :calculationVersion,
+                    :courierId, :locationId, :shipmentId, :assignmentAttemptId, :distanceMeters,
+                    :distanceSource, :onTimeOutcome, :acceptedAt, :deliveredAt, :transitSeconds)
+                """).params(params).update();
+    }
+
+    /**
+     * T11: the courier leaderboard (7.4) — one row per courier over a date
+     * range, straight off {@code reporting.fact_delivery}. Never a courier's
+     * name: the caller resolves display through P19's reveal, keyed on
+     * {@code courierId}.
+     */
+    public List<CourierLeaderboardRow> readCourierLeaderboard(UUID tenantId, LocalDate from, LocalDate to) {
+        return jdbc.sql("""
+                SELECT courier_id,
+                       count(*)::integer AS delivery_count,
+                       min(distance_meters)::integer AS min_distance_meters,
+                       max(distance_meters)::integer AS max_distance_meters,
+                       avg(distance_meters) AS avg_distance_meters,
+                       sum(distance_meters)::bigint AS total_distance_meters,
+                       sum(transit_seconds)::bigint AS total_transit_seconds,
+                       avg(transit_seconds) AS avg_transit_seconds,
+                       count(*) FILTER (WHERE on_time_outcome = 'ON_TIME')::integer AS on_time_count,
+                       count(*) FILTER (WHERE on_time_outcome = 'LATE')::integer AS late_count
+                  FROM reporting.fact_delivery
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                 GROUP BY courier_id
+                 ORDER BY total_distance_meters DESC
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .query((ResultSet row, int number) -> new CourierLeaderboardRow(
+                        Objects.requireNonNull(row.getObject("courier_id", UUID.class)),
+                        row.getInt("delivery_count"),
+                        row.getInt("min_distance_meters"),
+                        row.getInt("max_distance_meters"),
+                        row.getDouble("avg_distance_meters"),
+                        row.getLong("total_distance_meters"),
+                        row.getLong("total_transit_seconds"),
+                        row.getDouble("avg_transit_seconds"),
+                        row.getInt("on_time_count"),
+                        row.getInt("late_count")))
+                .list();
+    }
+
+    /** One courier's totals across a range — see {@link #readCourierLeaderboard}. */
+    public record CourierLeaderboardRow(
+            UUID courierId,
+            int deliveryCount,
+            int minDistanceMeters,
+            int maxDistanceMeters,
+            double avgDistanceMeters,
+            long totalDistanceMeters,
+            long totalTransitSeconds,
+            double avgTransitSeconds,
+            int onTimeCount,
+            int lateCount) {}
+
+    /**
+     * T11 (7.4a): the {@code COURIER} scope of {@code agg_sla_bucket_day},
+     * narrowed the way {@link #readSlaBuckets} deliberately is not — that
+     * method reads every {@code scope_kind} in range for the {@code LOCATION}
+     * caller that has owned it since P39, and adding a {@code scope_kind}
+     * filter there would change what it returns for every existing caller.
+     */
+    public List<SlaBucketAggregate> readCourierSlaBuckets(UUID tenantId, LocalDate from, LocalDate to) {
+        return jdbc.sql("""
+                SELECT tenant_id, business_date, scope_kind, scope_id, bucket_set_version,
+                       bucket_code, order_count, share_basis_points
+                  FROM reporting.agg_sla_bucket_day
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND scope_kind = 'COURIER'
+                 ORDER BY business_date, scope_id, bucket_code
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .query((ResultSet row, int number) -> new SlaBucketAggregate(
+                        Objects.requireNonNull(row.getObject("tenant_id", UUID.class)),
+                        Objects.requireNonNull(row.getObject("business_date", LocalDate.class)),
+                        Objects.requireNonNull(row.getString("scope_kind")),
+                        Objects.requireNonNull(row.getObject("scope_id", UUID.class)),
+                        row.getInt("bucket_set_version"),
+                        Objects.requireNonNull(row.getString("bucket_code")),
+                        row.getInt("order_count"),
+                        row.getInt("share_basis_points")))
+                .list();
+    }
+
+    /**
+     * T11 (7.4b, ADR 0125): the delivery-sum-by-tariff audit.
+     * {@code fulfillment.delivery_fee_resolutions} already carries tariff,
+     * tariff version, zone, band and final fee (ADR 0037); this joins it
+     * through {@code quote_id -> orders.pricing_quote_id -> shipments} for
+     * the one column none of the three tables has on its own: which courier
+     * actually worked the delivery. {@code reporting} reads across {@code
+     * fulfillment} and {@code ordering} here the same way {@link
+     * #readSourceOrders} already does for the close job — a live,
+     * cross-schema read for a report, never a decision.
+     *
+     * <p>Grouped by tariff (not courier): the audit question is "did this
+     * tariff charge what it should have", and {@code courierBreakdown}
+     * inside each row answers "which couriers this tariff was actually
+     * billed against" without a second query.
+     */
+    public List<TariffAuditRow> readTariffAudit(UUID tenantId, Instant from, Instant to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", utc(from));
+        params.put("to", utc(to));
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND resolution.location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT resolution.tariff_id, resolution.tariff_version, resolution.zone_id,
+                       resolution.band_sequence, shipment.courier_id,
+                       count(*)::integer AS resolution_count,
+                       sum(resolution.final_fee_minor)::bigint AS total_final_fee_minor,
+                       resolution.currency
+                  FROM fulfillment.delivery_fee_resolutions resolution
+                  JOIN ordering.orders orders
+                    ON orders.tenant_id = resolution.tenant_id AND orders.pricing_quote_id = resolution.quote_id
+                  JOIN fulfillment.shipments shipment
+                    ON shipment.tenant_id = orders.tenant_id AND shipment.order_id = orders.id
+                 WHERE resolution.tenant_id = :tenantId AND resolution.tariff_id IS NOT NULL
+                   AND resolution.created_at BETWEEN :from AND :to
+                """ + locationFilter + """
+                 GROUP BY resolution.tariff_id, resolution.tariff_version, resolution.zone_id,
+                          resolution.band_sequence, shipment.courier_id, resolution.currency
+                 ORDER BY resolution.tariff_id, resolution.tariff_version, shipment.courier_id
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new TariffAuditRow(
+                        Objects.requireNonNull(row.getObject("tariff_id", UUID.class)),
+                        row.getInt("tariff_version"),
+                        row.getObject("zone_id", UUID.class),
+                        (Integer) row.getObject("band_sequence"),
+                        row.getObject("courier_id", UUID.class),
+                        row.getInt("resolution_count"),
+                        row.getLong("total_final_fee_minor"),
+                        Objects.requireNonNull(row.getString("currency"))))
+                .list();
+    }
+
+    /** One (tariff, courier) group over the audit range — see {@link #readTariffAudit}. */
+    public record TariffAuditRow(
+            UUID tariffId,
+            int tariffVersion,
+            @Nullable UUID zoneId,
+            @Nullable Integer bandSequence,
+            @Nullable UUID courierId,
+            int resolutionCount,
+            long totalFinalFeeMinor,
+            String currency) {}
+
+    /**
+     * T11 (7.4c, ADR 0125): per-order «order amount vs charged delivery vs
+     * provider billed vs variance vs reconciliation status» — the one report
+     * in the courier family that finds money. Every {@code PARTNER}-sourced
+     * delivered shipment in range, left-joined against its {@code DELIVERY}
+     * invoice line: a shipment with no line at all reads {@code UNBILLED}
+     * (ADR 0125 / {@code courier.domain.MatchStatus}'s own doc — "HorecaOS
+     * has a shipment the partner never billed" — computed here, at read
+     * time, rather than written onto a line that by definition does not
+     * exist), never folded into {@code PENDING} the way a bare {@code
+     * COALESCE} against the enum's other unbilled-looking states would.
+     */
+    public List<ExternalDeliveryCostRow> readExternalDeliveryCost(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND shipment.location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT orders.id AS order_id, orders.public_order_number, orders.total_minor,
+                       orders.currency, orders.fee_minor AS charged_delivery_minor,
+                       shipment.id AS shipment_id, shipment.provider_type, shipment.location_id,
+                       cost.amount_minor AS provider_estimated_minor,
+                       line.id AS invoice_line_id, line.amount_minor AS provider_billed_minor,
+                       line.match_status, line.variance_minor
+                  FROM fulfillment.shipments shipment
+                  JOIN ordering.orders orders
+                    ON orders.tenant_id = shipment.tenant_id AND orders.id = shipment.order_id
+                  LEFT JOIN LATERAL (
+                       SELECT amount_minor
+                         FROM fulfillment.delivery_cost_lines
+                        WHERE tenant_id = shipment.tenant_id AND shipment_id = shipment.id
+                          AND cost_path = 'PARTNER' AND cost_basis = 'ACCRUED'
+                        ORDER BY recognised_at DESC
+                        LIMIT 1) cost ON true
+                  LEFT JOIN LATERAL (
+                       SELECT id, amount_minor, match_status, variance_minor
+                         FROM fulfillment.partner_delivery_invoice_lines
+                        WHERE tenant_id = shipment.tenant_id AND shipment_id = shipment.id
+                          AND charge_type = 'DELIVERY'
+                        ORDER BY matched_at DESC NULLS LAST
+                        LIMIT 1) line ON true
+                 WHERE shipment.tenant_id = :tenantId AND shipment.source_type = 'PARTNER'
+                   AND shipment.status = 'DELIVERED'
+                   AND shipment.delivered_at::date BETWEEN :from AND :to
+                """ + locationFilter + """
+                 ORDER BY shipment.delivered_at DESC
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new ExternalDeliveryCostRow(
+                        Objects.requireNonNull(row.getObject("order_id", UUID.class)),
+                        Objects.requireNonNull(row.getString("public_order_number")),
+                        row.getLong("total_minor"),
+                        Objects.requireNonNull(row.getString("currency")),
+                        row.getLong("charged_delivery_minor"),
+                        Objects.requireNonNull(row.getObject("shipment_id", UUID.class)),
+                        row.getString("provider_type"),
+                        (Long) row.getObject("provider_estimated_minor"),
+                        row.getObject("invoice_line_id", UUID.class),
+                        (Long) row.getObject("provider_billed_minor"),
+                        row.getString("match_status"),
+                        (Long) row.getObject("variance_minor")))
+                .list();
+    }
+
+    /**
+     * One order's external-delivery cost cut — see {@link
+     * #readExternalDeliveryCost}. {@code matchStatus} is {@code null} exactly
+     * when {@code invoiceLineId} is: no invoice line exists yet for this
+     * shipment, which the caller reads as {@code UNBILLED} (never {@code
+     * PENDING} — {@code PENDING} means a line was imported and not yet
+     * matched; this shipment has no line to be pending).
+     */
+    public record ExternalDeliveryCostRow(
+            UUID orderId,
+            String publicOrderNumber,
+            long orderTotalMinor,
+            String currency,
+            long chargedDeliveryMinor,
+            UUID shipmentId,
+            @Nullable String providerType,
+            @Nullable Long providerEstimatedMinor,
+            @Nullable UUID invoiceLineId,
+            @Nullable Long providerBilledMinor,
+            @Nullable String matchStatus,
+            @Nullable Long varianceMinor) {}
 
     public void insertSlaBucket(SlaBucketAggregate row) {
         Map<String, Object> params = new HashMap<>();

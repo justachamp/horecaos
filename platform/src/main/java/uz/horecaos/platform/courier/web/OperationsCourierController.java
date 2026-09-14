@@ -1072,6 +1072,23 @@ public class OperationsCourierController {
                 partnerInvoices.match(tenantId, invoiceId, body.shipmentsByProviderRef(), actor(), body.reason()));
     }
 
+    @PostMapping("/shipments/{shipmentId}/external-delivery-cost/reconcile")
+    @RequiresCapability(value = Capability.PARTNER_INVOICE_MANAGE, mutating = true)
+    @Operation(
+            summary = "T11 7.4c: the per-order external-delivery-cost report's per-line reconcile action",
+            description = "Marks the shipment's DELIVERY-charge invoice line MATCHED when one exists. "
+                    + "A shipment with no invoice line at all is genuinely UNBILLED -- nothing to "
+                    + "reconcile against yet -- and the acknowledgement is recorded on the audit trail "
+                    + "alone; reconciled is false on that response.")
+    public ResponseEntity<ReconcileShipmentResponse> reconcileExternalDeliveryCost(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID shipmentId,
+            @Valid @RequestBody ReconcileShipmentRequest body) {
+
+        boolean reconciled = partnerInvoices.reconcileShipment(tenantId, shipmentId, actor(), body.reason());
+        return ResponseEntity.ok(new ReconcileShipmentResponse(reconciled));
+    }
+
     private static SettlementPeriodStatus parseSettlementStatus(String status) {
         try {
             return SettlementPeriodStatus.valueOf(status);
@@ -1505,6 +1522,10 @@ public class OperationsCourierController {
     record MatchRequest(
             @NotNull Map<String, UUID> shipmentsByProviderRef,
             @NotBlank String reason) {}
+
+    record ReconcileShipmentRequest(@NotBlank String reason) {}
+
+    record ReconcileShipmentResponse(boolean reconciled) {}
 
     /**
      * One roster row on the wire. No name field exists here at all — not even
