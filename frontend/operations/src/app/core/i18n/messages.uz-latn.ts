@@ -965,10 +965,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.tab.templates': 'Shablonlar',
   'settings.notifications.tab.routing': 'Yoʻnaltirish',
   'settings.notifications.automation.title': 'Avtomatlashtirish',
-  'settings.notifications.field.paymentLinkAutoSend': 'Toʻlov havolasini mijozga avtomatik yuborish',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Toʻlov havolasini mijozga avtomatik yuborish',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Hali ishlamaydi: hech qanday jarayon bu tugmachani hali oʻqimaydi, shuning uchun yoqish faqat tanlovni saqlaydi.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Agregator smenasi ochilishi/yopilishi haqida xabar berish',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Agregator smenasi ochilishi/yopilishi haqida xabar berish',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Hali ishlamaydi: platformada bu xabarni ishga tushiradigan agregator-smena hodisasi hali yoʻq.',
   'settings.notifications.create.action': 'Yangi shablon',
@@ -1014,7 +1016,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.editor.subject': 'Mavzu',
   'settings.notifications.editor.body': 'Matn',
   'settings.notifications.editor.variables': 'Oʻzgaruvchi qoʻshish',
-  'settings.notifications.editor.variables.empty': 'Bu bildirishnoma sinfi uchun oʻzgaruvchilar taklif etilmagan.',
+  'settings.notifications.editor.variables.empty':
+    'Bu bildirishnoma sinfi uchun oʻzgaruvchilar taklif etilmagan.',
   'settings.notifications.editor.preview': 'Mijoz qanday koʻradi',
   'settings.notifications.editor.save': 'Qoralamani saqlash',
   'settings.notifications.editor.saving': 'Saqlanmoqda…',
@@ -1033,9 +1036,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.testSend.result.ACCEPTED': 'Provayder qabul qildi.',
   'settings.notifications.testSend.result.REJECTED': 'Provayder rad etdi.',
   'settings.notifications.testSend.result.RETRYABLE': 'Uzatish xatosi — qayta urinib koʻring.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Noaniq — provayder allaqachon yuborgan boʻlishi mumkin.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Noaniq — provayder allaqachon yuborgan boʻlishi mumkin.',
   'settings.notifications.activate.confirm.title': 'Bu versiya faollashtirilsinmi?',
-  'settings.notifications.activate.confirm.body': 'Bu shablon boʻyicha har bir xabar shu matndan foydalanadi.',
+  'settings.notifications.activate.confirm.body':
+    'Bu shablon boʻyicha har bir xabar shu matndan foydalanadi.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'Bu versiya SMS shlyuzida hali «{state}» holatida. Bu oʻzgarmaguncha faollashtirish uni yuborilishiga olib kelmaydi.',
   'settings.notifications.activate.confirm.confirm': 'Faollashtirish',
@@ -1056,9 +1061,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.routing.action.editTopic': 'Mavzuni oʻzgartirish',
   'settings.notifications.routing.action.unbind': 'Uzish',
   'settings.notifications.routing.unbind.confirm.title': 'Bu chat uzilsinmi?',
-  'settings.notifications.routing.unbind.confirm.body': 'U darhol barcha hodisa sinflarini olishni toʻxtatadi.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'U darhol barcha hodisa sinflarini olishni toʻxtatadi.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Uzish',
-  'settings.notifications.routing.topic.prompt': 'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
+  'settings.notifications.routing.topic.prompt':
+    'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
   'settings.notifications.routing.topic.save': 'Saqlash',
 
   // 10.10 Maʻlumotnoma maʻlumotlari
@@ -1758,7 +1765,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.menus.filter.all': 'Barchasi',
   'catalog.menus.search.placeholder': 'Nomi yoki SKU boʻyicha qidirish',
   'catalog.menus.selectAll': 'Barcha qatorlarni tanlash',
-  'catalog.menus.selectionCapped': 'Faqat birinchi {cap} tasi — qo\'llang, so\'ng qolganlarini tanlang',
+  'catalog.menus.selectionCapped':
+    "Faqat birinchi {cap} tasi — qo'llang, so'ng qolganlarini tanlang",
   'catalog.menus.column.offering': 'Menyudagi holati',
   'catalog.menus.column.fulfillment': 'Buyurtma turlari',
   'catalog.menus.fulfillment.DELIVERY': 'Yetk',
@@ -2149,7 +2157,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.dispatch.hint':
     'Buyurtmani kuryer ustiga tashlab tayinlang. Uni orqaga, "Tayinlanmagan"ga tashlab, tayinlashni bekor qiling.',
   'delivery.dispatch.column.unassigned': 'Tayinlanmagan',
-  'delivery.dispatch.column.ineligible': 'Bu yerga tashlab bo\'lmaydi — {reason}',
+  'delivery.dispatch.column.ineligible': "Bu yerga tashlab bo'lmaydi — {reason}",
   'delivery.dispatch.action.unassign': 'Tayinlashni bekor qilish',
   'delivery.dispatch.status.PLANNED': 'Rejalashtirilgan',
   'delivery.dispatch.status.WAITING_TO_SOURCE': 'Kuryer izlanmoqda',
@@ -3147,6 +3155,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.campaigns.create.recipientCap': 'Qabul qiluvchilar chegarasi',
   'marketing.campaigns.create.costCeiling': 'Xarajat chegarasi (kichik birliklarda)',
   'marketing.campaigns.create.currency': 'Valyuta',
+  'marketing.campaigns.create.channel.unwiredSuffix': ' (hali ulanmagan)',
+  'marketing.campaigns.create.channel.unwiredHint':
+    'Bu kanal uchun hali yetkazib berish yoʻli yoʻq — kampaniyani unda ishga tushirib boʻlmaydi.',
+  'marketing.campaigns.create.scheduledAt': 'Rejalashtirilgan yuborish (ixtiyoriy)',
+  'marketing.campaigns.create.scheduledAt.hint':
+    'Darhol, operator buyrugʻi bilan ishga tushirish uchun boʻsh qoldiring.',
   'marketing.campaigns.create.submit': 'Qoralamani saqlash',
 
   'marketing.channel.SMS': 'SMS',
@@ -3185,6 +3199,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.campaign.field.costCeiling': 'Xarajat chegarasi',
   'marketing.campaign.field.spent': 'Sarflandi',
   'marketing.campaign.field.reserved': 'Zaxiraga olindi (summa · qabul qiluvchilar)',
+  'marketing.campaign.field.scheduledAt': 'Quyidagi vaqtga rejalashtirilgan',
+  'marketing.campaign.unwired.warning':
+    '{channel} kanali uchun hali yetkazib berish yoʻli yoʻq. Bu paydo boʻlmaguncha kampaniyani ishga tushirish rad etiladi.',
   'marketing.campaign.paused.blockedCount':
     'Bloklash himoyasi tomonidan toʻxtatildi: hozircha {count} qabul qiluvchi ushbu yuborishni bloklagan.',
   'marketing.campaign.resume.suppressedCost':
@@ -3231,6 +3248,13 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.audiences.create.removePredicate': 'Olib tashlash',
   'marketing.audiences.create.submit': 'Auditoriyani yaratish',
 
+  'marketing.audiences.detail.view': 'Koʻrish',
+  'marketing.audiences.detail.title': 'Auditoriya shartlari',
+  'marketing.audiences.detail.version': 'Ta’rif versiyasi {version}',
+  'marketing.audiences.detail.noPredicates': 'Shartlar yoʻq',
+  'marketing.audiences.detail.edit': 'Shartlarni tahrirlash',
+  'marketing.audiences.detail.save': 'Shartlarni saqlash',
+
   'marketing.predicate.type.RECENCY_DAYS': 'Oxirgi buyurtmadan necha kun oʻtdi',
   'marketing.predicate.type.ORDER_COUNT': 'Buyurtmalar soni',
   'marketing.predicate.type.COMPLETED_ORDER_COUNT': 'Bajarilgan buyurtmalar soni',
@@ -3263,6 +3287,72 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.suppressions.lift.title': 'Toʻxtatishni olib tashlash',
   'marketing.suppressions.lift.reason': 'Sabab',
   'marketing.suppressions.lift.submit': 'Olib tashlash',
+  'marketing.suppressions.record.action': 'Toʻxtatish qoʻshish',
+  'marketing.suppressions.record.title': 'Toʻxtatish qoʻshish',
+  'marketing.suppressions.record.customerAccountId': 'Mijoz hisobi ID',
+  'marketing.suppressions.record.channel': 'Kanal',
+  'marketing.suppressions.record.channel.everyChannel': 'Har qanday kanal',
+  'marketing.suppressions.record.reason': 'Sabab',
+  'marketing.suppressions.record.statedReason': 'Izoh (ixtiyoriy)',
+  'marketing.suppressions.record.submit': 'Qoʻshish',
+  'marketing.suppressions.reason.UNSUBSCRIBE': 'Obunani bekor qildi',
+  'marketing.suppressions.reason.HARD_BOUNCE': 'Qattiq yetkazib berilmadi',
+  'marketing.suppressions.reason.INVALID_NUMBER': 'Notoʻgʻri raqam',
+  'marketing.suppressions.reason.COMPLAINT': 'Shikoyat',
+  'marketing.suppressions.reason.OPERATOR_BLOCK': 'Operator tomonidan bloklangan',
+
+  // ------------------------------------------------------------- courier broadcasts 6.4b (T18)
+  'marketing.courierBroadcasts.title': 'Kuryerlarga xabarnomalar',
+  'marketing.courierBroadcasts.intro':
+    'Dispetcherning kuryerlarga oʻz operativ SMS xabarnomasi — smena almashinuvi, ob-havo, yoʻl yopilishi. Hech qachon mijoz kampaniyasi emas.',
+  'marketing.courierBroadcasts.loading': 'Yuklanmoqda',
+  'marketing.courierBroadcasts.denied': 'Ushbu brendning kuryer xabarnomalariga kirish yoʻq',
+  'marketing.courierBroadcasts.empty': 'Hali xabarnoma yoʻq',
+  'marketing.courierBroadcasts.create.action': 'Yangi xabarnoma',
+  'marketing.courierBroadcasts.create.title': 'Kuryer xabarnomasi qoralamasi',
+  'marketing.courierBroadcasts.create.targetKind': 'Qabul qiluvchilar',
+  'marketing.courierBroadcasts.create.targetKind.ALL_ACTIVE': 'Barcha faol kuryerlar',
+  'marketing.courierBroadcasts.create.targetKind.GROUP': 'Bitta kuryer guruhi',
+  'marketing.courierBroadcasts.create.targetGroupId': 'Guruh ID',
+  'marketing.courierBroadcasts.create.message': 'Xabar',
+  'marketing.courierBroadcasts.create.submit': 'Qoralamani saqlash',
+  'marketing.courierBroadcasts.column.target': 'Qabul qiluvchilar',
+  'marketing.courierBroadcasts.column.message': 'Xabar',
+  'marketing.courierBroadcasts.column.status': 'Holat',
+  'marketing.courierBroadcasts.column.recipients': 'Qabul qiluvchilar',
+  'marketing.courierBroadcasts.status.DRAFT': 'Qoralama',
+  'marketing.courierBroadcasts.status.SENT': 'Yuborildi',
+  'marketing.courierBroadcasts.status.FAILED': 'Muvaffaqiyatsiz',
+  'marketing.courierBroadcasts.action.send': 'Yuborish',
+  'marketing.courierBroadcasts.refusalReason': 'Rad etildi: {reason}',
+
+  // --------------------------------------------------------- attribution links 6.6a (ADR 0044, T18)
+  'marketing.attributionLinks.title': 'Jalb qilish havolalari',
+  'marketing.attributionLinks.intro':
+    'Kampaniya yoki bloger uchun kuzatiladigan ?ref= sayt havolasi yoki Telegram chuqur havolasi.',
+  'marketing.attributionLinks.loading': 'Yuklanmoqda',
+  'marketing.attributionLinks.denied': 'Ushbu brendning jalb qilish havolalariga kirish yoʻq',
+  'marketing.attributionLinks.empty': 'Hali havola yaratilmagan',
+  'marketing.attributionLinks.create.action': 'Havola yaratish',
+  'marketing.attributionLinks.create.title': 'Jalb qilish havolasini yaratish',
+  'marketing.attributionLinks.create.label': 'Nomi',
+  'marketing.attributionLinks.create.ownerNote': 'Izoh (ixtiyoriy)',
+  'marketing.attributionLinks.create.channel': 'Kanal',
+  'marketing.attributionLinks.create.destinationType': 'Manzil',
+  'marketing.attributionLinks.create.destinationId': 'Kampaniya ID',
+  'marketing.attributionLinks.create.submit': 'Havola yaratish',
+  'marketing.attributionLinks.column.label': 'Nomi',
+  'marketing.attributionLinks.column.link': 'Havola',
+  'marketing.attributionLinks.column.clicks': 'Bosishlar',
+  'marketing.attributionLinks.column.status': 'Holat',
+  'marketing.attributionLinks.action.archive': 'Arxivlash',
+  'marketing.attributionLinks.channel.WEB': 'Sayt',
+  'marketing.attributionLinks.channel.TELEGRAM_BOT': 'Telegram bot',
+  'marketing.attributionLinks.channel.TELEGRAM_MINI_APP': 'Telegram mini ilovasi',
+  'marketing.attributionLinks.channel.MOBILE_APP': 'Mobil ilova',
+  'marketing.attributionLinks.destinationType.CAMPAIGN': 'Kampaniya',
+  'marketing.attributionLinks.destinationType.STOREFRONT_HOME': 'Doʻkon bosh sahifasi',
+  'marketing.attributionLinks.destinationType.INFLUENCER': 'Bloger',
 
   // ------------------------------------------------------- promo codes 6.2 (ADR 0072, wave 60)
   'marketing.promoCodes.title': 'Promokodlar',

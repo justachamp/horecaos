@@ -955,10 +955,12 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.tab.templates': 'Шаблоны',
   'settings.notifications.tab.routing': 'Маршрутизация',
   'settings.notifications.automation.title': 'Автоматизация',
-  'settings.notifications.field.paymentLinkAutoSend': 'Отправлять клиенту ссылку на оплату автоматически',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Отправлять клиенту ссылку на оплату автоматически',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Пока не действует: ни один сценарий ещё не читает этот переключатель, поэтому включение только сохраняет выбор.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Уведомлять об открытии/закрытии смены агрегатора',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Уведомлять об открытии/закрытии смены агрегатора',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Пока не действует: в платформе ещё нет самого события смены агрегатора, которое запускало бы это уведомление.',
   'settings.notifications.create.action': 'Новый шаблон',
@@ -1004,7 +1006,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.editor.subject': 'Тема',
   'settings.notifications.editor.body': 'Текст',
   'settings.notifications.editor.variables': 'Вставить переменную',
-  'settings.notifications.editor.variables.empty': 'Для этого класса уведомлений переменные не предложены.',
+  'settings.notifications.editor.variables.empty':
+    'Для этого класса уведомлений переменные не предложены.',
   'settings.notifications.editor.preview': 'Как увидит клиент',
   'settings.notifications.editor.save': 'Сохранить черновик',
   'settings.notifications.editor.saving': 'Сохранение…',
@@ -1023,15 +1026,18 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.testSend.result.ACCEPTED': 'Принято провайдером.',
   'settings.notifications.testSend.result.REJECTED': 'Отклонено провайдером.',
   'settings.notifications.testSend.result.RETRYABLE': 'Ошибка передачи — попробуйте ещё раз.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Неопределённо — провайдер, возможно, уже отправил.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Неопределённо — провайдер, возможно, уже отправил.',
   'settings.notifications.activate.confirm.title': 'Активировать эту версию?',
-  'settings.notifications.activate.confirm.body': 'Каждое сообщение по этому шаблону будет использовать этот текст.',
+  'settings.notifications.activate.confirm.body':
+    'Каждое сообщение по этому шаблону будет использовать этот текст.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'Эта версия пока «{state}» у SMS-шлюза. Активация не заставит её отправляться, пока это не изменится.',
   'settings.notifications.activate.confirm.confirm': 'Активировать',
   'settings.notifications.routing.lead':
     'Какие из привязанных Telegram-чатов этого бренда слышат какие события, и их форум-тема.',
-  'settings.notifications.routing.empty': 'Ни один чат ещё не привязан. Отправьте «/link <код>» в Telegram-группе, чтобы привязать её.',
+  'settings.notifications.routing.empty':
+    'Ни один чат ещё не привязан. Отправьте «/link <код>» в Telegram-группе, чтобы привязать её.',
   'settings.notifications.routing.column.chat': 'Чат',
   'settings.notifications.routing.column.topic': 'Тема',
   'settings.notifications.routing.column.status': 'Статус',
@@ -1045,9 +1051,11 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.routing.action.editTopic': 'Сменить тему',
   'settings.notifications.routing.action.unbind': 'Отвязать',
   'settings.notifications.routing.unbind.confirm.title': 'Отвязать этот чат?',
-  'settings.notifications.routing.unbind.confirm.body': 'Он сразу перестанет получать любые классы событий.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'Он сразу перестанет получать любые классы событий.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Отвязать',
-  'settings.notifications.routing.topic.prompt': 'ID темы форума — оставьте пустым для обычного чата',
+  'settings.notifications.routing.topic.prompt':
+    'ID темы форума — оставьте пустым для обычного чата',
   'settings.notifications.routing.topic.save': 'Сохранить',
 
   // 10.10 Справочные данные
@@ -3129,6 +3137,12 @@ export const messagesRu: MessageCatalogue = {
   'marketing.campaigns.create.recipientCap': 'Лимит получателей',
   'marketing.campaigns.create.costCeiling': 'Потолок расходов (в минимальных единицах)',
   'marketing.campaigns.create.currency': 'Валюта',
+  'marketing.campaigns.create.channel.unwiredSuffix': ' (ещё не подключён)',
+  'marketing.campaigns.create.channel.unwiredHint':
+    'Для этого канала пока нет пути доставки — запустить кампанию на нём нельзя.',
+  'marketing.campaigns.create.scheduledAt': 'Отложенная отправка (необязательно)',
+  'marketing.campaigns.create.scheduledAt.hint':
+    'Оставьте пустым, чтобы запустить сразу, по команде оператора.',
   'marketing.campaigns.create.submit': 'Сохранить черновик',
 
   'marketing.channel.SMS': 'SMS',
@@ -3167,6 +3181,9 @@ export const messagesRu: MessageCatalogue = {
   'marketing.campaign.field.costCeiling': 'Потолок расходов',
   'marketing.campaign.field.spent': 'Потрачено',
   'marketing.campaign.field.reserved': 'Зарезервировано (сумма · получатели)',
+  'marketing.campaign.field.scheduledAt': 'Запланирована на',
+  'marketing.campaign.unwired.warning':
+    'Для канала {channel} пока нет пути доставки. Запуск этой кампании будет отклонён, пока он не появится.',
   'marketing.campaign.paused.blockedCount':
     'Остановлена защитой от блокировок: получателей, заблокировавших рассылку — {count}.',
   'marketing.campaign.resume.suppressedCost':
@@ -3212,6 +3229,13 @@ export const messagesRu: MessageCatalogue = {
   'marketing.audiences.create.removePredicate': 'Удалить',
   'marketing.audiences.create.submit': 'Создать аудиторию',
 
+  'marketing.audiences.detail.view': 'Просмотр',
+  'marketing.audiences.detail.title': 'Условия аудитории',
+  'marketing.audiences.detail.version': 'Версия определения {version}',
+  'marketing.audiences.detail.noPredicates': 'Нет условий',
+  'marketing.audiences.detail.edit': 'Изменить условия',
+  'marketing.audiences.detail.save': 'Сохранить условия',
+
   'marketing.predicate.type.RECENCY_DAYS': 'Дней с последнего заказа',
   'marketing.predicate.type.ORDER_COUNT': 'Количество заказов',
   'marketing.predicate.type.COMPLETED_ORDER_COUNT': 'Количество завершённых заказов',
@@ -3244,6 +3268,72 @@ export const messagesRu: MessageCatalogue = {
   'marketing.suppressions.lift.title': 'Снять подавление',
   'marketing.suppressions.lift.reason': 'Причина',
   'marketing.suppressions.lift.submit': 'Снять',
+  'marketing.suppressions.record.action': 'Добавить подавление',
+  'marketing.suppressions.record.title': 'Добавить подавление',
+  'marketing.suppressions.record.customerAccountId': 'ID аккаунта клиента',
+  'marketing.suppressions.record.channel': 'Канал',
+  'marketing.suppressions.record.channel.everyChannel': 'Любой канал',
+  'marketing.suppressions.record.reason': 'Причина',
+  'marketing.suppressions.record.statedReason': 'Пояснение (необязательно)',
+  'marketing.suppressions.record.submit': 'Добавить',
+  'marketing.suppressions.reason.UNSUBSCRIBE': 'Отписался',
+  'marketing.suppressions.reason.HARD_BOUNCE': 'Жёсткий отказ доставки',
+  'marketing.suppressions.reason.INVALID_NUMBER': 'Неверный номер',
+  'marketing.suppressions.reason.COMPLAINT': 'Жалоба',
+  'marketing.suppressions.reason.OPERATOR_BLOCK': 'Заблокировано оператором',
+
+  // ------------------------------------------------------------- courier broadcasts 6.4b (T18)
+  'marketing.courierBroadcasts.title': 'Рассылки курьерам',
+  'marketing.courierBroadcasts.intro':
+    'Собственная оперативная SMS-рассылка диспетчера курьерам — смена смены, погодные условия, перекрытие маршрута. Никогда не клиентская кампания.',
+  'marketing.courierBroadcasts.loading': 'Загрузка',
+  'marketing.courierBroadcasts.denied': 'Нет доступа к рассылкам курьерам этого бренда',
+  'marketing.courierBroadcasts.empty': 'Рассылок пока нет',
+  'marketing.courierBroadcasts.create.action': 'Новая рассылка',
+  'marketing.courierBroadcasts.create.title': 'Черновик рассылки курьерам',
+  'marketing.courierBroadcasts.create.targetKind': 'Получатели',
+  'marketing.courierBroadcasts.create.targetKind.ALL_ACTIVE': 'Все активные курьеры',
+  'marketing.courierBroadcasts.create.targetKind.GROUP': 'Одна группа курьеров',
+  'marketing.courierBroadcasts.create.targetGroupId': 'ID группы',
+  'marketing.courierBroadcasts.create.message': 'Сообщение',
+  'marketing.courierBroadcasts.create.submit': 'Сохранить черновик',
+  'marketing.courierBroadcasts.column.target': 'Получатели',
+  'marketing.courierBroadcasts.column.message': 'Сообщение',
+  'marketing.courierBroadcasts.column.status': 'Статус',
+  'marketing.courierBroadcasts.column.recipients': 'Получателей',
+  'marketing.courierBroadcasts.status.DRAFT': 'Черновик',
+  'marketing.courierBroadcasts.status.SENT': 'Отправлена',
+  'marketing.courierBroadcasts.status.FAILED': 'Не удалась',
+  'marketing.courierBroadcasts.action.send': 'Отправить',
+  'marketing.courierBroadcasts.refusalReason': 'Отклонено: {reason}',
+
+  // --------------------------------------------------------- attribution links 6.6a (ADR 0044, T18)
+  'marketing.attributionLinks.title': 'Ссылки привлечения',
+  'marketing.attributionLinks.intro':
+    'Отслеживаемая ссылка сайта ?ref= или диплинк Telegram — для кампании или блогера.',
+  'marketing.attributionLinks.loading': 'Загрузка',
+  'marketing.attributionLinks.denied': 'Нет доступа к ссылкам привлечения этого бренда',
+  'marketing.attributionLinks.empty': 'Ссылок пока нет',
+  'marketing.attributionLinks.create.action': 'Создать ссылку',
+  'marketing.attributionLinks.create.title': 'Создать ссылку привлечения',
+  'marketing.attributionLinks.create.label': 'Название',
+  'marketing.attributionLinks.create.ownerNote': 'Заметка (необязательно)',
+  'marketing.attributionLinks.create.channel': 'Канал',
+  'marketing.attributionLinks.create.destinationType': 'Назначение',
+  'marketing.attributionLinks.create.destinationId': 'ID кампании',
+  'marketing.attributionLinks.create.submit': 'Создать ссылку',
+  'marketing.attributionLinks.column.label': 'Название',
+  'marketing.attributionLinks.column.link': 'Ссылка',
+  'marketing.attributionLinks.column.clicks': 'Переходов',
+  'marketing.attributionLinks.column.status': 'Статус',
+  'marketing.attributionLinks.action.archive': 'В архив',
+  'marketing.attributionLinks.channel.WEB': 'Сайт',
+  'marketing.attributionLinks.channel.TELEGRAM_BOT': 'Telegram-бот',
+  'marketing.attributionLinks.channel.TELEGRAM_MINI_APP': 'Мини-приложение Telegram',
+  'marketing.attributionLinks.channel.MOBILE_APP': 'Мобильное приложение',
+  'marketing.attributionLinks.destinationType.CAMPAIGN': 'Кампания',
+  'marketing.attributionLinks.destinationType.STOREFRONT_HOME': 'Главная страница витрины',
+  'marketing.attributionLinks.destinationType.INFLUENCER': 'Блогер',
 
   // ------------------------------------------------------- promo codes 6.2 (ADR 0072, wave 60)
   'marketing.promoCodes.title': 'Промокоды',

@@ -982,10 +982,12 @@ export const messagesEn = {
   'settings.notifications.tab.templates': 'Templates',
   'settings.notifications.tab.routing': 'Routing',
   'settings.notifications.automation.title': 'Automation',
-  'settings.notifications.field.paymentLinkAutoSend': 'Send the payment link to the customer automatically',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Send the payment link to the customer automatically',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Not yet enforced: no send trigger reads this switch yet, so turning it on records the choice without changing behaviour.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Notify on aggregator shift open/close',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Notify on aggregator shift open/close',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Not yet enforced: no aggregator-shift event exists in the platform yet to trigger this.',
   'settings.notifications.create.action': 'New template',
@@ -1031,7 +1033,8 @@ export const messagesEn = {
   'settings.notifications.editor.subject': 'Subject',
   'settings.notifications.editor.body': 'Text',
   'settings.notifications.editor.variables': 'Insert a variable',
-  'settings.notifications.editor.variables.empty': 'No merge variables are offered for this notification class.',
+  'settings.notifications.editor.variables.empty':
+    'No merge variables are offered for this notification class.',
   'settings.notifications.editor.preview': 'How the customer sees it',
   'settings.notifications.editor.save': 'Save draft',
   'settings.notifications.editor.saving': 'Saving…',
@@ -1050,15 +1053,18 @@ export const messagesEn = {
   'settings.notifications.testSend.result.ACCEPTED': 'Accepted by the provider.',
   'settings.notifications.testSend.result.REJECTED': 'Refused by the provider.',
   'settings.notifications.testSend.result.RETRYABLE': 'A transport error — try again.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Uncertain — the provider may already have sent it.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Uncertain — the provider may already have sent it.',
   'settings.notifications.activate.confirm.title': 'Activate this version?',
-  'settings.notifications.activate.confirm.body': 'Every message using this template will use this wording from now on.',
+  'settings.notifications.activate.confirm.body':
+    'Every message using this template will use this wording from now on.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'This version is still {state} with its SMS gateway. Activating it will not make it send until that changes.',
   'settings.notifications.activate.confirm.confirm': 'Activate',
   'settings.notifications.routing.lead':
     'Which of this brand’s bound Telegram chats hear about which events, and their forum topic.',
-  'settings.notifications.routing.empty': 'No chat is bound yet. Use "/link <code>" in a Telegram group to bind one.',
+  'settings.notifications.routing.empty':
+    'No chat is bound yet. Use "/link <code>" in a Telegram group to bind one.',
   'settings.notifications.routing.column.chat': 'Chat',
   'settings.notifications.routing.column.topic': 'Topic',
   'settings.notifications.routing.column.status': 'Status',
@@ -1072,7 +1078,8 @@ export const messagesEn = {
   'settings.notifications.routing.action.editTopic': 'Change topic',
   'settings.notifications.routing.action.unbind': 'Unbind',
   'settings.notifications.routing.unbind.confirm.title': 'Unbind this chat?',
-  'settings.notifications.routing.unbind.confirm.body': 'It stops receiving every event class immediately.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'It stops receiving every event class immediately.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Unbind',
   'settings.notifications.routing.topic.prompt': 'Forum topic id — leave empty for the flat chat',
   'settings.notifications.routing.topic.save': 'Save',
@@ -3157,6 +3164,12 @@ export const messagesEn = {
   'marketing.campaigns.create.recipientCap': 'Recipient cap',
   'marketing.campaigns.create.costCeiling': 'Cost ceiling (minor units)',
   'marketing.campaigns.create.currency': 'Currency',
+  'marketing.campaigns.create.channel.unwiredSuffix': ' (not wired yet)',
+  'marketing.campaigns.create.channel.unwiredHint':
+    'No delivery path exists for this channel yet — a campaign cannot be launched against it.',
+  'marketing.campaigns.create.scheduledAt': 'Scheduled send (optional)',
+  'marketing.campaigns.create.scheduledAt.hint':
+    'Leave blank to launch immediately, on an operator’s word.',
   'marketing.campaigns.create.submit': 'Save draft',
 
   'marketing.channel.SMS': 'SMS',
@@ -3195,6 +3208,9 @@ export const messagesEn = {
   'marketing.campaign.field.costCeiling': 'Cost ceiling',
   'marketing.campaign.field.spent': 'Spent',
   'marketing.campaign.field.reserved': 'Reserved (cost · recipients)',
+  'marketing.campaign.field.scheduledAt': 'Scheduled for',
+  'marketing.campaign.unwired.warning':
+    'No delivery path is wired for {channel} yet. Launching this campaign will be refused until it is.',
   'marketing.campaign.paused.blockedCount':
     'Paused by the block-rate guard: {count} recipient(s) have blocked this send so far.',
   'marketing.campaign.resume.suppressedCost':
@@ -3240,6 +3256,13 @@ export const messagesEn = {
   'marketing.audiences.create.removePredicate': 'Remove',
   'marketing.audiences.create.submit': 'Define audience',
 
+  'marketing.audiences.detail.view': 'View',
+  'marketing.audiences.detail.title': 'Audience predicates',
+  'marketing.audiences.detail.version': 'Definition version {version}',
+  'marketing.audiences.detail.noPredicates': 'No predicates',
+  'marketing.audiences.detail.edit': 'Edit predicates',
+  'marketing.audiences.detail.save': 'Save predicates',
+
   'marketing.predicate.type.RECENCY_DAYS': 'Days since last order',
   'marketing.predicate.type.ORDER_COUNT': 'Order count',
   'marketing.predicate.type.COMPLETED_ORDER_COUNT': 'Completed order count',
@@ -3272,6 +3295,72 @@ export const messagesEn = {
   'marketing.suppressions.lift.title': 'Lift this suppression',
   'marketing.suppressions.lift.reason': 'Reason',
   'marketing.suppressions.lift.submit': 'Lift',
+  'marketing.suppressions.record.action': 'Record a suppression',
+  'marketing.suppressions.record.title': 'Record a suppression',
+  'marketing.suppressions.record.customerAccountId': 'Customer account ID',
+  'marketing.suppressions.record.channel': 'Channel',
+  'marketing.suppressions.record.channel.everyChannel': 'Every channel',
+  'marketing.suppressions.record.reason': 'Reason',
+  'marketing.suppressions.record.statedReason': 'Stated reason (optional)',
+  'marketing.suppressions.record.submit': 'Record',
+  'marketing.suppressions.reason.UNSUBSCRIBE': 'Unsubscribed',
+  'marketing.suppressions.reason.HARD_BOUNCE': 'Hard bounce',
+  'marketing.suppressions.reason.INVALID_NUMBER': 'Invalid number',
+  'marketing.suppressions.reason.COMPLAINT': 'Complaint',
+  'marketing.suppressions.reason.OPERATOR_BLOCK': 'Blocked by an operator',
+
+  // ------------------------------------------------------------- courier broadcasts 6.4b (T18)
+  'marketing.courierBroadcasts.title': 'Courier broadcasts',
+  'marketing.courierBroadcasts.intro':
+    'A dispatcher’s own operational SMS blast to couriers — a shift change, a weather closure, a route closure. Never a customer campaign.',
+  'marketing.courierBroadcasts.loading': 'Loading',
+  'marketing.courierBroadcasts.denied': 'No access to this brand’s courier broadcasts',
+  'marketing.courierBroadcasts.empty': 'No broadcast sent yet',
+  'marketing.courierBroadcasts.create.action': 'New broadcast',
+  'marketing.courierBroadcasts.create.title': 'Draft a courier broadcast',
+  'marketing.courierBroadcasts.create.targetKind': 'Target',
+  'marketing.courierBroadcasts.create.targetKind.ALL_ACTIVE': 'Every active courier',
+  'marketing.courierBroadcasts.create.targetKind.GROUP': 'One courier group',
+  'marketing.courierBroadcasts.create.targetGroupId': 'Group ID',
+  'marketing.courierBroadcasts.create.message': 'Message',
+  'marketing.courierBroadcasts.create.submit': 'Save draft',
+  'marketing.courierBroadcasts.column.target': 'Target',
+  'marketing.courierBroadcasts.column.message': 'Message',
+  'marketing.courierBroadcasts.column.status': 'Status',
+  'marketing.courierBroadcasts.column.recipients': 'Recipients',
+  'marketing.courierBroadcasts.status.DRAFT': 'Draft',
+  'marketing.courierBroadcasts.status.SENT': 'Sent',
+  'marketing.courierBroadcasts.status.FAILED': 'Failed',
+  'marketing.courierBroadcasts.action.send': 'Send',
+  'marketing.courierBroadcasts.refusalReason': 'Refused: {reason}',
+
+  // --------------------------------------------------------- attribution links 6.6a (ADR 0044, T18)
+  'marketing.attributionLinks.title': 'Acquisition links',
+  'marketing.attributionLinks.intro':
+    'A trackable website ?ref= link or Telegram deep link, for a campaign or an influencer.',
+  'marketing.attributionLinks.loading': 'Loading',
+  'marketing.attributionLinks.denied': 'No access to this brand’s acquisition links',
+  'marketing.attributionLinks.empty': 'No link minted yet',
+  'marketing.attributionLinks.create.action': 'Mint a link',
+  'marketing.attributionLinks.create.title': 'Mint an acquisition link',
+  'marketing.attributionLinks.create.label': 'Label',
+  'marketing.attributionLinks.create.ownerNote': 'Note (optional)',
+  'marketing.attributionLinks.create.channel': 'Channel',
+  'marketing.attributionLinks.create.destinationType': 'Destination',
+  'marketing.attributionLinks.create.destinationId': 'Campaign ID',
+  'marketing.attributionLinks.create.submit': 'Mint link',
+  'marketing.attributionLinks.column.label': 'Label',
+  'marketing.attributionLinks.column.link': 'Link',
+  'marketing.attributionLinks.column.clicks': 'Clicks',
+  'marketing.attributionLinks.column.status': 'Status',
+  'marketing.attributionLinks.action.archive': 'Archive',
+  'marketing.attributionLinks.channel.WEB': 'Website',
+  'marketing.attributionLinks.channel.TELEGRAM_BOT': 'Telegram bot',
+  'marketing.attributionLinks.channel.TELEGRAM_MINI_APP': 'Telegram mini app',
+  'marketing.attributionLinks.channel.MOBILE_APP': 'Mobile app',
+  'marketing.attributionLinks.destinationType.CAMPAIGN': 'A campaign',
+  'marketing.attributionLinks.destinationType.STOREFRONT_HOME': 'The storefront home',
+  'marketing.attributionLinks.destinationType.INFLUENCER': 'An influencer',
 
   // ------------------------------------------------------- promo codes 6.2 (ADR 0072, wave 60)
   'marketing.promoCodes.title': 'Promo codes',
