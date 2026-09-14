@@ -39,6 +39,7 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.loyalty.api.HeldTenderPort;
+import uz.horecaos.platform.loyalty.api.LoyaltyExpiryWarningPort;
 import uz.horecaos.platform.loyalty.api.PointsRedemptionPort;
 import uz.horecaos.platform.loyalty.application.LoyaltyAccrualService;
 import uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService;
@@ -109,6 +110,15 @@ class LoyaltyLedgerAndSplitTenderTests {
      * knows.
      */
     private static final HeldTenderPort SETTLEMENT_STILL_COMING = (tenantId, tenderId) -> true;
+
+    /**
+     * A no-op double for the tests below that are not about the expiry warning
+     * itself — {@link #warnExpiringLotsSendsExactlyOneWarningPerLot} builds its
+     * own recording implementation instead, the same split {@link
+     * #NOTHING_AWAITS}/{@link #SETTLEMENT_STILL_COMING} already use.
+     */
+    private static final LoyaltyExpiryWarningPort NO_WARNINGS_RECORDED =
+            (tenantId, accountId, lotId, expiresAt, remainingMinor, daysRemaining) -> {};
 
     /**
      * Past {@code PointsRedemptionService.HOLD_LIFETIME}, which is
@@ -213,7 +223,7 @@ class LoyaltyLedgerAndSplitTenderTests {
         redemption = new PointsRedemptionService(store, policies, clock);
         accrual = new LoyaltyAccrualService(store, policies, clock);
         adjustments = new LoyaltyAdjustmentService(store, new AlwaysApproves(), audit, clock, 100_000L);
-        maintenance = new LoyaltyMaintenanceService(store, redemption, NOTHING_AWAITS, clock);
+        maintenance = new LoyaltyMaintenanceService(store, redemption, NOTHING_AWAITS, NO_WARNINGS_RECORDED, clock);
         queries = new LoyaltyQueryService(store, clock);
         settlements = new OrderSettlementService(settlementStore, redemption, clock);
 
@@ -468,7 +478,11 @@ class LoyaltyLedgerAndSplitTenderTests {
         clock.advance(Duration.ofDays(200));
 
         var sweep = new LoyaltyMaintenanceService(
-                new StaleBatchLoyaltyStore(jdbc, asTheSweepSawIt), redemption, NOTHING_AWAITS, clock);
+                new StaleBatchLoyaltyStore(jdbc, asTheSweepSawIt),
+                redemption,
+                NOTHING_AWAITS,
+                NO_WARNINGS_RECORDED,
+                clock);
         transactions.executeWithoutResult(status -> sweep.expireLots());
 
         assertThat(queries.balance(TENANT, accountId).balanceMinor())
@@ -479,6 +493,62 @@ class LoyaltyLedgerAndSplitTenderTests {
         assertThat(queries.balanceDrift(TENANT, accountId))
                 .as("and the ledger still reconciles to the cached balance")
                 .isZero();
+    }
+
+    /**
+     * T18: {@code expiryWarningDays} has been authorable, validated, and
+     * persisted on the accrual rule since V0042, and this is the first test
+     * that anything ever reads it. The seeded BRAND rule (see
+     * {@link #seedPolicies}) carries {@code expiry_warning_days = 14} and
+     * {@code lot_lifetime_days = 180}, so a lot advanced to day 170 is nine
+     * days from expiry — inside the window — and a lot left at day 0 is not.
+     */
+    @Test
+    @DisplayName("warnExpiringLots sends exactly one warning per lot, and only inside its window")
+    void warnExpiringLotsSendsExactlyOneWarningPerLot() {
+        UUID order = completedOrder("C-1", 100_000L, 0L);
+        transactions.executeWithoutResult(status -> accrual.accrue(completion(order, 100_000L, 0L)));
+        UUID accountId = accountId();
+        UUID lotId = store.openLots(TENANT, accountId).getFirst().id();
+
+        record Warning(UUID accountId, UUID lotId, long remainingMinor, long daysRemaining) {}
+        List<Warning> warned = new CopyOnWriteArrayList<>();
+        LoyaltyExpiryWarningPort recording =
+                (tenantId, warnedAccountId, warnedLotId, expiresAt, remainingMinor, daysRemaining) ->
+                        warned.add(new Warning(warnedAccountId, warnedLotId, remainingMinor, daysRemaining));
+        LoyaltyMaintenanceService sweep =
+                new LoyaltyMaintenanceService(store, redemption, NOTHING_AWAITS, recording, clock);
+
+        // Day 0: earns_at is still in the future (earn_delay_hours = 24), so the
+        // lot is not even ACTIVE yet — lotsNeedingExpiryWarning requires ACTIVE —
+        // and the sweep must find nothing.
+        int touchedBeforeMaturity = transactions.execute(status -> sweep.warnExpiringLots());
+        assertThat(touchedBeforeMaturity)
+                .as("a PENDING lot is not yet warned about")
+                .isZero();
+
+        // Day 170: expiresAt is 180 days past earns_at, itself 24h past order
+        // completion, so 170 days in leaves 11 days to expiry — inside the
+        // 14-day window.
+        clock.advance(Duration.ofDays(170));
+        transactions.executeWithoutResult(status -> maintenance.matureLots());
+
+        int firstPass = transactions.execute(status -> sweep.warnExpiringLots());
+        assertThat(firstPass).isOne();
+        assertThat(warned).hasSize(1);
+        Warning warning = warned.getFirst();
+        assertThat(warning.accountId()).isEqualTo(accountId);
+        assertThat(warning.lotId()).isEqualTo(lotId);
+        assertThat(warning.remainingMinor()).isEqualTo(3_000L);
+        // expiresAt = (NOW + 24h earn delay) + 180d lifetime; the clock sits at
+        // NOW + 170d, so the remainder is exactly 10d + 24h = 11 whole days.
+        assertThat(warning.daysRemaining()).isEqualTo(11L);
+
+        // A second pass, before the next tick would naturally run, must not send
+        // a second message for the same lot — the sweep's own idempotency key.
+        int secondPass = transactions.execute(status -> sweep.warnExpiringLots());
+        assertThat(secondPass).as("one warning per lot, ever").isZero();
+        assertThat(warned).hasSize(1);
     }
 
     /**
@@ -1340,7 +1410,7 @@ class LoyaltyLedgerAndSplitTenderTests {
 
         clock.advance(PAST_THE_HOLD_LIFETIME);
         LoyaltyMaintenanceService sweep =
-                new LoyaltyMaintenanceService(store, redemption, SETTLEMENT_STILL_COMING, clock);
+                new LoyaltyMaintenanceService(store, redemption, SETTLEMENT_STILL_COMING, NO_WARNINGS_RECORDED, clock);
         int released = transactions.execute(status -> sweep.releaseStaleHolds());
         assertThat(released)
                 .as("a renewal is not a release and is not counted as one")
@@ -1429,7 +1499,7 @@ class LoyaltyLedgerAndSplitTenderTests {
         // And the sweep afterwards has nothing left to do, whatever the port says.
         clock.advance(PAST_THE_HOLD_LIFETIME);
         LoyaltyMaintenanceService sweep =
-                new LoyaltyMaintenanceService(store, redemption, SETTLEMENT_STILL_COMING, clock);
+                new LoyaltyMaintenanceService(store, redemption, SETTLEMENT_STILL_COMING, NO_WARNINGS_RECORDED, clock);
         int released = transactions.execute(status -> sweep.releaseStaleHolds());
         assertThat(released).isZero();
         assertThat(store.staleReservations(clock.instant(), 500)).isEmpty();

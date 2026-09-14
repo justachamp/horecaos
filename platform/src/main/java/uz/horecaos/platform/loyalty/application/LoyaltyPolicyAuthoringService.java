@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -80,6 +81,7 @@ public class LoyaltyPolicyAuthoringService {
     @Transactional
     public AccrualRuleAuthoringRow draftAccrualRule(UUID tenantId, UUID brandId, AccrualRuleDraft draft) {
         validateAccrualDraft(draft);
+        validateAccrualScope(tenantId, draft);
         Instant now = clock.instant();
         Instant validFrom = draft.validFrom() != null ? draft.validFrom() : now;
         UUID id = UUID.randomUUID();
@@ -169,6 +171,45 @@ public class LoyaltyPolicyAuthoringService {
         }
         if (!problems.isEmpty()) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, String.join("; ", problems));
+        }
+    }
+
+    /**
+     * The check {@link #validateAccrualDraft} could not run: whether {@code
+     * scopeId} actually names a row, not merely a well-formed UUID.
+     *
+     * <p>Run separately, and after the shape check, because it is a database
+     * round trip and the shape check already refuses a BRAND rule carrying
+     * one or a LOCATION/CHANNEL rule carrying none — this only runs once a
+     * scopeId is known to be present and expected. Without it a mistyped or
+     * stale location id persisted silently and {@code
+     * JdbcLoyaltyStore.accrualRule}'s own narrowest-first resolver simply
+     * never matched it, so every order at that location fell back to the
+     * brand's rule with no error anywhere — the failure V0308's trigger also
+     * guards, this being the one an operator actually sees as a clean 422
+     * instead of a raw {@code foreign_key_violation}.
+     */
+    private void validateAccrualScope(UUID tenantId, AccrualRuleDraft draft) {
+        // validateAccrualDraft already refused a LOCATION/CHANNEL rule
+        // carrying a null scopeId, so a non-null read here is a re-statement
+        // of that check, not a new assumption.
+        if ("LOCATION".equals(draft.scopeType())) {
+            UUID scopeId = Objects.requireNonNull(draft.scopeId(), "shape-checked: a LOCATION rule names a scopeId");
+            if (!store.locationExists(tenantId, scopeId)) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "No location %s belongs to this tenant; a LOCATION rule must scope to a real location"
+                                .formatted(scopeId));
+            }
+        }
+        if ("CHANNEL".equals(draft.scopeType())) {
+            UUID scopeId = Objects.requireNonNull(draft.scopeId(), "shape-checked: a CHANNEL rule names a scopeId");
+            if (!store.channelExists(tenantId, scopeId)) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "No sales channel %s belongs to this tenant; a CHANNEL rule must scope to a real channel"
+                                .formatted(scopeId));
+            }
         }
     }
 

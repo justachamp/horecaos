@@ -362,6 +362,7 @@ class OrderCompletionAccrualTriggerTests {
                     now.minus(Duration.ofHours(1)),
                     now.plus(Duration.ofDays(180)),
                     LotStatus.ACTIVE,
+                    0,
                     now);
             store.creditBalance(TENANT, account.id(), amountMinor, 0L, now);
         });
