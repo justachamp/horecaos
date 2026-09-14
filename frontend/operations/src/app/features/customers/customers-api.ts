@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { Versioned } from '../../core/api/aggregate-version';
 import { command } from '../../core/api/idempotency';
+import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { CursorState, Page } from '../../core/api/page';
 import { Money } from '../../core/format/money';
@@ -212,6 +213,35 @@ export interface CustomerOrderSummary {
   readonly promisedAt: string | null;
   readonly version: number;
   readonly placedAt: string;
+}
+
+/**
+ * `StorefrontOrderingController.ReorderPlanResponse` (ADR 0074), answered
+ * for a staff caller through `CustomerOrderHistoryController.reorderPlan`
+ * (row 1.3f) — the identical shape the storefront's own `@CustomerOwned`
+ * read returns.
+ */
+export interface ReorderPlan {
+  readonly orderId: string;
+  readonly publicOrderNumber: string;
+  readonly locationId: string;
+  readonly channelCode: string;
+  readonly verdict: 'READY' | 'PARTIAL' | 'UNAVAILABLE';
+  readonly currency: string;
+  readonly lines: readonly ReorderPlanLine[];
+}
+
+export interface ReorderPlanLine {
+  readonly lineNumber: number;
+  readonly productName: string;
+  readonly variantName: string | null;
+  readonly productId: string | null;
+  readonly variantId: string;
+  readonly quantity: number;
+  readonly modifierOptionIds: readonly string[];
+  readonly status: 'AVAILABLE' | 'SOLD_OUT' | 'WITHDRAWN' | 'UNPRICED' | 'MODIFIERS_WITHDRAWN';
+  readonly unitAmountMinor: number | null;
+  readonly originalUnitAmountMinor: number;
 }
 
 // ---------------------------------------------------------------------- cashback
@@ -486,12 +516,13 @@ export class CustomersApi {
     return result.value ?? [];
   }
 
+  /** @returns the new address's id — row 1.3b's inline add auto-selects it rather than leaving the operator to find it in a refreshed list. */
   async addAddress(
     scope: LocationScope,
     accountId: string,
     request: SaveCustomerAddressRequest,
-  ): Promise<void> {
-    await firstValueFrom(
+  ): Promise<{ id: string }> {
+    return firstValueFrom(
       this.api.post<SaveCustomerAddressRequest, { id: string }>(
         operationsPaths.customerAddresses(scope, accountId),
         command(request),
@@ -653,6 +684,30 @@ export class CustomersApi {
     return firstValueFrom(
       this.api.page<CustomerOrderSummary>(operationsPaths.customerOrders(scope, accountId), state),
     );
+  }
+
+  /**
+   * Row 1.3f's «Повторить» — whether one of this customer's own orders can
+   * be ordered again, and with what. `null` when the order does not exist or
+   * is not this account's own (the server answers `RESOURCE_NOT_FOUND`
+   * either way, never distinguishing the two).
+   */
+  async reorderPlan(
+    scope: LocationScope,
+    accountId: string,
+    orderId: string,
+  ): Promise<ReorderPlan | null> {
+    try {
+      const result = await firstValueFrom(
+        this.api.get<ReorderPlan>(operationsPaths.customerOrderReorder(scope, accountId, orderId)),
+      );
+      return result.value;
+    } catch (error) {
+      if (error instanceof ApiError && error.code === ApiErrorCode.RESOURCE_NOT_FOUND) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   // --------------------------------------------------------------- the cashback

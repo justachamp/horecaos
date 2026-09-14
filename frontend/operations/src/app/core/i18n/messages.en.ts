@@ -4206,6 +4206,45 @@ export const messagesEn = {
   'orders.newOrder.order.cancel': 'Cancel',
   'orders.newOrder.order.created': 'Order {number} created',
   'orders.newOrder.order.unavailableCount': '{count} item(s) in the basket are no longer available',
+  'orders.newOrder.order.branch': 'Branch',
+  'orders.newOrder.order.byZone': '(by zone)',
+  'orders.newOrder.order.promoCode': 'Promo code',
+  'orders.newOrder.order.cashTendered': 'Cash tendered',
+  'orders.newOrder.order.changeDue': 'Change due',
+
+  // wave P14: §5.4 the address pane (row 1.3b)
+  'orders.newOrder.address.title': 'Address',
+  'orders.newOrder.address.loading': 'Loading addresses…',
+  'orders.newOrder.address.denied': 'No access to this customer’s saved addresses',
+  'orders.newOrder.address.empty': 'No saved addresses',
+  'orders.newOrder.address.add': '+ New address',
+  'orders.newOrder.address.notLocated':
+    'This address has no map pin yet, so delivery cannot be routed — the pin and the map are not built yet. Choose a different address or confirm by phone.',
+  'orders.newOrder.address.notServiceable':
+    'This address is outside every delivery zone for this branch',
+  'orders.newOrder.address.recipientName': 'Recipient',
+  'orders.newOrder.address.recipientPhone': 'Recipient phone',
+  'orders.newOrder.address.deliveryNote': 'Note for the courier',
+
+  // wave P14: §5.3 «Повторить» (row 1.3f)
+  'orders.newOrder.reorder.action': 'Repeat',
+  'orders.newOrder.reorder.busy': 'Repeating…',
+  'orders.newOrder.reorder.unavailable': 'Nothing on this order can be ordered again',
+  'orders.newOrder.reorder.partial':
+    'Some items on this order are no longer available and were skipped',
+
+  // wave P14: manual aggregator order entry (row 1.3g)
+  'orders.newOrder.aggregator.toggle': 'Aggregator order',
+  'orders.newOrder.aggregator.title': 'Aggregator order',
+  'orders.newOrder.aggregator.channel': 'Aggregator',
+  'orders.newOrder.aggregator.noChannels': 'No aggregator channel is configured',
+  'orders.newOrder.aggregator.externalOrderId': 'Aggregator’s own order number',
+  'orders.newOrder.aggregator.subtotal': 'Subtotal',
+  'orders.newOrder.aggregator.discount': 'Discount',
+  'orders.newOrder.aggregator.fee': 'Fee',
+  'orders.newOrder.aggregator.total': 'Total the aggregator collected',
+  'orders.newOrder.aggregator.hint':
+    'Recorded exactly as the aggregator stated it — nothing here is re-priced by HorecaOS',
 
   // --- shared/ui (ADR 0101) ----------------------------------------------
   // The only keys in this catalogue owned by a component rather than by a

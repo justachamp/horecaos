@@ -180,12 +180,57 @@ class CustomerIdentityTests {
         UUID viaSignIn = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-adr0076-signin")
                 .account()
                 .accountId();
-        UUID viaImport = identity.createAccountWithoutPrincipal(TENANT, BRAND_A).accountId();
+        UUID viaImport = identity.createAccountWithoutPrincipal(
+                        TENANT, BRAND_A, CustomerIdentityService.ORIGIN_IMPORT, null)
+                .accountId();
 
         assertThat(viaSignIn.version()).isEqualTo(7);
         assertThat(viaSignIn.variant()).isEqualTo(2);
         assertThat(viaImport.version()).isEqualTo(7);
         assertThat(viaImport.variant()).isEqualTo(2);
+    }
+
+    /**
+     * Wave P14, V0295 (ADR 0015/0039): the two origin-bearing writers of
+     * {@link CustomerIdentityService#createAccountWithoutPrincipal} — an
+     * operator's "Создать клиента" and the CSV import — are told apart on the
+     * row itself, closing the gap ADR 0039's own status line named.
+     */
+    @Test
+    @DisplayName("createAccountWithoutPrincipal records origin and, for OPERATOR, the staff actor")
+    void createAccountWithoutPrincipalRecordsOriginAndActor() {
+        UUID operatorAccount = identity.createAccountWithoutPrincipal(
+                        TENANT, BRAND_A, CustomerIdentityService.ORIGIN_OPERATOR, "staff-subject-42")
+                .accountId();
+        UUID importAccount = identity.createAccountWithoutPrincipal(
+                        TENANT, BRAND_A, CustomerIdentityService.ORIGIN_IMPORT, null)
+                .accountId();
+        UUID signInAccount = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-origin-self-service")
+                .account()
+                .accountId();
+
+        assertThat(originAndActorOf(operatorAccount)).isEqualTo(new String[] {"OPERATOR", "staff-subject-42"});
+        assertThat(originAndActorOf(importAccount)).isEqualTo(new String[] {"IMPORT", null});
+        // The sign-in path is untouched by this wave and still relies on the
+        // column's own default rather than naming it explicitly.
+        assertThat(originAndActorOf(signInAccount)).isEqualTo(new String[] {"SELF_SERVICE", null});
+    }
+
+    /** {@code ck_customer_account_operator_actor}: OPERATOR with no actor is refused at the database, not silently accepted. */
+    @Test
+    @DisplayName("the database refuses an OPERATOR-origin account with no actor named")
+    void operatorOriginRequiresAnActor() {
+        Throwable thrown = catchThrowable(() ->
+                identity.createAccountWithoutPrincipal(TENANT, BRAND_A, CustomerIdentityService.ORIGIN_OPERATOR, null));
+
+        assertThat(thrown).isNotNull();
+    }
+
+    private String[] originAndActorOf(UUID accountId) {
+        return jdbc.sql("SELECT origin, created_by_actor_id FROM customer.customer_accounts WHERE id = :id")
+                .param("id", accountId)
+                .query((rs, n) -> new String[] {rs.getString("origin"), rs.getString("created_by_actor_id")})
+                .single();
     }
 
     @Test

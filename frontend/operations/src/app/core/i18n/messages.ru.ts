@@ -4188,6 +4188,44 @@ export const messagesRu: MessageCatalogue = {
   'orders.newOrder.order.cancel': 'Отмена',
   'orders.newOrder.order.created': 'Заказ {number} создан',
   'orders.newOrder.order.unavailableCount': 'Позиций в корзине больше не доступно: {count}',
+  'orders.newOrder.order.branch': 'Филиал',
+  'orders.newOrder.order.byZone': '(по зоне)',
+  'orders.newOrder.order.promoCode': 'Промокод',
+  'orders.newOrder.order.cashTendered': 'Сдача с',
+  'orders.newOrder.order.changeDue': 'Сдача',
+
+  // wave P14: §5.4 адресная панель (строка 1.3b)
+  'orders.newOrder.address.title': 'Адрес',
+  'orders.newOrder.address.loading': 'Загрузка адресов…',
+  'orders.newOrder.address.denied': 'Нет доступа к сохранённым адресам клиента',
+  'orders.newOrder.address.empty': 'Сохранённых адресов нет',
+  'orders.newOrder.address.add': '+ Новый адрес',
+  'orders.newOrder.address.notLocated':
+    'У этого адреса ещё нет метки на карте, доставка не может быть рассчитана — карта и метка пока не реализованы. Выберите другой адрес или уточните по телефону.',
+  'orders.newOrder.address.notServiceable': 'Этот адрес вне зоны доставки этого филиала',
+  'orders.newOrder.address.recipientName': 'Получатель',
+  'orders.newOrder.address.recipientPhone': 'Телефон получателя',
+  'orders.newOrder.address.deliveryNote': 'Комментарий курьеру',
+
+  // wave P14: §5.3 «Повторить» (строка 1.3f)
+  'orders.newOrder.reorder.action': 'Повторить',
+  'orders.newOrder.reorder.busy': 'Повторяем…',
+  'orders.newOrder.reorder.unavailable': 'Ни одну позицию этого заказа нельзя повторить',
+  'orders.newOrder.reorder.partial':
+    'Часть позиций этого заказа больше не доступна и была пропущена',
+
+  // wave P14: заказ агрегатора вручную (строка 1.3g)
+  'orders.newOrder.aggregator.toggle': 'Заказ агрегатора',
+  'orders.newOrder.aggregator.title': 'Заказ агрегатора',
+  'orders.newOrder.aggregator.channel': 'Агрегатор',
+  'orders.newOrder.aggregator.noChannels': 'Канал агрегатора не настроен',
+  'orders.newOrder.aggregator.externalOrderId': 'Номер заказа у агрегатора',
+  'orders.newOrder.aggregator.subtotal': 'Подытог',
+  'orders.newOrder.aggregator.discount': 'Скидка',
+  'orders.newOrder.aggregator.fee': 'Комиссия',
+  'orders.newOrder.aggregator.total': 'Сумма, полученная агрегатором',
+  'orders.newOrder.aggregator.hint':
+    'Записано точно так, как указал агрегатор, — HorecaOS не пересчитывает эту сумму',
 
   // --- shared/ui (ADR 0101) ----------------------------------------------
   'ui.denied.title': 'Нет доступа к этому разделу',

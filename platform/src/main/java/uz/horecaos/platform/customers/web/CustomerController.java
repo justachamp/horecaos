@@ -406,11 +406,17 @@ public class CustomerController {
                     + "same channel-identity-only shape ADR 0059's SendPulse import uses. It "
                     + "starts non-contactable — no consent decision exists for it, and 'absence "
                     + "of a decision is not consent' already handles that (ConsentService's own "
-                    + "doc) — so no origin column is needed to say so.")
+                    + "doc). V0295 now records origin = OPERATOR and the staff subject who typed "
+                    + "it, so a marketing export can filter this account out by fact rather than "
+                    + "by the absence of one.")
     public ResponseEntity<IdResponse> createManually(
             @PathVariable UUID tenantId, @Valid @RequestBody CreateCustomerRequest request) {
         try {
-            var account = identity.createAccountWithoutPrincipal(tenantId, request.brandId());
+            var account = identity.createAccountWithoutPrincipal(
+                    tenantId,
+                    request.brandId(),
+                    CustomerIdentityService.ORIGIN_OPERATOR,
+                    currentActor.get().subject());
             profiles.addContactPoint(tenantId, account.accountId(), ContactType.PHONE, request.phone(), true);
             if (request.displayName() != null && !request.displayName().isBlank()) {
                 // A brand-new account from insertAccount's own DEFAULT 1.

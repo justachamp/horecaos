@@ -21,10 +21,24 @@
   path the storefront's own checkout takes — through a new
   `OperatorOrderingService`, so an operator-placed order differs from a
   customer's own only in attribution (`created_by_actor_type = 'USER'`).
-  Payment is cash only this wave — the endpoint refuses any other
-  `paymentMethodCode` before writing a row, since a card link sent to the
-  customer is a bigger piece this wave does not build and does not test end to
-  end. `POST .../orders/customer-lookups` (capability `CUSTOMER_READ` at
+  Payment is now the operator channel's own matrix (wave P14, gap map row
+  `1.3e`): the endpoint no longer hard-refuses anything but `CASH` itself —
+  `CheckoutEligibilityGuard`'s existing channel-matrix check (`tenant.channel_payment_methods`
+  intersected with `PaymentIntentPort#canAcceptPayment`) decides, the identical
+  gate every other checkout already passes through. A card link is still not
+  a separate flow this wave builds; whichever methods the tenant has actually
+  enabled on that channel are simply no longer refused by this endpoint's own
+  code. ADR 0072 promo codes are threaded the same wave: `PlaceOrderRequest.promoCode`
+  reaches `CartService#applyPromoCode` between filling the basket and pricing
+  it. Writing this test surfaced a pre-existing, unrelated defect this wave
+  does not fix: a discounted order's `subtotal_minor` (as `PricingEngine`
+  reports it) is already net of the discount, while `ordering.orders`'s
+  `ck_order_total_reconciles` (V0022, predating ADR 0072) assumes it is
+  gross — so any checkout anywhere, through this endpoint or the storefront's
+  own, that reaches a nonzero discount currently fails that constraint; see
+  `CartCheckoutAndOrderTests#anOperatorPlacedOrderAppliesAPromoCode`'s own doc
+  for the reproduction and why this wave does not attempt the schema fix.
+  `POST .../orders/customer-lookups` (capability `CUSTOMER_READ` at
   `LOCATION` scope) resolves a phone number through the existing ADR 0015
   hashed-lookup port (`CustomerPhoneLookup`, the same one ADR 0064's
   screen-pop already uses), returning a masked name, last-order date and
@@ -37,16 +51,27 @@
   A brand-new customer with no match still goes through the existing
   `POST .../tenants/{tenantId}/customers` (`CustomerIdentityService
   #createAccountWithoutPrincipal`, capability `CUSTOMER_MANAGE`, `TENANT`
-  scope, unchanged by this wave) rather than a second creation path; ADR
-  0015's `origin`/`created_by_actor_id` columns this ADR sketched for that
-  account remain not built; today's account is already non-contactable for
-  marketing on the same "absence of a decision is not consent" argument
-  `ConsentService` already relies on. Capturing change-due
+  scope) rather than a second creation path. ADR 0015's `origin`/`created_by_actor_id`
+  columns this ADR sketched for that account are now built (wave P14, V0295):
+  `customer.customer_accounts.origin` (`SELF_SERVICE | OPERATOR | IMPORT |
+  AGGREGATOR | MIGRATION`, default `SELF_SERVICE`) and `created_by_actor_id`,
+  written as `OPERATOR`/the staff subject by exactly this endpoint's own
+  create-on-miss path and by nothing else that reaches `CustomerIdentityService
+  #createAccountWithoutPrincipal` — the CSV import writes `IMPORT` with no
+  actor. Covered by `CustomerIdentityTests#createAccountWithoutPrincipalRecordsOriginAndActor`
+  and `#operatorOriginRequiresAnActor` (the database itself refuses an
+  `OPERATOR` row with no actor named, `ck_customer_account_operator_actor`).
+  The account is still non-contactable for marketing on the same "absence of
+  a decision is not consent" argument `ConsentService` already relies on —
+  `origin` is what now lets a marketing export filter it out by fact rather
+  than by the absence of one. Capturing change-due
   (`cash_tendered_expected_minor`), a kitchen note or the callback flag *at
   creation* is not built either — an operator sets those after the order
   exists, through the ordinary `POST .../amendments` endpoint's
   `SET_CASH_TENDERED`/`SET_KITCHEN_NOTE`/`SET_CALLBACK_REQUESTED` commands,
-  already built above. Bulk actions are now built (wave 97):
+  already built above; wave P14's New order screen shows a live, client-side-only
+  change-due computation at creation, still not persisted for the same reason.
+  Bulk actions are now built (wave 97):
   `POST .../tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/bulk-actions`
   (`OrderBulkActionService`, capability `ORDER_BULK_ACTION` at `LOCATION`
   scope, held only by `location-manager` — `location-staff` holds neither

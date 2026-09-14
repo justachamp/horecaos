@@ -23,10 +23,18 @@
   `PARTNER_INTEGRATION` grant design. Not built: the nine ADR 0032
   events, none of which exists in code or in the catalogue, so nothing downstream
   hears about an aggregator order; menu pull, availability push and every outbound
-  Camel adapter; manual aggregator order creation (`entry_mode = MANUAL`);
-  partner-driven cancellation and status projection with the inventory release and
-  the void-or-refund it must trigger; and the OpenAPI document and contract tests
-  for the partner surface.
+  Camel adapter; partner-driven cancellation and status projection with the
+  inventory release and the void-or-refund it must trigger; and the OpenAPI
+  document and contract tests for the partner surface. Manual aggregator
+  order creation (`entry_mode = MANUAL`) is now built (wave P14, gap map row
+  `1.3g`, ADR 0114): `POST .../orders/aggregator-entries` (`ORDER_PLACE` at
+  `LOCATION` scope) through a new `ordering`-module writer
+  (`AggregatorOrderIntakeService`/`JdbcAggregatorOrderStore`), deliberately
+  not a call into `partner` — see ADR 0114 for why — writing the same four
+  authority columns this record defines, plus one `order_external_references`
+  row so the board's `reference` filter finds it. No `order_external_pricing`
+  or `order_handover_challenges` row is written for a manual entry; ADR
+  0114's own open inputs cover that gap.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture), finance (settlement), legal (fiscal liability on aggregator-collected payments), product (partner programme terms)

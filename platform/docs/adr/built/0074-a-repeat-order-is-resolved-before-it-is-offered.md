@@ -9,9 +9,17 @@
   `repeat()` gate on the plan's verdict), and ADR 0075's Telegram customer
   bot, whose `CustomerBotOrderingAdapter` calls the same
   `ReorderPlanService` behind its own `TELEGRAM_CUSTOMER_INLINE_ACTIONS_ENABLED`
-  entitlement gate. Not built, out of this record's own scope:
-  `StorefrontCatalogQuery.menuFor` does not yet consult the 86 list for
-  ordinary menu browsing — a separate future change, not a repeat-order gap.
+  entitlement gate. A staff-capability caller now reaches the same
+  `ReorderPlanService#planFor` too (wave P14, gap map row `1.3f`):
+  `CustomerOrderHistoryController.reorderPlan` (`GET .../tenants/{t}/brands/{b}/customers/{accountId}/orders/{orderId}/reorder`,
+  `ORDER_READ` at `BRAND` scope, never `@CustomerOwned`) for the New order
+  screen's «Повторить» on the phone-lookup history peek. `LOCATION_STAFF`
+  does not hold `ORDER_READ` at `BRAND` scope (only at its own `LOCATION`),
+  an existing capability-model gap this wave inherits rather than fixes —
+  see `CustomerOrderHistoryReorderHttpTests`. Not built, out of this
+  record's own scope: `StorefrontCatalogQuery.menuFor` does not yet consult
+  the 86 list for ordinary menu browsing — a separate future change, not a
+  repeat-order gap.
 - Date proposed: 2026-09-06
 - Date decided: 2026-09-06
 - Deciders: Ayubkhon Abbosov (platform owner)

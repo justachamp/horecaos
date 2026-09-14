@@ -4215,6 +4215,46 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.order.cancel': 'Bekor qilish',
   'orders.newOrder.order.created': '{number}-buyurtma yaratildi',
   'orders.newOrder.order.unavailableCount': 'Savatdagi {count} ta taom endi mavjud emas',
+  'orders.newOrder.order.branch': 'Filial',
+  'orders.newOrder.order.byZone': '(hudud bo’yicha)',
+  'orders.newOrder.order.promoCode': 'Promokod',
+  'orders.newOrder.order.cashTendered': 'Berilgan pul',
+  'orders.newOrder.order.changeDue': 'Qaytim',
+
+  // wave P14: §5.4 manzil paneli (1.3b qatori)
+  'orders.newOrder.address.title': 'Manzil',
+  'orders.newOrder.address.loading': 'Manzillar yuklanmoqda…',
+  'orders.newOrder.address.denied': 'Mijozning saqlangan manzillariga ruxsat yo’q',
+  'orders.newOrder.address.empty': 'Saqlangan manzillar yo’q',
+  'orders.newOrder.address.add': '+ Yangi manzil',
+  'orders.newOrder.address.notLocated':
+    'Bu manzilda hali xaritada nuqta yo’q, shuning uchun yetkazib berish hisoblanmaydi — xarita va nuqta hali qurilmagan. Boshqa manzilni tanlang yoki telefon orqali aniqlashtiring.',
+  'orders.newOrder.address.notServiceable':
+    'Bu manzil ushbu filial yetkazib berish hududidan tashqarida',
+  'orders.newOrder.address.recipientName': 'Qabul qiluvchi',
+  'orders.newOrder.address.recipientPhone': 'Qabul qiluvchi telefoni',
+  'orders.newOrder.address.deliveryNote': 'Kuryer uchun izoh',
+
+  // wave P14: §5.3 «Takrorlash» (1.3f qatori)
+  'orders.newOrder.reorder.action': 'Takrorlash',
+  'orders.newOrder.reorder.busy': 'Takrorlanmoqda…',
+  'orders.newOrder.reorder.unavailable':
+    'Bu buyurtmadan hech nimani qayta buyurtma qilib bo’lmaydi',
+  'orders.newOrder.reorder.partial':
+    'Bu buyurtmaning ba’zi taomlari endi mavjud emas va o’tkazib yuborildi',
+
+  // wave P14: agregator buyurtmasini qo'lda kiritish (1.3g qatori)
+  'orders.newOrder.aggregator.toggle': 'Agregator buyurtmasi',
+  'orders.newOrder.aggregator.title': 'Agregator buyurtmasi',
+  'orders.newOrder.aggregator.channel': 'Agregator',
+  'orders.newOrder.aggregator.noChannels': 'Agregator kanali sozlanmagan',
+  'orders.newOrder.aggregator.externalOrderId': 'Agregatordagi buyurtma raqami',
+  'orders.newOrder.aggregator.subtotal': 'Oraliq summa',
+  'orders.newOrder.aggregator.discount': 'Chegirma',
+  'orders.newOrder.aggregator.fee': 'Komissiya',
+  'orders.newOrder.aggregator.total': 'Agregator yig’gan summa',
+  'orders.newOrder.aggregator.hint':
+    'Agregator ko’rsatgan summa aynan shu holicha yozildi — HorecaOS uni qayta hisoblamaydi',
 
   // --- shared/ui (ADR 0101) ----------------------------------------------
   'ui.denied.title': 'Bu boʻlimga kirish huquqingiz yoʻq',
