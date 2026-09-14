@@ -650,6 +650,7 @@ export const messagesEn = {
   'settings.nav.integrations': 'Integrations',
   'settings.nav.referenceData': 'Reference data',
   'settings.nav.catalogBaseSettings': 'Catalog base settings',
+  'settings.nav.deliveryPolicy': 'Delivery policy',
 
   'settings.home.title': 'Settings',
   'settings.home.lead':
@@ -693,6 +694,8 @@ export const messagesEn = {
   'settings.home.description.orderPolicy': 'The rulebook every order is measured against.',
   'settings.home.description.catalogBaseSettings':
     'Company-wide stock logic and QR/kiosk pricing switches.',
+  'settings.home.description.deliveryPolicy':
+    'Out-of-zone addresses, what the courier sees and may do, and GPS action checks.',
   'settings.home.description.paymentMethods': "The tenant's own list of ways a customer can pay.",
   'settings.home.description.fiscalization': 'Whom the restaurant trades as, for tax.',
   'settings.home.description.notifications':
@@ -1328,6 +1331,7 @@ export const messagesEn = {
   'settings.locations.tab.fiscal': 'Fiscal',
   'settings.locations.tab.channels': 'Channels',
   'settings.locations.tab.notifications': 'Notifications',
+  'settings.locations.tab.floorPlan': 'Floor plan',
   'settings.locations.edit': 'Edit',
   'settings.locations.cancel': 'Cancel',
   'settings.locations.save': 'Save',
@@ -1375,6 +1379,41 @@ export const messagesEn = {
     'Which channels sell from this location is managed on Settings → Sales channels.',
   'settings.locations.notifications.note':
     'This branch’s alert routing is managed on Settings → Notifications.',
+
+  // ---- Floor plan tab (rows 10.2d/X.36/10.5b, wave P38) ------------------
+  'settings.locations.floorPlan.settingsTitle': 'Dine-in QR settings',
+  'settings.locations.floorPlan.edit': 'Edit',
+  'settings.locations.floorPlan.cancel': 'Cancel',
+  'settings.locations.floorPlan.save': 'Save',
+  'settings.locations.floorPlan.saving': 'Saving…',
+  'settings.locations.floorPlan.loading': 'Loading…',
+  'settings.locations.floorPlan.reason': 'Reason',
+  'settings.locations.floorPlan.field.qrMode': 'What a scanned code does here',
+  'settings.locations.floorPlan.field.turnaround': 'Turnaround buffer (minutes)',
+  'settings.locations.floorPlan.field.guestSessionTtl': 'Guest session length (minutes)',
+  'settings.locations.floorPlan.field.serviceCharge': 'Service charge (%)',
+  'settings.locations.floorPlan.qrMode.VIEW_ONLY': 'View menu only',
+  'settings.locations.floorPlan.qrMode.ORDER_AND_PAY': 'Order and pay',
+  'settings.locations.floorPlan.qrMode.SETTLE_OPEN_TICKET': 'Settle an open ticket',
+  'settings.locations.floorPlan.qrMode.SETTLE_OPEN_TICKET.reason':
+    'Disabled: needs a POS adapter that declares both an open-ticket read and a ticket settlement, and none does yet (ADR 0011/0047). Not a missing feature on this screen — the mode is refused at configuration on purpose, both here and by the database.',
+  'settings.locations.floorPlan.roomTitle': 'Sections and tables',
+  'settings.locations.floorPlan.addSection': 'Add section',
+  'settings.locations.floorPlan.sectionCodePlaceholder': 'Code (e.g. MAIN)',
+  'settings.locations.floorPlan.sectionNamePlaceholder': 'Name (e.g. Main hall)',
+  'settings.locations.floorPlan.noSections':
+    'No sections yet — add one before placing tables. A venue with no sections has nowhere for a table to belong.',
+  'settings.locations.floorPlan.addTable': 'Add table',
+  'settings.locations.floorPlan.tableCodePlaceholder': 'Code (e.g. T1)',
+  'settings.locations.floorPlan.tableNamePlaceholder': 'Name (e.g. Table 1)',
+  'settings.locations.floorPlan.moveReason': 'Dragged on the floor-plan canvas',
+  'settings.locations.floorPlan.close': 'Close',
+  'settings.locations.floorPlan.tableSeats': '{count} seats',
+  'settings.locations.floorPlan.issueQr': 'Issue QR code',
+  'settings.locations.floorPlan.rotateQr': 'Rotate QR code',
+  'settings.locations.floorPlan.rotating': 'Rotating…',
+  'settings.locations.floorPlan.revokedGuestSessions':
+    '{count} guest session(s) on the old code were cut off.',
 
   'finance.scope.denied': 'This account is not permitted to see Finance.',
 
@@ -2877,9 +2916,49 @@ export const messagesEn = {
   'delivery.policy.confirmationPointRetentionDays': 'Confirmation-point retention (days)',
   'delivery.policy.consequence.confirmationPointRetentionDays':
     'Delivery confirmation photos and signatures are kept for this many days, then purged.',
-  'delivery.policy.notBuilt':
-    'Not shown here yet: GPS gates, show-only-kitchen-ready, reveal-location timing, the telemetry collection-gate default, and post-delivery payment check — no policy document backs them.',
-  'delivery.policy.readOnly': 'Read-only this wave — no authoring endpoint exists yet.',
+  'delivery.policy.card.courier': 'What the courier sees and may do',
+  'delivery.policy.kitchenReadyOnly': 'Show only kitchen-ready orders',
+  'delivery.policy.consequence.kitchenReadyOnly':
+    'A courier sees and may take only orders the kitchen has already marked ready.',
+  'delivery.policy.revealCustomerLocationTiming': 'Reveal customer location',
+  'delivery.policy.revealCustomerLocationTiming.BEFORE_ACCEPT': 'Before accept',
+  'delivery.policy.revealCustomerLocationTiming.AFTER_ACCEPT': 'After accept',
+  'delivery.policy.consequence.revealCustomerLocationTiming':
+    'Before accept shows the exact address to every courier who sees the offer; after accept shows it only once one commits.',
+  'delivery.policy.postDeliveryPaymentCheckRequired': 'Check payment status after delivery',
+  'delivery.policy.consequence.postDeliveryPaymentCheckRequired':
+    'An order may not close until payment is confirmed.',
+  'delivery.policy.gpsVerificationEnabled': 'Check courier actions by GPS radius',
+  'delivery.policy.consequence.gpsVerificationEnabled':
+    'Off by default. Turning this on starts checking the courier’s reported position against both radii below.',
+  'delivery.policy.gpsAcceptRadiusKm': 'Accept radius (km, from the pickup point)',
+  'delivery.policy.gpsStatusChangeRadiusMeters':
+    'Status-change radius (m, from the customer point)',
+  'delivery.policy.billingMode': 'Courier billing (personal balance)',
+  'delivery.policy.billingMode.refused': 'Refused by ADR 0042',
+  'delivery.policy.billingMode.reason':
+    'HorecaOS does not take deposits from workers. A personal balance a courier must top up trades a payroll problem for a debt-collection one — this switch does not exist here by design, not by omission.',
+  'delivery.policy.telemetryGate': 'Telemetry collection gate',
+  'delivery.policy.telemetryGate.platformOnly': 'Platform-only',
+  'delivery.policy.telemetryGate.reason':
+    'Registered (ADR 0045) but writable only from the platform administration surface — a tenant cannot set this here.',
+  'delivery.policy.edit': 'Edit',
+  'delivery.policy.cancel': 'Cancel',
+  'delivery.policy.publish': 'Publish',
+  'delivery.policy.saving': 'Publishing…',
+  'delivery.policy.reason': 'Reason',
+  'delivery.policy.reasonPlaceholder': 'Why is this changing?',
+  'delivery.policy.yes': 'Yes',
+  'delivery.policy.no': 'No',
+  'delivery.policy.outOfZone.title': 'Addresses outside every zone',
+  'delivery.policy.outOfZone.field': 'What to do with an out-of-zone address',
+  'delivery.policy.outOfZone.option.REJECT': 'Reject',
+  'delivery.policy.outOfZone.option.OFFER_PICKUP': 'Offer pickup instead',
+  'delivery.policy.outOfZone.option.MANUAL_REVIEW': 'Hold for manual review',
+  'delivery.policy.outOfZone.hint':
+    'Not yet enforced: checkout still refuses an out-of-zone address outright, whatever this is set to — it records the tenant’s intended handling ahead of the consumer that will read it.',
+  'delivery.policy.outOfZone.catchmentNote':
+    'Orders from outside a branch’s own catchment are already refused — driven by whether a catchment zone is configured, not by a switch on this screen.',
 
   // ---------------------------------------------------------------- customers (wave 31)
   'customers.title': 'Customers',
@@ -4917,6 +4996,9 @@ export const messagesEn = {
   // shared/ui — q-drag-drop-assign (X.22)
   'shared.dragDropAssign.rejected': 'Could not move: {reason}',
   'shared.dragDropAssign.rejectedUnknown': 'Could not move — try again.',
+  // shared/ui — q-table-print-card (X.36, wave P38)
+  'shared.tablePrintCard.tokenLabel': 'Code (type this in if the scan fails)',
+  'shared.tablePrintCard.none': 'No code issued for this table yet.',
   // --- shared/ui q-secret-input (ADR 0106, gap-map row X.14) --------------
   // Reveal-once **at entry** only — never a value the server returned, since
   // no surface this platform exposes ever returns one (ADR 0028).

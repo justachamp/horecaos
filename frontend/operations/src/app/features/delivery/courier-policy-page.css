@@ -84,12 +84,8 @@
   color: var(--q-ink-subtle);
 }
 
-.policy__not-built {
-  margin-top: 16px;
-  padding: 12px;
-  background: var(--q-info-tint);
-  color: var(--q-info-text);
-  border-radius: var(--q-radius);
+.policy__disabledValue {
+  color: var(--q-ink-subtle);
 }
 
 .policy__denied,
@@ -107,5 +103,99 @@
   padding: 8px 12px;
   background: var(--q-error-tint);
   color: var(--q-error-text);
+  border-radius: var(--q-radius);
+}
+
+/* ---- wave P38: the whole-document edit form and the out-of-zone card,
+   matching order-policy-page.css's own button/field/form conventions. */
+
+.card {
+  margin-top: 24px;
+  padding: 16px 20px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.card__head h2 {
+  margin: 0;
+}
+
+.primary {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.primary:disabled {
+  background: var(--q-surface-2);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.secondary {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.form label {
+  display: block;
+  color: var(--q-ink-muted);
+  margin-top: 12px;
+}
+
+.form label:first-child {
+  margin-top: 0;
+}
+
+.field {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--q-surface-2);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  box-sizing: border-box;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--q-ink);
+}
+
+.form__actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.error {
+  margin-top: 12px;
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+  padding: 8px 12px;
   border-radius: var(--q-radius);
 }

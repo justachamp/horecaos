@@ -619,7 +619,13 @@ class PlannedShiftServiceTests {
                     defaults.penaltyApprovalThresholdMinor(),
                     ShiftEnforcement.ADVISORY,
                     defaults.graceSeconds(),
-                    defaults.confirmationPointRetentionDays());
+                    defaults.confirmationPointRetentionDays(),
+                    defaults.gpsVerificationEnabled(),
+                    defaults.gpsAcceptRadiusMeters(),
+                    defaults.gpsStatusChangeRadiusMeters(),
+                    defaults.kitchenReadyOnly(),
+                    defaults.revealCustomerLocationTiming(),
+                    defaults.postDeliveryPaymentCheckRequired());
             return Optional.of((ResolvedPolicy<P>)
                     new ResolvedPolicy<>(key.code(), UUID.randomUUID(), 1, scope.type(), "test", document));
         }

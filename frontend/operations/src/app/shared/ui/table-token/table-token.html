@@ -1,0 +1,22 @@
+<div
+  class="token"
+  [class.token--dragging]="dragging()"
+  [class.token--outOfService]="table().status === 'OUT_OF_SERVICE'"
+  [class.token--archived]="table().status === 'ARCHIVED'"
+  [class.token--disabled]="disabled()"
+  [style.transform]="'translate(' + renderX() + 'px, ' + renderY() + 'px)'"
+  (pointerdown)="onPointerDown($event)"
+  (pointermove)="onPointerMove($event)"
+  (pointerup)="onPointerUp($event)"
+  (pointercancel)="onPointerUp($event)"
+  [attr.data-testid]="'table-token-' + table().tableId"
+  [attr.aria-label]="table().displayName"
+  role="button"
+  tabindex="0"
+>
+  <span class="token__code q-body-sm">{{ table().code }}</span>
+  <span class="token__seats q-caption">{{ table().seats }}</span>
+  @if (table().qrIssued) {
+    <span class="token__qr" data-testid="table-token-qr-badge" aria-hidden="true">▦</span>
+  }
+</div>

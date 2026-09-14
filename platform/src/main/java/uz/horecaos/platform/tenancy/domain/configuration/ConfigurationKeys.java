@@ -477,6 +477,36 @@ public final class ConfigurationKeys {
                             + "domain fact exists yet to trigger it.")
                     .build();
 
+    /**
+     * Gap map row {@code 10.13} (wave P38): what a tenant wants to happen to
+     * an address {@code DeliveryFeeResolver} refuses as outside every zone or
+     * outside a branch's own catchment ({@code OUT_OF_ZONE}/{@code
+     * OUTSIDE_CATCHMENT}). Declared here so a stored row for it passes the
+     * startup validator, and declared identically in {@code
+     * fulfillment.api.DeliveryConfigurationKeys} for the reason recorded on
+     * {@link #COURIER_APPLICANT_RETENTION_MONTHS}.
+     *
+     * <p>Not yet enforced. {@code DeliveryFeeResolver}'s own refusal is
+     * unconditional today and stays that way this wave — the gap this key
+     * closes is that a tenant could not even record its intended handling of
+     * the case, not that the checkout path branches on three outcomes yet.
+     * A value of {@code REJECT} is a no-op: it names today's actual
+     * behaviour. {@code OFFER_PICKUP} and {@code MANUAL_REVIEW} are real
+     * strings a future storefront/ops consumer can switch on the day one
+     * exists.
+     */
+    public static final ConfigurationKey<String> DELIVERY_OUT_OF_ZONE_POLICY = ConfigurationKey.of(
+                    "delivery.out_of_zone_policy", String.class)
+            .defaultValue("REJECT")
+            .ownedBy("fulfillment")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION)
+            .describedAs("What happens to an address DeliveryFeeResolver refuses as out of every "
+                    + "zone or outside a branch's catchment: REJECT (default — matches today's "
+                    + "unconditional refusal), OFFER_PICKUP, or MANUAL_REVIEW. Not yet enforced: "
+                    + "the resolver's own refusal does not read this key yet.")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
@@ -505,7 +535,8 @@ public final class ConfigurationKeys {
             CATALOG_USE_STOCK_LOGIC,
             CATALOG_QR_KIOSK_PRICE_PLANE,
             NOTIFICATIONS_PAYMENT_LINK_AUTO_SEND,
-            NOTIFICATIONS_AGGREGATOR_SHIFT_NOTIFICATIONS_ENABLED));
+            NOTIFICATIONS_AGGREGATOR_SHIFT_NOTIFICATIONS_ENABLED,
+            DELIVERY_OUT_OF_ZONE_POLICY));
 
     private ConfigurationKeys() {}
 

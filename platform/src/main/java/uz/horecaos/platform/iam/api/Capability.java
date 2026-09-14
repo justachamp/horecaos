@@ -411,6 +411,29 @@ public enum Capability {
      */
     DELIVERY_FEE_EVIDENCE_READ("delivery.fee.evidence.read", "delivery", "fee.evidence.read"),
     DELIVERY_MANUAL_ASSIGN("delivery.manual_assign", "delivery", "manual_assign"),
+
+    /**
+     * ADR 0042, gap map row {@code 10.13}: reading the courier compensation
+     * policy document — shift enforcement, the cash ceiling, the GPS gates,
+     * the kitchen-ready-only switch, reveal timing, the post-delivery payment
+     * check — resolved through ADR 0030 at whichever scope the settings
+     * screen's resolution selector is pointed at.
+     *
+     * <p>Its own capability rather than folded into {@link #COURIER_READ}:
+     * the courier roster and this policy document are different objects read
+     * by different people, the same split {@link #DELIVERY_ZONE_READ} draws
+     * from {@link #COURIER_READ} for zones and tariffs.
+     */
+    DELIVERY_POLICY_READ("delivery.policy.read", "delivery", "policy.read"),
+
+    /**
+     * ADR 0042, gap map row {@code 10.13}: publishing the next version of the
+     * courier compensation policy document, over {@code PolicyAuthor}. Before
+     * this capability existed the document had no writer anywhere reachable
+     * from the console — {@code PolicyAuthor} had exactly two other
+     * consumers and no controller injected it for this key.
+     */
+    DELIVERY_POLICY_WRITE("delivery.policy.write", "delivery", "policy.write"),
     SHIPMENT_CANCEL("shipment.cancel", "shipment", "cancel"),
 
     /**

@@ -69,7 +69,22 @@ public class JdbcPolicyResolver implements PolicyResolver, PolicyCurrentCache {
     @Cacheable(
             cacheNames = "tenant.policy_current",
             key = "#key.code() + '|' + #scope.type() + ':' + #scope.tenantId() "
-                    + "+ ':' + #scope.brandId() + ':' + #scope.locationId()")
+                    + "+ ':' + #scope.brandId() + ':' + #scope.locationId()",
+            // Spring's caching aspect unwraps an Optional-typed result before
+            // evaluating `unless` and before handing it to the Cache: #result
+            // here is already the bare ResolvedPolicy, or null for an empty
+            // Optional (nothing configured at any scope) — never the Optional
+            // itself, so `#result.isEmpty()` fails at evaluation time (it is
+            // not an Optional by the time `unless` sees it) and must not be
+            // written. CacheConfiguration's manager.setAllowNullValues(false)
+            // refuses to store the unwrapped null outright, throwing on every
+            // read that should have fallen through to a resolver's own
+            // defaults (see CourierPolicyResolver's own DEFAULTS fallback).
+            // Nothing configured is the common case for a scope that has never
+            // been authored, so skipping the cache write here rather than
+            // caching a real value is the correct trade: a miss costs one
+            // query, a stored null broke the read outright.
+            unless = "#result == null")
     public <P> Optional<ResolvedPolicy<P>> resolve(PolicyKey<P> key, ResourceScope scope) {
         List<Row> candidates = jdbc.sql(SELECT_ACTIVE_IN_CHAIN)
                 .param("keyCode", key.code())
