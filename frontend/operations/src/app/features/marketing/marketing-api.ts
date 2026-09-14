@@ -148,6 +148,15 @@ export interface RecipientView {
   readonly terminalStatus: string | null;
 }
 
+/** Row 7.9b. Mirrors `OperationsMarketingController.RecipientCountsResponse`. */
+export interface RecipientCountsView {
+  readonly pending: number;
+  readonly queued: number;
+  readonly deferred: number;
+  readonly refused: number;
+  readonly total: number;
+}
+
 /** Mirrors `OperationsMarketingController.SuppressionListItemResponse`. */
 export interface SuppressionView {
   readonly suppressionId: string;
@@ -325,6 +334,17 @@ export class MarketingApi {
       }),
     );
     return result.value ?? [];
+  }
+
+  /** Row 7.9b: how many recipients ended each way, without paging the full list. */
+  async recipientCounts(scope: BrandScope, campaignId: string): Promise<RecipientCountsView> {
+    return (
+      await firstValueFrom(
+        this.api.get<RecipientCountsView>(
+          marketingPaths.campaignRecipientCounts(scope, campaignId),
+        ),
+      )
+    ).value;
   }
 
   // ----------------------------------------------------------- suppression

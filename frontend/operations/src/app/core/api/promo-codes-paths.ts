@@ -31,4 +31,14 @@ export const promoCodePaths = {
   redemptions(scope: BrandScope, couponId: string): string {
     return `${this.base(scope)}/${encodeURIComponent(couponId)}/redemptions`;
   },
+
+  /**
+   * Row 7.9a: `CustomerDiscountHistoryController`, tenant-scoped rather than
+   * brand-scoped like the rest of this file — a customer account can hold
+   * redemptions against more than one brand under the same tenant, and "how
+   * much has this customer been discounted" means everywhere in the tenant.
+   */
+  customerDiscountHistory(tenantId: string, customerAccountId: string): string {
+    return `${OPERATIONS}/tenants/${encodeURIComponent(tenantId)}/customers/${encodeURIComponent(customerAccountId)}/discount-history`;
+  },
 } as const;

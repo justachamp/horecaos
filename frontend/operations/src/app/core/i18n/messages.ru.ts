@@ -955,10 +955,12 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.tab.templates': 'Шаблоны',
   'settings.notifications.tab.routing': 'Маршрутизация',
   'settings.notifications.automation.title': 'Автоматизация',
-  'settings.notifications.field.paymentLinkAutoSend': 'Отправлять клиенту ссылку на оплату автоматически',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Отправлять клиенту ссылку на оплату автоматически',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Пока не действует: ни один сценарий ещё не читает этот переключатель, поэтому включение только сохраняет выбор.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Уведомлять об открытии/закрытии смены агрегатора',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Уведомлять об открытии/закрытии смены агрегатора',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Пока не действует: в платформе ещё нет самого события смены агрегатора, которое запускало бы это уведомление.',
   'settings.notifications.create.action': 'Новый шаблон',
@@ -1004,7 +1006,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.editor.subject': 'Тема',
   'settings.notifications.editor.body': 'Текст',
   'settings.notifications.editor.variables': 'Вставить переменную',
-  'settings.notifications.editor.variables.empty': 'Для этого класса уведомлений переменные не предложены.',
+  'settings.notifications.editor.variables.empty':
+    'Для этого класса уведомлений переменные не предложены.',
   'settings.notifications.editor.preview': 'Как увидит клиент',
   'settings.notifications.editor.save': 'Сохранить черновик',
   'settings.notifications.editor.saving': 'Сохранение…',
@@ -1023,15 +1026,18 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.testSend.result.ACCEPTED': 'Принято провайдером.',
   'settings.notifications.testSend.result.REJECTED': 'Отклонено провайдером.',
   'settings.notifications.testSend.result.RETRYABLE': 'Ошибка передачи — попробуйте ещё раз.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Неопределённо — провайдер, возможно, уже отправил.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Неопределённо — провайдер, возможно, уже отправил.',
   'settings.notifications.activate.confirm.title': 'Активировать эту версию?',
-  'settings.notifications.activate.confirm.body': 'Каждое сообщение по этому шаблону будет использовать этот текст.',
+  'settings.notifications.activate.confirm.body':
+    'Каждое сообщение по этому шаблону будет использовать этот текст.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'Эта версия пока «{state}» у SMS-шлюза. Активация не заставит её отправляться, пока это не изменится.',
   'settings.notifications.activate.confirm.confirm': 'Активировать',
   'settings.notifications.routing.lead':
     'Какие из привязанных Telegram-чатов этого бренда слышат какие события, и их форум-тема.',
-  'settings.notifications.routing.empty': 'Ни один чат ещё не привязан. Отправьте «/link <код>» в Telegram-группе, чтобы привязать её.',
+  'settings.notifications.routing.empty':
+    'Ни один чат ещё не привязан. Отправьте «/link <код>» в Telegram-группе, чтобы привязать её.',
   'settings.notifications.routing.column.chat': 'Чат',
   'settings.notifications.routing.column.topic': 'Тема',
   'settings.notifications.routing.column.status': 'Статус',
@@ -1045,9 +1051,11 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.routing.action.editTopic': 'Сменить тему',
   'settings.notifications.routing.action.unbind': 'Отвязать',
   'settings.notifications.routing.unbind.confirm.title': 'Отвязать этот чат?',
-  'settings.notifications.routing.unbind.confirm.body': 'Он сразу перестанет получать любые классы событий.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'Он сразу перестанет получать любые классы событий.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Отвязать',
-  'settings.notifications.routing.topic.prompt': 'ID темы форума — оставьте пустым для обычного чата',
+  'settings.notifications.routing.topic.prompt':
+    'ID темы форума — оставьте пустым для обычного чата',
   'settings.notifications.routing.topic.save': 'Сохранить',
 
   // 10.10 Справочные данные
@@ -3625,6 +3633,47 @@ export const messagesRu: MessageCatalogue = {
     'Скорость ответа не показана: пока нет столбца времени ожидания вызова (V0149).',
   'reports.staff.telephony.conversionNotBuilt':
     'Конверсия звонков в заказы не показана: нужна привязка call-provenance, которую даёт 1.6 (пока не реализовано).',
+
+  // ---------------------------------------------------------------- reports 7.9 marketing (T15)
+  'reports.marketing.title': 'Маркетинговые отчёты',
+  'reports.marketing.tab.discounts': 'Скидки клиента',
+  'reports.marketing.tab.campaigns': 'Рассылки',
+  'reports.marketing.promoSummaryNotBuilt':
+    'Сводка по промокодам и детализация по кодам не показаны: нужна reporting.fact_promotion_redemption, а для неё — ADR по промоакциям, которого пока нет (ADR 0023).',
+
+  'reports.marketing.discounts.intro':
+    'На сколько клиент уже был проскидкован, по всем брендам сразу — проверка, которую стоит выполнить перед выдачей ещё одного компенсационного промокода.',
+  'reports.marketing.discounts.searchPlaceholder': 'Поиск по имени или телефону',
+  'reports.marketing.discounts.searchEmpty': 'Ни один клиент не найден по этому запросу.',
+  'reports.marketing.discounts.selectedFor': 'История скидок: {name}',
+  'reports.marketing.discounts.loading': 'Загрузка…',
+  'reports.marketing.discounts.empty': 'Этот клиент ни разу не использовал промокод.',
+  'reports.marketing.discounts.totalsTitle': 'Итого погашено',
+  'reports.marketing.discounts.column.promotion': 'Акция',
+  'reports.marketing.discounts.column.code': 'Код',
+  'reports.marketing.discounts.column.status': 'Статус',
+  'reports.marketing.discounts.column.amount': 'Сумма',
+  'reports.marketing.discounts.column.when': 'Зарезервировано',
+  'reports.marketing.discounts.column.order': 'Заказ',
+  'reports.marketing.discounts.status.RESERVED': 'Удержано под заказ',
+  'reports.marketing.discounts.status.REDEEMED': 'Погашено',
+  'reports.marketing.discounts.status.RELEASED': 'Возвращено, не потрачено',
+
+  'reports.marketing.campaigns.loading': 'Загрузка…',
+  'reports.marketing.campaigns.empty': 'Рассылок пока нет.',
+  'reports.marketing.campaigns.column.name': 'Название',
+  'reports.marketing.campaigns.column.channel': 'Канал',
+  'reports.marketing.campaigns.column.status': 'Статус',
+  'reports.marketing.campaigns.selectPrompt':
+    'Выберите рассылку, чтобы увидеть статистику доставки.',
+  'reports.marketing.campaigns.countsTitle': 'Статистика доставки',
+  'reports.marketing.campaigns.count.pending': 'В очереди',
+  'reports.marketing.campaigns.count.queued': 'Отправлено в доставку',
+  'reports.marketing.campaigns.count.deferred': 'Отложено (тихие часы)',
+  'reports.marketing.campaigns.count.refused': 'Отказано',
+  'reports.marketing.campaigns.count.total': 'Всего получателей',
+  'reports.marketing.campaigns.readReceiptsNotBuilt':
+    'Отметки о прочтении не показаны: пока не фиксируется ни статус прочтения, ни дата прочтения — это не измерено, а не равно нулю.',
 
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
   'reports.forecast.title': 'История спроса',

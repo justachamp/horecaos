@@ -965,10 +965,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.tab.templates': 'Shablonlar',
   'settings.notifications.tab.routing': 'Yoʻnaltirish',
   'settings.notifications.automation.title': 'Avtomatlashtirish',
-  'settings.notifications.field.paymentLinkAutoSend': 'Toʻlov havolasini mijozga avtomatik yuborish',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Toʻlov havolasini mijozga avtomatik yuborish',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Hali ishlamaydi: hech qanday jarayon bu tugmachani hali oʻqimaydi, shuning uchun yoqish faqat tanlovni saqlaydi.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Agregator smenasi ochilishi/yopilishi haqida xabar berish',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Agregator smenasi ochilishi/yopilishi haqida xabar berish',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Hali ishlamaydi: platformada bu xabarni ishga tushiradigan agregator-smena hodisasi hali yoʻq.',
   'settings.notifications.create.action': 'Yangi shablon',
@@ -1014,7 +1016,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.editor.subject': 'Mavzu',
   'settings.notifications.editor.body': 'Matn',
   'settings.notifications.editor.variables': 'Oʻzgaruvchi qoʻshish',
-  'settings.notifications.editor.variables.empty': 'Bu bildirishnoma sinfi uchun oʻzgaruvchilar taklif etilmagan.',
+  'settings.notifications.editor.variables.empty':
+    'Bu bildirishnoma sinfi uchun oʻzgaruvchilar taklif etilmagan.',
   'settings.notifications.editor.preview': 'Mijoz qanday koʻradi',
   'settings.notifications.editor.save': 'Qoralamani saqlash',
   'settings.notifications.editor.saving': 'Saqlanmoqda…',
@@ -1033,9 +1036,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.testSend.result.ACCEPTED': 'Provayder qabul qildi.',
   'settings.notifications.testSend.result.REJECTED': 'Provayder rad etdi.',
   'settings.notifications.testSend.result.RETRYABLE': 'Uzatish xatosi — qayta urinib koʻring.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Noaniq — provayder allaqachon yuborgan boʻlishi mumkin.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Noaniq — provayder allaqachon yuborgan boʻlishi mumkin.',
   'settings.notifications.activate.confirm.title': 'Bu versiya faollashtirilsinmi?',
-  'settings.notifications.activate.confirm.body': 'Bu shablon boʻyicha har bir xabar shu matndan foydalanadi.',
+  'settings.notifications.activate.confirm.body':
+    'Bu shablon boʻyicha har bir xabar shu matndan foydalanadi.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'Bu versiya SMS shlyuzida hali «{state}» holatida. Bu oʻzgarmaguncha faollashtirish uni yuborilishiga olib kelmaydi.',
   'settings.notifications.activate.confirm.confirm': 'Faollashtirish',
@@ -1056,9 +1061,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.routing.action.editTopic': 'Mavzuni oʻzgartirish',
   'settings.notifications.routing.action.unbind': 'Uzish',
   'settings.notifications.routing.unbind.confirm.title': 'Bu chat uzilsinmi?',
-  'settings.notifications.routing.unbind.confirm.body': 'U darhol barcha hodisa sinflarini olishni toʻxtatadi.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'U darhol barcha hodisa sinflarini olishni toʻxtatadi.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Uzish',
-  'settings.notifications.routing.topic.prompt': 'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
+  'settings.notifications.routing.topic.prompt':
+    'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
   'settings.notifications.routing.topic.save': 'Saqlash',
 
   // 10.10 Maʻlumotnoma maʻlumotlari
@@ -1758,7 +1765,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.menus.filter.all': 'Barchasi',
   'catalog.menus.search.placeholder': 'Nomi yoki SKU boʻyicha qidirish',
   'catalog.menus.selectAll': 'Barcha qatorlarni tanlash',
-  'catalog.menus.selectionCapped': 'Faqat birinchi {cap} tasi — qo\'llang, so\'ng qolganlarini tanlang',
+  'catalog.menus.selectionCapped':
+    "Faqat birinchi {cap} tasi — qo'llang, so'ng qolganlarini tanlang",
   'catalog.menus.column.offering': 'Menyudagi holati',
   'catalog.menus.column.fulfillment': 'Buyurtma turlari',
   'catalog.menus.fulfillment.DELIVERY': 'Yetk',
@@ -2149,7 +2157,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.dispatch.hint':
     'Buyurtmani kuryer ustiga tashlab tayinlang. Uni orqaga, "Tayinlanmagan"ga tashlab, tayinlashni bekor qiling.',
   'delivery.dispatch.column.unassigned': 'Tayinlanmagan',
-  'delivery.dispatch.column.ineligible': 'Bu yerga tashlab bo\'lmaydi — {reason}',
+  'delivery.dispatch.column.ineligible': "Bu yerga tashlab bo'lmaydi — {reason}",
   'delivery.dispatch.action.unassign': 'Tayinlashni bekor qilish',
   'delivery.dispatch.status.PLANNED': 'Rejalashtirilgan',
   'delivery.dispatch.status.WAITING_TO_SOURCE': 'Kuryer izlanmoqda',
@@ -3646,6 +3654,47 @@ export const messagesUzLatn: MessageCatalogue = {
     'Javob tezligi koʻrsatilmaydi: hozircha qoʻngʻiroqni kutish vaqti ustuni yoʻq (V0149).',
   'reports.staff.telephony.conversionNotBuilt':
     'Qoʻngʻiroqdan buyurtmaga aylanish koʻrsatilmaydi: buning uchun 1.6 taʻminlaydigan call-provenance bogʻlanishi kerak (hali yaratilmagan).',
+
+  // ---------------------------------------------------------------- reports 7.9 marketing (T15)
+  'reports.marketing.title': 'Marketing hisobotlari',
+  'reports.marketing.tab.discounts': 'Mijoz chegirmalari',
+  'reports.marketing.tab.campaigns': 'Kampaniyalar',
+  'reports.marketing.promoSummaryNotBuilt':
+    'Promokod boʻyicha umumiy hisobot va har bir kod boʻyicha tafsilot koʻrsatilmaydi: buning uchun reporting.fact_promotion_redemption va u uchun hali mavjud boʻlmagan aksiyalar ADR kerak (ADR 0023).',
+
+  'reports.marketing.discounts.intro':
+    'Mijoz barcha brendlar boʻyicha qancha chegirma olganini koʻrsatadi — yana bir izzat-hurmat promokodi berishdan oldin oʻtkaziladigan tekshiruv.',
+  'reports.marketing.discounts.searchPlaceholder': 'Ism yoki telefon boʻyicha qidirish',
+  'reports.marketing.discounts.searchEmpty': 'Bu soʻrov boʻyicha mijoz topilmadi.',
+  'reports.marketing.discounts.selectedFor': 'Chegirmalar tarixi: {name}',
+  'reports.marketing.discounts.loading': 'Yuklanmoqda…',
+  'reports.marketing.discounts.empty': 'Bu mijoz hech qachon promokod ishlatmagan.',
+  'reports.marketing.discounts.totalsTitle': 'Jami ishlatilgan',
+  'reports.marketing.discounts.column.promotion': 'Aksiya',
+  'reports.marketing.discounts.column.code': 'Kod',
+  'reports.marketing.discounts.column.status': 'Holat',
+  'reports.marketing.discounts.column.amount': 'Summa',
+  'reports.marketing.discounts.column.when': 'Band qilingan',
+  'reports.marketing.discounts.column.order': 'Buyurtma',
+  'reports.marketing.discounts.status.RESERVED': 'Buyurtma uchun band qilingan',
+  'reports.marketing.discounts.status.REDEEMED': 'Ishlatilgan',
+  'reports.marketing.discounts.status.RELEASED': 'Qaytarilgan, ishlatilmagan',
+
+  'reports.marketing.campaigns.loading': 'Yuklanmoqda…',
+  'reports.marketing.campaigns.empty': 'Hozircha kampaniyalar yoʻq.',
+  'reports.marketing.campaigns.column.name': 'Nomi',
+  'reports.marketing.campaigns.column.channel': 'Kanal',
+  'reports.marketing.campaigns.column.status': 'Holat',
+  'reports.marketing.campaigns.selectPrompt':
+    'Yetkazib berish statistikasini koʻrish uchun kampaniyani tanlang.',
+  'reports.marketing.campaigns.countsTitle': 'Yetkazib berish statistikasi',
+  'reports.marketing.campaigns.count.pending': 'Navbatda',
+  'reports.marketing.campaigns.count.queued': 'Yetkazishga yuborilgan',
+  'reports.marketing.campaigns.count.deferred': 'Kechiktirilgan (tinch soatlar)',
+  'reports.marketing.campaigns.count.refused': 'Rad etilgan',
+  'reports.marketing.campaigns.count.total': 'Jami qabul qiluvchilar',
+  'reports.marketing.campaigns.readReceiptsNotBuilt':
+    'Oʻqilganlik belgilari koʻrsatilmaydi: hozircha na oʻqilgan holat, na oʻqilgan vaqt yozib borilmaydi — bu oʻlchanmagan, nolga teng emas.',
 
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
   'reports.forecast.title': 'Talab tarixi',

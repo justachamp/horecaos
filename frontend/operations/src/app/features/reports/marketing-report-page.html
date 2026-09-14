@@ -1,0 +1,287 @@
+<div class="marketing-report">
+  <div class="marketing-report__header">
+    <h1 class="q-title">{{ 'reports.marketing.title' | t }}</h1>
+  </div>
+
+  @switch (pageState()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'reports.marketing.campaigns.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'reports.denied.notGranted' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+      </div>
+    }
+    @case ('ready') {
+      <div class="marketing-report__tabs" role="tablist">
+        @for (tab of tabs; track tab.id) {
+          <button
+            type="button"
+            role="tab"
+            class="tab"
+            [class.tab--active]="activeTab() === tab.id"
+            [attr.aria-selected]="activeTab() === tab.id"
+            (click)="selectTab(tab.id)"
+          >
+            {{ tab.labelKey | t }}
+          </button>
+        }
+      </div>
+
+      @switch (activeTab()) {
+        @case ('discounts') {
+          <section class="panel" data-testid="marketing-report-discounts">
+            <p class="q-body-sm intro">{{ 'reports.marketing.discounts.intro' | t }}</p>
+
+            <q-combobox
+              class="search"
+              [query]="searchQuery()"
+              (queryChange)="onSearchInput($event)"
+              [options]="searchOptions()"
+              [loading]="searchState() === 'loading'"
+              [placeholder]="'reports.marketing.discounts.searchPlaceholder' | t"
+              (optionSelected)="onCustomerSelected($event)"
+              (search)="onSearchDebounced($event)"
+              data-testid="marketing-report-customer-search"
+            />
+
+            @switch (searchState()) {
+              @case ('denied') {
+                <p class="q-body-sm denied">{{ 'reports.denied.notGranted' | t }}</p>
+              }
+              @case ('error') {
+                <div class="error-band" role="alert">
+                  <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+                  <button type="button" class="secondary" (click)="retrySearch()">
+                    {{ 'reports.error.retry' | t }}
+                  </button>
+                </div>
+              }
+              @case ('ready') {
+                @if (searchResults().length === 0) {
+                  <p class="q-body-sm muted">{{ 'reports.marketing.discounts.searchEmpty' | t }}</p>
+                }
+              }
+              @default {}
+            }
+
+            @if (selectedCustomer(); as customer) {
+              <h2 class="q-body-sm selected-customer">
+                {{
+                  'reports.marketing.discounts.selectedFor' | t: { name: customerLabel(customer) }
+                }}
+              </h2>
+
+              @switch (historyState()) {
+                @case ('loading') {
+                  <p class="q-body-sm">{{ 'reports.marketing.discounts.loading' | t }}</p>
+                }
+                @case ('error') {
+                  <div class="error-band" role="alert">
+                    <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+                    <button type="button" class="secondary" (click)="retryHistory()">
+                      {{ 'reports.error.retry' | t }}
+                    </button>
+                  </div>
+                }
+                @case ('ready') {
+                  @if (history(); as h) {
+                    @if (h.totalsRedeemed.length > 0) {
+                      <div class="totals" data-testid="marketing-report-discount-totals">
+                        <span class="q-caption">{{
+                          'reports.marketing.discounts.totalsTitle' | t
+                        }}</span>
+                        @for (total of h.totalsRedeemed; track total.currency) {
+                          <span class="q-data-lg q-tnum total-chip">
+                            {{ formatMoneyValue(total.amountMinor, total.currency) }}
+                          </span>
+                        }
+                      </div>
+                    }
+
+                    @if (h.redemptions.length === 0) {
+                      <p class="q-body-sm muted">{{ 'reports.marketing.discounts.empty' | t }}</p>
+                    } @else {
+                      <table class="table">
+                        <thead>
+                          <tr>
+                            <th class="q-caption">
+                              {{ 'reports.marketing.discounts.column.promotion' | t }}
+                            </th>
+                            <th class="q-caption">
+                              {{ 'reports.marketing.discounts.column.code' | t }}
+                            </th>
+                            <th class="q-caption">
+                              {{ 'reports.marketing.discounts.column.status' | t }}
+                            </th>
+                            <th class="q-caption num">
+                              {{ 'reports.marketing.discounts.column.amount' | t }}
+                            </th>
+                            <th class="q-caption">
+                              {{ 'reports.marketing.discounts.column.when' | t }}
+                            </th>
+                            <th class="q-caption">
+                              {{ 'reports.marketing.discounts.column.order' | t }}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          @for (row of h.redemptions; track row.redemptionId) {
+                            <tr>
+                              <td class="q-body-sm">{{ row.promotionName }}</td>
+                              <td class="q-body-sm q-tnum">{{ row.codeHint ?? '—' }}</td>
+                              <td class="q-body-sm">
+                                <span
+                                  class="status-badge"
+                                  [class.status-badge--redeemed]="row.status === 'REDEEMED'"
+                                  [class.status-badge--released]="row.status === 'RELEASED'"
+                                >
+                                  {{ redemptionStatusLabelKey(row.status) | t }}
+                                </span>
+                              </td>
+                              <td class="q-body-sm q-tnum num">
+                                {{ formatMoneyValue(row.amountMinor, row.currency) }}
+                              </td>
+                              <td class="q-body-sm q-tnum">{{ formatWhen(row.reservedAt) }}</td>
+                              <td class="q-body-sm q-tnum">{{ row.orderId ?? '—' }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    }
+                  }
+                }
+                @default {}
+              }
+            }
+          </section>
+        }
+        @case ('campaigns') {
+          <section class="panel campaigns-tab" data-testid="marketing-report-campaigns">
+            @switch (campaignsState()) {
+              @case ('loading') {
+                <p class="q-body-sm">{{ 'reports.marketing.campaigns.loading' | t }}</p>
+              }
+              @case ('denied') {
+                <p class="q-body-sm denied">{{ 'reports.denied.notGranted' | t }}</p>
+              }
+              @case ('error') {
+                <div class="error-band" role="alert">
+                  <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+                  <button type="button" class="secondary" (click)="retryCampaigns()">
+                    {{ 'reports.error.retry' | t }}
+                  </button>
+                </div>
+              }
+              @case ('ready') {
+                @if (campaigns().length === 0) {
+                  <p class="q-body-sm muted">{{ 'reports.marketing.campaigns.empty' | t }}</p>
+                } @else {
+                  <div class="campaigns-layout">
+                    <table class="table campaigns-list">
+                      <thead>
+                        <tr>
+                          <th class="q-caption">
+                            {{ 'reports.marketing.campaigns.column.name' | t }}
+                          </th>
+                          <th class="q-caption">
+                            {{ 'reports.marketing.campaigns.column.channel' | t }}
+                          </th>
+                          <th class="q-caption">
+                            {{ 'reports.marketing.campaigns.column.status' | t }}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (campaign of campaigns(); track campaign.campaignId) {
+                          <tr
+                            class="campaign-row"
+                            [class.campaign-row--selected]="
+                              selectedCampaign()?.campaignId === campaign.campaignId
+                            "
+                            (click)="selectCampaign(campaign)"
+                            data-testid="marketing-report-campaign-row"
+                          >
+                            <td class="q-body-sm">{{ campaign.name }}</td>
+                            <td class="q-body-sm">{{ campaign.channel }}</td>
+                            <td class="q-body-sm">
+                              {{ campaignStatusLabelKey(campaign.status) | t }}
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+
+                    <div class="campaign-counts">
+                      @if (!selectedCampaign()) {
+                        <p class="q-body-sm muted">
+                          {{ 'reports.marketing.campaigns.selectPrompt' | t }}
+                        </p>
+                      } @else {
+                        @switch (countsState()) {
+                          @case ('loading') {
+                            <p class="q-body-sm">{{ 'reports.marketing.campaigns.loading' | t }}</p>
+                          }
+                          @case ('error') {
+                            <div class="error-band" role="alert">
+                              <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+                              <button type="button" class="secondary" (click)="retryCounts()">
+                                {{ 'reports.error.retry' | t }}
+                              </button>
+                            </div>
+                          }
+                          @case ('ready') {
+                            @if (counts(); as c) {
+                              <h2 class="q-body-sm">
+                                {{ 'reports.marketing.campaigns.countsTitle' | t }}
+                              </h2>
+                              <dl
+                                class="counts-grid"
+                                data-testid="marketing-report-recipient-counts"
+                              >
+                                <dt class="q-caption">
+                                  {{ 'reports.marketing.campaigns.count.queued' | t }}
+                                </dt>
+                                <dd class="q-data-lg q-tnum">{{ c.queued }}</dd>
+                                <dt class="q-caption">
+                                  {{ 'reports.marketing.campaigns.count.deferred' | t }}
+                                </dt>
+                                <dd class="q-data-lg q-tnum">{{ c.deferred }}</dd>
+                                <dt class="q-caption">
+                                  {{ 'reports.marketing.campaigns.count.refused' | t }}
+                                </dt>
+                                <dd class="q-data-lg q-tnum">{{ c.refused }}</dd>
+                                <dt class="q-caption">
+                                  {{ 'reports.marketing.campaigns.count.pending' | t }}
+                                </dt>
+                                <dd class="q-data-lg q-tnum">{{ c.pending }}</dd>
+                                <dt class="q-caption">
+                                  {{ 'reports.marketing.campaigns.count.total' | t }}
+                                </dt>
+                                <dd class="q-data-lg q-tnum">{{ c.total }}</dd>
+                              </dl>
+                              <p class="q-body-sm not-built-note">
+                                {{ 'reports.marketing.campaigns.readReceiptsNotBuilt' | t }}
+                              </p>
+                            }
+                          }
+                          @default {}
+                        }
+                      }
+                    </div>
+                  </div>
+                }
+              }
+              @default {}
+            }
+          </section>
+        }
+      }
+
+      <p class="q-body-sm not-built-note">{{ 'reports.marketing.promoSummaryNotBuilt' | t }}</p>
+    }
+  }
+</div>

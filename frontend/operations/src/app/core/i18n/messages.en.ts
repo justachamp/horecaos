@@ -982,10 +982,12 @@ export const messagesEn = {
   'settings.notifications.tab.templates': 'Templates',
   'settings.notifications.tab.routing': 'Routing',
   'settings.notifications.automation.title': 'Automation',
-  'settings.notifications.field.paymentLinkAutoSend': 'Send the payment link to the customer automatically',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Send the payment link to the customer automatically',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Not yet enforced: no send trigger reads this switch yet, so turning it on records the choice without changing behaviour.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Notify on aggregator shift open/close',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Notify on aggregator shift open/close',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Not yet enforced: no aggregator-shift event exists in the platform yet to trigger this.',
   'settings.notifications.create.action': 'New template',
@@ -1031,7 +1033,8 @@ export const messagesEn = {
   'settings.notifications.editor.subject': 'Subject',
   'settings.notifications.editor.body': 'Text',
   'settings.notifications.editor.variables': 'Insert a variable',
-  'settings.notifications.editor.variables.empty': 'No merge variables are offered for this notification class.',
+  'settings.notifications.editor.variables.empty':
+    'No merge variables are offered for this notification class.',
   'settings.notifications.editor.preview': 'How the customer sees it',
   'settings.notifications.editor.save': 'Save draft',
   'settings.notifications.editor.saving': 'Saving…',
@@ -1050,15 +1053,18 @@ export const messagesEn = {
   'settings.notifications.testSend.result.ACCEPTED': 'Accepted by the provider.',
   'settings.notifications.testSend.result.REJECTED': 'Refused by the provider.',
   'settings.notifications.testSend.result.RETRYABLE': 'A transport error — try again.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Uncertain — the provider may already have sent it.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Uncertain — the provider may already have sent it.',
   'settings.notifications.activate.confirm.title': 'Activate this version?',
-  'settings.notifications.activate.confirm.body': 'Every message using this template will use this wording from now on.',
+  'settings.notifications.activate.confirm.body':
+    'Every message using this template will use this wording from now on.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'This version is still {state} with its SMS gateway. Activating it will not make it send until that changes.',
   'settings.notifications.activate.confirm.confirm': 'Activate',
   'settings.notifications.routing.lead':
     'Which of this brand’s bound Telegram chats hear about which events, and their forum topic.',
-  'settings.notifications.routing.empty': 'No chat is bound yet. Use "/link <code>" in a Telegram group to bind one.',
+  'settings.notifications.routing.empty':
+    'No chat is bound yet. Use "/link <code>" in a Telegram group to bind one.',
   'settings.notifications.routing.column.chat': 'Chat',
   'settings.notifications.routing.column.topic': 'Topic',
   'settings.notifications.routing.column.status': 'Status',
@@ -1072,7 +1078,8 @@ export const messagesEn = {
   'settings.notifications.routing.action.editTopic': 'Change topic',
   'settings.notifications.routing.action.unbind': 'Unbind',
   'settings.notifications.routing.unbind.confirm.title': 'Unbind this chat?',
-  'settings.notifications.routing.unbind.confirm.body': 'It stops receiving every event class immediately.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'It stops receiving every event class immediately.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Unbind',
   'settings.notifications.routing.topic.prompt': 'Forum topic id — leave empty for the flat chat',
   'settings.notifications.routing.topic.save': 'Save',
@@ -3648,6 +3655,46 @@ export const messagesEn = {
     'Answer speed is not shown: there is no ring/wait time column yet (V0149).',
   'reports.staff.telephony.conversionNotBuilt':
     'Call-to-order conversion is not shown: it needs the call-provenance wiring that 1.6 supplies (not built yet).',
+
+  // ---------------------------------------------------------------- reports 7.9 marketing (T15)
+  'reports.marketing.title': 'Marketing reports',
+  'reports.marketing.tab.discounts': 'Customer discounts',
+  'reports.marketing.tab.campaigns': 'Campaigns',
+  'reports.marketing.promoSummaryNotBuilt':
+    'Promo-code summary and per-code redemption detail are not shown: they need reporting.fact_promotion_redemption, which needs a promotions ADR that does not exist yet (ADR 0023).',
+
+  'reports.marketing.discounts.intro':
+    'How much a customer has been discounted, across every brand — the check to run before granting another goodwill code.',
+  'reports.marketing.discounts.searchPlaceholder': 'Search by name or phone',
+  'reports.marketing.discounts.searchEmpty': 'No customer matches this search.',
+  'reports.marketing.discounts.selectedFor': 'Discount history for {name}',
+  'reports.marketing.discounts.loading': 'Loading…',
+  'reports.marketing.discounts.empty': 'This customer has never redeemed a coupon.',
+  'reports.marketing.discounts.totalsTitle': 'Total redeemed',
+  'reports.marketing.discounts.column.promotion': 'Promotion',
+  'reports.marketing.discounts.column.code': 'Code',
+  'reports.marketing.discounts.column.status': 'Status',
+  'reports.marketing.discounts.column.amount': 'Amount',
+  'reports.marketing.discounts.column.when': 'Reserved',
+  'reports.marketing.discounts.column.order': 'Order',
+  'reports.marketing.discounts.status.RESERVED': 'Held for checkout',
+  'reports.marketing.discounts.status.REDEEMED': 'Redeemed',
+  'reports.marketing.discounts.status.RELEASED': 'Released, never spent',
+
+  'reports.marketing.campaigns.loading': 'Loading…',
+  'reports.marketing.campaigns.empty': 'No campaigns yet.',
+  'reports.marketing.campaigns.column.name': 'Name',
+  'reports.marketing.campaigns.column.channel': 'Channel',
+  'reports.marketing.campaigns.column.status': 'Status',
+  'reports.marketing.campaigns.selectPrompt': 'Select a campaign to see its delivery counts.',
+  'reports.marketing.campaigns.countsTitle': 'Delivery counts',
+  'reports.marketing.campaigns.count.pending': 'Pending',
+  'reports.marketing.campaigns.count.queued': 'Sent for delivery',
+  'reports.marketing.campaigns.count.deferred': 'Deferred (quiet hours)',
+  'reports.marketing.campaigns.count.refused': 'Refused',
+  'reports.marketing.campaigns.count.total': 'Total recipients',
+  'reports.marketing.campaigns.readReceiptsNotBuilt':
+    'Read receipts are not shown: there is no read status or read_at column recorded yet — this is unmeasured, not zero.',
 
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
   'reports.forecast.title': 'Demand history',

@@ -746,20 +746,17 @@ export const routes: Routes = [
                 'metric for any of its tiles; RFM lives in Customers 5.3 instead',
             },
           },
-          // 7.9 Marketing reports: promo-code redemption needs
-          // reporting.fact_promotion_redemption, which does not exist (no
-          // promotions ADR at all, per statistics.md §7); the campaign tab
-          // would need a campaign list/summary read this wave does not add,
-          // to stay out of Marketing §6's own surface (a sibling wave).
+          // 7.9 Marketing reports (T15): 7.9a per-customer discount history and
+          // 7.9b campaign delivery counts are real this wave — see
+          // `marketing-report-page.ts`'s own doc. 7.9's promo-code summary and
+          // per-code redemption detail stay named-not-built inline on the same
+          // page: ADR 0023 forbids `reporting` reading `pricing` directly, so
+          // they need `reporting.fact_promotion_redemption`, whose grain needs
+          // a promotions ADR that does not exist yet (statistics.md §7).
           {
             path: 'marketing',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: {
-              spec:
-                'frontend-information-architecture.md §7.9 (Marketing reports) — no promotions ADR, ' +
-                'no fact_promotion_redemption',
-            },
+              import('./features/reports/marketing-report-page').then((m) => m.MarketingReportPage),
           },
           // 7.8 Demand history (wave 48): the owner's 2026-09-05 decision,
           // recorded in ADR 0043's implementation status, was to ship the
