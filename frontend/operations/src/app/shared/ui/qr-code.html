@@ -1,0 +1,27 @@
+@switch (outcome().kind) {
+  @case ('matrix') {
+    <svg
+      class="q-qr-code"
+      [style.width.px]="size()"
+      [style.height.px]="size()"
+      [attr.viewBox]="'0 0 ' + matrixSize() + ' ' + matrixSize()"
+      [attr.role]="label() ? 'img' : null"
+      [attr.aria-label]="label()"
+      [attr.aria-hidden]="label() ? null : 'true'"
+      data-testid="qr-code-svg"
+    >
+      <rect width="100%" height="100%" fill="#ffffff" />
+      @for (cell of darkCells(); track trackCell($index, cell)) {
+        <rect [attr.x]="cell.col" [attr.y]="cell.row" width="1" height="1" fill="#000000" />
+      }
+    </svg>
+  }
+  @case ('tooLong') {
+    <p class="q-caption qr-code__fallback" data-testid="qr-code-too-long">
+      {{ 'ui.qrCode.tooLong' | t }}
+    </p>
+  }
+  @default {
+    <!-- Empty value: render nothing, not an error state. -->
+  }
+}

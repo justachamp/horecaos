@@ -1413,6 +1413,7 @@ export const messagesEn = {
   'finance.payments.reissue.submitting': 'Sending…',
   'finance.payments.reissue.result.link': 'Sent. Checkout link: {url}',
   'finance.payments.reissue.result.push': 'Invoice pushed to the phone.',
+  'finance.payments.reissue.result.qrLabel': 'QR code for this checkout link',
   'finance.payments.reissue.reason.noPaymentIntent': 'This order has no payment to present.',
   'finance.payments.reissue.reason.notPayableOnline':
     'This order is not paid through a provider — it settles in cash.',
@@ -2068,6 +2069,7 @@ export const messagesEn = {
   'kitchen.nav.vdu': 'Display',
   'kitchen.nav.stopList': 'Stop list',
   'kitchen.nav.capacity': 'Capacity',
+  'kitchen.nav.devices': 'Devices',
 
   'kitchen.denied': 'No access to this location’s kitchen board',
   'kitchen.empty': 'Nothing in production right now',
@@ -2212,6 +2214,36 @@ export const messagesEn = {
   'kitchen.capacity.weekday.5': 'Friday',
   'kitchen.capacity.weekday.6': 'Saturday',
   'kitchen.capacity.weekday.7': 'Sunday',
+
+  // Kitchen devices (row 2/X.2, ADR 0079) — wave P17
+  'kitchen.devices.title': 'Kitchen devices',
+  'kitchen.devices.hint':
+    'Every kitchen display enrolled at this branch. A new screen shows a code on its own — type it below to approve it; never scanned.',
+  'kitchen.devices.loading': 'Loading devices',
+  'kitchen.devices.denied': 'No access to this location’s kitchen devices',
+  'kitchen.devices.loadError': 'Could not load kitchen devices',
+  'kitchen.devices.approve.title': 'Approve a new device',
+  'kitchen.devices.approve.hint':
+    'Read the code off the new screen and type it here — this screen never scans one.',
+  'kitchen.devices.approve.userCode': 'Code shown on the device',
+  'kitchen.devices.approve.displayName': 'Name for this device',
+  'kitchen.devices.approve.incomplete': 'Enter the code and a name for the device.',
+  'kitchen.devices.approve.submitting': 'Approving…',
+  'kitchen.devices.approve.submit': 'Approve',
+  'kitchen.devices.active.title': 'Active devices',
+  'kitchen.devices.active.empty': 'No devices enrolled at this branch yet',
+  'kitchen.devices.revoked.title': 'Revoked devices',
+  'kitchen.devices.column.displayName': 'Device',
+  'kitchen.devices.column.enrolledBy': 'Approved by',
+  'kitchen.devices.column.enrolledAt': 'Approved at',
+  'kitchen.devices.column.revokedBy': 'Revoked by',
+  'kitchen.devices.column.revokedAt': 'Revoked at',
+  'kitchen.devices.column.revokedReason': 'Reason',
+  'kitchen.devices.revoke.start': 'Revoke',
+  'kitchen.devices.revoke.reasonPlaceholder': 'Why — lost, replaced, stolen…',
+  'kitchen.devices.revoke.confirm': 'Confirm revoke',
+  'kitchen.devices.revoke.submitting': 'Revoking…',
+  'kitchen.devices.revoke.cancel': 'Cancel',
 
   // Couriers (3.3) — wave 30
   'couriers.title': 'Couriers',
@@ -4523,6 +4555,7 @@ export const messagesEn = {
   'ui.filterBar.more': 'More filters',
   'ui.filterBar.reset': 'Reset filters',
   'ui.toast.dismiss': 'Dismiss',
+  'ui.qrCode.tooLong': 'Too long to render as a QR code',
   'ui.splitPane.handle': 'Resize the detail pane',
   'ui.richText.kind.paragraph': 'Paragraph',
   'ui.richText.kind.heading': 'Heading',
@@ -4860,6 +4893,34 @@ export const messagesEn = {
   'settings.integrations.failures.replay': 'Replay',
   'settings.integrations.failures.replay.reasonPrompt': 'Reason for replaying this message:',
   'settings.integrations.failures.empty': 'No failed messages right now.',
+
+  // Device shell — rows X/X.2 and X.35 (ADR 0079, ADR 0119, wave P17). Not
+  // reached from the console shell: `/device`, a top-level route.
+  'device.offlineBanner': 'Offline — waiting for the connection to come back',
+  'device.setup.title': 'Set up this device',
+  'device.setup.hint': 'One-time — enter this device’s branch before pairing it.',
+  'device.setup.tenantId': 'Tenant ID',
+  'device.setup.brandId': 'Brand ID',
+  'device.setup.locationId': 'Branch ID',
+  'device.setup.incomplete': 'Enter all three IDs.',
+  'device.setup.save': 'Save',
+  'device.enrol.title': 'Pair this device',
+  'device.enrol.hint': 'A manager reads the code below and approves it from Kitchen → Devices.',
+  'device.enrol.begin': 'Show pairing code',
+  'device.enrol.beginning': 'Requesting a code…',
+  'device.enrol.userCodeLabel': 'Code for the manager to type',
+  'device.enrol.waiting': 'Waiting for a manager to approve this device…',
+  'device.enrol.qrLabel': 'This device’s pairing code',
+  'device.enrol.denied': 'This pairing request was denied. Try again.',
+  'device.enrol.expired': 'This pairing code expired. Try again.',
+  'device.enrol.error': 'Could not reach the platform. Try again.',
+  'device.enrol.retry': 'Try again',
+  'device.board.loading': 'Loading the board',
+  'device.board.empty': 'No tickets on the line right now',
+  'device.board.error': 'Could not load the board',
+  'device.board.start': 'Start',
+  'device.board.ready': 'Ready',
+  'device.resetDevice': 'Reset this device',
 } as const;
 
 /** Every key the application may ask for. Derived, never hand-maintained. */
