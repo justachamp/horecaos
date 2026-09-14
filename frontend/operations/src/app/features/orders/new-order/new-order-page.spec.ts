@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router, provideRouter } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
@@ -94,6 +94,7 @@ describe('NewOrderPage', () => {
     searchItems: ReturnType<typeof vi.fn>;
     placeOrder: ReturnType<typeof vi.fn>;
     aggregatorEntry: ReturnType<typeof vi.fn>;
+    recordCallProvenance: ReturnType<typeof vi.fn>;
   };
   let customersApi: {
     create: ReturnType<typeof vi.fn>;
@@ -113,6 +114,7 @@ describe('NewOrderPage', () => {
     customersOverrides: Partial<typeof customersApi> = {},
     channels: readonly ChannelView[] = [],
     matrices: { paymentMethods: Record<string, boolean> } = { paymentMethods: {} },
+    queryParams: Readonly<Record<string, string>> = {},
   ): Promise<void> {
     newOrderApi = {
       menu: vi.fn().mockResolvedValue(MENU),
@@ -120,6 +122,7 @@ describe('NewOrderPage', () => {
       searchItems: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
       placeOrder: vi.fn(),
       aggregatorEntry: vi.fn(),
+      recordCallProvenance: vi.fn().mockResolvedValue(undefined),
       ...overrides,
     };
     customersApi = {
@@ -134,6 +137,10 @@ describe('NewOrderPage', () => {
       imports: [NewOrderPage],
       providers: [
         provideRouter([]),
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap(queryParams) } },
+        },
         {
           provide: CurrentLocation,
           useValue: {
@@ -277,6 +284,53 @@ describe('NewOrderPage', () => {
       { variantId: 'v-1', quantity: 1, modifierOptionIds: [], customerNote: null },
     ]);
     expect(navigateSpy).toHaveBeenCalledWith(['/orders', 'order-1']);
+  });
+
+  it('links the placed order to the claimed call it started from, when this screen was opened from one', async () => {
+    const result: PlaceOrderResult = {
+      orderId: 'order-2',
+      publicOrderNumber: '#0002',
+      status: 'CONFIRMED',
+      version: 1,
+      outcome: 'PLACED',
+      warnings: [],
+    };
+    const placeOrder = vi.fn().mockResolvedValue(result);
+    const recordCallProvenance = vi.fn().mockResolvedValue(undefined);
+    await render({ placeOrder, recordCallProvenance }, { callEventId: 'call-9' });
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.detectChanges();
+
+    await fixture.componentInstance['submit']();
+
+    expect(recordCallProvenance).toHaveBeenCalledWith(SCOPE, 'order-2', 'call-9');
+  });
+
+  it('never calls recordCallProvenance for an order not started from a claimed call', async () => {
+    const result: PlaceOrderResult = {
+      orderId: 'order-3',
+      publicOrderNumber: '#0003',
+      status: 'CONFIRMED',
+      version: 1,
+      outcome: 'PLACED',
+      warnings: [],
+    };
+    const placeOrder = vi.fn().mockResolvedValue(result);
+    const recordCallProvenance = vi.fn().mockResolvedValue(undefined);
+    // No `callEventId` query param this time — the ordinary walk-in/typed order.
+    await render({ placeOrder, recordCallProvenance });
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.detectChanges();
+
+    await fixture.componentInstance['submit']();
+
+    expect(recordCallProvenance).not.toHaveBeenCalled();
   });
 
   it('refuses to submit with an empty basket even when a customer is selected', async () => {

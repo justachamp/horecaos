@@ -181,6 +181,17 @@ export const operationsPaths = {
     return `${this.order(scope, orderId)}/completion`;
   },
 
+  /**
+   * Links an order to the call it originated from (ADR 0064,
+   * `OperationsOrderController.recordCallProvenance`). Write-once on the
+   * server; called once, from the new-order screen, when the operator
+   * started the order from a claimed screen-pop card. Mutation: key
+   * required.
+   */
+  orderCallProvenance(scope: LocationScope, orderId: string): string {
+    return `${this.order(scope, orderId)}/call-provenance`;
+  },
+
   /** Approve or reject an order awaiting a decision. Mutation: key required. */
   orderApprovalDecisions(scope: LocationScope, orderId: string): string {
     return `${this.order(scope, orderId)}/approval-decisions`;
@@ -388,9 +399,20 @@ export const operationsPaths = {
     return `${this.reservation(scope, reservationId)}/state-actions`;
   },
 
-  /** Change the party size, the time, or the tables of a booking not yet seated. Mutation: key and `If-Match`. */
+  /** Change the party size, the time, the tables, or the guest's own details of a booking not yet seated. Mutation: key and `If-Match`. */
   reservationAmendments(scope: LocationScope, reservationId: string): string {
     return `${this.reservation(scope, reservationId)}/amendments`;
+  },
+
+  /**
+   * Dine-in sessions (ADR 0047, `TableSessionController`) — on
+   * {@link LEGACY_TENANT_PREFIX} under the location, not under
+   * `/reservations`: the controller's own `@RequestMapping` has no such
+   * segment. `POST` here with a `reservationId` is what seats a booking
+   * (IA 1.5a) — the reservation moves to `SEATED` in the same transaction.
+   */
+  dineInSessions(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/dine-in/sessions`;
   },
 
   /**

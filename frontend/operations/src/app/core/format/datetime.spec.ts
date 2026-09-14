@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatClock, formatDate, formatDateTime, formatDuration, formatTime } from './datetime';
+import {
+  formatClock,
+  formatDate,
+  formatDateTime,
+  formatDuration,
+  formatTime,
+  zonedTimeToInstant,
+} from './datetime';
 
 const TASHKENT = 'Asia/Tashkent';
 /** 2026-08-21T14:34:05Z is 19:34:05 in Tashkent (UTC+5, no DST). */
@@ -40,5 +47,33 @@ describe('date and time formatting', () => {
 
   it('clamps a negative duration rather than rendering a negative wait', () => {
     expect(formatDuration(-5, { hour: 'ч', minute: 'мин' })).toBe('0 мин');
+  });
+
+  describe('zonedTimeToInstant', () => {
+    it('is the inverse of formatTime for a whole hour, in the tenant zone not the browser one', () => {
+      const instant = zonedTimeToInstant('2026-08-21', 19.5, TASHKENT);
+      expect(instant.toISOString()).toBe('2026-08-21T14:30:00.000Z');
+      expect(formatTime(instant, TASHKENT)).toBe('19:30');
+    });
+
+    it('rolls an hour at or past 24 into the next calendar day — the wrap a booking window past midnight needs', () => {
+      // 25.5 hours from 2026-08-21 00:00 Tashkent is 2026-08-22 01:30 Tashkent.
+      const instant = zonedTimeToInstant('2026-08-21', 25.5, TASHKENT);
+      expect(formatDate(instant, TASHKENT)).toBe('22.08.2026');
+      expect(formatTime(instant, TASHKENT)).toBe('01:30');
+    });
+
+    it('rolls a negative hour into the previous calendar day', () => {
+      const instant = zonedTimeToInstant('2026-08-21', -1, TASHKENT);
+      expect(formatDate(instant, TASHKENT)).toBe('20.08.2026');
+      expect(formatTime(instant, TASHKENT)).toBe('23:00');
+    });
+
+    it('answers a different UTC instant for the same wall clock in a different zone', () => {
+      const inTashkent = zonedTimeToInstant('2026-08-21', 19, TASHKENT);
+      const inLondon = zonedTimeToInstant('2026-08-21', 19, 'Europe/London');
+      expect(inTashkent.getTime()).not.toBe(inLondon.getTime());
+      expect(formatTime(inLondon, 'Europe/London')).toBe('19:00');
+    });
   });
 });

@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router, provideRouter } from '@angular/router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
@@ -66,6 +67,7 @@ describe('CallCentrePage', () => {
     await TestBed.configureTestingModule({
       imports: [CallCentrePage],
       providers: [
+        provideRouter([]),
         {
           provide: CurrentLocation,
           useValue: {
@@ -92,6 +94,7 @@ describe('CallCentrePage', () => {
       myPresence: () => Promise.resolve(presence()),
       callLog: () => Promise.resolve([]),
       currentCall: () => Promise.resolve(emptyCard()),
+      roster: () => Promise.resolve([]),
       ...overrides,
     };
   }
@@ -147,7 +150,9 @@ describe('CallCentrePage', () => {
     );
 
     const host = fixture.nativeElement as HTMLElement;
-    expect(host.querySelector('[data-testid="call-centre-screen-pop-card"]')?.textContent).toContain('Alisher');
+    expect(
+      host.querySelector('[data-testid="call-centre-screen-pop-card"]')?.textContent,
+    ).toContain('Alisher');
     expect(host.textContent).toContain('A-1001');
     expect(host.querySelector('[data-testid="call-centre-create-customer"]')).toBeNull();
   });
@@ -173,7 +178,9 @@ describe('CallCentrePage', () => {
     fixture.detectChanges();
 
     expect(acknowledge).toHaveBeenCalledWith(SCOPE, 'call-1');
-    expect(host.querySelector('[data-testid="call-centre-claimed-by"]')?.textContent).toContain('op-1');
+    expect(host.querySelector('[data-testid="call-centre-claimed-by"]')?.textContent).toContain(
+      'op-1',
+    );
   });
 
   it('refuses to pause without a reason', async () => {
@@ -181,7 +188,9 @@ describe('CallCentrePage', () => {
     await render(fakeApi({ setPresence }));
 
     const host = fixture.nativeElement as HTMLElement;
-    (host.querySelector('[data-testid="call-centre-presence-PAUSED"]') as HTMLButtonElement).click();
+    (
+      host.querySelector('[data-testid="call-centre-presence-PAUSED"]') as HTMLButtonElement
+    ).click();
     fixture.detectChanges();
 
     expect(setPresence).not.toHaveBeenCalled();
@@ -189,21 +198,29 @@ describe('CallCentrePage', () => {
   });
 
   it('pauses with a reason', async () => {
-    const setPresence = vi.fn().mockResolvedValue(presence({ state: 'PAUSED', reason: 'Lunch break' }));
+    const setPresence = vi
+      .fn()
+      .mockResolvedValue(presence({ state: 'PAUSED', reason: 'Lunch break' }));
     await render(fakeApi({ setPresence }));
 
     const host = fixture.nativeElement as HTMLElement;
-    const reasonField = host.querySelector('[data-testid="call-centre-presence-reason"]') as HTMLInputElement;
+    const reasonField = host.querySelector(
+      '[data-testid="call-centre-presence-reason"]',
+    ) as HTMLInputElement;
     reasonField.value = 'Lunch break';
     reasonField.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
-    (host.querySelector('[data-testid="call-centre-presence-PAUSED"]') as HTMLButtonElement).click();
+    (
+      host.querySelector('[data-testid="call-centre-presence-PAUSED"]') as HTMLButtonElement
+    ).click();
     await flushMicrotasks();
     fixture.detectChanges();
 
     expect(setPresence).toHaveBeenCalledWith(SCOPE, 'PAUSED', 'Lunch break');
-    expect(host.querySelector('[data-testid="call-centre-presence-current"]')?.textContent).toContain('Lunch break');
+    expect(
+      host.querySelector('[data-testid="call-centre-presence-current"]')?.textContent,
+    ).toContain('Lunch break');
   });
 
   it('renders the call log', async () => {
@@ -233,7 +250,9 @@ describe('CallCentrePage', () => {
     );
 
     const host = fixture.nativeElement as HTMLElement;
-    (host.querySelector('[data-testid="call-centre-create-customer"]') as HTMLButtonElement).click();
+    (
+      host.querySelector('[data-testid="call-centre-create-customer"]') as HTMLButtonElement
+    ).click();
     await flushMicrotasks();
     fixture.detectChanges();
 
@@ -241,10 +260,13 @@ describe('CallCentrePage', () => {
     // display value — a mask could never be typed into a real contact point.
     const dialog = host.querySelector('[data-testid="create-customer-dialog"]');
     expect(dialog).not.toBeNull();
-    const phoneField = dialog?.querySelector('[data-testid="create-customer-phone"]') as HTMLInputElement | undefined;
+    const phoneField = dialog?.querySelector('[data-testid="create-customer-phone"]') as
+      HTMLInputElement | undefined;
     expect(phoneField?.value).toBe('+998901234567');
 
-    (dialog?.querySelector('[data-testid="create-customer-confirm"]') as HTMLButtonElement)?.click();
+    (
+      dialog?.querySelector('[data-testid="create-customer-confirm"]') as HTMLButtonElement
+    )?.click();
     await flushMicrotasks();
 
     expect(create).toHaveBeenCalledWith(SCOPE, {
@@ -263,5 +285,61 @@ describe('CallCentrePage', () => {
 
     const host = fixture.nativeElement as HTMLElement;
     expect(host.querySelector('[data-testid="call-centre-screen-pop-error"]')).toBeNull();
+  });
+
+  it('shows the team roster — roster() was dead code before W01', async () => {
+    await render(
+      fakeApi({
+        roster: () =>
+          Promise.resolve([
+            presence({ operatorPrincipalId: 'op-2', state: 'ONLINE' }),
+            presence({ operatorPrincipalId: 'op-3', state: 'PAUSED', reason: 'Break' }),
+          ]),
+      }),
+    );
+
+    const host = fixture.nativeElement as HTMLElement;
+    const roster = host.querySelector('[data-testid="call-centre-roster"]');
+    expect(roster).not.toBeNull();
+    expect(roster?.textContent).toContain('op-2');
+    expect(roster?.textContent).toContain('op-3');
+    expect(roster?.textContent).toContain('Break');
+  });
+
+  it('hides the roster section rather than the whole screen when the roster read is refused', async () => {
+    await render(
+      fakeApi({
+        roster: () => Promise.reject(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null)),
+      }),
+    );
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="call-centre-roster"]')).toBeNull();
+    // The rest of the screen still works — this operator just has no team board.
+    expect(host.querySelector('[data-testid="call-centre-denied"]')).toBeNull();
+  });
+
+  it('starts an order for a claimed, known caller, carrying the call id', async () => {
+    await render(
+      fakeApi({
+        currentCall: () =>
+          Promise.resolve(
+            ringingCard({
+              unknownCaller: false,
+              acknowledgedBy: 'op-1',
+              customerDisplayName: 'Alisher',
+            }),
+          ),
+      }),
+    );
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="call-centre-start-order"]') as HTMLButtonElement).click();
+
+    expect(navigate).toHaveBeenCalledWith(['/orders/new'], {
+      queryParams: { callEventId: 'call-1' },
+    });
   });
 });

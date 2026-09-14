@@ -8,9 +8,11 @@ import { I18n, LOCALES, Locale, isLocale } from '../core/i18n/i18n';
 import { TPipe } from '../core/i18n/t.pipe';
 import { Toasts } from '../shared/ui/toast';
 import { ToastHost } from '../shared/ui/toast-host';
+import { CallBar } from './call-bar';
 import { NAVIGATION, NavGroup } from './navigation';
 import { ServiceStatus } from './service-status';
 import { SupportBanner } from './support-banner';
+import { VoicePresence } from './voice-presence';
 
 /**
  * The console shell: rail, top bar, and the routed view.
@@ -48,7 +50,7 @@ import { SupportBanner } from './support-banner';
  */
 @Component({
   selector: 'q-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, TPipe, SupportBanner, ToastHost],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, TPipe, SupportBanner, ToastHost, CallBar],
   templateUrl: './shell.html',
   styleUrl: './shell.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -58,6 +60,7 @@ export class Shell {
   private readonly i18n = inject(I18n);
   private readonly currentLocation = inject(CurrentLocation);
   private readonly capabilities = inject(SessionCapabilities);
+  private readonly voicePresence = inject(VoicePresence);
   protected readonly auth = inject(Auth);
   protected readonly status = inject(ServiceStatus);
   private readonly toasts = inject(Toasts);
@@ -105,6 +108,13 @@ export class Shell {
     // unfiltered rail would otherwise show is as short as the session
     // context read allows.
     void this.capabilities.ensureLoaded();
+    // IA X.37: starts the presence/screen-pop poll the shell's own call bar
+    // reads, here rather than waiting for an operator to open
+    // `/orders/call-centre` first — the entire point of the bar is that a
+    // ringing call reaches an operator on any screen. Idempotent, same
+    // shape as `ensureLoaded` above; `call-centre-page.ts` calls it again
+    // for the case where that page is opened directly.
+    this.voicePresence.start();
   }
 
   /**

@@ -194,6 +194,14 @@ describe('Shell', () => {
     expect(currentLocation.ensureLoaded).toHaveBeenCalled();
   });
 
+  it('mounts the call bar (IA X.37) so a ringing call reaches an operator on any screen', () => {
+    // Behaviour (claiming, starting an order, what renders while a call is
+    // ringing) is `call-bar.spec.ts`'s own job; this only proves the shell
+    // actually mounts it, outside the routed outlet, the same way it mounts
+    // `q-toast-host`.
+    expect(fixture.nativeElement.querySelector('q-call-bar')).not.toBeNull();
+  });
+
   it('shows no location picker for an operator with at most one location', () => {
     // Zero options (a direct LOCATION grant) and one option (a resolved
     // brand with a single branch) must look identical to the operator: no
