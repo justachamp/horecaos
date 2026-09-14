@@ -110,13 +110,31 @@ export interface PlaceOrderLine {
   readonly customerNote?: string | null;
 }
 
-/** `OperationsOrderController.PlaceOrderRequest`. Cash only, this release (ADR 0039) — see `OperatorOrderingService.java:94`. */
+/**
+ * `OperationsOrderController.DestinationRequest` — where a `DELIVERY` order
+ * goes, one of the resolved customer's own saved addresses, named by id,
+ * never typed ad hoc (row 1.3b).
+ */
+export interface DestinationRequest {
+  readonly customerAddressId: string;
+  readonly recipientName: string;
+  readonly recipientPhone: string;
+  readonly deliveryNote?: string | null;
+}
+
+/**
+ * `OperationsOrderController.PlaceOrderRequest`. `paymentMethodCode` is
+ * checked against the operator channel's own matrix, never hard-coded to
+ * cash (wave P14; see `OperatorOrderingService`'s own doc).
+ */
 export interface PlaceOrderRequest {
   readonly customerAccountId: string;
   readonly channelCode: string;
   readonly fulfillmentMode: string;
   readonly lines: readonly PlaceOrderLine[];
-  readonly paymentMethodCode: 'CASH';
+  readonly destination?: DestinationRequest | null;
+  readonly paymentMethodCode: string;
+  readonly promoCode?: string | null;
 }
 
 /** `OperationsOrderController.PlaceOrderResponse`. */
@@ -213,6 +231,46 @@ export class NewOrderApi {
       ),
     );
   }
+
+  /**
+   * Row 1.3g (ADR 0040) — records an aggregator's own order under its
+   * `AGGREGATOR`-type channel, with externally-set pricing, never run
+   * through the ordinary cart/quote pipeline {@link placeOrder} uses.
+   */
+  aggregatorEntry(
+    scope: LocationScope,
+    request: AggregatorOrderRequest,
+  ): Promise<PlaceOrderResult> {
+    return firstValueFrom(
+      this.api.post<AggregatorOrderRequest, PlaceOrderResult>(
+        operationsPaths.orderAggregatorEntries(scope),
+        command(request),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------- §5.6 aggregator entry (1.3g)
+
+/** `OperationsOrderController.AggregatorOrderLineRequest`. */
+export interface AggregatorOrderLine {
+  readonly variantId?: string | null;
+  readonly nameSnapshot: string;
+  readonly quantity: number;
+  readonly unitAmountMinor: number;
+  readonly externalItemReference?: string | null;
+}
+
+/** `OperationsOrderController.AggregatorOrderRequest`. */
+export interface AggregatorOrderRequest {
+  readonly channelCode: string;
+  readonly externalOrderId: string;
+  readonly lines: readonly AggregatorOrderLine[];
+  readonly currency: string;
+  readonly subtotalMinor: number;
+  readonly discountMinor: number;
+  readonly feeMinor: number;
+  readonly totalMinor: number;
 }
 
 function toBrandScope(scope: LocationScope): BrandScope {

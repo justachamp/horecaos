@@ -955,10 +955,12 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.tab.templates': 'Шаблоны',
   'settings.notifications.tab.routing': 'Маршрутизация',
   'settings.notifications.automation.title': 'Автоматизация',
-  'settings.notifications.field.paymentLinkAutoSend': 'Отправлять клиенту ссылку на оплату автоматически',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Отправлять клиенту ссылку на оплату автоматически',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Пока не действует: ни один сценарий ещё не читает этот переключатель, поэтому включение только сохраняет выбор.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Уведомлять об открытии/закрытии смены агрегатора',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Уведомлять об открытии/закрытии смены агрегатора',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Пока не действует: в платформе ещё нет самого события смены агрегатора, которое запускало бы это уведомление.',
   'settings.notifications.create.action': 'Новый шаблон',
@@ -1004,7 +1006,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.editor.subject': 'Тема',
   'settings.notifications.editor.body': 'Текст',
   'settings.notifications.editor.variables': 'Вставить переменную',
-  'settings.notifications.editor.variables.empty': 'Для этого класса уведомлений переменные не предложены.',
+  'settings.notifications.editor.variables.empty':
+    'Для этого класса уведомлений переменные не предложены.',
   'settings.notifications.editor.preview': 'Как увидит клиент',
   'settings.notifications.editor.save': 'Сохранить черновик',
   'settings.notifications.editor.saving': 'Сохранение…',
@@ -1023,15 +1026,18 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.testSend.result.ACCEPTED': 'Принято провайдером.',
   'settings.notifications.testSend.result.REJECTED': 'Отклонено провайдером.',
   'settings.notifications.testSend.result.RETRYABLE': 'Ошибка передачи — попробуйте ещё раз.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Неопределённо — провайдер, возможно, уже отправил.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Неопределённо — провайдер, возможно, уже отправил.',
   'settings.notifications.activate.confirm.title': 'Активировать эту версию?',
-  'settings.notifications.activate.confirm.body': 'Каждое сообщение по этому шаблону будет использовать этот текст.',
+  'settings.notifications.activate.confirm.body':
+    'Каждое сообщение по этому шаблону будет использовать этот текст.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'Эта версия пока «{state}» у SMS-шлюза. Активация не заставит её отправляться, пока это не изменится.',
   'settings.notifications.activate.confirm.confirm': 'Активировать',
   'settings.notifications.routing.lead':
     'Какие из привязанных Telegram-чатов этого бренда слышат какие события, и их форум-тема.',
-  'settings.notifications.routing.empty': 'Ни один чат ещё не привязан. Отправьте «/link <код>» в Telegram-группе, чтобы привязать её.',
+  'settings.notifications.routing.empty':
+    'Ни один чат ещё не привязан. Отправьте «/link <код>» в Telegram-группе, чтобы привязать её.',
   'settings.notifications.routing.column.chat': 'Чат',
   'settings.notifications.routing.column.topic': 'Тема',
   'settings.notifications.routing.column.status': 'Статус',
@@ -1045,9 +1051,11 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.routing.action.editTopic': 'Сменить тему',
   'settings.notifications.routing.action.unbind': 'Отвязать',
   'settings.notifications.routing.unbind.confirm.title': 'Отвязать этот чат?',
-  'settings.notifications.routing.unbind.confirm.body': 'Он сразу перестанет получать любые классы событий.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'Он сразу перестанет получать любые классы событий.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Отвязать',
-  'settings.notifications.routing.topic.prompt': 'ID темы форума — оставьте пустым для обычного чата',
+  'settings.notifications.routing.topic.prompt':
+    'ID темы форума — оставьте пустым для обычного чата',
   'settings.notifications.routing.topic.save': 'Сохранить',
 
   // 10.10 Справочные данные
@@ -4109,6 +4117,44 @@ export const messagesRu: MessageCatalogue = {
   'orders.newOrder.order.cancel': 'Отмена',
   'orders.newOrder.order.created': 'Заказ {number} создан',
   'orders.newOrder.order.unavailableCount': 'Позиций в корзине больше не доступно: {count}',
+  'orders.newOrder.order.branch': 'Филиал',
+  'orders.newOrder.order.byZone': '(по зоне)',
+  'orders.newOrder.order.promoCode': 'Промокод',
+  'orders.newOrder.order.cashTendered': 'Сдача с',
+  'orders.newOrder.order.changeDue': 'Сдача',
+
+  // wave P14: §5.4 адресная панель (строка 1.3b)
+  'orders.newOrder.address.title': 'Адрес',
+  'orders.newOrder.address.loading': 'Загрузка адресов…',
+  'orders.newOrder.address.denied': 'Нет доступа к сохранённым адресам клиента',
+  'orders.newOrder.address.empty': 'Сохранённых адресов нет',
+  'orders.newOrder.address.add': '+ Новый адрес',
+  'orders.newOrder.address.notLocated':
+    'У этого адреса ещё нет метки на карте, доставка не может быть рассчитана — карта и метка пока не реализованы. Выберите другой адрес или уточните по телефону.',
+  'orders.newOrder.address.notServiceable': 'Этот адрес вне зоны доставки этого филиала',
+  'orders.newOrder.address.recipientName': 'Получатель',
+  'orders.newOrder.address.recipientPhone': 'Телефон получателя',
+  'orders.newOrder.address.deliveryNote': 'Комментарий курьеру',
+
+  // wave P14: §5.3 «Повторить» (строка 1.3f)
+  'orders.newOrder.reorder.action': 'Повторить',
+  'orders.newOrder.reorder.busy': 'Повторяем…',
+  'orders.newOrder.reorder.unavailable': 'Ни одну позицию этого заказа нельзя повторить',
+  'orders.newOrder.reorder.partial':
+    'Часть позиций этого заказа больше не доступна и была пропущена',
+
+  // wave P14: заказ агрегатора вручную (строка 1.3g)
+  'orders.newOrder.aggregator.toggle': 'Заказ агрегатора',
+  'orders.newOrder.aggregator.title': 'Заказ агрегатора',
+  'orders.newOrder.aggregator.channel': 'Агрегатор',
+  'orders.newOrder.aggregator.noChannels': 'Канал агрегатора не настроен',
+  'orders.newOrder.aggregator.externalOrderId': 'Номер заказа у агрегатора',
+  'orders.newOrder.aggregator.subtotal': 'Подытог',
+  'orders.newOrder.aggregator.discount': 'Скидка',
+  'orders.newOrder.aggregator.fee': 'Комиссия',
+  'orders.newOrder.aggregator.total': 'Сумма, полученная агрегатором',
+  'orders.newOrder.aggregator.hint':
+    'Записано точно так, как указал агрегатор, — HorecaOS не пересчитывает эту сумму',
 
   // --- shared/ui (ADR 0101) ----------------------------------------------
   'ui.denied.title': 'Нет доступа к этому разделу',

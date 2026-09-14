@@ -982,10 +982,12 @@ export const messagesEn = {
   'settings.notifications.tab.templates': 'Templates',
   'settings.notifications.tab.routing': 'Routing',
   'settings.notifications.automation.title': 'Automation',
-  'settings.notifications.field.paymentLinkAutoSend': 'Send the payment link to the customer automatically',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Send the payment link to the customer automatically',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Not yet enforced: no send trigger reads this switch yet, so turning it on records the choice without changing behaviour.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Notify on aggregator shift open/close',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Notify on aggregator shift open/close',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Not yet enforced: no aggregator-shift event exists in the platform yet to trigger this.',
   'settings.notifications.create.action': 'New template',
@@ -1031,7 +1033,8 @@ export const messagesEn = {
   'settings.notifications.editor.subject': 'Subject',
   'settings.notifications.editor.body': 'Text',
   'settings.notifications.editor.variables': 'Insert a variable',
-  'settings.notifications.editor.variables.empty': 'No merge variables are offered for this notification class.',
+  'settings.notifications.editor.variables.empty':
+    'No merge variables are offered for this notification class.',
   'settings.notifications.editor.preview': 'How the customer sees it',
   'settings.notifications.editor.save': 'Save draft',
   'settings.notifications.editor.saving': 'Saving…',
@@ -1050,15 +1053,18 @@ export const messagesEn = {
   'settings.notifications.testSend.result.ACCEPTED': 'Accepted by the provider.',
   'settings.notifications.testSend.result.REJECTED': 'Refused by the provider.',
   'settings.notifications.testSend.result.RETRYABLE': 'A transport error — try again.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Uncertain — the provider may already have sent it.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Uncertain — the provider may already have sent it.',
   'settings.notifications.activate.confirm.title': 'Activate this version?',
-  'settings.notifications.activate.confirm.body': 'Every message using this template will use this wording from now on.',
+  'settings.notifications.activate.confirm.body':
+    'Every message using this template will use this wording from now on.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'This version is still {state} with its SMS gateway. Activating it will not make it send until that changes.',
   'settings.notifications.activate.confirm.confirm': 'Activate',
   'settings.notifications.routing.lead':
     'Which of this brand’s bound Telegram chats hear about which events, and their forum topic.',
-  'settings.notifications.routing.empty': 'No chat is bound yet. Use "/link <code>" in a Telegram group to bind one.',
+  'settings.notifications.routing.empty':
+    'No chat is bound yet. Use "/link <code>" in a Telegram group to bind one.',
   'settings.notifications.routing.column.chat': 'Chat',
   'settings.notifications.routing.column.topic': 'Topic',
   'settings.notifications.routing.column.status': 'Status',
@@ -1072,7 +1078,8 @@ export const messagesEn = {
   'settings.notifications.routing.action.editTopic': 'Change topic',
   'settings.notifications.routing.action.unbind': 'Unbind',
   'settings.notifications.routing.unbind.confirm.title': 'Unbind this chat?',
-  'settings.notifications.routing.unbind.confirm.body': 'It stops receiving every event class immediately.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'It stops receiving every event class immediately.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Unbind',
   'settings.notifications.routing.topic.prompt': 'Forum topic id — leave empty for the flat chat',
   'settings.notifications.routing.topic.save': 'Save',
@@ -4128,6 +4135,45 @@ export const messagesEn = {
   'orders.newOrder.order.cancel': 'Cancel',
   'orders.newOrder.order.created': 'Order {number} created',
   'orders.newOrder.order.unavailableCount': '{count} item(s) in the basket are no longer available',
+  'orders.newOrder.order.branch': 'Branch',
+  'orders.newOrder.order.byZone': '(by zone)',
+  'orders.newOrder.order.promoCode': 'Promo code',
+  'orders.newOrder.order.cashTendered': 'Cash tendered',
+  'orders.newOrder.order.changeDue': 'Change due',
+
+  // wave P14: §5.4 the address pane (row 1.3b)
+  'orders.newOrder.address.title': 'Address',
+  'orders.newOrder.address.loading': 'Loading addresses…',
+  'orders.newOrder.address.denied': 'No access to this customer’s saved addresses',
+  'orders.newOrder.address.empty': 'No saved addresses',
+  'orders.newOrder.address.add': '+ New address',
+  'orders.newOrder.address.notLocated':
+    'This address has no map pin yet, so delivery cannot be routed — the pin and the map are not built yet. Choose a different address or confirm by phone.',
+  'orders.newOrder.address.notServiceable':
+    'This address is outside every delivery zone for this branch',
+  'orders.newOrder.address.recipientName': 'Recipient',
+  'orders.newOrder.address.recipientPhone': 'Recipient phone',
+  'orders.newOrder.address.deliveryNote': 'Note for the courier',
+
+  // wave P14: §5.3 «Повторить» (row 1.3f)
+  'orders.newOrder.reorder.action': 'Repeat',
+  'orders.newOrder.reorder.busy': 'Repeating…',
+  'orders.newOrder.reorder.unavailable': 'Nothing on this order can be ordered again',
+  'orders.newOrder.reorder.partial':
+    'Some items on this order are no longer available and were skipped',
+
+  // wave P14: manual aggregator order entry (row 1.3g)
+  'orders.newOrder.aggregator.toggle': 'Aggregator order',
+  'orders.newOrder.aggregator.title': 'Aggregator order',
+  'orders.newOrder.aggregator.channel': 'Aggregator',
+  'orders.newOrder.aggregator.noChannels': 'No aggregator channel is configured',
+  'orders.newOrder.aggregator.externalOrderId': 'Aggregator’s own order number',
+  'orders.newOrder.aggregator.subtotal': 'Subtotal',
+  'orders.newOrder.aggregator.discount': 'Discount',
+  'orders.newOrder.aggregator.fee': 'Fee',
+  'orders.newOrder.aggregator.total': 'Total the aggregator collected',
+  'orders.newOrder.aggregator.hint':
+    'Recorded exactly as the aggregator stated it — nothing here is re-priced by HorecaOS',
 
   // --- shared/ui (ADR 0101) ----------------------------------------------
   // The only keys in this catalogue owned by a component rather than by a

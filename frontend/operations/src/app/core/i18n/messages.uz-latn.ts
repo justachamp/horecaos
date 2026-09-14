@@ -965,10 +965,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.tab.templates': 'Shablonlar',
   'settings.notifications.tab.routing': 'Yoʻnaltirish',
   'settings.notifications.automation.title': 'Avtomatlashtirish',
-  'settings.notifications.field.paymentLinkAutoSend': 'Toʻlov havolasini mijozga avtomatik yuborish',
+  'settings.notifications.field.paymentLinkAutoSend':
+    'Toʻlov havolasini mijozga avtomatik yuborish',
   'settings.notifications.field.paymentLinkAutoSend.hint':
     'Hali ishlamaydi: hech qanday jarayon bu tugmachani hali oʻqimaydi, shuning uchun yoqish faqat tanlovni saqlaydi.',
-  'settings.notifications.field.aggregatorShiftNotifications': 'Agregator smenasi ochilishi/yopilishi haqida xabar berish',
+  'settings.notifications.field.aggregatorShiftNotifications':
+    'Agregator smenasi ochilishi/yopilishi haqida xabar berish',
   'settings.notifications.field.aggregatorShiftNotifications.hint':
     'Hali ishlamaydi: platformada bu xabarni ishga tushiradigan agregator-smena hodisasi hali yoʻq.',
   'settings.notifications.create.action': 'Yangi shablon',
@@ -1014,7 +1016,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.editor.subject': 'Mavzu',
   'settings.notifications.editor.body': 'Matn',
   'settings.notifications.editor.variables': 'Oʻzgaruvchi qoʻshish',
-  'settings.notifications.editor.variables.empty': 'Bu bildirishnoma sinfi uchun oʻzgaruvchilar taklif etilmagan.',
+  'settings.notifications.editor.variables.empty':
+    'Bu bildirishnoma sinfi uchun oʻzgaruvchilar taklif etilmagan.',
   'settings.notifications.editor.preview': 'Mijoz qanday koʻradi',
   'settings.notifications.editor.save': 'Qoralamani saqlash',
   'settings.notifications.editor.saving': 'Saqlanmoqda…',
@@ -1033,9 +1036,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.testSend.result.ACCEPTED': 'Provayder qabul qildi.',
   'settings.notifications.testSend.result.REJECTED': 'Provayder rad etdi.',
   'settings.notifications.testSend.result.RETRYABLE': 'Uzatish xatosi — qayta urinib koʻring.',
-  'settings.notifications.testSend.result.UNCERTAIN': 'Noaniq — provayder allaqachon yuborgan boʻlishi mumkin.',
+  'settings.notifications.testSend.result.UNCERTAIN':
+    'Noaniq — provayder allaqachon yuborgan boʻlishi mumkin.',
   'settings.notifications.activate.confirm.title': 'Bu versiya faollashtirilsinmi?',
-  'settings.notifications.activate.confirm.body': 'Bu shablon boʻyicha har bir xabar shu matndan foydalanadi.',
+  'settings.notifications.activate.confirm.body':
+    'Bu shablon boʻyicha har bir xabar shu matndan foydalanadi.',
   'settings.notifications.activate.confirm.bodyWithheld':
     'Bu versiya SMS shlyuzida hali «{state}» holatida. Bu oʻzgarmaguncha faollashtirish uni yuborilishiga olib kelmaydi.',
   'settings.notifications.activate.confirm.confirm': 'Faollashtirish',
@@ -1056,9 +1061,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.routing.action.editTopic': 'Mavzuni oʻzgartirish',
   'settings.notifications.routing.action.unbind': 'Uzish',
   'settings.notifications.routing.unbind.confirm.title': 'Bu chat uzilsinmi?',
-  'settings.notifications.routing.unbind.confirm.body': 'U darhol barcha hodisa sinflarini olishni toʻxtatadi.',
+  'settings.notifications.routing.unbind.confirm.body':
+    'U darhol barcha hodisa sinflarini olishni toʻxtatadi.',
   'settings.notifications.routing.unbind.confirm.confirm': 'Uzish',
-  'settings.notifications.routing.topic.prompt': 'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
+  'settings.notifications.routing.topic.prompt':
+    'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
   'settings.notifications.routing.topic.save': 'Saqlash',
 
   // 10.10 Maʻlumotnoma maʻlumotlari
@@ -1758,7 +1765,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.menus.filter.all': 'Barchasi',
   'catalog.menus.search.placeholder': 'Nomi yoki SKU boʻyicha qidirish',
   'catalog.menus.selectAll': 'Barcha qatorlarni tanlash',
-  'catalog.menus.selectionCapped': 'Faqat birinchi {cap} tasi — qo\'llang, so\'ng qolganlarini tanlang',
+  'catalog.menus.selectionCapped':
+    "Faqat birinchi {cap} tasi — qo'llang, so'ng qolganlarini tanlang",
   'catalog.menus.column.offering': 'Menyudagi holati',
   'catalog.menus.column.fulfillment': 'Buyurtma turlari',
   'catalog.menus.fulfillment.DELIVERY': 'Yetk',
@@ -2149,7 +2157,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.dispatch.hint':
     'Buyurtmani kuryer ustiga tashlab tayinlang. Uni orqaga, "Tayinlanmagan"ga tashlab, tayinlashni bekor qiling.',
   'delivery.dispatch.column.unassigned': 'Tayinlanmagan',
-  'delivery.dispatch.column.ineligible': 'Bu yerga tashlab bo\'lmaydi — {reason}',
+  'delivery.dispatch.column.ineligible': "Bu yerga tashlab bo'lmaydi — {reason}",
   'delivery.dispatch.action.unassign': 'Tayinlashni bekor qilish',
   'delivery.dispatch.status.PLANNED': 'Rejalashtirilgan',
   'delivery.dispatch.status.WAITING_TO_SOURCE': 'Kuryer izlanmoqda',
@@ -4135,6 +4143,46 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.order.cancel': 'Bekor qilish',
   'orders.newOrder.order.created': '{number}-buyurtma yaratildi',
   'orders.newOrder.order.unavailableCount': 'Savatdagi {count} ta taom endi mavjud emas',
+  'orders.newOrder.order.branch': 'Filial',
+  'orders.newOrder.order.byZone': '(hudud bo’yicha)',
+  'orders.newOrder.order.promoCode': 'Promokod',
+  'orders.newOrder.order.cashTendered': 'Berilgan pul',
+  'orders.newOrder.order.changeDue': 'Qaytim',
+
+  // wave P14: §5.4 manzil paneli (1.3b qatori)
+  'orders.newOrder.address.title': 'Manzil',
+  'orders.newOrder.address.loading': 'Manzillar yuklanmoqda…',
+  'orders.newOrder.address.denied': 'Mijozning saqlangan manzillariga ruxsat yo’q',
+  'orders.newOrder.address.empty': 'Saqlangan manzillar yo’q',
+  'orders.newOrder.address.add': '+ Yangi manzil',
+  'orders.newOrder.address.notLocated':
+    'Bu manzilda hali xaritada nuqta yo’q, shuning uchun yetkazib berish hisoblanmaydi — xarita va nuqta hali qurilmagan. Boshqa manzilni tanlang yoki telefon orqali aniqlashtiring.',
+  'orders.newOrder.address.notServiceable':
+    'Bu manzil ushbu filial yetkazib berish hududidan tashqarida',
+  'orders.newOrder.address.recipientName': 'Qabul qiluvchi',
+  'orders.newOrder.address.recipientPhone': 'Qabul qiluvchi telefoni',
+  'orders.newOrder.address.deliveryNote': 'Kuryer uchun izoh',
+
+  // wave P14: §5.3 «Takrorlash» (1.3f qatori)
+  'orders.newOrder.reorder.action': 'Takrorlash',
+  'orders.newOrder.reorder.busy': 'Takrorlanmoqda…',
+  'orders.newOrder.reorder.unavailable':
+    'Bu buyurtmadan hech nimani qayta buyurtma qilib bo’lmaydi',
+  'orders.newOrder.reorder.partial':
+    'Bu buyurtmaning ba’zi taomlari endi mavjud emas va o’tkazib yuborildi',
+
+  // wave P14: agregator buyurtmasini qo'lda kiritish (1.3g qatori)
+  'orders.newOrder.aggregator.toggle': 'Agregator buyurtmasi',
+  'orders.newOrder.aggregator.title': 'Agregator buyurtmasi',
+  'orders.newOrder.aggregator.channel': 'Agregator',
+  'orders.newOrder.aggregator.noChannels': 'Agregator kanali sozlanmagan',
+  'orders.newOrder.aggregator.externalOrderId': 'Agregatordagi buyurtma raqami',
+  'orders.newOrder.aggregator.subtotal': 'Oraliq summa',
+  'orders.newOrder.aggregator.discount': 'Chegirma',
+  'orders.newOrder.aggregator.fee': 'Komissiya',
+  'orders.newOrder.aggregator.total': 'Agregator yig’gan summa',
+  'orders.newOrder.aggregator.hint':
+    'Agregator ko’rsatgan summa aynan shu holicha yozildi — HorecaOS uni qayta hisoblamaydi',
 
   // --- shared/ui (ADR 0101) ----------------------------------------------
   'ui.denied.title': 'Bu boʻlimga kirish huquqingiz yoʻq',

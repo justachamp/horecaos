@@ -81,6 +81,11 @@ export const operationsPaths = {
     return `${this.orders(scope)}/customer-lookups`;
   },
 
+  /** Row 1.3g (ADR 0040): record an aggregator's own order by hand. */
+  orderAggregatorEntries(scope: LocationScope): string {
+    return `${this.orders(scope)}/aggregator-entries`;
+  },
+
   /** One order with its snapshotted lines. Returns an `ETag`. */
   order(scope: LocationScope, orderId: string): string {
     return `${this.orders(scope)}/${encodeURIComponent(orderId)}`;
@@ -519,6 +524,15 @@ export const operationsPaths = {
    */
   customerOrders(scope: LocationScope, accountId: string): string {
     return `${LEGACY_TENANT_PREFIX}${tenantBrand(scope)}/customers/${encodeURIComponent(accountId)}/orders`;
+  },
+
+  /**
+   * Row 1.3f: the staff-capability twin of the storefront's own reorder
+   * plan (`CustomerOrderHistoryController`, `ORDER_READ` at `BRAND` scope) —
+   * never `@CustomerOwned`, unlike the storefront's identical read.
+   */
+  customerOrderReorder(scope: LocationScope, accountId: string, orderId: string): string {
+    return `${this.customerOrders(scope, accountId)}/${encodeURIComponent(orderId)}/reorder`;
   },
 
   /**
