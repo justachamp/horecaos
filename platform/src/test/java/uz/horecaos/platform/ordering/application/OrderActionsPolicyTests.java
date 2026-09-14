@@ -360,27 +360,30 @@ class OrderActionsPolicyTests {
     /**
      * {@code AMEND}'s gate ({@code canAmend}: legal on any order that has not
      * ended, regardless of fulfilment mode or advance/cancel state, mirroring
-     * {@code OrderAmendmentService.propose}'s own status guard) is built and
-     * correct — but wave P05's adversarial review found the console has no
-     * translated label or click handler for a code {@code ORDER_AMEND}
-     * already reaches five real roles with, so emission is held behind
-     * {@code OrderActionsPolicy.AMEND_EMISSION_ENABLED} until wave P10 ships
-     * the amendment client (ADR 0105). This test proves the hold, not the
-     * gate: {@code AMEND} must never appear in {@code actions[]} today, on
-     * any status or mode, even for a principal holding every other action
-     * capability there is. {@link #amendsGateIsBuiltButDisabled} is the
-     * companion assertion that the gate itself still exists and is not simply
-     * deleted code.
+     * {@code OrderAmendmentService.propose}'s own status guard) was built and
+     * correct from wave P05, but held behind {@code
+     * OrderActionsPolicy.AMEND_EMISSION_ENABLED} because that wave's own
+     * adversarial review found the console had no translated label or click
+     * handler for a code {@code ORDER_AMEND} already reached five real roles
+     * with (ADR 0105). Wave P10 gave it both — {@code order-actions.ts}'s
+     * real case, {@code order-detail-pane.ts}'s {@code q-order-amend-menu} —
+     * and flipped the constant to {@code true} (ADR 0113). This test proves
+     * the flip did exactly what it was designed to: {@code AMEND} appears in
+     * {@code actions[]} wherever {@code canAmend} and {@code ORDER_AMEND}
+     * both hold, on every status and mode, and never for a principal missing
+     * the capability. {@link #amendsGateMatchesCanAmend} is the companion
+     * assertion that the gate itself computes what this test also reads
+     * directly, so the two cannot drift apart unnoticed.
      */
     @Test
-    void amendIsNeverEmittedTodayRegardlessOfStatusModeOrGrant() {
+    void amendIsEmittedWhereverTheGateAndGrantBothHold() {
         for (OrderStatus status : OrderStatus.values()) {
             for (FulfillmentMode mode : FulfillmentMode.values()) {
                 boolean withFullGrant = OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS).stream()
                         .anyMatch(a -> a.code() == OrderActionCode.AMEND);
                 assertThat(withFullGrant)
-                        .as("%s/%s must never offer AMEND while emission is held back", status, mode)
-                        .isFalse();
+                        .as("%s/%s AMEND, granted", status, mode)
+                        .isEqualTo(OrderActionsPolicy.canAmend(status));
 
                 boolean withoutGrant =
                         OrderActionsPolicy.availableFor(status, mode, EnumSet.noneOf(Capability.class)).stream()
@@ -393,15 +396,14 @@ class OrderActionsPolicyTests {
     }
 
     /**
-     * The gate {@code AMEND_EMISSION_ENABLED} holds back is exactly the one
-     * described in ADR 0105 and the class doc — proved here by reading {@code
-     * canAmend} directly, the same predicate the (currently inert) {@code
-     * AMEND} branch in {@code availableFor} uses. If this ever disagreed with
-     * {@code availableFor}'s own guard, flipping the constant on for wave P10
-     * would emit something other than what was designed and tested here.
+     * The predicate {@code availableFor}'s {@code AMEND} branch reads,
+     * asserted directly — the same one {@link #amendIsEmittedWhereverTheGateAndGrantBothHold}
+     * exercises indirectly through {@code availableFor} itself. If the two
+     * ever disagreed, the branch would be emitting something other than what
+     * this test says {@code canAmend} computes.
      */
     @Test
-    void amendsGateIsBuiltButDisabled() {
+    void amendsGateMatchesCanAmend() {
         for (OrderStatus status : OrderStatus.values()) {
             assertThat(OrderActionsPolicy.canAmend(status))
                     .as("%s canAmend", status)
@@ -441,32 +443,35 @@ class OrderActionsPolicyTests {
      * {@code SUPPORT_AGENT} holds exactly the inverse of {@code
      * LOCATION_STAFF} among these four: {@code ORDER_CANCEL} and {@code
      * ORDER_AMEND}, never {@code ORDER_APPROVE} or {@code ORDER_ADVANCE}.
-     * {@code ORDER_AMEND} is held, but {@code AMEND} itself is never emitted
-     * today (see {@link #amendIsNeverEmittedTodayRegardlessOfStatusModeOrGrant}),
-     * so this role's only visible action right now is {@code CANCEL}.
+     * Wave P10 flipped {@code AMEND_EMISSION_ENABLED}, so both of this role's
+     * two capabilities are now visible: {@code CANCEL} wherever {@code
+     * canCancel} holds, {@code AMEND} wherever {@code canAmend} holds, and
+     * never {@code APPROVE}/{@code REJECT}/{@code ADVANCE}, which it holds
+     * neither capability for.
      */
     @Test
-    void supportAgentOnlyEverOffersCancelToday() {
+    void supportAgentOffersExactlyCancelAndAmend() {
         Set<Capability> granted = PlatformRole.SUPPORT_AGENT.capabilities();
-        assertThat(granted)
-                .as("support-agent must hold ORDER_AMEND for this test to prove AMEND stays hidden despite the grant")
-                .contains(Capability.ORDER_AMEND);
+        assertThat(granted).contains(Capability.ORDER_CANCEL, Capability.ORDER_AMEND);
         for (OrderStatus status : OrderStatus.values()) {
             for (FulfillmentMode mode : FulfillmentMode.values()) {
                 List<OrderActionCode> codes = codesOf(status, mode, granted);
                 assertThat(codes)
                         .as("support-agent at %s/%s", status, mode)
-                        .doesNotContain(
-                                OrderActionCode.APPROVE,
-                                OrderActionCode.REJECT,
-                                OrderActionCode.ADVANCE,
-                                OrderActionCode.AMEND);
+                        .doesNotContain(OrderActionCode.APPROVE, OrderActionCode.REJECT, OrderActionCode.ADVANCE);
+                assertThat(codes.contains(OrderActionCode.AMEND))
+                        .as("%s/%s AMEND", status, mode)
+                        .isEqualTo(OrderActionsPolicy.canAmend(status));
+                assertThat(codes.contains(OrderActionCode.CANCEL))
+                        .as("%s/%s CANCEL", status, mode)
+                        .isEqualTo(OrderActionsPolicy.canCancel(status));
             }
         }
         // RECEIVED is cancellable and amendable; support-agent's grant covers
-        // both, but only CANCEL is visible while AMEND emission is held back.
+        // both, and both are now visible together — CANCEL added before AMEND
+        // in availableFor's own order.
         assertThat(codesOf(OrderStatus.RECEIVED, FulfillmentMode.DELIVERY, granted))
-                .containsExactly(OrderActionCode.CANCEL);
+                .containsExactly(OrderActionCode.CANCEL, OrderActionCode.AMEND);
     }
 
     /**
@@ -531,11 +536,12 @@ class OrderActionsPolicyTests {
      * real route.
      *
      * <p>{@code AMEND} answers {@code true} here — its route ({@code POST
-     * .../amendments}) genuinely exists and its gate is built — even though
-     * {@link #amendIsNeverEmittedTodayRegardlessOfStatusModeOrGrant} proves it
-     * is not emitted today. "Has a route" and "is emitted" are different
-     * questions for exactly this code: the hold is a frontend-readiness
-     * decision (ADR 0105), not a missing endpoint.
+     * .../amendments}) genuinely exists and its gate is built, and as of wave
+     * P10 it is emitted too (see {@link #amendIsEmittedWhereverTheGateAndGrantBothHold}).
+     * "Has a route" and "is emitted" stayed different questions for this code
+     * through wave P05's hold — a frontend-readiness decision (ADR 0105), not
+     * a missing endpoint — and ADR 0113 is the record of the hold being
+     * lifted.
      */
     private static boolean hasRealRouteToday(OrderActionCode code) {
         return switch (code) {
