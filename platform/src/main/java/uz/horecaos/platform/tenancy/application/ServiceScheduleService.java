@@ -176,9 +176,18 @@ public class ServiceScheduleService {
         }
     }
 
-    /** Binds a timetable to one fulfilment mode at one location. */
+    /**
+     * Binds a timetable to one fulfilment mode at one location.
+     *
+     * <p>{@link #requireOwned} first, the same guard every sibling write in
+     * this class applies — without it, a {@code scheduleId} from the wrong
+     * brand surfaces as a raw {@code DataIntegrityViolationException} out of
+     * the database's own composite foreign key rather than the clean
+     * not-found every other schedule-scoped write here gives.
+     */
     @Transactional
     public void bind(UUID tenantId, UUID brandId, UUID locationId, FulfillmentMode mode, UUID scheduleId) {
+        requireOwned(tenantId, brandId, scheduleId);
         store.bindSchedule(tenantId, brandId, locationId, mode, scheduleId, clock.instant());
     }
 

@@ -15,6 +15,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -66,6 +68,8 @@ import uz.horecaos.platform.web.api.ErrorCode;
  */
 @Service
 public class StaffInvitationService {
+
+    private static final Logger log = LoggerFactory.getLogger(StaffInvitationService.class);
 
     /** How long an emailed or copied link works -- the same window ADR 0097 chose. */
     public static final Duration LINK_LIFETIME = Duration.ofHours(72);
@@ -132,7 +136,10 @@ public class StaffInvitationService {
      * @throws AuthorizationService.AccessDeniedException when the actor does
      *                      not hold {@code IAM_GRANT_MANAGE} at the chosen scope
      * @throws ApiException {@code RESOURCE_CONFLICT} naming the existing
-     *                      subject when the phone is already registered;
+     *                      subject when the phone already has an account in
+     *                      this tenant's own organization (a phone belonging
+     *                      to a different tenant is refused the same way,
+     *                      but never named -- see {@link #rejectIfPhoneTaken});
      *                      whatever {@link GrantAuthority#grant}
      *                      throws when the actor cannot confer this specific
      *                      job at this scope (staff-and-access.md §0's corollary)
@@ -140,40 +147,62 @@ public class StaffInvitationService {
     public Created invite(UUID tenantId, InviteCommand command, ActorRef actor, String correlationId) {
         authorization.require(actor.subject(), Capability.IAM_GRANT_MANAGE, command.scope());
 
-        Optional<StaffAccount> duplicate = accounts.findByPhone(command.phone());
-        if (duplicate.isPresent()) {
-            throw new ApiException(
-                    ErrorCode.RESOURCE_CONFLICT,
-                    "This phone number already has an account",
-                    Map.of(
-                            "field",
-                            "phone",
-                            "existingSubjectId",
-                            duplicate.get().subjectId()));
-        }
-
+        // Resolved before the phone is ever looked up: the duplicate check
+        // below needs the inviting tenant's own organization to decide what
+        // it may disclose about a match (tenant isolation is the platform's
+        // primary security boundary -- see rejectIfPhoneTaken).
         String organizationId = store.keycloakOrganizationId(tenantId)
                 .orElseThrow(() -> new ApiException(
                         ErrorCode.RESOURCE_CONFLICT, "This tenant has no organization to invite a colleague into"));
 
-        StaffAccount account =
-                accounts.create(command.firstName(), command.lastName(), command.phone(), command.email());
+        rejectIfPhoneTaken(organizationId, accounts.findByPhone(command.phone()));
 
-        // EnsureMembership.email is not annotated @Nullable in iam.api (outside
-        // this change's scope), but existingSubjectId is set, so the create
-        // branch that would read email never runs -- OnboardingStepHandlers'
-        // own doc on ensureMembership names this same one-of-two shape.
-        @SuppressWarnings("NullAway")
-        MembershipRef membership =
-                organizations.ensureMembership(new EnsureMembership(organizationId, "", account.subjectId()));
+        StaffAccount account;
+        try {
+            account = accounts.create(command.firstName(), command.lastName(), command.phone(), command.email());
+        } catch (StaffAccounts.StaffAccountAlreadyExistsException lostRace) {
+            // Two invitations for the same phone raced past the check above;
+            // Keycloak's own username-uniqueness constraint is the real
+            // arbiter of "taken", so re-resolve through the losing side and
+            // answer with the exact same, tenant-scoped conflict the
+            // winner's synchronous pre-check would have thrown.
+            rejectIfPhoneTaken(organizationId, accounts.findByPhone(command.phone()));
+            // findByPhone came back empty even though Keycloak just refused
+            // the create as a duplicate -- stale read or a since-deleted
+            // account either way. Refuse the same conflict without a
+            // subject id rather than silently retrying a create that has
+            // already failed once.
+            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This phone number already has an account");
+        }
 
-        UUID grantId = grants.grant(
-                membership.subjectId(),
-                command.roleCode(),
-                command.scope(),
-                command.reason(),
-                command.validUntil(),
-                actor.subject());
+        MembershipRef membership;
+        UUID grantId;
+        try {
+            // EnsureMembership.email is not annotated @Nullable in iam.api
+            // (outside this change's scope), but existingSubjectId is set,
+            // so the create branch that would read email never runs --
+            // OnboardingStepHandlers' own doc on ensureMembership names this
+            // same one-of-two shape.
+            @SuppressWarnings("NullAway")
+            MembershipRef ensured =
+                    organizations.ensureMembership(new EnsureMembership(organizationId, "", account.subjectId()));
+            membership = ensured;
+
+            grantId = grants.grant(
+                    membership.subjectId(),
+                    command.roleCode(),
+                    command.scope(),
+                    command.reason(),
+                    command.validUntil(),
+                    actor.subject());
+        } catch (RuntimeException refused) {
+            // The account (and possibly its organization membership) already
+            // exist at this point; without cleanup, accounts.findByPhone
+            // above would find this account forever and refuse every future
+            // invitation for this phone, by anybody, for good.
+            abandonOrphanedAccount(tenantId, account, refused, actor, command.reason(), correlationId);
+            throw refused;
+        }
 
         String token = newToken();
         String tokenHash = hash(token);
@@ -215,6 +244,102 @@ public class StaffInvitationService {
             sendMail(invitationId, tenantId, account, command.email(), command.roleCode(), language, link, now);
         }
         return new Created(invitationId, account.subjectId(), grantId, link);
+    }
+
+    /**
+     * Refuses an invitation whose phone is already taken -- but names the
+     * existing subject only when it is confirmed to belong to the inviting
+     * tenant's own organization.
+     *
+     * <p>{@link StaffAccounts#findByPhone} searches the whole shared
+     * Keycloak realm, with no tenant filter of any kind (a staff account is
+     * one global identity keyed by phone, never tenant-scoped). Disclosing a
+     * match's existence, or its subject id, to a manager who has only proven
+     * authority over their own tenant would let any tenant enumerate
+     * arbitrary phone numbers across the platform and learn who already
+     * holds an account elsewhere -- crossing the tenant isolation boundary
+     * this platform treats as primary. So a match outside this tenant's own
+     * organization is refused the identical {@code RESOURCE_CONFLICT} an
+     * in-tenant match gets, but without {@code existingSubjectId}: Keycloak's
+     * own username uniqueness means a second account cannot be created for
+     * the same phone either way, so there is nothing to gain by letting the
+     * create attempt run and fail on its own.
+     */
+    private void rejectIfPhoneTaken(String organizationId, Optional<StaffAccount> duplicate) {
+        if (duplicate.isEmpty()) {
+            return;
+        }
+        if (organizations.isMember(organizationId, duplicate.get().subjectId())) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "This phone number already has an account",
+                    Map.of(
+                            "field",
+                            "phone",
+                            "existingSubjectId",
+                            duplicate.get().subjectId()));
+        }
+        throw new ApiException(
+                ErrorCode.RESOURCE_CONFLICT, "This phone number already has an account", Map.of("field", "phone"));
+    }
+
+    /**
+     * Undoes {@link StaffAccounts#create} after the membership or grant step
+     * refused, so a mid-flow failure never leaves an account that blocks
+     * every future invite for that phone forever (ADR 0116's accepted
+     * "orphaned, grant-less account" trade-off does not extend to a phone
+     * that can never be invited again).
+     *
+     * <p>Best-effort: the caller still needs to see the original refusal --
+     * that is the one an actor can act on -- so this never replaces {@code
+     * cause} with its own exception. When the identity provider will not
+     * take the delete either, the account is now a permanent orphan; that is
+     * logged and audited distinctly so an operator can remove it by hand,
+     * the same shape {@code PasswordResetService#recordPasswordNotSet} uses
+     * for its own un-repairable dead end.
+     */
+    private void abandonOrphanedAccount(
+            UUID tenantId,
+            StaffAccount account,
+            RuntimeException cause,
+            ActorRef actor,
+            String reason,
+            String correlationId) {
+        try {
+            accounts.delete(account.subjectId());
+            log.warn(
+                    "A staff invitation's job grant was refused after the account was created; the orphaned "
+                            + "account was removed (subject {}, correlation {})",
+                    account.subjectId(),
+                    correlationId,
+                    cause);
+        } catch (RuntimeException deleteFailed) {
+            log.error(
+                    "A staff invitation's job grant was refused after the account was created, and removing the "
+                            + "orphaned account also failed; it now permanently blocks this phone until an operator "
+                            + "removes it by hand (subject {}, correlation {})",
+                    account.subjectId(),
+                    correlationId,
+                    deleteFailed);
+            Instant now = clock.instant();
+            transactions.executeWithoutResult(
+                    ignored -> audit.record(AuditFact.of("tenant.staff_invitation.orphan_left", AuditClass.SECURITY)
+                            .by(actor)
+                            .at(ResourceScope.tenant(tenantId))
+                            .target("iam.staff_account", Ids.newId())
+                            .because(reason)
+                            .changed(Map.of(
+                                    "subjectId",
+                                    account.subjectId(),
+                                    "refusalReason",
+                                    cause.getClass().getSimpleName(),
+                                    "cleanupFailure",
+                                    deleteFailed.getClass().getSimpleName()))
+                            .usingCapability(Capability.IAM_GRANT_MANAGE.code())
+                            .correlatedBy(correlationId)
+                            .occurredAt(now)
+                            .build()));
+        }
     }
 
     /**

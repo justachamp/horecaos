@@ -3124,6 +3124,7 @@ export const messagesEn = {
   'staff.inviteDialog.submitting': 'Inviting…',
   'staff.inviteDialog.confirmClose': 'Discard this invitation?',
   'staff.inviteDialog.doneTitle': 'Invitation created',
+  'staff.inviteDialog.doneTitleResent': 'New link ready',
   'staff.inviteDialog.doneBody':
     'Send this link to the new colleague however you reach them — Telegram, SMS, in person. It works once, for 72 hours.',
   'staff.inviteDialog.copy': 'Copy link',

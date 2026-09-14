@@ -8,6 +8,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignStore.CampaignRef;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * Writes the status {@code CampaignStatus} declared and nobody wrote (ADR
@@ -71,10 +73,24 @@ public class CampaignScheduledSendScheduler {
                             "Campaign {} was due to send but was no longer SCHEDULED when the sweep reached it",
                             ref.campaignId());
                 }
+            } catch (ApiException failure) {
+                // UNPROCESSABLE_STATE here means CampaignService#start refused the
+                // SCHEDULED -> SENDING move outright (an unwired channel, most
+                // often) — a state that will never resolve itself between sweeps.
+                // Left alone, scheduled_at stays in the past and every sweep from
+                // now on re-selects and re-refuses the same campaign, forever.
+                // Disarming it (see clearFailedSchedule's own doc) turns that into
+                // one refusal an operator can see and act on, not an unbounded log.
+                log.error("Campaign {} could not be promoted from SCHEDULED", ref.campaignId(), failure);
+                if (failure.errorCode() == ErrorCode.UNPROCESSABLE_STATE) {
+                    String reason = failure.getMessage() == null ? "UNPROCESSABLE_STATE" : failure.getMessage();
+                    campaigns.clearFailedSchedule(ref.tenantId(), ref.campaignId(), reason, clock.instant());
+                }
             } catch (RuntimeException failure) {
-                // One campaign's failure — an unwired channel, a lapsed
-                // entitlement — must not stop every other tenant's scheduled
-                // campaign from being promoted on this pass.
+                // A transient failure (a lapsed entitlement check, a DB blip) must
+                // not disarm the schedule — it is retried on the next sweep, and
+                // must not stop every other tenant's scheduled campaign from being
+                // promoted on this same pass either.
                 log.error("Campaign {} could not be promoted from SCHEDULED", ref.campaignId(), failure);
             }
         }

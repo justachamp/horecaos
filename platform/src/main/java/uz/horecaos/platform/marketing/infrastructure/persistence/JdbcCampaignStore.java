@@ -154,6 +154,35 @@ public class JdbcCampaignStore {
     }
 
     /**
+     * Disarms a scheduled send that could not go out when its moment
+     * arrived — an unwired channel, most often — so {@link
+     * #dueScheduledCampaigns} stops re-selecting it every sweep.
+     *
+     * <p>Status stays {@code SCHEDULED}; only {@code scheduled_at} is cleared,
+     * which is enough to drop the row out of that query's {@code <= :asOf}
+     * predicate. That, rather than reverting to {@code APPROVED}, is
+     * deliberate: {@code CampaignStatus}'s own transition table does not
+     * allow {@code SCHEDULED -> APPROVED}, and a null {@code scheduledAt} is
+     * exactly what {@code CampaignService#start} already reads as "the moment
+     * has arrived" — so a caller who presses launch again once the channel is
+     * wired sends immediately, through the same one method, rather than
+     * needing a second scheduled-arm step.
+     */
+    public boolean clearFailedSchedule(UUID tenantId, UUID campaignId, String reason, Instant now) {
+        return jdbc.sql("""
+                UPDATE marketing.campaigns
+                   SET scheduled_at = NULL, halted_reason = :reason, version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id AND status = 'SCHEDULED'
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", campaignId)
+                        .param("reason", reason)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    /**
      * Counts one more blocked recipient, atomically.
      *
      * <p>A plain conditional {@code UPDATE ... RETURNING}, not a read-then-write:

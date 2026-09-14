@@ -223,7 +223,8 @@ class LoyaltyLedgerAndSplitTenderTests {
         redemption = new PointsRedemptionService(store, policies, clock);
         accrual = new LoyaltyAccrualService(store, policies, clock);
         adjustments = new LoyaltyAdjustmentService(store, new AlwaysApproves(), audit, clock, 100_000L);
-        maintenance = new LoyaltyMaintenanceService(store, redemption, NOTHING_AWAITS, NO_WARNINGS_RECORDED, clock);
+        maintenance = new LoyaltyMaintenanceService(
+                store, redemption, NOTHING_AWAITS, NO_WARNINGS_RECORDED, transactions, clock);
         queries = new LoyaltyQueryService(store, clock);
         settlements = new OrderSettlementService(settlementStore, redemption, clock);
 
@@ -482,6 +483,7 @@ class LoyaltyLedgerAndSplitTenderTests {
                 redemption,
                 NOTHING_AWAITS,
                 NO_WARNINGS_RECORDED,
+                transactions,
                 clock);
         transactions.executeWithoutResult(status -> sweep.expireLots());
 
@@ -517,7 +519,7 @@ class LoyaltyLedgerAndSplitTenderTests {
                 (tenantId, warnedAccountId, warnedLotId, expiresAt, remainingMinor, daysRemaining) ->
                         warned.add(new Warning(warnedAccountId, warnedLotId, remainingMinor, daysRemaining));
         LoyaltyMaintenanceService sweep =
-                new LoyaltyMaintenanceService(store, redemption, NOTHING_AWAITS, recording, clock);
+                new LoyaltyMaintenanceService(store, redemption, NOTHING_AWAITS, recording, transactions, clock);
 
         // Day 0: earns_at is still in the future (earn_delay_hours = 24), so the
         // lot is not even ACTIVE yet — lotsNeedingExpiryWarning requires ACTIVE —
@@ -549,6 +551,63 @@ class LoyaltyLedgerAndSplitTenderTests {
         int secondPass = transactions.execute(status -> sweep.warnExpiringLots());
         assertThat(secondPass).as("one warning per lot, ever").isZero();
         assertThat(warned).hasSize(1);
+    }
+
+    /**
+     * T18: before this fix, {@code warnExpiringLots} was one {@code
+     * @Transactional} method — every lot's own commit and every lot's own
+     * port call shared one database transaction. A later lot's port failure
+     * rolled back the whole pass, including the marks already committed for
+     * lots warned earlier in it, so the next sweep sent the same warning to
+     * the same customer a second time. This proves lot A's own commit
+     * survives lot B's later failure. Not wrapped in {@code
+     * transactions.execute(...)} here, deliberately: the real {@code
+     * LoyaltySweeper} calls {@code warnExpiringLots} directly, and an outer
+     * transaction here would hide exactly the bug this is proving fixed.
+     */
+    @Test
+    @DisplayName("a lot's own warning commits even when a later lot's send fails, and the batch does not roll back")
+    void warnExpiringLotsCommitsEachLotIndependentlyOfALaterFailure() {
+        UUID orderA = completedOrder("C-A", 100_000L, 0L);
+        transactions.executeWithoutResult(status -> accrual.accrue(completion(orderA, 100_000L, 0L)));
+        UUID lotA = store.openLots(TENANT, accountId()).getFirst().id();
+
+        // Minted a little later so its own expiry sorts after lot A's —
+        // lotsNeedingExpiryWarning's own ORDER BY expires_at is what decides
+        // which lot the throwing port below sees first.
+        clock.advance(Duration.ofHours(2));
+        UUID orderB = completedOrder("C-B", 100_000L, 0L);
+        transactions.executeWithoutResult(status -> accrual.accrue(completion(orderB, 100_000L, 0L)));
+        UUID lotB = store.openLots(TENANT, accountId()).stream()
+                .map(LotRow::id)
+                .filter(id -> !id.equals(lotA))
+                .findFirst()
+                .orElseThrow();
+
+        clock.advance(Duration.ofDays(170));
+        transactions.executeWithoutResult(status -> maintenance.matureLots());
+
+        List<UUID> attempted = new ArrayList<>();
+        LoyaltyExpiryWarningPort failsOnSecondLot =
+                (tenantId, warnedAccountId, warnedLotId, expiresAt, remainingMinor, daysRemaining) -> {
+                    attempted.add(warnedLotId);
+                    if (attempted.size() == 2) {
+                        throw new RuntimeException("simulated ADR 0020 adapter failure");
+                    }
+                };
+        LoyaltyMaintenanceService sweep =
+                new LoyaltyMaintenanceService(store, redemption, NOTHING_AWAITS, failsOnSecondLot, transactions, clock);
+
+        assertThatThrownBy(sweep::warnExpiringLots).isInstanceOf(RuntimeException.class);
+
+        assertThat(attempted)
+                .as("lot A sorts first by expires_at; lot B's send is the one that fails")
+                .containsExactly(lotA, lotB);
+        assertThat(store.lotsNeedingExpiryWarning(clock.instant(), 10))
+                .as("lot A's own mark already committed and is not undone by lot B's later "
+                        + "failure — only lot B, whose send never even reached its own mark, is still due")
+                .extracting(LotRow::id)
+                .containsExactly(lotB);
     }
 
     /**
@@ -1409,8 +1468,8 @@ class LoyaltyLedgerAndSplitTenderTests {
         splitTender(order, 100_000L, 12_000L);
 
         clock.advance(PAST_THE_HOLD_LIFETIME);
-        LoyaltyMaintenanceService sweep =
-                new LoyaltyMaintenanceService(store, redemption, SETTLEMENT_STILL_COMING, NO_WARNINGS_RECORDED, clock);
+        LoyaltyMaintenanceService sweep = new LoyaltyMaintenanceService(
+                store, redemption, SETTLEMENT_STILL_COMING, NO_WARNINGS_RECORDED, transactions, clock);
         int released = transactions.execute(status -> sweep.releaseStaleHolds());
         assertThat(released)
                 .as("a renewal is not a release and is not counted as one")
@@ -1498,8 +1557,8 @@ class LoyaltyLedgerAndSplitTenderTests {
 
         // And the sweep afterwards has nothing left to do, whatever the port says.
         clock.advance(PAST_THE_HOLD_LIFETIME);
-        LoyaltyMaintenanceService sweep =
-                new LoyaltyMaintenanceService(store, redemption, SETTLEMENT_STILL_COMING, NO_WARNINGS_RECORDED, clock);
+        LoyaltyMaintenanceService sweep = new LoyaltyMaintenanceService(
+                store, redemption, SETTLEMENT_STILL_COMING, NO_WARNINGS_RECORDED, transactions, clock);
         int released = transactions.execute(status -> sweep.releaseStaleHolds());
         assertThat(released).isZero();
         assertThat(store.staleReservations(clock.instant(), 500)).isEmpty();
