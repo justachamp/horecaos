@@ -42,6 +42,20 @@ export const operationsPaths = {
   },
 
   /**
+   * The ADR 0045 realtime push endpoint — `OperationsStreamController`, on
+   * the same pre-ADR-0031 prefix `orders` above sits on, since it is mapped
+   * directly under the location rather than under `/operations`. Query
+   * params: `channels` (repeated, e.g. `order_queue`, `counters`), and
+   * `scope` when a channel is carried wider than `LOCATION` (`TENANT:{id}` or
+   * `BRAND:{id}`) — omitted here because every caller this console has today
+   * subscribes at its own location. `core/realtime/realtime-client.ts` is the
+   * one caller; nothing else should build this URL by hand.
+   */
+  streams(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/operations/streams`;
+  },
+
+  /**
    * The order board (orders.md §2.4, ADR 0102, wave P07) — the branch's
    * orders, filtered in the database and cursor-paged, superseding {@link
    * orders} for any caller that needs a filter this console's toolbar offers
