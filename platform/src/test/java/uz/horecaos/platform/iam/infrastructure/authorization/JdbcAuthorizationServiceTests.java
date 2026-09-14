@@ -273,6 +273,9 @@ class JdbcAuthorizationServiceTests {
                 Capability.DELIVERY_ZONE_READ,
                 Capability.DELIVERY_TARIFF_READ,
                 Capability.DELIVERY_FEE_EVIDENCE_READ,
+                // ADR 0042, gap map row 10.13, wave P38: reading the courier
+                // compensation/delivery policy document takes nothing out.
+                Capability.DELIVERY_POLICY_READ,
                 Capability.COURIER_POSITION_READ,
                 Capability.KITCHEN_TICKET_READ,
                 Capability.RESERVATION_READ,

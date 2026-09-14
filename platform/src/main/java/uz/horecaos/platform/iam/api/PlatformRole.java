@@ -254,6 +254,13 @@ public enum PlatformRole {
                     DELIVERY_TARIFF_MANAGE,
                     DELIVERY_TARIFF_ACTIVATE,
                     DELIVERY_FEE_EVIDENCE_READ,
+                    // ADR 0042, gap map row 10.13: the courier compensation
+                    // policy document — GPS gates, kitchen-ready-only, reveal
+                    // timing, the post-delivery payment check — read and
+                    // written from the same Settings screen as the zones and
+                    // tariffs immediately above.
+                    DELIVERY_POLICY_READ,
+                    DELIVERY_POLICY_WRITE,
                     COURIER_READ,
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
@@ -417,6 +424,13 @@ public enum PlatformRole {
                     DELIVERY_TARIFF_READ,
                     DELIVERY_TARIFF_MANAGE,
                     DELIVERY_FEE_EVIDENCE_READ,
+                    // ADR 0042, gap map row 10.13: the courier compensation
+                    // policy document — GPS gates, kitchen-ready-only, reveal
+                    // timing, the post-delivery payment check — read and
+                    // written from the same Settings screen as the zones and
+                    // tariffs immediately above.
+                    DELIVERY_POLICY_READ,
+                    DELIVERY_POLICY_WRITE,
                     COURIER_READ,
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
@@ -582,6 +596,10 @@ public enum PlatformRole {
                     DELIVERY_ZONE_MANAGE,
                     DELIVERY_TARIFF_READ,
                     DELIVERY_TARIFF_MANAGE,
+                    // ADR 0042, gap map row 10.13: the courier compensation
+                    // policy document, same reasoning as the two roles above.
+                    DELIVERY_POLICY_READ,
+                    DELIVERY_POLICY_WRITE,
                     MARKETPLACE_AVAILABILITY_PUSH,
                     NOTIFICATION_TEMPLATE_AUTHOR,
                     NOTIFICATION_ROUTING_MANAGE,
