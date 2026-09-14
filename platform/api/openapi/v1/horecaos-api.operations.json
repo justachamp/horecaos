@@ -654,6 +654,36 @@
         },
         "type" : "object"
       },
+      "ApprovalDecisionResponse" : {
+        "properties" : {
+          "action" : {
+            "type" : "string"
+          },
+          "actorId" : {
+            "type" : "string"
+          },
+          "actorType" : {
+            "type" : "string"
+          },
+          "decisionChannel" : {
+            "type" : "string"
+          },
+          "decisionId" : {
+            "type" : "string"
+          },
+          "effective" : {
+            "type" : "boolean"
+          },
+          "issuedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApprovalRequestControllerDecisionRequest" : {
         "properties" : {
           "decision" : {
@@ -5865,6 +5895,59 @@
         },
         "type" : "object"
       },
+      "KitchenEventResponse" : {
+        "properties" : {
+          "actorId" : {
+            "type" : "string"
+          },
+          "actorType" : {
+            "type" : "string"
+          },
+          "fromStatus" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "occurredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "type" : "string"
+          },
+          "ticketItemId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "toStatus" : {
+            "type" : "string"
+          },
+          "trigger" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "KitchenEventsResponse" : {
+        "properties" : {
+          "events" : {
+            "items" : {
+              "$ref" : "#/components/schemas/KitchenEventResponse"
+            },
+            "type" : "array"
+          },
+          "ticketId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "ticketStatus" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "LatenessPolicyResponse" : {
         "properties" : {
           "delivery" : {
@@ -8035,6 +8118,52 @@
               "$ref" : "#/components/schemas/OrderMixSliceResponse"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderDeliveryResponse" : {
+        "properties" : {
+          "courierEtaAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "customerDeliveryFeeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "estimatedReadyAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "planId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "planStatus" : {
+            "type" : "string"
+          },
+          "planVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "promisedDeliveryEnd" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "promisedDeliveryStart" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "providerCostMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "shipment" : {
+            "$ref" : "#/components/schemas/ShipmentResponse"
           }
         },
         "type" : "object"
@@ -12142,6 +12271,45 @@
         },
         "type" : "object"
       },
+      "ShipmentResponse" : {
+        "properties" : {
+          "assignedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "courierId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "deliveredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "pickedUpAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "providerBindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "shipmentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sourceType" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "ShipmentView" : {
         "properties" : {
           "courierId" : {
@@ -13359,6 +13527,10 @@
             "type" : "string"
           },
           "channelSystemType" : {
+            "type" : "string"
+          },
+          "courierEtaAt" : {
+            "format" : "date-time",
             "type" : "string"
           },
           "createdAt" : {
@@ -16772,6 +16944,59 @@
         },
         "summary" : "The lateness policy in force for this location",
         "tags" : [ "Order lateness" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/delivery" : {
+      "get" : {
+        "description" : "Not found for an order fulfilled some other way -- pickup, dine-in, or one whose delivery plan was cancelled outright. `providerCostMinor` is set only when fulfillment.delivery_cost_subsidies recognised a gap between the customer's fee and what the winning partner billed; a provider-fulfilled order that came in at or under the customer's fee has no such row, and this read says so honestly rather than fabricate a figure nothing recorded.",
+        "operationId" : "delivery",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrderDeliveryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This order's delivery plan, current shipment and both money figures",
+        "tags" : [ "Order delivery" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/lateness" : {
@@ -26136,6 +26361,59 @@
         "tags" : [ "Kitchen devices" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/orders/{orderId}/events" : {
+      "get" : {
+        "description" : "Empty when the order never opened a ticket at all — an ordinary state, not an error. A ticket that opened at a different branch answers not found, the same rule every other order-keyed read in this console follows.",
+        "operationId" : "eventsForOrder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/KitchenEventsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This order's kitchen production events, if it ever opened a ticket",
+        "tags" : [ "Kitchen board" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/routing-rules" : {
       "post" : {
         "description" : "Naming a station writes the location layer; naming a role writes the brand layer. A rule addresses exactly one of a variant, a product, or a category.",
@@ -28331,6 +28609,62 @@
           }
         },
         "summary" : "Reveal the customer's phone in full",
+        "tags" : [ "Operations orders" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/decisions" : {
+      "get" : {
+        "description" : "At most one row is ever effective; every other row here is a click that lost the compare-and-set, a duplicate, or arrived after the order was already decided.",
+        "operationId" : "decisions",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ApprovalDecisionResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every decision this order ever received, including a losing one",
         "tags" : [ "Operations orders" ]
       }
     },
@@ -34407,6 +34741,9 @@
   }, {
     "description" : "Audiences, campaigns, and suppression (ADR 0044)",
     "name" : "Marketing"
+  }, {
+    "description" : "The order-keyed read of one order's delivery plan, shipment and money",
+    "name" : "Order delivery"
   }, {
     "description" : "One customer's own orders, as staff may read them",
     "name" : "Customer order history"

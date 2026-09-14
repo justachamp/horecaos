@@ -321,6 +321,17 @@ export interface ApplyPromoCodeRequest {
   code: string;
 }
 
+export interface ApprovalDecisionResponse {
+  action?: string;
+  actorId?: string;
+  actorType?: string;
+  decisionChannel?: string;
+  decisionId?: string;
+  effective?: boolean;
+  issuedAt?: string;
+  reasonCode?: string;
+}
+
 export interface ApprovalRequestControllerDecisionRequest {
   decision: string;
   reason: string;
@@ -3061,6 +3072,24 @@ export interface KitchenBoardControllerCountsResponse {
   total?: number;
 }
 
+export interface KitchenEventResponse {
+  actorId?: string;
+  actorType?: string;
+  fromStatus?: string;
+  id?: string;
+  occurredAt?: string;
+  reasonCode?: string;
+  ticketItemId?: string;
+  toStatus?: string;
+  trigger?: string;
+}
+
+export interface KitchenEventsResponse {
+  events?: Array<KitchenEventResponse>;
+  ticketId?: string;
+  ticketStatus?: string;
+}
+
 export interface LatenessPolicyResponse {
   delivery?: LatenessThresholdsResponse;
   dineIn?: LatenessThresholdsResponse;
@@ -4021,6 +4050,20 @@ export interface OrderCountsResponse {
   total?: number;
   totalNonTerminal?: number;
   typeMix?: Array<OrderMixSliceResponse>;
+}
+
+export interface OrderDeliveryResponse {
+  courierEtaAt?: string;
+  currency?: string;
+  customerDeliveryFeeMinor?: number;
+  estimatedReadyAt?: string;
+  planId?: string;
+  planStatus?: string;
+  planVersion?: number;
+  promisedDeliveryEnd?: string;
+  promisedDeliveryStart?: string;
+  providerCostMinor?: number;
+  shipment?: ShipmentResponse;
 }
 
 export interface OrderDetailResponse {
@@ -6284,6 +6327,18 @@ export interface SettlementPeriodResponse {
   status?: string;
 }
 
+export interface ShipmentResponse {
+  assignedAt?: string;
+  courierId?: string;
+  deliveredAt?: string;
+  pickedUpAt?: string;
+  providerBindingId?: string;
+  shipmentId?: string;
+  sourceType?: string;
+  status?: string;
+  version?: number;
+}
+
 export interface ShipmentView {
   courierId?: string;
   providerBindingId?: string;
@@ -7034,6 +7089,7 @@ export interface TestSendResponse {
 export interface TicketResponse {
   channelCode?: string;
   channelSystemType?: string;
+  courierEtaAt?: string;
   createdAt?: string;
   fulfilmentMode?: string;
   items?: Array<ItemView>;
@@ -7779,6 +7835,7 @@ export interface Operations {
   "unassign": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/unassign"; request: { parameters: { path: { brandId: string; locationId: string; planId: string; tenantId: string } }; body: UnassignRequest }; responses: { "200": DispatchResponse } };
   "queue": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/queue"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<PlanQueueResponse> } };
   "policy": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/lateness-policy"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LatenessPolicyResponse } };
+  "delivery": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/delivery"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderDeliveryResponse } };
   "severity": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/lateness"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderLatenessResponse } };
   "replacePreparationBands": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/preparation-bands"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BandsRequest }; responses: { "200": unknown } };
   "bindSchedule": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/service-bindings"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BindingRequest }; responses: { "200": unknown } };
@@ -8097,6 +8154,7 @@ export interface Operations {
   "list_33": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<DeviceResponse> } };
   "approve_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices/enrolments/{userCode}/approve"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; userCode: string } }; body: ApproveRequest }; responses: { "200": DeviceResponse } };
   "revoke": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices/{deviceId}/revoke"; request: { parameters: { path: { brandId: string; deviceId: string; locationId: string; tenantId: string } }; body: RevokeRequest }; responses: { "200": RevokeResponse } };
+  "eventsForOrder": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/orders/{orderId}/events"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": KitchenEventsResponse } };
   "route": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/routing-rules"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: RoutingRuleRequest }; responses: { "200": RoutingRuleResponse } };
   "capacity": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/station-capacity"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<StationCapacityResponse> } };
   "addCapacity": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/station-capacity"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: StationCapacityRequest }; responses: { "200": StationCapacityResponse } };
@@ -8133,6 +8191,7 @@ export interface Operations {
   "complete": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/completion"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: CompleteRequest }; responses: { "200": OperationsOrderControllerDecisionResponse } };
   "revealAddress": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/customer/address"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": OperationsOrderControllerAddressResponse } };
   "revealPhone": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/customer/phone"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": PhoneRevealResponse } };
+  "decisions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/decisions"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": Array<ApprovalDecisionResponse> } };
   "revealNote": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/lines/{lineId}/note"; request: { parameters: { path: { brandId: string; lineId: string; locationId: string; orderId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": NoteResponse } };
   "revisions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/revisions"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": Array<RevisionResponse> } };
   "stateAction_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/state-actions"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: OperationsOrderControllerStateActionRequest }; responses: { "200": OperationsOrderControllerDecisionResponse } };
