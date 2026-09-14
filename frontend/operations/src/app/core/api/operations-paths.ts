@@ -138,6 +138,26 @@ export const operationsPaths = {
   },
 
   /**
+   * Every decision this order ever received, winner and losers alike (wave
+   * P11, gap map row 1.2b) — a sibling read to {@link orderTimeline}, not a
+   * field folded into it: that response is a released contract this array
+   * must not narrow or change the shape of.
+   */
+  orderDecisions(scope: LocationScope, orderId: string): string {
+    return `${this.order(scope, orderId)}/decisions`;
+  },
+
+  /**
+   * The order-to-fulfilment seam (`OrderDeliveryController`, wave P11, gap
+   * map rows 1.2e/1.2n/2.1a) — on the ADR 0031 prefix like `dispatch`, not on
+   * {@link order}'s legacy one: this controller is new and has no legacy
+   * shape to inherit.
+   */
+  orderDelivery(scope: LocationScope, orderId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/orders/${encodeURIComponent(orderId)}/delivery`;
+  },
+
+  /**
    * Every revision of this order (ADR 0039, wave P09/gap map `1.2p`) — the
    * append-only chain `orderQuery.revisions` already serves and no screen has
    * read before now.
@@ -337,6 +357,11 @@ export const operationsPaths = {
   /** Custody transfer off the pass (2.3, Раздача). Mutation: key required, no body. */
   kitchenTicketHandOver(scope: LocationScope, ticketId: string): string {
     return `${this.kitchenTicket(scope, ticketId)}/hand-over`;
+  },
+
+  /** The order detail's production lane (wave P11, gap map row 1.2b) — `ORDER_READ`, not `KITCHEN_TICKET_READ`. */
+  kitchenEventsByOrder(scope: LocationScope, orderId: string): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/orders/${encodeURIComponent(orderId)}/events`;
   },
 
   /** One production line, at the station it routed to. */
