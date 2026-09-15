@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
@@ -108,6 +109,7 @@ describe('OrderReportsPage', () => {
     await TestBed.configureTestingModule({
       imports: [OrderReportsPage],
       providers: [
+        provideRouter([]),
         ReportsFilterState,
         {
           provide: CurrentLocation,

@@ -475,8 +475,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.handover.bypassConfirm': 'Qoʻlda tasdiqlashni yakunlash',
 
   'orders.detail.section.payment': 'Toʻlov',
-  'orders.detail.payment.error': 'Toʻlov maʼlumotlarini yuklab boʻlmadi',
-  'orders.detail.payment.denied': 'Toʻlov maʼlumotlariga kirish huquqi yoʻq',
+  'orders.detail.payment.error': 'Toʻlov maʻlumotlarini yuklab boʻlmadi',
+  'orders.detail.payment.denied': 'Toʻlov maʻlumotlariga kirish huquqi yoʻq',
 
   'orders.detail.section.fiscal': 'Fiskal cheklar',
   'orders.detail.fiscal.error': 'Fiskal hujjatlarni yuklab boʻlmadi',
@@ -2166,7 +2166,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'myWork.title': 'Mening ishim',
   'myWork.subtitle':
     'Ushbu filialdagi shaxsiy buyurtmalaringiz va tushumingiz — faqat bugun uchun.',
-  'myWork.loading': 'Ish maʼlumotlari yuklanmoqda',
+  'myWork.loading': 'Ish maʻlumotlari yuklanmoqda',
   'myWork.error': 'Yuklab boʻlmadi',
   'myWork.channel.title': 'Mening buyurtmalarim kanal boʻyicha',
   'myWork.channel.period': '{from} dan, joriy savdo kuni',
@@ -2175,7 +2175,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'myWork.payment.empty': 'Bugun hali tushumlar qayd etilmagan',
   'myWork.locked.title': 'Hali mavjud emas',
   'myWork.locked.ask':
-    'Shaxsiy maʼlumotlar va interfeys shaxsiylashtirishi xodim identifikatsiyasi boʻyicha ADR kutmoqda — uni platforma egasi hali yozmagan.',
+    'Shaxsiy maʻlumotlar va interfeys shaxsiylashtirishi xodim identifikatsiyasi boʻyicha ADR kutmoqda — uni platforma egasi hali yozmagan.',
 
   // ---- IA 0.1e / X/X.3 Devor taxtasi (wallboard-shell.ts) — T23 toʻlqini ----
   'wallboard.title': 'Jonli taxta',
@@ -3498,14 +3498,14 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.nav.exports': 'Eksport',
   'reports.exportCentre.title': 'Eksport markazi',
   'reports.exportCentre.subtitle':
-    'Har bir eksport navbatga qoʻyiladi, huquq bilan cheklanadi va qayd etiladi — auditlanadigan shaxsiy maʼlumot chiqishi (ADR 0043/ADR 0029).',
+    'Har bir eksport navbatga qoʻyiladi, huquq bilan cheklanadi va qayd etiladi — auditlanadigan shaxsiy maʻlumot chiqishi (ADR 0043/ADR 0029).',
   'reports.exportCentre.newTitle': 'Yangi eksport',
   'reports.exportCentre.reportLabel': 'Hisobot',
   'reports.exportCentre.reportOption.customerDirectory': 'Mijozlar roʻyxati',
   'reports.exportCentre.columnsLabel': 'Ustunlar',
-  'reports.exportCentre.piiGroupLabel': 'Shaxsiy maʼlumot (customer.pii.export talab qilinadi)',
+  'reports.exportCentre.piiGroupLabel': 'Shaxsiy maʻlumot (customer.pii.export talab qilinadi)',
   'reports.exportCentre.piiGroupHidden':
-    'Shaxsiy maʼlumot ustunlari yashirilgan — sizda customer.pii.export huquqi yoʻq',
+    'Shaxsiy maʻlumot ustunlari yashirilgan — sizda customer.pii.export huquqi yoʻq',
   'reports.exportCentre.statusLabel': 'Holat',
   'reports.exportCentre.statusFilter.all': 'Barcha holatlar',
   'reports.exportCentre.statusFilter.active': 'Faol',
@@ -3529,7 +3529,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.exportCentre.status.FAILED': 'Xato',
   'reports.exportCentre.rowCount': '{count} qator',
   'reports.exportCentre.truncated': '{quota} qatorgacha qisqartirildi',
-  'reports.exportCentre.piiIncluded': 'Shaxsiy maʼlumotni oʻz ichiga oladi',
+  'reports.exportCentre.piiIncluded': 'Shaxsiy maʻlumotni oʻz ichiga oladi',
   'reports.exportCentre.download': 'Yuklab olish',
   'reports.exportCentre.column.accountId': 'Akkaunt ID',
   'reports.exportCentre.column.status': 'Holat',
