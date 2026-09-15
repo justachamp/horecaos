@@ -31,7 +31,9 @@ class MetricRegistryTests {
                 "sla_bucket_set.v1",
                 "channel_mix.count.v1",
                 "receipt_depth.v1",
-                "payment_mix.amount.v1");
+                "payment_mix.amount.v1",
+                "orders.promised.v1",
+                "handover_time.median.v1");
 
         assertThat(named)
                 .allSatisfy(
@@ -105,6 +107,30 @@ class MetricRegistryTests {
         assertThat(paymentMix.grain().namesLegalEntity()).isTrue();
         assertThat(paymentMix.aggregation()).isEqualTo(MetricDefinition.Aggregation.DISTRIBUTION);
         assertThat(paymentMix.effectiveFrom()).isEqualTo(LocalDate.of(2026, 9, 14));
+    }
+
+    @Test
+    void ordersPromisedIsTheOnTimeDenominatorNotMoney() {
+        // Wave T06 (7.3): the branch leaderboard's «В норме %» denominator.
+        MetricDefinition promised = MetricRegistry.require("orders.promised.v1");
+
+        assertThat(promised.sourceAvailable()).isTrue();
+        assertThat(promised.grain()).isEqualTo(Grain.DAY_LOCATION);
+        assertThat(promised.isMoney()).isFalse();
+        assertThat(promised.aggregation()).isEqualTo(MetricDefinition.Aggregation.COUNT);
+    }
+
+    @Test
+    void handoverTimeMedianReadsSecondsTotalNotSecondsToReady() {
+        // Wave T06 (7.3a): the SLA table's «Медиана» column — the same
+        // population sla_bucket_set.v1 buckets, distinct from
+        // prep_time.median.v1's own seconds_to_ready.
+        MetricDefinition handover = MetricRegistry.require("handover_time.median.v1");
+
+        assertThat(handover.sourceAvailable()).isTrue();
+        assertThat(handover.grain()).isEqualTo(Grain.DAY_LOCATION);
+        assertThat(handover.aggregation()).isEqualTo(MetricDefinition.Aggregation.MEDIAN);
+        assertThat(handover.sourceFact()).isEqualTo("reporting.fact_order.seconds_total");
     }
 
     @Test
