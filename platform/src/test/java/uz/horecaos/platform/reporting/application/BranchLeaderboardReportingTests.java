@@ -166,6 +166,55 @@ class BranchLeaderboardReportingTests {
         assertThat(byChannel).containsEntry("TELEGRAM", 5L).containsEntry("AGGREGATOR_X", 2L);
     }
 
+    @Test
+    void oneQueryNamingAllThreeAxesAndAllThreeMetricsAnswersEveryLeaderboardColumnTheFrontendAsksFor() {
+        // The exact shape branch-sla-report-page.ts's own `load()` sends:
+        // metric=[orders.count.v1, orders.promised.v1, orders.late.v1],
+        // groupBy=[LOCATION, FULFILMENT_TYPE, CHANNEL] — one request answering
+        // the delivery/pickup split, the aggregator count, and the on-time
+        // denominator/numerator together, not three separate calls.
+        insertFullAggregate(LOCATION_A, "TELEGRAM", "DELIVERY", 5, 5, 1);
+        insertFullAggregate(LOCATION_A, "AGGREGATOR_X", "DELIVERY", 2, 2, 0);
+        insertFullAggregate(LOCATION_A, "TELEGRAM", "PICKUP", 3, 0, 0);
+
+        var result = queries.run(new ReportQuery(
+                TENANT,
+                DAY,
+                DAY,
+                List.of("orders.count.v1", "orders.promised.v1", "orders.late.v1"),
+                List.of(Grain.Dimension.LOCATION, Grain.Dimension.FULFILMENT_TYPE, Grain.Dimension.CHANNEL),
+                List.of(),
+                List.of(),
+                List.of()));
+
+        // Folding FULFILMENT_TYPE and CHANNEL away (as the frontend's
+        // sumAcrossDays keyed by locationId alone does) must recover the true
+        // branch totals: 10 orders, 7 promised, 1 late.
+        long orders = 0;
+        long promised = 0;
+        long late = 0;
+        long deliveryCount = 0;
+        long aggregatorCount = 0;
+        for (var row : result.rows()) {
+            long count = Objects.requireNonNull(row.values().get("orders.count.v1"));
+            orders += count;
+            promised += Objects.requireNonNull(row.values().get("orders.promised.v1"));
+            late += Objects.requireNonNull(row.values().get("orders.late.v1"));
+            if ("DELIVERY".equals(row.slice().fulfilmentType())) {
+                deliveryCount += count;
+            }
+            if ("AGGREGATOR_X".equals(row.slice().channelCode())) {
+                aggregatorCount += count;
+            }
+        }
+
+        assertThat(orders).isEqualTo(10);
+        assertThat(promised).isEqualTo(7);
+        assertThat(late).isEqualTo(1);
+        assertThat(deliveryCount).isEqualTo(7);
+        assertThat(aggregatorCount).isEqualTo(2);
+    }
+
     // ------------------------------------------------- orders.promised.v1
 
     @Test
@@ -326,6 +375,17 @@ class BranchLeaderboardReportingTests {
 
     /** One {@code agg_branch_day} row for the grouping tests — money fields are irrelevant to them. */
     private void insertAggregate(UUID locationId, String channelCode, String fulfilmentType, int orderCount) {
+        insertFullAggregate(locationId, channelCode, fulfilmentType, orderCount, 0, 0);
+    }
+
+    /** {@link #insertAggregate}, naming a promised/late count too — the combined-query test's own fixture. */
+    private void insertFullAggregate(
+            UUID locationId,
+            String channelCode,
+            String fulfilmentType,
+            int orderCount,
+            int promisedCount,
+            int lateCount) {
         store.insertAggregate(new ReportingFacts.BranchDayAggregate(
                 new ReportingFacts.BranchDayKey(TENANT, DAY, locationId, null, channelCode, fulfilmentType),
                 1,
@@ -337,8 +397,8 @@ class BranchLeaderboardReportingTests {
                 0L,
                 0L,
                 null,
-                0,
-                0,
+                promisedCount,
+                lateCount,
                 0,
                 0));
     }
