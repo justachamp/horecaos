@@ -1,0 +1,8 @@
+.q-connection-state-banner {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--q-radius);
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}

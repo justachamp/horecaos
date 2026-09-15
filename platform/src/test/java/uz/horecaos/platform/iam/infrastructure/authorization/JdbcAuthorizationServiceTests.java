@@ -273,6 +273,9 @@ class JdbcAuthorizationServiceTests {
                 Capability.DELIVERY_ZONE_READ,
                 Capability.DELIVERY_TARIFF_READ,
                 Capability.DELIVERY_FEE_EVIDENCE_READ,
+                // ADR 0042, gap map row 10.13, wave P38: reading the courier
+                // compensation/delivery policy document takes nothing out.
+                Capability.DELIVERY_POLICY_READ,
                 Capability.COURIER_POSITION_READ,
                 Capability.KITCHEN_TICKET_READ,
                 Capability.RESERVATION_READ,
@@ -290,6 +293,14 @@ class JdbcAuthorizationServiceTests {
                 // to read its own wallet -- what it paid, what HorecaOS granted,
                 // and which statement is still due. Reading takes nothing out.
                 Capability.COMMERCIAL_WALLET_READ,
+                // ADR 0127, wave T19: browsing the modules HorecaOS sells, from
+                // the tenant's own console -- seeing what is for sale is not a
+                // commitment of money, and takes nothing out.
+                Capability.COMMERCIAL_MODULE_READ,
+                // ADR 0127, wave T19: a suspended tenant is exactly the tenant
+                // that needs to read its own place in the arrears lifecycle --
+                // the same rule as COMMERCIAL_WALLET_READ just above.
+                Capability.COMMERCIAL_ARREARS_READ,
                 Capability.LOYALTY_READ,
                 Capability.REFERRAL_READ,
                 Capability.REPORTING_READ,

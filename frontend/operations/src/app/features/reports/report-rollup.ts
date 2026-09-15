@@ -96,6 +96,46 @@ export function dailyAverageCheck(rows: readonly RowResponse[]): readonly DailyR
 }
 
 /**
+ * Wave P27 (7.1d): the filter bar's granularity axis, applied to a
+ * day-by-day series client-side — the typed `/queries` endpoint has no week
+ * or month grain of its own (`Grain` in the registry is a metric's storage
+ * grain, not a display bucket), and folding calendar weeks/months is
+ * arithmetic on numbers the day-grain read already returned correctly, the
+ * same footing {@link sumAcrossDays} itself stands on.
+ *
+ * ISO weeks (Monday start) for `'week'`; calendar months for `'month'`. The
+ * bucket key is the bucket's own first date, so callers can still label it
+ * with `ddmm`/a month name without a second lookup.
+ */
+export function rollUpByGranularity(
+  points: readonly DailyPoint[],
+  granularity: 'day' | 'week' | 'month',
+): readonly DailyPoint[] {
+  if (granularity === 'day') {
+    return points;
+  }
+  const byBucket = new Map<string, number>();
+  for (const point of points) {
+    const key =
+      granularity === 'week' ? startOfIsoWeek(point.date) : `${point.date.slice(0, 7)}-01`;
+    byBucket.set(key, (byBucket.get(key) ?? 0) + point.value);
+  }
+  return [...byBucket.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, value]) => ({ date, value }));
+}
+
+function startOfIsoWeek(iso: string): string {
+  const [year, month, day] = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  // getUTCDay(): 0 = Sunday .. 6 = Saturday. ISO weeks start Monday, so
+  // Sunday is 6 days into the week it belongs to, not 0.
+  const isoDayIndex = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - isoDayIndex);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
  * `average_check.v1`'s own published formula (`MetricRegistry`): gross
  * revenue over completed-order count, same filter, same date attribution.
  * Applying the registry's stated formula to two already-correctly-summed

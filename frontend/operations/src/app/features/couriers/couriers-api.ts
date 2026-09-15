@@ -384,7 +384,7 @@ export interface DraftRosterEntryRequest {
   readonly reason: string;
 }
 
-/** Mirrors `OperationsCourierController.CourierPolicyResponse` (IA 3.9). */
+/** Mirrors `OperationsCourierController.CourierPolicyResponse` (IA 3.9, wave P38). */
 export interface CourierPolicyView {
   readonly reverificationDays: number;
   readonly warningDays: number;
@@ -394,9 +394,40 @@ export interface CourierPolicyView {
   readonly shiftEnforcement: 'ENFORCED' | 'ADVISORY' | 'OFF';
   readonly graceSeconds: number;
   readonly confirmationPointRetentionDays: number;
+  /** Wave P38 — couriers.md §16's GPS master toggle and its two radii. */
+  readonly gpsVerificationEnabled: boolean;
+  readonly gpsAcceptRadiusMeters: number;
+  readonly gpsStatusChangeRadiusMeters: number;
+  readonly kitchenReadyOnly: boolean;
+  readonly revealCustomerLocationTiming: 'BEFORE_ACCEPT' | 'AFTER_ACCEPT';
+  readonly postDeliveryPaymentCheckRequired: boolean;
   readonly winningScope: string;
   readonly policyId: string;
   readonly policyVersion: number;
+}
+
+/** Mirrors `OperationsCourierController.CourierPolicyWriteRequest` — every field required (whole-document publish). */
+export interface CourierPolicyWriteInput {
+  readonly reverificationDays: number;
+  readonly warningDays: number;
+  readonly settlementPeriodDays: number;
+  readonly cashCeilingMinor: number;
+  readonly penaltyApprovalThresholdMinor: number;
+  readonly shiftEnforcement: 'ENFORCED' | 'ADVISORY' | 'OFF';
+  readonly graceSeconds: number;
+  readonly confirmationPointRetentionDays: number;
+  readonly gpsVerificationEnabled: boolean;
+  readonly gpsAcceptRadiusMeters: number;
+  readonly gpsStatusChangeRadiusMeters: number;
+  readonly kitchenReadyOnly: boolean;
+  readonly revealCustomerLocationTiming: 'BEFORE_ACCEPT' | 'AFTER_ACCEPT';
+  readonly postDeliveryPaymentCheckRequired: boolean;
+  readonly reason: string;
+}
+
+/** T11 7.4c: mirrors `OperationsCourierController.ReconcileShipmentResponse`. */
+export interface ReconcileShipmentResponse {
+  readonly reconciled: boolean;
 }
 
 /**
@@ -847,5 +878,48 @@ export class CouriersApi {
       }),
     );
     return result.value;
+  }
+
+  /**
+   * Publishes the next version of the courier compensation policy (wave
+   * P38). Whole-document: every field of {@link CourierPolicyWriteInput} is
+   * required, matching `OperationsCourierController`'s own "no partial
+   * merge" rule for this document. Omit `brandId`/`locationId` to publish
+   * the tenant-wide default; supply either for a brand or location override.
+   */
+  async writePolicy(
+    tenantId: string,
+    input: CourierPolicyWriteInput,
+    brandId?: string,
+    locationId?: string,
+  ): Promise<CourierPolicyView> {
+    return firstValueFrom(
+      this.api.put<CourierPolicyWriteInput, CourierPolicyView>(
+        courierPaths.courierPolicy(tenantId),
+        command(input),
+        { params: { ...(brandId ? { brandId } : {}), ...(locationId ? { locationId } : {}) } },
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------ T11 7.4c
+
+  /**
+   * The external-delivery-cost report's per-line reconcile action. `reconciled`
+   * is `false` for a genuinely `UNBILLED` shipment — nothing to reconcile
+   * against yet, and the acknowledgement was recorded on the audit trail
+   * alone.
+   */
+  async reconcileExternalDeliveryCost(
+    tenantId: string,
+    shipmentId: string,
+    reason: string,
+  ): Promise<ReconcileShipmentResponse> {
+    return firstValueFrom(
+      this.api.post<{ reason: string }, ReconcileShipmentResponse>(
+        courierPaths.externalDeliveryCostReconcile(tenantId, shipmentId),
+        command({ reason }),
+      ),
+    );
   }
 }

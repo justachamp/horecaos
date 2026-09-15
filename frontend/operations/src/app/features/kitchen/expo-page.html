@@ -1,8 +1,4 @@
 <div class="expo">
-  <div class="expo__note-band" role="note">
-    <span class="q-body-sm">{{ 'kitchen.expo.noCodeVerification' | t }}</span>
-  </div>
-
   @if (actionNotice(); as notice) {
     <div class="expo__notice-band" role="alert">
       <span class="q-body-sm">{{ notice }}</span>
@@ -40,13 +36,26 @@
             <button
               type="button"
               class="ticket__handover"
-              [disabled]="isBusy(ticket)"
+              [disabled]="isBusy(ticket) || !canHandOver(ticket)"
               (click)="handOver(ticket)"
               data-testid="expo-handover"
             >
               {{ 'kitchen.expo.handOver' | t }}
             </button>
           </div>
+
+          <div class="ticket__rollup" data-testid="expo-rollup">
+            @for (row of departmentRollup(ticket); track row.stationId) {
+              <span
+                class="rollup-chip"
+                [class.rollup-chip--ready]="row.readyQuantity === row.totalQuantity"
+                data-testid="expo-rollup-chip"
+              >
+                {{ stationLabel(row.stationId) }}: {{ row.readyQuantity }}/{{ row.totalQuantity }}
+              </span>
+            }
+          </div>
+
           <table class="ticket__items">
             <thead>
               <tr>
@@ -78,6 +87,29 @@
               }
             </tbody>
           </table>
+
+          <label class="ticket__packing">
+            <input
+              type="checkbox"
+              [checked]="isPacked(ticket)"
+              [disabled]="!allItemsReady(ticket)"
+              (change)="togglePacked(ticket)"
+              data-testid="expo-packed"
+            />
+            <span class="q-body-sm">
+              {{
+                allItemsReady(ticket)
+                  ? ('kitchen.expo.packedConfirm' | t)
+                  : ('kitchen.expo.packedWaiting' | t)
+              }}
+            </span>
+          </label>
+
+          <q-order-handover-panel
+            [scope]="expoScope()"
+            [orderId]="ticket.orderId"
+            (challengeChange)="onChallengeChange(ticket, $event)"
+          />
         </div>
       } @empty {
         <div class="expo__empty">

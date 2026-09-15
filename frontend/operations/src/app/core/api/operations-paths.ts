@@ -42,6 +42,20 @@ export const operationsPaths = {
   },
 
   /**
+   * The ADR 0045 realtime push endpoint — `OperationsStreamController`, on
+   * the same pre-ADR-0031 prefix `orders` above sits on, since it is mapped
+   * directly under the location rather than under `/operations`. Query
+   * params: `channels` (repeated, e.g. `order_queue`, `counters`), and
+   * `scope` when a channel is carried wider than `LOCATION` (`TENANT:{id}` or
+   * `BRAND:{id}`) — omitted here because every caller this console has today
+   * subscribes at its own location. `core/realtime/realtime-client.ts` is the
+   * one caller; nothing else should build this URL by hand.
+   */
+  streams(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/operations/streams`;
+  },
+
+  /**
    * The order board (orders.md §2.4, ADR 0102, wave P07) — the branch's
    * orders, filtered in the database and cursor-paged, superseding {@link
    * orders} for any caller that needs a filter this console's toolbar offers
@@ -135,6 +149,26 @@ export const operationsPaths = {
   /** Every transition with what caused it — the answer to "why is it in this state". */
   orderTimeline(scope: LocationScope, orderId: string): string {
     return `${this.order(scope, orderId)}/timeline`;
+  },
+
+  /**
+   * Every decision this order ever received, winner and losers alike (wave
+   * P11, gap map row 1.2b) — a sibling read to {@link orderTimeline}, not a
+   * field folded into it: that response is a released contract this array
+   * must not narrow or change the shape of.
+   */
+  orderDecisions(scope: LocationScope, orderId: string): string {
+    return `${this.order(scope, orderId)}/decisions`;
+  },
+
+  /**
+   * The order-to-fulfilment seam (`OrderDeliveryController`, wave P11, gap
+   * map rows 1.2e/1.2n/2.1a) — on the ADR 0031 prefix like `dispatch`, not on
+   * {@link order}'s legacy one: this controller is new and has no legacy
+   * shape to inherit.
+   */
+  orderDelivery(scope: LocationScope, orderId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/orders/${encodeURIComponent(orderId)}/delivery`;
   },
 
   /**
@@ -334,9 +368,27 @@ export const operationsPaths = {
     return `${this.kitchenTicket(scope, ticketId)}/release`;
   },
 
+  /**
+   * Places a ticket on manual hold, or edits when a held ticket fires (2.2's
+   * buffer, `KitchenBoardController.reschedule`, wave T02). Moving a fire time
+   * later than the promise permits additionally needs
+   * `kitchen.ticket.release.override` and a reason; moving it earlier or
+   * placing an ordinary hold needs neither. `expectedVersion` travels in the
+   * body, not `If-Match` — the same convention this controller's own
+   * `release` above keeps.
+   */
+  kitchenTicketReleaseSchedule(scope: LocationScope, ticketId: string): string {
+    return `${this.kitchenTicket(scope, ticketId)}/release-schedule`;
+  },
+
   /** Custody transfer off the pass (2.3, Раздача). Mutation: key required, no body. */
   kitchenTicketHandOver(scope: LocationScope, ticketId: string): string {
     return `${this.kitchenTicket(scope, ticketId)}/hand-over`;
+  },
+
+  /** The order detail's production lane (wave P11, gap map row 1.2b) — `ORDER_READ`, not `KITCHEN_TICKET_READ`. */
+  kitchenEventsByOrder(scope: LocationScope, orderId: string): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/orders/${encodeURIComponent(orderId)}/events`;
   },
 
   /** One production line, at the station it routed to. */
@@ -364,6 +416,15 @@ export const operationsPaths = {
   },
 
   /**
+   * One throughput ceiling — `PUT` corrects it, `DELETE` removes it (wave
+   * T02, gap map row 2.6). Both take `expectedVersion` in the body, the same
+   * convention {@link kitchenStationCapacity}'s own `POST` sibling keeps.
+   */
+  kitchenStationCapacityWindow(scope: LocationScope, capacityWindowId: string): string {
+    return `${this.kitchenStationCapacity(scope)}/${encodeURIComponent(capacityWindowId)}`;
+  },
+
+  /**
    * Routes a catalogue node to a station role (the brand layer) or a station
    * (the location layer) -- `KitchenStationController.route`, row 4.2g's
    * kitchen department. `POST`-only; naming `stationRole` and leaving
@@ -372,6 +433,26 @@ export const operationsPaths = {
    */
   kitchenRoutingRules(scope: LocationScope): string {
     return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/routing-rules`;
+  },
+
+  /**
+   * The branch's kitchen display devices (ADR 0079, `KitchenDeviceController`,
+   * row `2/X.2`, wave P17) — active and revoked alike, with who enrolled or
+   * revoked each one. `POST`s land on {@link kitchenDeviceApprove} and
+   * {@link kitchenDeviceRevoke}, never here.
+   */
+  kitchenDevices(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/devices`;
+  },
+
+  /** Approves a pending enrolment by the `userCode` a new device's own screen shows. */
+  kitchenDeviceApprove(scope: LocationScope, userCode: string): string {
+    return `${this.kitchenDevices(scope)}/enrolments/${encodeURIComponent(userCode)}/approve`;
+  },
+
+  /** Revokes one enrolled device. Idempotent — revoking an already-revoked device is not an error. */
+  kitchenDeviceRevoke(scope: LocationScope, deviceId: string): string {
+    return `${this.kitchenDevices(scope)}/${encodeURIComponent(deviceId)}/revoke`;
   },
 
   /**
@@ -413,6 +494,45 @@ export const operationsPaths = {
    */
   dineInSessions(scope: LocationScope): string {
     return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/dine-in/sessions`;
+  },
+
+  /**
+   * Floor plan settings (ADR 0047, `FloorPlanController`, rows `10.2d`/
+   * `10.5b`, wave P38): `qrMode`, turnaround buffer, guest-session TTL,
+   * service-charge rate. `GET`/`PUT`, both `DINEIN_FLOORPLAN_MANAGE`.
+   */
+  dineInSettings(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/dine-in/settings`;
+  },
+
+  /** A branch's sections (wave P38). `GET` (`RESERVATION_READ`) or `POST` (`DINEIN_FLOORPLAN_MANAGE`, mutating). */
+  dineInSections(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/dine-in/sections`;
+  },
+
+  /** A branch's tables (wave P38). `GET` (`RESERVATION_READ`) or `POST` (`DINEIN_FLOORPLAN_MANAGE`, mutating). */
+  dineInTables(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/dine-in/tables`;
+  },
+
+  /** One table (wave P38). `PUT` moves it — `layoutX`/`layoutY`, `If-Match` required. */
+  dineInTable(scope: LocationScope, tableId: string): string {
+    return `${this.dineInTables(scope)}/${encodeURIComponent(tableId)}`;
+  },
+
+  /** Archive/restore a table (ADR 0047). `POST`, `If-Match` required. */
+  dineInTableStatusChanges(scope: LocationScope, tableId: string): string {
+    return `${this.dineInTable(scope, tableId)}/status-changes`;
+  },
+
+  /**
+   * Issue or rotate a table's QR token (ADR 0047). `POST`, `If-Match`
+   * required. The only endpoint in the platform whose response carries a
+   * live credential, and carries it exactly once — see
+   * `FloorPlanController`'s own doc.
+   */
+  dineInTableQrRotations(scope: LocationScope, tableId: string): string {
+    return `${this.dineInTable(scope, tableId)}/qr-token-rotations`;
   },
 
   /**
@@ -656,6 +776,50 @@ export const operationsPaths = {
   loyaltyLiability(scope: LocationScope): string {
     return `${OPERATIONS}${tenant(scope)}/reports/loyalty-liability`;
   },
+
+  /**
+   * Credit or debit a balance by hand (row 5.2e) — `LoyaltyOperationsController.adjust`,
+   * the same ADR-0031-prefixed controller as {@link customerLoyaltyBalances}.
+   * Mutation: key, `LOYALTY_ADJUST`, and above the configured threshold an
+   * ADR 0027 approval — the response's own `status` says which.
+   */
+  customerLoyaltyAdjustments(scope: LocationScope, accountId: string): string {
+    return `${this.customerLoyaltyBalances(scope, accountId)}/adjustments`;
+  },
+
+  /**
+   * Row 5.2g: every coupon-gated discount this customer has ever held,
+   * tenant-wide (`CustomerDiscountHistoryController`, ADR 0072, row 7.9a) —
+   * `pricing.coupon_redemptions`' own `ix_redemptions_customer` index, read
+   * here for the first time from this console.
+   */
+  customerDiscountHistory(scope: LocationScope, accountId: string): string {
+    return `${OPERATIONS}${tenant(scope)}/customers/${encodeURIComponent(accountId)}/discount-history`;
+  },
+
+  /**
+   * Row 5/X.1: raise (`POST`) or read (`GET`) this customer's own
+   * data-subject erasure requests (`CustomerController`, V0178). The
+   * tenant-wide worklist a merchant has no reason to browse from here stays
+   * behind the control plane; this is the per-account history only.
+   */
+  customerErasureRequests(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/erasure-requests`;
+  },
+
+  /** Withdraw a PENDING request. Mutation: key required. */
+  customerErasureRequestCancel(scope: LocationScope, accountId: string, requestId: string): string {
+    return `${this.customerErasureRequests(scope, accountId)}/${encodeURIComponent(requestId)}/cancel`;
+  },
+
+  /** The transition that actually anonymises the account. Mutation: key and `CUSTOMER_ERASURE_EXECUTE`. */
+  customerErasureRequestExecute(
+    scope: LocationScope,
+    accountId: string,
+    requestId: string,
+  ): string {
+    return `${this.customerErasureRequests(scope, accountId)}/${encodeURIComponent(requestId)}/execute`;
+  },
 } as const;
 
 /**
@@ -823,9 +987,24 @@ export const courierPaths = {
     return `${this.courierRosterEntries(tenantId)}/${encodeURIComponent(entryId)}/cancel`;
   },
 
-  /** The courier compensation policy in force (IA 3.9). Query params: optional `brandId`, `locationId`. */
+  /**
+   * The courier compensation policy (IA 3.9, settings.md §10.13/couriers.md
+   * §16). `GET` reads what is in force; `PUT` (wave P38) publishes the next
+   * whole-document version. Both take optional `brandId`/`locationId` query
+   * params — omit both for the tenant-wide scope.
+   */
   courierPolicy(tenantId: string): string {
     return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/courier-policy`;
+  },
+
+  /**
+   * T11 7.4c (ADR 0125): the per-line reconcile action the external-
+   * delivery-cost report names (`POST`). Mutation: key required. Lives beside
+   * the invoice-line endpoints it mutates, not under `reportsPaths` — that
+   * tree only ever reads.
+   */
+  externalDeliveryCostReconcile(tenantId: string, shipmentId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/shipments/${encodeURIComponent(shipmentId)}/external-delivery-cost/reconcile`;
   },
 } as const;
 

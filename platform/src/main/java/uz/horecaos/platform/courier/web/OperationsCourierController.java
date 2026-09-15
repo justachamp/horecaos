@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -36,6 +37,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.courier.application.CourierAdjustmentService;
 import uz.horecaos.platform.courier.application.CourierCashService;
 import uz.horecaos.platform.courier.application.CourierEngagementService;
+import uz.horecaos.platform.courier.application.CourierPolicies;
 import uz.horecaos.platform.courier.application.CourierPolicyResolver;
 import uz.horecaos.platform.courier.application.CourierRateCardService;
 import uz.horecaos.platform.courier.application.CourierRosterQueryService;
@@ -58,10 +60,14 @@ import uz.horecaos.platform.courier.domain.PayoutMethod;
 import uz.horecaos.platform.courier.domain.RateCard;
 import uz.horecaos.platform.courier.domain.RateComponent;
 import uz.horecaos.platform.courier.domain.RateComponentType;
+import uz.horecaos.platform.courier.domain.RevealTiming;
 import uz.horecaos.platform.courier.domain.SettlementPeriodStatus;
 import uz.horecaos.platform.courier.domain.ShiftActor;
+import uz.horecaos.platform.courier.domain.ShiftEnforcement;
 import uz.horecaos.platform.courier.domain.VerificationMethod;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore.AdjustmentSplit;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore.ShiftCashSummary;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierRateCardStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierRateCardStore.CardSummaryRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore;
@@ -75,13 +81,16 @@ import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostS
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore.InvoiceLineRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore.InvoiceRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcPlannedShiftStore.PlannedShiftRow;
+import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.tenancy.api.PolicyAuthor;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
+import uz.horecaos.platform.web.idempotency.Idempotent;
 
 /**
  * The operations half of ADR 0042: engagements, verification, adjustments,
@@ -113,9 +122,11 @@ public class OperationsCourierController {
     private final JdbcCourierRateCardStore rateCardStore;
     private final JdbcCourierShiftStore shiftStore;
     private final CourierPolicyResolver policyResolver;
+    private final PolicyAuthor policyAuthor;
     private final JdbcDeliveryCostStore deliveryCostStore;
     private final PlannedShiftService plannedShifts;
     private final CurrentActor currentActor;
+    private final AuthorizationService authorization;
 
     public OperationsCourierController(
             CourierEngagementService engagements,
@@ -134,9 +145,11 @@ public class OperationsCourierController {
             JdbcCourierRateCardStore rateCardStore,
             JdbcCourierShiftStore shiftStore,
             CourierPolicyResolver policyResolver,
+            PolicyAuthor policyAuthor,
             JdbcDeliveryCostStore deliveryCostStore,
             PlannedShiftService plannedShifts,
-            CurrentActor currentActor) {
+            CurrentActor currentActor,
+            AuthorizationService authorization) {
         this.engagements = engagements;
         this.shifts = shifts;
         this.cash = cash;
@@ -153,9 +166,11 @@ public class OperationsCourierController {
         this.rateCardStore = rateCardStore;
         this.shiftStore = shiftStore;
         this.policyResolver = policyResolver;
+        this.policyAuthor = policyAuthor;
         this.deliveryCostStore = deliveryCostStore;
         this.plannedShifts = plannedShifts;
         this.currentActor = currentActor;
+        this.authorization = authorization;
     }
 
     // ------------------------------------------------------------------ roster
@@ -658,25 +673,95 @@ public class OperationsCourierController {
 
     // ------------------------------------------------------------------- policy
 
+    /**
+     * Neither policy endpoint below carries {@code @RequiresCapability}, and
+     * that absence is deliberate rather than an oversight the build-time scan
+     * would have caught (see the two exemptions named for these paths in
+     * {@code EndpointCapabilityDeclarationTests}).
+     *
+     * <p>{@code brandId}/{@code locationId} are optional request parameters —
+     * omitting both resolves the tenant-wide document, and either widens or
+     * narrows the resolution exactly as {@link #policyScope} computes. A
+     * {@code @RequiresCapability(scope = ...)} declaration is one fixed
+     * {@link uz.horecaos.platform.iam.api.ResourceScope.ScopeType} per method,
+     * enforced by {@code CapabilityEnforcementInterceptor} from the request
+     * before the handler ever runs. {@code TENANT} (the annotation's default)
+     * is the only scope that never crashes here, because it is the only one
+     * whose identifier — {@code tenantId} — is not optional; but a
+     * TENANT-scoped enforcement check is never satisfied by a BRAND- or
+     * LOCATION-scoped grant ({@link uz.horecaos.platform.iam.api.ResourceScope#covers}
+     * only lets a broader scope reach a narrower one), so it silently refused
+     * a BRAND_MANAGER calling with their own {@code brandId} even though
+     * {@code PlatformRole} bundles {@code DELIVERY_POLICY_READ}/{@code
+     * DELIVERY_POLICY_WRITE} into that role for exactly this call. Declaring
+     * {@code BRAND} instead would fix that case but crash the tenant-wide one
+     * ({@code brandId} omitted, per {@code
+     * EndpointCapabilityDeclarationTests#aDeclaredScopeNamesOnlyPathVariablesOrRequestParametersTheRouteActuallyDeclares}),
+     * and making {@code brandId} a required parameter to satisfy that test
+     * would delete the tenant-wide read/write the frontend's scope ladder
+     * depends on. So the check is made explicitly, against the same scope the
+     * read or write actually resolves at, mirroring {@code
+     * OperationsStreamController.authorize}'s per-channel {@code
+     * authorization.require} call for the identical reason.
+     */
     @GetMapping("/courier-policy")
-    @RequiresCapability(Capability.COURIER_READ)
     @Operation(
-            summary = "The courier compensation policy in force (IA 3.9)",
+            summary = "The courier compensation policy in force (IA 3.9, settings.md §10.13/§16)",
             description = "Omit brandId/locationId for the tenant-wide resolution; supply either "
-                    + "to see what a specific brand or location actually resolves. Read-only this "
-                    + "wave — couriers.md §16 also names GPS gates, the kitchen-ready-only toggle, "
-                    + "reveal-location timing and the telemetry gate default, none of which any "
-                    + "policy document backs yet.")
+                    + "to see what a specific brand or location actually resolves. Wave P38 gave "
+                    + "this document a writer beside this read (see PUT of the same path) and "
+                    + "five new fields couriers.md §16 always named: the GPS master toggle with "
+                    + "its accept and status-change radii, the kitchen-ready-only gate, when the "
+                    + "customer's exact location is revealed, and the post-delivery payment "
+                    + "check. Courier billing mode stays refused by ADR 0042 and has no field "
+                    + "here; the telemetry collection gate is a separate, PLATFORM_ADMIN-only "
+                    + "ADR 0030 key and is not part of this document. Authorization is checked "
+                    + "against brandId/locationId's own resolved scope, not a fixed TENANT "
+                    + "default, so a BRAND_MANAGER reading their own brand's policy is not "
+                    + "refused for a grant the role bundle already gives them.")
     public ResponseEntity<CourierPolicyResponse> courierPolicy(
             @PathVariable UUID tenantId,
             @RequestParam(required = false) UUID brandId,
             @RequestParam(required = false) UUID locationId) {
 
-        ResourceScope scope = locationId != null && brandId != null
+        ResourceScope scope = policyScope(tenantId, brandId, locationId);
+        authorization.require(currentActor.get().subject(), Capability.DELIVERY_POLICY_READ, scope);
+        return ResponseEntity.ok(CourierPolicyResponse.of(policyResolver.resolveWithIdentity(scope)));
+    }
+
+    @PutMapping("/courier-policy")
+    @Idempotent
+    @Operation(
+            summary = "Publish the next version of the courier compensation policy",
+            description = "Whole-document replace: every field is required, because ADR 0030 "
+                    + "versions the document as one unit rather than merging a partial write "
+                    + "over the version it replaces. Omit brandId/locationId to publish the "
+                    + "tenant-wide default; supply either to publish a brand or location "
+                    + "override. The version this replaces is never touched — PolicyResolver.pinned "
+                    + "keeps answering with it for whatever already resolved it. Authorization is "
+                    + "checked against that same resolved scope (see the class-level doc on "
+                    + "courierPolicy above), so a BRAND_MANAGER publishing their own brand's "
+                    + "override is not refused for a grant the role bundle already gives them.")
+    public ResponseEntity<CourierPolicyResponse> writeCourierPolicy(
+            @PathVariable UUID tenantId,
+            @RequestParam(required = false) UUID brandId,
+            @RequestParam(required = false) UUID locationId,
+            @Valid @RequestBody CourierPolicyWriteRequest body) {
+
+        ResourceScope scope = policyScope(tenantId, brandId, locationId);
+        authorization.require(currentActor.get().subject(), Capability.DELIVERY_POLICY_WRITE, scope);
+        CourierCompensationPolicy document = body.toDocument();
+        ResolvedPolicy<CourierCompensationPolicy> published =
+                policyAuthor.author(CourierPolicies.COMPENSATION, scope, document, actor(), body.reason());
+
+        return ResponseEntity.ok(CourierPolicyResponse.of(published));
+    }
+
+    /** Omit brandId/locationId for the tenant-wide scope; supply either for a brand or location override. */
+    private static ResourceScope policyScope(UUID tenantId, @Nullable UUID brandId, @Nullable UUID locationId) {
+        return locationId != null && brandId != null
                 ? ResourceScope.location(tenantId, brandId, locationId)
                 : brandId != null ? ResourceScope.brand(tenantId, brandId) : ResourceScope.tenant(tenantId);
-
-        return ResponseEntity.ok(CourierPolicyResponse.of(policyResolver.resolveWithIdentity(scope)));
     }
 
     // ------------------------------------------------------------- engagement
@@ -797,8 +882,13 @@ public class OperationsCourierController {
             @RequestParam(required = false) UUID locationId,
             @RequestParam(defaultValue = "100") int limit) {
 
-        return ResponseEntity.ok(shiftStore.listHandovers(tenantId, status, locationId, Math.min(limit, 500)).stream()
-                .map(CashHandoverResponse::of)
+        List<HandoverRow> rows = shiftStore.listHandovers(tenantId, status, locationId, Math.min(limit, 500));
+        Map<UUID, String> names = courierStore.displayReferencesOf(
+                tenantId, rows.stream().map(HandoverRow::courierId).collect(Collectors.toSet()));
+        Map<UUID, ShiftCashSummary> summaries = ledger.cashSummaryByShift(
+                tenantId, rows.stream().map(HandoverRow::shiftId).collect(Collectors.toSet()));
+        return ResponseEntity.ok(rows.stream()
+                .map(row -> CashHandoverResponse.of(row, names.get(row.courierId()), summaries.get(row.shiftId())))
                 .toList());
     }
 
@@ -909,9 +999,15 @@ public class OperationsCourierController {
     public ResponseEntity<LedgerResponse> ledgerOf(
             @PathVariable UUID tenantId, @PathVariable UUID courierId, @RequestParam(defaultValue = "100") int limit) {
 
+        List<JdbcCourierLedgerStore.LedgerEntryRow> entries =
+                ledger.entriesOfCourier(tenantId, courierId, Math.min(limit, 500));
         return ResponseEntity.ok(new LedgerResponse(
                 ledger.balanceMinor(tenantId, courierId),
-                ledger.entriesOfCourier(tenantId, courierId, Math.min(limit, 500)).stream()
+                // entriesOfCourier orders newest first; the most recent entry's
+                // currency is the balance's, and null only for a courier with no
+                // ledger entries at all, whose balance is zero regardless.
+                entries.isEmpty() ? null : entries.getFirst().currency(),
+                entries.stream()
                         .map(entry -> new LedgerLine(
                                 entry.id(),
                                 entry.entryType().name(),
@@ -936,8 +1032,12 @@ public class OperationsCourierController {
             @RequestParam(defaultValue = "100") int limit) {
 
         SettlementPeriodStatus parsed = status == null ? null : parseSettlementStatus(status);
-        return ResponseEntity.ok(ledger.listPeriods(tenantId, parsed, Math.min(limit, 500)).stream()
-                .map(SettlementPeriodResponse::of)
+        List<JdbcCourierLedgerStore.PeriodRow> rows = ledger.listPeriods(tenantId, parsed, Math.min(limit, 500));
+        Map<UUID, AdjustmentSplit> splits = ledger.adjustmentSplitByPeriod(
+                tenantId,
+                rows.stream().map(JdbcCourierLedgerStore.PeriodRow::id).collect(Collectors.toSet()));
+        return ResponseEntity.ok(rows.stream()
+                .map(row -> SettlementPeriodResponse.of(row, splits.get(row.id())))
                 .toList());
     }
 
@@ -1070,6 +1170,55 @@ public class OperationsCourierController {
 
         return ResponseEntity.ok(
                 partnerInvoices.match(tenantId, invoiceId, body.shipmentsByProviderRef(), actor(), body.reason()));
+    }
+
+    @PostMapping("/partner-delivery-invoices/{invoiceId}/dispute")
+    @RequiresCapability(value = Capability.PARTNER_INVOICE_MANAGE, mutating = true)
+    @Operation(
+            summary = "Flag an invoice for pushback to the partner — the акт сверки dispute path",
+            description = "Refused once the invoice is PAID. Disputing records the operator's "
+                    + "decision; it settles nothing with the partner itself.")
+    public ResponseEntity<Void> disputeInvoice(
+            @PathVariable UUID tenantId, @PathVariable UUID invoiceId, @Valid @RequestBody DisputeInvoiceRequest body) {
+
+        partnerInvoices.disputeInvoice(tenantId, invoiceId, actor(), body.reason());
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/partner-delivery-invoices/{invoiceId}/lines/{lineId}/variance-acceptance")
+    @RequiresCapability(value = Capability.PARTNER_INVOICE_MANAGE, mutating = true)
+    @Operation(
+            summary = "Accept or dispute one VARIANCE line",
+            description = "The only two dispositions a VARIANCE row can carry: pay the partner's "
+                    + "charge as invoiced, or flag it disputed. match_status stays VARIANCE either "
+                    + "way — it is a fact about the money — only variance_resolution changes.")
+    public ResponseEntity<PartnerInvoiceLineResponse> resolveVariance(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID invoiceId,
+            @PathVariable UUID lineId,
+            @Valid @RequestBody VarianceAcceptanceRequest body) {
+
+        return ResponseEntity.ok(PartnerInvoiceLineResponse.of(
+                partnerInvoices.resolveVariance(tenantId, invoiceId, lineId, body.accept(), actor(), body.reason())));
+    }
+
+    @PostMapping("/shipments/{shipmentId}/external-delivery-cost/reconcile")
+    @RequiresCapability(value = Capability.PARTNER_INVOICE_MANAGE, mutating = true)
+    @Operation(
+            summary = "T11 7.4c: the per-order external-delivery-cost report's per-line reconcile action",
+            description = "Marks the shipment's DELIVERY-charge invoice line MATCHED when one exists. "
+                    + "A shipment with no invoice line at all is genuinely UNBILLED -- nothing to "
+                    + "reconcile against yet -- and the acknowledgement is recorded on the audit trail "
+                    + "alone; reconciled is false on that response. Refuses (UNPROCESSABLE_STATE) a line "
+                    + "that is VARIANCE: that money discrepancy is disposed of only through the "
+                    + "variance-acceptance endpoint's accept/dispute choice, never by this action.")
+    public ResponseEntity<ReconcileShipmentResponse> reconcileExternalDeliveryCost(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID shipmentId,
+            @Valid @RequestBody ReconcileShipmentRequest body) {
+
+        boolean reconciled = partnerInvoices.reconcileShipment(tenantId, shipmentId, actor(), body.reason());
+        return ResponseEntity.ok(new ReconcileShipmentResponse(reconciled));
     }
 
     private static SettlementPeriodStatus parseSettlementStatus(String status) {
@@ -1506,6 +1655,16 @@ public class OperationsCourierController {
             @NotNull Map<String, UUID> shipmentsByProviderRef,
             @NotBlank String reason) {}
 
+    record DisputeInvoiceRequest(@NotBlank String reason) {}
+
+    /** @param accept true pays the partner's charge as invoiced; false disputes it. */
+    record VarianceAcceptanceRequest(
+            boolean accept, @NotBlank String reason) {}
+
+    record ReconcileShipmentRequest(@NotBlank String reason) {}
+
+    record ReconcileShipmentResponse(boolean reconciled) {}
+
     /**
      * One roster row on the wire. No name field exists here at all — not even
      * a masked one — because there is nothing decrypted to mask; see {@link
@@ -1795,6 +1954,12 @@ public class OperationsCourierController {
             String shiftEnforcement,
             int graceSeconds,
             int confirmationPointRetentionDays,
+            boolean gpsVerificationEnabled,
+            int gpsAcceptRadiusMeters,
+            int gpsStatusChangeRadiusMeters,
+            boolean kitchenReadyOnly,
+            String revealCustomerLocationTiming,
+            boolean postDeliveryPaymentCheckRequired,
             String winningScope,
             UUID policyId,
             int policyVersion) {
@@ -1810,9 +1975,77 @@ public class OperationsCourierController {
                     doc.shiftEnforcement().name(),
                     doc.graceSeconds(),
                     doc.confirmationPointRetentionDays(),
+                    doc.gpsVerificationEnabled(),
+                    doc.gpsAcceptRadiusMeters(),
+                    doc.gpsStatusChangeRadiusMeters(),
+                    doc.kitchenReadyOnly(),
+                    doc.revealCustomerLocationTiming().name(),
+                    doc.postDeliveryPaymentCheckRequired(),
                     resolved.winningScope().name(),
                     resolved.policyId(),
                     resolved.policyVersion());
+        }
+    }
+
+    /**
+     * The whole-document write body for {@code PUT .../courier-policy}. Every
+     * field is required — ADR 0030 versions this document as one unit, not a
+     * partial merge over the version it replaces, so a caller reads the
+     * current {@link CourierPolicyResponse} first and sends every field back,
+     * changed or not.
+     */
+    record CourierPolicyWriteRequest(
+            @Min(1) int reverificationDays,
+            @Min(1) int warningDays,
+            @Min(1) int settlementPeriodDays,
+            @PositiveOrZero long cashCeilingMinor,
+            @PositiveOrZero long penaltyApprovalThresholdMinor,
+            @NotBlank String shiftEnforcement,
+            @PositiveOrZero int graceSeconds,
+            @Min(1) int confirmationPointRetentionDays,
+            boolean gpsVerificationEnabled,
+            @Positive int gpsAcceptRadiusMeters,
+            @Positive int gpsStatusChangeRadiusMeters,
+            boolean kitchenReadyOnly,
+            @NotBlank String revealCustomerLocationTiming,
+            boolean postDeliveryPaymentCheckRequired,
+            @NotBlank @Size(max = 500) String reason) {
+
+        CourierCompensationPolicy toDocument() {
+            return new CourierCompensationPolicy(
+                    reverificationDays,
+                    warningDays,
+                    settlementPeriodDays,
+                    cashCeilingMinor,
+                    penaltyApprovalThresholdMinor,
+                    parseShiftEnforcement(),
+                    graceSeconds,
+                    confirmationPointRetentionDays,
+                    gpsVerificationEnabled,
+                    gpsAcceptRadiusMeters,
+                    gpsStatusChangeRadiusMeters,
+                    kitchenReadyOnly,
+                    parseRevealTiming(),
+                    postDeliveryPaymentCheckRequired);
+        }
+
+        private ShiftEnforcement parseShiftEnforcement() {
+            try {
+                return ShiftEnforcement.valueOf(shiftEnforcement);
+            } catch (IllegalArgumentException unknown) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED, "Unknown shiftEnforcement \"%s\"".formatted(shiftEnforcement));
+            }
+        }
+
+        private RevealTiming parseRevealTiming() {
+            try {
+                return RevealTiming.valueOf(revealCustomerLocationTiming);
+            } catch (IllegalArgumentException unknown) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "Unknown revealCustomerLocationTiming \"%s\"".formatted(revealCustomerLocationTiming));
+            }
         }
     }
 
@@ -1828,7 +2061,8 @@ public class OperationsCourierController {
     record AdjustmentResponse(
             @Nullable UUID entryId, @Nullable UUID approvalRequestId, boolean written) {}
 
-    record LedgerResponse(long balanceMinor, List<LedgerLine> entries) {}
+    /** @param currency null only for a courier with no ledger entries; the balance is then zero regardless. */
+    record LedgerResponse(long balanceMinor, @Nullable String currency, List<LedgerLine> entries) {}
 
     record LedgerLine(
             UUID entryId,
@@ -1842,11 +2076,34 @@ public class OperationsCourierController {
 
     record PayoutResponse(@Nullable UUID payoutId, @Nullable UUID approvalRequestId, boolean authorised) {}
 
-    /** One cash handover — Finance 8.3. */
+    /**
+     * One cash handover — Finance 8.3.
+     *
+     * @param courierDisplayReference the non-personal handle (ADR 0029), never
+     *                                the decrypted name — null only where the
+     *                                courier row has since been removed
+     * @param bonusPaidMinor          a bonus already posted to this courier
+     *                                while the shift was open — money paid
+     *                                that reduces what the cash count still
+     *                                owes, shown rather than netted into
+     *                                {@code expectedMinor}: the handover's own
+     *                                expected figure stays exactly what
+     *                                {@code cashCollectedDuringShift} says
+     * @param cashDeliveredCount      deliveries this shift where cash changed
+     *                                hands
+     * @param nonCashDeliveredCount   deliveries this shift on any other
+     *                                payment method — the IA's "by payment
+     *                                method" split
+     * @param nonCashEarningsMinor    gross earnings on those non-cash
+     *                                deliveries; there is no "collected"
+     *                                figure for them because no cash changed
+     *                                hands on any of them
+     */
     record CashHandoverResponse(
             UUID handoverId,
             UUID shiftId,
             UUID courierId,
+            @Nullable String courierDisplayReference,
             UUID locationId,
             String status,
             String currency,
@@ -1854,16 +2111,22 @@ public class OperationsCourierController {
             @Nullable Long declaredMinor,
             @Nullable Long confirmedMinor,
             @Nullable Long varianceMinor,
+            long bonusPaidMinor,
+            int cashDeliveredCount,
+            int nonCashDeliveredCount,
+            long nonCashEarningsMinor,
             @Nullable String declaredAt,
             @Nullable String confirmedBy,
             @Nullable String confirmedAt,
             @Nullable String reasonCode) {
 
-        static CashHandoverResponse of(HandoverRow row) {
+        static CashHandoverResponse of(
+                HandoverRow row, @Nullable String courierDisplayReference, @Nullable ShiftCashSummary summary) {
             return new CashHandoverResponse(
                     row.id(),
                     row.shiftId(),
                     row.courierId(),
+                    courierDisplayReference,
                     row.locationId(),
                     row.status(),
                     row.currency(),
@@ -1871,6 +2134,10 @@ public class OperationsCourierController {
                     row.declaredMinor(),
                     row.confirmedMinor(),
                     row.varianceMinor(),
+                    summary == null ? 0L : summary.bonusPaidMinor(),
+                    summary == null ? 0 : summary.cashDeliveredCount(),
+                    summary == null ? 0 : summary.nonCashDeliveredCount(),
+                    summary == null ? 0L : summary.nonCashEarningsMinor(),
                     row.declaredAt() == null ? null : row.declaredAt().toString(),
                     row.confirmedBy(),
                     row.confirmedAt() == null ? null : row.confirmedAt().toString(),
@@ -1878,7 +2145,20 @@ public class OperationsCourierController {
         }
     }
 
-    /** One settlement period — Finance 8.5. */
+    /**
+     * One settlement period — Finance 8.5's salary report (IA §8.5: "orders,
+     * km, hours, вовремя, penalties, bonus, К оплате").
+     *
+     * @param distanceMeters the period's km column, in the base unit money
+     *                       already uses this codebase over: raw metres,
+     *                       never a pre-divided double
+     * @param paidSeconds    the period's hours column, in seconds for the same
+     *                       reason
+     * @param bonusMinor     the period's bonus column, split from {@code
+     *                       adjustmentsMinor} at read time — see {@link
+     *                       JdbcCourierLedgerStore#adjustmentSplitByPeriod}
+     * @param penaltyMinor   the period's penalty column, same split
+     */
     record SettlementPeriodResponse(
             UUID periodId,
             UUID courierId,
@@ -1892,12 +2172,16 @@ public class OperationsCourierController {
             long amountPayableMinor,
             int deliveredCount,
             int onTimeCount,
+            long distanceMeters,
+            long paidSeconds,
+            long bonusMinor,
+            long penaltyMinor,
             boolean complianceFlag,
             @Nullable String statementHash,
             @Nullable String closedAt,
             @Nullable String settledAt) {
 
-        static SettlementPeriodResponse of(JdbcCourierLedgerStore.PeriodRow row) {
+        static SettlementPeriodResponse of(JdbcCourierLedgerStore.PeriodRow row, @Nullable AdjustmentSplit split) {
             return new SettlementPeriodResponse(
                     row.id(),
                     row.courierId(),
@@ -1911,6 +2195,10 @@ public class OperationsCourierController {
                     row.amountPayableMinor(),
                     row.deliveredCount(),
                     row.onTimeCount(),
+                    row.distanceMeters(),
+                    row.paidSeconds(),
+                    split == null ? 0L : split.bonusMinor(),
+                    split == null ? 0L : split.penaltyMinor(),
                     row.complianceFlag(),
                     row.statementHash(),
                     row.closedAt() == null ? null : row.closedAt().toString(),
@@ -1944,6 +2232,7 @@ public class OperationsCourierController {
         }
     }
 
+    /** @param varianceResolution ACCEPTED or DISPUTED — only ever set on a VARIANCE line. */
     record PartnerInvoiceLineResponse(
             UUID lineId,
             String providerShipmentRef,
@@ -1953,7 +2242,8 @@ public class OperationsCourierController {
             String chargeType,
             String matchStatus,
             @Nullable Long varianceMinor,
-            @Nullable String reasonCode) {
+            @Nullable String reasonCode,
+            @Nullable String varianceResolution) {
 
         static PartnerInvoiceLineResponse of(InvoiceLineRow row) {
             return new PartnerInvoiceLineResponse(
@@ -1965,7 +2255,8 @@ public class OperationsCourierController {
                     row.chargeType().name(),
                     row.matchStatus().name(),
                     row.varianceMinor(),
-                    row.reasonCode());
+                    row.reasonCode(),
+                    row.varianceResolution());
         }
     }
 

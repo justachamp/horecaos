@@ -338,6 +338,15 @@ export class KitchenQueuePage implements OnInit {
       : null;
   }
 
+  /** The courier ETA chip (wave P11, gap map row 2.1a) — the winning partner quote's own ETA, joined by `TicketResponse.courierEtaAt`. */
+  protected courierEtaLabel(ticket: TicketResponse): string | null {
+    return ticket.courierEtaAt
+      ? this.i18n.t('kitchen.ticket.courierEta', {
+          time: formatClock(new Date(ticket.courierEtaAt), PLACEHOLDER_TIME_ZONE),
+        })
+      : null;
+  }
+
   protected stationLabel(stationId: string): string {
     const station = this.stationsById().get(stationId);
     if (!station) {

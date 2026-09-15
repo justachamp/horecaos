@@ -34,3 +34,104 @@
   min-height: 0;
   overflow: auto;
 }
+
+/* The filter bar's own rows (wave P07/P27 — see `q-filter-bar`'s own doc for
+   the outer chrome, which this file no longer owns). Two rows deliberately
+   different in visual weight (statistics.md §1.1): the period axis is
+   primary and dark-filled, the slice axis is secondary and outlined. */
+.reports-filter-bar__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.filter-bar__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Row 1: dark-filled pills. */
+.pill {
+  padding: 6px 14px;
+  border: 1px solid var(--q-ink);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-size: var(--q-type-body-sm);
+  cursor: pointer;
+}
+
+.pill--active {
+  background: var(--q-ink);
+  color: var(--q-inverse-ink);
+}
+
+.pill:focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: 1px;
+}
+
+.reports-filter-bar__date-input {
+  padding: 5px 8px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-size: var(--q-type-body-sm);
+}
+
+.reports-filter-bar__date-sep {
+  color: var(--q-ink-subtle);
+}
+
+/* Row 2: amber-outlined segmented controls. */
+.filter-bar__segmented {
+  display: inline-flex;
+  border: 1px solid var(--q-warning);
+}
+
+.segment {
+  padding: 4px 10px;
+  border: none;
+  border-right: 1px solid var(--q-warning);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-body-xs);
+  cursor: pointer;
+}
+
+.segment:last-child {
+  border-right: none;
+}
+
+.segment--active {
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.segment:focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: -2px;
+}
+
+/* Secondary row: branch / channel / legal entity / payment method / granularity. */
+.reports-filter-bar__secondary-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.reports-filter-bar__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 200px;
+}
+
+.reports-filter-bar__field-label {
+  color: var(--q-ink-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.32px;
+}

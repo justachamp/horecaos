@@ -34,6 +34,9 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDispatchB
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcSourcingJobStore;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.telemetry.api.RealtimeSignal;
+import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
+import uz.horecaos.platform.telemetry.api.StreamChannel;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
@@ -62,6 +65,7 @@ class ManualDispatchServiceTests {
     private ManualDispatchService dispatch;
     private JdbcAssignmentStore assignments;
     private RecordingAudit audit;
+    private RecordingRealtimeSignals realtime;
     private DeliveryPlanningService planning;
     private UUID branch;
     private UUID channelId;
@@ -105,8 +109,9 @@ class ManualDispatchServiceTests {
         JdbcDeliveryPlanStore planStore = new JdbcDeliveryPlanStore(jdbc);
         assignments = new JdbcAssignmentStore(jdbc);
         audit = new RecordingAudit();
-        dispatch =
-                new ManualDispatchService(planStore, assignments, new JdbcCourierEligibilityStore(jdbc), audit, clock);
+        realtime = new RecordingRealtimeSignals();
+        dispatch = new ManualDispatchService(
+                planStore, assignments, new JdbcCourierEligibilityStore(jdbc), audit, realtime, clock);
 
         seedTenancy();
         seedCourier(COURIER, "K-001");
@@ -141,6 +146,15 @@ class ManualDispatchServiceTests {
         assertThat(audit.facts).hasSize(1);
         assertThat(audit.facts.getFirst().actionCode()).isEqualTo("fulfillment.dispatch.assign");
         assertThat(audit.facts.getFirst().actor()).isEqualTo(OPERATOR);
+
+        // ADR 0045: the board's own signal, so a drag-assign is visible to
+        // every other operator's screen without waiting for the 10-second poll.
+        assertThat(realtime.signals).hasSize(1);
+        RealtimeSignal signal = realtime.signals.getFirst();
+        assertThat(signal.channel()).isEqualTo(StreamChannel.DISPATCH_BOARD);
+        assertThat(signal.tenantId()).isEqualTo(TENANT);
+        assertThat(signal.scopeKey().id()).isEqualTo(branch);
+        assertThat(signal.resourceId()).isEqualTo(plan.id());
     }
 
     @Test
@@ -158,6 +172,9 @@ class ManualDispatchServiceTests {
         assertThat(second.applied()).isFalse();
         assertThat(second.reason()).isEqualTo("ALREADY_ASSIGNED");
         assertThat(countShipmentsFor(plan.id())).isEqualTo(1L);
+        // The refused second assign publishes no DISPATCH_BOARD signal of its own --
+        // the one signal on record is the first assign's (ADR 0045).
+        assertThat(realtime.signals).extracting(RealtimeSignal::channel).containsExactly(StreamChannel.DISPATCH_BOARD);
     }
 
     @Test
@@ -171,6 +188,8 @@ class ManualDispatchServiceTests {
         assertThat(outcome.applied()).isFalse();
         assertThat(outcome.reason()).isEqualTo("STALE_VERSION");
         assertThat(countShipmentsFor(plan.id())).isZero();
+        // A stale-version refusal is a no-op end to end -- ADR 0045's board signal included.
+        assertThat(realtime.signals).isEmpty();
     }
 
     @Test
@@ -193,6 +212,9 @@ class ManualDispatchServiceTests {
         assertThat(audit.facts)
                 .as("a refused assignment leaves no audit fact behind it")
                 .isEmpty();
+        assertThat(realtime.signals)
+                .as("a refused assignment publishes no DISPATCH_BOARD signal either")
+                .isEmpty();
     }
 
     @Test
@@ -212,6 +234,7 @@ class ManualDispatchServiceTests {
         assertThat(outcome.applied()).isFalse();
         assertThat(outcome.reason()).isEqualTo("COURIER_NOT_ELIGIBLE");
         assertThat(countShipmentsFor(plan.id())).isZero();
+        assertThat(realtime.signals).isEmpty();
     }
 
     @Test
@@ -240,6 +263,7 @@ class ManualDispatchServiceTests {
 
         assertThat(outcome.applied()).isFalse();
         assertThat(outcome.reason()).isEqualTo("COURIER_NOT_ELIGIBLE");
+        assertThat(realtime.signals).isEmpty();
     }
 
     @Test
@@ -262,6 +286,11 @@ class ManualDispatchServiceTests {
         assertThat(audit.facts)
                 .extracting(AuditFact::actionCode)
                 .containsExactly("fulfillment.dispatch.assign", "fulfillment.dispatch.unassign");
+
+        // One DISPATCH_BOARD signal each, same ADR 0045 push as the assign side.
+        assertThat(realtime.signals)
+                .extracting(RealtimeSignal::channel)
+                .containsExactly(StreamChannel.DISPATCH_BOARD, StreamChannel.DISPATCH_BOARD);
     }
 
     @Test
@@ -283,6 +312,9 @@ class ManualDispatchServiceTests {
 
         // The refused unassign wrote nothing — only the earlier assign is on record.
         assertThat(audit.facts).extracting(AuditFact::actionCode).containsExactly("fulfillment.dispatch.assign");
+        // ...and published no DISPATCH_BOARD signal of its own -- the one signal on
+        // record is the earlier assign's.
+        assertThat(realtime.signals).extracting(RealtimeSignal::channel).containsExactly(StreamChannel.DISPATCH_BOARD);
     }
 
     // -------------------------------------------------------------- helpers
@@ -504,6 +536,23 @@ class ManualDispatchServiceTests {
         @Override
         public void record(AuditFact fact) {
             facts.add(fact);
+        }
+    }
+
+    /**
+     * No {@code @Transactional} proxy sits in front of {@code dispatch} in this
+     * suite (it is built with {@code new}), so {@code
+     * TransactionSynchronizationManager.isSynchronizationActive()} is false and
+     * {@link ManualDispatchService} publishes immediately rather than deferring
+     * to an {@code afterCommit()} callback nothing here would ever invoke.
+     */
+    private static final class RecordingRealtimeSignals implements RealtimeSignalPublisher {
+
+        private final List<RealtimeSignal> signals = new ArrayList<>();
+
+        @Override
+        public void publish(RealtimeSignal signal) {
+            signals.add(signal);
         }
     }
 

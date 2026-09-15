@@ -22,6 +22,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.telemetry.api.RealtimeSignal;
 import uz.horecaos.platform.telemetry.api.RealtimeSignal.Subscription;
+import uz.horecaos.platform.telemetry.api.SnapshotSource;
 import uz.horecaos.platform.telemetry.api.StreamChannel;
 
 /**

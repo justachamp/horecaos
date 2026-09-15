@@ -222,12 +222,72 @@ public class JdbcDeliveryCostStore {
                 """).params(params).update() == 1;
     }
 
+    /**
+     * T11 (7.4c) review, 2026-09-14: the operator-reconcile write, distinct
+     * from {@link #matchLine}'s own bulk-sweep use. Conditioned on the line
+     * not being {@code VARIANCE} at the moment of the write — not only at the
+     * caller's earlier read — so a line that races into {@code VARIANCE}
+     * between {@code PartnerInvoiceService.reconcileShipment}'s check and this
+     * update is refused here too, rather than silently wiping the variance a
+     * concurrent {@code match} call just recorded. {@code
+     * ck_partner_line_resolution_status} additionally refuses at the database
+     * a matched row that still carries a non-null {@code variance_resolution}
+     * from an earlier accept/dispute, since this UPDATE clears
+     * {@code variance_minor} but not that column.
+     */
+    public boolean reconcileLine(UUID tenantId, UUID lineId, UUID shipmentId, String reasonCode) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("id", lineId);
+        params.put("shipmentId", shipmentId);
+        params.put("reasonCode", reasonCode);
+
+        return jdbc.sql("""
+                UPDATE fulfillment.partner_delivery_invoice_lines
+                   SET shipment_id = :shipmentId, match_status = 'MATCHED',
+                       variance_minor = NULL, reason_code = :reasonCode, matched_at = now()
+                 WHERE tenant_id = :tenantId AND id = :id AND match_status <> 'VARIANCE'
+                """).params(params).update() == 1;
+    }
+
     public void markInvoiceMatched(UUID tenantId, UUID invoiceId) {
         jdbc.sql("""
                 UPDATE fulfillment.partner_delivery_invoices
                    SET status = 'MATCHED', matched_at = now(), version = version + 1
                  WHERE tenant_id = :tenantId AND id = :id AND status = 'IMPORTED'
                 """).param("tenantId", tenantId).param("id", invoiceId).update();
+    }
+
+    /**
+     * Flags an invoice for pushback to the partner. Refused from {@code PAID}:
+     * a paid invoice is disputed by other means, not by this workflow.
+     */
+    public boolean markInvoiceDisputed(UUID tenantId, UUID invoiceId) {
+        return jdbc.sql("""
+                UPDATE fulfillment.partner_delivery_invoices
+                   SET status = 'DISPUTED', version = version + 1
+                 WHERE tenant_id = :tenantId AND id = :id AND status IN ('IMPORTED', 'MATCHED')
+                """).param("tenantId", tenantId).param("id", invoiceId).update() == 1;
+    }
+
+    /**
+     * An operator's disposition of one {@code VARIANCE} line — accept the
+     * partner's charge as invoiced, or flag it disputed. Refused on any other
+     * {@code match_status}; {@code ck_partner_line_resolution_status} says the
+     * same thing at the database.
+     */
+    public boolean resolveVarianceLine(UUID tenantId, UUID lineId, String resolution, String resolvedBy) {
+        return jdbc.sql("""
+                UPDATE fulfillment.partner_delivery_invoice_lines
+                   SET variance_resolution = :resolution, resolved_by = :resolvedBy, resolved_at = now()
+                 WHERE tenant_id = :tenantId AND id = :id AND match_status = 'VARIANCE'
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", lineId)
+                        .param("resolution", resolution)
+                        .param("resolvedBy", resolvedBy)
+                        .update()
+                == 1;
     }
 
     public List<InvoiceLineRow> linesOfInvoice(UUID tenantId, UUID invoiceId) {
@@ -239,6 +299,23 @@ public class JdbcDeliveryCostStore {
                 .param("invoiceId", invoiceId)
                 .query(JdbcDeliveryCostStore::mapInvoiceLine)
                 .list();
+    }
+
+    /**
+     * T11 (7.4c, ADR 0125): the one {@code DELIVERY}-charge invoice line for a
+     * shipment, if a partner has ever billed one — what the per-order
+     * external-delivery-cost report's reconcile action operates on.
+     * {@code uq_partner_line_ref} allows more than one line per shipment only
+     * across different {@code charge_type}s, so this is at most one row.
+     */
+    public Optional<InvoiceLineRow> deliveryLineForShipment(UUID tenantId, UUID shipmentId) {
+        return jdbc.sql(SELECT_INVOICE_LINE + """
+                 WHERE tenant_id = :tenantId AND shipment_id = :shipmentId AND charge_type = 'DELIVERY'
+                """)
+                .param("tenantId", tenantId)
+                .param("shipmentId", shipmentId)
+                .query(JdbcDeliveryCostStore::mapInvoiceLine)
+                .optional();
     }
 
     public Optional<InvoiceRow> findInvoice(UUID tenantId, UUID invoiceId) {
@@ -331,7 +408,8 @@ public class JdbcDeliveryCostStore {
      *
      * <p>{@code shipmentId} is null until matching resolves the partner's own
      * reference, and stays null on an {@code UNMATCHED_LINE}; the variance and
-     * its reason exist only where matching found one.
+     * its reason exist only where matching found one; {@code varianceResolution}
+     * only on a {@code VARIANCE} line an operator has since accepted or disputed.
      */
     public record InvoiceLineRow(
             UUID id,
@@ -344,7 +422,10 @@ public class JdbcDeliveryCostStore {
             PartnerChargeType chargeType,
             MatchStatus matchStatus,
             @Nullable Long varianceMinor,
-            @Nullable String reasonCode) {}
+            @Nullable String reasonCode,
+            @Nullable String varianceResolution,
+            @Nullable String resolvedBy,
+            @Nullable Instant resolvedAt) {}
 
     // ----------------------------------------------------------------- mapping
 
@@ -359,7 +440,8 @@ public class JdbcDeliveryCostStore {
 
     private static final String SELECT_INVOICE_LINE = """
             SELECT id, tenant_id, invoice_id, provider_shipment_ref, shipment_id, amount_minor,
-                   currency, charge_type, match_status, variance_minor, reason_code
+                   currency, charge_type, match_status, variance_minor, reason_code,
+                   variance_resolution, resolved_by, resolved_at
               FROM fulfillment.partner_delivery_invoice_lines
             """;
 
@@ -420,6 +502,9 @@ public class JdbcDeliveryCostStore {
                 // Null on every line that is not a variance, and getLong would
                 // answer zero — a variance of nothing, which is a matched line.
                 rs.getObject("variance_minor", Long.class),
-                rs.getString("reason_code"));
+                rs.getString("reason_code"),
+                rs.getString("variance_resolution"),
+                rs.getString("resolved_by"),
+                JdbcCourierStore.instant(rs.getObject("resolved_at", OffsetDateTime.class)));
     }
 }

@@ -237,6 +237,7 @@ public class DeliverySourcingService {
 
         if (won) {
             recordSubsidyIfAny(request, decision.partner(), quote, now);
+            recordCourierEtaIfAny(request, quote, now);
         }
 
         SourcingProgress next = progress.withPartnerAttempt(
@@ -580,6 +581,20 @@ public class DeliverySourcingService {
                 .correlatedBy(request.correlationId())
                 .occurredAt(now)
                 .build());
+    }
+
+    /**
+     * The winning quote's own ETA, persisted onto the plan the instant it wins
+     * (gap map row 2.1a) — best-effort, exactly like {@link
+     * #recordSubsidyIfAny}: display data for the kitchen board, never a
+     * decision, so nothing here is retried and nothing here can fail the
+     * booking it rode in on.
+     */
+    private void recordCourierEtaIfAny(SourcingRequest request, @Nullable DeliveryQuote quote, Instant now) {
+        if (quote == null || quote.deliveryEtaSeconds() == null) {
+            return;
+        }
+        journal.recordCourierEta(request.tenantId(), request.planId(), now.plusSeconds(quote.deliveryEtaSeconds()));
     }
 
     private ResolvedPolicy<DeliverySubsidyPolicy> resolveSubsidyPolicy(SourcingRequest request) {

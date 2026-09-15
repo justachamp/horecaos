@@ -133,7 +133,8 @@ class EndpointCapabilityDeclarationTests {
                     || isStaffInvitationEndpoint(handler)
                     || isStaffPasswordResetEndpoint(handler)
                     || isPreAccountTelegramSignInEndpoint(handler)
-                    || isDeviceEnrolmentBootstrapEndpoint(handler)) {
+                    || isDeviceEnrolmentBootstrapEndpoint(handler)
+                    || isScopeResolvedCourierPolicyEndpoint(handler)) {
                 continue;
             }
             if (authorizationDeclarationCount(handler) == 0) {
@@ -489,6 +490,34 @@ class EndpointCapabilityDeclarationTests {
         String path = pathOf(handler);
         return path.equals("/api/v1/control-plane/device-enrolments")
                 || path.equals("/api/v1/control-plane/device-enrolments/{deviceCode}/poll");
+    }
+
+    /**
+     * ADR 0025/ADR 0042: the courier compensation policy writer, whose scope
+     * genuinely varies per request between TENANT, BRAND, and LOCATION — the
+     * one thing a single {@code @RequiresCapability(scope = ...)} declaration
+     * cannot express. {@code brandId}/{@code locationId} are optional request
+     * parameters, and omitting both is a real, currently-used call (the
+     * tenant-wide default the frontend's scope ladder reads as its top level).
+     * Declaring {@code TENANT} (the annotation default) is the only scope that
+     * never throws, but a TENANT-scoped enforcement check is never satisfied by
+     * a BRAND- or LOCATION-scoped grant, which used to lock a BRAND_MANAGER out
+     * of their own brand's policy entirely. Declaring {@code BRAND} would fix
+     * that but fails {@link
+     * #aDeclaredScopeNamesOnlyPathVariablesOrRequestParametersTheRouteActuallyDeclares}
+     * (and crashes at runtime) whenever the tenant-wide call omits
+     * {@code brandId}, and making {@code brandId} required would delete that
+     * call. {@code OperationsCourierController.courierPolicy}'s own class-level
+     * doc explains the same reasoning; both handlers call {@code
+     * authorization.require} directly against the scope they actually resolve
+     * ({@code policyScope}), the same shape
+     * {@code OperationsStreamController.authorize} already uses for a
+     * per-channel scope. Only the PUT needs this exemption — GET is never a
+     * mutating handler — and it keeps its replay protection via
+     * {@code @Idempotent} rather than {@code RequiresCapability.mutating()}.
+     */
+    private static boolean isScopeResolvedCourierPolicyEndpoint(Method handler) {
+        return pathOf(handler).equals("/api/v1/operations/tenants/{tenantId}/courier-policy");
     }
 
     /**

@@ -1,0 +1,22 @@
+<div class="card" data-testid="table-print-card">
+  <p class="card__branch q-caption">{{ branchName() }}</p>
+  <h3 class="card__table q-title">{{ tableDisplayName() }}</h3>
+  <p class="card__code q-mono">{{ tableCode() }}</p>
+
+  @if (qrToken(); as token) {
+    <div class="card__mark" data-testid="table-print-card-mark">
+      <q-qr-code
+        [value]="token"
+        [size]="120"
+        [label]="'shared.tablePrintCard.qrLabel' | t"
+        data-testid="table-print-card-qr"
+      />
+    </div>
+    <p class="card__tokenLabel q-caption">{{ 'shared.tablePrintCard.tokenLabel' | t }}</p>
+    <p class="card__token q-mono" data-testid="table-print-card-token">{{ token }}</p>
+  } @else {
+    <p class="card__none q-body-sm" data-testid="table-print-card-none">
+      {{ 'shared.tablePrintCard.none' | t }}
+    </p>
+  }
+</div>

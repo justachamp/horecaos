@@ -1,0 +1,346 @@
+<div class="floorPlan">
+  <section class="card">
+    <div class="card__head">
+      <h3 class="q-subhead">{{ 'settings.locations.floorPlan.settingsTitle' | t }}</h3>
+      @if (!editingSettings() && !settingsLoading()) {
+        <button type="button" class="q-body primary" (click)="startEditingSettings()">
+          {{ 'settings.locations.floorPlan.edit' | t }}
+        </button>
+      }
+    </div>
+
+    @if (settingsLoading()) {
+      <p class="q-body-sm">{{ 'settings.locations.floorPlan.loading' | t }}</p>
+    } @else if (settingsError(); as error) {
+      <p class="q-body-sm error" role="alert">{{ error }}</p>
+    } @else if (!editingSettings()) {
+      @if (settings(); as current) {
+        <dl class="fields">
+          <div class="field">
+            <dt class="q-caption">{{ 'settings.locations.floorPlan.field.qrMode' | t }}</dt>
+            <dd class="q-body">{{ qrModeLabel(current.qrMode) }}</dd>
+          </div>
+          <div class="field">
+            <dt class="q-caption">{{ 'settings.locations.floorPlan.field.turnaround' | t }}</dt>
+            <dd class="q-body">{{ current.turnaroundMinutes }}</dd>
+          </div>
+          <div class="field">
+            <dt class="q-caption">
+              {{ 'settings.locations.floorPlan.field.guestSessionTtl' | t }}
+            </dt>
+            <dd class="q-body">{{ current.guestSessionTtlMinutes }}</dd>
+          </div>
+          <div class="field">
+            <dt class="q-caption">{{ 'settings.locations.floorPlan.field.serviceCharge' | t }}</dt>
+            <dd class="q-body">{{ current.serviceChargeRateBp / 100 }}%</dd>
+          </div>
+        </dl>
+      }
+    } @else {
+      <div class="form">
+        <label class="q-caption" for="floorplan-qr-mode">{{
+          'settings.locations.floorPlan.field.qrMode' | t
+        }}</label>
+        <select
+          id="floorplan-qr-mode"
+          class="q-body field"
+          [value]="draftQrMode()"
+          (change)="draftQrMode.set($any($event.target).value)"
+          data-testid="floorplan-qr-mode-select"
+        >
+          @for (mode of qrModes; track mode.value) {
+            <option
+              [value]="mode.value"
+              [disabled]="!mode.selectable"
+              [attr.data-testid]="'floorplan-qr-mode-option-' + mode.value"
+            >
+              {{ qrModeLabel(mode.value) }}
+            </option>
+          }
+        </select>
+        <p class="q-caption hint" data-testid="floorplan-qr-mode-settle-reason">
+          {{ 'settings.locations.floorPlan.qrMode.SETTLE_OPEN_TICKET.reason' | t }}
+        </p>
+
+        <label class="q-caption" for="floorplan-turnaround">{{
+          'settings.locations.floorPlan.field.turnaround' | t
+        }}</label>
+        <input
+          id="floorplan-turnaround"
+          class="q-body field"
+          type="number"
+          min="0"
+          max="240"
+          [value]="draftTurnaroundMinutes()"
+          (input)="draftTurnaroundMinutes.set(+$any($event.target).value)"
+        />
+
+        <label class="q-caption" for="floorplan-ttl">{{
+          'settings.locations.floorPlan.field.guestSessionTtl' | t
+        }}</label>
+        <input
+          id="floorplan-ttl"
+          class="q-body field"
+          type="number"
+          min="5"
+          max="1440"
+          [value]="draftGuestSessionTtlMinutes()"
+          (input)="draftGuestSessionTtlMinutes.set(+$any($event.target).value)"
+        />
+
+        <label class="q-caption" for="floorplan-service-charge">{{
+          'settings.locations.floorPlan.field.serviceCharge' | t
+        }}</label>
+        <input
+          id="floorplan-service-charge"
+          class="q-body field"
+          type="number"
+          min="0"
+          max="100"
+          step="0.01"
+          [value]="draftServiceChargeRateBp() / 100"
+          (input)="setServiceChargePercent(+$any($event.target).value)"
+        />
+
+        <label class="q-caption" for="floorplan-settings-reason">{{
+          'settings.locations.floorPlan.reason' | t
+        }}</label>
+        <input
+          id="floorplan-settings-reason"
+          class="q-body field"
+          type="text"
+          [value]="draftSettingsReason()"
+          (input)="draftSettingsReason.set($any($event.target).value)"
+        />
+
+        @if (settingsSaveError(); as error) {
+          <p class="q-body-sm error" role="alert">{{ error }}</p>
+        }
+
+        <div class="form__actions">
+          <button
+            type="button"
+            class="q-body secondary"
+            (click)="cancelEditingSettings()"
+            [disabled]="settingsSaving()"
+          >
+            {{ 'settings.locations.floorPlan.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            class="q-body primary"
+            (click)="saveSettings()"
+            [disabled]="!canSaveSettings()"
+          >
+            {{
+              settingsSaving()
+                ? ('settings.locations.floorPlan.saving' | t)
+                : ('settings.locations.floorPlan.save' | t)
+            }}
+          </button>
+        </div>
+      </div>
+    }
+  </section>
+
+  <section class="card">
+    <div class="card__head">
+      <h3 class="q-subhead">{{ 'settings.locations.floorPlan.roomTitle' | t }}</h3>
+      @if (!addingSection()) {
+        <button type="button" class="q-body secondary" (click)="startAddingSection()">
+          {{ 'settings.locations.floorPlan.addSection' | t }}
+        </button>
+      }
+    </div>
+
+    @if (floorLoading()) {
+      <p class="q-body-sm">{{ 'settings.locations.floorPlan.loading' | t }}</p>
+    } @else if (floorError(); as error) {
+      <p class="q-body-sm error" role="alert">{{ error }}</p>
+    } @else {
+      @if (addingSection()) {
+        <div class="form form--inline">
+          <input
+            class="q-body field"
+            type="text"
+            [value]="draftSectionCode()"
+            (input)="draftSectionCode.set($any($event.target).value)"
+            [attr.placeholder]="'settings.locations.floorPlan.sectionCodePlaceholder' | t"
+          />
+          <input
+            class="q-body field"
+            type="text"
+            [value]="draftSectionName()"
+            (input)="draftSectionName.set($any($event.target).value)"
+            [attr.placeholder]="'settings.locations.floorPlan.sectionNamePlaceholder' | t"
+          />
+          @if (sectionSaveError(); as error) {
+            <p class="q-body-sm error" role="alert">{{ error }}</p>
+          }
+          <div class="form__actions">
+            <button
+              type="button"
+              class="q-body secondary"
+              (click)="cancelAddingSection()"
+              [disabled]="sectionSaving()"
+            >
+              {{ 'settings.locations.floorPlan.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              class="q-body primary"
+              (click)="saveSection()"
+              [disabled]="!canSaveSection()"
+            >
+              {{ 'settings.locations.floorPlan.save' | t }}
+            </button>
+          </div>
+        </div>
+      }
+
+      @if (sections().length === 0) {
+        <p class="q-body-sm">{{ 'settings.locations.floorPlan.noSections' | t }}</p>
+      } @else {
+        <div class="sectionTabs" role="tablist">
+          @for (section of sections(); track section.sectionId) {
+            <button
+              type="button"
+              class="sectionTab q-body-sm"
+              [class.sectionTab--on]="activeSectionId() === section.sectionId"
+              role="tab"
+              (click)="selectSection(section.sectionId)"
+            >
+              {{ section.displayName }}
+            </button>
+          }
+        </div>
+
+        <div class="canvasWrap">
+          <q-floor-plan-canvas
+            [tables]="tablesInSection()"
+            [disabled]="movingTableId() !== null"
+            (tableMoved)="onTableMoved($event)"
+            (tableSelected)="onTableSelected($event)"
+          />
+
+          @if (selectedTable(); as table) {
+            <aside class="tablePanel" data-testid="floorplan-table-panel">
+              <div class="tablePanel__head">
+                <h4 class="q-body">{{ table.displayName }}</h4>
+                <button type="button" class="q-body-sm linkButton" (click)="closeTablePanel()">
+                  {{ 'settings.locations.floorPlan.close' | t }}
+                </button>
+              </div>
+              <p class="q-caption">
+                {{ 'settings.locations.floorPlan.tableSeats' | t: { count: table.seats } }}
+              </p>
+
+              <label class="q-caption" for="floorplan-rotate-reason">{{
+                'settings.locations.floorPlan.reason' | t
+              }}</label>
+              <input
+                id="floorplan-rotate-reason"
+                class="q-body field"
+                type="text"
+                [value]="rotateReason()"
+                (input)="rotateReason.set($any($event.target).value)"
+                data-testid="floorplan-rotate-reason"
+              />
+
+              @if (rotateError(); as error) {
+                <p class="q-body-sm error" role="alert">{{ error }}</p>
+              }
+
+              <button
+                type="button"
+                class="q-body primary"
+                (click)="rotateQrToken()"
+                [disabled]="!canRotate()"
+                data-testid="floorplan-rotate-button"
+              >
+                {{
+                  rotating()
+                    ? ('settings.locations.floorPlan.rotating' | t)
+                    : table.qrIssued
+                      ? ('settings.locations.floorPlan.rotateQr' | t)
+                      : ('settings.locations.floorPlan.issueQr' | t)
+                }}
+              </button>
+
+              @if (lastRevokedGuestSessions(); as revoked) {
+                <p class="q-body-sm" data-testid="floorplan-revoked-count">
+                  {{ 'settings.locations.floorPlan.revokedGuestSessions' | t: { count: revoked } }}
+                </p>
+              }
+
+              @if (lastIssuedToken(); as token) {
+                <q-table-print-card
+                  [branchName]="branchName()"
+                  [tableCode]="table.code"
+                  [tableDisplayName]="table.displayName"
+                  [qrToken]="token"
+                />
+              }
+            </aside>
+          }
+        </div>
+
+        @if (!addingTable()) {
+          <button
+            type="button"
+            class="q-body secondary addTableButton"
+            (click)="startAddingTable()"
+          >
+            {{ 'settings.locations.floorPlan.addTable' | t }}
+          </button>
+        } @else {
+          <div class="form form--inline">
+            <input
+              class="q-body field"
+              type="text"
+              [value]="draftTableCode()"
+              (input)="draftTableCode.set($any($event.target).value)"
+              [attr.placeholder]="'settings.locations.floorPlan.tableCodePlaceholder' | t"
+            />
+            <input
+              class="q-body field"
+              type="text"
+              [value]="draftTableName()"
+              (input)="draftTableName.set($any($event.target).value)"
+              [attr.placeholder]="'settings.locations.floorPlan.tableNamePlaceholder' | t"
+            />
+            <input
+              class="q-body field"
+              type="number"
+              min="1"
+              max="100"
+              [value]="draftTableSeats()"
+              (input)="draftTableSeats.set(+$any($event.target).value)"
+            />
+            @if (tableSaveError(); as error) {
+              <p class="q-body-sm error" role="alert">{{ error }}</p>
+            }
+            <div class="form__actions">
+              <button
+                type="button"
+                class="q-body secondary"
+                (click)="cancelAddingTable()"
+                [disabled]="tableSaving()"
+              >
+                {{ 'settings.locations.floorPlan.cancel' | t }}
+              </button>
+              <button
+                type="button"
+                class="q-body primary"
+                (click)="saveTable()"
+                [disabled]="!canSaveTable()"
+              >
+                {{ 'settings.locations.floorPlan.save' | t }}
+              </button>
+            </div>
+          </div>
+        }
+      }
+    }
+  </section>
+</div>

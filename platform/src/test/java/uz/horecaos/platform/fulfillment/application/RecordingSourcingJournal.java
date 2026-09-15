@@ -32,6 +32,7 @@ class RecordingSourcingJournal implements SourcingJournal {
     final List<String> exceptions = new ArrayList<>();
     final List<DeliveryQuote> quotes = new ArrayList<>();
     final List<CostSubsidy> subsidies = new ArrayList<>();
+    final Map<UUID, Instant> courierEtas = new LinkedHashMap<>();
 
     /** Set the instant {@link #settlePartnerAttempt} reports a BOOKED receipt as won. */
     private @Nullable UUID wonShipmentId;
@@ -107,6 +108,11 @@ class RecordingSourcingJournal implements SourcingJournal {
     @Override
     public void recordCostSubsidy(CostSubsidy subsidy) {
         subsidies.add(subsidy);
+    }
+
+    @Override
+    public void recordCourierEta(UUID tenantId, UUID planId, Instant etaAt) {
+        courierEtas.put(planId, etaAt);
     }
 
     private OpenAttempt open(String key, AttemptStatus initial) {

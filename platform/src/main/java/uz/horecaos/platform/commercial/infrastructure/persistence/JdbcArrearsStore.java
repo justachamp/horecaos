@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -38,6 +39,30 @@ public class JdbcArrearsStore {
                          WHERE s.status IN ('PAST_DUE', 'SUSPENDED')
                          ORDER BY s.status_changed_at
                         """).query(JdbcArrearsStore::row).list();
+    }
+
+    /**
+     * This tenant's own row, live or in arrears, for the tenant-reachable arrears
+     * read (ADR 0127, Finance 8.6). Unlike {@link #board}, not limited to
+     * {@code PAST_DUE}/{@code SUSPENDED}: a tenant in good standing is owed an
+     * answer too, so the restricted-feature banner knows there is nothing to
+     * restrict. {@code status NOT IN (...)} mirrors {@code
+     * JdbcSubscriptionStore.findLive} — at most one non-terminal subscription
+     * exists per tenant, so a terminated tenant (no live row) answers empty.
+     */
+    public Optional<ArrearRow> forTenant(UUID tenantId) {
+        return jdbc.sql("""
+                        SELECT s.id, s.tenant_id, t.display_name, s.status, s.status_changed_at,
+                               s.suspension_reason, s.version, p.code AS plan_code, v.version_number
+                          FROM commercial.subscriptions s
+                          JOIN tenant.tenants t ON t.id = s.tenant_id
+                          JOIN commercial.plan_versions v ON v.id = s.plan_version_id
+                          JOIN commercial.plans p ON p.id = v.plan_id
+                         WHERE s.tenant_id = :tenantId AND s.status NOT IN ('TERMINATED', 'EXPIRED')
+                        """)
+                .param("tenantId", tenantId)
+                .query(JdbcArrearsStore::row)
+                .optional();
     }
 
     public List<Arrear> pastDueSince(Instant before, int limit) {

@@ -12,9 +12,11 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -122,9 +124,9 @@ public class KitchenStationController {
     @RequiresCapability(value = Capability.KITCHEN_TICKET_READ, scope = ScopeType.LOCATION)
     @Operation(
             summary = "The branch's throughput ceilings (IA §2.6)",
-            description = "Read today only by this screen — the release scheduler does not shift "
-                    + "on it yet (ADR 0041's own implementation checklist names why). A manager "
-                    + "compares this against the board by eye.")
+            description = "KitchenTicketService.decideRelease shifts a ticket's release earlier "
+                    + "when a station's board is already committed past this ceiling for the "
+                    + "slot; a manager also compares it against the board by eye.")
     public ResponseEntity<List<StationCapacityResponse>> capacity(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
 
@@ -138,9 +140,8 @@ public class KitchenStationController {
     @Operation(
             summary = "Add a throughput ceiling for one station, one weekday, one time window",
             description = "Refused when it overlaps a window already stored for that station and "
-                    + "weekday. There is no edit or delete in this release — remove a mistake by "
-                    + "the same discipline `routing-rules` already applies: nothing here is ever "
-                    + "removed once created.")
+                    + "weekday. A mistake is corrected with the PUT or DELETE below, not by a "
+                    + "second, conflicting POST.")
     public ResponseEntity<StationCapacityResponse> addCapacity(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -158,6 +159,51 @@ public class KitchenStationController {
                 body.portionsPerHour()));
 
         return ResponseEntity.ok(StationCapacityResponse.of(created));
+    }
+
+    @PutMapping("/station-capacity/{capacityWindowId}")
+    @RequiresCapability(value = Capability.KITCHEN_STATION_MANAGE, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Correct a throughput ceiling's window or rate",
+            description = "Refused (409) when the edited window would overlap another window "
+                    + "already stored for that station and weekday — the same rule `POST` "
+                    + "enforces, checked excluding this window's own row. The station and "
+                    + "weekday themselves do not move; delete and re-create for that.")
+    public ResponseEntity<StationCapacityResponse> updateCapacity(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID capacityWindowId,
+            @Valid @RequestBody UpdateStationCapacityRequest body) {
+
+        StationCapacityRow updated = stations.updateCapacityWindow(new KitchenStationService.CapacityWindowEdit(
+                tenantId,
+                locationId,
+                capacityWindowId,
+                body.windowStart(),
+                body.windowEnd(),
+                body.portionsPerHour(),
+                body.expectedVersion()));
+
+        return ResponseEntity.ok(StationCapacityResponse.of(updated));
+    }
+
+    @DeleteMapping("/station-capacity/{capacityWindowId}")
+    @RequiresCapability(value = Capability.KITCHEN_STATION_MANAGE, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Remove a throughput ceiling",
+            description = "A mistyped or overlapping window blocked the correct one from ever "
+                    + "being authored, since `POST` refuses an overlap — deleting the wrong "
+                    + "window is what frees the slot for the right one.")
+    public ResponseEntity<Void> deleteCapacity(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID capacityWindowId,
+            @Valid @RequestBody DeleteStationCapacityRequest body) {
+
+        stations.deleteCapacityWindow(tenantId, locationId, capacityWindowId, body.expectedVersion());
+        return ResponseEntity.noContent().build();
     }
 
     record StationRequest(
@@ -211,6 +257,14 @@ public class KitchenStationController {
             @NotNull LocalTime windowStart,
             @NotNull LocalTime windowEnd,
             @Min(1) @Max(100_000) int portionsPerHour) {}
+
+    record UpdateStationCapacityRequest(
+            @NotNull LocalTime windowStart,
+            @NotNull LocalTime windowEnd,
+            @Min(1) @Max(100_000) int portionsPerHour,
+            @NotNull Integer expectedVersion) {}
+
+    record DeleteStationCapacityRequest(@NotNull Integer expectedVersion) {}
 
     record StationCapacityResponse(
             UUID capacityWindowId,

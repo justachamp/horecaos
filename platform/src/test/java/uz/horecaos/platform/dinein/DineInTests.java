@@ -737,7 +737,7 @@ class DineInTests {
 
         int version = store.findTable(TENANT, tableOne).orElseThrow().version();
         FloorPlanService.IssuedQrToken rotated = transactions.execute(
-                status -> floorPlan.rotateQrToken(TENANT, tableOne, version, "manager", "Code photographed"));
+                status -> floorPlan.rotateQrToken(TENANT, branch, tableOne, version, "manager", "Code photographed"));
 
         assertThat(rotated.revokedGuestSessions())
                 .as("rotation without revocation leaves the photographed code working for "
@@ -769,7 +769,7 @@ class DineInTests {
 
         int version = store.findTable(TENANT, tableOne).orElseThrow().version();
         transactions.executeWithoutResult(status ->
-                floorPlan.changeTableStatus(TENANT, tableOne, version, "ARCHIVED", "manager", "Table removed"));
+                floorPlan.changeTableStatus(TENANT, branch, tableOne, version, "ARCHIVED", "manager", "Table removed"));
 
         ApiException archived =
                 (ApiException) catchThrowable(() -> transactions.execute(status -> qr.exchange(printed)));
@@ -907,7 +907,8 @@ class DineInTests {
     private String issueToken(UUID tableId) {
         int version = store.findTable(TENANT, tableId).orElseThrow().version();
         return transactions
-                .execute(status -> floorPlan.rotateQrToken(TENANT, tableId, version, "manager", "First printing"))
+                .execute(status ->
+                        floorPlan.rotateQrToken(TENANT, branch, tableId, version, "manager", "First printing"))
                 .plaintext();
     }
 

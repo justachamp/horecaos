@@ -91,6 +91,7 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'loyalty.read',
   'marketplace.availability.push',
   'marketplace.handover.bypass',
+  'marketplace.handover.verify',
   'marketplace.liveness.read',
   'marketplace.menu.push',
   'marketplace.order.create.manual',

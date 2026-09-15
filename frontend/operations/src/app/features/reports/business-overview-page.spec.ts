@@ -157,6 +157,11 @@ describe('BusinessOverviewPage', () => {
    */
   async function render(configure?: (filters: ReportsFilterState) => void): Promise<void> {
     TestBed.resetTestingModule();
+    // ReportsFilterState (wave P27) reads its initial state from the URL on
+    // construction so a filtered view survives a reload — jsdom's
+    // window.location persists across tests in this file, so a prior test's
+    // filters would otherwise leak into the next one's "fresh" instance.
+    history.replaceState(null, '', '/statistics/overview');
     paymentMixSpy = vi.fn().mockResolvedValue(paymentMixResponse());
     await TestBed.configureTestingModule({
       imports: [BusinessOverviewPage],
@@ -183,6 +188,11 @@ describe('BusinessOverviewPage', () => {
               .fn()
               .mockResolvedValue({ rows: [], maybeMore: false, provenance: provenance() }),
             paymentMix: paymentMixSpy,
+            metrics: vi.fn().mockResolvedValue([]),
+            cancellationReasons: vi.fn().mockResolvedValue([]),
+            fulfilmentTime: vi
+              .fn()
+              .mockResolvedValue({ medianSeconds: null, provenance: provenance() }),
           },
         },
         { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
@@ -265,5 +275,65 @@ describe('BusinessOverviewPage', () => {
     const host = fixture.nativeElement as HTMLElement;
     const lineCharts = host.querySelectorAll('[data-testid="q-line-chart"]');
     expect(lineCharts.length).toBe(2);
+  });
+
+  // ----------------------------------------------------------- wave P27 (7.1/7.1d)
+
+  it(
+    'always groups Band A by LEGAL_ENTITY — a two-entity tenant would otherwise throw ' +
+      'CombinedEntityTotalException and error the whole page (ADR 0038)',
+    async () => {
+      await render();
+      const querySpy = (
+        TestBed.inject(ReportingApi) as unknown as { query: ReturnType<typeof vi.fn> }
+      ).query;
+      const bandACall = querySpy.mock.calls.find(
+        (call: unknown[]) =>
+          (call[1] as QueryParams).metric.includes('revenue.gross.v1') &&
+          !(call[1] as QueryParams).groupBy?.includes('CHANNEL') &&
+          !(call[1] as QueryParams).groupBy?.includes('LOCATION'),
+      );
+      expect(bandACall).toBeDefined();
+      expect((bandACall![1] as QueryParams).groupBy).toContain('LEGAL_ENTITY');
+    },
+  );
+
+  it('pushes the branch, channel and legal-entity filters from ReportsFilterState into every query', async () => {
+    await render((filters) => {
+      filters.setLocationIds(['loc-1']);
+      filters.setChannelCodes(['TELEGRAM']);
+      filters.setLegalEntityIds(['entity-1']);
+    });
+    await flushMicrotasks();
+
+    const querySpy = (
+      TestBed.inject(ReportingApi) as unknown as { query: ReturnType<typeof vi.fn> }
+    ).query;
+    const bandACall = querySpy.mock.calls.find((call: unknown[]) =>
+      (call[1] as QueryParams).metric.includes('revenue.gross.v1'),
+    );
+    expect(bandACall).toBeDefined();
+    const params = bandACall![1] as QueryParams;
+    expect(params.locationId).toEqual(['loc-1']);
+    expect(params.channelCode).toEqual(['TELEGRAM']);
+    expect(params.legalEntityId).toEqual(['entity-1']);
+  });
+
+  it('pushes the fulfilment-type filter into the late-orders read used for the late tile subtitle', async () => {
+    await render((filters) => filters.setFulfilmentType('DELIVERY'));
+    await flushMicrotasks();
+
+    const api = TestBed.inject(ReportingApi) as unknown as { orders: ReturnType<typeof vi.fn> };
+    expect(api.orders).toHaveBeenCalledWith(
+      SCOPE.tenantId,
+      expect.objectContaining({ fulfilmentType: ['DELIVERY'] }),
+    );
+  });
+
+  it("calls the metric dictionary once, for every tile's formula panel", async () => {
+    await render();
+    const api = TestBed.inject(ReportingApi) as unknown as { metrics: ReturnType<typeof vi.fn> };
+    expect(api.metrics).toHaveBeenCalledTimes(1);
+    expect(api.metrics).toHaveBeenCalledWith(SCOPE.tenantId);
   });
 });

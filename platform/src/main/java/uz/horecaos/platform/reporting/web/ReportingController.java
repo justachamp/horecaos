@@ -84,10 +84,18 @@ public class ReportingController {
             @RequestParam List<String> metric,
             @RequestParam(required = false) List<String> groupBy,
             @RequestParam(required = false) List<UUID> locationId,
-            @RequestParam(required = false) List<String> channelCode) {
+            @RequestParam(required = false) List<String> channelCode,
+            @RequestParam(required = false) List<UUID> legalEntityId) {
 
         ReportQuery query = new ReportQuery(
-                tenantId, from, to, metric, dimensions(groupBy), orEmpty(locationId), orEmpty(channelCode));
+                tenantId,
+                from,
+                to,
+                metric,
+                dimensions(groupBy),
+                orEmpty(locationId),
+                orEmpty(channelCode),
+                orEmpty(legalEntityId));
 
         var result = queries.run(query);
         return ResponseEntity.ok(new QueryResponse(
@@ -190,6 +198,45 @@ public class ReportingController {
                 new MedianResponse(result.medianSeconds(), ProvenanceResponse.of(result.provenance())));
     }
 
+    @GetMapping("/fulfilment-time")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "Median seconds from order creation to close, for one fulfilment type (7.1)",
+            description = "delivery_time.median.v1 / pickup_time.median.v1 — the overview's "
+                    + "pickup/delivery elapsed-time tiles. Null when nothing of that fulfilment "
+                    + "type closed in range, which is not a zero-second delivery.")
+    public ResponseEntity<MedianResponse> fulfilmentTime(
+            @PathVariable UUID tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId,
+            @RequestParam String fulfilmentType) {
+
+        if (!"DELIVERY".equals(fulfilmentType) && !"PICKUP".equals(fulfilmentType)) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "fulfilmentType must be DELIVERY or PICKUP",
+                    Map.of("fulfilmentType", fulfilmentType));
+        }
+        var result = queries.fulfilmentTime(tenantId, from, to, orEmpty(locationId), fulfilmentType);
+        return ResponseEntity.ok(
+                new MedianResponse(result.medianSeconds(), ProvenanceResponse.of(result.provenance())));
+    }
+
+    @GetMapping("/cancellation-reasons")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "The tenant's cancellation-reason registry (7.1a)",
+            description = "Resolves a CANCELLED order's cancellationReasonCode (order_outcome_reasons.id, "
+                    + "as a string) to the internal_name an operator actually picked, so the funnel's "
+                    + "cancellation panel prints a name rather than a UUID. REJECTED/EXPIRED reason "
+                    + "codes name a different, platform-fixed registry this does not cover.")
+    public ResponseEntity<List<CancellationReasonResponse>> cancellationReasons(@PathVariable UUID tenantId) {
+        return ResponseEntity.ok(queries.cancellationReasons(tenantId).stream()
+                .map(row -> new CancellationReasonResponse(row.reasonCode(), row.internalName()))
+                .toList());
+    }
+
     @GetMapping("/orders")
     @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
     @Operation(
@@ -205,15 +252,43 @@ public class ReportingController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) List<UUID> locationId,
             @RequestParam(required = false) List<String> channelCode,
+            @RequestParam(required = false) List<String> fulfilmentType,
+            @RequestParam(required = false) List<UUID> legalEntityId,
             @RequestParam(defaultValue = "DATE_DESC") String sort,
-            @RequestParam(required = false) Integer limit) {
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant afterOccurredAt,
+            @RequestParam(required = false) UUID afterOrderId) {
 
         var result = queries.orders(
-                tenantId, from, to, orEmpty(locationId), orEmpty(channelCode), orderSort(sort), clampOrderLimit(limit));
+                tenantId,
+                from,
+                to,
+                orEmpty(locationId),
+                orEmpty(channelCode),
+                orEmpty(fulfilmentType),
+                orEmpty(legalEntityId),
+                orderSort(sort),
+                clampOrderLimit(limit),
+                cursor(afterOccurredAt, afterOrderId));
         return ResponseEntity.ok(new OrderListResponse(
                 result.rows().stream().map(OrderRowResponse::of).toList(),
                 result.maybeMore(),
                 ProvenanceResponse.of(result.provenance())));
+    }
+
+    /** wave P27 (7.2a): the previous page's last row — both present or both absent. */
+    private static JdbcReportingStore.@Nullable OrderCursor cursor(
+            @Nullable Instant afterOccurredAt, @Nullable UUID afterOrderId) {
+        if (afterOccurredAt == null && afterOrderId == null) {
+            return null;
+        }
+        if (afterOccurredAt == null || afterOrderId == null) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "afterOccurredAt and afterOrderId are both required to page, or both omitted",
+                    Map.of());
+        }
+        return new JdbcReportingStore.OrderCursor(afterOccurredAt, afterOrderId);
     }
 
     @GetMapping("/order-outcomes")
@@ -532,7 +607,15 @@ public class ReportingController {
             List<PaymentMixRowResponse> byLocation,
             ProvenanceResponse provenance) {}
 
-    /** One order-grain row. See {@code JdbcReportingStore.OrderRow} for what each field means. */
+    /**
+     * One order-grain row. See {@code JdbcReportingStore.OrderRow} for what
+     * each field means.
+     *
+     * @param secondsToAccept    wave P27: CONFIRMED -> PREPARING, "branch acceptance"
+     * @param secondsPreparing   wave P27: PREPARING -> READY, actual cooking — narrower than {@code secondsToReady}
+     * @param publicOrderNumber  wave P27: the short number a receipt prints
+     * @param isPreorder         wave P27: «Предзаказ» — see {@code JdbcReportingStore.OrderRow}'s own doc
+     */
     public record OrderRowResponse(
             UUID orderId,
             LocalDate businessDate,
@@ -553,7 +636,11 @@ public class ReportingController {
             @Nullable Integer secondsToReady,
             @Nullable Integer secondsTotal,
             @Nullable Integer secondsLate,
-            @Nullable String cancellationReasonCode) {
+            @Nullable String cancellationReasonCode,
+            @Nullable Integer secondsToAccept,
+            @Nullable Integer secondsPreparing,
+            @Nullable String publicOrderNumber,
+            boolean isPreorder) {
 
         static OrderRowResponse of(JdbcReportingStore.OrderRow row) {
             return new OrderRowResponse(
@@ -576,7 +663,11 @@ public class ReportingController {
                     row.secondsToReady(),
                     row.secondsTotal(),
                     row.secondsLate(),
-                    row.cancellationReasonCode());
+                    row.cancellationReasonCode(),
+                    row.secondsToAccept(),
+                    row.secondsPreparing(),
+                    row.publicOrderNumber(),
+                    row.isPreorder());
         }
     }
 
@@ -718,16 +809,34 @@ public class ReportingController {
         }
     }
 
-    /** One (terminal status, cancellation reason) bucket. */
+    /**
+     * One (terminal status, cancellation reason, disposition, liability) bucket.
+     *
+     * @param stockDisposition wave P27 (7.1): what the cancellation cost the tenant's stock — ADR 0039's
+     *                         {@code order_outcomes}, copied onto the fact. Null on a row with no recorded
+     *                         outcome, never a "no effect" reading
+     */
     public record OutcomeRowResponse(
-            String terminalStatus, @Nullable String cancellationReasonCode, int count) {
+            String terminalStatus,
+            @Nullable String cancellationReasonCode,
+            @Nullable String stockDisposition,
+            @Nullable String liabilityParty,
+            int count) {
 
         static OutcomeRowResponse of(JdbcReportingStore.OutcomeRow row) {
-            return new OutcomeRowResponse(row.terminalStatus(), row.cancellationReasonCode(), row.count());
+            return new OutcomeRowResponse(
+                    row.terminalStatus(),
+                    row.cancellationReasonCode(),
+                    row.stockDisposition(),
+                    row.liabilityParty(),
+                    row.count());
         }
     }
 
     public record OutcomeListResponse(List<OutcomeRowResponse> rows, ProvenanceResponse provenance) {}
+
+    /** One tenant cancellation reason — wave P27 (7.1a). See {@code JdbcReportingStore.CancellationReasonRow}. */
+    public record CancellationReasonResponse(String reasonCode, String internalName) {}
 
     /**
      * What ADR 0023 requires a report to declare about itself.

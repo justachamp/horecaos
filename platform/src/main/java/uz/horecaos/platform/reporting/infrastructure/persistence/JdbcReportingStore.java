@@ -19,6 +19,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.reporting.application.ReportingFacts;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayKey;
 import uz.horecaos.platform.reporting.application.ReportingFacts.CallHourFact;
@@ -45,11 +46,27 @@ import uz.horecaos.platform.reporting.domain.MetricDefinition;
  * delivered instantly.
  *
  * <p>The source reads — {@link #readSourceOrders}, {@link #readSourceLines},
- * {@link #readSourceRefunds}, {@link #readSourceCallEvents} — are the only
- * statements in the reporting module that touch a module schema, and they are
- * read-only. Everything the read path uses stays inside {@code reporting},
- * which is what the {@code horecaos_reporting_read} role enforces at the
- * database.
+ * {@link #readSourceRefunds}, {@link #readSourceCallEvents}, {@link
+ * #readSourceDeliveries} and {@link #readSourceTenders} — are read-only and
+ * run only from {@code DayCloseService} at business-day close, projecting what
+ * they read into an immutable {@code reporting.fact_*} row.
+ *
+ * <p>They are not, however, the only statements here that touch a module
+ * schema outside {@code reporting} — an adversarial review (2026-09-14)
+ * found this doc overclaiming that they were. {@link #readTariffAudit},
+ * {@link #readExternalDeliveryCost}, {@link #readOrders}'s {@code is_preorder}
+ * subquery, and {@link #readCancellationReasons} also read a module schema
+ * directly ({@code fulfillment}, {@code ordering}, {@code kitchen}), and —
+ * unlike the source reads above — do so live, on every request, rather
+ * than once at close time into a fact. Each carries its own doc note
+ * explaining why it reads live rather than through a fact, and none of the
+ * four is actually covered by the {@code horecaos_reporting_read} database
+ * role this class otherwise documents: the running application connects as
+ * {@code horecaos_app} (a member of {@code horecaos_application}), not as
+ * that role, so nothing today enforces the boundary at the database for any
+ * query in this class. Whether these four should instead project into a fact
+ * — so a report never has to trade freshness for being closed — is an open
+ * design question tracked against ADR 0043, not resolved by this comment.
  */
 @Repository
 public class JdbcReportingStore {
@@ -228,6 +245,7 @@ public class JdbcReportingStore {
                        o.promised_at, o.promise_travel_minutes, o.version,
                        o.created_by_actor_type, o.created_by_actor_id,
                        o.accepted_by_actor_type, o.accepted_by_actor_id,
+                       o.public_order_number,
                        (SELECT i.legal_entity_id
                           FROM payments.payment_intents i
                          WHERE i.tenant_id = o.tenant_id AND i.order_id = o.id
@@ -238,12 +256,27 @@ public class JdbcReportingStore {
                           FROM ordering.order_state_history h
                          WHERE h.tenant_id = o.tenant_id AND h.order_id = o.id
                            AND h.to_status = 'READY') AS ready_at,
+                       -- Wave P27 (7.2): the same mining as ready_at above, one
+                       -- status earlier, so the "branch acceptance" wait
+                       -- (CONFIRMED -> PREPARING) can be told apart from actual
+                       -- cooking (PREPARING -> READY) without a new source.
+                       (SELECT min(h.occurred_at)
+                          FROM ordering.order_state_history h
+                         WHERE h.tenant_id = o.tenant_id AND h.order_id = o.id
+                           AND h.to_status = 'PREPARING') AS preparing_at,
                        (SELECT h.reason_code
                           FROM ordering.order_state_history h
                          WHERE h.tenant_id = o.tenant_id AND h.order_id = o.id
                            AND h.to_status IN ('CANCELLED', 'REJECTED', 'EXPIRED')
                          ORDER BY h.sequence_number DESC
                          LIMIT 1) AS cancellation_reason_code,
+                       -- Wave P27 (7.1): ADR 0039's terminal-outcome row, written
+                       -- in the same transaction as the cancellation. Left-joined
+                       -- rather than required: an order still open, or closed
+                       -- before ADR 0039 shipped, has no outcome row and both
+                       -- columns stay null — never NO_EFFECT, which would claim a
+                       -- disposition nobody recorded.
+                       oo.stock_disposition, oo.liability_party,
                        (o.customer_account_id IS NOT NULL AND NOT EXISTS (
                             SELECT 1 FROM ordering.orders e
                              WHERE e.tenant_id = o.tenant_id
@@ -251,6 +284,8 @@ public class JdbcReportingStore {
                                AND e.status = 'COMPLETED'
                                AND e.created_at < o.created_at)) AS is_first_order
                   FROM ordering.orders o
+                  LEFT JOIN ordering.order_outcomes oo
+                    ON oo.tenant_id = o.tenant_id AND oo.order_id = o.id
                  WHERE o.tenant_id = :tenantId
                    AND o.created_at >= :from AND o.created_at < :to
                  ORDER BY o.created_at, o.id
@@ -462,7 +497,14 @@ public class JdbcReportingStore {
             @Nullable String createdByActorType,
             @Nullable String createdByActorId,
             @Nullable String acceptedByActorType,
-            @Nullable String acceptedByActorId) {}
+            @Nullable String acceptedByActorId,
+            /** Wave P27 (7.2): CONFIRMED -> PREPARING, mined from {@code order_state_history} the same way {@code readyAt} already is. */
+            @Nullable Instant preparingAt,
+            /** Wave P27 (7.2a): {@code ordering.orders.public_order_number} — the short number a receipt prints. */
+            String publicOrderNumber,
+            /** Wave P27 (7.1): ADR 0039's {@code order_outcomes.stock_disposition}, null until a terminal outcome is recorded. */
+            @Nullable String stockDisposition,
+            @Nullable String liabilityParty) {}
 
     public record SourceLine(
             UUID lineId,
@@ -519,7 +561,8 @@ public class JdbcReportingStore {
                 "fact_refund",
                 "agg_branch_day",
                 "agg_sla_bucket_day",
-                "fact_call_hour")) {
+                "fact_call_hour",
+                "fact_delivery")) {
             jdbc.sql("DELETE FROM reporting.%s WHERE tenant_id = :tenantId AND business_date = :day".formatted(table))
                     .param("tenantId", tenantId)
                     .param("day", businessDate)
@@ -647,6 +690,11 @@ public class JdbcReportingStore {
         params.put("promisedAt", utc(fact.promisedAt()));
         params.put("promiseTravelMinutes", fact.promiseTravelMinutes());
         params.put("secondsLate", fact.secondsLate());
+        params.put("secondsToAccept", fact.secondsToAccept());
+        params.put("secondsPreparing", fact.secondsPreparing());
+        params.put("publicOrderNumber", fact.publicOrderNumber());
+        params.put("stockDisposition", fact.stockDisposition());
+        params.put("liabilityParty", fact.liabilityParty());
         params.put("calculationVersion", fact.metricCalculationVersion());
         params.put("sourceOrderVersion", fact.sourceOrderVersion());
 
@@ -659,6 +707,8 @@ public class JdbcReportingStore {
                     is_first_order, gross_revenue_som, discount_som, delivery_fee_som, tax_som,
                     net_revenue_som, line_count, item_count, seconds_to_confirm, seconds_to_ready,
                     seconds_total, promised_at, promise_travel_minutes, seconds_late,
+                    seconds_to_accept, seconds_preparing, public_order_number,
+                    stock_disposition, liability_party,
                     metric_calculation_version, source_order_version)
                 VALUES (
                     :tenantId, :orderId, :businessDate, :boundaryVersion, :occurredAt, :closedAt,
@@ -668,6 +718,8 @@ public class JdbcReportingStore {
                     :isFirstOrder, :gross, :discount, :deliveryFee, :tax,
                     :net, :lineCount, :itemCount, :secondsToConfirm, :secondsToReady,
                     :secondsTotal, :promisedAt, :promiseTravelMinutes, :secondsLate,
+                    :secondsToAccept, :secondsPreparing, :publicOrderNumber,
+                    :stockDisposition, :liabilityParty,
                     :calculationVersion, :sourceOrderVersion)
                 """).params(params).update();
     }
@@ -790,6 +842,372 @@ public class JdbcReportingStore {
                     :newCustomers)
                 """).params(params).update();
     }
+
+    /**
+     * T11 / ADR 0125: one business date's internal deliveries, straight off
+     * {@code fulfillment.courier_assignment_earnings} — the fact {@link
+     * uz.horecaos.platform.courier.application.DeliveryAccrualOrderCompletionTrigger}
+     * now writes on every real delivery. Joined to {@code
+     * fulfillment.assignment_attempts} for {@code accepted_at}, which the
+     * earning row itself does not carry (ADR 0042 never needed it).
+     *
+     * <p>Read by an instant range against {@code delivered_at} — the same
+     * choice every other {@code readSource*} here makes over {@code
+     * fact_order}'s own snapshotted date — rather than by trusting the
+     * earning's own stored {@code business_date}. An adversarial review
+     * (2026-09-14) found the two could disagree: {@code
+     * CourierAccrualService} once stamped {@code business_date} from a plain
+     * UTC calendar date, so a delivery in the tenant's early-morning window
+     * was filed a day off and silently dropped by this method's previous
+     * exact-equality filter. {@code CourierAccrualService} now stamps the
+     * correct date too (through this same boundary), but re-deriving it here
+     * as well — rather than trusting a column written by a different module —
+     * keeps this read correct even if a future write path gets the stamp
+     * wrong again.
+     */
+    public List<SourceDelivery> readSourceDeliveries(UUID tenantId, Instant from, Instant to) {
+        return jdbc.sql("""
+                SELECT earning.id AS earning_id, earning.courier_id, earning.location_id,
+                       earning.shipment_id, earning.assignment_attempt_id, earning.distance_meters,
+                       earning.distance_source, earning.on_time_outcome, earning.delivered_at,
+                       attempt.accepted_at
+                  FROM fulfillment.courier_assignment_earnings earning
+                  JOIN fulfillment.assignment_attempts attempt
+                    ON attempt.tenant_id = earning.tenant_id AND attempt.id = earning.assignment_attempt_id
+                 WHERE earning.tenant_id = :tenantId
+                   AND earning.delivered_at >= :from AND earning.delivered_at < :to
+                """)
+                .param("tenantId", tenantId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query((ResultSet row, int number) -> new SourceDelivery(
+                        Objects.requireNonNull(row.getObject("earning_id", UUID.class)),
+                        Objects.requireNonNull(row.getObject("courier_id", UUID.class)),
+                        Objects.requireNonNull(row.getObject("location_id", UUID.class)),
+                        Objects.requireNonNull(row.getObject("shipment_id", UUID.class)),
+                        Objects.requireNonNull(row.getObject("assignment_attempt_id", UUID.class)),
+                        row.getInt("distance_meters"),
+                        Objects.requireNonNull(row.getString("distance_source")),
+                        Objects.requireNonNull(row.getString("on_time_outcome")),
+                        requireInstant(row, "accepted_at"),
+                        requireInstant(row, "delivered_at")))
+                .list();
+    }
+
+    /** One row {@link #readSourceDeliveries} produced — the source for {@code ReportingFacts.DeliveryFact}. */
+    public record SourceDelivery(
+            UUID earningId,
+            UUID courierId,
+            UUID locationId,
+            UUID shipmentId,
+            UUID assignmentAttemptId,
+            int distanceMeters,
+            String distanceSource,
+            String onTimeOutcome,
+            Instant acceptedAt,
+            Instant deliveredAt) {}
+
+    public void insertDeliveryFact(ReportingFacts.DeliveryFact fact) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", fact.tenantId());
+        params.put("earningId", fact.courierAssignmentEarningId());
+        params.put("businessDate", fact.businessDate());
+        params.put("boundaryVersion", fact.boundaryVersion());
+        params.put("calculationVersion", fact.metricCalculationVersion());
+        params.put("courierId", fact.courierId());
+        params.put("locationId", fact.locationId());
+        params.put("shipmentId", fact.shipmentId());
+        params.put("assignmentAttemptId", fact.assignmentAttemptId());
+        params.put("distanceMeters", fact.distanceMeters());
+        params.put("distanceSource", fact.distanceSource());
+        params.put("onTimeOutcome", fact.onTimeOutcome());
+        params.put("acceptedAt", utc(fact.acceptedAt()));
+        params.put("deliveredAt", utc(fact.deliveredAt()));
+        params.put("transitSeconds", fact.transitSeconds());
+
+        jdbc.sql("""
+                INSERT INTO reporting.fact_delivery (
+                    tenant_id, courier_assignment_earning_id, business_date, boundary_version,
+                    metric_calculation_version, courier_id, location_id, shipment_id,
+                    assignment_attempt_id, distance_meters, distance_source, on_time_outcome,
+                    accepted_at, delivered_at, transit_seconds)
+                VALUES (
+                    :tenantId, :earningId, :businessDate, :boundaryVersion, :calculationVersion,
+                    :courierId, :locationId, :shipmentId, :assignmentAttemptId, :distanceMeters,
+                    :distanceSource, :onTimeOutcome, :acceptedAt, :deliveredAt, :transitSeconds)
+                """).params(params).update();
+    }
+
+    /**
+     * T11: the courier leaderboard (7.4) — one row per courier over a date
+     * range, straight off {@code reporting.fact_delivery}. Never a courier's
+     * name: the caller resolves display through P19's reveal, keyed on
+     * {@code courierId}.
+     */
+    public List<CourierLeaderboardRow> readCourierLeaderboard(UUID tenantId, LocalDate from, LocalDate to) {
+        return jdbc.sql("""
+                SELECT courier_id,
+                       count(*)::integer AS delivery_count,
+                       min(distance_meters)::integer AS min_distance_meters,
+                       max(distance_meters)::integer AS max_distance_meters,
+                       avg(distance_meters) AS avg_distance_meters,
+                       sum(distance_meters)::bigint AS total_distance_meters,
+                       sum(transit_seconds)::bigint AS total_transit_seconds,
+                       avg(transit_seconds) AS avg_transit_seconds,
+                       count(*) FILTER (WHERE on_time_outcome = 'ON_TIME')::integer AS on_time_count,
+                       count(*) FILTER (WHERE on_time_outcome = 'LATE')::integer AS late_count
+                  FROM reporting.fact_delivery
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                 GROUP BY courier_id
+                 ORDER BY total_distance_meters DESC
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .query((ResultSet row, int number) -> new CourierLeaderboardRow(
+                        Objects.requireNonNull(row.getObject("courier_id", UUID.class)),
+                        row.getInt("delivery_count"),
+                        row.getInt("min_distance_meters"),
+                        row.getInt("max_distance_meters"),
+                        row.getDouble("avg_distance_meters"),
+                        row.getLong("total_distance_meters"),
+                        row.getLong("total_transit_seconds"),
+                        row.getDouble("avg_transit_seconds"),
+                        row.getInt("on_time_count"),
+                        row.getInt("late_count")))
+                .list();
+    }
+
+    /** One courier's totals across a range — see {@link #readCourierLeaderboard}. */
+    public record CourierLeaderboardRow(
+            UUID courierId,
+            int deliveryCount,
+            int minDistanceMeters,
+            int maxDistanceMeters,
+            double avgDistanceMeters,
+            long totalDistanceMeters,
+            long totalTransitSeconds,
+            double avgTransitSeconds,
+            int onTimeCount,
+            int lateCount) {}
+
+    /**
+     * T11 (7.4a): the {@code COURIER} scope of {@code agg_sla_bucket_day},
+     * narrowed the way {@link #readSlaBuckets} deliberately is not — that
+     * method reads every {@code scope_kind} in range for the {@code LOCATION}
+     * caller that has owned it since P39, and adding a {@code scope_kind}
+     * filter there would change what it returns for every existing caller.
+     */
+    public List<SlaBucketAggregate> readCourierSlaBuckets(UUID tenantId, LocalDate from, LocalDate to) {
+        return jdbc.sql("""
+                SELECT tenant_id, business_date, scope_kind, scope_id, bucket_set_version,
+                       bucket_code, order_count, share_basis_points
+                  FROM reporting.agg_sla_bucket_day
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND scope_kind = 'COURIER'
+                 ORDER BY business_date, scope_id, bucket_code
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .query((ResultSet row, int number) -> new SlaBucketAggregate(
+                        Objects.requireNonNull(row.getObject("tenant_id", UUID.class)),
+                        Objects.requireNonNull(row.getObject("business_date", LocalDate.class)),
+                        Objects.requireNonNull(row.getString("scope_kind")),
+                        Objects.requireNonNull(row.getObject("scope_id", UUID.class)),
+                        row.getInt("bucket_set_version"),
+                        Objects.requireNonNull(row.getString("bucket_code")),
+                        row.getInt("order_count"),
+                        row.getInt("share_basis_points")))
+                .list();
+    }
+
+    /**
+     * T11 (7.4b, ADR 0125): the delivery-sum-by-tariff audit.
+     * {@code fulfillment.delivery_fee_resolutions} already carries tariff,
+     * tariff version, zone, band and final fee (ADR 0037); this joins it
+     * through {@code quote_id -> orders.pricing_quote_id -> shipments} for
+     * the one column none of the three tables has on its own: which courier
+     * actually worked the delivery.
+     *
+     * <p>Unlike {@link #readSourceOrders} and this class's other {@code
+     * readSource*} methods, this is not a close-time read that gets
+     * projected into an immutable fact — it runs live, on every {@code
+     * GET .../tariff-audit} request (see the class doc above), so the same
+     * range re-read later can disagree if a resolution in it changes. That
+     * is an accepted trade for this specific report (an audit needs current
+     * state, not yesterday's snapshot of it), not a pattern ADR 0125 itself
+     * decides one way or the other — see the class doc's open question.
+     *
+     * <p>Grouped by tariff (not courier): the audit question is "did this
+     * tariff charge what it should have", and {@code courierBreakdown}
+     * inside each row answers "which couriers this tariff was actually
+     * billed against" without a second query.
+     */
+    public List<TariffAuditRow> readTariffAudit(UUID tenantId, Instant from, Instant to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", utc(from));
+        params.put("to", utc(to));
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND resolution.location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT resolution.tariff_id, resolution.tariff_version, resolution.zone_id,
+                       resolution.band_sequence, shipment.courier_id,
+                       count(*)::integer AS resolution_count,
+                       sum(resolution.final_fee_minor)::bigint AS total_final_fee_minor,
+                       resolution.currency
+                  FROM fulfillment.delivery_fee_resolutions resolution
+                  JOIN ordering.orders orders
+                    ON orders.tenant_id = resolution.tenant_id AND orders.pricing_quote_id = resolution.quote_id
+                  JOIN fulfillment.shipments shipment
+                    ON shipment.tenant_id = orders.tenant_id AND shipment.order_id = orders.id
+                 WHERE resolution.tenant_id = :tenantId AND resolution.tariff_id IS NOT NULL
+                   AND resolution.created_at BETWEEN :from AND :to
+                """ + locationFilter + """
+                 GROUP BY resolution.tariff_id, resolution.tariff_version, resolution.zone_id,
+                          resolution.band_sequence, shipment.courier_id, resolution.currency
+                 ORDER BY resolution.tariff_id, resolution.tariff_version, shipment.courier_id
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new TariffAuditRow(
+                        Objects.requireNonNull(row.getObject("tariff_id", UUID.class)),
+                        row.getInt("tariff_version"),
+                        row.getObject("zone_id", UUID.class),
+                        (Integer) row.getObject("band_sequence"),
+                        row.getObject("courier_id", UUID.class),
+                        row.getInt("resolution_count"),
+                        row.getLong("total_final_fee_minor"),
+                        Objects.requireNonNull(row.getString("currency"))))
+                .list();
+    }
+
+    /** One (tariff, courier) group over the audit range — see {@link #readTariffAudit}. */
+    public record TariffAuditRow(
+            UUID tariffId,
+            int tariffVersion,
+            @Nullable UUID zoneId,
+            @Nullable Integer bandSequence,
+            @Nullable UUID courierId,
+            int resolutionCount,
+            long totalFinalFeeMinor,
+            String currency) {}
+
+    /**
+     * T11 (7.4c, ADR 0125): per-order «order amount vs charged delivery vs
+     * provider billed vs variance vs reconciliation status» — the one report
+     * in the courier family that finds money. Every {@code PARTNER}-sourced
+     * delivered shipment in range, left-joined against its {@code DELIVERY}
+     * invoice line: a shipment with no line at all reads {@code UNBILLED}
+     * (ADR 0125 / {@code courier.domain.MatchStatus}'s own doc — "HorecaOS
+     * has a shipment the partner never billed" — computed here, at read
+     * time, rather than written onto a line that by definition does not
+     * exist), never folded into {@code PENDING} the way a bare {@code
+     * COALESCE} against the enum's other unbilled-looking states would.
+     *
+     * <p>Takes an instant range, not the caller's raw date range — the same
+     * correction {@link #readTariffAudit} already applies. An adversarial
+     * review (2026-09-14) found the previous {@code delivered_at::date}
+     * version cast in the database session's own timezone rather than the
+     * tenant's business-day zone, misfiling a delivery near local midnight by
+     * a calendar day for any non-UTC tenant. {@link
+     * uz.horecaos.platform.reporting.application.ReportQueryService#externalDeliveryCost}
+     * is the one caller and resolves the range through {@code
+     * BusinessDayBoundary} before it reaches here.
+     *
+     * <p>Like {@link #readTariffAudit}, this is a live, request-time read
+     * across {@code fulfillment} and {@code ordering} — not a close-time
+     * source read projected into an immutable fact — so a re-read of the
+     * same range can disagree with an earlier one (a line matched or
+     * resolved in between). See the class doc's open question on whether
+     * this and its three siblings should instead be projected.
+     */
+    public List<ExternalDeliveryCostRow> readExternalDeliveryCost(
+            UUID tenantId, Instant from, Instant to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", utc(from));
+        params.put("to", utc(to));
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND shipment.location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT orders.id AS order_id, orders.public_order_number, orders.total_minor,
+                       orders.currency, orders.fee_minor AS charged_delivery_minor,
+                       shipment.id AS shipment_id, shipment.provider_type, shipment.location_id,
+                       cost.amount_minor AS provider_estimated_minor,
+                       line.id AS invoice_line_id, line.amount_minor AS provider_billed_minor,
+                       line.match_status, line.variance_minor
+                  FROM fulfillment.shipments shipment
+                  JOIN ordering.orders orders
+                    ON orders.tenant_id = shipment.tenant_id AND orders.id = shipment.order_id
+                  LEFT JOIN LATERAL (
+                       SELECT amount_minor
+                         FROM fulfillment.delivery_cost_lines
+                        WHERE tenant_id = shipment.tenant_id AND shipment_id = shipment.id
+                          AND cost_path = 'PARTNER' AND cost_basis = 'ACCRUED'
+                        ORDER BY recognised_at DESC
+                        LIMIT 1) cost ON true
+                  LEFT JOIN LATERAL (
+                       SELECT id, amount_minor, match_status, variance_minor
+                         FROM fulfillment.partner_delivery_invoice_lines
+                        WHERE tenant_id = shipment.tenant_id AND shipment_id = shipment.id
+                          AND charge_type = 'DELIVERY'
+                        ORDER BY matched_at DESC NULLS LAST
+                        LIMIT 1) line ON true
+                 WHERE shipment.tenant_id = :tenantId AND shipment.source_type = 'PARTNER'
+                   AND shipment.status = 'DELIVERED'
+                   AND shipment.delivered_at >= :from AND shipment.delivered_at < :to
+                """ + locationFilter + """
+                 ORDER BY shipment.delivered_at DESC
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new ExternalDeliveryCostRow(
+                        Objects.requireNonNull(row.getObject("order_id", UUID.class)),
+                        Objects.requireNonNull(row.getString("public_order_number")),
+                        row.getLong("total_minor"),
+                        Objects.requireNonNull(row.getString("currency")),
+                        row.getLong("charged_delivery_minor"),
+                        Objects.requireNonNull(row.getObject("shipment_id", UUID.class)),
+                        row.getString("provider_type"),
+                        (Long) row.getObject("provider_estimated_minor"),
+                        row.getObject("invoice_line_id", UUID.class),
+                        (Long) row.getObject("provider_billed_minor"),
+                        row.getString("match_status"),
+                        (Long) row.getObject("variance_minor")))
+                .list();
+    }
+
+    /**
+     * One order's external-delivery cost cut — see {@link
+     * #readExternalDeliveryCost}. {@code matchStatus} is {@code null} exactly
+     * when {@code invoiceLineId} is: no invoice line exists yet for this
+     * shipment, which the caller reads as {@code UNBILLED} (never {@code
+     * PENDING} — {@code PENDING} means a line was imported and not yet
+     * matched; this shipment has no line to be pending).
+     */
+    public record ExternalDeliveryCostRow(
+            UUID orderId,
+            String publicOrderNumber,
+            long orderTotalMinor,
+            String currency,
+            long chargedDeliveryMinor,
+            UUID shipmentId,
+            @Nullable String providerType,
+            @Nullable Long providerEstimatedMinor,
+            @Nullable UUID invoiceLineId,
+            @Nullable Long providerBilledMinor,
+            @Nullable String matchStatus,
+            @Nullable Long varianceMinor) {}
 
     public void insertSlaBucket(SlaBucketAggregate row) {
         Map<String, Object> params = new HashMap<>();
@@ -965,6 +1383,46 @@ public class JdbcReportingStore {
     }
 
     /**
+     * Wave P27 (7.1): median {@code seconds_total} for one fulfilment type —
+     * the pickup/delivery elapsed-time tiles the overview never had a
+     * registry entry or endpoint for. Not a data gap: {@code
+     * fact_order.seconds_total} and {@code fulfilment_type} are both already
+     * written by every close run; this is the same "median cannot be
+     * composed from per-slice medians" reasoning {@link #medianSecondsToReady}
+     * documents, one column and one extra filter over.
+     *
+     * @return null when no order of this fulfilment type closed in range,
+     *         which is not a zero-second delivery
+     */
+    public @Nullable Integer medianSecondsTotalByFulfilment(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, String fulfilmentType) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+        params.put("fulfilmentType", fulfilmentType);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        Double median = jdbc.sql("""
+                SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY seconds_total)
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND fulfilment_type = :fulfilmentType AND seconds_total IS NOT NULL
+                """ + locationFilter)
+                .params(params)
+                .query(Double.class)
+                .optional()
+                .orElse(null);
+
+        return median == null ? null : (int) Math.round(median);
+    }
+
+    /**
      * Order-grain rows straight off {@code fact_order}, for the three 7.2 tables
      * that are genuinely per-order rather than day-grain (ADR 0043's own
      * {@code sla-buckets}/{@code preparation-time} endpoints already establish
@@ -991,6 +1449,44 @@ public class JdbcReportingStore {
             List<String> channelCodes,
             OrderSort sort,
             int limit) {
+        return readOrders(tenantId, from, to, locationIds, channelCodes, List.of(), List.of(), sort, limit, null);
+    }
+
+    /**
+     * Wave P27 (7.2/7.2a): adds a fulfilment-type filter (previously applied
+     * client-side over an already-fetched page — the exact axis-in-the-query
+     * fix this wave's brief calls for), a legal-entity filter, and an
+     * optional keyset {@code cursor} for {@link OrderSort#DATE_DESC} — «Заказы»'s
+     * cursor paging, past the 200-row cap a single bounded read otherwise
+     * hides behind. The other two sorts stay a single bounded page: {@code
+     * cursor} is accepted for them without error but has nothing to compare
+     * against ({@link OrderSort#DURATION_DESC}/{@link OrderSort#LATENESS_DESC}
+     * order by a duration, not the {@code (occurredAt, orderId)} pair a
+     * cursor names), so it is silently ignored there rather than refused —
+     * the two per-tab views a manager pages through today are «Заказы»
+     * only.
+     *
+     * <p>{@code is_preorder} is the one column here not read off {@code
+     * fact_order} itself: a live {@code EXISTS} against {@code
+     * kitchen.tickets}, read on every call rather than snapshotted at close
+     * (an adversarial review, 2026-09-14, named this alongside {@link
+     * #readTariffAudit}/{@link #readExternalDeliveryCost} as a live,
+     * request-time read of a module schema outside {@code reporting} — see
+     * the class doc). A ticket's {@code release_mode} corrected after the
+     * order closed changes what a historical order shows on re-load, unlike
+     * every other column this method returns.
+     */
+    public List<OrderRow> readOrders(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> channelCodes,
+            List<String> fulfilmentTypes,
+            List<UUID> legalEntityIds,
+            OrderSort sort,
+            int limit,
+            @Nullable OrderCursor cursor) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -1000,48 +1496,76 @@ public class JdbcReportingStore {
 
         StringBuilder filter = new StringBuilder();
         if (!locationIds.isEmpty()) {
-            filter.append(" AND location_id IN (:locations)");
+            filter.append(" AND fo.location_id IN (:locations)");
             params.put("locations", locationIds);
         }
         if (!channelCodes.isEmpty()) {
-            filter.append(" AND channel_code IN (:channels)");
+            filter.append(" AND fo.channel_code IN (:channels)");
             params.put("channels", channelCodes);
+        }
+        if (!fulfilmentTypes.isEmpty()) {
+            filter.append(" AND fo.fulfilment_type IN (:fulfilmentTypes)");
+            params.put("fulfilmentTypes", fulfilmentTypes);
+        }
+        if (!legalEntityIds.isEmpty()) {
+            filter.append(" AND fo.legal_entity_id IN (:legalEntities)");
+            params.put("legalEntities", legalEntityIds);
         }
 
         String orderClause =
                 switch (sort) {
                     // «Заказы»: every order in range, newest first — a commercial
                     // log is read chronologically.
-                    case DATE_DESC -> "ORDER BY occurred_at DESC, order_id DESC";
+                    case DATE_DESC -> {
+                        if (cursor != null) {
+                            filter.append(" AND (fo.occurred_at, fo.order_id) < (:afterOccurredAt, :afterOrderId)");
+                            params.put("afterOccurredAt", utc(cursor.occurredAt()));
+                            params.put("afterOrderId", cursor.orderId());
+                        }
+                        yield "ORDER BY fo.occurred_at DESC, fo.order_id DESC";
+                    }
                     // «Этапы»: only orders with a total elapsed time to audit. An
                     // order still open has nothing to measure, and NULLS would
                     // otherwise sort ahead of every real duration.
                     case DURATION_DESC -> {
-                        filter.append(" AND seconds_total IS NOT NULL");
-                        yield "ORDER BY seconds_total DESC, order_id DESC";
+                        filter.append(" AND fo.seconds_total IS NOT NULL");
+                        yield "ORDER BY fo.seconds_total DESC, fo.order_id DESC";
                     }
                     // «Опоздания»: only orders that were actually late. Sorted by
                     // severity, matching the spec's own "the queue exists for the
                     // worst case" — never by time.
                     case LATENESS_DESC -> {
-                        filter.append(" AND seconds_late IS NOT NULL AND seconds_late > 0");
-                        yield "ORDER BY seconds_late DESC, order_id DESC";
+                        filter.append(" AND fo.seconds_late IS NOT NULL AND fo.seconds_late > 0");
+                        yield "ORDER BY fo.seconds_late DESC, fo.order_id DESC";
                     }
                 };
 
         return jdbc.sql("""
-                SELECT order_id, business_date, location_id, legal_entity_id, channel_code,
-                       fulfilment_type, terminal_status, gross_revenue_som, discount_som,
-                       delivery_fee_som, tax_som, net_revenue_som, item_count, occurred_at,
-                       closed_at, seconds_to_confirm, seconds_to_ready, seconds_total,
-                       seconds_late, cancellation_reason_code
-                  FROM reporting.fact_order
-                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                SELECT fo.order_id, fo.business_date, fo.location_id, fo.legal_entity_id, fo.channel_code,
+                       fo.fulfilment_type, fo.terminal_status, fo.gross_revenue_som, fo.discount_som,
+                       fo.delivery_fee_som, fo.tax_som, fo.net_revenue_som, fo.item_count, fo.occurred_at,
+                       fo.closed_at, fo.seconds_to_confirm, fo.seconds_to_ready, fo.seconds_total,
+                       fo.seconds_late, fo.cancellation_reason_code, fo.seconds_to_accept,
+                       fo.seconds_preparing, fo.public_order_number,
+                       -- Wave P27 (7.2a): "Предзаказ" — the closest signal this
+                       -- schema carries for "placed ahead of when it is wanted"
+                       -- is a kitchen ticket released on a schedule rather than
+                       -- fired on confirm (kitchen.tickets.release_mode, ADR 0041).
+                       EXISTS (
+                           SELECT 1 FROM kitchen.tickets t
+                            WHERE t.tenant_id = fo.tenant_id AND t.order_id = fo.order_id
+                              AND t.release_mode = 'SCHEDULED'
+                       ) AS is_preorder
+                  FROM reporting.fact_order fo
+                 WHERE fo.tenant_id = :tenantId AND fo.business_date BETWEEN :from AND :to
                 """ + filter + " " + orderClause + " LIMIT :limit")
                 .params(params)
                 .query(JdbcReportingStore::orderRow)
                 .list();
     }
+
+    /** A keyset cursor for {@link OrderSort#DATE_DESC} — the last row of the previous page. */
+    public record OrderCursor(Instant occurredAt, UUID orderId) {}
 
     /**
      * Every terminal status in range, split by cancellation reason where one was
@@ -1076,20 +1600,58 @@ public class JdbcReportingStore {
         }
 
         return jdbc.sql("""
-                SELECT terminal_status, cancellation_reason_code, count(*) AS order_count
+                SELECT terminal_status, cancellation_reason_code, stock_disposition, liability_party,
+                       count(*) AS order_count
                   FROM reporting.fact_order
                  WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
                 """ + filter + """
-                 GROUP BY terminal_status, cancellation_reason_code
+                 GROUP BY terminal_status, cancellation_reason_code, stock_disposition, liability_party
                  ORDER BY order_count DESC, terminal_status, cancellation_reason_code NULLS FIRST
                 """)
                 .params(params)
                 .query((ResultSet row, int number) -> new OutcomeRow(
                         row.getString("terminal_status"),
                         row.getString("cancellation_reason_code"),
+                        row.getString("stock_disposition"),
+                        row.getString("liability_party"),
                         row.getInt("order_count")))
                 .list();
     }
+
+    /**
+     * Wave P27 (7.1a): the tenant's cancellation-reason registry, so the
+     * funnel can resolve {@code cancellation_reason_code} — a CANCEL action's
+     * reason is {@code order_outcome_reasons.id} as a string, and this is the
+     * one place that table is read from — to the {@code internal_name} an
+     * operator actually picked, instead of printing the machine id.
+     *
+     * <p>A REJECTED or EXPIRED order's reason code names a different,
+     * platform-fixed registry ({@code ordering.order_reject_reasons}) this
+     * read does not cover; a code this map has no entry for is left for the
+     * caller to render as-is rather than guessed at.
+     *
+     * <p>A live read of {@code ordering.order_outcome_reasons} on every call
+     * — not a source read projected into a fact at close time (an
+     * adversarial review, 2026-09-14, named this alongside {@link
+     * #readOrders}'s {@code is_preorder} join, {@link #readTariffAudit} and
+     * {@link #readExternalDeliveryCost} — see the class doc). A tenant
+     * renaming a reason's {@code internal_name} changes what a historical
+     * order's cancellation reason reads as on re-load.
+     */
+    public List<CancellationReasonRow> readCancellationReasons(UUID tenantId) {
+        return jdbc.sql("""
+                SELECT id, internal_name
+                  FROM ordering.order_outcome_reasons
+                 WHERE tenant_id = :tenantId AND kind = 'CANCELLATION'
+                """)
+                .param("tenantId", tenantId)
+                .query((ResultSet row, int number) -> new CancellationReasonRow(
+                        row.getObject("id", UUID.class).toString(), row.getString("internal_name")))
+                .list();
+    }
+
+    /** One tenant cancellation reason — see {@link #readCancellationReasons}. */
+    public record CancellationReasonRow(String reasonCode, String internalName) {}
 
     /**
      * Per-variant sales, summed over the range — Reports 7.7's «Продажи» tab.
@@ -1317,7 +1879,15 @@ public class JdbcReportingStore {
         LATENESS_DESC
     }
 
-    /** One order, straight off {@code fact_order} — see {@link #readOrders}. */
+    /** One order, straight off {@code fact_order} — see {@link #readOrders}.
+     *
+     * @param secondsToAccept  wave P27: CONFIRMED -> PREPARING, "branch acceptance"
+     * @param secondsPreparing wave P27: PREPARING -> READY, actual cooking — narrower than {@code secondsToReady}
+     * @param publicOrderNumber wave P27: the short number a receipt prints, null on a row closed before it was added
+     * @param isPreorder       wave P27: whether any kitchen ticket for this order was released on a schedule
+     *                         ({@code kitchen.tickets.release_mode = 'SCHEDULED'}) rather than fired on confirm —
+     *                         the closest signal this schema carries for "placed ahead of when it is wanted"
+     */
     public record OrderRow(
             UUID orderId,
             LocalDate businessDate,
@@ -1338,11 +1908,26 @@ public class JdbcReportingStore {
             @Nullable Integer secondsToReady,
             @Nullable Integer secondsTotal,
             @Nullable Integer secondsLate,
-            @Nullable String cancellationReasonCode) {}
+            @Nullable String cancellationReasonCode,
+            @Nullable Integer secondsToAccept,
+            @Nullable Integer secondsPreparing,
+            @Nullable String publicOrderNumber,
+            boolean isPreorder) {}
 
-    /** One (status, reason) bucket — see {@link #readOrderOutcomes}. */
+    /**
+     * One (status, reason, disposition, liability) bucket — see {@link #readOrderOutcomes}.
+     *
+     * @param stockDisposition wave P27 (7.1): ADR 0039's cancellation cost — what a cancellation cost the
+     *                         tenant's stock. Null on a row with no recorded outcome (still open, or closed
+     *                         before ADR 0039), never a fifth "no effect" reading
+     * @param liabilityParty   see {@code stockDisposition} — travels with it from the same outcome row
+     */
     public record OutcomeRow(
-            String terminalStatus, @Nullable String cancellationReasonCode, int count) {}
+            String terminalStatus,
+            @Nullable String cancellationReasonCode,
+            @Nullable String stockDisposition,
+            @Nullable String liabilityParty,
+            int count) {}
 
     private static OrderRow orderRow(ResultSet row, int number) throws SQLException {
         return new OrderRow(
@@ -1365,7 +1950,11 @@ public class JdbcReportingStore {
                 row.getObject("seconds_to_ready", Integer.class),
                 row.getObject("seconds_total", Integer.class),
                 row.getObject("seconds_late", Integer.class),
-                row.getString("cancellation_reason_code"));
+                row.getString("cancellation_reason_code"),
+                row.getObject("seconds_to_accept", Integer.class),
+                row.getObject("seconds_preparing", Integer.class),
+                row.getString("public_order_number"),
+                row.getBoolean("is_preorder"));
     }
 
     /** The boundary versions present in a range, so a mixed range can be refused. */
@@ -1737,7 +2326,11 @@ public class JdbcReportingStore {
                 row.getString("created_by_actor_type"),
                 row.getString("created_by_actor_id"),
                 row.getString("accepted_by_actor_type"),
-                row.getString("accepted_by_actor_id"));
+                row.getString("accepted_by_actor_id"),
+                instantOrNull(row, "preparing_at"),
+                row.getString("public_order_number"),
+                row.getString("stock_disposition"),
+                row.getString("liability_party"));
     }
 
     private static BranchDayAggregate aggregate(ResultSet row, int number) throws SQLException {

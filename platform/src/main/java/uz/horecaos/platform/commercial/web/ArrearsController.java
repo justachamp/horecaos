@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.commercial.application.ArrearsService;
 import uz.horecaos.platform.commercial.domain.Statement;
@@ -17,7 +18,9 @@ import uz.horecaos.platform.commercial.domain.SubscriptionStatus;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcArrearsStore.ArrearRow;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ApiMoney;
+import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -63,8 +66,49 @@ public class ArrearsController {
                         .toList()));
     }
 
+    @GetMapping("/api/v1/tenants/{tenantId}/commercial/arrears")
+    @RequiresCapability(value = Capability.COMMERCIAL_ARREARS_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "This tenant's own place in the arrears lifecycle",
+            description = "Where the subscription is right now, how long it has been there, and what "
+                    + "that stage restricts — the tenant-reachable, single-row mirror of the platform "
+                    + "board above (ADR 0127). A tenant in good standing gets ACTIVE with nothing "
+                    + "restricted, not a 404: this is a state read, not an arrears-only one.")
+    public ResponseEntity<TenantArrearsView> tenantArrears(@PathVariable UUID tenantId) {
+        Instant now = clock.instant();
+        ArrearsService.TenantArrears found = arrears.forTenant(tenantId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "The tenant has no subscription"));
+        return ResponseEntity.ok(TenantArrearsView.of(found, now));
+    }
+
     /** The board: the stages, then the tenants in them. */
     public record ArrearsBoardView(List<StageView> stages, List<ArrearView> subscriptions) {}
+
+    /** This tenant's own row: its stage, how long it has been there, and what that stage restricts. */
+    public record TenantArrearsView(
+            String status,
+            boolean planEntitlementsApply,
+            boolean additionsBlocked,
+            List<String> allowedNext,
+            String since,
+            long daysInStatus,
+            @Nullable String suspensionReason,
+            @Nullable LatestStatementView latestStatement) {
+
+        static TenantArrearsView of(ArrearsService.TenantArrears found, Instant now) {
+            ArrearRow row = found.row();
+            Statement latest = found.latestStatement();
+            return new TenantArrearsView(
+                    row.status().name(),
+                    row.status().grantsPlanEntitlements(),
+                    row.status().blocksAdditions(),
+                    row.status().allowedNext().stream().map(Enum::name).sorted().toList(),
+                    row.since().toString(),
+                    Math.max(0, Duration.between(row.since(), now).toDays()),
+                    row.suspensionReason(),
+                    latest == null ? null : LatestStatementView.of(latest));
+        }
+    }
 
     /** What one stage does to a tenant. */
     public record StageView(

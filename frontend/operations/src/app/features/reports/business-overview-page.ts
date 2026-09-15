@@ -16,7 +16,7 @@ import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { DonutChart } from '../../shared/ui/charts/donut-chart';
-import { KpiTile, deltaOf } from '../../shared/ui/charts/kpi-tile';
+import { KpiTile, KpiTileFormula, deltaOf } from '../../shared/ui/charts/kpi-tile';
 import { LineChart } from '../../shared/ui/charts/line-chart';
 import { StackedBarChart } from '../../shared/ui/charts/stacked-bar-chart';
 import { ChartCategory, ChartSeries } from '../../shared/ui/charts/chart-model';
@@ -41,11 +41,14 @@ import {
   dailyAverageCheck,
   dailySeries,
   deriveAverageCheck,
+  rollUpByGranularity,
   sumAcrossDays,
   sumTotal,
 } from './report-rollup';
-import { ReportsFilterState } from './reports-filter-state';
+import { Granularity, ReportsFilterState } from './reports-filter-state';
 import {
+  CancellationReasonResponse,
+  MetricResponse,
   OrderRowResponse,
   OutcomeRowResponse,
   ProvenanceResponse,
@@ -75,6 +78,8 @@ interface TileViewModel {
   readonly provisionalNote: string | null;
   /** One point per business date in the tile's own period — {@link KpiTile}'s sparkline (IA X.20). */
   readonly sparklinePoints: readonly (number | null)[];
+  /** statistics.md §1.2's published-formula panel — null while the metrics dictionary has not loaded yet. */
+  readonly formula: KpiTileFormula | null;
 }
 
 interface MixRow {
@@ -89,6 +94,10 @@ interface MixRow {
 interface OutcomeRow {
   readonly status: string;
   readonly reasonCode: string | null;
+  /** Already resolved to the tenant's own wording where a match exists — see `resolveReasonName`. */
+  readonly reasonLabel: string | null;
+  readonly stockDisposition: string | null;
+  readonly liabilityParty: string | null;
   readonly count: number;
   readonly sharePercent: number;
 }
@@ -115,18 +124,30 @@ type LoadState = 'loading' | 'ready' | 'denied' | 'error';
  * `report-rollup.ts` explains the one arithmetic step this page does perform
  * and why it is the registry's own formula rather than a new one.
  *
- * **What is scoped down for this wave**, named rather than silently missing:
- * no hourly sparkline (the day-grain query has no hour dimension to draw one
+ * **Wave P27.** Every money-metric query now always names `LEGAL_ENTITY` in
+ * `groupBy` — a two-entity tenant would otherwise have every Band A tile
+ * throw `CombinedEntityTotalException` and error the whole page (ADR 0038;
+ * see the trap this wave's own brief names) — and folds the per-entity rows
+ * back into one figure the same way `sumTotal` already folds per-day rows,
+ * which is transparent rather than the server-side combine ADR 0038
+ * forbids. `channelCodes`/`locationIds`/`legalEntityIds` from
+ * `ReportsFilterState` now reach every query this page makes. `Доставка`/
+ * `Самовывоз` read `delivery_time.median.v1`/`pickup_time.median.v1` over
+ * `GET .../reporting/fulfilment-time` instead of rendering "not built".
+ * Every tile carries the published-formula panel statistics.md §1.2
+ * requires, from one `GET .../reporting/metrics` call. The cancellation
+ * panel resolves its reason code to the tenant's own wording
+ * (`GET .../reporting/cancellation-reasons`) and shows what a cancellation
+ * cost — `stock_disposition`/`liability_party`, copied from ADR 0039's
+ * `order_outcomes` onto the fact this same wave.
+ *
+ * **What is still scoped down**, named rather than silently missing: no
+ * hourly sparkline (the day-grain query has no hour dimension to draw one
  * from); the delta compares against the same span one *whole number of weeks*
  * back rather than a hand-picked "same weekday last week", which is the same
  * property for every period this bar offers (`ReportsFilterState.comparisonRange`);
- * `Доставка`/`Самовывоз` timing still renders as honest not-built cards
- * (ADR 0042) — only `Оплата` (P39, ADR 0115) moved off that list, reading
- * `payment_mix.amount.v1` over `reporting.fact_order_tender`; the cancellation panel is an inline
- * breakdown table rather than a peek modal, and it cannot show what a
- * cancellation *cost* — `stock_disposition`/`liability_party` are columns
- * `fact_order` carries but ADR 0039's `order_outcomes` does not exist yet to
- * fill them, so every row would read null regardless.
+ * distance has no tile — `reporting.fact_delivery` has no producer (ADR 0042)
+ * and is out of this wave's scope.
  */
 @Component({
   selector: 'q-business-overview-page',
@@ -178,6 +199,7 @@ export class BusinessOverviewPage implements OnInit {
       this.dailyRows(),
       'revenue.gross.v1',
       this.i18n.t('reports.overview.tile.revenue'),
+      this.filters.granularity(),
     ),
   ]);
   protected readonly ordersTrend = computed<readonly ChartSeries[]>(() => [
@@ -185,9 +207,23 @@ export class BusinessOverviewPage implements OnInit {
       this.dailyRows(),
       'orders.count.v1',
       this.i18n.t('reports.overview.tile.orders'),
+      this.filters.granularity(),
     ),
   ]);
   protected readonly hasTrend = computed(() => this.dailyRows().length > 0);
+
+  /** Wave P27 (7.1): pickup/delivery elapsed time — delivery_time.median.v1 / pickup_time.median.v1. */
+  protected readonly deliveryTimeSeconds = signal<number | null>(null);
+  protected readonly pickupTimeSeconds = signal<number | null>(null);
+  private readonly deliveryTimeLoaded = signal(false);
+  private readonly pickupTimeLoaded = signal(false);
+  protected readonly deliveryTimeBuilt = computed(() => this.deliveryTimeLoaded());
+  protected readonly pickupTimeBuilt = computed(() => this.pickupTimeLoaded());
+
+  /** Wave P27 (7.1): the metric dictionary, keyed by code — GET .../reporting/metrics, called once. */
+  private readonly metricsByCode = signal<ReadonlyMap<string, MetricResponse>>(new Map());
+  /** Wave P27 (7.1a): a CANCELLED order's reason code (order_outcome_reasons.id) to its internal_name. */
+  private readonly cancellationReasonNames = signal<ReadonlyMap<string, string>>(new Map());
 
   protected readonly channelMixSegments = computed<readonly ChartCategory[]>(() =>
     this.channelMix().map((row) => ({
@@ -247,6 +283,60 @@ export class BusinessOverviewPage implements OnInit {
     return orderStatusLabel(status, (key) => this.i18n.t(key));
   }
 
+  /** Wave P27 (7.1): what a cancellation cost the tenant's stock — ADR 0039's disposition, translated. */
+  protected dispositionLabel(disposition: string | null): string | null {
+    if (disposition === null) {
+      return null;
+    }
+    const key = `reports.overview.funnel.disposition.${disposition}` as MessageKey;
+    return this.i18n.t(key);
+  }
+
+  /** Wave P27 (7.1): who carried the cost — ADR 0039's liability party, translated. */
+  protected liabilityLabel(party: string | null): string | null {
+    if (party === null) {
+      return null;
+    }
+    const key = `reports.overview.funnel.liability.${party}` as MessageKey;
+    return this.i18n.t(key);
+  }
+
+  /** Wave P27 (7.1d): branch/channel/legal-entity, in the shape every query call on this page shares. */
+  private sliceParams(): {
+    readonly locationId?: readonly string[];
+    readonly channelCode?: readonly string[];
+    readonly legalEntityId?: readonly string[];
+  } {
+    const locationIds = this.filters.locationIds();
+    const channelCodes = this.filters.channelCodes();
+    const legalEntityIds = this.filters.legalEntityIds();
+    return {
+      locationId: locationIds.length > 0 ? locationIds : undefined,
+      channelCode: channelCodes.length > 0 ? channelCodes : undefined,
+      legalEntityId: legalEntityIds.length > 0 ? legalEntityIds : undefined,
+    };
+  }
+
+  /** Wave P27 (7.1d): the fulfilment axis, pushed into the order-grain read rather than filtered after it. */
+  private fulfilmentTypeParam(): readonly string[] | undefined {
+    const type = this.filters.fulfilmentType();
+    return type === 'ALL' ? undefined : [type];
+  }
+
+  /** Wave P27 (7.1): statistics.md §1.2's published-formula panel, from the one metrics call this page makes. */
+  protected tileFormula(metricCode: string): KpiTileFormula | null {
+    const definition = this.metricsByCode().get(metricCode);
+    if (!definition) {
+      return null;
+    }
+    return {
+      definition: definition.definition,
+      inclusion: definition.includes,
+      exclusion: definition.excludes,
+      unit: definition.unit,
+    };
+  }
+
   private async load(): Promise<void> {
     await this.location.ensureLoaded();
     const scope = this.location.scope();
@@ -258,8 +348,10 @@ export class BusinessOverviewPage implements OnInit {
     this.state.set('loading');
     try {
       await Promise.all([
+        this.loadMetricsDictionary(scope),
         this.loadTilesAndMix(scope),
         this.loadPrepTime(scope),
+        this.loadFulfilmentTimes(scope),
         this.loadOutcomes(scope),
         this.loadBranches(scope),
         this.loadPaymentMix(scope),
@@ -281,38 +373,57 @@ export class BusinessOverviewPage implements OnInit {
   private async loadTilesAndMix(scope: LocationScope): Promise<void> {
     const range = this.filters.range();
     const comparison = this.filters.comparisonRange();
+    const slice = this.sliceParams();
     const channels = await this.channelsApi.list(scope).catch(() => [] as readonly ChannelView[]);
     const channelByCode = new Map(channels.map((channel) => [channel.code, channel]));
 
     const [currentQuery, comparisonQuery, channelQuery, fulfilmentQuery, lateSample] =
       await Promise.all([
+        // LEGAL_ENTITY is always named here even though nothing on this tile
+        // set shows it broken down by entity: BAND_A_METRICS mixes money
+        // metrics with count metrics, and a money metric queried without it
+        // on a two-entity tenant throws CombinedEntityTotalException (ADR
+        // 0038) and errors the whole page. sumTotal folds the per-entity
+        // rows back into one figure client-side, which is the transparent
+        // fold ADR 0038 allows — the refusal is only ever about the server
+        // silently combining two taxpayers into one stored total.
         this.api.query(scope.tenantId, {
           from: range.from,
           to: range.to,
           metric: [...BAND_A_METRICS],
+          groupBy: ['LEGAL_ENTITY'],
+          ...slice,
         }),
         this.api.query(scope.tenantId, {
           from: comparison.from,
           to: comparison.to,
           metric: [...BAND_A_METRICS],
+          groupBy: ['LEGAL_ENTITY'],
+          ...slice,
         }),
         this.api.query(scope.tenantId, {
           from: range.from,
           to: range.to,
           metric: ['channel_mix.count.v1', 'revenue.gross.v1'],
-          groupBy: ['CHANNEL'],
+          groupBy: ['CHANNEL', 'LEGAL_ENTITY'],
+          ...slice,
         }),
         this.api.query(scope.tenantId, {
           from: range.from,
           to: range.to,
           metric: ['orders.count.v1'],
           groupBy: ['FULFILMENT_TYPE'],
+          ...slice,
         }),
         this.api.orders(scope.tenantId, {
           from: range.from,
           to: range.to,
           sort: 'LATENESS_DESC',
           limit: 200,
+          locationId: slice.locationId,
+          channelCode: slice.channelCode,
+          fulfilmentType: this.fulfilmentTypeParam(),
+          legalEntityId: slice.legalEntityId,
         }),
       ]);
 
@@ -434,27 +545,80 @@ export class BusinessOverviewPage implements OnInit {
     );
   }
 
+  /** Wave P27 (7.1): the metric dictionary, so every tile can carry statistics.md §1.2's formula panel. */
+  private async loadMetricsDictionary(scope: LocationScope): Promise<void> {
+    const definitions = await this.api
+      .metrics(scope.tenantId)
+      .catch(() => [] as readonly MetricResponse[]);
+    this.metricsByCode.set(
+      new Map(definitions.map((definition) => [definition.metricCode, definition])),
+    );
+  }
+
+  /** Wave P27 (7.1a): resolves a CANCELLED order's reason code to the tenant's own wording. */
+  private async loadCancellationReasonNames(scope: LocationScope): Promise<void> {
+    const reasons = await this.api
+      .cancellationReasons(scope.tenantId)
+      .catch(() => [] as readonly CancellationReasonResponse[]);
+    this.cancellationReasonNames.set(
+      new Map(reasons.map((reason) => [reason.reasonCode, reason.internalName])),
+    );
+  }
+
+  /** Wave P27 (7.1): pickup/delivery elapsed time — GET .../reporting/fulfilment-time, a registry-and-endpoint gap. */
+  private async loadFulfilmentTimes(scope: LocationScope): Promise<void> {
+    const range = this.filters.range();
+    const locationId = this.sliceParams().locationId;
+    const [delivery, pickup] = await Promise.all([
+      this.api.fulfilmentTime(scope.tenantId, {
+        from: range.from,
+        to: range.to,
+        locationId,
+        fulfilmentType: 'DELIVERY',
+      }),
+      this.api.fulfilmentTime(scope.tenantId, {
+        from: range.from,
+        to: range.to,
+        locationId,
+        fulfilmentType: 'PICKUP',
+      }),
+    ]);
+    this.deliveryTimeSeconds.set(delivery.medianSeconds);
+    this.deliveryTimeLoaded.set(true);
+    this.pickupTimeSeconds.set(pickup.medianSeconds);
+    this.pickupTimeLoaded.set(true);
+  }
+
   private async loadPrepTime(scope: LocationScope): Promise<void> {
     const range = this.filters.range();
     const result = await this.api.preparationTime(scope.tenantId, {
       from: range.from,
       to: range.to,
+      locationId: this.sliceParams().locationId,
     });
     this.prepMedianSeconds.set(result.medianSeconds);
   }
 
   private async loadOutcomes(scope: LocationScope): Promise<void> {
+    await this.loadCancellationReasonNames(scope);
     const range = this.filters.range();
-    const result = await this.api.orderOutcomes(scope.tenantId, { from: range.from, to: range.to });
+    const slice = this.sliceParams();
+    const result = await this.api.orderOutcomes(scope.tenantId, {
+      from: range.from,
+      to: range.to,
+      locationId: slice.locationId,
+      channelCode: slice.channelCode,
+    });
     const total = result.rows.reduce((sum, row) => sum + row.count, 0);
     const completed = result.rows
       .filter((row) => row.terminalStatus === 'COMPLETED')
       .reduce((sum, row) => sum + row.count, 0);
     this.completedCount.set(completed);
+    const reasonNames = this.cancellationReasonNames();
     this.outcomes.set(
       result.rows
         .filter((row) => CANCELLING_STATUSES.has(row.terminalStatus))
-        .map((row) => outcomeRow(row, total)),
+        .map((row) => outcomeRow(row, total, reasonNames)),
     );
   }
 
@@ -473,7 +637,8 @@ export class BusinessOverviewPage implements OnInit {
       from: range.from,
       to: range.to,
       metric: ['revenue.gross.v1', 'orders.count.v1'],
-      groupBy: ['LOCATION'],
+      groupBy: ['LOCATION', 'LEGAL_ENTITY'],
+      ...this.sliceParams(),
     });
     const buckets = sumAcrossDays(result.rows, (row) => row.locationId ?? '', [
       'revenue.gross.v1',
@@ -510,6 +675,7 @@ export class BusinessOverviewPage implements OnInit {
       this.api.paymentMix(scope.tenantId, {
         from: range.from,
         to: range.to,
+        locationId: this.sliceParams().locationId,
         paymentMethodCode: paymentMethodCodes.length > 0 ? paymentMethodCodes : undefined,
       }),
     ]);
@@ -576,17 +742,27 @@ export class BusinessOverviewPage implements OnInit {
         ? this.i18n.t('reports.provenance.provisional.short')
         : null,
       sparklinePoints: config.sparklinePoints,
+      formula: this.tileFormula(config.key),
     };
   }
 }
 
-/** One metric's day-by-day series as {@link LineChart} wants it — DD.MM labels, a translated series name. */
+/**
+ * One metric's day-by-day series as {@link LineChart} wants it — DD.MM
+ * labels, a translated series name. Wave P27: folded to the filter bar's own
+ * `granularity` before charting — {@link rollUpByGranularity}'s own doc
+ * explains why that fold happens here rather than in the query.
+ */
 function dailySeriesToChart(
   rows: readonly RowResponse[],
   metricCode: string,
   label: string,
+  granularity: Granularity,
 ): ChartSeries {
-  const points: readonly DailyPoint[] = dailySeries(rows, metricCode);
+  const points: readonly DailyPoint[] = rollUpByGranularity(
+    dailySeries(rows, metricCode),
+    granularity,
+  );
   return {
     key: metricCode,
     label,
@@ -602,10 +778,21 @@ function summariseLateSample(rows: readonly OrderRowResponse[]): string | null {
   return value === null ? null : formatSignedMinutes(value, 'мин');
 }
 
-function outcomeRow(row: OutcomeRowResponse, total: number): OutcomeRow {
+/** Wave P27 (7.1a): resolves `cancellationReasonCode` to the tenant's own wording where a match exists. */
+function outcomeRow(
+  row: OutcomeRowResponse,
+  total: number,
+  reasonNames: ReadonlyMap<string, string>,
+): OutcomeRow {
   return {
     status: row.terminalStatus,
     reasonCode: row.cancellationReasonCode,
+    reasonLabel:
+      row.cancellationReasonCode === null
+        ? null
+        : (reasonNames.get(row.cancellationReasonCode) ?? row.cancellationReasonCode),
+    stockDisposition: row.stockDisposition,
+    liabilityParty: row.liabilityParty,
     count: row.count,
     sharePercent: percentOf(row.count, total),
   };

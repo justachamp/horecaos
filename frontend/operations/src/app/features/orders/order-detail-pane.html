@@ -211,6 +211,40 @@
               </dd>
             </div>
           </dl>
+
+          <!-- Доставка (row 1.2n, wave P11) — both delivery money figures, and the margin between them. -->
+          @if (delivery(); as plan) {
+            <dl class="pane__money" data-testid="order-detail-delivery-money">
+              <div class="pane__money-row">
+                <dt class="q-body-sm">{{ 'orders.detail.money.deliveryCustomer' | t }}</dt>
+                <dd class="q-mono q-tnum">
+                  {{ formatMoneyMinor(plan.customerDeliveryFeeMinor, plan.currency) }}
+                </dd>
+              </div>
+              @if (plan.shipment?.sourceType === 'PARTNER') {
+                <div class="pane__money-row">
+                  <dt class="q-body-sm">{{ 'orders.detail.money.deliveryProvider' | t }}</dt>
+                  <dd class="q-mono q-tnum">
+                    @if (plan.providerCostMinor != null) {
+                      {{ formatMoneyMinor(plan.providerCostMinor, plan.currency) }}
+                    } @else {
+                      <span class="q-caption">{{
+                        'orders.detail.money.deliveryProviderUnknown' | t
+                      }}</span>
+                    }
+                  </dd>
+                </div>
+                @if (plan.providerCostMinor != null) {
+                  <div class="pane__money-row">
+                    <dt class="q-body-sm">{{ 'orders.detail.money.deliveryMargin' | t }}</dt>
+                    <dd class="q-mono q-tnum">
+                      {{ formatMoneyMinor(deliveryMarginMinor(plan) ?? 0, plan.currency) }}
+                    </dd>
+                  </div>
+                }
+              }
+            </dl>
+          }
         } @else {
           <div class="pane__money-error" role="alert" data-testid="order-detail-money-error">
             <p class="q-body-sm">{{ 'orders.detail.money.error' | t }}</p>
@@ -682,6 +716,65 @@
       </section>
     }
 
+    <!-- ================================================================ Курьер (assign/unassign, row 1.2e, wave P11) -->
+    @if (canManageCourier()) {
+      <section class="pane__section" [attr.aria-label]="'orders.detail.section.courier' | t">
+        <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.courier' | t }}</h2>
+
+        @if (delivery(); as plan) {
+          <div class="pane__courier" data-testid="order-detail-courier">
+            @if (courierEtaLabel(plan); as etaLabel) {
+              <p class="q-body-sm q-caption" data-testid="order-detail-courier-eta">
+                {{ etaLabel }}
+              </p>
+            }
+            @if (plan.shipment?.courierId; as courierId) {
+              <p class="q-body-sm">
+                {{
+                  'orders.detail.courier.assigned'
+                    | t: { courier: courierDisplayReference(courierId) }
+                }}
+              </p>
+              <button
+                type="button"
+                class="pane__reveal-link"
+                [disabled]="assigningCourier()"
+                (click)="unassignCourier()"
+                data-testid="order-detail-courier-unassign"
+              >
+                {{ 'orders.detail.courier.unassign' | t }}
+              </button>
+            } @else {
+              <p class="q-body-sm">{{ 'orders.detail.courier.none' | t }}</p>
+            }
+
+            <button
+              type="button"
+              class="pane__reveal-link"
+              [disabled]="assigningCourier()"
+              (click)="toggleCourierPicker()"
+              data-testid="order-detail-courier-assign-toggle"
+            >
+              {{ 'orders.detail.courier.assign' | t }}
+            </button>
+
+            @if (courierPickerOpen()) {
+              <q-combobox
+                [options]="courierOptions()"
+                [placeholder]="'orders.detail.courier.pickerPlaceholder' | t"
+                [ariaLabel]="'orders.detail.section.courier' | t"
+                (optionSelected)="assignCourier($event)"
+                data-testid="order-detail-courier-picker"
+              />
+              @if (courierRoster().length === 0) {
+                <p class="q-caption">{{ 'orders.detail.courier.empty' | t }}</p>
+              }
+            }
+          </div>
+        }
+      </section>
+    }
+
     <!-- ================================================================ Код выдачи (handover, §3.8, row 1.2m) -->
     <section class="pane__section" [attr.aria-label]="'orders.detail.section.handover' | t">
       <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.handover' | t }}</h2>
@@ -720,19 +813,53 @@
         }
       </div>
 
-      <div class="pane__timeline-lane pane__timeline-lane--not-built">
+      <!-- Production lane (kitchen.ticket_events, row 1.2b, wave P11) -->
+      <div class="pane__timeline-lane" data-testid="order-detail-timeline-production">
         <p class="q-caption pane__timeline-lane-label">
           {{ 'orders.detail.timeline.lane.production' | t }}
         </p>
-        <p class="q-caption">{{ 'orders.detail.timeline.lane.notBuilt' | t }}</p>
+        @if (productionTimelineSteps(); as steps) {
+          @if (steps.length === 0) {
+            <p class="q-body-sm pane__state-inline">{{ 'orders.detail.timeline.empty' | t }}</p>
+          } @else {
+            <q-steps [steps]="steps" [ariaLabel]="'orders.detail.timeline.lane.production' | t" />
+          }
+        } @else if (kitchenEventsError()) {
+          <p class="q-body-sm pane__state-inline">{{ 'orders.detail.timeline.error' | t }}</p>
+        } @else {
+          <p class="q-body-sm pane__state-inline">{{ 'orders.detail.loading' | t }}</p>
+        }
       </div>
 
-      <div class="pane__timeline-lane pane__timeline-lane--not-built">
+      <!-- Delivery lane (fulfillment.shipments' own custody timestamps, row 1.2b, wave P11) -->
+      <div class="pane__timeline-lane" data-testid="order-detail-timeline-delivery">
         <p class="q-caption pane__timeline-lane-label">
           {{ 'orders.detail.timeline.lane.delivery' | t }}
         </p>
-        <p class="q-caption">{{ 'orders.detail.timeline.lane.notBuilt' | t }}</p>
+        @if (deliveryTimelineSteps(); as steps) {
+          @if (steps.length === 0) {
+            <p class="q-body-sm pane__state-inline">{{ 'orders.detail.timeline.empty' | t }}</p>
+          } @else {
+            <q-steps [steps]="steps" [ariaLabel]="'orders.detail.timeline.lane.delivery' | t" />
+          }
+        } @else if (deliveryError()) {
+          <p class="q-body-sm pane__state-inline">{{ 'orders.detail.timeline.error' | t }}</p>
+        } @else {
+          <p class="q-body-sm pane__state-inline">{{ 'orders.detail.loading' | t }}</p>
+        }
       </div>
+
+      <!-- The losing side of a decision (row 1.2b, wave P11) — ordering.approval_decisions, effective = false. -->
+      @if (losingDecisionEntries(); as entries) {
+        @if (entries.length > 0) {
+          <div class="pane__timeline-lane" data-testid="order-detail-timeline-losing-decisions">
+            <p class="q-caption pane__timeline-lane-label">
+              {{ 'orders.detail.timeline.decisions.title' | t }}
+            </p>
+            <q-timeline [entries]="entries" />
+          </div>
+        }
+      }
     </section>
 
     <!-- ================================================================ Атрибуция (§3.12) -->

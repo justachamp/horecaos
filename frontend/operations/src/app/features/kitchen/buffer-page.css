@@ -88,6 +88,54 @@
   cursor: default;
 }
 
+.buffer__edit {
+  margin-left: 8px;
+  padding: 4px 12px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-caption);
+}
+
+.buffer__edit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.buffer__edit-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 12px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+}
+
+.buffer__edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.buffer__edit-hint {
+  color: var(--q-ink-subtle);
+  margin: 0;
+}
+
+.buffer__edit-error {
+  color: var(--q-error-text);
+  margin: 0;
+  width: 100%;
+}
+
+.buffer__edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .buffer__empty,
 .buffer__denied {
   padding: 32px;

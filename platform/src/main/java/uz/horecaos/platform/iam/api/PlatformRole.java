@@ -254,6 +254,13 @@ public enum PlatformRole {
                     DELIVERY_TARIFF_MANAGE,
                     DELIVERY_TARIFF_ACTIVATE,
                     DELIVERY_FEE_EVIDENCE_READ,
+                    // ADR 0042, gap map row 10.13: the courier compensation
+                    // policy document — GPS gates, kitchen-ready-only, reveal
+                    // timing, the post-delivery payment check — read and
+                    // written from the same Settings screen as the zones and
+                    // tariffs immediately above.
+                    DELIVERY_POLICY_READ,
+                    DELIVERY_POLICY_WRITE,
                     COURIER_READ,
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
@@ -272,6 +279,7 @@ public enum PlatformRole {
                     MARKETPLACE_MENU_PUSH,
                     MARKETPLACE_AVAILABILITY_PUSH,
                     MARKETPLACE_ORDER_CREATE_MANUAL,
+                    MARKETPLACE_HANDOVER_VERIFY,
                     MARKETPLACE_HANDOVER_BYPASS,
                     MARKETPLACE_LIVENESS_READ,
                     CUSTOMER_READ,
@@ -306,6 +314,10 @@ public enum PlatformRole {
                     COMMERCIAL_SUBSCRIPTION_MANAGE,
                     COMMERCIAL_PLAN_READ,
                     COMMERCIAL_USAGE_READ,
+                    // ADR 0127: browsing the module catalogue and this tenant's own
+                    // place in the arrears lifecycle, from the operations console.
+                    COMMERCIAL_MODULE_READ,
+                    COMMERCIAL_ARREARS_READ,
                     // ADR 0095: the owner's own wallet -- both balances, the ledger,
                     // live bonus grants and each statement's paid and due amounts.
                     COMMERCIAL_WALLET_READ,
@@ -417,6 +429,13 @@ public enum PlatformRole {
                     DELIVERY_TARIFF_READ,
                     DELIVERY_TARIFF_MANAGE,
                     DELIVERY_FEE_EVIDENCE_READ,
+                    // ADR 0042, gap map row 10.13: the courier compensation
+                    // policy document — GPS gates, kitchen-ready-only, reveal
+                    // timing, the post-delivery payment check — read and
+                    // written from the same Settings screen as the zones and
+                    // tariffs immediately above.
+                    DELIVERY_POLICY_READ,
+                    DELIVERY_POLICY_WRITE,
                     COURIER_READ,
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
@@ -435,6 +454,7 @@ public enum PlatformRole {
                     MARKETPLACE_MENU_PUSH,
                     MARKETPLACE_AVAILABILITY_PUSH,
                     MARKETPLACE_ORDER_CREATE_MANUAL,
+                    MARKETPLACE_HANDOVER_VERIFY,
                     MARKETPLACE_HANDOVER_BYPASS,
                     MARKETPLACE_LIVENESS_READ,
                     CUSTOMER_READ,
@@ -538,6 +558,9 @@ public enum PlatformRole {
                     COMMERCIAL_OVERRIDE_APPROVE,
                     COMMERCIAL_PLAN_READ,
                     COMMERCIAL_USAGE_READ,
+                    // ADR 0127: same pair as TENANT_OWNER's own copy of this block.
+                    COMMERCIAL_MODULE_READ,
+                    COMMERCIAL_ARREARS_READ,
                     // ADR 0095: finance is who answers "why is this still due".
                     COMMERCIAL_WALLET_READ,
                     REPORTING_READ,
@@ -582,6 +605,10 @@ public enum PlatformRole {
                     DELIVERY_ZONE_MANAGE,
                     DELIVERY_TARIFF_READ,
                     DELIVERY_TARIFF_MANAGE,
+                    // ADR 0042, gap map row 10.13: the courier compensation
+                    // policy document, same reasoning as the two roles above.
+                    DELIVERY_POLICY_READ,
+                    DELIVERY_POLICY_WRITE,
                     MARKETPLACE_AVAILABILITY_PUSH,
                     NOTIFICATION_TEMPLATE_AUTHOR,
                     NOTIFICATION_ROUTING_MANAGE,
@@ -637,6 +664,10 @@ public enum PlatformRole {
                     KITCHEN_TICKET_RELEASE,
                     KITCHEN_TICKET_RELEASE_OVERRIDE,
                     KITCHEN_TICKET_HANDOVER,
+                    // ADR 0040, wave T02: comparing a marketplace handover code, held by
+                    // the same bundle as the KITCHEN_TICKET_HANDOVER it gates — a manager
+                    // who cannot complete a hand-over has no use for verifying one either.
+                    MARKETPLACE_HANDOVER_VERIFY,
                     // ADR 0047: the floor plan is the physical property of this branch,
                     // and a walkout is this shift's cash shortfall.
                     DINEIN_FLOORPLAN_MANAGE,

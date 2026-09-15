@@ -153,7 +153,133 @@ class ReportingControllerCapabilityHttpTests {
         assertThat(ok.getResponse().getContentAsString()).contains("\"rows\":[]");
     }
 
+    /**
+     * 2026-09-14 review: {@code /fulfilment-time} and {@code
+     * /cancellation-reasons} (P27) were two more {@code REPORTING_READ}
+     * endpoints on this controller with no HTTP-level test — this suite's
+     * own stated purpose is exactly to cover the controller's capability
+     * wiring as a whole, and these two were simply missed.
+     */
+    @Test
+    void fulfilmentTimeRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/fulfilment-time")
+                        .with(tokenFor(DISPATCHER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-07")
+                        .queryParam("fulfilmentType", "DELIVERY"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.REPORTING_READ.code());
+    }
+
+    @Test
+    void fulfilmentTimeSucceedsWithReportingRead() throws Exception {
+        MvcResult ok = mvc.perform(get(REPORTING + "/fulfilment-time")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-07")
+                        .queryParam("fulfilmentType", "DELIVERY"))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        assertThat(ok.getResponse().getContentAsString()).contains("\"medianSeconds\":null");
+    }
+
+    @Test
+    void cancellationReasonsRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/cancellation-reasons").with(tokenFor(DISPATCHER)))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.REPORTING_READ.code());
+    }
+
+    @Test
+    void cancellationReasonsSucceedsWithReportingRead() throws Exception {
+        MvcResult ok = mvc.perform(get(REPORTING + "/cancellation-reasons").with(tokenFor(MANAGER)))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        assertThat(ok.getResponse().getContentAsString()).isEqualTo("[]");
+    }
+
+    /**
+     * Wave P27: the trap the brief names by name — a money metric queried
+     * without {@code groupBy=LEGAL_ENTITY} on a two-entity tenant must come
+     * back as a handled {@code ProblemDetail} (ADR 0031/0038), never a 500 or
+     * an unhandled exception that renders as an errored page.
+     */
+    @Test
+    void aMoneyMetricWithoutLegalEntityGroupingIsAHandledErrorOnATwoEntityTenant() throws Exception {
+        UUID entityA = UUID.randomUUID();
+        UUID entityB = UUID.randomUUID();
+        insertFactOrder(entityA);
+        insertFactOrder(entityB);
+
+        MvcResult refused = mvc.perform(get(REPORTING + "/queries")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01")
+                        .queryParam("metric", "revenue.gross.v1"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus())
+                .as("a refusal, not a crash — ADR 0031's ProblemDetail, not a 500")
+                .isEqualTo(400);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("LEGAL_ENTITY_GROUPING_REQUIRED")
+                .contains("revenue.gross.v1");
+    }
+
+    @Test
+    void thePerEntityCutOfTheSameMoneyMetricSucceeds() throws Exception {
+        UUID entityA = UUID.randomUUID();
+        UUID entityB = UUID.randomUUID();
+        insertFactOrder(entityA);
+        insertFactOrder(entityB);
+
+        MvcResult ok = mvc.perform(get(REPORTING + "/queries")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01")
+                        .queryParam("metric", "revenue.gross.v1")
+                        .queryParam("groupBy", "LEGAL_ENTITY"))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        assertThat(ok.getResponse().getContentAsString()).contains("\"rows\":[");
+    }
+
     // ------------------------------------------------------------------ fixtures
+
+    private static final java.time.LocalDate FACT_DAY = java.time.LocalDate.of(2026, 9, 1);
+
+    /**
+     * {@code GET .../reporting/queries} reads {@code reporting.agg_branch_day}
+     * (the typed pipeline's own pre-aggregated table), not {@code fact_order}
+     * directly — see {@code JdbcReportingStore#readAggregates}.
+     */
+    private void insertFactOrder(UUID legalEntityId) {
+        jdbc.sql("""
+                INSERT INTO reporting.agg_branch_day (
+                    tenant_id, business_date, location_id, legal_entity_id, channel_code,
+                    fulfilment_type, boundary_version, metric_calculation_version, order_count,
+                    cancelled_count, gross_som, discount_som, net_som, refunded_som,
+                    promised_count, late_count, distinct_customers, new_customers)
+                VALUES (:tenantId, :businessDate, :locationId, :legalEntityId, 'TELEGRAM', 'DELIVERY',
+                    1, 1, 1, 0, 100000, 0, 100000, 0, 0, 0, 0, 0)
+                """)
+                .param("tenantId", TENANT)
+                .param("businessDate", FACT_DAY)
+                .param("locationId", UUID.randomUUID())
+                .param("legalEntityId", legalEntityId)
+                .update();
+    }
 
     private void insertTenant() {
         jdbc.sql("""

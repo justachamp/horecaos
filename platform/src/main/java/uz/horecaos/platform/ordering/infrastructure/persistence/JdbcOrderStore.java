@@ -685,6 +685,65 @@ public class JdbcOrderStore {
     }
 
     /**
+     * The board's tab badges, scoped by location alone — the ADR 0045 {@code
+     * COUNTERS} snapshot's own overload.
+     *
+     * <p>{@link #counts(UUID, UUID, UUID, CountsWindow, CountsWindow)} takes a
+     * {@code brandId} because every HTTP caller already holds one from its own
+     * path; a subscribed stream does not; {@code
+     * OperationsStreamController}'s subscription is a {@code ScopeKey} of
+     * {@code (LOCATION, locationId)} alone; and {@code CourierPositionSnapshotSource}'s
+     * sibling shows the pattern this deliberately follows. Dropping {@code
+     * brand_id} from the predicate loses nothing a caller who already knows
+     * {@code locationId} would have used it for: a location belongs to exactly
+     * one brand for its whole life, so restricting on {@code location_id} alone
+     * already selects that brand's rows and no other's — {@code tenant_id} is
+     * still the isolation boundary and is never dropped.
+     */
+    public OrderCountsRow locationCounts(
+            UUID tenantId, UUID locationId, CountsWindow boardWindow, CountsWindow liveWindow) {
+        return jdbc.sql("SELECT " + COUNT_COLUMNS + """
+                        FROM ordering.orders
+                        WHERE tenant_id = :tenantId AND location_id = :locationId
+                          AND (:boardFrom::timestamptz IS NULL OR created_at >= :boardFrom)
+                          AND (:boardTo::timestamptz IS NULL OR created_at < :boardTo)
+                        """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("boardFrom", utcOrNull(boardWindow.from()))
+                .param("boardTo", utcOrNull(boardWindow.to()))
+                .param("liveFrom", utcOrNull(liveWindow.from()))
+                .param("liveTo", utcOrNull(liveWindow.to()))
+                .query((row, number) -> mapCounts(row))
+                .single();
+    }
+
+    /**
+     * {@link #activeMix(UUID, UUID, UUID)}'s location-only sibling, for exactly
+     * the reason {@link #locationCounts} exists: the ADR 0045 {@code COUNTERS}
+     * snapshot source has a {@code locationId} and no {@code brandId} to pass.
+     */
+    public List<MixSliceRow> activeMixForLocation(UUID tenantId, UUID locationId) {
+        return jdbc.sql("""
+                SELECT
+                    CASE WHEN GROUPING(channel_code_snapshot) = 0 THEN 'CHANNEL' ELSE 'FULFILLMENT_MODE' END
+                        AS dimension,
+                    coalesce(channel_code_snapshot, fulfillment_mode) AS slice_key,
+                    count(*) AS slice_count
+                FROM ordering.orders
+                WHERE tenant_id = :tenantId AND location_id = :locationId
+                  AND status NOT IN ('PAYMENT_FAILED', 'REJECTED', 'EXPIRED', 'COMPLETED', 'CANCELLED')
+                GROUP BY GROUPING SETS ((channel_code_snapshot), (fulfillment_mode))
+                ORDER BY slice_count DESC, slice_key
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .query((row, number) -> new MixSliceRow(
+                        row.getString("dimension"), row.getString("slice_key"), row.getLong("slice_count")))
+                .list();
+    }
+
+    /**
      * The same badges again, one row per location of the brand — IA 0.1c's
      * branch leaderboard in a single read.
      *
@@ -1418,8 +1477,8 @@ public class JdbcOrderStore {
             String action,
             String decisionChannel,
             String actorType,
-            String actorId,
-            String reasonCode,
+            @Nullable String actorId,
+            @Nullable String reasonCode,
             Instant issuedAt) {
         jdbc.sql("""
                 INSERT INTO ordering.approval_decisions (
@@ -1453,6 +1512,27 @@ public class JdbcOrderStore {
                 .param("decisionId", decisionId)
                 .query(JdbcOrderStore::mapDecision)
                 .optional();
+    }
+
+    /**
+     * Every decision this order ever received, winner and losers alike (gap
+     * map row 1.2b) — the timeline's own question, "who tried to reject this
+     * and when", that {@link #findEffectiveDecision} alone cannot answer:
+     * V0022's own comment on this table says storing only the winner "would
+     * make an operator's rejected click invisible".
+     */
+    public List<ApprovalDecisionRow> decisionsOf(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT id, decision_id, action, decision_channel, actor_type, actor_id,
+                       reason_code, effective, issued_at
+                FROM ordering.approval_decisions
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                ORDER BY issued_at
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(JdbcOrderStore::mapDecision)
+                .list();
     }
 
     public Optional<ApprovalDecisionRow> findEffectiveDecision(UUID tenantId, UUID orderId) {

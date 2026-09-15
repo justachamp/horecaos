@@ -4,32 +4,53 @@ import { Router } from '@angular/router';
 import { Versioned } from '../../core/api/aggregate-version';
 import { CursorState, firstPage, nextPage } from '../../core/api/page';
 import { ApiError } from '../../core/api/problem-details';
+import { Auth } from '../../core/auth/auth';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { formatDate, formatDateTime } from '../../core/format/datetime';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { ActorChip } from '../../shared/ui/actor-chip';
+import { MoneyInput } from '../../shared/ui/money-input';
 import { describeApiError } from '../orders/order-errors';
+import { orderStatusLabel } from '../orders/order-status';
+import { BrandProfileApi, BrandView } from '../settings/brand-profile/brand-profile-api';
 import { customerStatusLabel } from './customer-status';
+import { ReviewRow, ReviewsApi } from './reviews/reviews-api';
 import {
   BlacklistStatus,
   ConsentDecision,
   ContactType,
   CustomerAddressFields,
   CustomerCoordinateSource,
+  CustomerDiscountHistory,
   CustomerEligibility,
   CustomerOrderSummary,
   CustomerProfile,
   CustomersApi,
+  ErasureRequest,
+  LoyaltyAdjustmentRequest,
+  LoyaltyAdjustmentResult,
   LoyaltyBalance,
   LoyaltyEntry,
+  PromoRedemption,
   RevealedBlacklistEntry,
   RevealedContact,
   RevealedCustomerAddress,
 } from './customers-api';
 
-type Tab = 'profile' | 'addresses' | 'orders' | 'consent' | 'cashback' | 'blacklist';
+type Tab =
+  | 'profile'
+  | 'addresses'
+  | 'orders'
+  | 'consent'
+  | 'cashback'
+  | 'blacklist'
+  | 'promos'
+  | 'reviews'
+  | 'erasure';
 
 const PLACEHOLDER_TIME_ZONE = 'Asia/Tashkent';
 
@@ -175,15 +196,19 @@ function toAddressFields(form: AddressFormState): CustomerAddressFields {
  */
 @Component({
   selector: 'q-customer-detail-pane',
-  imports: [TPipe],
+  imports: [TPipe, ActorChip, MoneyInput],
   templateUrl: './customer-detail-pane.html',
   styleUrl: './customer-detail-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CustomerDetailPane {
   private readonly api = inject(CustomersApi);
+  private readonly reviewsApi = inject(ReviewsApi);
+  private readonly brandProfiles = inject(BrandProfileApi);
   private readonly baseLocation = inject(CurrentLocation);
   private readonly router = inject(Router);
+  private readonly auth = inject(Auth);
+  protected readonly capabilities = inject(SessionCapabilities);
   protected readonly i18n = inject(I18n);
 
   /** Route param, bound by `withComponentInputBinding()` — see `order-detail-pane.ts` for the same idiom. */
@@ -281,6 +306,15 @@ export class CustomerDetailPane {
       case 'blacklist':
         void this.loadBlacklistStatus();
         return;
+      case 'promos':
+        void this.loadDiscountHistory();
+        return;
+      case 'reviews':
+        void this.loadReviews();
+        return;
+      case 'erasure':
+        void this.loadErasureRequests();
+        return;
       case 'profile':
         return;
     }
@@ -297,10 +331,16 @@ export class CustomerDetailPane {
     this.consentHistory.set(null);
     this.eligibility.set(null);
     this.balances.set(null);
+    this.brandNames.set(new Map());
     this.expandedBalanceId.set(null);
     this.loyaltyEntries.set(null);
+    this.adjustingBalanceId.set(null);
+    this.adjustResult.set(null);
     this.blacklistStatus.set(null);
     this.blacklistHistory.set(null);
+    this.discountHistory.set(null);
+    this.customerReviews.set(null);
+    this.erasureRequests.set(null);
   }
 
   // ------------------------------------------------------------------ profile
@@ -721,14 +761,18 @@ export class CustomerDetailPane {
   }
 
   /**
-   * §5.2 "reorder": navigates to the take-order flow, which is not built
-   * (`operations-spec/orders.md` §5, the `/orders/new` route's own
-   * `NotBuiltPage`). This link goes there honestly rather than fabricating a
-   * working reorder button — "omit, do not disable": it navigates somewhere,
-   * and that somewhere says plainly what is missing.
+   * §5.2 row 5.2d "Повторить": hands the new-order screen (wave P14) this
+   * order and this customer through the identical query params that
+   * screen's own history popover would produce, so `NewOrderPage.ngOnInit`
+   * pre-selects the customer and resolves the same staff reorder-plan
+   * wrapper (`GET .../customers/{accountId}/orders/{orderId}/reorder`) it
+   * already calls from its own header — the operator lands with the basket
+   * already filled rather than retyping it by hand.
    */
-  protected reorder(): void {
-    void this.router.navigate(['/orders/new']);
+  protected reorder(orderId: string): void {
+    void this.router.navigate(['/orders/new'], {
+      queryParams: { reorderAccountId: this.accountId(), reorderOrderId: orderId },
+    });
   }
 
   protected openOrder(orderId: string): void {
@@ -747,6 +791,11 @@ export class CustomerDetailPane {
 
   protected formatOrderPlacedAt(placedAt: string): string {
     return formatDateTime(new Date(placedAt), PLACEHOLDER_TIME_ZONE);
+  }
+
+  /** Row 5.2d: the console's own label map — never the raw wire enum. */
+  protected orderStatusText(status: string): string {
+    return orderStatusLabel(status, (key) => this.i18n.t(key));
   }
 
   // ------------------------------------------------------------------ consent
@@ -857,6 +906,8 @@ export class CustomerDetailPane {
 
   protected readonly balances = signal<readonly LoyaltyBalance[] | null>(null);
   protected readonly loadingBalances = signal(false);
+  /** brandId -> displayName, for labelling each balance card (row 5.2e) — see {@link brandLabel}'s own doc. */
+  protected readonly brandNames = signal<ReadonlyMap<string, string>>(new Map());
   protected readonly expandedBalanceId = signal<string | null>(null);
   protected readonly loyaltyEntries = signal<readonly LoyaltyEntry[] | null>(null);
   protected readonly loadingEntries = signal(false);
@@ -874,6 +925,28 @@ export class CustomerDetailPane {
     } finally {
       this.loadingBalances.set(false);
     }
+    // A brand name lookup that fails (a role holding LOYALTY_READ but not
+    // BRAND_READ, say) still leaves every balance card labelled — with its
+    // raw id, per brandLabel's own fallback — rather than blocking the tab
+    // the way new-order-page.ts's own channel-list read is already allowed
+    // to degrade.
+    try {
+      const brands: readonly BrandView[] = await this.brandProfiles.list(scope.tenantId);
+      this.brandNames.set(new Map(brands.map((brand) => [brand.id, brand.displayName])));
+    } catch {
+      this.brandNames.set(new Map());
+    }
+  }
+
+  /**
+   * Row 5.2e: "per-brand separation is the endpoint's whole point and two
+   * brands render as two indistinguishable cards" — this is the label that
+   * fixes it. Falls back to the raw id when the tenant's brand list could
+   * not be read, so a lookup failure degrades to an ugly-but-true label
+   * rather than a blank one.
+   */
+  protected brandLabel(brandId: string): string {
+    return this.brandNames().get(brandId) ?? brandId;
   }
 
   protected async toggleBalance(loyaltyAccountId: string): Promise<void> {
@@ -882,6 +955,10 @@ export class CustomerDetailPane {
       return;
     }
     this.expandedBalanceId.set(loyaltyAccountId);
+    await this.refreshEntries(loyaltyAccountId);
+  }
+
+  private async refreshEntries(loyaltyAccountId: string): Promise<void> {
     const scope = this.scope();
     if (!scope) {
       return;
@@ -900,6 +977,95 @@ export class CustomerDetailPane {
 
   protected formatBalanceMoney(money: LoyaltyBalance['balance']): string {
     return formatMoney(money, this.i18n.locale(), { withUnit: true });
+  }
+
+  /**
+   * Row 5.2e: "ledger rows also print entry.amountMinor raw while the
+   * balance above uses formatMoney, so the two numbers look like different
+   * currencies" — `LoyaltyEntry` carries no currency of its own
+   * (`LoyaltyOperationsController.EntryResponse`'s own doc: it lives on the
+   * balance this entry belongs to, already fetched), so the enclosing
+   * balance's currency is threaded in here rather than re-fetched per row.
+   */
+  protected formatEntryAmount(amountMinor: number, currency: string): string {
+    return formatMoney({ amountMinor, currency }, this.i18n.locale(), { withUnit: true });
+  }
+
+  // --------------------------------------------------- row 5.2e: manual adjustment
+
+  protected readonly adjustingBalanceId = signal<string | null>(null);
+  protected readonly adjustDirection = signal<'CREDIT' | 'DEBIT'>('CREDIT');
+  protected readonly adjustAmountMinor = signal(0);
+  protected readonly adjustReasonCode = signal('');
+  protected readonly adjustReason = signal('');
+  protected readonly adjustSaving = signal(false);
+  protected readonly adjustResult = signal<LoyaltyAdjustmentResult | null>(null);
+
+  /** `loyalty-page.ts:54-56`'s own claim that this UI is "already built... on Customer detail" was not true; this is what makes it true. */
+  protected canAdjustLoyalty(): boolean {
+    return this.capabilities.has('LOYALTY_ADJUST');
+  }
+
+  protected startAdjusting(balance: LoyaltyBalance): void {
+    this.adjustDirection.set('CREDIT');
+    this.adjustAmountMinor.set(0);
+    this.adjustReasonCode.set('');
+    this.adjustReason.set('');
+    this.adjustResult.set(null);
+    this.adjustingBalanceId.set(balance.accountId);
+  }
+
+  protected cancelAdjusting(): void {
+    this.adjustingBalanceId.set(null);
+  }
+
+  protected async submitAdjustment(balance: LoyaltyBalance): Promise<void> {
+    const scope = this.scope();
+    const subject = this.auth.subject();
+    const reasonCode = this.adjustReasonCode().trim();
+    const reason = this.adjustReason().trim();
+    const magnitude = this.adjustAmountMinor();
+    if (!scope || !subject || !reasonCode || !reason || magnitude <= 0 || this.adjustSaving()) {
+      return;
+    }
+    this.adjustSaving.set(true);
+    try {
+      const request: LoyaltyAdjustmentRequest = {
+        brandId: balance.brandId,
+        amountMinor: this.adjustDirection() === 'DEBIT' ? -magnitude : magnitude,
+        currency: balance.balance.currency,
+        reasonCode,
+        reason,
+        // Ignored server-side (see `LoyaltyAdjustmentRequest.actorSubject`'s own
+        // doc) — sent only because the published schema still requires it.
+        actorSubject: subject,
+      };
+      const result = await this.api.adjustLoyalty(scope, this.accountId(), request);
+      this.adjustResult.set(result);
+      if (result.status !== 'DECLINED') {
+        await this.loadBalances();
+        if (this.expandedBalanceId() === balance.accountId) {
+          await this.refreshEntries(balance.accountId);
+        }
+      }
+      this.adjustingBalanceId.set(null);
+    } catch (error) {
+      this.noticeFrom(error);
+    } finally {
+      this.adjustSaving.set(false);
+    }
+  }
+
+  protected adjustmentStatusLabel(status: LoyaltyAdjustmentResult['status']): string {
+    switch (status) {
+      case 'NOT_REQUIRED':
+      case 'APPROVED':
+        return this.i18n.t('customers.cashback.adjust.result.applied');
+      case 'PENDING':
+        return this.i18n.t('customers.cashback.adjust.result.pending');
+      case 'DECLINED':
+        return this.i18n.t('customers.cashback.adjust.result.declined');
+    }
   }
 
   // ---------------------------------------------------------------- blacklist
@@ -996,6 +1162,190 @@ export class CustomerDetailPane {
     } finally {
       this.liftingBlacklist.set(false);
     }
+  }
+
+  protected blacklistExpiryLabel(status: BlacklistStatus): string {
+    return status.expired
+      ? this.i18n.t('customers.blacklist.expiredNotLifted')
+      : this.i18n.t('customers.blacklist.active');
+  }
+
+  // -------------------------------------------------------- row 5.2g: promo redemptions
+
+  protected readonly discountHistory = signal<CustomerDiscountHistory | null>(null);
+  protected readonly loadingDiscountHistory = signal(false);
+
+  private async loadDiscountHistory(): Promise<void> {
+    const scope = this.scope();
+    if (!scope || this.loadingDiscountHistory()) {
+      return;
+    }
+    this.loadingDiscountHistory.set(true);
+    try {
+      this.discountHistory.set(await this.api.discountHistory(scope, this.accountId()));
+    } catch (error) {
+      this.noticeFrom(error);
+    } finally {
+      this.loadingDiscountHistory.set(false);
+    }
+  }
+
+  protected formatRedemptionAmount(redemption: PromoRedemption): string {
+    return formatMoney(
+      { amountMinor: redemption.amountMinor, currency: redemption.currency },
+      this.i18n.locale(),
+      { withUnit: true },
+    );
+  }
+
+  protected formatRedemptionTotal(total: { amountMinor: number; currency: string }): string {
+    return formatMoney(total, this.i18n.locale(), { withUnit: true });
+  }
+
+  protected redemptionStatusLabel(status: PromoRedemption['status']): string {
+    switch (status) {
+      case 'REDEEMED':
+        return this.i18n.t('customers.promos.status.REDEEMED');
+      case 'RESERVED':
+        return this.i18n.t('customers.promos.status.RESERVED');
+      case 'RELEASED':
+        return this.i18n.t('customers.promos.status.RELEASED');
+    }
+  }
+
+  // -------------------------------------------------------------- row 5.2h: reviews
+
+  protected readonly customerReviews = signal<readonly ReviewRow[] | null>(null);
+  protected readonly loadingReviews = signal(false);
+
+  private async loadReviews(): Promise<void> {
+    const scope = this.scope();
+    if (!scope || this.loadingReviews()) {
+      return;
+    }
+    this.loadingReviews.set(true);
+    try {
+      const page = await this.reviewsApi.list(scope, firstPage(50), {
+        customerAccountId: this.accountId(),
+      });
+      this.customerReviews.set(page.items);
+    } catch (error) {
+      this.noticeFrom(error);
+    } finally {
+      this.loadingReviews.set(false);
+    }
+  }
+
+  protected formatReviewSubmittedAt(submittedAt: string): string {
+    return formatDateTime(new Date(submittedAt), PLACEHOLDER_TIME_ZONE);
+  }
+
+  // -------------------------------------------------------------- row 5/X.1: erasure
+
+  protected readonly erasureRequests = signal<readonly ErasureRequest[] | null>(null);
+  protected readonly loadingErasureRequests = signal(false);
+  protected readonly raisingErasure = signal(false);
+  protected readonly erasureActionPendingId = signal<string | null>(null);
+
+  private async loadErasureRequests(): Promise<void> {
+    const scope = this.scope();
+    if (!scope || this.loadingErasureRequests()) {
+      return;
+    }
+    this.loadingErasureRequests.set(true);
+    try {
+      this.erasureRequests.set(await this.api.erasureRequests(scope, this.accountId()));
+    } catch (error) {
+      this.noticeFrom(error);
+    } finally {
+      this.loadingErasureRequests.set(false);
+    }
+  }
+
+  /**
+   * `CustomerController.requestErasure`/`cancelErasure` are both gated on
+   * `CUSTOMER_MANAGE` server-side (see that controller's own Javadoc on
+   * `CUSTOMER_ERASURE_RAISE`, written for this exact wave) — a support agent
+   * raises a request on a customer's behalf without holding the tenant-wide
+   * worklist capability, so this pane gates raise/withdraw on the
+   * capability the endpoints actually require rather than the one the gap
+   * map names, which the tenant-wide worklist alone still holds.
+   */
+  protected canRaiseErasure(): boolean {
+    return this.capabilities.has('CUSTOMER_MANAGE');
+  }
+
+  protected canExecuteErasure(): boolean {
+    return this.capabilities.has('CUSTOMER_ERASURE_EXECUTE');
+  }
+
+  protected hasPendingErasureRequest(): boolean {
+    return (this.erasureRequests() ?? []).some((request) => request.status === 'PENDING');
+  }
+
+  protected async raiseErasure(): Promise<void> {
+    const scope = this.scope();
+    if (!scope || this.raisingErasure()) {
+      return;
+    }
+    this.raisingErasure.set(true);
+    try {
+      await this.api.requestErasure(scope, this.accountId());
+      await this.loadErasureRequests();
+    } catch (error) {
+      this.noticeFrom(error);
+    } finally {
+      this.raisingErasure.set(false);
+    }
+  }
+
+  protected async withdrawErasure(requestId: string): Promise<void> {
+    const scope = this.scope();
+    if (!scope || this.erasureActionPendingId() !== null) {
+      return;
+    }
+    this.erasureActionPendingId.set(requestId);
+    try {
+      await this.api.cancelErasure(scope, this.accountId(), requestId);
+      await this.loadErasureRequests();
+    } catch (error) {
+      this.noticeFrom(error);
+    } finally {
+      this.erasureActionPendingId.set(null);
+    }
+  }
+
+  protected async executeErasureRequest(requestId: string): Promise<void> {
+    const scope = this.scope();
+    if (!scope || !this.canExecuteErasure() || this.erasureActionPendingId() !== null) {
+      return;
+    }
+    this.erasureActionPendingId.set(requestId);
+    try {
+      await this.api.executeErasure(scope, this.accountId(), requestId);
+      await this.loadErasureRequests();
+    } catch (error) {
+      this.noticeFrom(error);
+    } finally {
+      this.erasureActionPendingId.set(null);
+    }
+  }
+
+  protected erasureStatusLabel(status: string): string {
+    switch (status) {
+      case 'PENDING':
+        return this.i18n.t('customers.erasure.status.PENDING');
+      case 'COMPLETED':
+        return this.i18n.t('customers.erasure.status.COMPLETED');
+      case 'CANCELLED':
+        return this.i18n.t('customers.erasure.status.CANCELLED');
+      default:
+        return status;
+    }
+  }
+
+  protected formatErasureAt(instant: string): string {
+    return formatDateTime(new Date(instant), PLACEHOLDER_TIME_ZONE);
   }
 
   // ------------------------------------------------------------------- merge

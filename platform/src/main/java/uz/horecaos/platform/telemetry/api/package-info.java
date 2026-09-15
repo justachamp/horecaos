@@ -22,6 +22,14 @@
  * than a pin, and it is the same reduction that already crosses this boundary
  * inside a {@code FleetCandidate}.
  *
+ * <p>Inward once more, and unrelated to ADR 0042:
+ * {@link uz.horecaos.platform.telemetry.api.SnapshotSource} is how a
+ * {@code SNAPSHOT}-class channel gets its payload. {@code COUNTERS} carries an
+ * aggregate {@code ordering} owns, so the source that answers it lives in
+ * {@code ordering} and implements this published interface rather than
+ * telemetry inventing a second query path onto data it does not own (wave
+ * P08).
+ *
  * <p>Nothing here exposes a position, a track, or a duty session row. Those are
  * read through capability-gated HTTP, which is what keeps every read of them
  * authorized at a location scope rather than at a module boundary.

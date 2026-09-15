@@ -118,6 +118,25 @@ export const financePaths = {
     return `${financePaths.partnerInvoices(tenantId)}/${enc(invoiceId)}`;
   },
 
+  /** `.match` — the provider-ref→shipment resolution, also the resolution UI's retry call — wave T07. */
+  partnerInvoiceMatch(tenantId: string, invoiceId: string): string {
+    return `${financePaths.partnerInvoice(tenantId, invoiceId)}/match`;
+  },
+
+  /** `.dispute` — the акт сверки pushback path — wave T07. */
+  partnerInvoiceDispute(tenantId: string, invoiceId: string): string {
+    return `${financePaths.partnerInvoice(tenantId, invoiceId)}/dispute`;
+  },
+
+  /** `.resolveVariance` — accept or dispute one VARIANCE line — wave T07. */
+  partnerInvoiceLineVarianceAcceptance(
+    tenantId: string,
+    invoiceId: string,
+    lineId: string,
+  ): string {
+    return `${financePaths.partnerInvoice(tenantId, invoiceId)}/lines/${enc(lineId)}/variance-acceptance`;
+  },
+
   // ---------------------------------------------------------- 8.5 Courier payouts
 
   courierLedger(tenantId: string, courierId: string): string {
@@ -176,5 +195,23 @@ export const financePaths = {
 
   commercialStatementExport(tenantId: string, statementId: string): string {
     return `${financePaths.commercialStatement(tenantId, statementId)}/export`;
+  },
+
+  /**
+   * `CommercialOperationsController.modulesOnSale`/`.purchaseModule` — Finance
+   * 8.6's purchasable-module catalogue with inline purchase (ADR 0127). GET
+   * browses what is on sale; POST purchases one for this tenant.
+   */
+  commercialModules(tenantId: string): string {
+    return `/api/v1/tenants/${enc(tenantId)}/commercial/modules`;
+  },
+
+  commercialModulesHeld(tenantId: string): string {
+    return `${financePaths.commercialModules(tenantId)}/held`;
+  },
+
+  /** `ArrearsController.tenantArrears` — this tenant's own arrears state (ADR 0127). */
+  commercialArrears(tenantId: string): string {
+    return `/api/v1/tenants/${enc(tenantId)}/commercial/arrears`;
   },
 } as const;

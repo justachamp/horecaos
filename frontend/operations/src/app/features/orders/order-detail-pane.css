@@ -372,10 +372,15 @@
   color: var(--q-ink-muted);
 }
 
-.pane__timeline-lane--not-built {
-  color: var(--q-ink-subtle);
+/* ---- courier (row 1.2e, wave P11) ---------------------------------------- */
+
+.pane__courier {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
 
-.pane__timeline-lane--not-built .pane__timeline-lane-label {
-  color: var(--q-ink-subtle);
+.pane__courier q-combobox {
+  width: 100%;
 }

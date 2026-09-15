@@ -81,6 +81,9 @@ public class PartnerInvoiceService {
                     line.chargeType(),
                     MatchStatus.PENDING,
                     null,
+                    null,
+                    null,
+                    null,
                     null));
         }
 
@@ -151,6 +154,16 @@ public class PartnerInvoiceService {
     /**
      * Runs matching over one imported invoice.
      *
+     * <p>Only lines still {@code PENDING} or {@code UNMATCHED_LINE} are
+     * processed — a line already {@code MATCHED}, {@code VARIANCE} or
+     * {@code UNBILLED} is left exactly as matching last found it. This is what
+     * makes the operation safe to call a second time with a fuller map: it is
+     * the resolution path for an {@code UNMATCHED_LINE} row an operator has
+     * since found the correct shipment reference for, and reprocessing every
+     * already-resolved line on each retry would insert a second {@code
+     * delivery_cost_lines} row at {@code INVOICED} for the same shipment,
+     * double-counting a cost that was already recognised.
+     *
      * @param shipmentsByProviderRef the caller's resolution from the partner's
      *                               own shipment reference to a HorecaOS shipment.
      *                               Passed in rather than looked up here, because
@@ -170,7 +183,12 @@ public class PartnerInvoiceService {
         List<UUID> variances = new ArrayList<>();
         int matched = 0;
 
-        for (InvoiceLineRow line : costs.linesOfInvoice(tenantId, invoiceId)) {
+        List<InvoiceLineRow> unresolved = costs.linesOfInvoice(tenantId, invoiceId).stream()
+                .filter(line ->
+                        line.matchStatus() == MatchStatus.PENDING || line.matchStatus() == MatchStatus.UNMATCHED_LINE)
+                .toList();
+
+        for (InvoiceLineRow line : unresolved) {
             UUID shipmentId = shipmentsByProviderRef.get(line.providerShipmentRef());
             if (shipmentId == null) {
                 costs.matchLine(
@@ -240,6 +258,153 @@ public class PartnerInvoiceService {
                 .build());
 
         return new MatchReport(matched, List.copyOf(variances), List.copyOf(unmatched));
+    }
+
+    /**
+     * Flags the whole invoice for pushback to the partner — the акт сверки
+     * dispute path. Refused once the invoice is {@code PAID}: a paid invoice
+     * is disputed by other means, not by reopening this workflow.
+     */
+    @Transactional
+    public void disputeInvoice(UUID tenantId, UUID invoiceId, ActorRef actor, String reason) {
+        InvoiceRow invoice = costs.findInvoice(tenantId, invoiceId)
+                .orElseThrow(
+                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such partner invoice: " + invoiceId));
+        if (!costs.markInvoiceDisputed(tenantId, invoiceId)) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE, "This invoice is " + invoice.status() + " and cannot be disputed");
+        }
+
+        audit.record(AuditFact.of("partner.invoice.disputed", AuditClass.BUSINESS)
+                .by(actor)
+                .at(ResourceScope.tenant(tenantId))
+                .target("partner_delivery_invoice", invoiceId)
+                .because(reason)
+                .changed(Map.of(
+                        "providerCode", invoice.providerCode(), "providerInvoiceRef", invoice.providerInvoiceRef()))
+                .usingCapability("partner.invoice.manage")
+                .correlatedBy("partner-invoice")
+                .occurredAt(clock.instant())
+                .build());
+    }
+
+    /**
+     * An operator's disposition of one {@code VARIANCE} line: {@code accept}
+     * pays the partner's charge as invoiced despite the mismatch from the
+     * booked accrual; {@code false} disputes it instead. Neither changes {@code
+     * match_status} — a variance is a fact about the money, and stays reported
+     * as one — only {@code variance_resolution}, which the worklist reads to
+     * stop treating the row as unresolved.
+     */
+    @Transactional
+    public InvoiceLineRow resolveVariance(
+            UUID tenantId, UUID invoiceId, UUID lineId, boolean accept, ActorRef actor, String reason) {
+
+        List<InvoiceLineRow> lines = costs.linesOfInvoice(tenantId, invoiceId);
+        InvoiceLineRow line = lines.stream()
+                .filter(candidate -> candidate.id().equals(lineId))
+                .findFirst()
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such invoice line: " + lineId));
+        if (line.matchStatus() != MatchStatus.VARIANCE) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "Only a VARIANCE line can be accepted or disputed, this one is " + line.matchStatus());
+        }
+
+        String resolution = accept ? "ACCEPTED" : "DISPUTED";
+        if (!costs.resolveVarianceLine(tenantId, lineId, resolution, actor.subject())) {
+            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This line's match status changed under us");
+        }
+
+        audit.record(AuditFact.of("partner.invoice.variance.resolved", AuditClass.BUSINESS)
+                .by(actor)
+                .at(ResourceScope.tenant(tenantId))
+                .target("partner_delivery_invoice_line", lineId)
+                .because(reason)
+                .changed(Map.of("resolution", resolution, "varianceMinor", String.valueOf(line.varianceMinor())))
+                .usingCapability("partner.invoice.manage")
+                .correlatedBy("partner-invoice")
+                .occurredAt(clock.instant())
+                .build());
+
+        return costs.linesOfInvoice(tenantId, invoiceId).stream()
+                .filter(candidate -> candidate.id().equals(lineId))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    /**
+     * T11 (7.4c, ADR 0125): the per-line reconcile action the external-
+     * delivery-cost report names — an operator confirming, by hand, that a
+     * line already {@code MATCHED} is settled, or noting an {@code UNBILLED}
+     * shipment has been checked and is being watched for rather than acted
+     * on again. Distinct from {@link #match}'s own bulk sweep: that runs once
+     * per imported invoice against every one of its lines; this runs once,
+     * by a person, against exactly the shipment a report row named.
+     *
+     * <p>Refuses a {@code VARIANCE} line (2026-09-14 review): a variance is a
+     * real, non-zero difference between what HorecaOS accrued and what the
+     * partner billed, and {@link #resolveVariance} is the one path that
+     * disposes of it — {@code ACCEPTED} or {@code DISPUTED} — without ever
+     * erasing the amount. Before this guard, reconcile unconditionally wrote
+     * {@code MATCHED} with {@code variance_minor} and {@code reason_code}
+     * nulled out, silently writing off whatever the discrepancy was with no
+     * accept/dispute decision on record.
+     *
+     * @return {@code true} when a real invoice line was found and marked
+     *         {@code MATCHED}; {@code false} for a shipment with no invoice
+     *         line at all — genuinely {@code UNBILLED}, nothing to
+     *         reconcile against yet, and the acknowledgement is recorded on
+     *         the audit trail alone
+     * @throws ApiException {@code UNPROCESSABLE_STATE} if the line is
+     *                       {@code VARIANCE}; {@code RESOURCE_CONFLICT} if it
+     *                       raced into {@code VARIANCE} between this method's
+     *                       own read and its write
+     */
+    @Transactional
+    public boolean reconcileShipment(UUID tenantId, UUID shipmentId, ActorRef actor, String reason) {
+        Optional<InvoiceLineRow> line = costs.deliveryLineForShipment(tenantId, shipmentId);
+
+        if (line.isEmpty()) {
+            audit.record(AuditFact.of("partner.invoice.line.acknowledged-unbilled", AuditClass.BUSINESS)
+                    .by(actor)
+                    .at(ResourceScope.tenant(tenantId))
+                    .target("shipment", shipmentId)
+                    .because(reason)
+                    .changed(Map.of())
+                    .usingCapability("partner.invoice.manage")
+                    .correlatedBy("partner-invoice")
+                    .occurredAt(clock.instant())
+                    .build());
+            return false;
+        }
+
+        if (line.get().matchStatus() == MatchStatus.VARIANCE) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "A VARIANCE line must be accepted or disputed via resolveVariance, not reconciled: "
+                            + line.get().id());
+        }
+
+        if (!costs.reconcileLine(tenantId, line.get().id(), shipmentId, "OPERATOR_RECONCILED")) {
+            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This line's match status changed under us");
+        }
+
+        audit.record(AuditFact.of("partner.invoice.line.reconciled", AuditClass.BUSINESS)
+                .by(actor)
+                .at(ResourceScope.tenant(tenantId))
+                .target("partner_delivery_invoice_line", line.get().id())
+                .because(reason)
+                .changed(Map.of(
+                        "shipmentId",
+                        shipmentId,
+                        "previousStatus",
+                        line.get().matchStatus().name()))
+                .usingCapability("partner.invoice.manage")
+                .correlatedBy("partner-invoice")
+                .occurredAt(clock.instant())
+                .build());
+        return true;
     }
 
     /** What the booking said this partner delivery would cost, if anything did. */

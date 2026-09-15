@@ -1,0 +1,15 @@
+<div
+  class="canvas"
+  [style.width.px]="width()"
+  [style.height.px]="height()"
+  data-testid="floor-plan-canvas"
+>
+  @for (table of tables(); track table.tableId) {
+    <q-table-token
+      [table]="table"
+      [disabled]="disabled()"
+      (positionChange)="onPositionChange(table.tableId, $event)"
+      (selected)="tableSelected.emit(table.tableId)"
+    />
+  }
+</div>

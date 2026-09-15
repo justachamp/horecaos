@@ -13,6 +13,7 @@ function handover(overrides: Partial<CashHandoverView> = {}): CashHandoverView {
     handoverId: 'handover-1',
     shiftId: 'shift-1',
     courierId: 'courier-1',
+    courierDisplayReference: 'K-042',
     locationId: 'location-1',
     status: 'DECLARED',
     currency: 'UZS',
@@ -20,6 +21,10 @@ function handover(overrides: Partial<CashHandoverView> = {}): CashHandoverView {
     declaredMinor: 148_000,
     confirmedMinor: null,
     varianceMinor: null,
+    bonusPaidMinor: 0,
+    cashDeliveredCount: 1,
+    nonCashDeliveredCount: 0,
+    nonCashEarningsMinor: 0,
     declaredAt: '2026-09-04T20:00:00Z',
     confirmedBy: null,
     confirmedAt: null,
@@ -73,7 +78,10 @@ describe('CashReconciliationPage', () => {
     await render([handover()]);
     const text = host().textContent ?? '';
 
-    expect(api.cashHandovers).toHaveBeenCalledWith('tenant-1');
+    expect(api.cashHandovers).toHaveBeenCalledWith('tenant-1', {
+      status: undefined,
+      locationId: undefined,
+    });
     expect(text).toContain('Declared');
     // formatMoney renders the whole-som figure without inventing decimals.
     expect(text).toContain('150');

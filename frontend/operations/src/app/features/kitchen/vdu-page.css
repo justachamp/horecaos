@@ -13,16 +13,30 @@
 
 .vdu__card {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   height: 96px;
-  font-size: var(--q-type-headline);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
   background: var(--q-surface-1);
   color: var(--q-canvas);
   border-radius: var(--q-radius);
   border: 2px solid transparent;
+}
+
+.vdu__sequence {
+  font-size: var(--q-type-headline);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The number a courier or customer is actually holding (gap map row 2.4) —
+   secondary to sequenceLabel, which is what the kitchen itself calls the
+   ticket, but present whenever the order carries one. */
+.vdu__external-reference {
+  font-size: var(--q-type-body-sm);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
 }
 
 .vdu__card--ready {

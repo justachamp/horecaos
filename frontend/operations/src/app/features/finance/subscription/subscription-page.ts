@@ -10,8 +10,11 @@ import { describeApiError } from '../../orders/order-errors';
 import {
   CommercialApi,
   EntitlementSnapshotView,
+  SellableModuleView,
   StatementView,
   SubscriptionView,
+  TenantArrearsView,
+  TenantModuleView,
   UsageView,
 } from '../commercial-api';
 
@@ -33,6 +36,15 @@ const STATEMENT_STATUS_KEYS: Readonly<Record<string, MessageKey>> = {
   DRAFT: 'finance.subscription.statements.status.DRAFT',
   ISSUED: 'finance.subscription.statements.status.ISSUED',
   VOID: 'finance.subscription.statements.status.VOID',
+};
+
+/** `BillingUnit.java`'s five constants. */
+const BILLING_UNIT_KEYS: Readonly<Record<string, MessageKey>> = {
+  PER_TENANT: 'finance.subscription.modules.billingUnit.PER_TENANT',
+  PER_BRAND: 'finance.subscription.modules.billingUnit.PER_BRAND',
+  PER_LOCATION: 'finance.subscription.modules.billingUnit.PER_LOCATION',
+  PER_UNIT: 'finance.subscription.modules.billingUnit.PER_UNIT',
+  ONE_OFF: 'finance.subscription.modules.billingUnit.ONE_OFF',
 };
 
 /** `StatementLine.java`'s five kind constants. */
@@ -61,12 +73,21 @@ const STATEMENT_LINE_KIND_KEYS: Readonly<Record<string, MessageKey>> = {
  * `.statementExport`). That read was always `ScopeType.TENANT` and held by
  * `TENANT_OWNER`/`TENANT_FINANCE`; it simply had no client until now.
  *
- * **What is honestly not.** ADR 0021's own status line: no period close, no
- * wallet. Purchasable modules with inline purchase needs the platform-wide
- * plan catalogue, a `ScopeType.PLATFORM` read no tenant grant can satisfy —
- * this screen names that rather than shipping a catalogue with nothing to buy
- * from it. Arrears state and the restricted-feature banner need
- * `ArrearsController`'s own tenant-reachable mirror, not built here either.
+ * **The purchasable-module catalogue and the arrears banner, as of ADR
+ * 0127.** `modulesOnSale`/`modulesHeld`/`purchaseModule` render what HorecaOS
+ * sells and let `TENANT_OWNER`/`TENANT_FINANCE` add one inline — the same
+ * pair that already holds `refund.execute`, under the new
+ * `COMMERCIAL_MODULE_READ`/`COMMERCIAL_SUBSCRIPTION_MANAGE` (tenant scope)
+ * declarations. `arrears` reads this tenant's own place in the lifecycle
+ * under the new `COMMERCIAL_ARREARS_READ`; the restricted-feature banner
+ * renders only when something is actually restricted (`additionsBlocked` or
+ * plan entitlements not applying) — a healthy tenant sees nothing extra,
+ * because a banner that always shows stops meaning anything.
+ *
+ * **What is honestly not.** Period close is HorecaOS-staff work: ADR 0088
+ * decided a month is closed by issuing its statement, deliberately manual
+ * until tax and invoicing are approved, so this screen has nothing left to
+ * add for it. The prepaid wallet stays blocked on ADR 0095.
  */
 @Component({
   selector: 'q-subscription-page',
@@ -95,6 +116,18 @@ export class SubscriptionPage {
   /** Which statement a download is in flight for, so a slow export disables only its own button. */
   protected readonly downloadingStatementId = signal<string | null>(null);
 
+  protected readonly modulesOnSale = signal<readonly SellableModuleView[]>([]);
+  protected readonly modulesHeld = signal<readonly TenantModuleView[]>([]);
+  protected readonly modulesDenied = signal(false);
+  protected readonly moduleActionError = signal<string | null>(null);
+  /** Which module a purchase is in flight for, so a slow write disables only its own button. */
+  protected readonly purchasingModuleId = signal<string | null>(null);
+  /** `PER_UNIT` modules ask how many; keyed by moduleId, defaulting to 1. */
+  protected readonly moduleQuantities = signal<Readonly<Record<string, number>>>({});
+
+  protected readonly arrears = signal<TenantArrearsView | null>(null);
+  protected readonly arrearsDenied = signal(false);
+
   private tenantId: string | null = null;
 
   constructor() {
@@ -115,21 +148,38 @@ export class SubscriptionPage {
     }
     this.tenantId = tenantId;
     try {
-      const [subscription, entitlements, usage, statements] = await Promise.all([
-        this.api.subscription(tenantId).catch((error) => {
-          if (error instanceof ApiError && error.status === 403) {
-            this.subscriptionDenied.set(true);
-          }
-          return null;
-        }),
-        this.api.entitlements(tenantId),
-        this.api.usage(tenantId),
-        this.api.statements(tenantId),
-      ]);
+      const [subscription, entitlements, usage, statements, modulesOnSale, modulesHeld, arrears] =
+        await Promise.all([
+          this.api.subscription(tenantId).catch((error) => {
+            if (error instanceof ApiError && error.status === 403) {
+              this.subscriptionDenied.set(true);
+            }
+            return null;
+          }),
+          this.api.entitlements(tenantId),
+          this.api.usage(tenantId),
+          this.api.statements(tenantId),
+          this.api.modulesOnSale(tenantId).catch((error) => {
+            if (error instanceof ApiError && error.status === 403) {
+              this.modulesDenied.set(true);
+            }
+            return [];
+          }),
+          this.api.modulesHeld(tenantId).catch(() => []),
+          this.api.arrears(tenantId).catch((error) => {
+            if (error instanceof ApiError && error.status === 403) {
+              this.arrearsDenied.set(true);
+            }
+            return null;
+          }),
+        ]);
       this.subscription.set(subscription);
       this.entitlements.set(entitlements);
       this.usage.set(usage);
       this.statements.set(statements);
+      this.modulesOnSale.set(modulesOnSale);
+      this.modulesHeld.set(modulesHeld);
+      this.arrears.set(arrears);
       this.state.set('ready');
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
@@ -160,6 +210,56 @@ export class SubscriptionPage {
   protected lineKindLabel(kind: string): string {
     const key = STATEMENT_LINE_KIND_KEYS[kind];
     return key ? this.i18n.t(key) : kind;
+  }
+
+  protected billingUnitLabel(billingUnit: string): string {
+    const key = BILLING_UNIT_KEYS[billingUnit];
+    return key ? this.i18n.t(key) : billingUnit;
+  }
+
+  /** The banner's own status label — same set as {@link statusLabel}, read off a plain string. */
+  protected arrearsStatusLabel(status: string): string {
+    const key = STATUS_KEYS[status as SubscriptionView['status']] as MessageKey | undefined;
+    return key ? this.i18n.t(key) : status;
+  }
+
+  /** True once this tenant has a live (not-ended) instance of the module. */
+  protected alreadyHasModule(moduleId: string): boolean {
+    return this.modulesHeld().some((held) => held.moduleId === moduleId && held.endedAt === null);
+  }
+
+  protected quantityFor(moduleId: string): number {
+    return this.moduleQuantities()[moduleId] ?? 1;
+  }
+
+  protected setQuantity(moduleId: string, value: string): void {
+    const parsed = Number.parseInt(value, 10);
+    this.moduleQuantities.update((current) => ({
+      ...current,
+      [moduleId]: Number.isFinite(parsed) && parsed > 0 ? parsed : 1,
+    }));
+  }
+
+  protected async purchaseModule(module: SellableModuleView): Promise<void> {
+    if (this.purchasingModuleId() !== null) {
+      return;
+    }
+    this.moduleActionError.set(null);
+    this.purchasingModuleId.set(module.moduleId);
+    try {
+      const quantity = module.billingUnit === 'PER_UNIT' ? this.quantityFor(module.moduleId) : null;
+      await this.api.purchaseModule(this.requireTenantId(), module.moduleId, quantity);
+      const [modulesHeld, entitlements] = await Promise.all([
+        this.api.modulesHeld(this.requireTenantId()),
+        this.api.entitlements(this.requireTenantId()),
+      ]);
+      this.modulesHeld.set(modulesHeld);
+      this.entitlements.set(entitlements);
+    } catch (error) {
+      this.moduleActionError.set(this.describe(error));
+    } finally {
+      this.purchasingModuleId.set(null);
+    }
   }
 
   /** Toggles the inline line detail for one statement, fetching it the first time it opens. */

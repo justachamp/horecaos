@@ -141,3 +141,28 @@
   text-align: left;
   color: var(--q-ink-muted);
 }
+
+.restriction-banner {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--q-error-text);
+  border-radius: var(--q-radius);
+  background: var(--q-error-tint);
+  max-width: 480px;
+}
+
+.restriction-banner p {
+  margin: 8px 0 0;
+}
+
+.quantity-input {
+  width: 56px;
+  height: 36px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font: inherit;
+}

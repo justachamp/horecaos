@@ -134,6 +134,14 @@ export interface OrderRowResponse {
   readonly secondsTotal: number | null;
   readonly secondsLate: number | null;
   readonly cancellationReasonCode: string | null;
+  /** Wave P27 (7.2): CONFIRMED -> PREPARING, "branch acceptance". */
+  readonly secondsToAccept: number | null;
+  /** Wave P27 (7.2): PREPARING -> READY, actual cooking — narrower than secondsToReady. */
+  readonly secondsPreparing: number | null;
+  /** Wave P27 (7.2a): the short number a receipt prints. */
+  readonly publicOrderNumber: string | null;
+  /** Wave P27 (7.2a): «Предзаказ». */
+  readonly isPreorder: boolean;
 }
 
 export interface OrderListResponse {
@@ -146,7 +154,16 @@ export interface OrderListResponse {
 export interface OutcomeRowResponse {
   readonly terminalStatus: string;
   readonly cancellationReasonCode: string | null;
+  /** Wave P27 (7.1): what the cancellation cost the tenant's stock — ADR 0039. */
+  readonly stockDisposition: string | null;
+  readonly liabilityParty: string | null;
   readonly count: number;
+}
+
+/** Wave P27 (7.1a): one tenant cancellation reason. Mirrors `ReportingController.CancellationReasonResponse`. */
+export interface CancellationReasonResponse {
+  readonly reasonCode: string;
+  readonly internalName: string;
 }
 
 export interface OutcomeListResponse {
@@ -270,6 +287,95 @@ export interface OperatorProductListResponse {
   readonly provenance: ProvenanceResponse;
 }
 
+/**
+ * T11 (7.4, ADR 0125): one courier's totals across the range. Mirrors
+ * `CourierReportController.LeaderboardRowResponse`. Never a courier's
+ * protected name — resolve display through {@code CouriersApi.roster}'s own
+ * `displayReference`, keyed on `courierId`, exactly as P19 already does
+ * everywhere else in this console.
+ *
+ * @property onTimeShare null when no delivery in range recorded a promise —
+ *   never a zero that would read as "missed every delivery".
+ */
+export interface CourierLeaderboardRowResponse {
+  readonly courierId: string;
+  readonly deliveryCount: number;
+  readonly minDistanceMeters: number;
+  readonly maxDistanceMeters: number;
+  readonly avgDistanceMeters: number;
+  readonly totalDistanceMeters: number;
+  readonly avgTransitHours: number;
+  readonly totalTransitSeconds: number;
+  readonly onTimeShare: number | null;
+}
+
+export interface CourierLeaderboardResponse {
+  readonly rows: readonly CourierLeaderboardRowResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/** T11 (7.4a): the `COURIER` scope of the fixed SLA distribution. Mirrors `CourierBucketResponse`. */
+export interface CourierBucketResponse {
+  readonly businessDate: string;
+  readonly courierId: string;
+  readonly bucketCode: string;
+  readonly orderCount: number;
+  readonly shareBasisPoints: number;
+}
+
+export interface CourierSlaResponse {
+  readonly buckets: readonly CourierBucketResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/** T11 (7.4b): one (tariff, courier) group over the audit range. Mirrors `TariffAuditRowResponse`. */
+export interface TariffAuditRowResponse {
+  readonly tariffId: string;
+  readonly tariffVersion: number;
+  readonly zoneId: string | null;
+  readonly bandSequence: number | null;
+  readonly courierId: string | null;
+  readonly resolutionCount: number;
+  readonly totalFinalFeeMinor: number;
+  readonly currency: string;
+}
+
+export interface TariffAuditResponse {
+  readonly rows: readonly TariffAuditRowResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/**
+ * T11 (7.4c): one order's external-delivery cost cut. Mirrors
+ * `ExternalDeliveryCostRowResponse`.
+ *
+ * @property reconciliationStatus `UNBILLED` when no invoice line exists at
+ *   all yet — never `PENDING`, which means a line was imported and not yet
+ *   matched.
+ * @property reconcileActionAvailable false for a genuinely `UNBILLED` row:
+ *   there is no invoice line yet to reconcile against.
+ */
+export interface ExternalDeliveryCostRowResponse {
+  readonly orderId: string;
+  readonly publicOrderNumber: string;
+  readonly orderTotalMinor: number;
+  readonly currency: string;
+  readonly chargedDeliveryMinor: number;
+  readonly shipmentId: string;
+  readonly providerType: string | null;
+  readonly providerEstimatedMinor: number | null;
+  readonly providerBilledMinor: number | null;
+  readonly varianceMinor: number | null;
+  readonly reconciliationStatus: string;
+  readonly reconcileActionAvailable: boolean;
+}
+
+export interface ExternalDeliveryCostResponse {
+  readonly rows: readonly ExternalDeliveryCostRowResponse[];
+  readonly totalVarianceMinor: number;
+  readonly provenance: ProvenanceResponse;
+}
+
 export interface QueryParams {
   readonly from: string;
   readonly to: string;
@@ -277,6 +383,8 @@ export interface QueryParams {
   readonly groupBy?: readonly string[];
   readonly locationId?: readonly string[];
   readonly channelCode?: readonly string[];
+  /** Wave P27: previously only a groupBy dimension with no filter to go with it. */
+  readonly legalEntityId?: readonly string[];
 }
 
 export interface RangeParams {
@@ -314,6 +422,7 @@ export class ReportingApi {
           groupBy: params.groupBy,
           locationId: params.locationId,
           channelCode: params.channelCode,
+          legalEntityId: params.legalEntityId,
         },
       }),
     );
@@ -363,7 +472,16 @@ export class ReportingApi {
 
   async orders(
     tenantId: string,
-    params: RangeParams & { readonly sort: OrderSort; readonly limit?: number },
+    params: RangeParams & {
+      readonly sort: OrderSort;
+      readonly limit?: number;
+      /** Wave P27: pushed into the query — previously filtered client-side over an already-fetched page. */
+      readonly fulfilmentType?: readonly string[];
+      readonly legalEntityId?: readonly string[];
+      /** Wave P27 (7.2a): cursor paging past the bounded read — both present or both absent. */
+      readonly afterOccurredAt?: string;
+      readonly afterOrderId?: string;
+    },
   ): Promise<OrderListResponse> {
     const result = await firstValueFrom(
       this.api.get<OrderListResponse>(reportsPaths.orders(tenantId), {
@@ -372,12 +490,44 @@ export class ReportingApi {
           to: params.to,
           locationId: params.locationId,
           channelCode: params.channelCode,
+          fulfilmentType: params.fulfilmentType,
+          legalEntityId: params.legalEntityId,
           sort: params.sort,
           limit: params.limit,
+          afterOccurredAt: params.afterOccurredAt,
+          afterOrderId: params.afterOrderId,
         },
       }),
     );
     return result.value;
+  }
+
+  /** Wave P27 (7.1): the overview's pickup/delivery elapsed-time tile. */
+  async fulfilmentTime(
+    tenantId: string,
+    params: RangeParams & { readonly fulfilmentType: 'DELIVERY' | 'PICKUP' },
+  ): Promise<MedianResponse> {
+    const result = await firstValueFrom(
+      this.api.get<MedianResponse>(reportsPaths.fulfilmentTime(tenantId), {
+        params: {
+          from: params.from,
+          to: params.to,
+          locationId: params.locationId,
+          fulfilmentType: params.fulfilmentType,
+        },
+      }),
+    );
+    return result.value;
+  }
+
+  /** Wave P27 (7.1a): resolves a cancellation reason code to its tenant-chosen label. */
+  async cancellationReasons(tenantId: string): Promise<readonly CancellationReasonResponse[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly CancellationReasonResponse[]>(
+        reportsPaths.cancellationReasons(tenantId),
+      ),
+    );
+    return result.value ?? [];
   }
 
   async orderOutcomes(tenantId: string, params: RangeParams): Promise<OutcomeListResponse> {
@@ -456,6 +606,58 @@ export class ReportingApi {
           limit: params.limit,
         },
       }),
+    );
+    return result.value;
+  }
+
+  /** T11 (7.4): the courier leaderboard, courierId only — resolve display through `CouriersApi.roster`. */
+  async courierLeaderboard(
+    tenantId: string,
+    params: { readonly from: string; readonly to: string },
+  ): Promise<CourierLeaderboardResponse> {
+    const result = await firstValueFrom(
+      this.api.get<CourierLeaderboardResponse>(reportsPaths.courierLeaderboard(tenantId), {
+        params: { from: params.from, to: params.to },
+      }),
+    );
+    return result.value;
+  }
+
+  /** T11 (7.4a): the `COURIER` scope of the fixed SLA distribution. */
+  async courierSlaBuckets(
+    tenantId: string,
+    params: { readonly from: string; readonly to: string },
+  ): Promise<CourierSlaResponse> {
+    const result = await firstValueFrom(
+      this.api.get<CourierSlaResponse>(reportsPaths.courierSlaBuckets(tenantId), {
+        params: { from: params.from, to: params.to },
+      }),
+    );
+    return result.value;
+  }
+
+  /** T11 (7.4b): the delivery-sum-by-tariff audit. */
+  async courierTariffAudit(tenantId: string, params: RangeParams): Promise<TariffAuditResponse> {
+    const result = await firstValueFrom(
+      this.api.get<TariffAuditResponse>(reportsPaths.courierTariffAudit(tenantId), {
+        params: { from: params.from, to: params.to, locationId: params.locationId },
+      }),
+    );
+    return result.value;
+  }
+
+  /** T11 (7.4c): per-order external-delivery cost — the one courier report that finds money. */
+  async courierExternalDeliveryCost(
+    tenantId: string,
+    params: RangeParams,
+  ): Promise<ExternalDeliveryCostResponse> {
+    const result = await firstValueFrom(
+      this.api.get<ExternalDeliveryCostResponse>(
+        reportsPaths.courierExternalDeliveryCost(tenantId),
+        {
+          params: { from: params.from, to: params.to, locationId: params.locationId },
+        },
+      ),
     );
     return result.value;
   }

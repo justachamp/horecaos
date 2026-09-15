@@ -1,9 +1,7 @@
-package uz.horecaos.platform.telemetry.infrastructure.realtime;
+package uz.horecaos.platform.telemetry.api;
 
 import java.util.Optional;
 import java.util.UUID;
-import uz.horecaos.platform.telemetry.api.ScopeKey;
-import uz.horecaos.platform.telemetry.api.StreamChannel;
 
 /**
  * What a registered snapshot channel puts in its frame (ADR 0045).
@@ -20,6 +18,19 @@ import uz.horecaos.platform.telemetry.api.StreamChannel;
  * nothing on its own — the registry checks the channel's capability before every
  * snapshot it sends, because the alternative is a stream that keeps emitting
  * after a grant is revoked.
+ *
+ * <p><strong>Published in {@code telemetry.api} rather than kept internal</strong>
+ * (wave P08), because {@code COUNTERS} carries an aggregate {@code ordering}
+ * owns and computes — {@code CourierPositionSnapshotSource} answers for itself
+ * from inside this module, but nothing here can compute an order count without
+ * either duplicating {@code ordering}'s query or importing its internals, both
+ * of which ADR 0019's module boundary refuses. This is the same "inward port"
+ * shape as {@link CourierShiftPort} and {@link SettlementCalendarPort}: telemetry
+ * declares the contract, another module implements it, and {@link
+ * uz.horecaos.platform.telemetry.infrastructure.realtime.SseStreamRegistry}
+ * collects every implementation Spring finds regardless of which module it came
+ * from — module boundaries are a static-analysis property of imports, not of
+ * runtime wiring.
  */
 public interface SnapshotSource {
 

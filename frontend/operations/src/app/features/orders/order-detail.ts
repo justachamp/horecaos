@@ -117,7 +117,7 @@ export interface OrderLineNoteReveal {
 
 /**
  * `TimelineEntryResponse` — one row of `GET .../timeline` (§3.10, commercial
- * lane only; production and delivery are ADR 0041 / ADR 0014, not built).
+ * lane).
  */
 export interface OrderTimelineEntry {
   readonly sequence: number;
@@ -127,6 +127,29 @@ export interface OrderTimelineEntry {
   readonly reasonCode?: string | null;
   readonly actorType: string;
   readonly occurredAt: string;
+}
+
+/**
+ * `ApprovalDecisionResponse` — one row of `GET .../orders/{orderId}/decisions`
+ * (wave P11, gap map row 1.2b): every approve/reject command this order ever
+ * received, winner and losers alike. A separate read from {@link
+ * OrderTimelineEntry}'s own `GET .../timeline` — that response is a released
+ * contract `OpenApiContractTests` refuses to let narrow or change shape, so
+ * this rides its own endpoint rather than widening that one from an array to
+ * an object. At most one row per order has `effective: true`.
+ */
+export interface OrderApprovalDecision {
+  readonly decisionId: string;
+  /** `APPROVE` | `REJECT`. */
+  readonly action: string;
+  /** `HORECAOS_OPERATIONS` | `HORECAOS_TELEGRAM_BOT` | `POS` | `SYSTEM_TIMEOUT`. */
+  readonly decisionChannel: string;
+  /** `USER` | `SERVICE` | `SYSTEM_JOB` | `PROVIDER`. */
+  readonly actorType: string;
+  readonly actorId?: string | null;
+  readonly reasonCode?: string | null;
+  readonly effective: boolean;
+  readonly issuedAt: string;
 }
 
 /**
@@ -168,6 +191,51 @@ export interface OrderCountsResponse {
   readonly cancelled: number;
   readonly totalNonTerminal: number;
   readonly total: number;
+}
+
+/**
+ * `OrderDeliveryController.ShipmentResponse` — the shipment carrying one
+ * order's plan, with the three V0054 custody timestamps `DispatchController`'s
+ * own queue never serialises (gap map row 1.2n).
+ */
+export interface OrderDeliveryShipment {
+  readonly shipmentId: string;
+  /** `PENDING` | `ASSIGNED` | `PICKUP_PENDING` | `PICKED_UP` | `DELIVERED` | `CANCELLED`. */
+  readonly status: string;
+  /** `INTERNAL` | `PARTNER`. */
+  readonly sourceType: string;
+  readonly courierId?: string | null;
+  readonly providerBindingId?: string | null;
+  readonly assignedAt?: string | null;
+  readonly pickedUpAt?: string | null;
+  readonly deliveredAt?: string | null;
+  readonly version: number;
+}
+
+/**
+ * `OrderDeliveryController.OrderDeliveryResponse` — `GET .../orders/{orderId}/delivery`
+ * (wave P11, gap map rows 1.2e/1.2n/2.1a). Not found for an order fulfilled
+ * some other way (pickup, dine-in, a cancelled plan).
+ */
+export interface OrderDeliveryResponse {
+  readonly planId: string;
+  readonly planVersion: number;
+  readonly planStatus: string;
+  readonly estimatedReadyAt: string;
+  readonly promisedDeliveryStart?: string | null;
+  readonly promisedDeliveryEnd?: string | null;
+  readonly customerDeliveryFeeMinor: number;
+  /**
+   * Set only when `fulfillment.delivery_cost_subsidies` recognised a gap
+   * between the customer's fee and what the winning partner billed. A
+   * provider-fulfilled order that came in at or under the customer's fee has
+   * no such row — this is `null`, not zero, and the Money panel must say
+   * "not tracked" rather than imply a break-even margin nothing recorded.
+   */
+  readonly providerCostMinor?: number | null;
+  readonly currency: string;
+  readonly courierEtaAt?: string | null;
+  readonly shipment?: OrderDeliveryShipment | null;
 }
 
 /** Re-exported so callers of `order-detail.ts` need not also import `order-actions.ts` for this one type. */

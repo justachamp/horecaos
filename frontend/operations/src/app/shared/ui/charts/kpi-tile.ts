@@ -1,6 +1,19 @@
-import { ChangeDetectionStrategy, Component, booleanAttribute, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, booleanAttribute, input, signal } from '@angular/core';
 
 import { Sparkline } from './sparkline';
+
+/**
+ * The published-formula panel statistics.md §1.2 requires behind every
+ * tile's own "?" — already-translated prose, never a raw registry field
+ * name. A caller maps its own metric dictionary entry (`ReportingApi.metrics()`)
+ * onto this shape rather than {@link KpiTile} importing a feature's API model.
+ */
+export interface KpiTileFormula {
+  readonly definition: string;
+  readonly inclusion: string;
+  readonly exclusion: string;
+  readonly unit: string;
+}
 
 /**
  * A KPI tile's delta against its own comparison period — `+12%` styled up,
@@ -68,4 +81,23 @@ export class KpiTile {
 
   /** One point per business date in the tile's own period, oldest first. `null` renders as a gap. */
   readonly sparklinePoints = input<readonly (number | null)[] | null>(null);
+
+  /**
+   * statistics.md §1.2's published-formula panel — the "?" beside a figure.
+   * Absent renders no "?" at all rather than an empty one, for a tile whose
+   * caller has not wired a definition yet.
+   */
+  readonly formula = input<KpiTileFormula | null>(null);
+  /** Already translated — read to a screen reader in place of the bare "?" glyph. */
+  readonly formulaAriaLabel = input<string | null>(null);
+  /** Already translated section labels for the open panel — "Includes"/"Excludes"/"Unit". */
+  readonly formulaIncludesLabel = input<string | null>(null);
+  readonly formulaExcludesLabel = input<string | null>(null);
+  readonly formulaUnitLabel = input<string | null>(null);
+
+  protected readonly formulaOpen = signal(false);
+
+  protected toggleFormula(): void {
+    this.formulaOpen.update((open) => !open);
+  }
 }

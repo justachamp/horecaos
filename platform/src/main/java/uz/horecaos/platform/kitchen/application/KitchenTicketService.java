@@ -1001,8 +1001,31 @@ public class KitchenTicketService {
         return kitchen.channelSystemTypes(tenantId, channelCodes);
     }
 
+    /** The provider-assigned identifier for each of these orders, where one exists (gap map row 2.4, VDU). */
+    public Map<UUID, String> externalReferencesByOrder(UUID tenantId, Set<UUID> orderIds) {
+        return orders.externalReferences(tenantId, orderIds);
+    }
+
     public List<TicketItemRow> items(UUID tenantId, UUID ticketId) {
         return kitchen.itemsOf(tenantId, ticketId);
+    }
+
+    /**
+     * The ticket this order opened, whatever its status — including {@code
+     * HANDED_OVER} and {@code VOIDED}, which {@link #board} never returns.
+     * The order-keyed kitchen-events read (gap map row 1.2b) is the one
+     * caller: an operator's order detail pane holds an order id and nothing
+     * else, and today has no path from it to a ticket at all once the order
+     * is complete — the exact case the gap map calls out as falling off the
+     * board.
+     */
+    public Optional<TicketRow> byOrder(UUID tenantId, UUID orderId) {
+        return kitchen.findTicketByOrder(tenantId, orderId);
+    }
+
+    /** {@code kitchen.ticket_events} for one ticket (gap map row 1.2b) — written since ADR 0041, read here for the first time outside a test. */
+    public List<JdbcKitchenStore.TicketEventRow> events(UUID tenantId, UUID ticketId) {
+        return kitchen.eventsOf(tenantId, ticketId);
     }
 
     /** Whether order proposals reach ordering at all, surfaced on every board. */

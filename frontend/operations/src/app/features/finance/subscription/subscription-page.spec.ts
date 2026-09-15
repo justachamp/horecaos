@@ -8,8 +8,11 @@ import { I18n } from '../../../core/i18n/i18n';
 import {
   CommercialApi,
   EntitlementSnapshotView,
+  SellableModuleView,
   StatementView,
   SubscriptionView,
+  TenantArrearsView,
+  TenantModuleView,
   UsageView,
 } from '../commercial-api';
 import { SubscriptionPage } from './subscription-page';
@@ -101,6 +104,72 @@ const ISSUED_STATEMENT_DETAIL: StatementView = {
   ],
 };
 
+const ON_SALE_MODULE: SellableModuleView = {
+  moduleId: 'module-kiosk',
+  code: 'kiosk',
+  name: 'Self-service kiosk',
+  description: 'An ordering screen at the counter.',
+  billingUnit: 'PER_TENANT',
+  unitPrice: { amountMinor: 150_000, currency: 'UZS' },
+  featureKeys: [],
+  status: 'ACTIVE',
+  createdBy: 'commercial-author',
+  approvedBy: 'commercial-approver',
+  activatedAt: '2026-08-01T00:00:00Z',
+  retiredAt: null,
+};
+
+const ON_SALE_AND_ALREADY_HELD_MODULE: SellableModuleView = {
+  ...ON_SALE_MODULE,
+  moduleId: 'module-analytics',
+  code: 'analytics',
+  name: 'Analytics',
+};
+
+const ALREADY_HELD_MODULE: TenantModuleView = {
+  tenantModuleId: 'tm-1',
+  moduleId: 'module-analytics',
+  moduleCode: 'analytics',
+  moduleName: 'Analytics',
+  billingUnit: 'PER_TENANT',
+  unitPrice: { amountMinor: 90_000, currency: 'UZS' },
+  quantity: null,
+  startedAt: '2026-07-01T00:00:00Z',
+  startedBy: 'finance',
+  startReason: 'sold with the pilot',
+  endedAt: null,
+  endedBy: null,
+  endReason: null,
+};
+
+const ARREARS_HEALTHY: TenantArrearsView = {
+  status: 'ACTIVE',
+  planEntitlementsApply: true,
+  additionsBlocked: false,
+  allowedNext: ['PAST_DUE', 'SUSPENDED', 'CANCELLATION_SCHEDULED', 'TERMINATED'],
+  since: '2026-08-01T00:00:00Z',
+  daysInStatus: 14,
+  suspensionReason: null,
+  latestStatement: null,
+};
+
+const ARREARS_RESTRICTED: TenantArrearsView = {
+  status: 'SUSPENDED',
+  planEntitlementsApply: false,
+  additionsBlocked: true,
+  allowedNext: ['ACTIVE', 'TERMINATED'],
+  since: '2026-09-01T00:00:00Z',
+  daysInStatus: 5,
+  suspensionReason: 'three months unpaid',
+  latestStatement: {
+    statementId: 'st-2',
+    number: 'S-2026-08-000001',
+    periodKey: '2026-08',
+    total: { amountMinor: 1_500_000, currency: 'UZS' },
+    issuedAt: '2026-09-01T05:00:00Z',
+  },
+};
+
 class FakeCurrentTenant {
   readonly tenantId = signal<string | null>(TENANT_ID);
   readonly denied = signal(false);
@@ -121,6 +190,10 @@ describe('SubscriptionPage', () => {
     statements: ReturnType<typeof vi.fn>;
     statement: ReturnType<typeof vi.fn>;
     statementExport: ReturnType<typeof vi.fn>;
+    modulesOnSale: ReturnType<typeof vi.fn>;
+    modulesHeld: ReturnType<typeof vi.fn>;
+    purchaseModule: ReturnType<typeof vi.fn>;
+    arrears: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(async () => {
@@ -133,6 +206,10 @@ describe('SubscriptionPage', () => {
       statementExport: vi
         .fn()
         .mockResolvedValue('number,period\r\n"S-2026-08-000001","2026-08"\r\n'),
+      modulesOnSale: vi.fn().mockResolvedValue([ON_SALE_MODULE, ON_SALE_AND_ALREADY_HELD_MODULE]),
+      modulesHeld: vi.fn().mockResolvedValue([ALREADY_HELD_MODULE]),
+      purchaseModule: vi.fn().mockResolvedValue({ tenantModuleId: 'tm-2' }),
+      arrears: vi.fn().mockResolvedValue(ARREARS_HEALTHY),
     };
 
     await TestBed.configureTestingModule({
@@ -222,5 +299,80 @@ describe('SubscriptionPage', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain(
       'No statements have been issued yet.',
     );
+  });
+
+  // -------------------------------------------------- Finance 8.6, ADR 0127
+
+  it('lists the on-sale module catalogue and shows an already-held module as added, not purchasable', () => {
+    const host: HTMLElement = fixture.nativeElement;
+    expect(api.modulesOnSale).toHaveBeenCalledWith(TENANT_ID);
+    expect(api.modulesHeld).toHaveBeenCalledWith(TENANT_ID);
+    expect(host.textContent).toContain('Self-service kiosk');
+    expect(host.textContent).toContain('Analytics');
+
+    const rows = [...host.querySelectorAll('.table tbody tr')];
+    const analyticsRow = rows.find((row) => row.textContent?.includes('Analytics'));
+    expect(analyticsRow?.textContent).toContain('Added');
+    expect(analyticsRow?.querySelector('button')).toBeNull();
+
+    const kioskRow = rows.find((row) => row.textContent?.includes('Self-service kiosk'));
+    expect(kioskRow?.querySelector('button')?.textContent?.trim()).toBe('Add');
+  });
+
+  it('purchases an on-sale module and refreshes what the tenant holds and is entitled to', async () => {
+    const host: HTMLElement = fixture.nativeElement;
+    const addButton = [...host.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Add',
+    ) as HTMLButtonElement;
+    expect(addButton).toBeTruthy();
+
+    api.modulesHeld.mockResolvedValueOnce([
+      ALREADY_HELD_MODULE,
+      { ...ALREADY_HELD_MODULE, tenantModuleId: 'tm-2', moduleId: ON_SALE_MODULE.moduleId },
+    ]);
+    addButton.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.purchaseModule).toHaveBeenCalledWith(TENANT_ID, ON_SALE_MODULE.moduleId, null);
+    // Re-read after a successful purchase, so the catalogue reflects what just happened.
+    expect(api.modulesHeld).toHaveBeenCalledTimes(2);
+    expect(api.entitlements).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows a purchase failure as an alert rather than staying silent', async () => {
+    api.purchaseModule.mockRejectedValueOnce(
+      new ApiError(ApiErrorCode.INTERNAL_ERROR, 500, null, 'corr-2'),
+    );
+    const host: HTMLElement = fixture.nativeElement;
+    const addButton = [...host.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Add',
+    ) as HTMLButtonElement;
+
+    addButton.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[role="alert"]')).not.toBeNull();
+  });
+
+  it('renders no restriction banner while the subscription is in good standing', () => {
+    const host: HTMLElement = fixture.nativeElement;
+    expect(api.arrears).toHaveBeenCalledWith(TENANT_ID);
+    expect(host.textContent).not.toContain('Account standing');
+  });
+
+  it('renders the restricted-feature banner, with the latest statement, once additions are blocked', async () => {
+    api.arrears.mockResolvedValue(ARREARS_RESTRICTED);
+    fixture = TestBed.createComponent(SubscriptionPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const host: HTMLElement = fixture.nativeElement;
+    expect(host.textContent).toContain('Account standing');
+    expect(host.textContent).toContain('Suspended');
+    expect(host.textContent).toContain('5 days');
+    expect(host.textContent).toContain('S-2026-08-000001');
   });
 });

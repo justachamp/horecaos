@@ -32,6 +32,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.fulfillment.api.CourierEtaPort;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.AuthorizationService;
@@ -358,6 +359,172 @@ class KitchenExecutionTests {
         assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
     }
 
+    @Test
+    @DisplayName("a throughput ceiling can be corrected once created (gap map row 2.6)")
+    void aCapacityWindowCanBeCorrected() {
+        StationCapacityRow created = stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(18, 0), LocalTime.of(22, 0), 40));
+
+        StationCapacityRow updated = stationService.updateCapacityWindow(new KitchenStationService.CapacityWindowEdit(
+                TENANT, branch, created.id(), LocalTime.of(17, 0), LocalTime.of(21, 0), 55, created.version()));
+
+        assertThat(updated.windowStart()).isEqualTo(LocalTime.of(17, 0));
+        assertThat(updated.windowEnd()).isEqualTo(LocalTime.of(21, 0));
+        assertThat(updated.portionsPerHour()).isEqualTo(55);
+        assertThat(updated.version()).isEqualTo(created.version() + 1);
+        assertThat(stationService.listCapacityWindows(TENANT, branch))
+                .as("the correction must actually be what a second read sees")
+                .extracting(StationCapacityRow::portionsPerHour)
+                .containsExactly(55);
+    }
+
+    @Test
+    @DisplayName("correcting a ceiling with a version somebody else already moved is refused")
+    void updatingACapacityWindowAtTheWrongVersionIsRefused() {
+        StationCapacityRow created = stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(18, 0), LocalTime.of(22, 0), 40));
+        stationService.updateCapacityWindow(new KitchenStationService.CapacityWindowEdit(
+                TENANT, branch, created.id(), LocalTime.of(18, 0), LocalTime.of(22, 0), 50, created.version()));
+
+        // created.version() is now stale — somebody else's edit already moved it.
+        Throwable failure =
+                catchThrowable(() -> stationService.updateCapacityWindow(new KitchenStationService.CapacityWindowEdit(
+                        TENANT,
+                        branch,
+                        created.id(),
+                        LocalTime.of(18, 0),
+                        LocalTime.of(22, 0),
+                        60,
+                        created.version())));
+
+        assertThat(failure).isInstanceOf(ApiException.class);
+        assertThat(stationService.listCapacityWindows(TENANT, branch))
+                .as("the refused write must not have landed over the winning one")
+                .extracting(StationCapacityRow::portionsPerHour)
+                .containsExactly(50);
+    }
+
+    @Test
+    @DisplayName("correcting a ceiling into another window's slot is refused, the same as creating one there")
+    void updatingACapacityWindowIntoAnOverlapIsRefused() {
+        stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(9, 0), LocalTime.of(12, 0), 30));
+        StationCapacityRow evening = stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(18, 0), LocalTime.of(22, 0), 40));
+
+        Throwable failure =
+                catchThrowable(() -> stationService.updateCapacityWindow(new KitchenStationService.CapacityWindowEdit(
+                        TENANT,
+                        branch,
+                        evening.id(),
+                        LocalTime.of(11, 0),
+                        LocalTime.of(13, 0),
+                        40,
+                        evening.version())));
+
+        assertThat(failure).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT);
+    }
+
+    @Test
+    @DisplayName("a ceiling can be deleted, and deleting an overlapping one unblocks authoring the correct window")
+    void deletingAnOverlappingCeilingUnblocksTheCorrectOne() {
+        StationCapacityRow wrong = stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(9, 0), LocalTime.of(12, 0), 999));
+
+        // The manager meant 09:00-13:00, typed 09:00-12:00, and a second attempt
+        // at the real window collides with the typo — exactly the trap gap map
+        // row 2.6 names, with no edit or delete to escape it before this wave.
+        Throwable blocked =
+                catchThrowable(() -> stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                        TENANT, BRAND, branch, grillStation, 5, LocalTime.of(9, 0), LocalTime.of(13, 0), 30)));
+        assertThat(blocked).isInstanceOf(ApiException.class);
+
+        stationService.deleteCapacityWindow(TENANT, branch, wrong.id(), wrong.version());
+        assertThat(stationService.listCapacityWindows(TENANT, branch)).isEmpty();
+
+        StationCapacityRow corrected = stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(9, 0), LocalTime.of(13, 0), 30));
+
+        assertThat(stationService.listCapacityWindows(TENANT, branch))
+                .extracting(StationCapacityRow::id)
+                .containsExactly(corrected.id());
+    }
+
+    @Test
+    @DisplayName("deleting a ceiling with a stale version is refused, and the row survives")
+    void deletingACapacityWindowAtTheWrongVersionIsRefused() {
+        StationCapacityRow created = stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, branch, grillStation, 5, LocalTime.of(9, 0), LocalTime.of(12, 0), 30));
+
+        Throwable failure = catchThrowable(() -> stationService.deleteCapacityWindow(TENANT, branch, created.id(), 99));
+
+        assertThat(failure).isInstanceOf(ApiException.class);
+        assertThat(stationService.listCapacityWindows(TENANT, branch))
+                .extracting(StationCapacityRow::id)
+                .containsExactly(created.id());
+    }
+
+    @Test
+    @DisplayName("neither edit nor delete reaches a ceiling at a sibling branch")
+    void aCapacityWindowAtAnotherBranchIsNotFound() {
+        StationRow siblingGrill = stationService.create(new KitchenStationService.NewStation(
+                TENANT, BRAND, siblingBranch, "GRILL", StationRole.GRILL, "Гриль", "Gril", "Grill", 1, true));
+        StationCapacityRow created = stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT, BRAND, siblingBranch, siblingGrill.id(), 5, LocalTime.of(9, 0), LocalTime.of(12, 0), 30));
+
+        Throwable updateFailure =
+                catchThrowable(() -> stationService.updateCapacityWindow(new KitchenStationService.CapacityWindowEdit(
+                        TENANT, branch, created.id(), LocalTime.of(9, 0), LocalTime.of(12, 0), 40, created.version())));
+        Throwable deleteFailure = catchThrowable(
+                () -> stationService.deleteCapacityWindow(TENANT, branch, created.id(), created.version()));
+
+        assertThat(updateFailure).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) updateFailure).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+        assertThat(deleteFailure).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) deleteFailure).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    // ------------------------------------------------------- external references
+
+    @Test
+    @DisplayName("the VDU's external reference prefers a partner's display code over its order id, "
+            + "and ignores POS/HorecaOS-issued references entirely (gap map row 2.4)")
+    void externalReferencesPreferThePartnersOwnDisplayCode() {
+        UUID orderId = seedConfirmedOrder("A-050", null, null, null, burger);
+        UUID otherOrderId = seedConfirmedOrder("A-051", null, null, null, burger);
+
+        insertExternalReference(orderId, "PARTNER_ORDER_ID", "9911", "PARTNER");
+        insertExternalReference(orderId, "PARTNER_DISPLAY_CODE", "YE-42", "PARTNER");
+        insertExternalReference(otherOrderId, "POS_ORDER_ID", "POS-1", "POS");
+
+        Map<UUID, String> references = tickets.externalReferencesByOrder(TENANT, Set.of(orderId, otherOrderId));
+
+        assertThat(references)
+                .as("the partner's own display code wins over its order id")
+                .containsEntry(orderId, "YE-42");
+        assertThat(references)
+                .as("a POS-issued reference is never what a courier or a customer is holding")
+                .doesNotContainKey(otherOrderId);
+    }
+
+    private void insertExternalReference(UUID orderId, String type, String value, String issuedBy) {
+        jdbc.sql("""
+                INSERT INTO ordering.order_external_references
+                    (id, tenant_id, order_id, reference_type, reference_value,
+                     reference_value_normalised, issued_by)
+                VALUES (:id, :tenantId, :orderId, :type, :value, :normalised, :issuedBy)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("orderId", orderId)
+                .param("type", type)
+                .param("value", value)
+                .param("normalised", value.toUpperCase(java.util.Locale.ROOT))
+                .param("issuedBy", issuedBy)
+                .update();
+    }
+
     // --------------------------------------------------------- tickets and roll-up
 
     @Test
@@ -521,6 +688,67 @@ class KitchenExecutionTests {
                 .as("nothing was ready to hand over, so the ticket must not silently become HANDED_OVER")
                 .isEmpty();
         assertThat(tickets.require(TENANT, ticket.id()).status()).isNotEqualTo(TicketStatus.HANDED_OVER);
+    }
+
+    // -------------------------------------------- order-keyed events (gap map row 1.2b, wave P11)
+
+    @Test
+    @DisplayName("a HANDED_OVER ticket's events are read by order id even though board() never returns it")
+    void completedOrdersEventsSurviveOffTheBoard() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        UUID orderId = seedConfirmedOrder("A-060", null, null, null, burger);
+        TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+        TicketItemRow item = store.itemsOf(TENANT, ticket.id()).getFirst();
+        tickets.start(TENANT, item.id(), "cook", null);
+        tickets.ready(TENANT, item.id(), "cook", null);
+        tickets.handOver(TENANT, ticket.id(), "expo", null);
+
+        // The gap this closes, stated as an assertion: the live board itself
+        // never answers for this ticket once it is HANDED_OVER.
+        assertThat(tickets.board(TENANT, branch, List.of("FIRED", "IN_PRODUCTION", "READY"), 200))
+                .noneMatch(row -> row.id().equals(ticket.id()));
+
+        KitchenBoardController board =
+                new KitchenBoardController(tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas());
+
+        KitchenBoardController.KitchenEventsResponse response = Objects.requireNonNull(
+                board.eventsForOrder(TENANT, BRAND, branch, orderId).getBody());
+
+        assertThat(response.ticketId()).isEqualTo(ticket.id());
+        assertThat(response.ticketStatus()).isEqualTo("HANDED_OVER");
+        assertThat(response.events())
+                .as("every ticket-level transition this ticket made, in order")
+                .extracting(KitchenBoardController.KitchenEventResponse::toStatus)
+                .contains("FIRED", "IN_PRODUCTION", "READY", "HANDED_OVER");
+    }
+
+    @Test
+    @DisplayName("an order that never opened a ticket answers empty, not an error")
+    void anOrderWithNoTicketAnswersEmptyEvents() {
+        KitchenBoardController board =
+                new KitchenBoardController(tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas());
+
+        KitchenBoardController.KitchenEventsResponse response = Objects.requireNonNull(
+                board.eventsForOrder(TENANT, BRAND, branch, UUID.randomUUID()).getBody());
+
+        assertThat(response.ticketId()).isNull();
+        assertThat(response.ticketStatus()).isNull();
+        assertThat(response.events()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a ticket at a sibling branch answers not found, not somebody else's production events")
+    void aTicketAtASiblingBranchIsNotFoundForEvents() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        UUID orderId = seedConfirmedOrder("A-061", null, null, null, burger);
+        tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+
+        KitchenBoardController board =
+                new KitchenBoardController(tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas());
+
+        Throwable refusal = catchThrowable(() -> board.eventsForOrder(TENANT, BRAND, siblingBranch, orderId));
+
+        assertThat(refusal).isInstanceOf(ApiException.class);
     }
 
     // ------------------------------------------------------------------- release
@@ -799,7 +1027,8 @@ class KitchenExecutionTests {
         TicketItemRow item = store.itemsOf(TENANT, ticket.id()).getFirst();
         TicketItemStatus before = item.status();
 
-        KitchenBoardController board = new KitchenBoardController(tickets, cookAtSiblingBranch(), refusesEverything());
+        KitchenBoardController board =
+                new KitchenBoardController(tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas());
 
         Throwable refusal = catchThrowable(() -> board.start(TENANT, BRAND, siblingBranch, item.id()));
 
@@ -820,6 +1049,11 @@ class KitchenExecutionTests {
 
     private CurrentActor cookAtSiblingBranch() {
         return () -> new AuthenticatedActor(UUID.randomUUID().toString(), Set.of(), Map.of());
+    }
+
+    /** No item here has a delivery plan at all, so the join has nothing to answer. */
+    private CourierEtaPort noCourierEtas() {
+        return (tenantId, orderIds) -> java.util.Map.of();
     }
 
     /**
@@ -854,6 +1088,19 @@ class KitchenExecutionTests {
         TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
 
         assertThat(store.findTicket(UUID.randomUUID(), ticket.id())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("the order-keyed ticket lookup and its events, gap map row 1.2b's own reads, are equally invisible to"
+            + " another tenant -- findTicket's own isolation proves nothing about findTicketByOrder/eventsOf")
+    void theOrderKeyedTicketReadAndItsEventsAreInvisibleToAnotherTenant() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        UUID orderId = seedConfirmedOrder("A-063", null, null, null, burger);
+        TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+
+        UUID otherTenant = UUID.randomUUID();
+        assertThat(store.findTicketByOrder(otherTenant, orderId)).isEmpty();
+        assertThat(store.eventsOf(otherTenant, ticket.id())).isEmpty();
     }
 
     @Test

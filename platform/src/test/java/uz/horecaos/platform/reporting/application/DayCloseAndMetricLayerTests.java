@@ -300,6 +300,132 @@ class DayCloseAndMetricLayerTests {
         assertThat(fact).containsEntry("operator_principal_id", "channel:TELEGRAM");
     }
 
+    // ----------------------------------------------------- wave P27 (7.1/7.2)
+
+    @Test
+    @DisplayName("the close job copies stock_disposition and liability_party from order_outcomes onto the fact")
+    void theCloseJobCopiesTheCancellationCostFromOrderOutcomes() {
+        insertOrder("CANCELLED-1", ENTITY_A, "CANCELLED", tashkent(13, 0), tashkent(13, 5), 90_000, 0);
+        insertOrderOutcome(orderId("CANCELLED-1"), "WRITE_OFF", "TENANT", tashkent(13, 5));
+
+        close.close(TENANT, DAY);
+
+        Map<String, Object> fact = jdbc.sql("""
+                SELECT stock_disposition, liability_party FROM reporting.fact_order
+                 WHERE tenant_id = :t AND order_id = :id
+                """)
+                .param("t", TENANT)
+                .param("id", orderId("CANCELLED-1"))
+                .query()
+                .singleRow();
+
+        assertThat(fact).containsEntry("stock_disposition", "WRITE_OFF").containsEntry("liability_party", "TENANT");
+    }
+
+    @Test
+    @DisplayName("an order with no recorded outcome stays null, never a fabricated NO_EFFECT")
+    void anOrderWithNoOutcomeRowHasNoDisposition() {
+        insertOrder("NO_OUTCOME", ENTITY_A, "COMPLETED", tashkent(13, 0), tashkent(13, 40), 90_000, 0);
+
+        close.close(TENANT, DAY);
+
+        Map<String, Object> fact = jdbc.sql("""
+                SELECT stock_disposition, liability_party FROM reporting.fact_order
+                 WHERE tenant_id = :t AND order_id = :id
+                """)
+                .param("t", TENANT)
+                .param("id", orderId("NO_OUTCOME"))
+                .query()
+                .singleRow();
+
+        assertThat(fact.get("stock_disposition")).isNull();
+        assertThat(fact.get("liability_party")).isNull();
+    }
+
+    @Test
+    @DisplayName("the close job splits branch acceptance (CONFIRMED->PREPARING) from cooking (PREPARING->READY)")
+    void theCloseJobSplitsBranchAcceptanceFromCooking() {
+        Instant createdAt = tashkent(13, 0);
+        Instant confirmedAt = createdAt.plusSeconds(120); // insertOrder's own fixed confirmed_at offset
+        Instant preparingAt = confirmedAt.plusSeconds(11 * 60); // the branch let it wait eleven minutes
+        Instant readyAt = preparingAt.plusSeconds(9 * 60); // then it actually cooked for nine
+        insertOrder("SPLIT", ENTITY_A, "COMPLETED", createdAt, readyAt.plusSeconds(300), 90_000, 0);
+        insertStateHistory(orderId("SPLIT"), 1, "PREPARING", preparingAt);
+        insertStateHistory(orderId("SPLIT"), 2, "READY", readyAt);
+
+        close.close(TENANT, DAY);
+
+        Map<String, Object> fact = jdbc.sql("""
+                SELECT seconds_to_accept, seconds_preparing, seconds_to_ready FROM reporting.fact_order
+                 WHERE tenant_id = :t AND order_id = :id
+                """)
+                .param("t", TENANT)
+                .param("id", orderId("SPLIT"))
+                .query()
+                .singleRow();
+
+        assertThat(fact.get("seconds_to_accept"))
+                .as("CONFIRMED -> PREPARING: the branch-acceptance wait")
+                .isEqualTo(11 * 60);
+        assertThat(fact.get("seconds_preparing"))
+                .as("PREPARING -> READY: actual cooking, narrower than seconds_to_ready")
+                .isEqualTo(9 * 60);
+        assertThat(fact.get("seconds_to_ready"))
+                .as("CONFIRMED -> READY stays the unchanged, wider figure existing readers rely on")
+                .isEqualTo(11 * 60 + 9 * 60);
+    }
+
+    @Test
+    void thePublicOrderNumberIsSnapshottedOntoTheFact() {
+        insertOrder("NUMBERED", ENTITY_A, "COMPLETED", tashkent(13, 0), tashkent(13, 40), 90_000, 0);
+
+        close.close(TENANT, DAY);
+
+        Map<String, Object> fact = jdbc.sql("""
+                SELECT public_order_number FROM reporting.fact_order
+                 WHERE tenant_id = :t AND order_id = :id
+                """)
+                .param("t", TENANT)
+                .param("id", orderId("NUMBERED"))
+                .query()
+                .singleRow();
+
+        // insertOrder writes public_order_number = seed (its own :number param).
+        assertThat(fact).containsEntry("public_order_number", "NUMBERED");
+    }
+
+    private void insertOrderOutcome(
+            UUID orderId, String stockDisposition, @Nullable String liabilityParty, Instant occurredAt) {
+        jdbc.sql("""
+                INSERT INTO ordering.order_outcomes (
+                    order_id, tenant_id, kind, system_category, actor_type,
+                    stock_disposition, liability_party, reservation_committed, occurred_at)
+                VALUES (:orderId, :t, 'CANCELLED', 'CUSTOMER_CANCELLED', 'USER',
+                    :stockDisposition, :liabilityParty, true, :occurredAt)
+                """)
+                .param("orderId", orderId)
+                .param("t", TENANT)
+                .param("stockDisposition", stockDisposition)
+                .param("liabilityParty", liabilityParty)
+                .param("occurredAt", occurredAt.atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    private void insertStateHistory(UUID orderId, int sequenceNumber, String toStatus, Instant occurredAt) {
+        jdbc.sql("""
+                INSERT INTO ordering.order_state_history (
+                    id, tenant_id, order_id, sequence_number, to_status, trigger, actor_type, occurred_at)
+                VALUES (:id, :t, :orderId, :seq, :toStatus, 'OPERATIONS_ACTION', 'USER', :occurredAt)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", TENANT)
+                .param("orderId", orderId)
+                .param("seq", sequenceNumber)
+                .param("toStatus", toStatus)
+                .param("occurredAt", occurredAt.atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
     // ---------------------------------------------------- ADR 0064 call facts
 
     @Test
@@ -530,7 +656,7 @@ class DayCloseAndMetricLayerTests {
         close.close(TENANT, DAY);
 
         assertThatThrownBy(() -> queries.run(new ReportQuery(
-                        TENANT, DAY, DAY, List.of("revenue.gross.v1"), List.of(), List.of(), List.of())))
+                        TENANT, DAY, DAY, List.of("revenue.gross.v1"), List.of(), List.of(), List.of(), List.of())))
                 .isInstanceOf(ReportingRefusals.CombinedEntityTotalException.class)
                 .hasMessageContaining("neither tax filing");
     }
@@ -547,6 +673,7 @@ class DayCloseAndMetricLayerTests {
                 DAY,
                 List.of("revenue.gross.v1"),
                 List.of(Grain.Dimension.LEGAL_ENTITY),
+                List.of(),
                 List.of(),
                 List.of()));
 
@@ -565,8 +692,8 @@ class DayCloseAndMetricLayerTests {
         insertOrder("B-1", ENTITY_B, "COMPLETED", tashkent(14, 0), tashkent(14, 40), 80_000, 0);
         close.close(TENANT, DAY);
 
-        var result = queries.run(
-                new ReportQuery(TENANT, DAY, DAY, List.of("orders.count.v1"), List.of(), List.of(), List.of()));
+        var result = queries.run(new ReportQuery(
+                TENANT, DAY, DAY, List.of("orders.count.v1"), List.of(), List.of(), List.of(), List.of()));
 
         assertThat(result.rows()).hasSize(1);
         assertThat(result.rows().getFirst().values()).containsEntry("orders.count.v1", 2L);
@@ -583,6 +710,7 @@ class DayCloseAndMetricLayerTests {
                         List.of("revenue.gross.v1", "revenue.imaginary.v1"),
                         List.of(Grain.Dimension.LEGAL_ENTITY),
                         List.of(),
+                        List.of(),
                         List.of())))
                 .hasMessageContaining("revenue.imaginary.v1");
     }
@@ -595,6 +723,7 @@ class DayCloseAndMetricLayerTests {
                         DAY,
                         List.of("delivery_cost_variance.v1"),
                         List.of(Grain.Dimension.LEGAL_ENTITY),
+                        List.of(),
                         List.of(),
                         List.of())))
                 .isInstanceOf(ReportingRefusals.MetricNotBuiltException.class);
@@ -611,6 +740,7 @@ class DayCloseAndMetricLayerTests {
                         DAY,
                         List.of("revenue.gross.v1"),
                         List.of(Grain.Dimension.LEGAL_ENTITY),
+                        List.of(),
                         List.of(),
                         List.of()))
                 .provenance();
@@ -664,13 +794,21 @@ class DayCloseAndMetricLayerTests {
                         List.of("orders.count.v1"),
                         List.of(),
                         List.of(),
+                        List.of(),
                         List.of())))
                 .isInstanceOf(ReportingRefusals.MixedBoundaryRegimeException.class);
 
         // Either side of the frontier on its own is answerable, so the refusal is
         // exactly as wide as the problem.
         queries.run(new ReportQuery(
-                TENANT, DAY.plusDays(1), DAY.plusDays(2), List.of("orders.count.v1"), List.of(), List.of(), List.of()));
+                TENANT,
+                DAY.plusDays(1),
+                DAY.plusDays(2),
+                List.of("orders.count.v1"),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()));
     }
 
     // ---------------------------------------------------------- isolation
@@ -696,8 +834,8 @@ class DayCloseAndMetricLayerTests {
                 .param("e", ENTITY_A)
                 .update();
 
-        var result = queries.run(
-                new ReportQuery(TENANT, DAY, DAY, List.of("orders.count.v1"), List.of(), List.of(), List.of()));
+        var result = queries.run(new ReportQuery(
+                TENANT, DAY, DAY, List.of("orders.count.v1"), List.of(), List.of(), List.of(), List.of()));
 
         assertThat(result.rows()).hasSize(1);
         assertThat(result.rows().getFirst().values()).containsEntry("orders.count.v1", 1L);
@@ -738,7 +876,14 @@ class DayCloseAndMetricLayerTests {
 
     private long metric(LocalDate from, LocalDate to, String code) {
         var result = queries.run(new ReportQuery(
-                TENANT, from, to, List.of(code), List.of(Grain.Dimension.LEGAL_ENTITY), List.of(), List.of()));
+                TENANT,
+                from,
+                to,
+                List.of(code),
+                List.of(Grain.Dimension.LEGAL_ENTITY),
+                List.of(),
+                List.of(),
+                List.of()));
         return result.rows().stream()
                 .map(row -> row.values().get(code))
                 .filter(java.util.Objects::nonNull)

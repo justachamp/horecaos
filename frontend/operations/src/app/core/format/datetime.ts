@@ -89,6 +89,30 @@ function offsetMinutesEastOfUtc(instant: Date, zone: TimeZone): number {
 }
 
 /**
+ * `<input type="datetime-local">`'s own value shape (`YYYY-MM-DDTHH:mm`) for
+ * an instant, read as wall-clock time in a named zone — the write-side
+ * counterpart of {@link zonedTimeToInstant} for an editable field that must
+ * round-trip through that input's un-timezoned string shape.
+ */
+export function toZonedDatetimeLocal(instant: Date, zone: TimeZone): string {
+  const parts = zonedParts(instant, zone);
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+/**
+ * The inverse of {@link toZonedDatetimeLocal}: a `<input type="datetime-local">`
+ * value, interpreted as wall-clock time in a named zone rather than the
+ * browser's own — the fix for the class of bug where `new Date(local)` reads
+ * an editable fire-time/schedule field in whatever zone the operator's device
+ * happens to be set to.
+ */
+export function parseZonedDatetimeLocal(local: string, zone: TimeZone): Date {
+  const [dateIso, time] = local.split('T');
+  const [hour, minute] = (time ?? '00:00').split(':').map(Number);
+  return zonedTimeToInstant(dateIso, hour + minute / 60, zone);
+}
+
+/**
  * A duration in whole minutes, as `12 мин` or `1 ч 04 мин`.
  *
  * The minutes are zero-padded past the hour so that a column of durations stays

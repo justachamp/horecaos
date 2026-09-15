@@ -46,6 +46,30 @@
         <p class="q-body-sm muted">{{ 'finance.subscription.noSubscription' | t }}</p>
       }
 
+      @if (arrears(); as a) {
+        @if (a.additionsBlocked || !a.planEntitlementsApply) {
+          <div class="restriction-banner" role="alert">
+            <div class="plan-card__row">
+              <span class="q-subhead">{{ 'finance.subscription.arrears.title' | t }}</span>
+              <span class="status-badge">{{ arrearsStatusLabel(a.status) }}</span>
+            </div>
+            <p class="q-body-sm">
+              {{ 'finance.subscription.arrears.restricted' | t }}
+            </p>
+            <p class="q-caption muted">
+              {{ 'finance.subscription.arrears.since' | t }}: {{ a.since }} ·
+              {{ 'finance.subscription.arrears.days' | t: { days: a.daysInStatus } }}
+            </p>
+            @if (a.latestStatement; as latest) {
+              <p class="q-caption muted">
+                {{ 'finance.subscription.arrears.latestStatement' | t }}:
+                {{ money(latest.total) }} ({{ latest.number }})
+              </p>
+            }
+          </div>
+        }
+      }
+
       @if (entitlements(); as e) {
         <h2 class="q-subhead section-title">{{ 'finance.subscription.entitlements.title' | t }}</h2>
         <table class="table">
@@ -213,6 +237,73 @@
           }
         </tbody>
       </table>
+
+      @if (!modulesDenied()) {
+        <h2 class="q-subhead section-title">{{ 'finance.subscription.modules.title' | t }}</h2>
+        @if (moduleActionError(); as message) {
+          <div class="error-band" role="alert">
+            <span class="q-body-sm">{{ message }}</span>
+          </div>
+        }
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'finance.subscription.modules.name' | t }}</th>
+              <th class="q-caption">{{ 'finance.subscription.modules.billingUnit' | t }}</th>
+              <th class="q-caption num">{{ 'finance.subscription.modules.price' | t }}</th>
+              <th class="q-caption"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (module of modulesOnSale(); track module.moduleId) {
+              <tr>
+                <td class="q-body-sm">
+                  {{ module.name }}
+                  @if (module.description) {
+                    <div class="q-caption muted">{{ module.description }}</div>
+                  }
+                </td>
+                <td class="q-body-sm">{{ billingUnitLabel(module.billingUnit) }}</td>
+                <td class="q-body-sm q-tnum num">
+                  {{ money(module.unitPrice) }}
+                </td>
+                <td class="q-body-sm actions">
+                  @if (alreadyHasModule(module.moduleId)) {
+                    <span class="q-caption muted">{{
+                      'finance.subscription.modules.added' | t
+                    }}</span>
+                  } @else {
+                    @if (module.billingUnit === 'PER_UNIT') {
+                      <input
+                        type="number"
+                        min="1"
+                        class="quantity-input"
+                        [attr.aria-label]="'finance.subscription.modules.quantityLabel' | t"
+                        [value]="quantityFor(module.moduleId)"
+                        (change)="setQuantity(module.moduleId, $any($event.target).value)"
+                      />
+                    }
+                    <button
+                      type="button"
+                      class="secondary"
+                      [disabled]="purchasingModuleId() === module.moduleId"
+                      (click)="purchaseModule(module)"
+                    >
+                      {{ 'finance.subscription.modules.add' | t }}
+                    </button>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td class="q-body-sm empty" colspan="4">
+                  {{ 'finance.subscription.modules.empty' | t }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
 
       <p class="q-body-sm not-built-note">{{ 'finance.subscription.notBuiltNote' | t }}</p>
     }

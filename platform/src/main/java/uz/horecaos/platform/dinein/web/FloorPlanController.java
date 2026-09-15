@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -159,6 +160,33 @@ public class FloorPlanController {
                 body.layoutY()))));
     }
 
+    @PutMapping("/tables/{tableId}")
+    @RequiresCapability(value = Capability.DINEIN_FLOORPLAN_MANAGE, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Move a table on the floor plan canvas",
+            description = "Drag-to-reposition's save. layoutX/layoutY have no unit or bound beyond "
+                    + "what the canvas itself enforces — they are this branch's own drawing "
+                    + "surface, not a real-world coordinate.")
+    public ResponseEntity<TableResponse> moveTable(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID tableId,
+            @Valid @RequestBody TableLayoutRequest body,
+            HttpServletRequest request) {
+
+        long expected = AggregateVersion.requireIfMatch(request);
+        return ResponseEntity.ok(TableResponse.of(floorPlan.moveTable(
+                tenantId,
+                locationId,
+                tableId,
+                (int) expected,
+                body.layoutX(),
+                body.layoutY(),
+                currentActor.get().subject(),
+                body.reason())));
+    }
+
     @PostMapping("/tables/{tableId}/status-changes")
     @RequiresCapability(value = Capability.DINEIN_FLOORPLAN_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
@@ -177,6 +205,7 @@ public class FloorPlanController {
         long expected = AggregateVersion.requireIfMatch(request);
         return ResponseEntity.ok(TableResponse.of(floorPlan.changeTableStatus(
                 tenantId,
+                locationId,
                 tableId,
                 (int) expected,
                 body.status(),
@@ -202,7 +231,12 @@ public class FloorPlanController {
 
         long expected = AggregateVersion.requireIfMatch(request);
         FloorPlanService.IssuedQrToken issued = floorPlan.rotateQrToken(
-                tenantId, tableId, (int) expected, currentActor.get().subject(), body.reason());
+                tenantId,
+                locationId,
+                tableId,
+                (int) expected,
+                currentActor.get().subject(),
+                body.reason());
 
         return ResponseEntity.ok(new RotationResponse(
                 issued.tableId(),
@@ -266,6 +300,11 @@ public class FloorPlanController {
      * Carries {@code qrIssued} rather than the digest. Whether a table has a code
      * is what an operator needs to know; the digest tells them nothing and is one
      * more copy of a security-relevant value in one more log.
+     *
+     * <p>{@code layoutX}/{@code layoutY} were write-only before wave P38: {@link
+     * TableRequest} always took them, but nothing ever read them back, so the
+     * canvas this response now backs had nowhere to draw a table it had not
+     * itself just created.
      */
     record TableResponse(
             UUID tableId,
@@ -274,6 +313,8 @@ public class FloorPlanController {
             String displayName,
             int seats,
             boolean joinable,
+            @Nullable BigDecimal layoutX,
+            @Nullable BigDecimal layoutY,
             String status,
             boolean qrIssued,
             @Nullable Instant qrRotatedAt,
@@ -287,12 +328,20 @@ public class FloorPlanController {
                     row.displayName(),
                     row.seats(),
                     row.joinable(),
+                    row.layoutX(),
+                    row.layoutY(),
                     row.status(),
                     row.qrTokenHash() != null,
                     row.qrTokenRotatedAt(),
                     row.version());
         }
     }
+
+    /** Moves a table on the canvas (drag-to-reposition). Both coordinates are required, together. */
+    record TableLayoutRequest(
+            @NotNull BigDecimal layoutX,
+            @NotNull BigDecimal layoutY,
+            @NotBlank @Size(max = 500) String reason) {}
 
     record TableStatusRequest(
             @NotBlank @Size(max = 20) String status,

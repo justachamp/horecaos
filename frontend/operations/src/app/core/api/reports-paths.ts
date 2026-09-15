@@ -91,6 +91,38 @@ export const reportsPaths = {
   paymentMix(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/payment-mix`;
   },
+
+  /** Wave P27 (7.1): the overview's pickup/delivery elapsed-time tile. */
+  fulfilmentTime(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/fulfilment-time`;
+  },
+
+  /** Wave P27 (7.1a): the tenant's cancellation-reason registry. */
+  cancellationReasons(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/cancellation-reasons`;
+  },
+
+  /**
+   * T11 (7.4/7.4a/7.4b/7.4c, ADR 0125): `CourierReportController`'s own
+   * sub-tree — a separate class server-side (see its own doc for why), and a
+   * separate path segment here so the four courier reads read as one group
+   * rather than four more siblings of `/sla-buckets`.
+   */
+  courierLeaderboard(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/couriers/leaderboard`;
+  },
+
+  courierSlaBuckets(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/couriers/sla-buckets`;
+  },
+
+  courierTariffAudit(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/couriers/tariff-audit`;
+  },
+
+  courierExternalDeliveryCost(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/couriers/external-delivery-cost`;
+  },
 } as const;
 
 /**

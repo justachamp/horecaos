@@ -12,6 +12,8 @@ export interface CashHandoverView {
   readonly handoverId: string;
   readonly shiftId: string;
   readonly courierId: string;
+  /** The non-personal handle (ADR 0029) — null only for a since-removed courier row. */
+  readonly courierDisplayReference: string | null;
   readonly locationId: string;
   readonly status: 'PENDING' | 'DECLARED' | 'CONFIRMED' | 'VARIANCE_RAISED' | 'OVERRIDDEN';
   readonly currency: string;
@@ -19,6 +21,12 @@ export interface CashHandoverView {
   readonly declaredMinor: number | null;
   readonly confirmedMinor: number | null;
   readonly varianceMinor: number | null;
+  /** A bonus already posted this shift — money paid that reduces what the cash count still owes. */
+  readonly bonusPaidMinor: number;
+  /** IA's "courier daily/shift totals by payment method": deliveries this shift where cash changed hands. */
+  readonly cashDeliveredCount: number;
+  readonly nonCashDeliveredCount: number;
+  readonly nonCashEarningsMinor: number;
   readonly declaredAt: string | null;
   readonly confirmedBy: string | null;
   readonly confirmedAt: string | null;
@@ -76,13 +84,17 @@ export interface PartnerInvoiceView {
 }
 
 /** `PartnerChargeType.java`. */
-export type PartnerChargeType = 'DELIVERY' | 'CANCELLATION' | 'WAITING' | 'SURCHARGE' | 'ADJUSTMENT';
+export type PartnerChargeType =
+  'DELIVERY' | 'CANCELLATION' | 'WAITING' | 'SURCHARGE' | 'ADJUSTMENT';
 
 /**
  * `MatchStatus.java`. `UNMATCHED_LINE` — the partner billed for a shipment
  * HorecaOS has no record of — is never netted into any total (ADR 0042).
  */
 export type MatchStatus = 'PENDING' | 'MATCHED' | 'VARIANCE' | 'UNBILLED' | 'UNMATCHED_LINE';
+
+/** ACCEPTED or DISPUTED — only ever set on a `VARIANCE` line. */
+export type VarianceResolution = 'ACCEPTED' | 'DISPUTED';
 
 export interface PartnerInvoiceLineView {
   readonly lineId: string;
@@ -94,11 +106,26 @@ export interface PartnerInvoiceLineView {
   readonly matchStatus: MatchStatus;
   readonly varianceMinor: number | null;
   readonly reasonCode: string | null;
+  readonly varianceResolution: VarianceResolution | null;
 }
 
 export interface PartnerInvoiceDetailView {
   readonly invoice: PartnerInvoiceView;
   readonly lines: readonly PartnerInvoiceLineView[];
+}
+
+/** One line of an invoice import form — mirrors `OperationsCourierController.ImportInvoiceLine`. */
+export interface ImportInvoiceLine {
+  readonly providerShipmentRef: string;
+  readonly amountMinor: number;
+  readonly chargeType: PartnerChargeType;
+}
+
+/** Mirrors `OperationsCourierController.MatchReport`. */
+export interface MatchReportView {
+  readonly matchedLines: number;
+  readonly varianceLineIds: readonly string[];
+  readonly unmatchedLineIds: readonly string[];
 }
 
 // ---------------------------------------------------------------- 8.5 Courier payouts
@@ -115,10 +142,15 @@ export interface CourierLedgerLineView {
 /** Mirrors `OperationsCourierController.LedgerResponse`. */
 export interface CourierLedgerView {
   readonly balanceMinor: number;
+  /** Null only for a courier with no ledger entries — the balance is then zero regardless. */
+  readonly currency: string | null;
   readonly entries: readonly CourierLedgerLineView[];
 }
 
-/** Mirrors `OperationsCourierController.SettlementPeriodResponse`. */
+/**
+ * Mirrors `OperationsCourierController.SettlementPeriodResponse` — the salary
+ * report's columns (IA §8.5: "orders, km, hours, вовремя, penalties, bonus, К оплате").
+ */
 export interface SettlementPeriodView {
   readonly periodId: string;
   readonly courierId: string;
@@ -132,6 +164,14 @@ export interface SettlementPeriodView {
   readonly amountPayableMinor: number;
   readonly deliveredCount: number;
   readonly onTimeCount: number;
+  /** Raw metres, never pre-divided — the salary report's km column. */
+  readonly distanceMeters: number;
+  /** Raw seconds — the salary report's hours column. */
+  readonly paidSeconds: number;
+  /** Split from `adjustmentsMinor` at read time; positive. */
+  readonly bonusMinor: number;
+  /** Split from `adjustmentsMinor` at read time; negative or zero (`LedgerEntryType.PENALTY`'s fixed sign). */
+  readonly penaltyMinor: number;
   readonly complianceFlag: boolean;
   readonly statementHash: string | null;
   readonly closedAt: string | null;
@@ -170,10 +210,17 @@ export class CourierFinanceApi {
   async confirmCash(
     tenantId: string,
     handoverId: string,
-    input: { readonly confirmedMinor: number; readonly reasonCode?: string; readonly reason: string },
+    input: {
+      readonly confirmedMinor: number;
+      readonly reasonCode?: string;
+      readonly reason: string;
+    },
   ): Promise<void> {
     await firstValueFrom(
-      this.api.post<typeof input, void>(financePaths.cashHandoverConfirm(tenantId, handoverId), command(input)),
+      this.api.post<typeof input, void>(
+        financePaths.cashHandoverConfirm(tenantId, handoverId),
+        command(input),
+      ),
     );
   }
 
@@ -193,10 +240,7 @@ export class CourierFinanceApi {
     return result.value;
   }
 
-  async partnerInvoices(
-    tenantId: string,
-    status?: string,
-  ): Promise<readonly PartnerInvoiceView[]> {
+  async partnerInvoices(tenantId: string, status?: string): Promise<readonly PartnerInvoiceView[]> {
     const result = await firstValueFrom(
       this.api.get<readonly PartnerInvoiceView[]>(financePaths.partnerInvoices(tenantId), {
         params: { status },
@@ -205,11 +249,91 @@ export class CourierFinanceApi {
     return result.value ?? [];
   }
 
-  async partnerInvoiceDetail(tenantId: string, invoiceId: string): Promise<PartnerInvoiceDetailView> {
+  async partnerInvoiceDetail(
+    tenantId: string,
+    invoiceId: string,
+  ): Promise<PartnerInvoiceDetailView> {
     const result = await firstValueFrom(
       this.api.get<PartnerInvoiceDetailView>(financePaths.partnerInvoice(tenantId, invoiceId)),
     );
     return result.value;
+  }
+
+  /** `PartnerInvoiceService.importInvoice` — an operator's own load of a partner's monthly file. */
+  async importInvoice(
+    tenantId: string,
+    input: {
+      readonly providerCode: string;
+      readonly providerInvoiceRef: string;
+      readonly periodStart: string;
+      readonly periodEnd: string;
+      readonly totalMinor: number;
+      readonly currency: string;
+      readonly lines: readonly ImportInvoiceLine[];
+      readonly reason: string;
+    },
+  ): Promise<string> {
+    const result = await firstValueFrom(
+      this.api.post<typeof input, { readonly invoiceId: string }>(
+        financePaths.partnerInvoices(tenantId),
+        command(input),
+      ),
+    );
+    return result.invoiceId;
+  }
+
+  /**
+   * `PartnerInvoiceService.match` — also the `UNMATCHED_LINE` resolution call:
+   * only lines still `PENDING`/`UNMATCHED_LINE` are reprocessed, so calling
+   * this a second time with a fuller map is exactly how a resolved reference
+   * is applied.
+   */
+  async matchInvoice(
+    tenantId: string,
+    invoiceId: string,
+    shipmentsByProviderRef: Readonly<Record<string, string>>,
+    reason: string,
+  ): Promise<MatchReportView> {
+    const result = await firstValueFrom(
+      this.api.post<
+        {
+          readonly shipmentsByProviderRef: Readonly<Record<string, string>>;
+          readonly reason: string;
+        },
+        MatchReportView
+      >(
+        financePaths.partnerInvoiceMatch(tenantId, invoiceId),
+        command({ shipmentsByProviderRef, reason }),
+      ),
+    );
+    return result;
+  }
+
+  /** `PartnerInvoiceService.disputeInvoice` — the акт сверки pushback path. */
+  async disputeInvoice(tenantId: string, invoiceId: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<{ readonly reason: string }, void>(
+        financePaths.partnerInvoiceDispute(tenantId, invoiceId),
+        command({ reason }),
+      ),
+    );
+  }
+
+  /** `PartnerInvoiceService.resolveVariance` — accept (pay as invoiced) or dispute one VARIANCE line. */
+  async resolveVariance(
+    tenantId: string,
+    invoiceId: string,
+    lineId: string,
+    accept: boolean,
+    reason: string,
+  ): Promise<PartnerInvoiceLineView> {
+    const result = await firstValueFrom(
+      this.api.post<{ readonly accept: boolean; readonly reason: string }, PartnerInvoiceLineView>(
+        financePaths.partnerInvoiceLineVarianceAcceptance(tenantId, invoiceId, lineId),
+        command({ accept, reason }),
+      ),
+    );
+    return result;
   }
 
   // -------------------------------------------------------------- 8.5
@@ -221,7 +345,10 @@ export class CourierFinanceApi {
     return result.value;
   }
 
-  async settlementPeriods(tenantId: string, status?: string): Promise<readonly SettlementPeriodView[]> {
+  async settlementPeriods(
+    tenantId: string,
+    status?: string,
+  ): Promise<readonly SettlementPeriodView[]> {
     const result = await firstValueFrom(
       this.api.get<readonly SettlementPeriodView[]>(financePaths.settlementPeriods(tenantId), {
         params: { status },
@@ -237,6 +364,23 @@ export class CourierFinanceApi {
         command({ reason }),
       ),
     );
+  }
+
+  /**
+   * `CourierSettlementService.statementOf` — the stored statement, read back
+   * and never recomputed. The endpoint has existed since before this wave;
+   * nothing called it until now.
+   */
+  async settlementStatement(
+    tenantId: string,
+    periodId: string,
+  ): Promise<Readonly<Record<string, unknown>>> {
+    const result = await firstValueFrom(
+      this.api.get<Readonly<Record<string, unknown>>>(
+        financePaths.settlementPeriodStatement(tenantId, periodId),
+      ),
+    );
+    return result.value;
   }
 
   async authorisePayout(

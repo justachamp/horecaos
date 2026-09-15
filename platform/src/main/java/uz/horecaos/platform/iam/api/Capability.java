@@ -411,6 +411,29 @@ public enum Capability {
      */
     DELIVERY_FEE_EVIDENCE_READ("delivery.fee.evidence.read", "delivery", "fee.evidence.read"),
     DELIVERY_MANUAL_ASSIGN("delivery.manual_assign", "delivery", "manual_assign"),
+
+    /**
+     * ADR 0042, gap map row {@code 10.13}: reading the courier compensation
+     * policy document — shift enforcement, the cash ceiling, the GPS gates,
+     * the kitchen-ready-only switch, reveal timing, the post-delivery payment
+     * check — resolved through ADR 0030 at whichever scope the settings
+     * screen's resolution selector is pointed at.
+     *
+     * <p>Its own capability rather than folded into {@link #COURIER_READ}:
+     * the courier roster and this policy document are different objects read
+     * by different people, the same split {@link #DELIVERY_ZONE_READ} draws
+     * from {@link #COURIER_READ} for zones and tariffs.
+     */
+    DELIVERY_POLICY_READ("delivery.policy.read", "delivery", "policy.read"),
+
+    /**
+     * ADR 0042, gap map row {@code 10.13}: publishing the next version of the
+     * courier compensation policy document, over {@code PolicyAuthor}. Before
+     * this capability existed the document had no writer anywhere reachable
+     * from the console — {@code PolicyAuthor} had exactly two other
+     * consumers and no controller injected it for this key.
+     */
+    DELIVERY_POLICY_WRITE("delivery.policy.write", "delivery", "policy.write"),
     SHIPMENT_CANCEL("shipment.cancel", "shipment", "cancel"),
 
     /**
@@ -658,14 +681,30 @@ public enum Capability {
     MARKETPLACE_AVAILABILITY_PUSH("marketplace.availability.push", "marketplace", "availability.push"),
 
     /**
+     * ADR 0040/0041: comparing the code a courier or customer presents against
+     * the one the branch issued — the ordinary, many-times-a-shift half of a
+     * handover, done from expo (IA 2.3, gap map row 2.3).
+     *
+     * <p>Wave T02 registers this; {@code MarketplaceOperationsController.verify}
+     * held {@link Capability#ORDER_ADVANCE} as a placeholder until it existed,
+     * which the endpoint's own comment used to spell out. Kept separate from
+     * {@link #MARKETPLACE_HANDOVER_BYPASS} for the reason that capability's own
+     * doc gives: completing a handover is what everyone on the pass does all
+     * shift, while bypassing one is the rarer, higher-stakes act of skipping
+     * the compare rather than performing it.
+     */
+    MARKETPLACE_HANDOVER_VERIFY("marketplace.handover.verify", "marketplace", "handover.verify"),
+
+    /**
      * ADR 0040: overriding handover verification.
      *
-     * <p>Deliberately not folded into the capability that completes a handover.
-     * Completing one is a daily act at the pass and everyone who works it needs
-     * the grant; overriding verification is the decision to hand a bag over
-     * without proof, and one capability covering both would put the override in
-     * every expo bundle in the country. It always travels with a reason code and
-     * an ADR 0027 audit fact naming the supervisor.
+     * <p>Deliberately not folded into {@link #MARKETPLACE_HANDOVER_VERIFY}, the
+     * capability that completes a handover. Completing one is a daily act at
+     * the pass and everyone who works it needs the grant; overriding
+     * verification is the decision to hand a bag over without proof, and one
+     * capability covering both would put the override in every expo bundle in
+     * the country. It always travels with a reason code and an ADR 0027 audit
+     * fact naming the supervisor.
      */
     MARKETPLACE_HANDOVER_BYPASS("marketplace.handover.bypass", "marketplace", "handover.bypass"),
 
@@ -1077,6 +1116,37 @@ public enum Capability {
      * — nothing moves until they are.
      */
     COMMERCIAL_WALLET_MANAGE("commercial.wallet.manage", "commercial", "wallet.manage"),
+
+    /**
+     * ADR 0127: browsing the modules HorecaOS sells, from the tenant's own
+     * console.
+     *
+     * <p>The tenant-scoped mirror of {@link #COMMERCIAL_PLAN_READ}'s
+     * {@code control-plane/modules} read (ADR 0087) — {@code
+     * CommercialModuleController.onSale} declares that read at {@code
+     * ScopeType.PLATFORM}, which no tenant grant can satisfy, so a tenant
+     * that could not yet see the price list could not be shown an "inline
+     * purchase" catalogue without one. Composed into tenant roles, like
+     * {@link #COMMERCIAL_PLAN_READ}: seeing what is for sale is not itself a
+     * commitment of money, which is {@link #COMMERCIAL_SUBSCRIPTION_MANAGE}'s.
+     */
+    COMMERCIAL_MODULE_READ("commercial.module.read", "commercial", "module.read"),
+
+    /**
+     * ADR 0127: this tenant's own place in the arrears lifecycle — past due,
+     * suspended, or in good standing — and what that stage restricts.
+     *
+     * <p>The tenant-scoped mirror of {@code ArrearsController.board}'s
+     * {@code commercial.usage.read} read (ADR 0089), which spans every tenant
+     * at once and so stays platform-only; a tenant is owed its own row of
+     * that board, not the whole board, which is why this is a separate
+     * capability rather than a {@code ScopeType.TENANT} declaration reusing
+     * {@link #COMMERCIAL_USAGE_READ} — that capability already means "my
+     * metered usage" to a tenant, and overloading it with "am I suspended"
+     * would make one grant answer two unrelated questions with no way to
+     * hold one without the other.
+     */
+    COMMERCIAL_ARREARS_READ("commercial.arrears.read", "commercial", "arrears.read"),
 
     /**
      * ADR 0046: reading a customer's points balance, their movements, and the

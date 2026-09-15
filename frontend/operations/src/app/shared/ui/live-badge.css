@@ -1,0 +1,13 @@
+.q-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--q-success-text);
+}
+
+.q-live-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--q-success-text);
+}

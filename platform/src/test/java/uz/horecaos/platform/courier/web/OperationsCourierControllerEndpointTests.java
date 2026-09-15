@@ -1049,20 +1049,29 @@ class OperationsCourierControllerEndpointTests {
     /**
      * A TENANT-scope {@code courier.compensation} policy, ACTIVE and current.
      *
-     * <p>Without this, {@code JdbcPolicyResolver.resolve} answers {@code
-     * Optional.empty()} for a tenant that has never had one authored — exactly
-     * ADR 0042's documented fallback case — but Spring's {@code @Cacheable}
-     * unwraps that empty {@code Optional} to a bare {@code null} before {@code
-     * CourierPolicyResolver}'s own {@code .orElseGet(...)} ever runs, and the
-     * {@code tenant.policy_current} cache refuses null values. See the one
-     * test that calls this for what that looks like from the outside.
+     * <p>Every field here matches {@code CourierCompensationPolicy.DEFAULTS}
+     * exactly, including the six wave P38 added ({@code
+     * gpsVerificationEnabled} through {@code
+     * postDeliveryPaymentCheckRequired}) — this fixture exists only to give
+     * {@code JdbcPolicyResolver.resolve} a real row to find, not to exercise a
+     * non-default value, so it deliberately restates the defaults rather than
+     * diverging from them. {@code JdbcPolicyResolver.resolve}'s own {@code
+     * unless = "#result == null"} (wave P38) means this fixture is no longer
+     * load-bearing for the reason its previous doc named — {@code
+     * tenant.policy_current} no longer refuses to cache the empty-Optional
+     * fallback — but every field here must still match {@link
+     * uz.horecaos.platform.courier.domain.CourierCompensationPolicy}'s
+     * current shape or {@code JdbcPolicyResolver.deserialize} refuses the row.
      */
     private void seedCourierCompensationPolicy(UUID tenantId) {
         UUID policyId = UUID.randomUUID();
         String document = """
                 {"reverificationDays":180,"warningDays":30,"settlementPeriodDays":14,
                  "cashCeilingMinor":5000000,"penaltyApprovalThresholdMinor":200000,
-                 "shiftEnforcement":"ADVISORY","graceSeconds":300,"confirmationPointRetentionDays":30}
+                 "shiftEnforcement":"ADVISORY","graceSeconds":300,"confirmationPointRetentionDays":30,
+                 "gpsVerificationEnabled":false,"gpsAcceptRadiusMeters":1000,
+                 "gpsStatusChangeRadiusMeters":150,"kitchenReadyOnly":false,
+                 "revealCustomerLocationTiming":"AFTER_ACCEPT","postDeliveryPaymentCheckRequired":false}
                 """.replaceAll("\\s+", " ").trim();
         jdbc.sql("""
                 INSERT INTO tenant.policies (

@@ -663,6 +663,36 @@ public class OperationsOrderController {
                 .toList());
     }
 
+    /**
+     * Every approve/reject command this order ever received, winner and losers
+     * alike (gap map row 1.2b) — a separate read from {@link #timeline} rather
+     * than folded into it: {@link #timeline}'s response is a released ADR 0031
+     * contract, and {@code OpenApiContractTests} refuses to let a GET's
+     * response narrow or change shape, array to object included. V0022's own
+     * comment on {@code ordering.approval_decisions} is why this exists at
+     * all: storing only the winner "would make an operator's rejected click
+     * invisible".
+     */
+    @GetMapping("/{orderId}/decisions")
+    @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "Every decision this order ever received, including a losing one",
+            description = "At most one row is ever effective; every other row here is a click "
+                    + "that lost the compare-and-set, a duplicate, or arrived after the order was "
+                    + "already decided.")
+    public ResponseEntity<List<ApprovalDecisionResponse>> decisions(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID orderId) {
+
+        requireOrderAtLocation(tenantId, orderId, locationId);
+
+        return ResponseEntity.ok(orderQuery.decisions(tenantId, orderId).stream()
+                .map(ApprovalDecisionResponse::of)
+                .toList());
+    }
+
     @GetMapping("/reject-reasons")
     @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.LOCATION)
     @Operation(
@@ -2139,7 +2169,10 @@ public class OperationsOrderController {
             List<OrderMixSliceResponse> sourceMix,
             List<OrderMixSliceResponse> typeMix) {
 
-        static OrderCountsResponse of(LiveBoardQueryService.LocationLiveBoard board, OrderCountsPeriod period) {
+        // public: the ADR 0045 COUNTERS snapshot source (ordering.infrastructure.realtime)
+        // reuses this mapping rather than duplicating it, so the stream and the
+        // poll can never disagree about what the nine counters mean.
+        public static OrderCountsResponse of(LiveBoardQueryService.LocationLiveBoard board, OrderCountsPeriod period) {
             JdbcOrderStore.OrderCountsRow row = board.counts();
             return new OrderCountsResponse(
                     row.newOrders(),
@@ -2249,6 +2282,35 @@ public class OperationsOrderController {
                     row.reasonCode(),
                     row.actorType(),
                     row.occurredAt());
+        }
+    }
+
+    /**
+     * One {@code ordering.approval_decisions} row, {@link #decisions}' own
+     * response (gap map row 1.2b). {@code effective} is what tells the losing
+     * side of a race apart from the one that actually moved the order — at
+     * most one decision per order is ever {@code true}.
+     */
+    public record ApprovalDecisionResponse(
+            String decisionId,
+            String action,
+            String decisionChannel,
+            String actorType,
+            @Nullable String actorId,
+            @Nullable String reasonCode,
+            boolean effective,
+            Instant issuedAt) {
+
+        static ApprovalDecisionResponse of(JdbcOrderStore.ApprovalDecisionRow row) {
+            return new ApprovalDecisionResponse(
+                    row.decisionId(),
+                    row.action(),
+                    row.decisionChannel(),
+                    row.actorType(),
+                    row.actorId(),
+                    row.reasonCode(),
+                    row.effective(),
+                    row.issuedAt());
         }
     }
 }

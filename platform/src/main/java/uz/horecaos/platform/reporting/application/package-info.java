@@ -6,12 +6,21 @@
  *
  * <p>Two rules divide this package from the rest of the platform.
  *
- * <p>The close job is the <em>only</em> thing here that reads a module schema. It
- * reads {@code ordering} and {@code payments} and writes nothing but
- * {@code reporting}. The read path — everything a report or an API response goes
- * through — touches {@code reporting} alone, which ADR 0043 turns from a
- * convention into a grant: {@code horecaos_reporting_read} holds SELECT on that
- * schema and nothing else.
+ * <p>The close job reads a module schema — {@code ordering} and {@code
+ * payments} — and writes nothing but {@code reporting}. It was, until a
+ * 2026-09-14 review, documented here as the <em>only</em> thing that does: in
+ * fact {@link ReportQueryService#tariffAudit}, {@link
+ * ReportQueryService#externalDeliveryCost}, {@code ReportQueryService.orders}'s
+ * {@code is_preorder} join, and {@link ReportQueryService#cancellationReasons}
+ * also read a module schema directly ({@code fulfillment}, {@code ordering},
+ * {@code kitchen}) — live, on the request path, not once at close time into a
+ * fact. Each is a named, doc'd exception on its own method in {@link
+ * uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore},
+ * not a silent one, and none is covered by the {@code
+ * horecaos_reporting_read} grant ADR 0043 describes below — the running
+ * application does not connect as that role. Whether these four should
+ * instead be projected into a fact is open, tracked against ADR 0043, not
+ * decided by this package existing.
  *
  * <p>No aggregate is composed outside the metric registry. A caller names metric
  * ids and dimensions; it never sends SQL, an expression, or a fragment of one.

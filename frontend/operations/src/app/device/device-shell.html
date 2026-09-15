@@ -1,0 +1,188 @@
+<div class="device-shell">
+  @if (!online()) {
+    <div class="device-shell__offline" role="status" data-testid="device-offline-banner">
+      {{ 'device.offlineBanner' | t }}
+    </div>
+  }
+
+  @if (!isSetUp()) {
+    <section class="device-shell__panel" data-testid="device-setup-panel">
+      <h1 class="device-shell__title">{{ 'device.setup.title' | t }}</h1>
+      <p class="device-shell__hint">{{ 'device.setup.hint' | t }}</p>
+
+      <form class="device-shell__form" (submit)="$event.preventDefault(); saveSetup()">
+        <label class="device-shell__field">
+          <span>{{ 'device.setup.tenantId' | t }}</span>
+          <input
+            type="text"
+            [value]="setupTenantId()"
+            (input)="setupTenantId.set($any($event.target).value)"
+            data-testid="device-setup-tenant"
+          />
+        </label>
+        <label class="device-shell__field">
+          <span>{{ 'device.setup.brandId' | t }}</span>
+          <input
+            type="text"
+            [value]="setupBrandId()"
+            (input)="setupBrandId.set($any($event.target).value)"
+            data-testid="device-setup-brand"
+          />
+        </label>
+        <label class="device-shell__field">
+          <span>{{ 'device.setup.locationId' | t }}</span>
+          <input
+            type="text"
+            [value]="setupLocationId()"
+            (input)="setupLocationId.set($any($event.target).value)"
+            data-testid="device-setup-location"
+          />
+        </label>
+
+        @if (setupTouched() && !setupValid()) {
+          <p class="device-shell__error">{{ 'device.setup.incomplete' | t }}</p>
+        }
+
+        <button type="submit" class="device-shell__button" data-testid="device-setup-save">
+          {{ 'device.setup.save' | t }}
+        </button>
+      </form>
+    </section>
+  } @else if (!isEnrolled()) {
+    <section class="device-shell__panel" data-testid="device-enrol-panel">
+      <h1 class="device-shell__title">{{ 'device.enrol.title' | t }}</h1>
+      <p class="device-shell__hint">{{ 'device.enrol.hint' | t }}</p>
+
+      @switch (enrolmentPhase()) {
+        @case ('idle') {
+          <button
+            type="button"
+            class="device-shell__button"
+            (click)="beginEnrolment()"
+            data-testid="device-enrol-begin"
+          >
+            {{ 'device.enrol.begin' | t }}
+          </button>
+        }
+        @case ('beginning') {
+          <p class="device-shell__hint">{{ 'device.enrol.beginning' | t }}</p>
+        }
+        @case ('waiting') {
+          @if (enrolment(); as pending) {
+            <div class="device-shell__pairing">
+              <q-qr-code
+                [value]="pending.userCode"
+                [size]="220"
+                [label]="'device.enrol.qrLabel' | t"
+              />
+              <div class="device-shell__usercode">
+                <span class="device-shell__usercode-label">{{
+                  'device.enrol.userCodeLabel' | t
+                }}</span>
+                <span class="device-shell__usercode-value" data-testid="device-user-code">{{
+                  pending.userCode
+                }}</span>
+              </div>
+            </div>
+            <p class="device-shell__hint">{{ 'device.enrol.waiting' | t }}</p>
+          }
+        }
+        @case ('denied') {
+          <p class="device-shell__error">{{ 'device.enrol.denied' | t }}</p>
+          <button
+            type="button"
+            class="device-shell__button"
+            (click)="retryEnrolment()"
+            data-testid="device-enrol-retry"
+          >
+            {{ 'device.enrol.retry' | t }}
+          </button>
+        }
+        @case ('expired') {
+          <p class="device-shell__error">{{ 'device.enrol.expired' | t }}</p>
+          <button
+            type="button"
+            class="device-shell__button"
+            (click)="retryEnrolment()"
+            data-testid="device-enrol-retry"
+          >
+            {{ 'device.enrol.retry' | t }}
+          </button>
+        }
+        @case ('error') {
+          <p class="device-shell__error">{{ 'device.enrol.error' | t }}</p>
+          <button
+            type="button"
+            class="device-shell__button"
+            (click)="retryEnrolment()"
+            data-testid="device-enrol-retry"
+          >
+            {{ 'device.enrol.retry' | t }}
+          </button>
+        }
+      }
+    </section>
+  } @else {
+    <section class="device-shell__board" data-testid="device-board">
+      @if (!ticketsLoaded()) {
+        <p class="device-shell__hint">{{ 'device.board.loading' | t }}</p>
+      } @else if (boardError()) {
+        <p class="device-shell__error" data-testid="device-board-error">{{ boardError() }}</p>
+      } @else if (tickets().length === 0) {
+        <p class="device-shell__hint" data-testid="device-board-empty">
+          {{ 'device.board.empty' | t }}
+        </p>
+      } @else {
+        <div class="device-shell__tickets">
+          @for (ticket of tickets(); track ticket.ticketId) {
+            <article
+              class="device-shell__ticket"
+              [attr.data-testid]="'device-ticket-' + ticket.ticketId"
+            >
+              <header class="device-shell__ticket-header">
+                <span class="device-shell__ticket-label">{{ ticket.sequenceLabel }}</span>
+              </header>
+              <ul class="device-shell__items">
+                @for (item of ticket.items; track item.itemId) {
+                  <li class="device-shell__item">
+                    <span class="device-shell__item-qty">×{{ item.quantity }}</span>
+                    @if (item.status === 'QUEUED') {
+                      <button
+                        type="button"
+                        class="device-shell__button device-shell__button--item"
+                        [disabled]="itemBusy(item)"
+                        (click)="advance(item, 'start')"
+                        [attr.data-testid]="'device-item-start-' + item.itemId"
+                      >
+                        {{ 'device.board.start' | t }}
+                      </button>
+                    } @else if (item.status === 'STARTED') {
+                      <button
+                        type="button"
+                        class="device-shell__button device-shell__button--item"
+                        [disabled]="itemBusy(item)"
+                        (click)="advance(item, 'ready')"
+                        [attr.data-testid]="'device-item-ready-' + item.itemId"
+                      >
+                        {{ 'device.board.ready' | t }}
+                      </button>
+                    }
+                  </li>
+                }
+              </ul>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  }
+
+  <button
+    type="button"
+    class="device-shell__reset"
+    (click)="resetDevice()"
+    data-testid="device-reset"
+  >
+    {{ 'device.resetDevice' | t }}
+  </button>
+</div>

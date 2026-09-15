@@ -1,0 +1,38 @@
+.scheduler {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.scheduler__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scheduler__label {
+  flex: 0 0 100px;
+  color: var(--q-ink-muted);
+}
+
+.scheduler__track {
+  position: relative;
+  height: 28px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+}
+
+.scheduler__block {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 24px;
+}

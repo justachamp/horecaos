@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService;
 import uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService.AdjustmentCommand;
@@ -50,10 +51,13 @@ public class LoyaltyOperationsController {
 
     private final LoyaltyQueryService loyalty;
     private final LoyaltyAdjustmentService adjustments;
+    private final CurrentActor currentActor;
 
-    public LoyaltyOperationsController(LoyaltyQueryService loyalty, LoyaltyAdjustmentService adjustments) {
+    public LoyaltyOperationsController(
+            LoyaltyQueryService loyalty, LoyaltyAdjustmentService adjustments, CurrentActor currentActor) {
         this.loyalty = loyalty;
         this.adjustments = adjustments;
+        this.currentActor = currentActor;
     }
 
     @GetMapping("/tenants/{tenantId}/customers/{customerId}/loyalty")
@@ -77,7 +81,9 @@ public class LoyaltyOperationsController {
             description = "One account, one signed amount, one reason. Above the configured "
                     + "threshold it needs an ADR 0027 approval and returns PENDING until a second "
                     + "person decides it. There is no paired form and no transfer: two offsetting "
-                    + "adjustments are two separate approved acts.")
+                    + "adjustments are two separate approved acts. The audit trail's actor is "
+                    + "always the authenticated caller, never the request body's actorSubject — "
+                    + "see that field's own doc.")
     public ResponseEntity<AdjustmentResponse> adjust(
             @PathVariable UUID tenantId, @PathVariable UUID customerId, @RequestBody AdjustmentRequest request) {
 
@@ -89,7 +95,7 @@ public class LoyaltyOperationsController {
                 request.currency(),
                 request.reasonCode(),
                 request.reason(),
-                ActorRef.user(request.actorSubject(), null),
+                ActorRef.user(currentActor.get().subject(), null),
                 request.idempotencyKey(),
                 request.correlationId()));
 
@@ -127,9 +133,18 @@ public class LoyaltyOperationsController {
     /**
      * A manual adjustment against one account.
      *
-     * @param amountMinor signed whole som. There is no second account field on
-     *                    this record, and adding one would be the transfer this
-     *                    design refuses
+     * @param amountMinor  signed whole som. There is no second account field on
+     *                     this record, and adding one would be the transfer this
+     *                     design refuses
+     * @param actorSubject accepted for wire compatibility with already-published
+     *                     clients ({@code OpenApiContractTests} refuses to drop a
+     *                     published required field) but never read: {@code
+     *                     adjust()} always names the audit {@link ActorRef} from
+     *                     {@link CurrentActor} — the authenticated caller. Wave
+     *                     P40 adversarial review, finding high/1: trusting this
+     *                     field let any caller holding {@code LOYALTY_ADJUST}
+     *                     write a false name into the ADR 0027 audit trail for a
+     *                     balance movement somebody else made.
      */
     public record AdjustmentRequest(
             @NotNull UUID brandId,

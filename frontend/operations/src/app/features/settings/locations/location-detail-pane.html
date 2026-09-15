@@ -57,6 +57,14 @@
       >
         {{ 'settings.locations.tab.notifications' | t }}
       </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'floorplan'"
+        (click)="selectTab('floorplan')"
+      >
+        {{ 'settings.locations.tab.floorPlan' | t }}
+      </button>
     </div>
 
     @if (activeTab() === 'basics') {
@@ -626,6 +634,11 @@
     }
     @if (activeTab() === 'notifications') {
       <p class="q-body-sm">{{ 'settings.locations.notifications.note' | t }}</p>
+    }
+    @if (activeTab() === 'floorplan') {
+      @if (scope(); as floorScope) {
+        <q-floor-plan-pane [scope]="floorScope" [branchName]="location.displayName" />
+      }
     }
   }
 </div>

@@ -128,6 +128,16 @@ public interface SourcingJournal {
     void recordCostSubsidy(CostSubsidy subsidy);
 
     /**
+     * The winning partner quote's own delivery ETA, captured once against the
+     * plan the instant it wins (gap map row 2.1a). Best-effort, the same way
+     * {@link #recordCostSubsidy} is: an ETA is display data for the kitchen
+     * board, not a decision anything downstream is keyed on, so a write that
+     * loses a narrow race with a concurrent read is never retried and never
+     * blocks the booking it rode in on.
+     */
+    void recordCourierEta(UUID tenantId, UUID planId, Instant etaAt);
+
+    /**
      * A partner booking attempt about to be opened.
      *
      * @param idempotencyKey the key the partner sees, derived from the plan, the

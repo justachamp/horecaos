@@ -56,8 +56,75 @@
                 >
                   {{ 'kitchen.buffer.releaseNow' | t }}
                 </button>
+                <button
+                  type="button"
+                  class="buffer__edit"
+                  [disabled]="isBusy(ticket)"
+                  (click)="startEdit(ticket)"
+                  data-testid="buffer-edit"
+                >
+                  {{ 'kitchen.buffer.editFireTime' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="buffer__edit"
+                  [disabled]="isBusy(ticket)"
+                  (click)="holdIndefinitely(ticket)"
+                  data-testid="buffer-hold"
+                >
+                  {{ 'kitchen.buffer.hold' | t }}
+                </button>
               </td>
             </tr>
+            @if (editingTicketId() === ticket.ticketId) {
+              <tr data-testid="buffer-edit-row">
+                <td colspan="5">
+                  <form class="buffer__edit-form" (submit)="$event.preventDefault(); submitEdit()">
+                    <label class="buffer__edit-field">
+                      <span class="q-caption">{{ 'kitchen.buffer.edit.releaseAt' | t }}</span>
+                      <input
+                        type="datetime-local"
+                        [value]="editReleaseAtLocal()"
+                        (input)="setEditReleaseAt($any($event.target).value)"
+                        data-testid="buffer-edit-release-at"
+                      />
+                    </label>
+                    <p class="q-caption buffer__edit-hint">
+                      {{ 'kitchen.buffer.edit.clearForHold' | t }}
+                    </p>
+                    @if (editNeedsReason()) {
+                      <label class="buffer__edit-field">
+                        <span class="q-caption">{{ 'kitchen.buffer.edit.reason' | t }}</span>
+                        <input
+                          type="text"
+                          [value]="editReasonCode()"
+                          (input)="setEditReasonCode($any($event.target).value)"
+                          data-testid="buffer-edit-reason"
+                        />
+                      </label>
+                    }
+                    @if (editError(); as error) {
+                      <p class="q-caption buffer__edit-error" data-testid="buffer-edit-error">
+                        {{ error }}
+                      </p>
+                    }
+                    <div class="buffer__edit-actions">
+                      <button
+                        type="submit"
+                        class="primary"
+                        [disabled]="isBusy(ticket)"
+                        data-testid="buffer-edit-submit"
+                      >
+                        {{ 'kitchen.buffer.edit.save' | t }}
+                      </button>
+                      <button type="button" (click)="cancelEdit()" data-testid="buffer-edit-cancel">
+                        {{ 'kitchen.buffer.edit.cancel' | t }}
+                      </button>
+                    </div>
+                  </form>
+                </td>
+              </tr>
+            }
           } @empty {
             <tr>
               <td colspan="5" class="buffer__empty" data-testid="buffer-empty">

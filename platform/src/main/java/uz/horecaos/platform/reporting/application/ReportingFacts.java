@@ -36,6 +36,22 @@ public final class ReportingFacts {
      * @param secondsLate         signed seconds past the promise; null when there
      *                            was no promise or the order never closed, which
      *                            is a third state and not a zero
+     * @param secondsToAccept     wave P27 (7.2): CONFIRMED -> PREPARING, the
+     *                            "branch acceptance" wait — null until the order
+     *                            reaches PREPARING
+     * @param secondsPreparing    wave P27 (7.2): PREPARING -> READY, actual
+     *                            cooking time, narrower than {@code
+     *                            secondsToReady} — null until the order reaches
+     *                            READY from PREPARING
+     * @param publicOrderNumber   wave P27 (7.2a): snapshotted from {@code
+     *                            ordering.orders.public_order_number} — the short
+     *                            number a receipt and a kitchen ticket both print
+     * @param stockDisposition    ADR 0039's {@code ordering.order_outcomes},
+     *                            copied when a terminal outcome was recorded for
+     *                            this order. Null on an order with no outcome row
+     *                            yet (still open) or closed before ADR 0039
+     * @param liabilityParty      see {@code stockDisposition} — the two travel
+     *                            together from the same outcome row
      */
     public record OrderFact(
             UUID tenantId,
@@ -67,6 +83,11 @@ public final class ReportingFacts {
             @Nullable Instant promisedAt,
             @Nullable Integer promiseTravelMinutes,
             @Nullable Integer secondsLate,
+            @Nullable Integer secondsToAccept,
+            @Nullable Integer secondsPreparing,
+            @Nullable String publicOrderNumber,
+            @Nullable String stockDisposition,
+            @Nullable String liabilityParty,
             int metricCalculationVersion,
             int sourceOrderVersion) {
 
@@ -230,7 +251,7 @@ public final class ReportingFacts {
             int distinctCustomers,
             int newCustomers) {}
 
-    /** One bucket of the fixed SLA distribution, for one location on one day. */
+    /** One bucket of the fixed SLA distribution, for one location or one courier on one day. */
     public record SlaBucketAggregate(
             UUID tenantId,
             LocalDate businessDate,
@@ -240,6 +261,50 @@ public final class ReportingFacts {
             String bucketCode,
             int orderCount,
             int shareBasisPoints) {}
+
+    /**
+     * T11 / ADR 0125: one internal delivery, straight off {@code
+     * fulfillment.courier_assignment_earnings} (joined at close time to
+     * {@code assignment_attempts} for {@code acceptedAt}, a column the
+     * earning row itself does not carry). Never joined against a courier's
+     * protected name — {@code 7.4}/{@code 7.4a} resolve display through
+     * P19's reveal, keyed on {@code courierId}, never through this fact.
+     *
+     * @param courierAssignmentEarningId the natural key: one delivery
+     *                                   accrues exactly once
+     *                                   ({@code uq_earning_attempt}, V0040),
+     *                                   so one earning is exactly one
+     *                                   delivery fact
+     * @param transitSeconds            {@code deliveredAt - acceptedAt}, the
+     *                                  figure {@code 7.4}'s "transit hours"
+     *                                  and {@code 7.4a}'s SLA buckets are
+     *                                  both cut from
+     */
+    public record DeliveryFact(
+            UUID tenantId,
+            UUID courierAssignmentEarningId,
+            LocalDate businessDate,
+            int boundaryVersion,
+            int metricCalculationVersion,
+            UUID courierId,
+            UUID locationId,
+            UUID shipmentId,
+            UUID assignmentAttemptId,
+            int distanceMeters,
+            String distanceSource,
+            String onTimeOutcome,
+            Instant acceptedAt,
+            Instant deliveredAt,
+            int transitSeconds) {
+
+        public DeliveryFact {
+            Objects.requireNonNull(tenantId, "A fact is tenant-owned");
+            Objects.requireNonNull(courierAssignmentEarningId, "A delivery fact names its earning");
+            if (transitSeconds < 0) {
+                throw new IllegalArgumentException("A delivery cannot be delivered before it was accepted");
+            }
+        }
+    }
 
     /**
      * ADR 0064: one hour's call activity for one operator at one location, on

@@ -55,6 +55,19 @@ export const routes: Routes = [
       import('./features/auth/reset-password-page').then((m) => m.ResetPasswordPage),
   },
   {
+    // Row `X/X.2` (ADR 0079, ADR 0119, wave P17) — the KDS fullscreen shell.
+    // Outside `authGuard` and declared *before* the console `Shell` route
+    // below, on purpose, the same placement as `/login`/`/invite` above and
+    // for the same reason: `Shell`'s own children end in a catch-all
+    // `redirectTo: 'today'` (`placeholderRoutes`'s own comment names this),
+    // which would otherwise swallow this path if it were declared after.
+    // `DeviceShell` authenticates as `PlatformRole.KITCHEN_DEVICE` through
+    // its own ADR 0079 credential (`device/device-session.ts`) — never the
+    // staff Keycloak session `authGuard` checks, so this route carries none.
+    path: 'device',
+    loadComponent: () => import('./device/device-shell').then((m) => m.DeviceShell),
+  },
+  {
     path: '',
     loadComponent: () => import('./shell/shell').then((m) => m.Shell),
     canActivate: [authGuard],
@@ -703,21 +716,14 @@ export const routes: Routes = [
                 (m) => m.ProductAnalyticsPage,
               ),
           },
-          // 7.4 Courier reports: `delivery_cost_variance.v1`'s own registry
-          // entry declares `sourceAvailable: false` — ADR 0043's tender and
-          // delivery facts do not exist in `reporting` yet, so an analytics
-          // cut over courier performance has nothing to read even though
-          // ADR 0042's courier module itself (shifts, ledger, settlement) is
-          // real — see Finance 8.3-8.5, which reads that module directly.
+          // 7.4/7.4a/7.4b/7.4c Courier reports (T11, ADR 0125): real, the
+          // first console reader of reporting.fact_delivery and the COURIER
+          // scope of agg_sla_bucket_day — see `courier-report-page.ts`'s own
+          // doc for exactly what each of the four sections reads.
           {
             path: 'couriers',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: {
-              spec:
-                'frontend-information-architecture.md §7.4 (Courier reports) — reporting.fact_delivery ' +
-                'does not exist (ADR 0043)',
-            },
+              import('./features/reports/courier-report-page').then((m) => m.CourierReportPage),
           },
           // 7.5/7.5a/7.5b Staff reports (T12): `operator_principal_id` now
           // lands on `reporting.fact_order` and the close job copies
@@ -816,6 +822,16 @@ export const routes: Routes = [
             path: 'capacity',
             loadComponent: () =>
               import('./features/kitchen/capacity-page').then((m) => m.CapacityPage),
+          },
+          // IA row `2/X.2` (ADR 0079, wave P17): the manager's own side of
+          // the pairing handshake — list enrolled devices, approve a typed
+          // user code, revoke a lost one. The device's own side is
+          // `/device`, a top-level route outside this shell entirely — see
+          // `kitchen-shell.ts`'s own doc.
+          {
+            path: 'devices',
+            loadComponent: () =>
+              import('./features/kitchen/devices-page').then((m) => m.DevicesPage),
           },
         ],
       },

@@ -31,6 +31,16 @@ export interface TicketResponse {
   readonly ticketId: string;
   readonly orderId: string;
   readonly sequenceLabel: string;
+  /**
+   * The provider-assigned identifier a courier or a customer would actually
+   * quote — never `sequenceLabel`, which is HorecaOS's own number (wave T02,
+   * gap map row 2.4, IA 2.4's "provider-assigned external identifiers shown
+   * to humans"). Present only on a board read (`KitchenApi.board`); absent on
+   * a mutation response, the same trade-off `channelSystemType` documents
+   * below — a client that already holds it from its last board read loses
+   * nothing.
+   */
+  readonly externalReference?: string | null;
   /** `DELIVERY` | `PICKUP` | `DINE_IN`. */
   readonly fulfilmentMode: string;
   readonly channelCode?: string | null;
@@ -55,6 +65,14 @@ export interface TicketResponse {
   readonly readyAt?: string | null;
   readonly version: number;
   readonly createdAt: string;
+  /**
+   * The winning partner quote's own delivery ETA (wave P11, gap map row
+   * 2.1a) — absent for a pickup/dine-in ticket, a plan an in-house courier
+   * carries, or a partner that answered no ETA. Only `board()` resolves this;
+   * a mutation response keeps whichever value the last board read gave, the
+   * same rule `channelSystemType` already follows.
+   */
+  readonly courierEtaAt?: string | null;
   readonly items: readonly TicketItemView[];
 }
 
@@ -89,6 +107,36 @@ export interface ItemResponse {
   readonly item: TicketItemView;
   readonly ticketStatus: string;
   readonly ticketVersion: number;
+}
+
+/**
+ * `KitchenBoardController.KitchenEventResponse` — one `kitchen.ticket_events`
+ * row (wave P11, gap map row 1.2b). `ticketItemId` absent means a
+ * ticket-level transition; present means a per-line station advance.
+ */
+export interface KitchenEventResponse {
+  readonly id: string;
+  readonly ticketItemId?: string | null;
+  /** `HELD` | `FIRED` | `IN_PRODUCTION` | `READY` | `HANDED_OVER` | `VOIDED`, absent for a ticket's own opening event. */
+  readonly fromStatus?: string | null;
+  readonly toStatus: string;
+  readonly trigger: string;
+  readonly actorType: string;
+  readonly actorId: string;
+  readonly reasonCode?: string | null;
+  readonly occurredAt: string;
+}
+
+/**
+ * `KitchenBoardController.KitchenEventsResponse` — `GET
+ * .../kitchen/orders/{orderId}/events`, the order detail's production lane
+ * (wave P11, gap map row 1.2b). `ticketId`/`ticketStatus` are `null` exactly
+ * when `events` is empty — an order that never opened a ticket, not an error.
+ */
+export interface KitchenEventsResponse {
+  readonly ticketId?: string | null;
+  readonly ticketStatus?: string | null;
+  readonly events: readonly KitchenEventResponse[];
 }
 
 export interface StationResponse {
@@ -145,6 +193,37 @@ export class KitchenApi {
   }
 
   /**
+   * Places a ticket on manual hold, or edits when a held ticket fires (§2.2's
+   * buffer, `PUT .../release-schedule`). `releaseMode` is `MANUAL_HOLD` (no
+   * `releaseAt`) or `SCHEDULED` (with one). Moving `releaseAt` later than the
+   * ticket's own promise — or holding a ticket that has one at all — needs a
+   * `reasonCode`; the server refuses with 403 when the caller lacks
+   * `kitchen.ticket.release.override` for that case. Moving it earlier, or an
+   * ordinary hold with no promise yet, needs neither.
+   */
+  reschedule(
+    scope: LocationScope,
+    ticketId: string,
+    expectedVersion: number,
+    releaseMode: 'MANUAL_HOLD' | 'SCHEDULED',
+    releaseAt: string | null,
+    reasonCode?: string,
+  ): Observable<TicketResponse> {
+    return this.api.put<
+      {
+        expectedVersion: number;
+        releaseMode: string;
+        releaseAt: string | null;
+        reasonCode?: string;
+      },
+      TicketResponse
+    >(
+      operationsPaths.kitchenTicketReleaseSchedule(scope, ticketId),
+      command({ expectedVersion, releaseMode, releaseAt, reasonCode }),
+    );
+  }
+
+  /**
    * Custody transfer off the pass (§2.3, Раздача). A second press is not an
    * error — the caller wanted the ticket off the pass, and it already is.
    */
@@ -153,6 +232,18 @@ export class KitchenApi {
       operationsPaths.kitchenTicketHandOver(scope, ticketId),
       command({}),
     );
+  }
+
+  /**
+   * The production lane of the order detail's timeline (wave P11, gap map row
+   * 1.2b) — `ORDER_READ`, not `KITCHEN_TICKET_READ`: this call is made from
+   * the order detail pane, whose operator holds the former.
+   */
+  async eventsForOrder(scope: LocationScope, orderId: string): Promise<KitchenEventsResponse> {
+    const result = await firstValueFrom(
+      this.api.get<KitchenEventsResponse>(operationsPaths.kitchenEventsByOrder(scope, orderId)),
+    );
+    return result.value;
   }
 
   async stations(scope: LocationScope): Promise<readonly StationResponse[]> {

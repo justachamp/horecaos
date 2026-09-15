@@ -3,7 +3,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { Versioned } from '../../core/api/aggregate-version';
-import { command } from '../../core/api/idempotency';
+import { command, newIdempotencyKey } from '../../core/api/idempotency';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { CursorState, Page } from '../../core/api/page';
@@ -268,6 +268,84 @@ export interface LoyaltyEntry {
   readonly tenderId: string | null;
   readonly reasonCode: string | null;
   readonly occurredAt: string;
+}
+
+/**
+ * Row 5.2e: `LoyaltyOperationsController.AdjustmentRequest` — one signed
+ * movement, one reason, no transfer.
+ *
+ * `actorSubject` is sent for wire compatibility with the published contract
+ * but the server never reads it for the ADR 0027 audit trail — it always
+ * names the authenticated caller's own token instead (wave P40 adversarial
+ * review; see `AdjustmentRequest.actorSubject`'s own doc).
+ */
+export interface LoyaltyAdjustmentRequest {
+  readonly brandId: string;
+  /** Signed whole som (`amountMinor`'s own doc): positive credits, negative debits. */
+  readonly amountMinor: number;
+  readonly currency: string;
+  readonly reasonCode: string;
+  readonly reason: string;
+  /** Ignored by the server — kept only because the published schema still requires it. */
+  readonly actorSubject: string;
+  readonly correlationId?: string | null;
+}
+
+/** `ApprovalOutcome`'s four wire values (ADR 0027), as `AdjustmentResponse.status` renders them. */
+export type LoyaltyAdjustmentStatus = 'NOT_REQUIRED' | 'PENDING' | 'APPROVED' | 'DECLINED';
+
+/** `LoyaltyOperationsController.AdjustmentResponse`. */
+export interface LoyaltyAdjustmentResult {
+  readonly status: LoyaltyAdjustmentStatus;
+  readonly approvalRequestId: string | null;
+}
+
+// ------------------------------------------------ row 5.2g: promo redemptions
+
+/** `CustomerDiscountHistoryController.CustomerCouponRedemptionResponse`. */
+export interface PromoRedemption {
+  readonly redemptionId: string;
+  readonly brandId: string;
+  readonly couponId: string;
+  readonly codeHint: string | null;
+  readonly promotionId: string;
+  readonly promotionName: string;
+  readonly orderId: string | null;
+  readonly status: 'RESERVED' | 'REDEEMED' | 'RELEASED';
+  readonly amountMinor: number;
+  readonly currency: string;
+  readonly reservedAt: string;
+  readonly redeemedAt: string | null;
+  readonly releasedAt: string | null;
+}
+
+/** `CustomerDiscountHistoryController.CurrencyTotalResponse`. */
+export interface PromoRedemptionCurrencyTotal {
+  readonly currency: string;
+  readonly amountMinor: number;
+}
+
+/** `CustomerDiscountHistoryController.CustomerDiscountHistoryResponse`. */
+export interface CustomerDiscountHistory {
+  readonly redemptions: readonly PromoRedemption[];
+  readonly totalsRedeemed: readonly PromoRedemptionCurrencyTotal[];
+}
+
+// --------------------------------------------------------- row 5/X.1: erasure
+
+/** `CustomerController.ErasureRequestResponse` — no reason and no free text on any transition. */
+export interface ErasureRequest {
+  readonly id: string;
+  /** PENDING, COMPLETED, or CANCELLED. */
+  readonly status: string;
+  readonly requestedVia: string;
+  readonly requestedByActorType: string;
+  readonly requestedByActorId: string;
+  readonly requestedAt: string;
+  readonly completedAt: string | null;
+  readonly completedByActorId: string | null;
+  readonly cancelledAt: string | null;
+  readonly cancelledByActorId: string | null;
 }
 
 // ------------------------------------------------------------ row X.13/5.1b: import
@@ -768,5 +846,94 @@ export class CustomersApi {
       this.api.get<readonly CustomerImportRow[]>(operationsPaths.customerImportRows(scope, runId)),
     );
     return result.value ?? [];
+  }
+
+  // -------------------------------------------------- row 5.2e: manual adjustment
+
+  /**
+   * Credits or debits one balance by hand. `idempotencyKey` travels twice —
+   * once as the `Command`'s own `Idempotency-Key` header (every mutation
+   * carries one, ADR 0031) and once inside the body, because
+   * `LoyaltyOperationsController.AdjustmentRequest` declares its own
+   * `idempotencyKey` field rather than reading the header — the identical
+   * double-carry `PaymentsApi.grantFutureDiscount` already uses for the same
+   * controller shape.
+   */
+  async adjustLoyalty(
+    scope: LocationScope,
+    accountId: string,
+    request: LoyaltyAdjustmentRequest,
+  ): Promise<LoyaltyAdjustmentResult> {
+    const key = newIdempotencyKey();
+    return firstValueFrom(
+      this.api.post<LoyaltyAdjustmentRequest & { idempotencyKey: string }, LoyaltyAdjustmentResult>(
+        operationsPaths.customerLoyaltyAdjustments(scope, accountId),
+        { key, body: { ...request, idempotencyKey: key } },
+      ),
+    );
+  }
+
+  // -------------------------------------------------- row 5.2g: promo redemptions
+
+  async discountHistory(scope: LocationScope, accountId: string): Promise<CustomerDiscountHistory> {
+    return (
+      await firstValueFrom(
+        this.api.get<CustomerDiscountHistory>(
+          operationsPaths.customerDiscountHistory(scope, accountId),
+        ),
+      )
+    ).value;
+  }
+
+  // -------------------------------------------------------- row 5/X.1: erasure
+
+  async erasureRequests(
+    scope: LocationScope,
+    accountId: string,
+  ): Promise<readonly ErasureRequest[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly ErasureRequest[]>(
+        operationsPaths.customerErasureRequests(scope, accountId),
+      ),
+    );
+    return result.value ?? [];
+  }
+
+  /** Idempotent server-side: a second call while one request is already PENDING returns that same request. */
+  async requestErasure(scope: LocationScope, accountId: string): Promise<ErasureRequest> {
+    return firstValueFrom(
+      this.api.post<null, ErasureRequest>(
+        operationsPaths.customerErasureRequests(scope, accountId),
+        command(null),
+      ),
+    );
+  }
+
+  /** Withdraws a PENDING request. Idempotent for one already CANCELLED. */
+  async cancelErasure(
+    scope: LocationScope,
+    accountId: string,
+    requestId: string,
+  ): Promise<ErasureRequest> {
+    return firstValueFrom(
+      this.api.post<null, ErasureRequest>(
+        operationsPaths.customerErasureRequestCancel(scope, accountId, requestId),
+        command(null),
+      ),
+    );
+  }
+
+  /** The transition that actually anonymises the account. Idempotent for one already COMPLETED. */
+  async executeErasure(
+    scope: LocationScope,
+    accountId: string,
+    requestId: string,
+  ): Promise<ErasureRequest> {
+    return firstValueFrom(
+      this.api.post<null, ErasureRequest>(
+        operationsPaths.customerErasureRequestExecute(scope, accountId, requestId),
+        command(null),
+      ),
+    );
   }
 }

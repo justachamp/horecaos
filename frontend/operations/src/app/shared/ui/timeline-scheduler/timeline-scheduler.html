@@ -1,0 +1,20 @@
+<div class="scheduler" data-testid="timeline-scheduler">
+  @for (resource of resources(); track resource.id) {
+    <div class="scheduler__row" [attr.data-testid]="'timeline-row-' + resource.id">
+      <span class="scheduler__label q-body-sm">{{ resource.label }}</span>
+      <div class="scheduler__track" [style.width.px]="totalWidthPx()">
+        @for (block of blocksFor(resource.id); track block.id) {
+          <div
+            class="scheduler__block q-caption"
+            [style.left.px]="block.leftPx"
+            [style.width.px]="block.widthPx"
+            [attr.data-testid]="'timeline-block-' + block.id"
+            [attr.title]="block.label"
+          >
+            {{ block.label }}
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>
