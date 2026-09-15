@@ -222,6 +222,34 @@ public class JdbcDeliveryCostStore {
                 """).params(params).update() == 1;
     }
 
+    /**
+     * T11 (7.4c) review, 2026-09-14: the operator-reconcile write, distinct
+     * from {@link #matchLine}'s own bulk-sweep use. Conditioned on the line
+     * not being {@code VARIANCE} at the moment of the write — not only at the
+     * caller's earlier read — so a line that races into {@code VARIANCE}
+     * between {@code PartnerInvoiceService.reconcileShipment}'s check and this
+     * update is refused here too, rather than silently wiping the variance a
+     * concurrent {@code match} call just recorded. {@code
+     * ck_partner_line_resolution_status} additionally refuses at the database
+     * a matched row that still carries a non-null {@code variance_resolution}
+     * from an earlier accept/dispute, since this UPDATE clears
+     * {@code variance_minor} but not that column.
+     */
+    public boolean reconcileLine(UUID tenantId, UUID lineId, UUID shipmentId, String reasonCode) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("id", lineId);
+        params.put("shipmentId", shipmentId);
+        params.put("reasonCode", reasonCode);
+
+        return jdbc.sql("""
+                UPDATE fulfillment.partner_delivery_invoice_lines
+                   SET shipment_id = :shipmentId, match_status = 'MATCHED',
+                       variance_minor = NULL, reason_code = :reasonCode, matched_at = now()
+                 WHERE tenant_id = :tenantId AND id = :id AND match_status <> 'VARIANCE'
+                """).params(params).update() == 1;
+    }
+
     public void markInvoiceMatched(UUID tenantId, UUID invoiceId) {
         jdbc.sql("""
                 UPDATE fulfillment.partner_delivery_invoices

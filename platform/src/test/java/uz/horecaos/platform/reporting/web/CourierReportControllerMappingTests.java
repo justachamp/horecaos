@@ -57,7 +57,57 @@ class CourierReportControllerMappingTests {
         var response = CourierReportController.ExternalDeliveryCostRowResponse.of(row);
 
         assertThat(response.reconciliationStatus()).isEqualTo("VARIANCE");
-        assertThat(response.reconcileActionAvailable()).isTrue();
         assertThat(response.varianceMinor()).isEqualTo(5_000L);
+    }
+
+    /**
+     * 2026-09-14 review: a VARIANCE row's money discrepancy must be disposed
+     * of only through {@code resolveVariance}'s accept/dispute choice, never
+     * silently written off by this report's reconcile button — before this
+     * fix the mapping unconditionally offered the action for any row with an
+     * invoice line, VARIANCE included.
+     */
+    @Test
+    void aVarianceRowNeverOffersReconcile() {
+        var row = new JdbcReportingStore.ExternalDeliveryCostRow(
+                UUID.randomUUID(),
+                "ORD-2",
+                45_000L,
+                "UZS",
+                5_000L,
+                UUID.randomUUID(),
+                "NOOR",
+                20_000L,
+                UUID.randomUUID(),
+                25_000L,
+                "VARIANCE",
+                5_000L);
+
+        assertThat(CourierReportController.ExternalDeliveryCostRowResponse.of(row)
+                        .reconcileActionAvailable())
+                .isFalse();
+    }
+
+    /** A MATCHED row has nothing left to reconcile, so the action is withdrawn once matching lands. */
+    @Test
+    void aMatchedRowNeverOffersReconcile() {
+        var row = new JdbcReportingStore.ExternalDeliveryCostRow(
+                UUID.randomUUID(),
+                "ORD-3",
+                45_000L,
+                "UZS",
+                5_000L,
+                UUID.randomUUID(),
+                "NOOR",
+                20_000L,
+                UUID.randomUUID(),
+                20_000L,
+                "MATCHED",
+                null);
+
+        var response = CourierReportController.ExternalDeliveryCostRowResponse.of(row);
+
+        assertThat(response.reconciliationStatus()).isEqualTo("MATCHED");
+        assertThat(response.reconcileActionAvailable()).isFalse();
     }
 }

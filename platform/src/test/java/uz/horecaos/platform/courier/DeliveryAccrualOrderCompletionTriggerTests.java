@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
@@ -194,7 +195,8 @@ class DeliveryAccrualOrderCompletionTriggerTests {
                 ledger,
                 policyResolver,
                 legalEntities,
-                protection);
+                protection,
+                (tenantId, at) -> at.atZone(ZoneId.of("Asia/Tashkent")).toLocalDate());
         var rateCards = new CourierRateCardService(rateCardStore, audit, clock);
         var deliveryCompletion = new JdbcDeliveryCompletionAdapter(jdbc);
 

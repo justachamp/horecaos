@@ -250,10 +250,17 @@ public class CourierReportController {
                     row.providerBilledMinor(),
                     row.varianceMinor(),
                     status,
-                    // Reconcilable once an invoice line exists to reconcile
-                    // against; a genuinely UNBILLED row has no line yet, and the
-                    // action waits for one to arrive rather than inventing one.
-                    row.invoiceLineId() != null);
+                    // 2026-09-14 review: never for VARIANCE or MATCHED. A
+                    // VARIANCE row's money discrepancy is disposed of only
+                    // through resolveVariance's accept/dispute choice — never
+                    // silently written off by this button — and a MATCHED
+                    // row has nothing left to reconcile. UNMATCHED_LINE can
+                    // never actually reach this row (its invoice line carries
+                    // no shipment_id to join on), but is named here rather
+                    // than collapsed into "anything but VARIANCE/MATCHED" so
+                    // the condition still reads as an allowlist, not a
+                    // denylist someone has to keep in sync by hand.
+                    row.invoiceLineId() != null && ("UNMATCHED_LINE".equals(status) || "UNBILLED".equals(status)));
         }
     }
 

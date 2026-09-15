@@ -37,6 +37,7 @@ import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.courier.api.BusinessDayWindows;
 import uz.horecaos.platform.courier.application.AdjustmentRuleEvaluator;
 import uz.horecaos.platform.courier.application.ConfirmationPointRetentionJob;
 import uz.horecaos.platform.courier.application.CourierAccrualService;
@@ -264,7 +265,8 @@ class CourierCompensationTests {
                 ledger,
                 policyResolver,
                 legalEntities,
-                protection);
+                protection,
+                businessDayWindows());
         settlement = new CourierSettlementService(
                 ledgerStore, courierStore, costStore, approvals, audit, objectMapper, clock);
         cash = new CourierCashService(shiftStore, ledger, audit, clock);
@@ -373,6 +375,51 @@ class CourierCompensationTests {
         assertThat(ledgerStore.entriesOf(TENANT, first.settlementPeriodId()))
                 .filteredOn(entry -> entry.entryType() == LedgerEntryType.DELIVERY_EARNING)
                 .hasSize(1);
+    }
+
+    /**
+     * 2026-09-14 review: {@code recordDelivery} once stamped {@code
+     * business_date} from a plain UTC calendar date. For this tenant's
+     * Asia/Tashkent (UTC+5) boundary, 2026-09-01T21:10:00Z is 2026-09-
+     * 02T02:10 local -- after local midnight, so the tenant's own business
+     * day is Sep 2 -- but the naive UTC date of the same instant is still
+     * Sep 1. Before the fix this earning would have been stamped Sep 1 and
+     * silently dropped from reporting.fact_delivery when Sep 1's close had
+     * already run.
+     */
+    @Test
+    @DisplayName("a delivery in the tenant's early-morning window business-dates on the tenant's local day, "
+            + "not the UTC calendar day")
+    void aDeliveryJustAfterLocalMidnightBusinessDatesOnTheLocalDay() {
+        Instant acceptedAt = Instant.parse("2026-09-01T20:50:00Z"); // 01:50 Tashkent, 2 Sep
+        Instant deliveredAt = Instant.parse("2026-09-01T21:10:00Z"); // 02:10 Tashkent, 2 Sep
+
+        DeliveredShipment carried = deliveredShipment();
+        EarningRow earning = accruals.recordDelivery(new CourierAccrualService.DeliveredAssignment(
+                TENANT,
+                BRAND,
+                branch,
+                courierId,
+                null,
+                carried.shipmentId(),
+                carried.attemptId(),
+                4000,
+                DistanceSource.ROUTING,
+                acceptedAt,
+                deliveredAt,
+                null,
+                300,
+                1,
+                null,
+                null,
+                0,
+                false,
+                null,
+                null));
+
+        assertThat(earning.businessDate())
+                .as("the tenant's local business day (Sep 2), not deliveredAt's UTC calendar day (Sep 1)")
+                .isEqualTo(LocalDate.of(2026, 9, 2));
     }
 
     @Test
@@ -2214,6 +2261,15 @@ class CourierCompensationTests {
         } else if (node instanceof Iterable<?> items) {
             items.forEach(item -> collectKeys(item, keys));
         }
+    }
+
+    /**
+     * A minimal stand-in for reporting's {@code CourierBusinessDayWindowsAdapter},
+     * matching this fixture's own tenant timezone (Asia/Tashkent, midnight
+     * boundary) without pulling the reporting module into this test.
+     */
+    private static BusinessDayWindows businessDayWindows() {
+        return (tenantId, at) -> at.atZone(ZoneId.of("Asia/Tashkent")).toLocalDate();
     }
 
     private static ActorRef manager() {

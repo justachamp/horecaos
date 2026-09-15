@@ -2,12 +2,12 @@ package uz.horecaos.platform.courier.application;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.courier.api.BusinessDayWindows;
 import uz.horecaos.platform.courier.application.port.LegalEntityResolver;
 import uz.horecaos.platform.courier.domain.AccrualCalculator;
 import uz.horecaos.platform.courier.domain.AdjustmentOrigin;
@@ -60,6 +60,7 @@ public class CourierAccrualService {
     private final CourierPolicyResolver policies;
     private final LegalEntityResolver legalEntities;
     private final FieldProtection protection;
+    private final BusinessDayWindows businessDays;
 
     public CourierAccrualService(
             JdbcCourierLedgerStore ledgerStore,
@@ -70,7 +71,8 @@ public class CourierAccrualService {
             CourierLedgerService ledger,
             CourierPolicyResolver policies,
             LegalEntityResolver legalEntities,
-            FieldProtection protection) {
+            FieldProtection protection,
+            BusinessDayWindows businessDays) {
         this.ledgerStore = ledgerStore;
         this.rateCards = rateCards;
         this.shifts = shifts;
@@ -80,6 +82,7 @@ public class CourierAccrualService {
         this.policies = policies;
         this.legalEntities = legalEntities;
         this.protection = protection;
+        this.businessDays = businessDays;
     }
 
     /**
@@ -123,7 +126,12 @@ public class CourierAccrualService {
                 command.kitchenHandoverAt(),
                 command.pickupWindowEnd());
 
-        LocalDate businessDate = LocalDate.ofInstant(command.deliveredAt(), ZoneOffset.UTC);
+        // T11 review (ADR 0043): the tenant's own business day, through the
+        // same boundary DayCloseService derives every other fact against —
+        // never a plain UTC calendar date, which would file a delivery
+        // completed in the tenant's early-morning window under the previous
+        // trading day.
+        LocalDate businessDate = businessDays.businessDateOf(command.tenantId(), command.deliveredAt());
         UUID legalEntityId = legalEntities
                 .resolve(command.tenantId(), command.locationId(), businessDate)
                 .orElse(null);

@@ -302,13 +302,13 @@ public class DayCloseService {
                 boundary.version(),
                 MetricRegistry.CALCULATION_VERSION);
 
-        // T11 / ADR 0125. Read by the earning's own business_date rather than
-        // by the [from, to) instant range every order-side source above uses:
-        // CourierAccrualService already computed that date once, correctly, at
-        // the moment of accrual, and re-deriving it from delivered_at here
-        // would be a second place that computation lives.
+        // T11 / ADR 0125. Read by the same [from, to) instant range every
+        // order-side source above uses, against the earning's own
+        // delivered_at — not by trusting the earning's stored business_date,
+        // which an adversarial review (2026-09-14) found could disagree with
+        // this boundary for a delivery in the tenant's early-morning window.
         List<uz.horecaos.platform.reporting.application.ReportingFacts.DeliveryFact> deliveries =
-                store.readSourceDeliveries(tenantId, businessDate).stream()
+                store.readSourceDeliveries(tenantId, from, to).stream()
                         .map(source -> new uz.horecaos.platform.reporting.application.ReportingFacts.DeliveryFact(
                                 tenantId,
                                 source.earningId(),

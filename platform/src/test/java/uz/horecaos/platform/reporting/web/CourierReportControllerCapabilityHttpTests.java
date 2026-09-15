@@ -35,31 +35,33 @@ import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchro
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
- * Wave T12, second-pass adversarial review: no HTTP-level test existed for
- * {@code ReportingController} at all — {@code OperatorReportingTests} and its
- * siblings exercise {@code ReportQueryService}/{@code JdbcReportingStore}
- * directly, and {@code EndpointCapabilityDeclarationTests} only checks by
- * reflection that {@code @RequiresCapability} is present and well-shaped,
- * never that a real request lacking {@code REPORTING_READ} is actually
- * refused. Every route on this controller shares the identical {@code
- * REPORTING_READ}/{@code TENANT} declaration, so this suite covers the
- * controller's capability wiring as a whole through the two endpoints T12
- * added, following {@code CommercialOperationsControllerEndpointTests}' own
- * shape.
+ * 2026-09-14 review: no HTTP-level test existed for {@link
+ * CourierReportController} at all — {@code CourierReportControllerMappingTests}
+ * is a pure unit test of one response mapper and never starts MockMvc, and
+ * {@code CourierTariffAuditAndExternalCostTests} exercises {@code
+ * ReportQueryService} directly, not the controller or its {@code
+ * @RequiresCapability} wiring. Every one of this controller's four endpoints
+ * could have had its capability annotation silently removed or loosened and
+ * no test in the diff that introduced them would have failed.
+ *
+ * <p>Follows {@code ReportingControllerCapabilityHttpTests}' own shape (same
+ * MANAGER/DISPATCHER fixture and {@code tokenFor} helper) — that suite
+ * covers {@link ReportingController}; this one covers this controller, both
+ * declaring the identical {@code REPORTING_READ}/{@code TENANT} capability.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-class ReportingControllerCapabilityHttpTests {
+class CourierReportControllerCapabilityHttpTests {
 
-    private static final UUID TENANT = UUID.fromString("018f9b20-9000-7000-8000-0000000000a1");
+    private static final UUID TENANT = UUID.fromString("018f9b20-9000-7000-8000-0000000000b2");
 
     // LOCATION_MANAGER holds REPORTING_READ (PlatformRole.java); COURIER_DISPATCHER
     // holds plenty of other tenant/brand authority but never REPORTING_READ, so
     // it doubles as the "authenticated, but not this capability" negative case.
-    private static final String MANAGER = "reporting-manager";
-    private static final String DISPATCHER = "reporting-dispatcher";
+    private static final String MANAGER = "courier-reporting-manager";
+    private static final String DISPATCHER = "courier-reporting-dispatcher";
 
-    private static final String REPORTING = "/api/v1/tenants/" + TENANT + "/reporting";
+    private static final String COURIERS = "/api/v1/tenants/" + TENANT + "/reporting/couriers";
 
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
@@ -100,8 +102,8 @@ class ReportingControllerCapabilityHttpTests {
     }
 
     @Test
-    void operatorLeaderboardRefusesWithoutReportingRead() throws Exception {
-        MvcResult refused = mvc.perform(get(REPORTING + "/operator-leaderboard")
+    void leaderboardRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(COURIERS + "/leaderboard")
                         .with(tokenFor(DISPATCHER))
                         .queryParam("from", "2026-09-01")
                         .queryParam("to", "2026-09-07"))
@@ -114,8 +116,8 @@ class ReportingControllerCapabilityHttpTests {
     }
 
     @Test
-    void operatorLeaderboardSucceedsWithReportingRead() throws Exception {
-        MvcResult ok = mvc.perform(get(REPORTING + "/operator-leaderboard")
+    void leaderboardSucceedsWithReportingRead() throws Exception {
+        MvcResult ok = mvc.perform(get(COURIERS + "/leaderboard")
                         .with(tokenFor(MANAGER))
                         .queryParam("from", "2026-09-01")
                         .queryParam("to", "2026-09-07"))
@@ -126,10 +128,9 @@ class ReportingControllerCapabilityHttpTests {
     }
 
     @Test
-    void operatorProductsRefusesWithoutReportingRead() throws Exception {
-        MvcResult refused = mvc.perform(get(REPORTING + "/operator-products")
+    void slaBucketsRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(COURIERS + "/sla-buckets")
                         .with(tokenFor(DISPATCHER))
-                        .queryParam("operatorPrincipalId", "staff-1")
                         .queryParam("from", "2026-09-01")
                         .queryParam("to", "2026-09-07"))
                 .andReturn();
@@ -141,10 +142,35 @@ class ReportingControllerCapabilityHttpTests {
     }
 
     @Test
-    void operatorProductsSucceedsWithReportingRead() throws Exception {
-        MvcResult ok = mvc.perform(get(REPORTING + "/operator-products")
+    void slaBucketsSucceedsWithReportingRead() throws Exception {
+        MvcResult ok = mvc.perform(get(COURIERS + "/sla-buckets")
                         .with(tokenFor(MANAGER))
-                        .queryParam("operatorPrincipalId", "staff-1")
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-07"))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        assertThat(ok.getResponse().getContentAsString()).contains("\"buckets\":[]");
+    }
+
+    @Test
+    void tariffAuditRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(COURIERS + "/tariff-audit")
+                        .with(tokenFor(DISPATCHER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-07"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.REPORTING_READ.code());
+    }
+
+    @Test
+    void tariffAuditSucceedsWithReportingRead() throws Exception {
+        MvcResult ok = mvc.perform(get(COURIERS + "/tariff-audit")
+                        .with(tokenFor(MANAGER))
                         .queryParam("from", "2026-09-01")
                         .queryParam("to", "2026-09-07"))
                 .andReturn();
@@ -153,20 +179,12 @@ class ReportingControllerCapabilityHttpTests {
         assertThat(ok.getResponse().getContentAsString()).contains("\"rows\":[]");
     }
 
-    /**
-     * 2026-09-14 review: {@code /fulfilment-time} and {@code
-     * /cancellation-reasons} (P27) were two more {@code REPORTING_READ}
-     * endpoints on this controller with no HTTP-level test — this suite's
-     * own stated purpose is exactly to cover the controller's capability
-     * wiring as a whole, and these two were simply missed.
-     */
     @Test
-    void fulfilmentTimeRefusesWithoutReportingRead() throws Exception {
-        MvcResult refused = mvc.perform(get(REPORTING + "/fulfilment-time")
+    void externalDeliveryCostRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(COURIERS + "/external-delivery-cost")
                         .with(tokenFor(DISPATCHER))
                         .queryParam("from", "2026-09-01")
-                        .queryParam("to", "2026-09-07")
-                        .queryParam("fulfilmentType", "DELIVERY"))
+                        .queryParam("to", "2026-09-07"))
                 .andReturn();
 
         assertThat(refused.getResponse().getStatus()).isEqualTo(403);
@@ -176,116 +194,24 @@ class ReportingControllerCapabilityHttpTests {
     }
 
     @Test
-    void fulfilmentTimeSucceedsWithReportingRead() throws Exception {
-        MvcResult ok = mvc.perform(get(REPORTING + "/fulfilment-time")
+    void externalDeliveryCostSucceedsWithReportingRead() throws Exception {
+        MvcResult ok = mvc.perform(get(COURIERS + "/external-delivery-cost")
                         .with(tokenFor(MANAGER))
                         .queryParam("from", "2026-09-01")
-                        .queryParam("to", "2026-09-07")
-                        .queryParam("fulfilmentType", "DELIVERY"))
+                        .queryParam("to", "2026-09-07"))
                 .andReturn();
 
         assertThat(ok.getResponse().getStatus()).isEqualTo(200);
-        assertThat(ok.getResponse().getContentAsString()).contains("\"medianSeconds\":null");
-    }
-
-    @Test
-    void cancellationReasonsRefusesWithoutReportingRead() throws Exception {
-        MvcResult refused = mvc.perform(get(REPORTING + "/cancellation-reasons").with(tokenFor(DISPATCHER)))
-                .andReturn();
-
-        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
-        assertThat(refused.getResponse().getContentAsString())
-                .contains("INSUFFICIENT_CAPABILITY")
-                .contains(Capability.REPORTING_READ.code());
-    }
-
-    @Test
-    void cancellationReasonsSucceedsWithReportingRead() throws Exception {
-        MvcResult ok = mvc.perform(get(REPORTING + "/cancellation-reasons").with(tokenFor(MANAGER)))
-                .andReturn();
-
-        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
-        assertThat(ok.getResponse().getContentAsString()).isEqualTo("[]");
-    }
-
-    /**
-     * Wave P27: the trap the brief names by name — a money metric queried
-     * without {@code groupBy=LEGAL_ENTITY} on a two-entity tenant must come
-     * back as a handled {@code ProblemDetail} (ADR 0031/0038), never a 500 or
-     * an unhandled exception that renders as an errored page.
-     */
-    @Test
-    void aMoneyMetricWithoutLegalEntityGroupingIsAHandledErrorOnATwoEntityTenant() throws Exception {
-        UUID entityA = UUID.randomUUID();
-        UUID entityB = UUID.randomUUID();
-        insertFactOrder(entityA);
-        insertFactOrder(entityB);
-
-        MvcResult refused = mvc.perform(get(REPORTING + "/queries")
-                        .with(tokenFor(MANAGER))
-                        .queryParam("from", "2026-09-01")
-                        .queryParam("to", "2026-09-01")
-                        .queryParam("metric", "revenue.gross.v1"))
-                .andReturn();
-
-        assertThat(refused.getResponse().getStatus())
-                .as("a refusal, not a crash — ADR 0031's ProblemDetail, not a 500")
-                .isEqualTo(400);
-        assertThat(refused.getResponse().getContentAsString())
-                .contains("LEGAL_ENTITY_GROUPING_REQUIRED")
-                .contains("revenue.gross.v1");
-    }
-
-    @Test
-    void thePerEntityCutOfTheSameMoneyMetricSucceeds() throws Exception {
-        UUID entityA = UUID.randomUUID();
-        UUID entityB = UUID.randomUUID();
-        insertFactOrder(entityA);
-        insertFactOrder(entityB);
-
-        MvcResult ok = mvc.perform(get(REPORTING + "/queries")
-                        .with(tokenFor(MANAGER))
-                        .queryParam("from", "2026-09-01")
-                        .queryParam("to", "2026-09-01")
-                        .queryParam("metric", "revenue.gross.v1")
-                        .queryParam("groupBy", "LEGAL_ENTITY"))
-                .andReturn();
-
-        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
-        assertThat(ok.getResponse().getContentAsString()).contains("\"rows\":[");
+        assertThat(ok.getResponse().getContentAsString()).contains("\"rows\":[]");
     }
 
     // ------------------------------------------------------------------ fixtures
-
-    private static final java.time.LocalDate FACT_DAY = java.time.LocalDate.of(2026, 9, 1);
-
-    /**
-     * {@code GET .../reporting/queries} reads {@code reporting.agg_branch_day}
-     * (the typed pipeline's own pre-aggregated table), not {@code fact_order}
-     * directly — see {@code JdbcReportingStore#readAggregates}.
-     */
-    private void insertFactOrder(UUID legalEntityId) {
-        jdbc.sql("""
-                INSERT INTO reporting.agg_branch_day (
-                    tenant_id, business_date, location_id, legal_entity_id, channel_code,
-                    fulfilment_type, boundary_version, metric_calculation_version, order_count,
-                    cancelled_count, gross_som, discount_som, net_som, refunded_som,
-                    promised_count, late_count, distinct_customers, new_customers)
-                VALUES (:tenantId, :businessDate, :locationId, :legalEntityId, 'TELEGRAM', 'DELIVERY',
-                    1, 1, 1, 0, 100000, 0, 100000, 0, 0, 0, 0, 0)
-                """)
-                .param("tenantId", TENANT)
-                .param("businessDate", FACT_DAY)
-                .param("locationId", UUID.randomUUID())
-                .param("legalEntityId", legalEntityId)
-                .update();
-    }
 
     private void insertTenant() {
         jdbc.sql("""
                 INSERT INTO tenant.tenants
                     (id, slug, legal_name, display_name, default_currency, default_timezone, status, version)
-                VALUES (:id, 'reporting-capability-endpoint', 'Reporting', 'Reporting',
+                VALUES (:id, 'courier-reporting-capability-endpoint', 'Reporting', 'Reporting',
                     'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
                 """).param("id", TENANT).update();
     }
@@ -296,7 +222,7 @@ class ReportingControllerCapabilityHttpTests {
                     (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
                      status, granted_by, reason, valid_from)
                 VALUES (:id, :tenantId, :subject, :roleId, true, 'TENANT', :tenantId,
-                        'ACTIVE', 'test-fixture', 'reporting capability endpoint test', :validFrom)
+                        'ACTIVE', 'test-fixture', 'courier reporting capability endpoint test', :validFrom)
                 ON CONFLICT DO NOTHING
                 """)
                 .param("id", UUID.nameUUIDFromBytes((subject + role.code()).getBytes(UTF_8)))

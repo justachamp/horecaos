@@ -1166,7 +1166,9 @@ public class OperationsCourierController {
             description = "Marks the shipment's DELIVERY-charge invoice line MATCHED when one exists. "
                     + "A shipment with no invoice line at all is genuinely UNBILLED -- nothing to "
                     + "reconcile against yet -- and the acknowledgement is recorded on the audit trail "
-                    + "alone; reconciled is false on that response.")
+                    + "alone; reconciled is false on that response. Refuses (UNPROCESSABLE_STATE) a line "
+                    + "that is VARIANCE: that money discrepancy is disposed of only through the "
+                    + "variance-acceptance endpoint's accept/dispute choice, never by this action.")
     public ResponseEntity<ReconcileShipmentResponse> reconcileExternalDeliveryCost(
             @PathVariable UUID tenantId,
             @PathVariable UUID shipmentId,
