@@ -36746,7 +36746,7 @@
     },
     "/api/v1/tenants/{tenantId}/reporting/exports" : {
       "get" : {
-        "description" : "The export centre screen's own job history, newest first.",
+        "description" : "The export centre screen's own job history, newest first. A viewer who lacks customer.pii.export never sees another principal's PII columns or download URL in this list.",
         "operationId" : "recentExports",
         "parameters" : [ {
           "in" : "path",
@@ -37506,7 +37506,7 @@
     },
     "/api/v1/tenants/{tenantId}/reporting/reports/{id}" : {
       "get" : {
-        "description" : "What the export centre screen polls: QUEUED/RUNNING/COMPLETE/FAILED, the effective columns actually produced, whether the row quota truncated the result, and a short-lived download URL once COMPLETE.",
+        "description" : "What the export centre screen polls: QUEUED/RUNNING/COMPLETE/FAILED, the effective columns actually produced, whether the row quota truncated the result, and a short-lived download URL once COMPLETE. A viewer who lacks customer.pii.export never sees another principal's PII columns or download URL here, even for their own completed export.",
         "operationId" : "reportExportStatus",
         "parameters" : [ {
           "in" : "path",
