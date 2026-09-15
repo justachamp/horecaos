@@ -402,14 +402,18 @@ class OperatorReportingTests {
         params.put("gross", netSom);
         params.put("discount", 0L);
         params.put("net", netSom);
+        // Matches insertRow's own occurred_at for the sibling fact_order row,
+        // the same (business_date, order_id) pairing the wave W02 backfill
+        // migration joins on.
+        params.put("occurredAt", DAY.atTime(9, 0).atOffset(ZoneOffset.of("+05:00")));
 
         jdbc.sql("""
                 INSERT INTO reporting.fact_order_line (
                     tenant_id, business_date, order_id, line_id, location_id,
-                    product_name_snapshot, quantity, gross_som, discount_som, net_som)
+                    product_name_snapshot, quantity, gross_som, discount_som, net_som, occurred_at)
                 VALUES (
                     :tenantId, :businessDate, :orderId, :lineId, :locationId,
-                    :productName, :quantity, :gross, :discount, :net)
+                    :productName, :quantity, :gross, :discount, :net, :occurredAt)
                 """).params(params).update();
     }
 
