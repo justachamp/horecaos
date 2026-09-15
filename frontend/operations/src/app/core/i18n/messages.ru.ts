@@ -429,6 +429,7 @@ export const messagesRu: MessageCatalogue = {
   'orders.amendment.warning.CASH_TENDERED_INSUFFICIENT':
     '«Сдача с» теперь меньше итоговой суммы — клиент может доплатить.',
   'orders.amendment.warning.acknowledge': 'Понятно',
+  'orders.detail.amend.blockedByPosExport': 'Изменение недоступно: ожидается подтверждение POS',
 
   'orders.detail.section.revisions': 'Ревизии ({count})',
   'orders.detail.revisions.show': 'Показать ревизии',
@@ -484,6 +485,26 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.fiscal.outcome.NO_PROVIDER_PATH':
     'Этот платёж нельзя фискализировать через провайдера',
   'orders.detail.fiscal.outcome.NOT_WIRED': 'Провайдер не подключён',
+
+  'orders.detail.section.posExport': 'Экспорт в кассу',
+  'orders.detail.posExport.error': 'Не удалось загрузить экспорт в кассу',
+  'orders.detail.posExport.notExportedYet': 'Ещё не отправлен на кассу',
+  'orders.detail.posExport.reassurance': 'С заказом всё в порядке — не дошла его копия на кухне.',
+  'orders.detail.posExport.lastError': 'Касса ответила: {detail}',
+  'orders.detail.posExport.state.PENDING': 'Ещё не отправлен',
+  'orders.detail.posExport.state.SENT': 'Отправляется…',
+  'orders.detail.posExport.state.ACCEPTED': 'Дошёл до кассы',
+  'orders.detail.posExport.state.REJECTED': 'Касса отклонила',
+  'orders.detail.posExport.state.UNCERTAIN': 'Неизвестно — проверяется',
+  'orders.detail.posExport.state.AWAITING_OPERATOR': 'Требуется проверка',
+  'orders.detail.posExport.state.RESOLVED_LANDED': 'Подтверждено на кассе',
+  'orders.detail.posExport.state.RESOLVED_ABSENT': 'Не дошёл — можно отправить снова',
+  'orders.detail.posExport.state.ABANDONED': 'Не будет отправлен',
+  'orders.detail.posExport.action.push': 'Отправить в POS',
+  'orders.detail.posExport.action.push.reason': 'Причина',
+  'orders.detail.posExport.action.push.submit': 'Отправить',
+  'orders.detail.posExport.action.push.submitting': 'Отправка…',
+  'orders.detail.posExport.action.push.notSendable': 'Нельзя отправить повторно в этом состоянии',
 
   'orders.severity.blocked': 'требуется вмешательство',
   'orders.severity.approvalDeadline': 'подтвердить за {mmss}',

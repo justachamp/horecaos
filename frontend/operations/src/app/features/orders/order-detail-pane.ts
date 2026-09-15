@@ -77,6 +77,8 @@ import {
 } from './order-outcome-labels';
 import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outcome-reason-dialog';
 import { OrderPaymentPanel } from './order-payment-panel';
+import { OrderPosExportApi, OrderPosExportView, PosExportPushResult } from './order-pos-export-api';
+import { POS_EXPORT_STATE_LABEL_KEYS, posExportReachedTheTill } from './order-pos-export-labels';
 import {
   OrderRejectReasonDialog,
   OrderRejectSubmission,
@@ -182,6 +184,7 @@ export class OrderDetailPane {
   private readonly dispatchApi = inject(DispatchApi);
   private readonly couriersApi = inject(CouriersApi);
   private readonly kitchenApi = inject(KitchenApi);
+  private readonly posExportApi = inject(OrderPosExportApi);
   private readonly i18n = inject(I18n);
 
   /** Bound from the route parameter by `withComponentInputBinding()`. */
@@ -211,6 +214,22 @@ export class OrderDetailPane {
   /** The production lane's own read (wave P11, row `1.2b`) — `null` before it settles or on a non-critical failure, exactly like {@link timeline}. */
   protected readonly kitchenEvents = signal<KitchenEventsResponse | null>(null);
   protected readonly kitchenEventsError = signal(false);
+
+  /**
+   * §3.11 Интеграции's POS row (wave P42, row `1.2i`) — fetched at the pane
+   * level, like {@link delivery}, because it feeds two places at once: its
+   * own section below, and {@link amendBlockedReason}'s interlock on the
+   * AMEND action in the header. `null` before it settles or on a non-critical
+   * failure; `posExport()?.posCapable === false` is what suppresses the
+   * section (and the interlock) entirely rather than rendering an empty one.
+   */
+  protected readonly posExport = signal<OrderPosExportView | null>(null);
+  protected readonly posExportError = signal(false);
+  protected readonly posExportPushOpen = signal(false);
+  protected readonly posExportPushReason = signal('');
+  protected readonly posExportPushSubmitting = signal(false);
+  protected readonly posExportPushError = signal<string | null>(null);
+  protected readonly posExportPushResult = signal<PosExportPushResult | null>(null);
 
   /** The order detail's own assign/unassign control (wave P11, row `1.2e`) — reuses `DispatchApi` exactly as the kitchen pass's own picker does. */
   protected readonly courierRoster = signal<readonly RosterEntryResponse[]>([]);
@@ -395,6 +414,12 @@ export class OrderDetailPane {
     this.deliveryError.set(false);
     this.kitchenEvents.set(null);
     this.kitchenEventsError.set(false);
+    this.posExport.set(null);
+    this.posExportError.set(false);
+    this.posExportPushOpen.set(false);
+    this.posExportPushReason.set('');
+    this.posExportPushError.set(null);
+    this.posExportPushResult.set(null);
     this.courierPickerOpen.set(false);
     this.revealedPhone.set(null);
     this.revealedAddress.set(null);
@@ -426,6 +451,7 @@ export class OrderDetailPane {
       void this.loadDecisions(orderId);
       void this.loadDelivery(orderId);
       void this.loadKitchenEvents(orderId);
+      void this.loadPosExport(orderId);
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.code === ApiErrorCode.RESOURCE_NOT_FOUND) {
@@ -503,6 +529,19 @@ export class OrderDetailPane {
     }
   }
 
+  /** §3.11 Интеграции's POS row (wave P42, row `1.2i`) — fire-and-forget, exactly like {@link loadTimeline}. */
+  private async loadPosExport(orderId: string): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      this.posExport.set(await this.posExportApi.forOrder(scope, orderId));
+    } catch {
+      this.posExportError.set(true);
+    }
+  }
+
   /**
    * The resolved `ordering.lateness` policy (wave P06), fire-and-forget
    * exactly like {@link loadTimeline}: {@link headerSeverity} already falls
@@ -540,6 +579,110 @@ export class OrderDetailPane {
   /** For `q-order-handover-panel`'s `[scope]` input — the template cannot reach `location` directly. */
   protected currentScope(): LocationScope | null {
     return this.location.scope();
+  }
+
+  // ------------------------------------------------------------ §3.11 Интеграции (POS export, wave P42, row 1.2i)
+
+  protected posExportStateLabel(): string | null {
+    const state = this.posExport()?.export?.state;
+    return state ? this.i18n.t(POS_EXPORT_STATE_LABEL_KEYS[state]) : null;
+  }
+
+  /**
+   * The &sect;3.11 "a failed export is not an order failure" reassurance —
+   * the whole reason the Traps note in gap map row `1.2i` exists. Shown for
+   * every state except the two where the till is confirmed to actually hold
+   * the ticket ({@link posExportReachedTheTill}); never omitted just because
+   * a state also has its own error text, since the reassurance and the
+   * detail answer different questions.
+   */
+  protected posExportShowsReassurance(): boolean {
+    const state = this.posExport()?.export?.state;
+    return state !== undefined && !posExportReachedTheTill(state);
+  }
+
+  protected openPosExportPush(): void {
+    this.posExportPushOpen.set(true);
+    this.posExportPushReason.set('');
+    this.posExportPushError.set(null);
+    this.posExportPushResult.set(null);
+  }
+
+  protected cancelPosExportPush(): void {
+    this.posExportPushOpen.set(false);
+  }
+
+  protected setPosExportPushReason(value: string): void {
+    this.posExportPushReason.set(value);
+  }
+
+  protected canSubmitPosExportPush(): boolean {
+    return !this.posExportPushSubmitting() && this.posExportPushReason().trim().length > 0;
+  }
+
+  protected async submitPosExportPush(): Promise<void> {
+    if (!this.canSubmitPosExportPush()) {
+      return;
+    }
+    const scope = this.location.scope();
+    const detail = this.order();
+    if (!scope || !detail) {
+      return;
+    }
+    this.posExportPushSubmitting.set(true);
+    this.posExportPushError.set(null);
+    this.posExportPushResult.set(null);
+    try {
+      const result = await this.posExportApi.push(
+        scope,
+        detail.value.summary.orderId,
+        this.posExportPushReason().trim(),
+      );
+      this.posExportPushResult.set(result);
+      this.posExportPushOpen.set(false);
+      await this.loadPosExport(detail.value.summary.orderId);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.posExportPushError.set(this.errorMessage(error));
+      } else {
+        this.posExportPushError.set(this.i18n.t('error.unknown.noReference'));
+      }
+    } finally {
+      this.posExportPushSubmitting.set(false);
+    }
+  }
+
+  /**
+   * A push result earns its own banner only for `EXPORT_NOT_SENDABLE` — the
+   * ordinary "pressed it while it was already sent/landed/waiting on a
+   * decision" answer §4.8 describes, and the one outcome the refreshed state
+   * line below does not already say plainly on its own. Every other outcome
+   * (a successful send, a provider rejection, an uncertain result) is fully
+   * covered by {@link loadPosExport}'s own reload updating the state and
+   * error text this section already renders.
+   */
+  protected posExportPushResultLabel(): string | null {
+    const result = this.posExportPushResult();
+    return result?.status === 'REJECTED' && result.errorCode === 'EXPORT_NOT_SENDABLE'
+      ? this.i18n.t('orders.detail.posExport.action.push.notSendable')
+      : null;
+  }
+
+  /**
+   * The &sect;3.11 amendment interlock (ADR 0039, gap map row `1.2i`, wave
+   * P42): non-null exactly while `posExport()` names an export that {@link
+   * PosExportView#permitsAmendment} refuses, mirroring &sect;4.2's rule for a
+   * temporarily unavailable action — rendered as a disabled control with the
+   * reason attached, never silently omitted. `null` while the read has not
+   * settled or the tenant has no POS binding at all, so a branch with no
+   * till is never told to wait on one.
+   */
+  protected amendBlockedReason(): string | null {
+    const exportView = this.posExport()?.export;
+    if (!exportView || exportView.permitsAmendment) {
+      return null;
+    }
+    return this.i18n.t('orders.detail.amend.blockedByPosExport');
   }
 
   // ------------------------------------------------------------ header severity
@@ -654,6 +797,14 @@ export class OrderDetailPane {
         // orders.md §4.4: opens the amendment submenu. Wave P10 is the console
         // that can finally render and click this — see
         // `OrderActionsPolicy.AMEND_EMISSION_ENABLED`'s own doc (ADR 0105).
+        // The §3.11 interlock (wave P42) disables this button in the
+        // template while `amendBlockedReason()` is set; this guard is the
+        // same rule applied a second time, in case a click still reaches
+        // here (a stale render, a synthetic event) rather than relying on
+        // `disabled` alone.
+        if (this.amendBlockedReason()) {
+          return;
+        }
         this.dialog.set('amendMenu');
         return;
       default:

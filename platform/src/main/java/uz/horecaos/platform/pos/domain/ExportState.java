@@ -82,4 +82,32 @@ public enum ExportState {
     public boolean awaitsHuman() {
         return this == AWAITING_OPERATOR;
     }
+
+    /**
+     * Whether an amendment may proceed against the order this export belongs to
+     * (ADR 0039, orders.md &sect;3.11/&sect;4.4, wave P42's operations-plane
+     * mirror of the gate `ordering.application.PosExportStatus#settledFor`
+     * already enforces).
+     *
+     * <p>Deliberately duplicated rather than shared: {@code ordering} cannot
+     * import this type (it reads this module's table through SQL instead, per
+     * {@code JdbcPosExportStatus}'s own doc), so this is the one place {@code
+     * pos} states the same rule for its own operations-plane read. Keep the two
+     * in sync by hand if either ever changes — there is no third place doing so
+     * automatically.
+     *
+     * <p>{@code PENDING} permits: the row exists but nothing has been sent, so
+     * the kitchen has seen nothing yet. {@code REJECTED}, {@code
+     * RESOLVED_ABSENT} and {@code ABANDONED} permit because the till
+     * demonstrably does not hold this order. Every other state — including
+     * {@code ACCEPTED}, where the ticket is confirmed printed — refuses,
+     * because the kitchen may already be holding a ticket this edit would
+     * silently leave stale.
+     */
+    public boolean permitsAmendment() {
+        return switch (this) {
+            case PENDING, REJECTED, RESOLVED_ABSENT, ABANDONED -> true;
+            default -> false;
+        };
+    }
 }

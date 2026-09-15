@@ -73,7 +73,7 @@
           <button
             type="button"
             class="pane__primary-action"
-            [disabled]="busy()"
+            [disabled]="busy() || (primary.action === 'AMEND' && amendBlockedReason() !== null)"
             (click)="onActionClick(primary)"
             data-testid="order-detail-primary-action"
           >
@@ -102,6 +102,8 @@
                   <button
                     type="button"
                     class="pane__overflow-item"
+                    [disabled]="action.action === 'AMEND' && amendBlockedReason() !== null"
+                    [attr.title]="action.action === 'AMEND' ? amendBlockedReason() : null"
                     (click)="onActionClick(action)"
                     [attr.data-testid]="'order-detail-action-' + action.action"
                   >
@@ -113,6 +115,11 @@
           </div>
         }
       </div>
+      @if (primaryAction()?.action === 'AMEND' && amendBlockedReason(); as blockedReason) {
+        <p class="q-caption pane__amend-blocked" data-testid="order-detail-amend-blocked">
+          {{ blockedReason }}
+        </p>
+      }
     </header>
 
     @if (detail.value.warnings.length > 0) {
@@ -915,6 +922,125 @@
         }
       }
     </section>
+
+    <!-- ================================================================ POS export (§3.11, row 1.2i, wave P42) -->
+    <!-- Suppressed entirely (no section at all) while posExport() is unsettled or posCapable is false: ADR 0011's own rule -- absent, not disabled, when the location's own binding declares no ORDER_EXPORT capability. -->
+    @if (posExportError()) {
+      <section
+        class="pane__section"
+        [attr.aria-label]="'orders.detail.section.posExport' | t"
+        data-testid="order-detail-pos-export"
+      >
+        <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.posExport' | t }}</h2>
+        <p class="q-body-sm pane__state-inline" data-testid="order-detail-pos-export-error">
+          {{ 'orders.detail.posExport.error' | t }}
+        </p>
+      </section>
+    } @else if (posExport()?.posCapable) {
+      <section
+        class="pane__section"
+        [attr.aria-label]="'orders.detail.section.posExport' | t"
+        data-testid="order-detail-pos-export"
+      >
+        <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.posExport' | t }}</h2>
+
+        @if (posExportPushResultLabel(); as resultLabel) {
+          <p
+            class="q-body-sm pane__pos-export-result"
+            role="status"
+            data-testid="order-detail-pos-export-result"
+          >
+            {{ resultLabel }}
+          </p>
+        }
+
+        @if (posExport()?.export; as exportView) {
+          <p class="q-body-sm" data-testid="order-detail-pos-export-state">
+            {{ posExportStateLabel() }}
+          </p>
+
+          @if (posExportShowsReassurance()) {
+            <p
+              class="q-caption pane__pos-export-reassurance"
+              data-testid="order-detail-pos-export-reassurance"
+            >
+              {{ 'orders.detail.posExport.reassurance' | t }}
+            </p>
+          }
+
+          @if (exportView.lastError) {
+            <p
+              class="q-body-sm pane__pos-export-error"
+              data-testid="order-detail-pos-export-last-error"
+            >
+              {{ 'orders.detail.posExport.lastError' | t: { detail: exportView.lastError } }}
+            </p>
+          }
+
+          @if (!posExportPushOpen()) {
+            <button
+              type="button"
+              class="pane__reveal-link"
+              (click)="openPosExportPush()"
+              data-testid="order-detail-pos-export-push-toggle"
+            >
+              {{ 'orders.detail.posExport.action.push' | t }}
+            </button>
+          } @else {
+            <div class="pane__pos-export-form" data-testid="order-detail-pos-export-push-form">
+              <label class="pane__pos-export-field">
+                <span class="q-body-sm">{{
+                  'orders.detail.posExport.action.push.reason' | t
+                }}</span>
+                <input
+                  type="text"
+                  class="pane__pos-export-input"
+                  [value]="posExportPushReason()"
+                  (input)="setPosExportPushReason($any($event.target).value)"
+                  data-testid="order-detail-pos-export-push-reason"
+                />
+              </label>
+              @if (posExportPushError(); as message) {
+                <p
+                  class="q-body-sm pane__pos-export-error"
+                  role="alert"
+                  data-testid="order-detail-pos-export-push-error"
+                >
+                  {{ message }}
+                </p>
+              }
+              <div class="pane__pos-export-form-actions">
+                <button
+                  type="button"
+                  class="pane__pos-export-button pane__pos-export-button--secondary"
+                  [disabled]="posExportPushSubmitting()"
+                  (click)="cancelPosExportPush()"
+                >
+                  {{ 'orders.action.cancel' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="pane__pos-export-button"
+                  [disabled]="!canSubmitPosExportPush()"
+                  (click)="submitPosExportPush()"
+                  data-testid="order-detail-pos-export-push-submit"
+                >
+                  {{
+                    posExportPushSubmitting()
+                      ? ('orders.detail.posExport.action.push.submitting' | t)
+                      : ('orders.detail.posExport.action.push.submit' | t)
+                  }}
+                </button>
+              </div>
+            </div>
+          }
+        } @else {
+          <p class="q-body-sm pane__state-inline" data-testid="order-detail-pos-export-not-yet">
+            {{ 'orders.detail.posExport.notExportedYet' | t }}
+          </p>
+        }
+      </section>
+    }
 
     <!-- ================================================================ Атрибуция (§3.12) -->
     <section class="pane__section" [attr.aria-label]="'orders.detail.section.attribution' | t">
