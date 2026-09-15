@@ -427,6 +427,22 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.handover.bypassSupervisor': 'ФИО супервайзера',
   'orders.detail.handover.bypassConfirm': 'Подтвердить override',
 
+  'orders.detail.section.payment': 'Оплата',
+  'orders.detail.payment.error': 'Не удалось загрузить данные об оплате',
+  'orders.detail.payment.denied': 'Нет доступа к информации об оплате',
+
+  'orders.detail.section.fiscal': 'Фискальные чеки',
+  'orders.detail.fiscal.error': 'Не удалось загрузить фискальные документы',
+  'orders.detail.fiscal.denied': 'Нет доступа к фискальным документам',
+  'orders.detail.fiscal.action.retry.result': 'Результат: {outcome}',
+  'orders.detail.fiscal.outcome.ISSUED': 'Чек выдан',
+  'orders.detail.fiscal.outcome.ALREADY_ISSUED': 'Чек уже существовал',
+  'orders.detail.fiscal.outcome.REJECTED': 'Провайдер отклонил запрос',
+  'orders.detail.fiscal.outcome.UNCERTAIN': 'Провайдер не ответил',
+  'orders.detail.fiscal.outcome.NO_PROVIDER_PATH':
+    'Этот платёж нельзя фискализировать через провайдера',
+  'orders.detail.fiscal.outcome.NOT_WIRED': 'Провайдер не подключён',
+
   'orders.severity.blocked': 'требуется вмешательство',
   'orders.severity.approvalDeadline': 'подтвердить за {mmss}',
   'orders.severity.noPromiseFallback': 'в очереди {duration}',
@@ -1550,6 +1566,13 @@ export const messagesRu: MessageCatalogue = {
   'finance.paymentAttemptStatus.REVERSED': 'Возвращена',
   'finance.paymentAttemptStatus.FAILED': 'Не прошла',
   'finance.paymentAttemptStatus.UNCERTAIN': 'Неизвестно — провайдер не ответил',
+
+  'finance.fiscalDocumentStatus.NOT_APPLICABLE': 'Не применимо',
+  'finance.fiscalDocumentStatus.PENDING': 'Ожидает',
+  'finance.fiscalDocumentStatus.SUBMITTED': 'Отправлен',
+  'finance.fiscalDocumentStatus.ISSUED': 'Выдано',
+  'finance.fiscalDocumentStatus.FAILED': 'Отклонено',
+  'finance.fiscalDocumentStatus.BLOCKED': 'Заблокировано',
 
   'finance.entitlementScope.SUBTOTAL': 'Сумма заказа',
   'finance.entitlementScope.DELIVERY_FEE': 'Стоимость доставки',

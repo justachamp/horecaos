@@ -78,6 +78,36 @@ export const TENDER_STATUS_KEYS: Readonly<Record<TenderStatus, MessageKey>> = {
   FAILED: 'finance.tenderStatus.FAILED',
 };
 
+/** Mirrors `FiscalDocumentState` (Java, ADR 0038) -- fiscal-api.ts carries no such union. */
+export type FiscalDocumentStatus =
+  'NOT_APPLICABLE' | 'PENDING' | 'SUBMITTED' | 'ISSUED' | 'FAILED' | 'BLOCKED';
+
+/**
+ * `FiscalDocumentState` (Java, ADR 0038) -- the six-value lifecycle a fiscal
+ * document moves through. Neither `fiscal-page.html` (the blocked worklist)
+ * nor `fiscal-api.ts` carried a label map for this before wave P12: both
+ * print `document.status` raw. `isFiscalDocumentStatus` is the same
+ * known-vocabulary guard `isRefundReasonCode` below already uses, for a
+ * `FiscalDocumentView.status` typed as a bare `string` rather than the
+ * six-value union.
+ */
+export const FISCAL_DOCUMENT_STATUS_KEYS: Readonly<Record<FiscalDocumentStatus, MessageKey>> = {
+  NOT_APPLICABLE: 'finance.fiscalDocumentStatus.NOT_APPLICABLE',
+  PENDING: 'finance.fiscalDocumentStatus.PENDING',
+  SUBMITTED: 'finance.fiscalDocumentStatus.SUBMITTED',
+  ISSUED: 'finance.fiscalDocumentStatus.ISSUED',
+  FAILED: 'finance.fiscalDocumentStatus.FAILED',
+  BLOCKED: 'finance.fiscalDocumentStatus.BLOCKED',
+};
+
+const KNOWN_FISCAL_DOCUMENT_STATUSES: ReadonlySet<string> = new Set(
+  Object.keys(FISCAL_DOCUMENT_STATUS_KEYS),
+);
+
+export function isFiscalDocumentStatus(value: string): value is FiscalDocumentStatus {
+  return KNOWN_FISCAL_DOCUMENT_STATUSES.has(value);
+}
+
 export const ENTITLEMENT_SCOPE_KEYS: Readonly<Record<EntitlementScope, MessageKey>> = {
   SUBTOTAL: 'finance.entitlementScope.SUBTOTAL',
   DELIVERY_FEE: 'finance.entitlementScope.DELIVERY_FEE',

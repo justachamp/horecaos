@@ -441,6 +441,21 @@ export const messagesEn = {
   'orders.detail.handover.bypassSupervisor': 'Supervisor name',
   'orders.detail.handover.bypassConfirm': 'Confirm override',
 
+  'orders.detail.section.payment': 'Payment',
+  'orders.detail.payment.error': 'The payment could not be loaded',
+  'orders.detail.payment.denied': 'No access to payment information',
+
+  'orders.detail.section.fiscal': 'Fiscal receipts',
+  'orders.detail.fiscal.error': 'The fiscal documents could not be loaded',
+  'orders.detail.fiscal.denied': 'No access to fiscal documents',
+  'orders.detail.fiscal.action.retry.result': 'Result: {outcome}',
+  'orders.detail.fiscal.outcome.ISSUED': 'Receipt issued',
+  'orders.detail.fiscal.outcome.ALREADY_ISSUED': 'A receipt already existed',
+  'orders.detail.fiscal.outcome.REJECTED': 'The provider rejected the request',
+  'orders.detail.fiscal.outcome.UNCERTAIN': 'The provider did not answer',
+  'orders.detail.fiscal.outcome.NO_PROVIDER_PATH': 'No provider can fiscalize this leg',
+  'orders.detail.fiscal.outcome.NOT_WIRED': 'No provider is connected',
+
   'orders.severity.blocked': 'needs attention',
   'orders.severity.approvalDeadline': 'confirm within {mmss}',
   'orders.severity.noPromiseFallback': 'waiting {duration}',
@@ -1575,6 +1590,13 @@ export const messagesEn = {
   'finance.paymentAttemptStatus.REVERSED': 'Reversed',
   'finance.paymentAttemptStatus.FAILED': 'Failed',
   'finance.paymentAttemptStatus.UNCERTAIN': 'Uncertain — provider did not answer',
+
+  'finance.fiscalDocumentStatus.NOT_APPLICABLE': 'Not applicable',
+  'finance.fiscalDocumentStatus.PENDING': 'Pending',
+  'finance.fiscalDocumentStatus.SUBMITTED': 'Submitted',
+  'finance.fiscalDocumentStatus.ISSUED': 'Issued',
+  'finance.fiscalDocumentStatus.FAILED': 'Failed',
+  'finance.fiscalDocumentStatus.BLOCKED': 'Blocked',
 
   'finance.entitlementScope.SUBTOTAL': 'Subtotal',
   'finance.entitlementScope.DELIVERY_FEE': 'Delivery fee',
