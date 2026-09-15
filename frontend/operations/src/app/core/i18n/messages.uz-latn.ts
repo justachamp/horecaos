@@ -2162,6 +2162,21 @@ export const messagesUzLatn: MessageCatalogue = {
   'today.operators.notBuilt':
     'Xodimlar spravochnikasi bilan birga paydo boʻladi (IA 9.2, hali qurilmagan) — bugun buyurtmani qabul qilgan shaxsni ism bilan bogʻlash imkoni yoʻq.',
 
+  // ---- IA 0.2 Mening ishim (my-work-page.ts) — T01 toʻlqini ----
+  'myWork.title': 'Mening ishim',
+  'myWork.subtitle':
+    'Ushbu filialdagi shaxsiy buyurtmalaringiz va tushumingiz — faqat bugun uchun.',
+  'myWork.loading': 'Ish maʼlumotlari yuklanmoqda',
+  'myWork.error': 'Yuklab boʻlmadi',
+  'myWork.channel.title': 'Mening buyurtmalarim kanal boʻyicha',
+  'myWork.channel.period': '{from} dan, joriy savdo kuni',
+  'myWork.channel.empty': 'Bugun sizda hali buyurtmalar yoʻq',
+  'myWork.payment.title': 'Toʻlov usuli boʻyicha tushum',
+  'myWork.payment.empty': 'Bugun hali tushumlar qayd etilmagan',
+  'myWork.locked.title': 'Hali mavjud emas',
+  'myWork.locked.ask':
+    'Shaxsiy maʼlumotlar va interfeys shaxsiylashtirishi xodim identifikatsiyasi boʻyicha ADR kutmoqda — uni platforma egasi hali yozmagan.',
+
   // ---- IA 0.1e / X/X.3 Devor taxtasi (wallboard-shell.ts) — T23 toʻlqini ----
   'wallboard.title': 'Jonli taxta',
   'wallboard.denied': 'Jonli taxtaga kirish huquqi yoʻq',

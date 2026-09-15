@@ -62,17 +62,15 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  * counters renders where that cut falls — a supervisor reading a counter has
  * to be able to see what it counts.
  *
- * **IA 0.2 (My work) is an honest not-built page, linked from the toolbar
- * here.** Its whole "Owns" list depends on data this build does not have:
- * `created_by_actor_id`/`accepted_by_actor_id` do not exist on
- * `ordering.orders` at all (ADR 0039, orders.md §11.5 — "blocks... the
- * operator leaderboard"), so "my own queue" cannot be filtered, and even
- * `staff-and-access.md`'s own placement of these statistics on Home 0.2
- * assumes a staff person record (§11.1) that does not exist either — every
- * name would render as a raw Keycloak subject UUID. UI personalization
- * (interface language, a column picker) is listed under the same "Личные
- * данные... Not built — §11.1" line. Nothing here can be built as a partial
- * screen without fabricating data this backend cannot produce.
+ * **IA 0.2 (My work), linked from the toolbar here, is real as of wave
+ * T01** — `MyWorkPage`, at the link's own route. `0.2a`/`0.2b` (personal
+ * statistics by channel, revenue by payment method) ask no staff directory
+ * at all: they are self-scoped by the token's own subject, which is the one
+ * actor question this build can answer honestly without a name. `0.2c`/`0.2d`
+ * (personal data, UI personalization) do assume a staff person record
+ * (`staff-and-access.md` §11.1) that does not exist yet, and stay a named,
+ * honest lock on that page rather than being built here — see
+ * `my-work-page.ts`'s own doc for the boundary.
  */
 @Component({
   selector: 'q-today-page',

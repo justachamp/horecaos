@@ -101,17 +101,15 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/staff/my-profile-page').then((m) => m.MyProfilePage),
       },
-      // IA 0.2 (My work): an honest not-built page, linked from 0.1's own
-      // toolbar — see `today-page.ts`'s doc for why every field it would
-      // show depends on data (order attribution, a staff person record)
-      // this build does not have.
+      // IA 0.2 (My work), wave T01: `0.2a`/`0.2b` are real (the actor-grouped
+      // channel read is self-scoped by the token's own subject, per
+      // MyWorkQueryService's own doc); `0.2c`/`0.2d` stay an honest locked
+      // band inside the page itself, naming the staff-identity ADR, rather
+      // than a second not-built route — see `my-work-page.ts`'s own doc for
+      // the boundary.
       {
         path: 'today/my-work',
-        loadComponent: () =>
-          import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-        data: {
-          spec: 'frontend-information-architecture.md §0.2 (My work) — no attribution or staff-identity data',
-        },
+        loadComponent: () => import('./features/today/my-work-page').then((m) => m.MyWorkPage),
       },
       {
         path: 'orders',
