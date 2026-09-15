@@ -1423,6 +1423,104 @@ public class JdbcReportingStore {
     }
 
     /**
+     * Wave T06 (7.3): every branch's median preparation time in one grouped
+     * query, rather than the caller fanning out one {@link
+     * #medianSecondsToReady} call per branch — the branch leaderboard's own
+     * previous shape, and the fan-out the wave's brief names by name. Postgres
+     * computes one {@code percentile_cont} per {@code GROUP BY} group in a
+     * single pass, so this costs one query plan rather than N of them.
+     *
+     * <p>A location with no order that reached READY in range is simply absent
+     * from the result — never a row carrying a null median, which would ask
+     * every caller to tell "no branch" apart from "no data" a second time. The
+     * caller (see {@code ReportQueryService#preparationTimeByLocation}) reads
+     * a missing location the same way {@link #medianSecondsToReady} already
+     * reads an entirely empty range: as null, not zero.
+     */
+    public List<LocationMedianRow> medianSecondsToReadyByLocation(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT location_id,
+                       percentile_cont(0.5) WITHIN GROUP (ORDER BY seconds_to_ready) AS median_seconds
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND seconds_to_ready IS NOT NULL
+                """ + locationFilter + """
+                 GROUP BY location_id
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new LocationMedianRow(
+                        row.getObject("location_id", UUID.class),
+                        roundedOrNull(row.getObject("median_seconds", Double.class))))
+                .list();
+    }
+
+    /**
+     * Wave T06 (7.3a): the SLA time-bucket table's own «Медиана» column, per
+     * branch, in one grouped query — the same {@code percentile_cont GROUP BY}
+     * shape {@link #medianSecondsToReadyByLocation} already establishes, over
+     * {@code seconds_total} rather than {@code seconds_to_ready}: {@code
+     * seconds_total} is exactly the column {@code DayAggregator.slaBuckets}
+     * buckets orders by (statistics.md §2.3's own «Медиана»), so this reads
+     * the median of the same population the six buckets beside it summarise —
+     * a summary statistic over the same distribution, not a second one.
+     *
+     * <p>A branch with no order carrying a {@code closed_at} in range is
+     * absent from the result, on the same footing as {@link
+     * #medianSecondsToReadyByLocation}: never a row with a null median.
+     */
+    public List<LocationMedianRow> medianSecondsTotalByLocation(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT location_id,
+                       percentile_cont(0.5) WITHIN GROUP (ORDER BY seconds_total) AS median_seconds
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND seconds_total IS NOT NULL
+                """ + locationFilter + """
+                 GROUP BY location_id
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new LocationMedianRow(
+                        row.getObject("location_id", UUID.class),
+                        roundedOrNull(row.getObject("median_seconds", Double.class))))
+                .list();
+    }
+
+    private static @Nullable Integer roundedOrNull(@Nullable Double value) {
+        return value == null ? null : (int) Math.round(value);
+    }
+
+    /**
+     * One branch's median — see {@link #medianSecondsToReadyByLocation} (prep
+     * time) and {@link #medianSecondsTotalByLocation} (handover time).
+     */
+    public record LocationMedianRow(
+            UUID locationId, @Nullable Integer medianSeconds) {}
+
+    /**
      * Order-grain rows straight off {@code fact_order}, for the three 7.2 tables
      * that are genuinely per-order rather than day-grain (ADR 0043's own
      * {@code sla-buckets}/{@code preparation-time} endpoints already establish

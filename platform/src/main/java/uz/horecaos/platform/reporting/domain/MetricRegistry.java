@@ -422,7 +422,65 @@ public final class MetricRegistry {
                             + "against what the provider actually remits after its own commission "
                             + "or fee — that is a payments-module concern this figure does not "
                             + "answer.",
-                    P39_TENDER_FACT)));
+                    P39_TENDER_FACT),
+            // Wave T06 (7.3): the branch leaderboard's «В норме %» column needs a
+            // denominator. orders.late.v1 already counts the numerator (closed,
+            // promised, late); promised_count has been written to
+            // reporting.agg_branch_day since V0031, but nothing named it as a
+            // registry id until now — the same "registry-and-endpoint gap over
+            // already-written data" P27_FULFILMENT_TIME's own comment describes.
+            // No effectiveFrom, same as orders.late.v1 itself: the two are read
+            // together and neither states a date the other does not.
+            new MetricDefinition(
+                    new MetricId("orders.promised", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.agg_branch_day.promised_count",
+                    true,
+                    Aggregation.COUNT,
+                    "PROMISED_AND_CLOSED",
+                    CurrencyRule.NONE,
+                    "Integer",
+                    MetricUnit.COUNT,
+                    "Count of closed orders that carried a promise to the customer — the "
+                            + "denominator orders.late.v1 needs to become an on-time percentage: "
+                            + "on-time % = 100 × (orders.promised.v1 − orders.late.v1) / "
+                            + "orders.promised.v1.",
+                    "Orders that carried a promise and reached a terminal status — the same "
+                            + "inclusion rule orders.late.v1 states.",
+                    "Orders with no promise, which are a third state and never counted toward "
+                            + "either the numerator or the denominator of an on-time share.",
+                    "Not applicable.",
+                    null,
+                    null),
+            // Wave T06 (7.3a): statistics.md §2.3's own «Медиана» column beside
+            // the SLA time buckets. sla_bucket_set.v1 already sources
+            // seconds_total; this is the same population's median, a
+            // registry-and-endpoint gap over already-written data rather than a
+            // new fact — the identical move P27_FULFILMENT_TIME's own comment
+            // describes for delivery_time.median.v1/pickup_time.median.v1.
+            // Distinct from prep_time.median.v1: that one reads
+            // seconds_to_ready (confirmation to ready) and excludes orders
+            // cancelled before production; this reads seconds_total (creation
+            // to close) over every fulfilment type, exactly what the six
+            // buckets beside it summarise.
+            new MetricDefinition(
+                    new MetricId("handover_time.median", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_order.seconds_total",
+                    true,
+                    Aggregation.MEDIAN,
+                    "CLOSED_ORDERS",
+                    CurrencyRule.NONE,
+                    "Seconds",
+                    MetricUnit.SECONDS,
+                    "Median seconds from order creation to close, over every fulfilment type — "
+                            + "the same population sla_bucket_set.v1 buckets, summarised as one "
+                            + "figure per branch.",
+                    "Every order with a closed_at.",
+                    "Orders still open at the close of the business day.",
+                    "Not applicable.",
+                    null,
+                    null)));
 
     private MetricRegistry() {}
 

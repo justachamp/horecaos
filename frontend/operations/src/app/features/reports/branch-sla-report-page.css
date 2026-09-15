@@ -99,3 +99,39 @@
   border-radius: var(--q-radius);
   cursor: pointer;
 }
+
+/* Wave T06 (7.3): the leaderboard's persistent secondary sort control. */
+.sort-controls {
+  display: inline-flex;
+  border: 1px solid var(--q-hairline);
+  margin-top: 8px;
+}
+
+.segment {
+  padding: 4px 10px;
+  border: none;
+  border-right: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-body-xs);
+  cursor: pointer;
+}
+
+.segment:last-child {
+  border-right: none;
+}
+
+.segment--active {
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+}
+
+.fulfilment-split-hint {
+  margin-top: 4px;
+  color: var(--q-ink-subtle);
+}
+
+.channels-title,
+.payments-title {
+  margin-top: 32px;
+}

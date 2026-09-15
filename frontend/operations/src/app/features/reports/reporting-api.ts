@@ -119,13 +119,32 @@ export interface BucketResponse {
   readonly shareBasisPoints: number;
 }
 
+/**
+ * Wave T06 (7.3/7.3a): one branch's median — mirrors
+ * `ReportingController.LocationMedianResponse`. `medianSeconds` is null only
+ * when the caller asks for the wrong shape; a branch with nothing to compute
+ * a median from is simply absent from the parent list, never a row here.
+ */
+export interface LocationMedianResponse {
+  readonly locationId: string;
+  readonly medianSeconds: number | null;
+}
+
+/** @property medians wave T06 (7.3a): each branch's handover_time.median.v1, alongside the bucket counts. */
 export interface SlaResponse {
   readonly buckets: readonly BucketResponse[];
+  readonly medians: readonly LocationMedianResponse[];
   readonly provenance: ProvenanceResponse;
 }
 
 export interface MedianResponse {
   readonly medianSeconds: number | null;
+  readonly provenance: ProvenanceResponse;
+}
+
+/** Wave T06 (7.3): every branch's median preparation time from one request. */
+export interface LocationMedianListResponse {
+  readonly rows: readonly LocationMedianResponse[];
   readonly provenance: ProvenanceResponse;
 }
 
@@ -489,6 +508,23 @@ export class ReportingApi {
   async preparationTime(tenantId: string, params: RangeParams): Promise<MedianResponse> {
     const result = await firstValueFrom(
       this.api.get<MedianResponse>(reportsPaths.preparationTime(tenantId), {
+        params: { from: params.from, to: params.to, locationId: params.locationId },
+      }),
+    );
+    return result.value;
+  }
+
+  /**
+   * Wave T06 (7.3): every branch's median preparation time from one request —
+   * replaces the branch leaderboard's previous one-{@link preparationTime}
+   * -call-per-branch fan-out.
+   */
+  async preparationTimeByLocation(
+    tenantId: string,
+    params: RangeParams,
+  ): Promise<LocationMedianListResponse> {
+    const result = await firstValueFrom(
+      this.api.get<LocationMedianListResponse>(reportsPaths.preparationTimeByLocation(tenantId), {
         params: { from: params.from, to: params.to, locationId: params.locationId },
       }),
     );

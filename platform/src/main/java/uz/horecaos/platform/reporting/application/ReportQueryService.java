@@ -112,17 +112,28 @@ public class ReportQueryService {
         return new ReportResult(resultRows, provenance(query.tenantId(), metrics, boundary));
     }
 
-    /** The fixed SLA distribution, which is several rows per slice rather than one value. */
+    /**
+     * The fixed SLA distribution, which is several rows per slice rather than
+     * one value — plus, wave T06 (7.3a), each branch's own {@code
+     * handover_time.median.v1}: statistics.md §2.3's «Медиана» column, over
+     * the same population the six buckets summarise. One extra grouped query,
+     * still the one request this endpoint always was.
+     */
     @Transactional(readOnly = true)
-    public SlaResult slaBuckets(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+    public BranchSlaResult slaBuckets(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
         List<SlaBucketAggregate> rows = store.readSlaBuckets(tenantId, from, to).stream()
                 .filter(row -> locationIds.isEmpty() || locationIds.contains(row.scopeId()))
                 .toList();
-        return new SlaResult(
+        List<JdbcReportingStore.LocationMedianRow> medians =
+                store.medianSecondsTotalByLocation(tenantId, from, to, locationIds);
+        return new BranchSlaResult(
                 rows,
+                medians,
                 provenance(
                         tenantId,
-                        List.of(MetricRegistry.require("sla_bucket_set.v1")),
+                        List.of(
+                                MetricRegistry.require("sla_bucket_set.v1"),
+                                MetricRegistry.require("handover_time.median.v1")),
                         businessDays.boundaryFor(tenantId)));
     }
 
@@ -276,6 +287,30 @@ public class ReportQueryService {
         Integer median = store.medianSecondsToReady(tenantId, from, to, locationIds);
         return new MedianResult(
                 median,
+                provenance(
+                        tenantId,
+                        List.of(MetricRegistry.require("prep_time.median.v1")),
+                        businessDays.boundaryFor(tenantId)));
+    }
+
+    /**
+     * Wave T06 (7.3): every branch's median preparation time from one query,
+     * replacing the branch leaderboard's previous one-{@link #preparationTime}
+     * -call-per-branch fan-out. {@code locationIds} narrows the same way every
+     * other read here does; empty means every branch the caller may read.
+     *
+     * <p>A branch with no order that reached READY in range is simply absent
+     * from {@code rows} — see {@code JdbcReportingStore#medianSecondsToReadyByLocation}'s
+     * own doc for why that is not a row carrying a null median.
+     */
+    @Transactional(readOnly = true)
+    public LocationMedianResult preparationTimeByLocation(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        validateRange(from, to);
+        List<JdbcReportingStore.LocationMedianRow> rows =
+                store.medianSecondsToReadyByLocation(tenantId, from, to, locationIds);
+        return new LocationMedianResult(
+                rows,
                 provenance(
                         tenantId,
                         List.of(MetricRegistry.require("prep_time.median.v1")),
@@ -742,6 +777,17 @@ public class ReportQueryService {
     public record SlaResult(List<SlaBucketAggregate> buckets, Provenance provenance) {}
 
     /**
+     * Wave T06 (7.3a): {@link #slaBuckets}'s own result — the {@code LOCATION}
+     * scope only, which is the one that carries a per-branch median. {@link
+     * #courierSlaBuckets} keeps returning the plain {@link SlaResult}: the
+     * courier scope (T11, 7.4a) has no median column to carry.
+     */
+    public record BranchSlaResult(
+            List<SlaBucketAggregate> buckets,
+            List<JdbcReportingStore.LocationMedianRow> medians,
+            Provenance provenance) {}
+
+    /**
      * One payment-mix row: either an {@code overview} row ({@code locationId}
      * null, folded across every branch in range) or a {@code byLocation} row
      * (branch-specific) — see {@link #paymentMix}. Never across two legal
@@ -786,6 +832,9 @@ public class ReportQueryService {
     }
 
     public record MedianResult(@Nullable Integer medianSeconds, Provenance provenance) {}
+
+    /** Wave T06 (7.3): every branch's median preparation time from one query — see {@link #preparationTimeByLocation}. */
+    public record LocationMedianResult(List<JdbcReportingStore.LocationMedianRow> rows, Provenance provenance) {}
 
     /**
      * @param maybeMore true when the bounded read came back full — there may be
@@ -913,6 +962,7 @@ public class ReportQueryService {
         private int completed;
         private int cancelled;
         private int late;
+        private int promised;
 
         void add(BranchDayAggregate row) {
             gross += row.grossSom();
@@ -921,6 +971,7 @@ public class ReportQueryService {
             completed += row.orderCount();
             cancelled += row.cancelledCount();
             late += row.lateCount();
+            promised += row.promisedCount();
         }
 
         @Nullable
@@ -934,6 +985,8 @@ public class ReportQueryService {
                 case "orders.count.v1", "channel_mix.count.v1" -> (long) completed;
                 case "orders.cancelled.v1" -> (long) cancelled;
                 case "orders.late.v1" -> (long) late;
+                // Wave T06 (7.3): the on-time percentage's own denominator.
+                case "orders.promised.v1" -> (long) promised;
                 default ->
                     throw new IllegalStateException("The registry declares %s but this build cannot compute it"
                             .formatted(metric.id().code()));

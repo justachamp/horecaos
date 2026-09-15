@@ -4242,6 +4242,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.branches.column.averageCheck': 'Oʻrtacha chek',
   'reports.branches.column.cancelShare': 'Bekor qilingan, %',
   'reports.branches.column.prepTime': 'Tayyorlash vaqti',
+  // wave T06 (7.3): reyting jadvalining uchta yangi ustuni va ikkinchi darajali saralash.
+  'reports.branches.column.fulfilmentSplit': 'Yetkazib berish / Olib ketish / Agregatorlar',
+  'reports.branches.column.fulfilmentSplit.hint':
+    'Buyurtmalar soni: yetkazib berish / olib ketish / agregator, shu tartibda.',
+  'reports.branches.column.onTime': 'Vaqtida, %',
+  'reports.branches.sort.label': 'Saralash',
   'reports.branches.sla.title': 'SLA vaqt oraliqlari',
   'reports.branches.sla.bucket.UNDER_30': '≤30',
   'reports.branches.sla.bucket.M30_35': '30–35',
@@ -4250,8 +4256,20 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.branches.sla.bucket.M50_60': '50–60',
   'reports.branches.sla.bucket.OVER_60': '>60',
   'reports.branches.sla.total': 'Jami',
+  // wave T06 (7.3a): oraliq hisoblari yonidagi handover_time.median.v1.
+  'reports.branches.sla.median': 'Mediana',
   'reports.branches.sla.version': 'Oraliqlar: sla_bucket_set.v{version}',
   'reports.branches.minutesShort': '{minutes} daq',
+
+  // wave T06 (7.3b): kanallar boʻyicha hisob va toʻlov usullari boʻyicha boʻlinish.
+  'reports.branches.channels.title': 'Kanallar boʻyicha',
+  'reports.branches.channels.column.channel': 'Kanal',
+  'reports.branches.channels.empty': 'Bu davrda buyurtmalar yoʻq.',
+  'reports.branches.payments.title': 'Toʻlov usullari',
+  'reports.branches.payments.column.method': 'Usul',
+  'reports.branches.payments.column.count': 'Operatsiyalar',
+  'reports.branches.payments.column.amount': 'Summa',
+  'reports.branches.payments.empty': 'Bu davrda operatsiyalar yoʻq.',
 
   // ---------------------------------------------------------------- reports 7.4 (T11, ADR 0125)
   'reports.couriers.title': 'Kuryerlar hisobotlari',

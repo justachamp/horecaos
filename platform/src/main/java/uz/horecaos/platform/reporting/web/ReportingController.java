@@ -125,6 +125,7 @@ public class ReportingController {
                                 bucket.orderCount(),
                                 bucket.shareBasisPoints()))
                         .toList(),
+                result.medians().stream().map(LocationMedianResponse::of).toList(),
                 ProvenanceResponse.of(result.provenance())));
     }
 
@@ -196,6 +197,26 @@ public class ReportingController {
         var result = queries.preparationTime(tenantId, from, to, orEmpty(locationId));
         return ResponseEntity.ok(
                 new MedianResponse(result.medianSeconds(), ProvenanceResponse.of(result.provenance())));
+    }
+
+    @GetMapping("/preparation-time-by-location")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "Median seconds from confirmation to ready, per branch, in one query (7.3)",
+            description = "The branch leaderboard's own `Ср. время приготовления` column for every "
+                    + "branch at once — replaces fanning out one `.../preparation-time` call per "
+                    + "branch. A branch with no order that reached READY in range is simply absent "
+                    + "from `rows`, never a row carrying a null median.")
+    public ResponseEntity<LocationMedianListResponse> preparationTimeByLocation(
+            @PathVariable UUID tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId) {
+
+        var result = queries.preparationTimeByLocation(tenantId, from, to, orEmpty(locationId));
+        return ResponseEntity.ok(new LocationMedianListResponse(
+                result.rows().stream().map(LocationMedianResponse::of).toList(),
+                ProvenanceResponse.of(result.provenance())));
     }
 
     @GetMapping("/fulfilment-time")
@@ -573,9 +594,22 @@ public class ReportingController {
     public record BucketResponse(
             LocalDate businessDate, UUID locationId, String bucketCode, int orderCount, int shareBasisPoints) {}
 
-    public record SlaResponse(List<BucketResponse> buckets, ProvenanceResponse provenance) {}
+    /** @param medians wave T06 (7.3a): each branch's handover_time.median.v1 — see {@code ReportQueryService.BranchSlaResult}. */
+    public record SlaResponse(
+            List<BucketResponse> buckets, List<LocationMedianResponse> medians, ProvenanceResponse provenance) {}
 
     public record MedianResponse(@Nullable Integer medianSeconds, ProvenanceResponse provenance) {}
+
+    /** Wave T06 (7.3): one branch's median preparation time — see {@link #preparationTimeByLocation}. */
+    public record LocationMedianResponse(
+            UUID locationId, @Nullable Integer medianSeconds) {
+
+        static LocationMedianResponse of(JdbcReportingStore.LocationMedianRow row) {
+            return new LocationMedianResponse(row.locationId(), row.medianSeconds());
+        }
+    }
+
+    public record LocationMedianListResponse(List<LocationMedianResponse> rows, ProvenanceResponse provenance) {}
 
     /**
      * One payment-mix row — see {@code ReportQueryService.PaymentMixRow}.
