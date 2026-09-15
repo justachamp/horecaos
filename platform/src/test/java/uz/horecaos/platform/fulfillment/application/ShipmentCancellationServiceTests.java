@@ -261,6 +261,45 @@ class ShipmentCancellationServiceTests {
     }
 
     @Test
+    @DisplayName("a 64-char operator reason code -- the longest CancelRequest/ShipmentCancelRequest "
+            + "both accept -- completes the cascade instead of overflowing shipments.cancellation_reason_code "
+            + "(gap map P44: the column was varchar(48), the DTOs are @Size(max = 64))")
+    void cascadeCompletesWithAMaximumLengthReasonCode() {
+        DeliveryPlan plan = openPlan();
+        UUID courierId = seedCourier();
+        UUID shipmentId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO fulfillment.shipments (
+                    id, tenant_id, brand_id, location_id, order_id, delivery_plan_id,
+                    status, source_type, courier_id, assigned_at, version)
+                VALUES (:id, :tenantId, :brandId, :locationId, :orderId, :planId,
+                        'ASSIGNED', 'INTERNAL', :courierId, :now, 1)
+                """)
+                .param("id", shipmentId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", branch)
+                .param("orderId", plan.orderId())
+                .param("planId", plan.id())
+                .param("courierId", courierId)
+                .param("now", CONFIRMED.atOffset(ZoneOffset.UTC))
+                .update();
+        // Exactly 64 chars -- the boundary CancelRequest.reasonCode and
+        // ShipmentCancelRequest.reasonCode both permit via @Size(max = 64).
+        String reasonCode = "CUSTOMER_CHANGED_MIND_AFTER_COURIER_LEFT_THE_KITCHEN_WITH_FOOD_X";
+        assertThat(reasonCode).hasSize(64);
+
+        var outcome = service.cancelForOrder(TENANT, BRAND, branch, plan.orderId(), reasonCode, OPERATOR);
+
+        assertThat(outcome.result()).isEqualTo(Result.INTERNAL_CANCELLED);
+        assertThat(shipmentStatus(shipmentId)).isEqualTo("CANCELLED");
+        assertThat(planStore.find(TENANT, plan.id()).orElseThrow().status()).isEqualTo(PlanStatus.CANCELLED);
+        assertThat(audit.facts)
+                .extracting(AuditFact::actionCode)
+                .containsExactly("fulfillment.shipment.cascade-cancel");
+    }
+
+    @Test
     @DisplayName("an order with no delivery plan has nothing to cascade -- pickup and dine-in orders included")
     void noPlanIsNoOp() {
         var outcome = service.cancelForOrder(TENANT, BRAND, branch, UUID.randomUUID(), "CUSTOMER_REQUEST", OPERATOR);
