@@ -4,8 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../api/operations-paths';
 import { CurrentLocation } from '../auth/current-location';
+import { Capability, SessionCapabilities } from '../auth/session-capabilities';
 import { StaffTokenStore } from '../auth/staff-token-store';
 import { RealtimeClient } from './realtime-client';
+
+/** Every capability a `DEFAULT_CHANNELS` entry can require — the default fixture, so existing tests connect to every channel exactly as before this class started filtering by capability. */
+const ALL_STREAM_CAPABILITIES: readonly Capability[] = ['ORDER_READ', 'DELIVERY_PLAN_READ'];
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 
@@ -62,7 +66,9 @@ function failedResponse(status = 500): Response {
 describe('RealtimeClient', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
-  function setUp(): RealtimeClient {
+  function setUp(
+    heldCapabilities: readonly Capability[] = ALL_STREAM_CAPABILITIES,
+  ): RealtimeClient {
     TestBed.configureTestingModule({
       providers: [
         {
@@ -70,6 +76,10 @@ describe('RealtimeClient', () => {
           useValue: { scope: signal<LocationScope | null>(SCOPE) },
         },
         { provide: StaffTokenStore, useValue: { accessToken: () => 'access-token-1' } },
+        {
+          provide: SessionCapabilities,
+          useValue: { has: (capability: Capability) => heldCapabilities.includes(capability) },
+        },
       ],
     });
     return TestBed.inject(RealtimeClient);
@@ -98,6 +108,21 @@ describe('RealtimeClient', () => {
     expect(url).toContain('channels=counters');
     expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer access-token-1');
     expect((init.headers as Record<string, string>)['Last-Event-Id']).toBeUndefined();
+    expect(url).toContain('channels=order_detail');
+    expect(url).toContain('channels=dispatch_board');
+  });
+
+  it('omits dispatch_board — and only dispatch_board — for a role that holds ORDER_READ but not DELIVERY_PLAN_READ, so the server never refuses the whole connection over one channel this operator cannot have', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse([]));
+    setUp(['ORDER_READ']);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('channels=order_queue');
+    expect(url).toContain('channels=order_detail');
+    expect(url).toContain('channels=counters');
+    expect(url).not.toContain('dispatch_board');
   });
 
   it('a reconnect after a dropped connection sends Last-Event-Id, from the last frame actually seen', async () => {

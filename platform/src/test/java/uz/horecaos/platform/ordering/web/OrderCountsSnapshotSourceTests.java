@@ -146,6 +146,35 @@ class OrderCountsSnapshotSourceTests {
         assertThat(source.snapshot(TENANT, ScopeKey.tenant(TENANT))).isEmpty();
     }
 
+    @Test
+    @DisplayName(
+            "a LOCATION snapshot requested under another tenant reads none of this tenant's counts, even though the location id matches")
+    void crossTenantSnapshotDoesNotLeakAnotherTenantsLocationCounts() {
+        // The regression this guards: JdbcOrderStore.locationCounts/activeMixForLocation
+        // filter by `tenant_id = :tenantId AND location_id = :locationId` — but no test
+        // anywhere in this suite ever passes a tenantId that disagrees with the location's
+        // real tenant, so a future edit that dropped the tenant_id predicate (leaving
+        // location_id, which by itself already selects the one tenant that owns that
+        // location id) would still pass every other test here.
+        insertOrder("A-NEW", LOCATION_A, "RECEIVED");
+        insertOrder("A-KITCHEN", LOCATION_A, "PREPARING");
+
+        UUID otherTenant = UUID.fromString("018fb022-4000-7000-8000-0000000000e1");
+        jdbc.sql("""
+                        INSERT INTO tenant.tenants (id, slug, legal_name, display_name, default_currency,
+                            default_timezone, status, version)
+                        VALUES (:id, 'counters-snapshot-other-tenant', 'Legal', 'Second Tenant', 'UZS',
+                            'Asia/Tashkent', 'ACTIVE', 0)
+                        """).param("id", otherTenant).update();
+
+        Optional<Object> snapshot = source.snapshot(otherTenant, ScopeKey.location(LOCATION_A));
+
+        assertThat(snapshot).isPresent();
+        OperationsOrderController.OrderCountsResponse response =
+                (OperationsOrderController.OrderCountsResponse) snapshot.orElseThrow();
+        assertThat(response.total()).isZero();
+    }
+
     // ------------------------------------------------------------ fixtures
 
     private void insertOrder(String seed, UUID locationId, String status) {

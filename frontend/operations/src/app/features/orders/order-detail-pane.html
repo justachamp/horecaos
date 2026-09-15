@@ -723,6 +723,11 @@
 
         @if (delivery(); as plan) {
           <div class="pane__courier" data-testid="order-detail-courier">
+            @if (courierEtaLabel(plan); as etaLabel) {
+              <p class="q-body-sm q-caption" data-testid="order-detail-courier-eta">
+                {{ etaLabel }}
+              </p>
+            }
             @if (plan.shipment?.courierId; as courierId) {
               <p class="q-body-sm">
                 {{

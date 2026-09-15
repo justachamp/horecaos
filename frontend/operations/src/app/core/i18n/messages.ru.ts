@@ -314,6 +314,7 @@ export const messagesRu: MessageCatalogue = {
 
   'orders.detail.section.courier': 'Курьер',
   'orders.detail.courier.assigned': 'Назначен: {courier}',
+  'orders.detail.courier.eta': 'Курьер к {time}',
   'orders.detail.courier.none': 'Курьер не назначен',
   'orders.detail.courier.assign': 'Назначить курьера',
   'orders.detail.courier.unassign': 'Снять курьера',

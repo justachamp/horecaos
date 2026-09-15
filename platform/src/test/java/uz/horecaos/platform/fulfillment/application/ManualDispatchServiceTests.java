@@ -172,6 +172,9 @@ class ManualDispatchServiceTests {
         assertThat(second.applied()).isFalse();
         assertThat(second.reason()).isEqualTo("ALREADY_ASSIGNED");
         assertThat(countShipmentsFor(plan.id())).isEqualTo(1L);
+        // The refused second assign publishes no DISPATCH_BOARD signal of its own --
+        // the one signal on record is the first assign's (ADR 0045).
+        assertThat(realtime.signals).extracting(RealtimeSignal::channel).containsExactly(StreamChannel.DISPATCH_BOARD);
     }
 
     @Test
@@ -185,6 +188,8 @@ class ManualDispatchServiceTests {
         assertThat(outcome.applied()).isFalse();
         assertThat(outcome.reason()).isEqualTo("STALE_VERSION");
         assertThat(countShipmentsFor(plan.id())).isZero();
+        // A stale-version refusal is a no-op end to end -- ADR 0045's board signal included.
+        assertThat(realtime.signals).isEmpty();
     }
 
     @Test
@@ -207,6 +212,9 @@ class ManualDispatchServiceTests {
         assertThat(audit.facts)
                 .as("a refused assignment leaves no audit fact behind it")
                 .isEmpty();
+        assertThat(realtime.signals)
+                .as("a refused assignment publishes no DISPATCH_BOARD signal either")
+                .isEmpty();
     }
 
     @Test
@@ -226,6 +234,7 @@ class ManualDispatchServiceTests {
         assertThat(outcome.applied()).isFalse();
         assertThat(outcome.reason()).isEqualTo("COURIER_NOT_ELIGIBLE");
         assertThat(countShipmentsFor(plan.id())).isZero();
+        assertThat(realtime.signals).isEmpty();
     }
 
     @Test
@@ -254,6 +263,7 @@ class ManualDispatchServiceTests {
 
         assertThat(outcome.applied()).isFalse();
         assertThat(outcome.reason()).isEqualTo("COURIER_NOT_ELIGIBLE");
+        assertThat(realtime.signals).isEmpty();
     }
 
     @Test
@@ -302,6 +312,9 @@ class ManualDispatchServiceTests {
 
         // The refused unassign wrote nothing — only the earlier assign is on record.
         assertThat(audit.facts).extracting(AuditFact::actionCode).containsExactly("fulfillment.dispatch.assign");
+        // ...and published no DISPATCH_BOARD signal of its own -- the one signal on
+        // record is the earlier assign's.
+        assertThat(realtime.signals).extracting(RealtimeSignal::channel).containsExactly(StreamChannel.DISPATCH_BOARD);
     }
 
     // -------------------------------------------------------------- helpers

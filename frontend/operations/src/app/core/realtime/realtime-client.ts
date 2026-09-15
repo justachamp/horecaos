@@ -3,6 +3,7 @@ import { Injectable, Signal, effect, inject, signal } from '@angular/core';
 import { environment } from '../../../environments/environment';
 import { LocationScope, operationsPaths } from '../api/operations-paths';
 import { CurrentLocation } from '../auth/current-location';
+import { Capability, SessionCapabilities } from '../auth/session-capabilities';
 import { StaffTokenStore } from '../auth/staff-token-store';
 
 /**
@@ -47,6 +48,25 @@ type FrameListener = (frame: RealtimeFrame) => void;
 /** The channel set every screen that has a producer today may want a frame from. */
 const DEFAULT_CHANNELS = ['order_queue', 'order_detail', 'counters', 'dispatch_board'] as const;
 
+/**
+ * The capability each of {@link DEFAULT_CHANNELS} requires, mirroring
+ * `StreamChannel.capability()` (platform `telemetry/api/StreamChannel.java`)
+ * for the four channels this build ever requests. `streamUrl()` filters
+ * against this so a role missing one channel's capability — `DELIVERY_PLAN_READ`
+ * for `dispatch_board`, held by dispatchers but not, say, `BRAND_MANAGER` or
+ * `TENANT_FINANCE` — never asks for it at all: `OperationsStreamController.authorize()`
+ * refuses the *entire* connection on the first channel it has no capability
+ * for (`capabilityIsCheckedPerChannelNotOnceForTheWholeSubscription`), so a
+ * client that requested a channel it holds no capability for would lose the
+ * accelerator on every other channel too, not just that one.
+ */
+const CHANNEL_CAPABILITY: Record<(typeof DEFAULT_CHANNELS)[number], Capability> = {
+  order_queue: 'ORDER_READ',
+  order_detail: 'ORDER_READ',
+  counters: 'ORDER_READ',
+  dispatch_board: 'DELIVERY_PLAN_READ',
+};
+
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
 
@@ -74,10 +94,13 @@ const UNAVAILABLE_AFTER_FAILURES = 3;
  * connection's life. Changing it means reconnecting" — so rather than each
  * screen opening and tearing down its own stream as it routes in and out,
  * this class connects once its constructor runs, subscribed to every channel
- * this build has a producer for, and screens that care register a listener
- * with {@link onFrame} and filter by `channel`/`resourceId` themselves. Reconnects when
- * the operator switches branch, because a channel's scope key is the
- * location this connection was opened at.
+ * in {@link DEFAULT_CHANNELS} the operator holds the capability for (see
+ * {@link CHANNEL_CAPABILITY} — the server refuses the whole connection on
+ * the first channel it has no capability for, so a channel the operator
+ * cannot have must never be requested), and screens that care register a
+ * listener with {@link onFrame} and filter by `channel`/`resourceId`
+ * themselves. Reconnects when the operator switches branch, because a
+ * channel's scope key is the location this connection was opened at.
  *
  * **`Last-Event-Id` resync.** The server never replays — a reconnect with any
  * `Last-Event-Id` value at all answers with a `resync` frame meaning "your
@@ -109,6 +132,7 @@ const UNAVAILABLE_AFTER_FAILURES = 3;
 export class RealtimeClient {
   private readonly location = inject(CurrentLocation);
   private readonly tokens = inject(StaffTokenStore);
+  private readonly capabilities = inject(SessionCapabilities);
 
   private readonly stateSignal = signal<ConnectionState>('connecting');
   readonly state: Signal<ConnectionState> = this.stateSignal.asReadonly();
@@ -337,7 +361,9 @@ export class RealtimeClient {
   private streamUrl(scope: LocationScope): string {
     const params = new URLSearchParams();
     for (const channel of DEFAULT_CHANNELS) {
-      params.append('channels', channel);
+      if (this.capabilities.has(CHANNEL_CAPABILITY[channel])) {
+        params.append('channels', channel);
+      }
     }
     return `${environment.apiBaseUrl}${operationsPaths.streams(scope)}?${params.toString()}`;
   }
