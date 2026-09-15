@@ -10477,6 +10477,33 @@
         },
         "type" : "object"
       },
+      "LocationMedianListResponse" : {
+        "properties" : {
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LocationMedianResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "LocationMedianResponse" : {
+        "properties" : {
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "medianSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "LocationServiceOperationsControllerBandRequest" : {
         "properties" : {
           "dayOfWeek" : {
@@ -20499,6 +20526,12 @@
           "buckets" : {
             "items" : {
               "$ref" : "#/components/schemas/BucketResponse"
+            },
+            "type" : "array"
+          },
+          "medians" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LocationMedianResponse"
             },
             "type" : "array"
           },
@@ -60821,6 +60854,62 @@
           }
         },
         "summary" : "Median seconds from confirmation to ready",
+        "tags" : [ "Reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/preparation-time-by-location" : {
+      "get" : {
+        "description" : "The branch leaderboard's own `Ср. время приготовления` column for every branch at once — replaces fanning out one `.../preparation-time` call per branch. A branch with no order that reached READY in range is simply absent from `rows`, never a row carrying a null median.",
+        "operationId" : "preparationTimeByLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LocationMedianListResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Median seconds from confirmation to ready, per branch, in one query (7.3)",
         "tags" : [ "Reporting" ]
       }
     },
