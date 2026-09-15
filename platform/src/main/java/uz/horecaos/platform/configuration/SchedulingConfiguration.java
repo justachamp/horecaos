@@ -212,7 +212,7 @@ public class SchedulingConfiguration {
      * warning ADR 0046's own {@code expiryWarningDays} has been authorable,
      * validated, and persisted since V0042 while nothing ever sent it.
      */
-    static final int DEFAULT_POOL_SIZE = 62;
+    static final int DEFAULT_POOL_SIZE = 63;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.
