@@ -81,6 +81,7 @@ import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostS
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore.InvoiceLineRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore.InvoiceRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcPlannedShiftStore.PlannedShiftRow;
+import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -89,6 +90,7 @@ import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
+import uz.horecaos.platform.web.idempotency.Idempotent;
 
 /**
  * The operations half of ADR 0042: engagements, verification, adjustments,
@@ -124,6 +126,7 @@ public class OperationsCourierController {
     private final JdbcDeliveryCostStore deliveryCostStore;
     private final PlannedShiftService plannedShifts;
     private final CurrentActor currentActor;
+    private final AuthorizationService authorization;
 
     public OperationsCourierController(
             CourierEngagementService engagements,
@@ -145,7 +148,8 @@ public class OperationsCourierController {
             PolicyAuthor policyAuthor,
             JdbcDeliveryCostStore deliveryCostStore,
             PlannedShiftService plannedShifts,
-            CurrentActor currentActor) {
+            CurrentActor currentActor,
+            AuthorizationService authorization) {
         this.engagements = engagements;
         this.shifts = shifts;
         this.cash = cash;
@@ -166,6 +170,7 @@ public class OperationsCourierController {
         this.deliveryCostStore = deliveryCostStore;
         this.plannedShifts = plannedShifts;
         this.currentActor = currentActor;
+        this.authorization = authorization;
     }
 
     // ------------------------------------------------------------------ roster
@@ -668,8 +673,38 @@ public class OperationsCourierController {
 
     // ------------------------------------------------------------------- policy
 
+    /**
+     * Neither policy endpoint below carries {@code @RequiresCapability}, and
+     * that absence is deliberate rather than an oversight the build-time scan
+     * would have caught (see the two exemptions named for these paths in
+     * {@code EndpointCapabilityDeclarationTests}).
+     *
+     * <p>{@code brandId}/{@code locationId} are optional request parameters —
+     * omitting both resolves the tenant-wide document, and either widens or
+     * narrows the resolution exactly as {@link #policyScope} computes. A
+     * {@code @RequiresCapability(scope = ...)} declaration is one fixed
+     * {@link uz.horecaos.platform.iam.api.ResourceScope.ScopeType} per method,
+     * enforced by {@code CapabilityEnforcementInterceptor} from the request
+     * before the handler ever runs. {@code TENANT} (the annotation's default)
+     * is the only scope that never crashes here, because it is the only one
+     * whose identifier — {@code tenantId} — is not optional; but a
+     * TENANT-scoped enforcement check is never satisfied by a BRAND- or
+     * LOCATION-scoped grant ({@link uz.horecaos.platform.iam.api.ResourceScope#covers}
+     * only lets a broader scope reach a narrower one), so it silently refused
+     * a BRAND_MANAGER calling with their own {@code brandId} even though
+     * {@code PlatformRole} bundles {@code DELIVERY_POLICY_READ}/{@code
+     * DELIVERY_POLICY_WRITE} into that role for exactly this call. Declaring
+     * {@code BRAND} instead would fix that case but crash the tenant-wide one
+     * ({@code brandId} omitted, per {@code
+     * EndpointCapabilityDeclarationTests#aDeclaredScopeNamesOnlyPathVariablesOrRequestParametersTheRouteActuallyDeclares}),
+     * and making {@code brandId} a required parameter to satisfy that test
+     * would delete the tenant-wide read/write the frontend's scope ladder
+     * depends on. So the check is made explicitly, against the same scope the
+     * read or write actually resolves at, mirroring {@code
+     * OperationsStreamController.authorize}'s per-channel {@code
+     * authorization.require} call for the identical reason.
+     */
     @GetMapping("/courier-policy")
-    @RequiresCapability(Capability.DELIVERY_POLICY_READ)
     @Operation(
             summary = "The courier compensation policy in force (IA 3.9, settings.md §10.13/§16)",
             description = "Omit brandId/locationId for the tenant-wide resolution; supply either "
@@ -680,18 +715,22 @@ public class OperationsCourierController {
                     + "customer's exact location is revealed, and the post-delivery payment "
                     + "check. Courier billing mode stays refused by ADR 0042 and has no field "
                     + "here; the telemetry collection gate is a separate, PLATFORM_ADMIN-only "
-                    + "ADR 0030 key and is not part of this document.")
+                    + "ADR 0030 key and is not part of this document. Authorization is checked "
+                    + "against brandId/locationId's own resolved scope, not a fixed TENANT "
+                    + "default, so a BRAND_MANAGER reading their own brand's policy is not "
+                    + "refused for a grant the role bundle already gives them.")
     public ResponseEntity<CourierPolicyResponse> courierPolicy(
             @PathVariable UUID tenantId,
             @RequestParam(required = false) UUID brandId,
             @RequestParam(required = false) UUID locationId) {
 
         ResourceScope scope = policyScope(tenantId, brandId, locationId);
+        authorization.require(currentActor.get().subject(), Capability.DELIVERY_POLICY_READ, scope);
         return ResponseEntity.ok(CourierPolicyResponse.of(policyResolver.resolveWithIdentity(scope)));
     }
 
     @PutMapping("/courier-policy")
-    @RequiresCapability(value = Capability.DELIVERY_POLICY_WRITE, mutating = true)
+    @Idempotent
     @Operation(
             summary = "Publish the next version of the courier compensation policy",
             description = "Whole-document replace: every field is required, because ADR 0030 "
@@ -699,7 +738,10 @@ public class OperationsCourierController {
                     + "over the version it replaces. Omit brandId/locationId to publish the "
                     + "tenant-wide default; supply either to publish a brand or location "
                     + "override. The version this replaces is never touched — PolicyResolver.pinned "
-                    + "keeps answering with it for whatever already resolved it.")
+                    + "keeps answering with it for whatever already resolved it. Authorization is "
+                    + "checked against that same resolved scope (see the class-level doc on "
+                    + "courierPolicy above), so a BRAND_MANAGER publishing their own brand's "
+                    + "override is not refused for a grant the role bundle already gives them.")
     public ResponseEntity<CourierPolicyResponse> writeCourierPolicy(
             @PathVariable UUID tenantId,
             @RequestParam(required = false) UUID brandId,
@@ -707,6 +749,7 @@ public class OperationsCourierController {
             @Valid @RequestBody CourierPolicyWriteRequest body) {
 
         ResourceScope scope = policyScope(tenantId, brandId, locationId);
+        authorization.require(currentActor.get().subject(), Capability.DELIVERY_POLICY_WRITE, scope);
         CourierCompensationPolicy document = body.toDocument();
         ResolvedPolicy<CourierCompensationPolicy> published =
                 policyAuthor.author(CourierPolicies.COMPENSATION, scope, document, actor(), body.reason());

@@ -1036,6 +1036,8 @@ export class CustomerDetailPane {
         currency: balance.balance.currency,
         reasonCode,
         reason,
+        // Ignored server-side (see `LoyaltyAdjustmentRequest.actorSubject`'s own
+        // doc) — sent only because the published schema still requires it.
         actorSubject: subject,
       };
       const result = await this.api.adjustLoyalty(scope, this.accountId(), request);

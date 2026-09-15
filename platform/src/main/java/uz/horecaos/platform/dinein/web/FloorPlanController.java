@@ -178,6 +178,7 @@ public class FloorPlanController {
         long expected = AggregateVersion.requireIfMatch(request);
         return ResponseEntity.ok(TableResponse.of(floorPlan.moveTable(
                 tenantId,
+                locationId,
                 tableId,
                 (int) expected,
                 body.layoutX(),
@@ -204,6 +205,7 @@ public class FloorPlanController {
         long expected = AggregateVersion.requireIfMatch(request);
         return ResponseEntity.ok(TableResponse.of(floorPlan.changeTableStatus(
                 tenantId,
+                locationId,
                 tableId,
                 (int) expected,
                 body.status(),
@@ -229,7 +231,12 @@ public class FloorPlanController {
 
         long expected = AggregateVersion.requireIfMatch(request);
         FloorPlanService.IssuedQrToken issued = floorPlan.rotateQrToken(
-                tenantId, tableId, (int) expected, currentActor.get().subject(), body.reason());
+                tenantId,
+                locationId,
+                tableId,
+                (int) expected,
+                currentActor.get().subject(),
+                body.reason());
 
         return ResponseEntity.ok(new RotationResponse(
                 issued.tableId(),

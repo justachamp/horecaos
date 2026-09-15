@@ -5094,6 +5094,7 @@ export const messagesRu: MessageCatalogue = {
   'shared.dragDropAssign.rejected': 'Не удалось перенести: {reason}',
   'shared.dragDropAssign.rejectedUnknown': 'Не удалось перенести — попробуйте ещё раз.',
   // shared/ui — q-table-print-card (X.36, волна P38)
+  'shared.tablePrintCard.qrLabel': 'QR-код этого стола',
   'shared.tablePrintCard.tokenLabel': 'Код (введите вручную, если скан не сработал)',
   'shared.tablePrintCard.none': 'Для этого стола код ещё не выпущен.',
   // --- shared/ui q-secret-input (ADR 0106, gap-map row X.14) --------------

@@ -207,10 +207,18 @@ public class FloorPlanService {
      * shape every other table write here uses: two managers dragging the same
      * table at once settle on one final position, not a race the last write wins
      * silently.
+     *
+     * <p>{@code locationId} is the path's own location, the one the caller's
+     * {@code DINEIN_FLOORPLAN_MANAGE} grant was just checked at. The capability
+     * interceptor only proves that; it never inspects {@code tableId}, so a
+     * mismatch here means the id names a table at a different branch — the
+     * caller has no standing to know that table exists, so this reports the
+     * same {@code RESOURCE_NOT_FOUND} a foreign {@code tenantId} would.
      */
     @Transactional
     public TableRow moveTable(
             UUID tenantId,
+            UUID locationId,
             UUID tableId,
             int expectedVersion,
             BigDecimal layoutX,
@@ -218,8 +226,7 @@ public class FloorPlanService {
             String actorSubject,
             String reason) {
 
-        TableRow table = store.findTable(tenantId, tableId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such table"));
+        TableRow table = requireTableAtLocation(tenantId, locationId, tableId);
 
         Instant now = clock.instant();
         if (!store.updateTableLayout(tenantId, tableId, expectedVersion, layoutX, layoutY, now)) {
@@ -266,13 +273,17 @@ public class FloorPlanService {
      * guest token minted from the old one is revoked — and the operator is told how
      * many guests were cut off, because during service that number is the cost of
      * the decision they just took.
+     *
+     * <p>{@code locationId} is checked against the fetched table the same way
+     * {@link #moveTable} checks it, and for the same reason: the capability
+     * check at the interceptor proves the caller holds {@code DINEIN_QR_ROTATE}
+     * at the path's own branch, never that {@code tableId} belongs there.
      */
     @Transactional
     public IssuedQrToken rotateQrToken(
-            UUID tenantId, UUID tableId, int expectedVersion, String actorSubject, String reason) {
+            UUID tenantId, UUID locationId, UUID tableId, int expectedVersion, String actorSubject, String reason) {
 
-        TableRow table = store.findTable(tenantId, tableId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such table"));
+        TableRow table = requireTableAtLocation(tenantId, locationId, tableId);
 
         if ("ARCHIVED".equals(table.status())) {
             throw new ApiException(
@@ -320,13 +331,24 @@ public class FloorPlanService {
      * <p>Archiving also revokes the live guest tokens at that table. A code on a
      * table that has been carried out of the building is a code that must stop
      * working, and nobody is going to remember to rotate it first.
+     *
+     * <p>{@code locationId} is checked against the fetched table the same way
+     * {@link #moveTable} checks it, and for the same reason: the capability
+     * check at the interceptor proves the caller holds {@code
+     * DINEIN_FLOORPLAN_MANAGE} at the path's own branch, never that {@code
+     * tableId} belongs there.
      */
     @Transactional
     public TableRow changeTableStatus(
-            UUID tenantId, UUID tableId, int expectedVersion, String status, String actorSubject, String reason) {
+            UUID tenantId,
+            UUID locationId,
+            UUID tableId,
+            int expectedVersion,
+            String status,
+            String actorSubject,
+            String reason) {
 
-        TableRow table = store.findTable(tenantId, tableId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such table"));
+        TableRow table = requireTableAtLocation(tenantId, locationId, tableId);
 
         if (!List.of("ACTIVE", "OUT_OF_SERVICE", "ARCHIVED").contains(status)) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown table status " + status);
@@ -354,6 +376,34 @@ public class FloorPlanService {
                 .build());
 
         return store.findTable(tenantId, tableId).orElseThrow();
+    }
+
+    /**
+     * The table, confirmed to actually belong to {@code locationId}.
+     *
+     * <p>{@code DINEIN_FLOORPLAN_MANAGE}/{@code DINEIN_QR_ROTATE} are checked
+     * by {@code CapabilityEnforcementInterceptor} purely from the URL's own
+     * {@code tenantId}/{@code brandId}/{@code locationId} path variables — it
+     * has no way to know which table {@code tableId} names, so it only proves
+     * the caller holds the capability at the branch named in the path, never
+     * that the table being moved, rotated, or archived is actually there.
+     * {@code JdbcDineInStore.findTable} filters only on {@code tenant_id} and
+     * {@code id}, so without this check a manager scoped to one branch could
+     * reposition, rotate the QR code of, or archive a table belonging to any
+     * other branch in the same tenant by supplying that table's id — a
+     * cross-location write the LOCATION-scope grant exists to prevent.
+     * {@code RESOURCE_NOT_FOUND} rather than a forbidden response, so a caller
+     * outside the table's location cannot use the response to confirm the
+     * table exists at all, the same convention {@code
+     * OperationsOrderController.requireOrderAtLocation} uses.
+     */
+    private TableRow requireTableAtLocation(UUID tenantId, UUID locationId, UUID tableId) {
+        TableRow table = store.findTable(tenantId, tableId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such table"));
+        if (!table.locationId().equals(locationId)) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such table");
+        }
+        return table;
     }
 
     private static int orDefault(@Nullable Integer supplied, int fallback) {

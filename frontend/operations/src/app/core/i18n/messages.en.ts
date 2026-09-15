@@ -5130,6 +5130,7 @@ export const messagesEn = {
   'shared.dragDropAssign.rejected': 'Could not move: {reason}',
   'shared.dragDropAssign.rejectedUnknown': 'Could not move — try again.',
   // shared/ui — q-table-print-card (X.36, wave P38)
+  'shared.tablePrintCard.qrLabel': "This table's QR code",
   'shared.tablePrintCard.tokenLabel': 'Code (type this in if the scan fails)',
   'shared.tablePrintCard.none': 'No code issued for this table yet.',
   // --- shared/ui q-secret-input (ADR 0106, gap-map row X.14) --------------
