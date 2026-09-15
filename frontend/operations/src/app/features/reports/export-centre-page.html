@@ -1,0 +1,171 @@
+<div class="export-centre">
+  <div class="export-centre__header">
+    <h1 class="q-title">{{ 'reports.exportCentre.title' | t }}</h1>
+    <p class="q-body-sm export-centre__subtitle">{{ 'reports.exportCentre.subtitle' | t }}</p>
+  </div>
+
+  @switch (state()) {
+    @case ('loading') {
+      <div class="export-centre__skeleton" aria-busy="true"></div>
+    }
+    @case ('denied') {
+      <div class="export-centre__denied q-body-sm">{{ 'reports.denied.notGranted' | t }}</div>
+    }
+    @case ('error') {
+      <div class="export-centre__error q-body-sm" role="alert">
+        {{ 'reports.error.generic' | t }}
+      </div>
+    }
+    @case ('ready') {
+      <div class="export-centre__body">
+        <section class="export-centre__form" aria-labelledby="export-centre-new-title">
+          <h2 id="export-centre-new-title" class="q-subtitle">
+            {{ 'reports.exportCentre.newTitle' | t }}
+          </h2>
+
+          <div class="export-centre__field">
+            <span class="q-caption export-centre__field-label">{{
+              'reports.exportCentre.reportLabel' | t
+            }}</span>
+            <div class="q-body-sm" data-testid="export-centre-report-name">
+              {{ 'reports.exportCentre.reportOption.customerDirectory' | t }}
+            </div>
+          </div>
+
+          <q-export-column-chooser
+            [columns]="columns"
+            [selected]="selectedColumns()"
+            (selectedChange)="onColumnsChange($event)"
+          />
+
+          <div class="export-centre__filters">
+            <div class="export-centre__field">
+              <span class="q-caption export-centre__field-label">{{
+                'reports.exportCentre.statusLabel' | t
+              }}</span>
+              <select
+                class="export-centre__select"
+                [value]="statusFilter()"
+                (change)="statusFilter.set($any($event.target).value)"
+                data-testid="export-centre-status"
+              >
+                @for (option of statusOptions; track option.id) {
+                  <option [value]="option.id">{{ option.labelKey | t }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="export-centre__field">
+              <span class="q-caption export-centre__field-label">{{
+                'reports.exportCentre.queryLabel' | t
+              }}</span>
+              <input
+                type="text"
+                class="export-centre__input"
+                [value]="queryFilter()"
+                (input)="queryFilter.set($any($event.target).value)"
+                [placeholder]="'reports.exportCentre.queryPlaceholder' | t"
+                data-testid="export-centre-query"
+              />
+            </div>
+          </div>
+
+          <div class="export-centre__field">
+            <span class="q-caption export-centre__field-label">{{
+              'reports.exportCentre.purposeLabel' | t
+            }}</span>
+            <input
+              type="text"
+              class="export-centre__input"
+              [value]="purpose()"
+              (input)="purpose.set($any($event.target).value)"
+              [placeholder]="'reports.exportCentre.purposePlaceholder' | t"
+              data-testid="export-centre-purpose"
+            />
+          </div>
+
+          @if (submitError(); as error) {
+            <p class="export-centre__submit-error q-body-sm" role="alert">{{ error }}</p>
+          }
+
+          <button
+            type="button"
+            class="export-centre__submit"
+            [disabled]="submitting()"
+            (click)="submit()"
+            data-testid="export-centre-submit"
+          >
+            {{
+              (submitting() ? 'reports.exportCentre.submitting' : 'reports.exportCentre.submit') | t
+            }}
+          </button>
+        </section>
+
+        <section class="export-centre__history" aria-labelledby="export-centre-history-title">
+          <h2 id="export-centre-history-title" class="q-subtitle">
+            {{ 'reports.exportCentre.historyTitle' | t }}
+          </h2>
+
+          @if (history().length === 0) {
+            <p class="q-body-sm export-centre__history-empty">
+              {{ 'reports.exportCentre.historyEmpty' | t }}
+            </p>
+          } @else {
+            <ul class="export-centre__history-list">
+              @for (job of history(); track job.exportId) {
+                <li
+                  class="export-centre__job"
+                  [attr.data-testid]="'export-centre-job-' + job.exportId"
+                >
+                  <div class="export-centre__job-row">
+                    <span
+                      class="export-centre__status-badge"
+                      [class.export-centre__status-badge--queued]="job.status === 'QUEUED'"
+                      [class.export-centre__status-badge--running]="job.status === 'RUNNING'"
+                      [class.export-centre__status-badge--complete]="job.status === 'COMPLETE'"
+                      [class.export-centre__status-badge--failed]="job.status === 'FAILED'"
+                    >
+                      {{ statusLabelKey(job.status) | t }}
+                    </span>
+                    <span class="q-body-sm export-centre__job-report">
+                      {{ 'reports.exportCentre.reportOption.customerDirectory' | t }}
+                    </span>
+                    @if (job.includesPiiColumns) {
+                      <span class="export-centre__pii-badge" data-testid="export-centre-pii-badge">
+                        {{ 'reports.exportCentre.piiIncluded' | t }}
+                      </span>
+                    }
+                  </div>
+
+                  <div class="q-caption export-centre__job-meta">
+                    @if (job.rowCount !== null) {
+                      {{ 'reports.exportCentre.rowCount' | t: { count: job.rowCount } }}
+                    }
+                    @if (job.truncated) {
+                      · {{ 'reports.exportCentre.truncated' | t: { quota: job.rowQuota } }}
+                    }
+                    @if (job.status === 'FAILED' && job.failureReason) {
+                      · {{ job.failureReason }}
+                    }
+                  </div>
+
+                  @if (job.status === 'COMPLETE' && job.downloadUrl) {
+                    <a
+                      class="export-centre__download"
+                      [href]="job.downloadUrl"
+                      target="_blank"
+                      rel="noopener"
+                      data-testid="export-centre-download"
+                    >
+                      {{ 'reports.exportCentre.download' | t }}
+                    </a>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </section>
+      </div>
+    }
+  }
+</div>

@@ -123,6 +123,20 @@ export const reportsPaths = {
   courierExternalDeliveryCost(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/couriers/external-delivery-cost`;
   },
+
+  /**
+   * ADR 0043/ADR 0029, wave P28: the export centre's own job queue —
+   * `POST` queues one under `report.export`, `GET` is the job history the
+   * export centre screen renders.
+   */
+  exports(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/exports`;
+  },
+
+  /** One report export's status, by id — what the export centre screen polls. */
+  reportExport(tenantId: string, exportId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/reports/${encodeURIComponent(exportId)}`;
+  },
 } as const;
 
 /**
