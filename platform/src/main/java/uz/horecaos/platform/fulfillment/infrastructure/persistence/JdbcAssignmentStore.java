@@ -340,7 +340,55 @@ public class JdbcAssignmentStore {
                 == 1;
     }
 
+    /**
+     * Cancels a shipment from any status the order-cancellation cascade may
+     * find it in, {@code PICKED_UP} included (gap map row 1.2g) — the food is
+     * already in a courier's hand and the cascade's job is only to tell the
+     * provider, never to pretend the shipment never moved.
+     *
+     * <p>No expected version, unlike {@link #cancelShipment}. That method
+     * arbitrates a dispatcher's own click against a concurrent one; this runs
+     * once, after the order itself is already cancelled and the provider has
+     * already been told (or the cascade decided it never needed to be), and is
+     * never in a race with another write that matters.
+     */
+    public boolean cancelActiveShipment(UUID tenantId, UUID shipmentId, String reasonCode, Instant now) {
+        return jdbc.sql("""
+                UPDATE fulfillment.shipments
+                SET status = 'CANCELLED', cancelled_at = :now,
+                    cancellation_reason_code = :reasonCode, version = version + 1
+                WHERE tenant_id = :tenantId AND id = :shipmentId
+                  AND status IN ('ASSIGNED', 'PICKUP_PENDING', 'PICKED_UP')
+                """)
+                        .param("tenantId", tenantId)
+                        .param("shipmentId", shipmentId)
+                        .param("reasonCode", reasonCode)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
     // ------------------------------------------------------------------- reads
+
+    /**
+     * One shipment by its own id, whatever its status — the operator-facing
+     * shipment-cancel endpoint's lookup (gap map row 1.2g), which must be able
+     * to tell an already-cancelled shipment apart from one that never existed
+     * rather than answering both the same way {@link #findShipment} does.
+     */
+    public Optional<Shipment> findShipmentById(UUID tenantId, UUID shipmentId) {
+        return jdbc.sql("""
+                SELECT id, order_id, status, source_type, courier_id, provider_binding_id,
+                       provider_type, external_shipment_id, assigned_at, picked_up_at,
+                       delivered_at, version
+                FROM fulfillment.shipments
+                WHERE tenant_id = :tenantId AND id = :shipmentId
+                """)
+                .param("tenantId", tenantId)
+                .param("shipmentId", shipmentId)
+                .query((row, number) -> mapShipment(row))
+                .optional();
+    }
 
     /**
      * What this plan has already tried, from the attempts rather than a checkpoint.

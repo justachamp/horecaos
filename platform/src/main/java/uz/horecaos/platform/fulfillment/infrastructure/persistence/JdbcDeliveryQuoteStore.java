@@ -1,10 +1,13 @@
 package uz.horecaos.platform.fulfillment.infrastructure.persistence;
 
+import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore.instant;
 import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore.utc;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -88,5 +91,49 @@ public class JdbcDeliveryQuoteStore {
                     CAST(:capabilities AS jsonb), :failureCode, :receivedAt)
                 ON CONFLICT (provider_binding_id, request_id) DO NOTHING
                 """).params(params).update();
+    }
+
+    /**
+     * One quote by its own id, on the plan it was requested for — the manual
+     * external-booking accept/abandon path's lookup (gap map row 1.2f), which
+     * re-reads the persisted price rather than trust whatever figure a client
+     * echoes back, so an operator can never accept a price the platform did
+     * not itself just quote.
+     *
+     * <p>{@code providerType} comes back out of {@code capability_snapshot}
+     * (a Postgres {@code ->>'providerType'} projection) rather than a Jackson
+     * round trip: {@link #insert} wrote exactly one key into it, and reading
+     * it back through the same path {@link #insertAll} wrote it through would
+     * be a second JSON library on a value already sitting in the row.
+     */
+    public Optional<DeliveryQuote> find(UUID tenantId, UUID planId, UUID quoteId) {
+        return jdbc.sql("""
+                SELECT id, provider_binding_id, request_id, price_minor, currency,
+                       pickup_eta_seconds, delivery_eta_seconds, distance_meters, dead_head_meters,
+                       expires_at, quote_validity_source, failure_code, received_at,
+                       capability_snapshot ->> 'providerType' AS provider_type
+                FROM fulfillment.delivery_quotes
+                WHERE tenant_id = :tenantId AND delivery_plan_id = :planId AND id = :quoteId
+                """)
+                .param("tenantId", tenantId)
+                .param("planId", planId)
+                .param("quoteId", quoteId)
+                .query((row, number) -> new DeliveryQuote(
+                        row.getObject("id", UUID.class),
+                        row.getObject("provider_binding_id", UUID.class),
+                        row.getString("provider_type"),
+                        row.getObject("request_id", UUID.class),
+                        row.getObject("price_minor", Long.class),
+                        row.getString("currency"),
+                        row.getObject("pickup_eta_seconds", Integer.class),
+                        row.getObject("delivery_eta_seconds", Integer.class),
+                        row.getObject("distance_meters", Integer.class),
+                        row.getObject("dead_head_meters", Integer.class),
+                        instant(row, "expires_at"),
+                        "PARTNER".equals(row.getString("quote_validity_source")),
+                        row.getString("failure_code"),
+                        Objects.requireNonNull(
+                                instant(row, "received_at"), "a quote always records when it was received")))
+                .optional();
     }
 }

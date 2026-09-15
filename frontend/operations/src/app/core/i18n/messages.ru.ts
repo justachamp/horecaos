@@ -225,6 +225,20 @@ export const messagesRu: MessageCatalogue = {
   'orders.dialog.note.save': 'Сохранить',
   'orders.dialog.amendMenu.title': 'Что нужно изменить?',
 
+  // Конфирмация цены при вызове внешнего курьера (карта пробелов 1.2f, волна P44).
+  'orders.dialog.externalCourier.title': 'Вызвать курьера',
+  'orders.dialog.externalCourier.noPartners':
+    'Для этого филиала не настроена ни одна курьерская служба.',
+  'orders.dialog.externalCourier.partner': 'Курьерская служба',
+  'orders.dialog.externalCourier.getQuote': 'Узнать цену',
+  'orders.dialog.externalCourier.customerFee': 'Доставка с клиента',
+  'orders.dialog.externalCourier.providerPrice': 'Цена курьера',
+  'orders.dialog.externalCourier.delta': 'Превышение суммы клиента',
+  'orders.dialog.externalCourier.acknowledge': 'Подтверждаю, что превышение оплатит филиал.',
+  'orders.dialog.externalCourier.unavailable': 'Эта курьерская служба не смогла оценить маршрут.',
+  'orders.dialog.externalCourier.abandon': 'Отказаться от этой цены',
+  'orders.dialog.externalCourier.accept': 'Заказать этого курьера',
+
   'orders.dialog.outcome.stockDisposition.RELEASE': 'Резерв освобождён',
   'orders.dialog.outcome.stockDisposition.RETURN_TO_STOCK': 'Возврат на склад',
   'orders.dialog.outcome.stockDisposition.WRITE_OFF': 'Списание',
@@ -266,6 +280,34 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.money.deliveryProvider': 'Доставка (от партнёра)',
   'orders.detail.money.deliveryProviderUnknown': 'не отслеживается',
   'orders.detail.money.deliveryMargin': 'Маржа по доставке',
+
+  // Блок исключений доставки (карта пробелов 1.2f/1.2g, волна P44).
+  'orders.detail.delivery.exceptionReason.NO_PROVIDER': 'Нет доступной курьерской службы',
+  'orders.detail.delivery.exceptionReason.LATE_ASSIGNMENT': 'Курьер не назначен вовремя',
+  'orders.detail.delivery.exceptionReason.PROMISE_UNREACHABLE':
+    'Обещанное время доставки уже не может быть соблюдено',
+  'orders.detail.delivery.exceptionReason.AWAITING_RECONCILIATION':
+    'Результат бронирования не подтверждён — уточните у службы',
+  'orders.detail.delivery.exceptionReason.ABANDONED_HOLD':
+    'Резерв у партнёра не подтверждён и не отменён',
+  'orders.detail.delivery.exceptionReason.LATE_RESTAURANT': 'Кухня задержала заказ',
+  'orders.detail.delivery.exceptionReason.COURIER_NO_SHOW': 'Курьер не приехал',
+  'orders.detail.delivery.exceptionReason.ADDRESS_ISSUE': 'Не удалось определить адрес доставки',
+  'orders.detail.delivery.exceptionReason.PROVIDER_CANCEL_UNCERTAIN':
+    'Отмена у курьера не подтверждена — проверьте вручную',
+  'orders.detail.delivery.exceptionReason.PROVIDER_CANCEL_FAILED':
+    'Курьер недоступен или отказал в отмене — проверьте вручную',
+
+  // Исход отмены у курьера в диалоге отмены заказа (карта пробелов 1.2g, волна P44).
+  'orders.detail.delivery.cancelOutcome.INTERNAL_CANCELLED': 'Курьер снят с заказа.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_CANCELLED':
+    'Курьерская служба подтвердила отмену — бесплатно.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_CANCELLED_CHARGEABLE':
+    'Курьерская служба подтвердила отмену, но она платная.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_UNCERTAIN':
+    'Отмена у курьерской службы не подтверждена — проверьте вручную.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_FAILED':
+    'Курьерская служба отказала в отмене или недоступна — проверьте вручную.',
 
   'orders.detail.customer.name': 'Имя',
   'orders.detail.customer.guest': 'Гость',

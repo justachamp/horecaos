@@ -213,9 +213,25 @@ export interface OrderDeliveryShipment {
 }
 
 /**
+ * `OrderDeliveryController.DeliveryExceptionResponse` — one open ADR 0014
+ * sourcing or cancellation exception against this order's plan (gap map rows
+ * 1.2f/1.2g's own delivery-exception band). Never a customer name, address
+ * or phone.
+ */
+export interface DeliveryExceptionView {
+  readonly exceptionId: string;
+  readonly reasonCode: string;
+  readonly severity: string;
+  readonly status: string;
+  readonly detail?: string | null;
+  readonly raisedAt: string;
+}
+
+/**
  * `OrderDeliveryController.OrderDeliveryResponse` — `GET .../orders/{orderId}/delivery`
- * (wave P11, gap map rows 1.2e/1.2n/2.1a). Not found for an order fulfilled
- * some other way (pickup, dine-in, a cancelled plan).
+ * (wave P11, gap map rows 1.2e/1.2n/2.1a; the `exceptions` band added by
+ * wave P44, gap map rows 1.2f/1.2g). Not found for an order fulfilled some
+ * other way (pickup, dine-in, a cancelled plan).
  */
 export interface OrderDeliveryResponse {
   readonly planId: string;
@@ -236,6 +252,8 @@ export interface OrderDeliveryResponse {
   readonly currency: string;
   readonly courierEtaAt?: string | null;
   readonly shipment?: OrderDeliveryShipment | null;
+  /** Empty for the ordinary case: sourcing settled cleanly and nothing needs an operator. */
+  readonly exceptions: readonly DeliveryExceptionView[];
 }
 
 /** Re-exported so callers of `order-detail.ts` need not also import `order-actions.ts` for this one type. */

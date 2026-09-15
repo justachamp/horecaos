@@ -37,6 +37,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.fulfillment.api.ShipmentCancellationPort;
+import uz.horecaos.platform.fulfillment.api.ShipmentCancellationPort.Outcome;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
@@ -110,6 +112,7 @@ public class OperationsOrderController {
     private final OrderBulkActionService bulkActions;
     private final LiveBoardQueryService liveBoard;
     private final AggregatorOrderIntakeService aggregatorOrders;
+    private final ShipmentCancellationPort deliveryCancellation;
 
     /**
      * Every capability {@link OrderActionsPolicy#availableFor} reads. Computed
@@ -141,7 +144,8 @@ public class OperationsOrderController {
             OperatorCustomerLookupService customerLookup,
             OrderBulkActionService bulkActions,
             LiveBoardQueryService liveBoard,
-            AggregatorOrderIntakeService aggregatorOrders) {
+            AggregatorOrderIntakeService aggregatorOrders,
+            ShipmentCancellationPort deliveryCancellation) {
         this.orderQuery = orderQuery;
         this.orderState = orderState;
         this.outcomes = outcomes;
@@ -156,6 +160,7 @@ public class OperationsOrderController {
         this.bulkActions = bulkActions;
         this.liveBoard = liveBoard;
         this.aggregatorOrders = aggregatorOrders;
+        this.deliveryCancellation = deliveryCancellation;
     }
 
     /**
@@ -873,7 +878,7 @@ public class OperationsOrderController {
                     + "is still refused once confirmed, because none of those consequences has a "
                     + "default that is safe to assume. The operator never picks the write-off: "
                     + "the dialog shows what the reason carries and cannot change it.")
-    public ResponseEntity<DecisionResponse> cancel(
+    public ResponseEntity<OrderCancellationResponse> cancel(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
@@ -902,8 +907,28 @@ public class OperationsOrderController {
                                     "USER",
                                     currentActor.get().subject(),
                                     null));
-            return ResponseEntity.ok(new DecisionResponse(
-                    orderId, result.status().name(), result.orderVersion(), result.applied(), null, null));
+
+            // Cascaded after orderState/outcomes' own @Transactional call has
+            // returned -- its commit has already happened by then, so this
+            // never runs inside the order's own database transaction. A
+            // PARTNER shipment's cancel is a network call to Noor or Yandex,
+            // and ADR 0014's gap map row 1.2g exists so the operator who just
+            // clicked Cancel sees what happened to the courier, not just that
+            // the order moved. Only attempted for the decision that actually
+            // settled the order -- a lost race (`!applied`) means somebody
+            // else already decided this order, and cascading here would tell
+            // fulfilment about a cancellation this call did not cause.
+            Outcome deliveryOutcome = result.applied()
+                    ? deliveryCancellation.cancelForOrder(
+                            tenantId,
+                            brandId,
+                            locationId,
+                            orderId,
+                            body.reasonCode(),
+                            ActorRef.user(currentActor.get().subject(), null))
+                    : null;
+
+            return ResponseEntity.ok(OrderCancellationResponse.of(orderId, result, deliveryOutcome));
         } catch (OrderStateService.StaleOrderException stale) {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
         } catch (OrderStateService.CancellationNotPermittedException refused) {
@@ -1836,6 +1861,59 @@ public class OperationsOrderController {
             boolean applied,
             @Nullable String effectiveDecisionId,
             @Nullable String effectiveAction) {}
+
+    /**
+     * {@code .../cancellations}' own response (gap map row 1.2g) — everything
+     * {@link DecisionResponse} carries, plus what happened to this order's
+     * delivery plan, if it had one. {@code deliveryCancellation} is null for
+     * an order that never had a plan (pickup, dine-in) and for a decision
+     * this call lost the race for ({@code !applied}) — cascading fulfilment
+     * for a cancellation another operator's click actually caused would be a
+     * fact about the wrong decision.
+     *
+     * @param deliveryCancellation.outcome one of {@code
+     *        ShipmentCancellationPort.Result}'s names: {@code
+     *        NOTHING_TO_CANCEL}, {@code PLAN_CANCELLED}, {@code
+     *        INTERNAL_CANCELLED}, {@code PROVIDER_CANCELLED}, {@code
+     *        PROVIDER_CANCELLED_CHARGEABLE}, {@code PROVIDER_UNCERTAIN} or
+     *        {@code PROVIDER_FAILED} — the last two mean an operator must
+     *        still resolve this by hand, and the order detail pane's own
+     *        delivery-exception band is where that shows up next
+     */
+    public record OrderCancellationResponse(
+            UUID orderId,
+            String status,
+            int version,
+            boolean applied,
+            @Nullable String effectiveDecisionId,
+            @Nullable String effectiveAction,
+            @Nullable DeliveryCancellationOutcome deliveryCancellation) {
+
+        static OrderCancellationResponse of(
+                UUID orderId, OrderStateService.DecisionResult result, @Nullable Outcome outcome) {
+            return new OrderCancellationResponse(
+                    orderId,
+                    result.status().name(),
+                    result.orderVersion(),
+                    result.applied(),
+                    // Always null here, exactly as DecisionResponse's own doc already
+                    // says of this endpoint: cancellations has no competing decision
+                    // to report the effective one of. Kept on the wire rather than
+                    // dropped, so a client built against the old DecisionResponse
+                    // shape does not lose a field the OpenAPI contract still promises.
+                    null,
+                    null,
+                    outcome == null ? null : DeliveryCancellationOutcome.of(outcome));
+        }
+    }
+
+    public record DeliveryCancellationOutcome(
+            String outcome, @Nullable String providerType) {
+
+        static DeliveryCancellationOutcome of(Outcome outcome) {
+            return new DeliveryCancellationOutcome(outcome.result().name(), outcome.providerType());
+        }
+    }
 
     /**
      * One curated reject reason (V0119), as the reject dialog's picker renders it.

@@ -3,6 +3,7 @@ package uz.horecaos.platform.fulfillment.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -16,6 +17,8 @@ import uz.horecaos.platform.fulfillment.domain.sourcing.SourceType;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmentStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmentStore.Shipment;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryCostSubsidyStore;
+import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryExceptionStore;
+import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryExceptionStore.OpenException;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
@@ -52,12 +55,17 @@ public class OrderDeliveryController {
     private final JdbcDeliveryPlanStore plans;
     private final JdbcAssignmentStore assignments;
     private final JdbcDeliveryCostSubsidyStore subsidies;
+    private final JdbcDeliveryExceptionStore exceptions;
 
     public OrderDeliveryController(
-            JdbcDeliveryPlanStore plans, JdbcAssignmentStore assignments, JdbcDeliveryCostSubsidyStore subsidies) {
+            JdbcDeliveryPlanStore plans,
+            JdbcAssignmentStore assignments,
+            JdbcDeliveryCostSubsidyStore subsidies,
+            JdbcDeliveryExceptionStore exceptions) {
         this.plans = plans;
         this.assignments = assignments;
         this.subsidies = subsidies;
+        this.exceptions = exceptions;
     }
 
     @GetMapping("/delivery")
@@ -86,9 +94,10 @@ public class OrderDeliveryController {
                 .map(JdbcDeliveryCostSubsidyStore.Row::providerCostMinor)
                 .orElse(null);
         Instant courierEtaAt = plans.courierEtaByOrder(tenantId, orderId).orElse(null);
+        List<OpenException> openExceptions = exceptions.open(tenantId, plan.id());
 
         return ResponseEntity.ok(
-                OrderDeliveryResponse.of(plan, shipment.orElse(null), providerCostMinor, courierEtaAt));
+                OrderDeliveryResponse.of(plan, shipment.orElse(null), providerCostMinor, courierEtaAt, openExceptions));
     }
 
     // --------------------------------------------------------------- payloads
@@ -104,13 +113,15 @@ public class OrderDeliveryController {
             @Nullable Long providerCostMinor,
             String currency,
             @Nullable Instant courierEtaAt,
-            @Nullable ShipmentResponse shipment) {
+            @Nullable ShipmentResponse shipment,
+            List<DeliveryExceptionResponse> exceptions) {
 
         static OrderDeliveryResponse of(
                 DeliveryPlan plan,
                 @Nullable Shipment shipment,
                 @Nullable Long providerCostMinor,
-                @Nullable Instant courierEtaAt) {
+                @Nullable Instant courierEtaAt,
+                List<OpenException> exceptions) {
             return new OrderDeliveryResponse(
                     plan.id(),
                     plan.version(),
@@ -122,7 +133,36 @@ public class OrderDeliveryController {
                     providerCostMinor,
                     plan.currency(),
                     courierEtaAt,
-                    shipment == null ? null : ShipmentResponse.of(shipment));
+                    shipment == null ? null : ShipmentResponse.of(shipment),
+                    exceptions.stream().map(DeliveryExceptionResponse::of).toList());
+        }
+    }
+
+    /**
+     * The delivery-exception band (gap map rows 1.2f/1.2g): every open ADR
+     * 0014 sourcing or cancellation exception against this order's plan,
+     * mirroring {@code DispatchController.ExceptionResponse} — a separate
+     * record because {@code IdempotentResponseClassificationTests} requires
+     * unique OpenAPI schema names across the two controllers' response trees.
+     * Never a customer name, address or phone, for the same reason the class
+     * doc above gives.
+     */
+    public record DeliveryExceptionResponse(
+            UUID exceptionId,
+            String reasonCode,
+            String severity,
+            String status,
+            @Nullable String detail,
+            Instant raisedAt) {
+
+        static DeliveryExceptionResponse of(OpenException exception) {
+            return new DeliveryExceptionResponse(
+                    exception.id(),
+                    exception.reasonCode(),
+                    exception.severity(),
+                    exception.status(),
+                    exception.detail(),
+                    exception.raisedAt());
         }
     }
 

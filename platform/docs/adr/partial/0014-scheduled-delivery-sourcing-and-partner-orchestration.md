@@ -106,6 +106,48 @@
   quote that answered no ETA at all — leaves it null rather than a fabricated
   figure. Live, moving ETAs and the partner tracking callbacks above are the
   same still-open gap.
+  **Cascading cancel and the operator-invoked quote-delta seam now exist —
+  added 2026-09-15, gap map rows 1.2g/1.2f (ADR 0128).** The line 655 checklist
+  item ("Operations APIs") named two of its own remaining gaps by name — "a
+  shipment `cancel` independent of unassign" and an "operator-triggered
+  `source`" — and both are closed. `fulfillment.api.ShipmentBookingPort` gains
+  `cancel`, and `CamelShipmentBookingPort` implements it over the adapters'
+  existing `CANCEL_SHIPMENT` capability (Yandex's own `cancel-info` cost
+  check included, surfaced as `CANCELLED` vs `CANCELLED_WITH_COST` rather
+  than a bare boolean). `fulfillment.api.ShipmentCancellationPort` — the
+  `DeliveryPlanner` precedent's own inversion, for the identical cyclic-module
+  reason that doc gives — is what an order cancellation calls, from
+  `OperationsOrderController` **after** its own database transaction has
+  committed and never inside it, so a `PARTNER` shipment's cancel call never
+  holds a pooled connection across the network round trip. An `INTERNAL`
+  shipment is cancelled locally; a `PARTNER` one is told, and only a clean
+  `CANCELLED`/`CANCELLED_WITH_COST` answer marks the shipment cancelled and
+  the plan `CANCELLED` — `UNCERTAIN`, `REJECTED` and `RETRYABLE` all raise a
+  `fulfillment.delivery_exceptions` row (two new reason codes,
+  `PROVIDER_CANCEL_UNCERTAIN`/`PROVIDER_CANCEL_FAILED`) and move the plan to
+  `MANUAL_ACTION_REQUIRED` instead of guessing. `DispatchController` exposes
+  the dedicated `Capability.SHIPMENT_CANCEL` endpoint the API sketch below
+  names, under the now-standard `/tenants/{tenantId}/brands/.../locations/...`
+  prefix rather than the bare path the original 2026-08-19 sketch used, for
+  the same reason the dispatch queue already departed from that sketch. The
+  order detail's own delivery read (`OrderDeliveryController`) gains the same
+  open-exceptions band the dispatch board already had.
+  **The quote-delta seam** (`1.2f`, "the Millenium pattern" the IA names by
+  name): `SourceType.PARTNER` booking had no operator-invoked path at all —
+  only `DeliverySourcingService`'s own automated tick ever called `book`.
+  `ManualExternalBookingService` adds one: `quote` asks one partner what a
+  journey costs right now (side-effect-free by the port's own contract,
+  recorded as `fulfillment.delivery_quotes` evidence exactly like an
+  automated tick) against the plan's snapshotted customer fee, and `book`
+  either accepts that exact persisted quote — by id, never a price the
+  request body carries, which is what makes accepting a re-quoted increase
+  impossible to do implicitly — or records an abandon. Acceptance reuses
+  `SourcingJournal.openPartnerAttempt`/`settlePartnerAttempt`, the identical
+  single-winner primitives automated sourcing uses, so a manual accept that
+  costs more than the customer's fee recognises the same
+  `DELIVERY_COST_SUBSIDY` fact an automated booking would have. No migration:
+  both seams are built entirely on V0054's existing tables and V0186's
+  `delivery_cost_subsidies`.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture), operations, legal
@@ -655,7 +697,7 @@ reconciliation evidence.
 - [x] Implement quote filtering/scoring and single-winner compare-and-set. `QuoteScoring` is pure and versioned; the compare-and-set is `JdbcAssignmentStore.win`.
 - [ ] Implement or explicitly defer the internal courier model and legacy courier disposition. The courier model is built by ADR 0042/0045 (V0040, V0041, the `courier` and `telemetry` modules) and the seam is now closed: `courier.infrastructure.dispatch.InternalFleetAdapter` implements `fulfillment.api.InternalFleetPort`, so `SourcingPlanner`'s in-house branch is taken in production and a courier on shift is offered the order before any partner is called. What remains open under this box is the fleet's reach — a courier is enumerated only through an open shift at the branch, since ADR 0042's roster and availability tables are not built — and the legacy courier disposition, still neither built nor explicitly deferred.
 - [x] Implement first real partner adapter with uncertainty reconciliation. `NoorDeliveryAdapter` and `YandexDeliveryAdapter` classify a request that reached the partner as `UNCERTAIN` and resolve by query rather than retry. Production code now reaches both: `DeliveryPlanTrigger` opens the plan, `DeliverySourcingScheduler` claims the job, and `DeliverySourcingService` books through `CamelShipmentBookingPort`, against an `integration.bindings` row `ProviderInstallationController` can author.
-- [ ] Implement Operations APIs, tracking, recovery triggers, audit, metrics, and alerts. `fulfillment.web`'s `DispatchController` now holds a sourcing Operations API beside the ADR 0037 tariff, fee and zone controllers: the dispatch queue, audited manual assign/unassign (`ManualDispatchService`, `fulfillment.dispatch.assign`/`.unassign` ADR 0027 facts), and a read over the `fulfillment.delivery_exceptions` row a failed sourcing pass already opens. `ProviderCircuitMetrics` and ADR 0045's courier tracking endpoints exist. Still missing: an operator-triggered `source`/`reschedule`/`reconcile`, a shipment `cancel` independent of unassign, `GET .../tracking`, a partner tracking callback (see the Implementation status line above), and any sourcing-specific alert.
+- [ ] Implement Operations APIs, tracking, recovery triggers, audit, metrics, and alerts. `fulfillment.web`'s `DispatchController` now holds a sourcing Operations API beside the ADR 0037 tariff, fee and zone controllers: the dispatch queue, audited manual assign/unassign (`ManualDispatchService`, `fulfillment.dispatch.assign`/`.unassign` ADR 0027 facts), a read over the `fulfillment.delivery_exceptions` row a failed sourcing pass already opens, and — added 2026-09-15, gap map rows 1.2g/1.2f — the operator-triggered `Capability.SHIPMENT_CANCEL` shipment cancel independent of unassign and the `external-partners`/`external-quote`/`external-book` operator-invoked booking seam (`ShipmentCancellationService`, `ManualExternalBookingService`). `ProviderCircuitMetrics` and ADR 0045's courier tracking endpoints exist. Still missing: an operator-triggered `reschedule`/`reconcile`, `GET .../tracking`, a partner tracking callback (see the Implementation status line above), and any sourcing-specific alert.
 - [x] Capture a per-order courier ETA from the winning quote and expose it to the kitchen and the order detail (gap map rows 2.1a/1.2n). `CamelShipmentBookingPort.quote()`, `fulfillment.delivery_plans.courier_eta_at` (V0319), `fulfillment.api.CourierEtaPort`, and the join onto `KitchenBoardController.TicketResponse` and `fulfillment.web.OrderDeliveryController` — see the Implementation status line above. Not a live tracking feed; that gap and the partner tracking callbacks are the same open item, still unchecked below.
 - [x] Add timing, duplicate, uncertainty, cost, fallback, restart, and isolation tests. `DeliverySourcingTests` covers timing (a job before its due time is not claimed; a revised estimate moves it), duplicate (a replayed tick does not book twice; two bookings produce one shipment; an answered attempt is never resent), fallback (the cheapest quoting partner wins; a partner that refuses a quote is not booked), restart (a dead worker loses its lease and a lost lease cannot finish somebody else's job), isolation (a plan is not readable by another tenant), and now cost (`thecheapestQuotedPartnerWins` asserts the `DELIVERY_COST_SUBSIDY` row and its amount; `aCheaperPartnerRecordsNoSubsidy` proves a cheaper winning quote writes none); uncertainty and gateway classification are covered by the adapter tests.
 

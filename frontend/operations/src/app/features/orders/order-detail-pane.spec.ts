@@ -1072,6 +1072,83 @@ describe('OrderDetailPane: cancel past CONFIRMED uses a registry reason, never f
       undefined,
     );
   });
+
+  it('the cancel dialog renders the provider-cancellation outcome once the cascade settles (gap map row 1.2g)', async () => {
+    const cancel = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'CANCELLED',
+        version: 4,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+        deliveryCancellation: { outcome: 'PROVIDER_UNCERTAIN', providerType: 'noor-delivery' },
+      }),
+    );
+    configure({
+      get: apiGet({ value: confirmedWithCancel(), version: 3 }),
+      actionsApi: { cancelWithReason: cancel },
+      referenceDataApi: { list: () => Promise.resolve([reason()]) },
+    });
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    (
+      host.querySelector('[data-testid="order-outcome-reason-option-reason-1"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    (
+      host.querySelector('[data-testid="order-outcome-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const notice = host.querySelector('[data-testid="order-detail-notice"]');
+    expect(notice?.textContent).toContain(
+      'The courier provider’s cancellation could not be confirmed — check manually.',
+    );
+  });
+
+  it('a cancellation with nothing to tell a courier about renders no delivery notice at all', async () => {
+    const cancel = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'CANCELLED',
+        version: 4,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+        deliveryCancellation: { outcome: 'NOTHING_TO_CANCEL', providerType: null },
+      }),
+    );
+    configure({
+      get: apiGet({ value: confirmedWithCancel(), version: 3 }),
+      actionsApi: { cancelWithReason: cancel },
+      referenceDataApi: { list: () => Promise.resolve([reason()]) },
+    });
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    (
+      host.querySelector('[data-testid="order-outcome-reason-option-reason-1"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    (
+      host.querySelector('[data-testid="order-outcome-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="order-detail-notice"]')).toBeNull();
+  });
 });
 
 describe('OrderDetailPane: completion names the fulfilment mode’s own reason (§4.6, row 1.2j)', () => {
@@ -1414,6 +1491,7 @@ function deliveryResponse(overrides: Partial<OrderDeliveryResponse> = {}): Order
     estimatedReadyAt: '2026-08-30T09:20:00Z',
     customerDeliveryFeeMinor: 12_000,
     currency: 'UZS',
+    exceptions: [],
     ...overrides,
   };
 }

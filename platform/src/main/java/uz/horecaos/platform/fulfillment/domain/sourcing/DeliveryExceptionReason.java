@@ -32,6 +32,23 @@ public final class DeliveryExceptionReason {
     public static final String COURIER_NO_SHOW = "COURIER_NO_SHOW";
     public static final String ADDRESS_ISSUE = "ADDRESS_ISSUE";
 
+    /**
+     * A cancel reached the partner but its outcome could not be confirmed
+     * (gap map row 1.2g) — the same shape {@link #AWAITING_RECONCILIATION}
+     * gives a booking, kept as its own code because the two questions an
+     * operator resolves them with are different: "did sourcing ever book
+     * this" against "did the cancel I just asked for actually take".
+     */
+    public static final String PROVIDER_CANCEL_UNCERTAIN = "PROVIDER_CANCEL_UNCERTAIN";
+
+    /**
+     * The partner refused a cancel on business grounds, or a transport fault
+     * stopped the request from being asked at all (gap map row 1.2g). Either
+     * way the order is already cancelled in HorecaOS and the shipment is not,
+     * which is a person's problem to close, not automation's.
+     */
+    public static final String PROVIDER_CANCEL_FAILED = "PROVIDER_CANCEL_FAILED";
+
     private DeliveryExceptionReason() {}
 
     /**
