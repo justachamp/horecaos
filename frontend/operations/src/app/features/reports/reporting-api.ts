@@ -54,6 +54,14 @@ export interface RowResponse {
   readonly channelCode: string | null;
   readonly fulfilmentType: string | null;
   readonly legalEntityId: string | null;
+  /**
+   * T13 (7.6a): `'NEW'` or `'RETURNING'`, set only on a
+   * `revenue.new_vs_returning.v1` row. Optional rather than required-nullable
+   * so every other caller's existing fixtures (this field did not exist
+   * before this wave) do not have to be revisited to add a null they never
+   * cared about.
+   */
+  readonly customerType?: 'NEW' | 'RETURNING' | null;
   /** Metric code to figure. Absent means the slice had nothing to compute it from — never a zero. */
   readonly values: Readonly<Record<string, number | null>>;
 }
@@ -376,6 +384,81 @@ export interface ExternalDeliveryCostResponse {
   readonly provenance: ProvenanceResponse;
 }
 
+/**
+ * T13 (7.6): the six built KPI-tile figures — folded over the whole
+ * requested range, never a day-grain breakdown. Mirrors
+ * `ReportingController.CustomerKpiResponse`. `customers.ltv.v1` is not
+ * here: it is registered `sourceAvailable = false`.
+ *
+ * @property repeatShareBasisPoints null when distinctCustomers is zero —
+ *   never a zero that would read as "nobody came back".
+ * @property customerValueSom null when distinctCustomers is zero.
+ * @property basketDepth null when there were no orders to divide items by.
+ */
+export interface CustomerKpiResponse {
+  readonly newCustomers: number;
+  readonly distinctCustomers: number;
+  readonly repeatShareBasisPoints: number | null;
+  readonly orderFrequency: number | null;
+  readonly customerValueSom: number | null;
+  readonly basketDepth: number | null;
+  readonly provenance: ProvenanceResponse;
+}
+
+/**
+ * T13 (7.6a): one month-offset point on a cohort's retention curve. Mirrors
+ * `ReportingController.RetentionPointResponse`.
+ *
+ * @property retainedBasisPoints null when the cohort's own size is zero.
+ */
+export interface RetentionPointResponse {
+  readonly monthOffset: number;
+  readonly orderMonth: string;
+  readonly customerCount: number;
+  readonly retainedBasisPoints: number | null;
+}
+
+/** T13 (7.6a): one cohort and its retention curve. Mirrors `ReportingController.CohortResponse`. */
+export interface CohortResponse {
+  readonly cohortMonth: string;
+  readonly size: number;
+  readonly points: readonly RetentionPointResponse[];
+}
+
+/** T13 (7.6a): the cohort/retention grid. Mirrors `ReportingController.CohortListResponse`. */
+export interface CohortListResponse {
+  readonly cohorts: readonly CohortResponse[];
+  /** The widest range a single call tracks — narrow the request past this and the server refuses. */
+  readonly windowMonths: number;
+  readonly provenance: ProvenanceResponse;
+}
+
+/** T13 (7.6b): platform-fixed Frequency bands — never tenant-configurable. */
+export type FrequencyBand = 'F1_SINGLE' | 'F2_FEW' | 'F3_FREQUENT';
+
+/** T13 (7.6b): platform-fixed Recency bands, in days before the range's own `to`. */
+export type RecencyBand = 'R1_RECENT' | 'R2_LAPSING' | 'R3_AT_RISK';
+
+/** T13 (7.6b): one (Recency, Frequency) cell of the cross-tab. Mirrors `ReportingController.RfmCellResponse`. */
+export interface RfmCellResponse {
+  readonly recencyBand: RecencyBand;
+  readonly frequencyBand: FrequencyBand;
+  readonly memberCount: number;
+  readonly revenueSom: number;
+}
+
+/**
+ * T13 (7.6b): the whole R×F grid, all nine cells even when empty. Mirrors
+ * `ReportingController.RfmGridResponse`. Distinct from 5.3's segment
+ * builder: a marketer can size one segment there and read this whole grid
+ * to decide which cell is worth targeting.
+ */
+export interface RfmGridResponse {
+  readonly cells: readonly RfmCellResponse[];
+  readonly totalCustomers: number;
+  readonly provenance: ProvenanceResponse;
+}
+
 export interface QueryParams {
   readonly from: string;
   readonly to: string;
@@ -641,6 +724,62 @@ export class ReportingApi {
     const result = await firstValueFrom(
       this.api.get<TariffAuditResponse>(reportsPaths.courierTariffAudit(tenantId), {
         params: { from: params.from, to: params.to, locationId: params.locationId },
+      }),
+    );
+    return result.value;
+  }
+
+  /** T13 (7.6): the KPI-tile figures — new/distinct customers, repeat share, order frequency, customer value, basket depth. */
+  async customerKpis(
+    tenantId: string,
+    params: {
+      readonly from: string;
+      readonly to: string;
+      readonly locationId?: readonly string[];
+      readonly legalEntityId?: readonly string[];
+    },
+  ): Promise<CustomerKpiResponse> {
+    const result = await firstValueFrom(
+      this.api.get<CustomerKpiResponse>(reportsPaths.customerKpis(tenantId), {
+        params: {
+          from: params.from,
+          to: params.to,
+          locationId: params.locationId,
+          legalEntityId: params.legalEntityId,
+        },
+      }),
+    );
+    return result.value;
+  }
+
+  /** T13 (7.6a): monthly cohorts by first-order month, and their retention curve. */
+  async customerCohorts(tenantId: string, params: RangeParams): Promise<CohortListResponse> {
+    const result = await firstValueFrom(
+      this.api.get<CohortListResponse>(reportsPaths.customerCohorts(tenantId), {
+        params: { from: params.from, to: params.to, locationId: params.locationId },
+      }),
+    );
+    return result.value;
+  }
+
+  /** T13 (7.6b): the Recency x Frequency cross-tab, member counts and revenue per cell. */
+  async customerRfm(
+    tenantId: string,
+    params: {
+      readonly from: string;
+      readonly to: string;
+      readonly locationId?: readonly string[];
+      readonly legalEntityId?: readonly string[];
+    },
+  ): Promise<RfmGridResponse> {
+    const result = await firstValueFrom(
+      this.api.get<RfmGridResponse>(reportsPaths.customerRfm(tenantId), {
+        params: {
+          from: params.from,
+          to: params.to,
+          locationId: params.locationId,
+          legalEntityId: params.legalEntityId,
+        },
       }),
     );
     return result.value;

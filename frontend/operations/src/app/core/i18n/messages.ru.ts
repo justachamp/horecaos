@@ -4159,6 +4159,47 @@ export const messagesRu: MessageCatalogue = {
   'reports.products.abcXyzNotBuilt':
     'ABC- и XYZ-классификация пока не реализованы: в reporting нет таблицы classification_run и зарегистрированной метрики (ADR 0043).',
 
+  // ---------------------------------------------------------------- reports 7.6/7.6a/7.6b customer analytics (T13)
+  'reports.customers.title': 'Аналитика по клиентам',
+  'reports.customers.loading': 'Загрузка…',
+  'reports.customers.kpi.title': 'За этот период',
+  'reports.customers.kpi.newCustomers': 'Новые клиенты',
+  'reports.customers.kpi.distinctCustomers': 'Клиенты с заказом',
+  'reports.customers.kpi.repeatShare': 'Доля повторных',
+  'reports.customers.kpi.orderFrequency': 'Заказов на клиента',
+  'reports.customers.kpi.customerValue': 'Ценность клиента',
+  'reports.customers.kpi.basketDepth': 'Позиций в заказе',
+  'reports.customers.kpi.ltvTitle': 'Пожизненная ценность',
+  'reports.customers.kpi.ltvNotBuilt':
+    'Не реализовано: таблицы истории клиента ещё нет. Вместо числа, которое тихо обрывается на границе периода, плитка честно говорит об этом.',
+  'reports.customers.newVsReturning.title': 'Выручка: новые и вернувшиеся',
+  'reports.customers.newVsReturning.new': 'Новые клиенты',
+  'reports.customers.newVsReturning.returning': 'Вернувшиеся клиенты',
+  'reports.customers.newVsReturning.share': 'Доля выручки',
+  'reports.customers.newVsReturning.empty':
+    'В этом периоде нет завершённого заказа с известным клиентом.',
+  'reports.customers.cohorts.title': 'Когорты и удержание',
+  'reports.customers.cohorts.intro':
+    'Каждый клиент, чей первый заказ попал в этот диапазон, сгруппирован по месяцу, и доля когорты, заказавшей снова в каждый последующий месяц.',
+  'reports.customers.cohorts.empty': 'В этом диапазоне не началось ни одной когорты.',
+  'reports.customers.cohorts.column.cohort': 'Когорта',
+  'reports.customers.cohorts.column.size': 'Участников',
+  'reports.customers.cohorts.monthOffset': 'М+{offset}',
+  'reports.customers.cohorts.rangeTooWide':
+    'Этот диапазон шире, чем отслеживает одно чтение удержания — сузьте его до 12 месяцев или меньше.',
+  'reports.customers.rfm.title': 'RFM: давность × частота',
+  'reports.customers.rfm.intro':
+    'Границы зафиксированы платформой и не настраиваются тенантом. Это не конструктор сегментов «Клиентов»: там собирают один сегмент, здесь читают всю сетку, чтобы понять, какая ячейка стоит внимания.',
+  'reports.customers.rfm.totalCustomers': 'Клиентов в этой сетке: {count}',
+  'reports.customers.rfm.column.members': 'Участников',
+  'reports.customers.rfm.column.revenue': 'Выручка',
+  'reports.customers.rfm.recency.R1_RECENT': 'Недавно (0–6 дней)',
+  'reports.customers.rfm.recency.R2_LAPSING': 'Затихают (7–29 дней)',
+  'reports.customers.rfm.recency.R3_AT_RISK': 'Под риском (30+ дней)',
+  'reports.customers.rfm.frequency.F1_SINGLE': '1 заказ',
+  'reports.customers.rfm.frequency.F2_FEW': '2–3 заказа',
+  'reports.customers.rfm.frequency.F3_FREQUENT': '4+ заказов',
+
   // ---------------------------------------------------------------- reports 7.5/7.5a/7.5b staff (T12)
   'reports.staff.title': 'Отчёты по персоналу',
   'reports.staff.loading': 'Загрузка…',
