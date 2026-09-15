@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
+import { command } from '../../core/api/idempotency';
 import { reportsPaths } from '../../core/api/reports-paths';
 
 /**
@@ -56,6 +57,53 @@ export interface RowResponse {
   readonly legalEntityId: string | null;
   /** Metric code to figure. Absent means the slice had nothing to compute it from — never a zero. */
   readonly values: Readonly<Record<string, number | null>>;
+}
+
+/**
+ * ADR 0043/ADR 0029, wave P28's own export centre. Mirrors
+ * `ReportExportController.ReportExportRequest` — `columns` is what the
+ * column chooser asked for, not what the job actually produced; the PII
+ * group in it is silently dropped server-side when the requester lacks
+ * `customer.pii.export` rather than refusing the whole request. See
+ * `ExportColumnChooser` for the report-specific column vocabulary.
+ */
+export interface ReportExportRequest {
+  readonly reportKey: string;
+  readonly columns: readonly string[];
+  readonly status?: string | null;
+  readonly query?: string | null;
+  readonly purpose: string;
+}
+
+/** Mirrors `ReportExportController.ReportExportQueuedResponse`. */
+export interface ReportExportQueuedResponse {
+  readonly exportId: string;
+  readonly status: string;
+}
+
+/**
+ * One export job's status — what the export centre's history list polls.
+ * Mirrors `ReportExportController.ReportExportStatusResponse`.
+ *
+ * @property columns the effective columns the artefact actually carries —
+ *   never the requested set, so a PII omission is visible here rather than
+ *   only inferable from `includesPiiColumns`.
+ * @property downloadUrl a short-lived signed URL, present only once
+ *   `status` is `COMPLETE`.
+ */
+export interface ReportExportStatusResponse {
+  readonly exportId: string;
+  readonly reportKey: string;
+  readonly status: 'QUEUED' | 'RUNNING' | 'COMPLETE' | 'FAILED';
+  readonly columns: readonly string[];
+  readonly includesPiiColumns: boolean;
+  readonly rowQuota: number;
+  readonly rowCount: number | null;
+  readonly truncated: boolean;
+  readonly failureReason: string | null;
+  readonly createdAt: string;
+  readonly completedAt: string | null;
+  readonly downloadUrl: string | null;
 }
 
 export interface QueryResponse {
@@ -660,5 +708,41 @@ export class ReportingApi {
       ),
     );
     return result.value;
+  }
+
+  // ---------------------------------------------- row 7.2e: the export centre
+
+  /** Queues a report export under `report.export`; returns immediately with an id to poll. */
+  async requestExport(
+    tenantId: string,
+    request: ReportExportRequest,
+  ): Promise<ReportExportQueuedResponse> {
+    return firstValueFrom(
+      this.api.post<ReportExportRequest, ReportExportQueuedResponse>(
+        reportsPaths.exports(tenantId),
+        command(request),
+      ),
+    );
+  }
+
+  /** One export job's status — what the export centre screen polls. */
+  async exportStatus(tenantId: string, exportId: string): Promise<ReportExportStatusResponse> {
+    const result = await firstValueFrom(
+      this.api.get<ReportExportStatusResponse>(reportsPaths.reportExport(tenantId, exportId)),
+    );
+    return result.value;
+  }
+
+  /** The export centre's own job history, newest first. */
+  async recentExports(
+    tenantId: string,
+    limit = 50,
+  ): Promise<readonly ReportExportStatusResponse[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly ReportExportStatusResponse[]>(reportsPaths.exports(tenantId), {
+        params: { limit },
+      }),
+    );
+    return result.value ?? [];
   }
 }

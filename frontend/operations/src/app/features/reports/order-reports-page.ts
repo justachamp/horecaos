@@ -7,6 +7,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { ApiError } from '../../core/api/problem-details';
@@ -121,10 +122,13 @@ interface PivotRow {
  * Five tabs, matching the IA row's explicit "Owns": per-stage duration
  * («Этапы»), commercial/CRM log («Заказы»), daily operations («Посуточно»),
  * the two roll-ups as one pivot («Сводка»), and delayed orders («Опоздания»).
- * Excel/CSV export is the sixth thing the IA row names and is the one item
- * genuinely not built: ADR 0043's own rollout puts exports last, behind
- * `report.export`/`customer.pii.export` and an async job queue, none of
- * which exist yet — see the export button's own not-built state below.
+ * Excel/CSV export is the sixth thing the IA row names — wave P28 builds the
+ * export centre (`/statistics/exports`) behind `report.export`/
+ * `customer.pii.export` and an async job queue; the Export button here links
+ * there rather than triggering an order-log export of its own, since no
+ * export source is registered for the order log yet
+ * (`ReportExportRegistry`'s own doc names `CUSTOMER_DIRECTORY` as the one
+ * report wired end to end so far).
  *
  * «Этапы»/«Заказы»/«Опоздания» read `GET .../reporting/orders`, a bounded
  * order-grain read (see its own doc) rather than a paginated feed — real data,
@@ -159,7 +163,7 @@ interface PivotRow {
  */
 @Component({
   selector: 'q-order-reports-page',
-  imports: [TPipe, ProvenanceBanner, OrderRowsTable],
+  imports: [TPipe, RouterLink, ProvenanceBanner, OrderRowsTable],
   templateUrl: './order-reports-page.html',
   styleUrl: './order-reports-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -40,10 +40,12 @@
 .order-reports__export {
   margin-left: auto;
   padding: 6px 12px;
-  border: 1px dashed var(--q-ink-subtle);
+  border: 1px solid var(--q-primary);
+  border-radius: var(--q-radius);
   background: transparent;
-  color: var(--q-ink-subtle);
-  cursor: not-allowed;
+  color: var(--q-primary);
+  text-decoration: none;
+  cursor: pointer;
 }
 
 .order-reports__skeleton {

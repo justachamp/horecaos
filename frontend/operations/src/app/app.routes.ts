@@ -773,6 +773,16 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/reports/demand-forecast-page').then((m) => m.DemandForecastPage),
           },
+          // 7.2e (wave P28): the export centre — POST/GET .../reporting/exports
+          // under report.export, with the PII column group additionally
+          // gated on customer.pii.export. Only the customer directory report
+          // is wired server-side today; see `export-centre-page.ts`'s own
+          // doc for how a second report joins it.
+          {
+            path: 'exports',
+            loadComponent: () =>
+              import('./features/reports/export-centre-page').then((m) => m.ExportCentrePage),
+          },
         ],
       },
       // The product editor is a *sibling* of `catalog`, not one of its

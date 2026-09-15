@@ -17,14 +17,14 @@
         {{ tab.labelKey | t }}
       </button>
     }
-    <button
-      type="button"
+    <a
       class="order-reports__export"
-      disabled
-      [attr.title]="'reports.export.notBuilt' | t"
+      routerLink="/statistics/exports"
+      [attr.title]="'reports.export.hint' | t"
+      data-testid="order-reports-export-link"
     >
       {{ 'reports.export.button' | t }}
-    </button>
+    </a>
   </div>
 
   @switch (state()) {
