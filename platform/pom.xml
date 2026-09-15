@@ -19,6 +19,14 @@
 
     <properties>
         <horecaos.test.forks>4</horecaos.test.forks>
+        <!-- Extra JVM flags for every surefire fork, composed after JaCoCo's
+             javaagent flag below. Empty here so a developer machine keeps the
+             JVM's own defaults; CI passes an explicit heap and metaspace ceiling
+             per fork (see .github/workflows/ci.yml), because four forks each
+             defaulting to a quarter of the runner's memory exhausted it once the
+             suite passed ~4500 tests (2026-09-15: OutOfMemoryError: Metaspace in a
+             fork, then the job hung to its timeout and was reported cancelled). -->
+        <horecaos.test.jvmArgs></horecaos.test.jvmArgs>
         <java.version>25</java.version>
         <!-- ADR 0054. The coverage floor may only rise. Raise it when coverage
              rises; never lower it to admit a change. Measured 0.7879 line
@@ -440,7 +448,7 @@
                          resolution until surefire actually forks, which is what
                          lets JaCoCo's instrumentation compose with (rather than
                          be clobbered by) whatever else ends up in argLine. -->
-                    <argLine>@{argLine}</argLine>
+                    <argLine>@{argLine} ${horecaos.test.jvmArgs}</argLine>
                 </configuration>
             </plugin>
             <plugin>

@@ -77,7 +77,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.platform == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: platform
@@ -90,8 +90,15 @@ jobs:
           distribution: temurin
           cache: maven
 
+      - name: Runner resources
+        run: nproc && free -h && df -h / | tail -1
+
       - name: Verify
-        run: ./mvnw --batch-mode verify
+        # Two forks with an explicit ceiling each: the hosted runner's memory is
+        # the binding constraint, not its cores. Four forks defaulting to a
+        # quarter of RAM apiece ran the runner out of memory on 2026-09-15
+        # (OutOfMemoryError: Metaspace inside a fork, then a hang to the timeout).
+        run: ./mvnw --batch-mode verify -Dhorecaos.test.forks=2 "-Dhorecaos.test.jvmArgs=-Xmx1536m -XX:MaxMetaspaceSize=768m"
 
       - name: OpenAPI compatibility and generated TypeScript clients
         run: |
