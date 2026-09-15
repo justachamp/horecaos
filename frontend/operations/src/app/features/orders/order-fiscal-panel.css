@@ -1,0 +1,117 @@
+:host {
+  display: block;
+}
+
+.fiscal-panel__state,
+.fiscal-panel__note {
+  color: var(--q-ink-muted);
+  margin: 4px 0;
+}
+
+.fiscal-panel__notice {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.fiscal-panel__warning {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.fiscal-panel__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.fiscal-panel__table thead th {
+  text-align: left;
+  color: var(--q-ink-muted);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.fiscal-panel__table tbody td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-caption);
+}
+
+.fiscal-panel__actions {
+  text-align: right;
+}
+
+.fiscal-panel__link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--q-primary);
+  font-size: var(--q-type-body-sm);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.fiscal-panel__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0;
+  padding: 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.fiscal-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fiscal-panel__input {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+  font-size: var(--q-type-body-sm);
+}
+
+.fiscal-panel__error {
+  color: var(--q-error-text);
+}
+
+.fiscal-panel__form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.fiscal-panel__button {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.fiscal-panel__button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.fiscal-panel__button--secondary {
+  background: transparent;
+}

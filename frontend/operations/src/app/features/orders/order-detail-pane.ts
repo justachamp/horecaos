@@ -60,6 +60,7 @@ import {
 } from './order-detail';
 import { OrderDeliveryApi } from './order-delivery-api';
 import { describeApiError, mutationErrorNotice } from './order-errors';
+import { OrderFiscalPanel } from './order-fiscal-panel';
 import { OrderHandoverPanel } from './order-handover-panel';
 import { orderLifecycleSteps } from './order-lifecycle-steps';
 import { MoneyReconciliation, reconcileMoney } from './order-money';
@@ -75,6 +76,7 @@ import {
   deliveryExceptionReasonLabel,
 } from './order-outcome-labels';
 import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outcome-reason-dialog';
+import { OrderPaymentPanel } from './order-payment-panel';
 import {
   OrderRejectReasonDialog,
   OrderRejectSubmission,
@@ -133,8 +135,11 @@ type DialogKind =
  * the lines table, the money panel with its §1.3 reconciliation guard, the
  * customer and address panels behind their ADR 0029 reveal calls, and — as of
  * wave P10 — the §3.6 «Комментарии» block and its amendment history are
- * built. Оплата, Фискализация and Интеграции (§3.9/§3.11) still need tables
- * that do not exist yet (§11) and are not here. As of wave P11, all three
+ * built. Интеграции (§3.11) still needs a table that does not exist yet
+ * (§11) and is not here; Оплата and Фискализация (§3.9, row `1.2l`, wave
+ * P12) are — {@link OrderPaymentPanel} and {@link OrderFiscalPanel}, each
+ * reading its own endpoint rather than a field this record would otherwise
+ * have to grow. As of wave P11, all three
  * timeline lanes render: commercial (`GET .../timeline`'s `transitions`),
  * production (`kitchen.ticket_events`, joined by order id for the first time
  * outside a test) and delivery (`fulfillment.shipments`' own custody
@@ -154,6 +159,8 @@ type DialogKind =
     OrderRejectReasonDialog,
     OrderHandoverPanel,
     ExternalCourierDialog,
+    OrderPaymentPanel,
+    OrderFiscalPanel,
     Steps,
     Timeline,
     Combobox,

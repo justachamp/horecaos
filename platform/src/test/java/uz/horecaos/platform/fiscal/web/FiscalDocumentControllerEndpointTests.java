@@ -29,6 +29,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
+import uz.horecaos.platform.fiscal.domain.FiscalReasonCode;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.support.TestDatabase;
@@ -157,6 +158,45 @@ class FiscalDocumentControllerEndpointTests {
                 .contains("fiscal.document.read");
     }
 
+    /**
+     * Wave P12's own reason for existing: {@code FiscalApi.forOrder} (the
+     * frontend client for this endpoint) had no caller until this wave wired an
+     * order-detail fiscal panel to it, and the one document shape nothing on
+     * any screen could reach before that is exactly this one -- a document the
+     * provider answered and rejected, which never entered {@code BLOCKED} and
+     * therefore never appeared on the worklist {@code /documents/blocked}
+     * drives. {@code FAILED} still owes a receipt ({@link
+     * uz.horecaos.platform.fiscal.domain.FiscalDocumentState#owesAReceipt()}),
+     * but nothing chases it until a person notices -- and until this wave, no
+     * screen let a person notice it on this order at all.
+     */
+    @Test
+    void perOrderDocumentsSurfaceAFailedDocumentThatNeverReachedTheBlockedWorklist() throws Exception {
+        UUID orderId = seedOrder("F-104");
+        failedDocument(orderId, FiscalReasonCode.PROVIDER_REJECTED);
+
+        MvcResult perOrder = mvc.perform(get("/api/v1/tenants/" + TENANT + "/fiscal/orders/" + orderId + "/documents")
+                        .with(tokenFor(FINANCE)))
+                .andReturn();
+
+        assertThat(perOrder.getResponse().getStatus()).isEqualTo(200);
+        assertThat(perOrder.getResponse().getContentAsString())
+                .as("a FAILED document must be inspectable from the order's own fiscal read, "
+                        + "the one screen this wave adds it to")
+                .contains("\"status\":\"FAILED\"")
+                .contains("\"publicOrderNumber\":\"F-104\"");
+
+        MvcResult worklist = mvc.perform(get("/api/v1/tenants/" + TENANT + "/fiscal/documents/blocked")
+                        .with(tokenFor(FINANCE)))
+                .andReturn();
+
+        assertThat(worklist.getResponse().getStatus()).isEqualTo(200);
+        assertThat(worklist.getResponse().getContentAsString())
+                .as("FAILED is not BLOCKED -- the worklist the rest of this console reads from "
+                        + "never surfaces this document, which is the gap the order-detail panel closes")
+                .doesNotContain(orderId.toString());
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private void blockedDocument(UUID orderId, String reasonCode) {
@@ -175,6 +215,29 @@ class FiscalDocumentControllerEndpointTests {
                 .param("submittedAt", NOW.atOffset(ZoneOffset.UTC))
                 .param("blockedAt", NOW.plusSeconds(3600).atOffset(ZoneOffset.UTC))
                 .param("deadline", NOW.plusSeconds(3600).atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    /**
+     * A document the provider answered and rejected -- {@code FAILED}, not
+     * {@code BLOCKED}. No {@code blocked_at}: {@code ck_fiscal_document_blocked_at}
+     * only constrains the {@code BLOCKED} status, and a FAILED row was never
+     * blocked.
+     */
+    private void failedDocument(UUID orderId, String reasonCode) {
+        jdbc.sql("""
+                INSERT INTO fiscal.fiscal_documents (id, tenant_id, order_id, legal_entity_id,
+                    provider_type, document_type, status, reason_code, reason_note,
+                    submitted_at, created_at, updated_at)
+                VALUES (:id, :t, :o, :e, 'PAYME', 'SALE', 'FAILED', :reason,
+                    'provider answered with a non-zero status', :submittedAt, :submittedAt, :submittedAt)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", TENANT)
+                .param("o", orderId)
+                .param("e", ENTITY)
+                .param("reason", reasonCode)
+                .param("submittedAt", NOW.atOffset(ZoneOffset.UTC))
                 .update();
     }
 

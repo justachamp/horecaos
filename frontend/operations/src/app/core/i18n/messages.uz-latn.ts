@@ -474,6 +474,22 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.handover.bypassSupervisor': 'Supervayzer F.I.Sh.',
   'orders.detail.handover.bypassConfirm': 'Qoʻlda tasdiqlashni yakunlash',
 
+  'orders.detail.section.payment': 'Toʻlov',
+  'orders.detail.payment.error': 'Toʻlov maʼlumotlarini yuklab boʻlmadi',
+  'orders.detail.payment.denied': 'Toʻlov maʼlumotlariga kirish huquqi yoʻq',
+
+  'orders.detail.section.fiscal': 'Fiskal cheklar',
+  'orders.detail.fiscal.error': 'Fiskal hujjatlarni yuklab boʻlmadi',
+  'orders.detail.fiscal.denied': 'Fiskal hujjatlarga kirish huquqi yoʻq',
+  'orders.detail.fiscal.action.retry.result': 'Natija: {outcome}',
+  'orders.detail.fiscal.outcome.ISSUED': 'Chek chiqarildi',
+  'orders.detail.fiscal.outcome.ALREADY_ISSUED': 'Chek allaqachon mavjud edi',
+  'orders.detail.fiscal.outcome.REJECTED': 'Provayder soʻrovni rad etdi',
+  'orders.detail.fiscal.outcome.UNCERTAIN': 'Provayder javob bermadi',
+  'orders.detail.fiscal.outcome.NO_PROVIDER_PATH':
+    'Bu toʻlovni provayder orqali fiskallashtirib boʻlmaydi',
+  'orders.detail.fiscal.outcome.NOT_WIRED': 'Provayder ulanmagan',
+
   'orders.severity.blocked': 'aralashuv talab qilinadi',
   'orders.severity.approvalDeadline': '{mmss} ichida tasdiqlang',
   'orders.severity.noPromiseFallback': 'navbatda {duration}',
@@ -1606,6 +1622,13 @@ export const messagesUzLatn: MessageCatalogue = {
   'finance.paymentAttemptStatus.REVERSED': 'Qaytarilgan',
   'finance.paymentAttemptStatus.FAILED': 'Amalga oshmadi',
   'finance.paymentAttemptStatus.UNCERTAIN': 'Nomaʻlum — provayder javob bermadi',
+
+  'finance.fiscalDocumentStatus.NOT_APPLICABLE': 'Talab qilinmaydi',
+  'finance.fiscalDocumentStatus.PENDING': 'Kutilmoqda',
+  'finance.fiscalDocumentStatus.SUBMITTED': 'Yuborilgan',
+  'finance.fiscalDocumentStatus.ISSUED': 'Berilgan',
+  'finance.fiscalDocumentStatus.FAILED': 'Rad etilgan',
+  'finance.fiscalDocumentStatus.BLOCKED': 'Bloklangan',
 
   'finance.entitlementScope.SUBTOTAL': 'Buyurtma summasi',
   'finance.entitlementScope.DELIVERY_FEE': 'Yetkazib berish narxi',

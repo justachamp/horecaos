@@ -1,0 +1,211 @@
+<div class="payment-panel" data-testid="order-payment-panel">
+  @if (loading()) {
+    <p class="q-body-sm payment-panel__state">{{ 'finance.payments.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm payment-panel__state" data-testid="order-payment-denied">
+      {{ 'orders.detail.payment.denied' | t }}
+    </p>
+  } @else if (loadError()) {
+    <p class="q-body-sm payment-panel__state" data-testid="order-payment-error">
+      {{ 'orders.detail.payment.error' | t }}
+    </p>
+  } @else if (payment(); as order) {
+    @if (order.intent; as intent) {
+      <dl class="payment-panel__fields">
+        <div class="payment-panel__row">
+          <dt class="q-caption">{{ 'finance.payments.intent.tender' | t }}</dt>
+          <dd class="q-body-sm">{{ intent.tender }} · {{ intent.method }}</dd>
+        </div>
+        @if (intent.providerType) {
+          <div class="payment-panel__row">
+            <dt class="q-caption">{{ 'finance.payments.intent.provider' | t }}</dt>
+            <dd class="q-body-sm">{{ intent.providerType }}</dd>
+          </div>
+        }
+        <div class="payment-panel__row">
+          <dt class="q-caption">{{ 'finance.payments.intent.amount' | t }}</dt>
+          <dd class="q-body-sm q-mono">{{ money(intent.amount) }}</dd>
+        </div>
+        <div class="payment-panel__row">
+          <dt class="q-caption">{{ 'finance.payments.intent.status' | t }}</dt>
+          <dd class="q-body-sm" data-testid="order-payment-intent-status">
+            <span class="status-badge">{{ intentStatusLabel(intent.status) }}</span>
+          </dd>
+        </div>
+        <div class="payment-panel__row">
+          <dt class="q-caption">{{ 'finance.payments.captured' | t }}</dt>
+          <dd class="q-body-sm q-mono">{{ money(order.captured) }}</dd>
+        </div>
+        <div class="payment-panel__row">
+          <dt class="q-caption">{{ 'finance.payments.returned' | t }}</dt>
+          <dd class="q-body-sm q-mono">{{ money(order.returned) }}</dd>
+        </div>
+      </dl>
+    } @else {
+      <p class="q-body-sm payment-panel__note" data-testid="order-payment-no-intent">
+        {{ 'finance.payments.intent.none' | t }}
+      </p>
+    }
+
+    <h3 class="q-emphasis payment-panel__subtitle">{{ 'finance.payments.tenders.title' | t }}</h3>
+    @if (order.payment.length > 0) {
+      <table class="payment-panel__table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'finance.payments.tenders.sequence' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.tenders.method' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.tenders.amount' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.tenders.status' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.tenders.refunded' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (tender of order.payment; track tender.tenderId) {
+            <tr data-testid="order-payment-tender-row">
+              <td class="q-body-sm q-mono">{{ tender.sequence }}</td>
+              <td class="q-body-sm">{{ tender.methodDisplayName }}</td>
+              <td class="q-body-sm q-mono">{{ money(tender.amount) }}</td>
+              <td class="q-body-sm">
+                <span class="status-badge" data-testid="order-payment-tender-status">{{
+                  tenderStatusLabel(tender.status)
+                }}</span>
+              </td>
+              <td class="q-body-sm q-mono">{{ money(tender.refunded) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    } @else {
+      <p class="q-body-sm payment-panel__note" data-testid="order-payment-tenders-empty">
+        {{ 'finance.payments.tenders.empty' | t }}
+      </p>
+    }
+
+    @if (order.intent && order.attempts.length > 0) {
+      <table class="payment-panel__table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'finance.payments.attempts.provider' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.attempts.status' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.attempts.presentation' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.attempts.amount' | t }}</th>
+            <th class="q-caption">{{ 'finance.payments.attempts.createdAt' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (attempt of order.attempts; track attempt.attemptId) {
+            <tr data-testid="order-payment-attempt-row">
+              <td class="q-body-sm">{{ attempt.providerType }}</td>
+              <td class="q-body-sm">
+                <span class="status-badge" data-testid="order-payment-attempt-status">{{
+                  attemptStatusLabel(attempt.status)
+                }}</span>
+              </td>
+              <td class="q-body-sm">{{ attempt.presentationKind ?? '—' }}</td>
+              <td class="q-body-sm q-mono">{{ money(attempt.amount) }}</td>
+              <td class="q-body-sm">{{ timestamp(attempt.createdAt) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+
+    @if (order.intent?.tender === 'PROVIDER') {
+      <div class="payment-panel__toolbar">
+        <button
+          type="button"
+          class="payment-panel__link"
+          (click)="toggleReissueForm()"
+          data-testid="order-payment-reissue-toggle"
+        >
+          {{ 'finance.payments.reissue.action' | t }}
+        </button>
+      </div>
+      @if (showReissueForm()) {
+        <div class="payment-panel__form" data-testid="order-payment-reissue-form">
+          <label class="payment-panel__field">
+            <span class="q-body-sm">{{ 'finance.payments.reissue.kind.label' | t }}</span>
+            <select
+              class="payment-panel__input"
+              [value]="reissueKind()"
+              (change)="reissueKind.set($any($event.target).value)"
+              data-testid="order-payment-reissue-kind"
+            >
+              <option value="PAYMENT_LINK">{{ 'finance.payments.reissue.kind.link' | t }}</option>
+              <option value="INVOICE_PUSH">{{ 'finance.payments.reissue.kind.push' | t }}</option>
+            </select>
+          </label>
+
+          @if (reissueKind() === 'INVOICE_PUSH') {
+            <label class="payment-panel__field">
+              <span class="q-body-sm">{{ 'finance.payments.reissue.phone.label' | t }}</span>
+              <input
+                type="text"
+                class="payment-panel__input"
+                [value]="reissuePhone()"
+                (input)="reissuePhone.set($any($event.target).value)"
+                [placeholder]="'finance.payments.reissue.phone.placeholder' | t"
+                data-testid="order-payment-reissue-phone"
+              />
+            </label>
+          }
+
+          @if (reissueError(); as message) {
+            <p
+              class="q-body-sm payment-panel__error"
+              role="alert"
+              data-testid="order-payment-reissue-error"
+            >
+              {{ message }}
+            </p>
+          }
+          @if (reissueResult(); as result) {
+            <p
+              class="q-body-sm payment-panel__notice"
+              role="status"
+              data-testid="order-payment-reissue-result"
+            >
+              {{
+                result.checkoutUrl
+                  ? ('finance.payments.reissue.result.link' | t: { url: result.checkoutUrl })
+                  : ('finance.payments.reissue.result.push' | t)
+              }}
+            </p>
+            @if (result.qrPayload) {
+              <q-qr-code
+                [value]="result.qrPayload"
+                [size]="160"
+                [label]="'finance.payments.reissue.result.qrLabel' | t"
+                data-testid="order-payment-reissue-qr"
+              />
+            }
+          }
+
+          <div class="payment-panel__form-actions">
+            <button
+              type="button"
+              class="payment-panel__button payment-panel__button--secondary"
+              (click)="showReissueForm.set(false)"
+              [disabled]="reissueSubmitting()"
+            >
+              {{ 'finance.payments.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              class="payment-panel__button"
+              [disabled]="!canReissue()"
+              (click)="submitReissue()"
+              data-testid="order-payment-reissue-submit"
+            >
+              {{
+                reissueSubmitting()
+                  ? ('finance.payments.reissue.submitting' | t)
+                  : ('finance.payments.reissue.submit' | t)
+              }}
+            </button>
+          </div>
+        </div>
+      }
+    }
+  }
+</div>

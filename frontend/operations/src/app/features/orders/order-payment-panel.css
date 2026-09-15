@@ -1,0 +1,128 @@
+:host {
+  display: block;
+}
+
+.payment-panel__state,
+.payment-panel__note {
+  color: var(--q-ink-muted);
+  margin: 4px 0;
+}
+
+.payment-panel__fields {
+  margin: 0 0 12px;
+}
+
+.payment-panel__row {
+  margin-bottom: 8px;
+}
+
+.payment-panel__row dt {
+  color: var(--q-ink-subtle);
+}
+
+.payment-panel__row dd {
+  margin: 2px 0 0;
+}
+
+.payment-panel__subtitle {
+  margin: 12px 0 6px;
+}
+
+.payment-panel__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+}
+
+.payment-panel__table thead th {
+  text-align: left;
+  color: var(--q-ink-muted);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.payment-panel__table tbody td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-caption);
+}
+
+.payment-panel__toolbar {
+  margin-top: 4px;
+}
+
+.payment-panel__link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--q-primary);
+  font-size: var(--q-type-body-sm);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.payment-panel__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.payment-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.payment-panel__input {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+  font-size: var(--q-type-body-sm);
+}
+
+.payment-panel__error {
+  color: var(--q-error-text);
+}
+
+.payment-panel__notice {
+  color: var(--q-success-text);
+}
+
+.payment-panel__form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.payment-panel__button {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.payment-panel__button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.payment-panel__button--secondary {
+  background: transparent;
+}
