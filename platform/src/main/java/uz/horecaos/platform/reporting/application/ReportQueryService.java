@@ -3,6 +3,7 @@ package uz.horecaos.platform.reporting.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -81,6 +82,20 @@ public class ReportQueryService {
             }
         }
 
+        // T13 (7.6a): revenue.new_vs_returning.v1 is sourced from fact_order
+        // directly, never agg_branch_day — a different physical read that
+        // cannot share a slice with every other metric here, so it is
+        // refused rather than silently dropped or silently answered alone.
+        boolean anyCustomerTypeGrain =
+                metrics.stream().anyMatch(metric -> metric.grain() == Grain.DAY_LOCATION_LEGAL_ENTITY_CUSTOMER_TYPE);
+        if (anyCustomerTypeGrain) {
+            if (metrics.size() > 1) {
+                throw new ReportingRefusals.MixedCustomerTypeGrainException(
+                        metrics.stream().map(metric -> metric.id().code()).toList());
+            }
+            return runCustomerTypeQuery(query, metrics.getFirst());
+        }
+
         BusinessDayBoundary boundary = businessDays.boundaryFor(query.tenantId());
         refuseMixedBoundaryRegime(query.tenantId(), query.from(), query.to());
 
@@ -113,6 +128,263 @@ public class ReportQueryService {
 
         return new ReportResult(resultRows, provenance(query.tenantId(), metrics, boundary));
     }
+
+    /**
+     * T13 (7.6a): {@code revenue.new_vs_returning.v1} — the one {@code
+     * /queries} metric sourced from {@code reporting.fact_order} directly.
+     * {@link #run} branches here before touching {@code agg_branch_day} at
+     * all, mirroring that method's own shape (boundary refusal, entity-total
+     * refusal, slice/bucket fold) over {@link JdbcReportingStore.CustomerTypeDayAggregate}
+     * instead of {@code BranchDayAggregate}.
+     */
+    private ReportResult runCustomerTypeQuery(ReportQuery query, MetricDefinition metric) {
+        BusinessDayBoundary boundary = businessDays.boundaryFor(query.tenantId());
+        refuseMixedBoundaryRegime(query.tenantId(), query.from(), query.to());
+
+        List<JdbcReportingStore.CustomerTypeDayAggregate> rows = store.readCustomerTypeRevenue(
+                query.tenantId(),
+                query.from(),
+                query.to(),
+                query.locationIds(),
+                query.legalEntityIds(),
+                query.channelCodes());
+
+        if (metric.isMoney() && !query.groupsByLegalEntity()) {
+            Set<UUID> entities = new HashSet<>();
+            rows.forEach(row -> entities.add(row.legalEntityId()));
+            if (entities.size() > 1) {
+                throw new ReportingRefusals.CombinedEntityTotalException(
+                        List.of(metric.id().code()), entities.size());
+            }
+        }
+
+        Map<Slice, Long> bySlice = new LinkedHashMap<>();
+        for (JdbcReportingStore.CustomerTypeDayAggregate row : rows) {
+            bySlice.merge(customerTypeSliceOf(query, row), row.grossSom(), Long::sum);
+        }
+
+        List<ReportRow> resultRows = new ArrayList<>(bySlice.size());
+        bySlice.forEach((slice, grossSom) ->
+                resultRows.add(new ReportRow(slice, Map.of(metric.id().code(), grossSom))));
+        resultRows.sort(Comparator.comparing(row -> row.slice().sortKey()));
+
+        return new ReportResult(resultRows, provenance(query.tenantId(), List.of(metric), boundary));
+    }
+
+    /**
+     * T13 (7.6): the KPI-tile figures — one folded read over the whole
+     * requested range (never a day-grain breakdown; a tile shows one number
+     * for its period). {@code customers.ltv.v1} is not here: it is
+     * registered {@code sourceAvailable = false} and this method answers
+     * only the six the registry declares built.
+     */
+    @Transactional(readOnly = true)
+    public CustomerKpiResult customerKpis(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<UUID> legalEntityIds) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        JdbcReportingStore.CustomerKpiRow row = store.readCustomerKpis(tenantId, from, to, locationIds, legalEntityIds);
+
+        // customers.value.v1 is money (ADR 0038): refused rather than folded
+        // across more than one legal entity when the caller did not narrow
+        // to one, the same rule /queries applies to every money metric.
+        if (legalEntityIds.isEmpty() && row.legalEntityCount() > 1) {
+            throw new ReportingRefusals.CombinedEntityTotalException(
+                    List.of("customers.value.v1"), row.legalEntityCount());
+        }
+
+        Long repeatShareBasisPoints = row.distinctCustomers() == 0
+                ? null
+                : Math.round(10_000.0 * (row.distinctCustomers() - row.newCustomers()) / row.distinctCustomers());
+        Double orderFrequency =
+                row.distinctCustomers() == 0 ? null : (double) row.orderCount() / row.distinctCustomers();
+        Long customerValueSom =
+                row.distinctCustomers() == 0 ? null : Math.round((double) row.netSom() / row.distinctCustomers());
+        Double basketDepth = row.orderCount() == 0 ? null : (double) row.itemCountSum() / row.orderCount();
+
+        List<MetricDefinition> metrics = List.of(
+                MetricRegistry.require("customers.new.v1"),
+                MetricRegistry.require("customers.distinct.v1"),
+                MetricRegistry.require("customers.repeat_share.v1"),
+                MetricRegistry.require("customers.order_frequency.v1"),
+                MetricRegistry.require("customers.value.v1"),
+                MetricRegistry.require("customers.basket_depth.v1"));
+
+        return new CustomerKpiResult(
+                row.newCustomers(),
+                row.distinctCustomers(),
+                repeatShareBasisPoints,
+                orderFrequency,
+                customerValueSom,
+                basketDepth,
+                provenance(tenantId, metrics, businessDays.boundaryFor(tenantId)));
+    }
+
+    public record CustomerKpiResult(
+            int newCustomers,
+            int distinctCustomers,
+            @Nullable Long repeatShareBasisPoints,
+            @Nullable Double orderFrequency,
+            @Nullable Long customerValueSom,
+            @Nullable Double basketDepth,
+            Provenance provenance) {}
+
+    /** How many months {@link #customerCohorts} tracks cohort formation and retention over, in one call. */
+    public static final int COHORT_WINDOW_MONTHS = 12;
+
+    /**
+     * T13 (7.6a): the cohort/retention grid. Refuses a range wider than
+     * {@link #COHORT_WINDOW_MONTHS} rather than silently truncating
+     * retention for the earliest cohorts in a wider request.
+     */
+    @Transactional(readOnly = true)
+    public CohortResult customerCohorts(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        validateRange(from, to);
+        int spanMonths = (int) (ChronoUnit.MONTHS.between(from.withDayOfMonth(1), to.withDayOfMonth(1)) + 1);
+        if (spanMonths > COHORT_WINDOW_MONTHS) {
+            throw new ReportingRefusals.CohortRangeTooWideException(spanMonths, COHORT_WINDOW_MONTHS);
+        }
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        List<JdbcReportingStore.CohortCell> cells = store.readCustomerCohorts(tenantId, from, to, locationIds);
+
+        Map<LocalDate, Map<LocalDate, Integer>> byCohort = new LinkedHashMap<>();
+        Map<LocalDate, Integer> cohortSizes = new LinkedHashMap<>();
+        for (JdbcReportingStore.CohortCell cell : cells) {
+            byCohort.computeIfAbsent(cell.cohortMonth(), ignored -> new LinkedHashMap<>())
+                    .put(cell.orderMonth(), cell.customerCount());
+            if (cell.orderMonth().equals(cell.cohortMonth())) {
+                cohortSizes.put(cell.cohortMonth(), cell.customerCount());
+            }
+        }
+
+        List<Cohort> cohorts = new ArrayList<>(byCohort.size());
+        byCohort.forEach((cohortMonth, byOrderMonth) -> {
+            int size = cohortSizes.getOrDefault(cohortMonth, 0);
+            List<RetentionPoint> points = new ArrayList<>();
+            byOrderMonth.forEach((orderMonth, count) -> {
+                int offset = (int) ChronoUnit.MONTHS.between(cohortMonth, orderMonth);
+                Long retainedBasisPoints = size == 0 ? null : Math.round(10_000.0 * count / size);
+                points.add(new RetentionPoint(offset, orderMonth, count, retainedBasisPoints));
+            });
+            points.sort(Comparator.comparingInt(RetentionPoint::monthOffset));
+            cohorts.add(new Cohort(cohortMonth, size, points));
+        });
+        cohorts.sort(Comparator.comparing(Cohort::cohortMonth));
+
+        return new CohortResult(
+                cohorts, COHORT_WINDOW_MONTHS, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    /**
+     * One cohort's retention curve.
+     *
+     * @param size the cohort's own member count — {@code monthOffset = 0}'s
+     *             {@code customerCount}, restated here so a caller never
+     *             recomputes it from {@code points}
+     */
+    public record Cohort(LocalDate cohortMonth, int size, List<RetentionPoint> points) {}
+
+    /**
+     * @param retainedBasisPoints null when the cohort's size is zero —
+     *                            never a zero that would read as "nobody
+     *                            came back" rather than "there is no cohort"
+     */
+    public record RetentionPoint(
+            int monthOffset,
+            LocalDate orderMonth,
+            int customerCount,
+            @Nullable Long retainedBasisPoints) {}
+
+    public record CohortResult(List<Cohort> cohorts, int windowMonths, Provenance provenance) {}
+
+    /**
+     * T13 (7.6b): platform-fixed Frequency bands — never tenant-configurable,
+     * the same rule {@code SlaBucketSet} already applies to elapsed-time
+     * buckets: an editable band would rewrite every grid already drawn and
+     * nothing would record that it happened.
+     */
+    public enum FrequencyBand {
+        F1_SINGLE,
+        F2_FEW,
+        F3_FREQUENT;
+
+        static FrequencyBand of(int orderCount) {
+            if (orderCount <= 1) {
+                return F1_SINGLE;
+            }
+            return orderCount <= 3 ? F2_FEW : F3_FREQUENT;
+        }
+    }
+
+    /** T13 (7.6b): platform-fixed Recency bands, in days before the range's own {@code to}. */
+    public enum RecencyBand {
+        R1_RECENT,
+        R2_LAPSING,
+        R3_AT_RISK;
+
+        static RecencyBand of(long daysSinceLastOrder) {
+            if (daysSinceLastOrder <= 6) {
+                return R1_RECENT;
+            }
+            return daysSinceLastOrder <= 29 ? R2_LAPSING : R3_AT_RISK;
+        }
+    }
+
+    /**
+     * T13 (7.6b): the R×F cross-tab — cells with member counts and revenue,
+     * distinct from 5.3's segment builder. Monetary is a cell value here,
+     * never a third bucketed axis: the row's own brief calls this "R×F", not
+     * a three-axis RFM cube.
+     */
+    @Transactional(readOnly = true)
+    public RfmResult customerRfm(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<UUID> legalEntityIds) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        List<JdbcReportingStore.CustomerRfmRow> inputs =
+                store.readCustomerRfmInputs(tenantId, from, to, locationIds, legalEntityIds);
+
+        Map<RfmCellKey, RfmAccumulator> byCell = new LinkedHashMap<>();
+        for (JdbcReportingStore.CustomerRfmRow input : inputs) {
+            long daysSinceLastOrder = ChronoUnit.DAYS.between(input.lastOrderDate(), to);
+            RfmCellKey key = new RfmCellKey(RecencyBand.of(daysSinceLastOrder), FrequencyBand.of(input.orderCount()));
+            byCell.computeIfAbsent(key, ignored -> new RfmAccumulator()).add(input.netSom());
+        }
+
+        List<RfmCell> cells = new ArrayList<>();
+        for (RecencyBand recency : RecencyBand.values()) {
+            for (FrequencyBand frequency : FrequencyBand.values()) {
+                RfmAccumulator accumulator = byCell.get(new RfmCellKey(recency, frequency));
+                cells.add(new RfmCell(
+                        recency,
+                        frequency,
+                        accumulator == null ? 0 : accumulator.memberCount,
+                        accumulator == null ? 0L : accumulator.revenueSom));
+            }
+        }
+
+        return new RfmResult(cells, inputs.size(), provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    private record RfmCellKey(RecencyBand recency, FrequencyBand frequency) {}
+
+    private static final class RfmAccumulator {
+        private int memberCount;
+        private long revenueSom;
+
+        void add(long netSom) {
+            memberCount++;
+            revenueSom += netSom;
+        }
+    }
+
+    /** One (Recency band, Frequency band) cell of {@link #customerRfm}. */
+    public record RfmCell(RecencyBand recency, FrequencyBand frequency, int memberCount, long revenueSom) {}
+
+    public record RfmResult(List<RfmCell> cells, int totalCustomers, Provenance provenance) {}
 
     /**
      * The fixed SLA distribution, which is several rows per slice rather than
@@ -917,7 +1189,21 @@ public class ReportQueryService {
                 query.groupBy().contains(Grain.Dimension.FULFILMENT_TYPE)
                         ? row.key().fulfilmentType()
                         : null,
-                query.groupsByLegalEntity() ? row.key().legalEntityId() : null);
+                query.groupsByLegalEntity() ? row.key().legalEntityId() : null,
+                null);
+    }
+
+    /** T13 (7.6a): {@link #runCustomerTypeQuery}'s own slice key — customer type replaces channel/fulfilment. */
+    private static Slice customerTypeSliceOf(ReportQuery query, JdbcReportingStore.CustomerTypeDayAggregate row) {
+        return new Slice(
+                row.businessDate(),
+                query.groupBy().contains(Grain.Dimension.LOCATION) ? row.locationId() : null,
+                null,
+                null,
+                query.groupsByLegalEntity() ? row.legalEntityId() : null,
+                query.groupBy().contains(Grain.Dimension.CUSTOMER_TYPE)
+                        ? (row.isFirstOrder() ? "NEW" : "RETURNING")
+                        : null);
     }
 
     private Provenance provenance(UUID tenantId, List<MetricDefinition> metrics, BusinessDayBoundary boundary) {
@@ -945,16 +1231,25 @@ public class ReportQueryService {
                 store.readOpenDivergences(tenantId).size());
     }
 
-    /** One row's dimension values. Any of them null means "not grouped by". */
+    /**
+     * One row's dimension values. Any of them null means "not grouped by".
+     *
+     * @param customerType T13 (7.6a): {@code "NEW"} or {@code "RETURNING"},
+     *                     set only on a row from {@link #run}'s
+     *                     customer-type-grain branch — every other caller
+     *                     leaves it null, same as an ungrouped dimension.
+     */
     public record Slice(
             LocalDate businessDate,
             @Nullable UUID locationId,
             @Nullable String channelCode,
             @Nullable String fulfilmentType,
-            @Nullable UUID legalEntityId) {
+            @Nullable UUID legalEntityId,
+            @Nullable String customerType) {
 
         String sortKey() {
-            return "%s|%s|%s|%s|%s".formatted(businessDate, locationId, channelCode, fulfilmentType, legalEntityId);
+            return "%s|%s|%s|%s|%s|%s"
+                    .formatted(businessDate, locationId, channelCode, fulfilmentType, legalEntityId, customerType);
         }
     }
 

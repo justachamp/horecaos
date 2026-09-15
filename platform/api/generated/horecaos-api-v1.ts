@@ -1280,6 +1280,18 @@ export interface CoarseCourier {
   reason?: string;
 }
 
+export interface CohortListResponse {
+  cohorts?: Array<CohortResponse>;
+  provenance?: ProvenanceResponse;
+  windowMonths?: number;
+}
+
+export interface CohortResponse {
+  cohortMonth?: string;
+  points?: Array<RetentionPointResponse>;
+  size?: number;
+}
+
 export interface CommercialAdminControllerAdjustmentRequest {
   approvedBy: string;
   entitlementKey: string;
@@ -2086,6 +2098,16 @@ export interface CustomerImportSubmitResponse {
   rowsTotal?: number;
   runId?: string;
   status?: string;
+}
+
+export interface CustomerKpiResponse {
+  basketDepth?: number;
+  customerValueSom?: number;
+  distinctCustomers?: number;
+  newCustomers?: number;
+  orderFrequency?: number;
+  provenance?: ProvenanceResponse;
+  repeatShareBasisPoints?: number;
 }
 
 export interface CustomerLookupCandidateResponse {
@@ -5945,6 +5967,13 @@ export interface ResumeScopeRequest {
   reason: string;
 }
 
+export interface RetentionPointResponse {
+  customerCount?: number;
+  monthOffset?: number;
+  orderMonth?: string;
+  retainedBasisPoints?: number;
+}
+
 export interface RetentionRule {
   code?: string;
   enforcedBy?: string;
@@ -6070,6 +6099,19 @@ export interface RevokeRequest {
 
 export interface RevokeResponse {
   changed?: boolean;
+}
+
+export interface RfmCellResponse {
+  frequencyBand?: string;
+  memberCount?: number;
+  recencyBand?: string;
+  revenueSom?: number;
+}
+
+export interface RfmGridResponse {
+  cells?: Array<RfmCellResponse>;
+  provenance?: ProvenanceResponse;
+  totalCustomers?: number;
 }
 
 export interface RoleDescriptor {
@@ -8613,6 +8655,9 @@ export interface Operations {
   "leaderboard": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/couriers/leaderboard"; request: { parameters: { path: { tenantId: string }; query: { from: string; to: string } } }; responses: { "200": LeaderboardResponse } };
   "slaBuckets_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/couriers/sla-buckets"; request: { parameters: { path: { tenantId: string }; query: { from: string; to: string } } }; responses: { "200": CourierSlaResponse } };
   "tariffAudit": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/couriers/tariff-audit"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": TariffAuditResponse } };
+  "customerCohorts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/customer-cohorts"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": CohortListResponse } };
+  "customerKpis": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/customer-kpis"; request: { parameters: { path: { tenantId: string }; query: { from: string; legalEntityId?: Array<string>; locationId?: Array<string>; to: string } } }; responses: { "200": CustomerKpiResponse } };
+  "customerRfm": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/customer-rfm"; request: { parameters: { path: { tenantId: string }; query: { from: string; legalEntityId?: Array<string>; locationId?: Array<string>; to: string } } }; responses: { "200": RfmGridResponse } };
   "demandHistory": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/demand-history"; request: { parameters: { path: { tenantId: string }; query: { locationId: string; sampleSize?: number; weekday: number } } }; responses: { "200": DemandHistoryResponse } };
   "recentExports": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/exports"; request: { parameters: { path: { tenantId: string }; query: { limit?: number } } }; responses: { "200": Array<ReportExportStatusResponse> } };
   "requestExport": { method: "POST"; path: "/api/v1/tenants/{tenantId}/reporting/exports"; request: { parameters: { path: { tenantId: string } }; body: ReportExportRequest }; responses: { "200": ReportExportQueuedResponse } };

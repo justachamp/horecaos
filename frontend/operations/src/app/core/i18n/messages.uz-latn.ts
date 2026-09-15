@@ -4325,6 +4325,47 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.products.abcXyzNotBuilt':
     'ABC va XYZ tasnifi hali yaratilmagan: reportingʻda classification_run jadvali va roʻyxatga olingan metrika yoʻq (ADR 0043).',
 
+  // ---------------------------------------------------------------- reports 7.6/7.6a/7.6b customer analytics (T13)
+  'reports.customers.title': 'Mijozlar tahlili',
+  'reports.customers.loading': 'Yuklanmoqda…',
+  'reports.customers.kpi.title': 'Shu davr uchun',
+  'reports.customers.kpi.newCustomers': 'Yangi mijozlar',
+  'reports.customers.kpi.distinctCustomers': 'Buyurtma bergan mijozlar',
+  'reports.customers.kpi.repeatShare': 'Qaytganlar ulushi',
+  'reports.customers.kpi.orderFrequency': 'Mijozga buyurtmalar',
+  'reports.customers.kpi.customerValue': 'Mijoz qiymati',
+  'reports.customers.kpi.basketDepth': 'Buyurtmadagi pozitsiyalar',
+  'reports.customers.kpi.ltvTitle': 'Umrbod qiymat',
+  'reports.customers.kpi.ltvNotBuilt':
+    'Hali yaratilmagan: mijozning umrbod tarixi jadvali yoʻq. Soʻrov davri chegarasida jim toʻxtaydigan raqam oʻrniga, plitka buni ochiq aytadi.',
+  'reports.customers.newVsReturning.title': 'Tushum: yangi va qaytgan mijozlar',
+  'reports.customers.newVsReturning.new': 'Yangi mijozlar',
+  'reports.customers.newVsReturning.returning': 'Qaytgan mijozlar',
+  'reports.customers.newVsReturning.share': 'Tushumdagi ulush',
+  'reports.customers.newVsReturning.empty':
+    'Shu davrda mijozi maʻlum boʻlgan yakunlangan buyurtma yoʻq.',
+  'reports.customers.cohorts.title': 'Kohortalar va ushlab qolish',
+  'reports.customers.cohorts.intro':
+    'Birinchi buyurtmasi shu oraliqqa toʻgʻri kelgan har bir mijoz oʻsha oyga guruhlangan, va har bir kohortaning keyingi har bir oyda qayta buyurtma bergan ulushi.',
+  'reports.customers.cohorts.empty': 'Shu oraliqda birorta kohorta boshlanmagan.',
+  'reports.customers.cohorts.column.cohort': 'Kohorta',
+  'reports.customers.cohorts.column.size': 'Aʻzolar',
+  'reports.customers.cohorts.monthOffset': 'O+{offset}',
+  'reports.customers.cohorts.rangeTooWide':
+    'Bu oraliq bitta ushlab qolish oʻqishi kuzatadigan oylardan kengroq — uni 12 oy yoki kamroqqacha torayting.',
+  'reports.customers.rfm.title': 'RFM: soʻnggi marta × chastota',
+  'reports.customers.rfm.intro':
+    'Chegaralar platforma tomonidan belgilangan, tenant sozlay olmaydi. Bu «Mijozlar» segment konstruktoridan farq qiladi: u yerda bitta segment oʻlchanadi, bu yerda esa qaysi katakka eʻtibor qaratish kerakligini bilish uchun butun setka oʻqiladi.',
+  'reports.customers.rfm.totalCustomers': 'Bu setkada {count} mijoz',
+  'reports.customers.rfm.column.members': 'Aʻzolar',
+  'reports.customers.rfm.column.revenue': 'Tushum',
+  'reports.customers.rfm.recency.R1_RECENT': 'Yaqinda (0–6 kun)',
+  'reports.customers.rfm.recency.R2_LAPSING': 'Sovib bormoqda (7–29 kun)',
+  'reports.customers.rfm.recency.R3_AT_RISK': 'Xavf ostida (30+ kun)',
+  'reports.customers.rfm.frequency.F1_SINGLE': '1 ta buyurtma',
+  'reports.customers.rfm.frequency.F2_FEW': '2–3 ta buyurtma',
+  'reports.customers.rfm.frequency.F3_FREQUENT': '4+ buyurtma',
+
   // ---------------------------------------------------------------- reports 7.5/7.5a/7.5b staff (T12)
   'reports.staff.title': 'Xodimlar boʻyicha hisobotlar',
   'reports.staff.loading': 'Yuklanmoqda…',

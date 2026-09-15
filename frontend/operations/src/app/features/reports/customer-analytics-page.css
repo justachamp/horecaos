@@ -1,0 +1,187 @@
+.customers {
+  padding: 24px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.denied {
+  color: var(--q-ink-muted);
+}
+
+.error-band {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--q-error-tint);
+  border-radius: var(--q-radius);
+}
+
+.secondary {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ltv-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 28px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+}
+
+.ltv-note__title {
+  font-weight: 600;
+}
+
+.ltv-note__text {
+  color: var(--q-ink-muted);
+}
+
+.ltv-note__formula {
+  flex-basis: 100%;
+  color: var(--q-ink-muted);
+}
+
+.band {
+  margin-bottom: 28px;
+}
+
+.band-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.formula-note {
+  color: var(--q-ink-muted);
+}
+
+.intro {
+  color: var(--q-ink-muted);
+  margin: 4px 0 12px;
+  max-width: 68ch;
+}
+
+.empty {
+  color: var(--q-ink-subtle);
+  padding: 12px 0;
+}
+
+/* 7.6a: new vs. returning revenue split bars */
+.split-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.split-bar {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.split-bar__label {
+  color: var(--q-ink-muted);
+}
+
+.split-bar__track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--q-surface-1);
+  overflow: hidden;
+}
+
+.split-bar__fill {
+  height: 100%;
+  background: var(--q-primary);
+  border-radius: 999px;
+}
+
+.split-bar__fill--returning {
+  background: var(--q-ink-subtle);
+}
+
+.split-bar__value {
+  white-space: nowrap;
+}
+
+/* Shared table look, matching product-analytics-page.css */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.table thead th {
+  text-align: left;
+  color: var(--q-ink-muted);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.num {
+  text-align: right;
+}
+
+.cohort-sizes {
+  max-width: 320px;
+}
+
+/* 7.6b: RFM grid */
+.rfm-grid {
+  max-width: 560px;
+}
+
+.row-header {
+  text-align: left;
+  color: var(--q-ink-muted);
+  white-space: nowrap;
+}
+
+.rfm-cell {
+  min-width: 100px;
+}
+
+.rfm-cell__members {
+  font-weight: 600;
+}
+
+.rfm-cell__revenue {
+  color: var(--q-ink-muted);
+}
+
+.rfm-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 6px;
+  color: var(--q-ink-muted);
+}

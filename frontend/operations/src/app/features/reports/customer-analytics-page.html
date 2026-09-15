@@ -1,0 +1,157 @@
+<div class="customers">
+  <div class="header">
+    <h1 class="q-title">{{ 'reports.customers.title' | t }}</h1>
+    <q-provenance-banner [provenance]="provenance()" [requestedTo]="requestedTo()" />
+  </div>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'reports.customers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'reports.denied.notGranted' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <!-- 7.6: six KPI tiles, each carrying statistics.md §1.2's "?" formula panel -->
+      <h2 class="q-subhead">{{ 'reports.customers.kpi.title' | t }}</h2>
+      <div class="tiles">
+        @for (tile of tiles(); track tile.key) {
+          <q-kpi-tile
+            [label]="tile.labelKey | t"
+            [value]="tile.value"
+            [formula]="tile.formula"
+            [formulaAriaLabel]="'reports.overview.formula.ariaLabel' | t"
+            [formulaIncludesLabel]="'reports.overview.formula.includes' | t"
+            [formulaExcludesLabel]="'reports.overview.formula.excludes' | t"
+            [formulaUnitLabel]="'reports.overview.formula.unit' | t"
+          />
+        }
+      </div>
+
+      <!-- LTV is registered but not built: named once, never a number that quietly stops at the query range -->
+      <div class="ltv-note">
+        <span class="q-body-sm ltv-note__title">{{ 'reports.customers.kpi.ltvTitle' | t }}</span>
+        <span class="q-body-sm ltv-note__text">{{ 'reports.customers.kpi.ltvNotBuilt' | t }}</span>
+        @if (ltvFormula(); as formula) {
+          <details class="ltv-note__formula">
+            <summary class="q-caption">{{ 'reports.overview.formula.ariaLabel' | t }}</summary>
+            <p class="q-caption">{{ formula.definition }}</p>
+          </details>
+        }
+      </div>
+
+      <!-- 7.6a: new-vs-returning revenue, revenue.new_vs_returning.v1 through GET .../queries -->
+      <section class="band">
+        <div class="band-header">
+          <h2 class="q-subhead">{{ 'reports.customers.newVsReturning.title' | t }}</h2>
+          @if (newVsReturningFormula(); as formula) {
+            <details class="formula-note">
+              <summary class="q-caption">{{ 'reports.overview.formula.ariaLabel' | t }}</summary>
+              <p class="q-caption">{{ formula.definition }}</p>
+            </details>
+          }
+        </div>
+        @if (customerTypeTotal() === 0) {
+          <p class="q-body-sm empty">{{ 'reports.customers.newVsReturning.empty' | t }}</p>
+        } @else {
+          <div class="split-bars">
+            @for (row of customerTypeTiles(); track row.key) {
+              <div class="split-bar">
+                <div class="split-bar__label q-body-sm">{{ row.labelKey | t }}</div>
+                <div class="split-bar__track">
+                  <div
+                    class="split-bar__fill"
+                    [class.split-bar__fill--returning]="row.key === 'RETURNING'"
+                    [style.width.%]="row.sharePercent"
+                  ></div>
+                </div>
+                <div class="split-bar__value q-body-sm q-tnum">
+                  {{ formatMoneyValue(row.revenueSom) }} · {{ row.sharePercent }}%
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </section>
+
+      <!-- 7.6a: cohorts and retention -->
+      <section class="band">
+        <h2 class="q-subhead">{{ 'reports.customers.cohorts.title' | t }}</h2>
+        <p class="q-caption intro">{{ 'reports.customers.cohorts.intro' | t }}</p>
+        @if (cohortsRangeTooWide()) {
+          <p class="q-body-sm empty">{{ 'reports.customers.cohorts.rangeTooWide' | t }}</p>
+        } @else if (cohortHeatRows().length === 0) {
+          <p class="q-body-sm empty">{{ 'reports.customers.cohorts.empty' | t }}</p>
+        } @else {
+          <q-heatmap-chart
+            [rows]="cohortHeatRows()"
+            [ariaLabel]="'reports.customers.cohorts.title' | t"
+            [valueFormatter]="cohortValueFormatter"
+          />
+          <table class="table cohort-sizes">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'reports.customers.cohorts.column.cohort' | t }}</th>
+                <th class="q-caption num">{{ 'reports.customers.cohorts.column.size' | t }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (cohort of cohorts(); track cohort.cohortMonth) {
+                <tr>
+                  <td class="q-body-sm">{{ cohort.cohortMonth.slice(0, 7) }}</td>
+                  <td class="q-body-sm q-tnum num">{{ cohort.size }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+
+      <!-- 7.6b: RFM cross-tab — platform-fixed bands, member counts and revenue per cell -->
+      <section class="band">
+        <h2 class="q-subhead">{{ 'reports.customers.rfm.title' | t }}</h2>
+        <p class="q-caption intro">{{ 'reports.customers.rfm.intro' | t }}</p>
+        <p class="q-caption">
+          {{ 'reports.customers.rfm.totalCustomers' | t: { count: rfmTotalCustomers() } }}
+        </p>
+        <table class="table rfm-grid">
+          <thead>
+            <tr>
+              <th class="q-caption"></th>
+              @for (frequency of frequencyBands; track frequency) {
+                <th class="q-caption num">{{ frequencyLabel(frequency) }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rfmRows(); track row.recency) {
+              <tr>
+                <th class="q-caption row-header">{{ recencyLabel(row.recency) }}</th>
+                @for (cell of row.cells; track cell.frequency) {
+                  <td class="q-body-sm num rfm-cell">
+                    <div class="rfm-cell__members q-tnum">{{ cell.memberCount }}</div>
+                    <div class="rfm-cell__revenue q-caption q-tnum">
+                      {{ formatMoneyValue(cell.revenueSom) }}
+                    </div>
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+        <div class="rfm-legend q-caption">
+          <span>{{ 'reports.customers.rfm.column.members' | t }}</span>
+          <span>{{ 'reports.customers.rfm.column.revenue' | t }}</span>
+        </div>
+      </section>
+    }
+  }
+</div>

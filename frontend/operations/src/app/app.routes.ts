@@ -735,20 +735,21 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/reports/staff-report-page').then((m) => m.StaffReportPage),
           },
-          // 7.6 Customer analytics: none of its six published-formula tiles
-          // (new customers, basket depth, LTV, …) is a registered metric —
-          // ADR 0043's own status line names ABC/XYZ/RFM and forecasting as
-          // not built, and Band D's funnel needs `analytics.events`, which
-          // cannot be backfilled. RFM itself is real, in Customers 5.3.
+          // 7.6/7.6a/7.6b Customer analytics (T13): real now — MetricRegistry
+          // gained seven customer-grain metrics (`GET .../customer-kpis`),
+          // new-vs-returning revenue answers through the typed
+          // `GET .../queries` (`revenue.new_vs_returning.v1`, grouped by the
+          // new CUSTOMER_TYPE dimension), and cohorts/RFM are two new
+          // bespoke reads (`.../customer-cohorts`, `.../customer-rfm`) — see
+          // `customer-analytics-page.ts`'s own doc for what is scoped down.
+          // 7.6c (acquisition source, the pre-order funnel) stays blocked on
+          // ADR 0043's open legal input for behavioural telemetry.
           {
             path: 'customers',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: {
-              spec:
-                'frontend-information-architecture.md §7.6 (Customer analytics) — no registered ' +
-                'metric for any of its tiles; RFM lives in Customers 5.3 instead',
-            },
+              import('./features/reports/customer-analytics-page').then(
+                (m) => m.CustomerAnalyticsPage,
+              ),
           },
           // 7.9 Marketing reports (T15): 7.9a per-customer discount history and
           // 7.9b campaign delivery counts are real this wave — see

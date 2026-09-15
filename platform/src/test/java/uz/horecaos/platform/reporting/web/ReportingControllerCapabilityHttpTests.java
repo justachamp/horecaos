@@ -208,6 +208,119 @@ class ReportingControllerCapabilityHttpTests {
         assertThat(ok.getResponse().getContentAsString()).isEqualTo("[]");
     }
 
+    // ------------------------------------------------------ T13 (7.6/7.6a/7.6b)
+
+    @Test
+    void customerKpisRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/customer-kpis")
+                        .with(tokenFor(DISPATCHER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-07"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.REPORTING_READ.code());
+    }
+
+    @Test
+    void customerKpisSucceedsWithReportingRead() throws Exception {
+        MvcResult ok = mvc.perform(get(REPORTING + "/customer-kpis")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-07"))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        assertThat(ok.getResponse().getContentAsString())
+                .contains("\"newCustomers\":0")
+                .contains("\"distinctCustomers\":0");
+    }
+
+    @Test
+    void customerCohortsRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/customer-cohorts")
+                        .with(tokenFor(DISPATCHER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-07"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.REPORTING_READ.code());
+    }
+
+    @Test
+    void customerCohortsSucceedsWithReportingRead() throws Exception {
+        MvcResult ok = mvc.perform(get(REPORTING + "/customer-cohorts")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-07"))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        assertThat(ok.getResponse().getContentAsString()).contains("\"cohorts\":[]");
+    }
+
+    @Test
+    void customerCohortsRefusesARangeWiderThanTheRetentionWindow() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/customer-cohorts")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2025-08-01")
+                        .queryParam("to", "2026-08-15"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus())
+                .as("a refusal, not a crash")
+                .isEqualTo(400);
+        assertThat(refused.getResponse().getContentAsString()).contains("COHORT_RANGE_TOO_WIDE");
+    }
+
+    @Test
+    void customerRfmRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/customer-rfm")
+                        .with(tokenFor(DISPATCHER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-07"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.REPORTING_READ.code());
+    }
+
+    @Test
+    void customerRfmSucceedsWithReportingRead() throws Exception {
+        MvcResult ok = mvc.perform(get(REPORTING + "/customer-rfm")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-07"))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        assertThat(ok.getResponse().getContentAsString()).contains("\"totalCustomers\":0");
+    }
+
+    @Test
+    void metricsDictionaryPublishesTheCustomerAnalyticsFormulas() throws Exception {
+        MvcResult ok =
+                mvc.perform(get(REPORTING + "/metrics").with(tokenFor(MANAGER))).andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        assertThat(ok.getResponse().getContentAsString())
+                .contains("customers.new.v1")
+                .contains("customers.distinct.v1")
+                .contains("customers.repeat_share.v1")
+                .contains("customers.order_frequency.v1")
+                .contains("customers.value.v1")
+                .contains("customers.basket_depth.v1")
+                .contains("customers.ltv.v1")
+                .contains("revenue.new_vs_returning.v1");
+    }
+
     /**
      * Wave P27: the trap the brief names by name — a money metric queried
      * without {@code groupBy=LEGAL_ENTITY} on a two-entity tenant must come

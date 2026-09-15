@@ -118,6 +118,27 @@ export const reportsPaths = {
   },
 
   /**
+   * T13 (7.6): new/distinct customers, repeat share, order frequency,
+   * customer value and basket depth — folded over the whole requested
+   * range. Its own endpoint, not `/queries`: a distinct-customer count
+   * cannot be correctly summed across the channel/fulfilment rows that
+   * pipeline rolls `agg_branch_day` up from.
+   */
+  customerKpis(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/customer-kpis`;
+  },
+
+  /** T13 (7.6a): monthly cohorts by first-order month, and their retention curve. */
+  customerCohorts(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/customer-cohorts`;
+  },
+
+  /** T13 (7.6b): the Recency x Frequency cross-tab, member counts and revenue per cell. */
+  customerRfm(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/customer-rfm`;
+  },
+
+  /**
    * T11 (7.4/7.4a/7.4b/7.4c, ADR 0125): `CourierReportController`'s own
    * sub-tree — a separate class server-side (see its own doc for why), and a
    * separate path segment here so the four courier reads read as one group

@@ -4323,6 +4323,47 @@ export const messagesEn = {
   'reports.products.abcXyzNotBuilt':
     'ABC and XYZ classification are not built yet: reporting has no classification_run table and no registered metric for either (ADR 0043).',
 
+  // ---------------------------------------------------------------- reports 7.6/7.6a/7.6b customer analytics (T13)
+  'reports.customers.title': 'Customer analytics',
+  'reports.customers.loading': 'Loading…',
+  'reports.customers.kpi.title': 'This period',
+  'reports.customers.kpi.newCustomers': 'New customers',
+  'reports.customers.kpi.distinctCustomers': 'Customers who ordered',
+  'reports.customers.kpi.repeatShare': 'Repeat share',
+  'reports.customers.kpi.orderFrequency': 'Orders per customer',
+  'reports.customers.kpi.customerValue': 'Customer value',
+  'reports.customers.kpi.basketDepth': 'Items per order',
+  'reports.customers.kpi.ltvTitle': 'Lifetime value',
+  'reports.customers.kpi.ltvNotBuilt':
+    'Not built: no customer-lifetime table exists yet. Rather than a number that quietly stops at the query range, this tile says so.',
+  'reports.customers.newVsReturning.title': 'New vs. returning revenue',
+  'reports.customers.newVsReturning.new': 'New customers',
+  'reports.customers.newVsReturning.returning': 'Returning customers',
+  'reports.customers.newVsReturning.share': 'Share of revenue',
+  'reports.customers.newVsReturning.empty':
+    'No completed order with a known customer in this period.',
+  'reports.customers.cohorts.title': 'Cohorts & retention',
+  'reports.customers.cohorts.intro':
+    'Every customer whose first order fell in this range, grouped by that month, and the share of each cohort ordering again in every month since.',
+  'reports.customers.cohorts.empty': 'No cohort started in this range.',
+  'reports.customers.cohorts.column.cohort': 'Cohort',
+  'reports.customers.cohorts.column.size': 'Members',
+  'reports.customers.cohorts.monthOffset': 'M+{offset}',
+  'reports.customers.cohorts.rangeTooWide':
+    'This range covers more months than one retention read tracks — narrow it to 12 months or fewer.',
+  'reports.customers.rfm.title': 'RFM: Recency × Frequency',
+  'reports.customers.rfm.intro':
+    'Platform-fixed bands, never tenant-configurable. Distinct from the Customers segment builder: size one segment there, read the whole grid here to see which cell is worth targeting.',
+  'reports.customers.rfm.totalCustomers': '{count} customers in this grid',
+  'reports.customers.rfm.column.members': 'Members',
+  'reports.customers.rfm.column.revenue': 'Revenue',
+  'reports.customers.rfm.recency.R1_RECENT': 'Recent (0–6 days)',
+  'reports.customers.rfm.recency.R2_LAPSING': 'Lapsing (7–29 days)',
+  'reports.customers.rfm.recency.R3_AT_RISK': 'At risk (30+ days)',
+  'reports.customers.rfm.frequency.F1_SINGLE': '1 order',
+  'reports.customers.rfm.frequency.F2_FEW': '2–3 orders',
+  'reports.customers.rfm.frequency.F3_FREQUENT': '4+ orders',
+
   // ---------------------------------------------------------------- reports 7.5/7.5a/7.5b staff (T12)
   'reports.staff.title': 'Staff reports',
   'reports.staff.loading': 'Loading…',
