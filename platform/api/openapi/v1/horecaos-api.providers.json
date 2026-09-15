@@ -34,7 +34,7 @@
         "required" : [ "externalItemReference", "lineAmountMinor", "name", "unitAmountMinor" ],
         "type" : "object"
       },
-      "PushRequest" : {
+      "PartnerOrderControllerPushRequest" : {
         "properties" : {
           "discountFunding" : {
             "type" : "string"
@@ -172,7 +172,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/PushRequest"
+                "$ref" : "#/components/schemas/PartnerOrderControllerPushRequest"
               }
             }
           },

@@ -18,7 +18,7 @@ export interface Line {
   unitAmountMinor: number;
 }
 
-export interface PushRequest {
+export interface PartnerOrderControllerPushRequest {
   discountFunding?: string;
   displayCode?: string;
   externalOrderId: string;
@@ -48,7 +48,7 @@ export interface Totals {
 }
 
 export interface Operations {
-  "push": { method: "POST"; path: "/api/v1/partner/tenants/{tenantId}/orders"; request: { parameters: { path: { tenantId: string } }; body: PushRequest }; responses: { "200": PushResponse } };
+  "push": { method: "POST"; path: "/api/v1/partner/tenants/{tenantId}/orders"; request: { parameters: { path: { tenantId: string } }; body: PartnerOrderControllerPushRequest }; responses: { "200": PushResponse } };
   "handle_3": { method: "DELETE"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };
   "handle": { method: "GET"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };
   "handle_5": { method: "HEAD"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };

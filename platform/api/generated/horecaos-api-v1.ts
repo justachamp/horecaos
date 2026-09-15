@@ -2783,17 +2783,6 @@ export interface ExportRequest {
   purpose: string;
 }
 
-export interface ExportView {
-  attemptCount?: number;
-  correlationReference?: string;
-  exportId?: string;
-  externalOrderId?: string;
-  orderId?: string;
-  requestedAt?: string;
-  state?: string;
-  venue?: string;
-}
-
 export interface ExternalBookRequest {
   bindingId: string;
   decision: "ACCEPT" | "ABANDON";
@@ -4459,6 +4448,31 @@ export interface OrderPaymentResponse {
   returned?: ApiMoney;
 }
 
+export interface OrderPosExportControllerExportView {
+  attemptCount?: number;
+  exportId?: string;
+  externalOrderId?: string;
+  firstSentAt?: string;
+  lastError?: string;
+  lastErrorCode?: string;
+  permitsAmendment?: boolean;
+  requestedAt?: string;
+  resolutionKind?: string;
+  resolutionReason?: string;
+  resolvedAt?: string;
+  settledAt?: string;
+  state?: string;
+}
+
+export interface OrderPosExportControllerPushRequest {
+  reason: string;
+}
+
+export interface OrderPosExportResponse {
+  export?: OrderPosExportControllerExportView;
+  posCapable?: boolean;
+}
+
 export interface OrderResponse {
   confirmedAt?: string;
   createdAt?: string;
@@ -4680,11 +4694,6 @@ export interface PageEntityMappingResponse {
   nextCursor?: string;
 }
 
-export interface PageExportView {
-  items?: Array<ExportView>;
-  nextCursor?: string;
-}
-
 export interface PageFailureSummary {
   items?: Array<FailureSummary>;
   nextCursor?: string;
@@ -4737,6 +4746,11 @@ export interface PagePlatformInstallationView {
 
 export interface PagePolicyResponse {
   items?: Array<PolicyResponse>;
+  nextCursor?: string;
+}
+
+export interface PagePosOrderExportControllerExportView {
+  items?: Array<PosOrderExportControllerExportView>;
   nextCursor?: string;
 }
 
@@ -4844,6 +4858,18 @@ export interface PartnerInvoiceResponse {
   providerInvoiceRef?: string;
   status?: string;
   totalMinor?: number;
+}
+
+export interface PartnerOrderControllerPushRequest {
+  discountFunding?: string;
+  displayCode?: string;
+  externalOrderId: string;
+  fulfillmentMode: string;
+  handoverCode?: string;
+  lines: Array<Line>;
+  pickupExpectedAt?: string;
+  totals: Totals;
+  venueReference: string;
 }
 
 export interface PasswordResetAcceptRequest {
@@ -5179,6 +5205,17 @@ export interface PollResponse {
   status?: string;
 }
 
+export interface PosOrderExportControllerExportView {
+  attemptCount?: number;
+  correlationReference?: string;
+  exportId?: string;
+  externalOrderId?: string;
+  orderId?: string;
+  requestedAt?: string;
+  state?: string;
+  venue?: string;
+}
+
 export interface PosOrderExportControllerResolutionRequest {
   decision: "LANDED" | "ABSENT" | "ABANDON";
   externalOrderId?: string;
@@ -5417,24 +5454,19 @@ export interface PurchaseModuleRequest {
   quantity?: number;
 }
 
-export interface PushRequest {
-  discountFunding?: string;
-  displayCode?: string;
-  externalOrderId: string;
-  fulfillmentMode: string;
-  handoverCode?: string;
-  lines: Array<Line>;
-  pickupExpectedAt?: string;
-  totals: Totals;
-  venueReference: string;
-}
-
 export interface PushResponse {
   orderId?: string;
   publicOrderNumber?: string;
   rejectionCode?: string;
   status?: string;
   unmappedItems?: Array<string>;
+}
+
+export interface PushResultResponse {
+  detail?: string;
+  errorCode?: string;
+  state?: string;
+  status?: string;
 }
 
 export interface PutLineRequest {
@@ -8143,7 +8175,7 @@ export interface Operations {
   "update_5": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };
   "view": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/owner-invitation"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OwnerInvitationView } };
   "resend_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/owner-invitation/resend"; request: { parameters: { path: { tenantId: string } }; body: OwnerInvitationResendRequest }; responses: { "200": unknown } };
-  "awaitingOperator": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports"; request: { parameters: { path: { tenantId: string }; query: { limit?: number } } }; responses: { "200": PageExportView } };
+  "awaitingOperator": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports"; request: { parameters: { path: { tenantId: string }; query: { limit?: number } } }; responses: { "200": PagePosOrderExportControllerExportView } };
   "candidates": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports/{exportId}/candidates"; request: { parameters: { path: { exportId: string; tenantId: string } } }; responses: { "200": PageCandidateView } };
   "discover": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports/{exportId}/discovery"; request: { parameters: { path: { exportId: string; tenantId: string } } }; responses: { "200": {  } } };
   "resolve_2": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports/{exportId}/resolution"; request: { parameters: { path: { exportId: string; tenantId: string } }; body: PosOrderExportControllerResolutionRequest }; responses: { "200": {  } } };
@@ -8397,8 +8429,10 @@ export interface Operations {
   "update_2": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };
   "reimburseDeliveryFee": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/delivery-fee-reimbursements"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: RefundRequest }; responses: { "200": RemedyResponse } };
   "grantFutureDiscount": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/future-discounts"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: FutureDiscountRequest }; responses: { "200": RemedyResponse } };
-  "forOrder_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/payment"; request: { parameters: { path: { orderId: string; tenantId: string } } }; responses: { "200": OrderPaymentResponse } };
+  "forOrder_3": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/payment"; request: { parameters: { path: { orderId: string; tenantId: string } } }; responses: { "200": OrderPaymentResponse } };
   "rePresent": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/payment/re-presentations"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: RePresentationRequest }; responses: { "200": OperationsPaymentControllerPaymentSessionResponse } };
+  "forOrder_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/pos-export"; request: { parameters: { path: { orderId: string; tenantId: string } } }; responses: { "200": OrderPosExportResponse } };
+  "push_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/pos-export/push"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: OrderPosExportControllerPushRequest }; responses: { "200": PushResultResponse } };
   "recordRefund": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/refunds"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: RefundRequest }; responses: { "200": RemedyResponse } };
   "remediesOfOrder": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/remedies"; request: { parameters: { path: { orderId: string; tenantId: string } } }; responses: { "200": Array<RemedyResponse> } };
   "partnerInvoices": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices"; request: { parameters: { path: { tenantId: string }; query: { limit?: number; status?: string } } }; responses: { "200": Array<PartnerInvoiceResponse> } };
@@ -8434,7 +8468,7 @@ export interface Operations {
   "visitsToTenant": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/support-sessions"; request: { parameters: { path: { tenantId: string }; query: { limit?: number } } }; responses: { "200": PageSupportSessionView } };
   "current_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/support-sessions/current"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": SupportSessionView } };
   "endFromTenant": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/support-sessions/{sessionId}/end"; request: { parameters: { path: { sessionId: string; tenantId: string } }; body: EndRequest }; responses: { "200": SupportSessionView } };
-  "push": { method: "POST"; path: "/api/v1/partner/tenants/{tenantId}/orders"; request: { parameters: { path: { tenantId: string } }; body: PushRequest }; responses: { "200": PushResponse } };
+  "push": { method: "POST"; path: "/api/v1/partner/tenants/{tenantId}/orders"; request: { parameters: { path: { tenantId: string } }; body: PartnerOrderControllerPushRequest }; responses: { "200": PushResponse } };
   "entitlementKeys": { method: "GET"; path: "/api/v1/platform-admin/commercial/entitlement-keys"; request: { parameters: Record<string, never> }; responses: { "200": Array<EntitlementKeyResponse> } };
   "all": { method: "GET"; path: "/api/v1/platform-admin/commercial/modules"; request: { parameters: Record<string, never> }; responses: { "200": Array<ModuleView> } };
   "draft_1": { method: "POST"; path: "/api/v1/platform-admin/commercial/modules"; request: { parameters: Record<string, never>; body: DraftModuleRequest }; responses: { "200": ModuleDrafted } };

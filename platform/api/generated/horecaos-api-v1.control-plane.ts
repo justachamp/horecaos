@@ -1081,17 +1081,6 @@ export interface ExceptionRequest {
   reason: string;
 }
 
-export interface ExportView {
-  attemptCount?: number;
-  correlationReference?: string;
-  exportId?: string;
-  externalOrderId?: string;
-  orderId?: string;
-  requestedAt?: string;
-  state?: string;
-  venue?: string;
-}
-
 export interface FailureOperationsControllerReasonRequest {
   reason: string;
 }
@@ -1758,11 +1747,6 @@ export interface PageEntityMappingResponse {
   nextCursor?: string;
 }
 
-export interface PageExportView {
-  items?: Array<ExportView>;
-  nextCursor?: string;
-}
-
 export interface PageFailureSummary {
   items?: Array<FailureSummary>;
   nextCursor?: string;
@@ -1805,6 +1789,11 @@ export interface PagePlatformInstallationView {
 
 export interface PagePolicyResponse {
   items?: Array<PolicyResponse>;
+  nextCursor?: string;
+}
+
+export interface PagePosOrderExportControllerExportView {
+  items?: Array<PosOrderExportControllerExportView>;
   nextCursor?: string;
 }
 
@@ -2032,6 +2021,17 @@ export interface PolicyResponse {
 export interface PollResponse {
   credential?: CredentialResponse;
   status?: string;
+}
+
+export interface PosOrderExportControllerExportView {
+  attemptCount?: number;
+  correlationReference?: string;
+  exportId?: string;
+  externalOrderId?: string;
+  orderId?: string;
+  requestedAt?: string;
+  state?: string;
+  venue?: string;
 }
 
 export interface PosOrderExportControllerResolutionRequest {
@@ -3370,7 +3370,7 @@ export interface Operations {
   "update_1": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };
   "view": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/owner-invitation"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OwnerInvitationView } };
   "resend": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/owner-invitation/resend"; request: { parameters: { path: { tenantId: string } }; body: OwnerInvitationResendRequest }; responses: { "200": unknown } };
-  "awaitingOperator": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports"; request: { parameters: { path: { tenantId: string }; query: { limit?: number } } }; responses: { "200": PageExportView } };
+  "awaitingOperator": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports"; request: { parameters: { path: { tenantId: string }; query: { limit?: number } } }; responses: { "200": PagePosOrderExportControllerExportView } };
   "candidates": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports/{exportId}/candidates"; request: { parameters: { path: { exportId: string; tenantId: string } } }; responses: { "200": PageCandidateView } };
   "discover": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports/{exportId}/discovery"; request: { parameters: { path: { exportId: string; tenantId: string } } }; responses: { "200": {  } } };
   "resolve_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports/{exportId}/resolution"; request: { parameters: { path: { exportId: string; tenantId: string } }; body: PosOrderExportControllerResolutionRequest }; responses: { "200": {  } } };

@@ -3409,38 +3409,6 @@
         "required" : [ "date", "label", "reason" ],
         "type" : "object"
       },
-      "ExportView" : {
-        "properties" : {
-          "attemptCount" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "correlationReference" : {
-            "type" : "string"
-          },
-          "exportId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "externalOrderId" : {
-            "type" : "string"
-          },
-          "orderId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "requestedAt" : {
-            "type" : "string"
-          },
-          "state" : {
-            "type" : "string"
-          },
-          "venue" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "FailureOperationsControllerReasonRequest" : {
         "properties" : {
           "reason" : {
@@ -5495,20 +5463,6 @@
         },
         "type" : "object"
       },
-      "PageExportView" : {
-        "properties" : {
-          "items" : {
-            "items" : {
-              "$ref" : "#/components/schemas/ExportView"
-            },
-            "type" : "array"
-          },
-          "nextCursor" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "PageFailureSummary" : {
         "properties" : {
           "items" : {
@@ -5626,6 +5580,20 @@
           "items" : {
             "items" : {
               "$ref" : "#/components/schemas/PolicyResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PagePosOrderExportControllerExportView" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PosOrderExportControllerExportView"
             },
             "type" : "array"
           },
@@ -6290,6 +6258,38 @@
             "$ref" : "#/components/schemas/CredentialResponse"
           },
           "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PosOrderExportControllerExportView" : {
+        "properties" : {
+          "attemptCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "correlationReference" : {
+            "type" : "string"
+          },
+          "exportId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "externalOrderId" : {
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "requestedAt" : {
+            "type" : "string"
+          },
+          "state" : {
+            "type" : "string"
+          },
+          "venue" : {
             "type" : "string"
           }
         },
@@ -18823,7 +18823,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/PageExportView"
+                  "$ref" : "#/components/schemas/PagePosOrderExportControllerExportView"
                 }
               }
             },
