@@ -2631,6 +2631,13 @@
             "format" : "date",
             "type" : "string"
           },
+          "legalEntityIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "locationIds" : {
             "items" : {
               "format" : "uuid",

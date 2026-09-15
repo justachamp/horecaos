@@ -1265,6 +1265,7 @@ export interface ClassificationRowResponse {
 
 export interface ClassificationRunRequest {
   from: string;
+  legalEntityIds?: Array<string>;
   locationIds?: Array<string>;
   to: string;
 }

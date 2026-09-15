@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -75,16 +76,34 @@ public class ProductClassificationService {
      * a disputed class-C ruling is defended by pointing at the run that was
      * live when the dispute was raised, not by a cache that might now answer
      * differently.
+     *
+     * @param legalEntityIds ADR 0038 (V0370, batch 6 review): {@code
+     *      revenue.gross.v1} is money, and money is only meaningful once the
+     *      taxpayer is named. Empty means every legal entity the caller may
+     *      read; naming one or more narrows {@link JdbcClassificationStore
+     *      #readVariantBuckets} to only those entities' lines. Either way, if
+     *      the (possibly narrowed) rows still span more than one legal
+     *      entity, the run is refused with {@link
+     *      ReportingRefusals.CombinedEntityTotalException} rather than
+     *      persisting a class-C ruling nobody can defend — the same rule
+     *      {@code ReportQueryService#refuseCombinedEntityTotal} and {@code
+     *      #customerKpis} apply to every other money metric
      */
     @Transactional
     public ClassificationRun run(
-            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, String requestedBy) {
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<UUID> legalEntityIds,
+            String requestedBy) {
         validateWindow(from, to);
         refuseMixedBoundaryRegime(tenantId, from, to);
 
         int bucketCount = bucketCountFor(from, to);
         List<JdbcClassificationStore.VariantBucketRow> buckets =
-                classificationStore.readVariantBuckets(tenantId, from, to, locationIds, BUCKET_DAYS);
+                classificationStore.readVariantBuckets(tenantId, from, to, locationIds, legalEntityIds, BUCKET_DAYS);
+        refuseCombinedEntityTotal(buckets);
 
         Map<UUID, VariantAccumulator> byVariant = new LinkedHashMap<>();
         for (JdbcClassificationStore.VariantBucketRow bucket : buckets) {
@@ -154,6 +173,16 @@ public class ProductClassificationService {
      * REPORTING_READ} rather than {@code REPORTING_CLASSIFICATION_RUN}, so a
      * repeat page view does not need to hold the write capability just to
      * see what was last computed.
+     *
+     * <p><b>Still live (batch 6 review, open issue):</b> {@code
+     * reporting.classification_run} has no {@code legal_entity_ids} identity,
+     * so this method takes no {@code legalEntityIds} parameter and cannot
+     * filter by one — it returns whichever run most recently matched {@code
+     * (tenantId, from, to, locationIds)} alone, regardless of which entity or
+     * entities {@link #run} was scoped to when that row was written. Two
+     * requests scoped to different legal entities over the same window and
+     * location set therefore still collide here even after {@link #run}
+     * itself refuses to combine entities within one run.
      */
     @Transactional(readOnly = true)
     public Optional<ClassificationRun> latest(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
@@ -207,6 +236,27 @@ public class ProductClassificationService {
         LocalDate frontier = recutThrough.get();
         if (!from.isAfter(frontier) && to.isAfter(frontier)) {
             throw new ReportingRefusals.MixedBoundaryRegimeException(frontier);
+        }
+    }
+
+    /**
+     * ADR 0038 (V0370, batch 6 review): {@code revenue.gross.v1} is money, and
+     * money is only meaningful once the taxpayer is named — the same rule
+     * {@code ReportQueryService#refuseCombinedEntityTotal} and {@code
+     * #runCustomerTypeQuery} apply to every other money metric. Checked on the
+     * (possibly {@code legalEntityIds}-narrowed) bucket rows themselves rather
+     * than on the caller's request alone: a caller naming more than one entity
+     * explicitly is refused exactly the same as a caller naming none, because
+     * either way the ABC ranking below would otherwise sum gross revenue that
+     * reconciles to neither taxpayer's filing. A row with no recorded fiscal
+     * identity ({@code legalEntityId() == null}) counts as its own entity, on
+     * the same footing {@code BranchDayKey}'s own null already carries.
+     */
+    private static void refuseCombinedEntityTotal(List<JdbcClassificationStore.VariantBucketRow> buckets) {
+        Set<UUID> entities = new HashSet<>();
+        buckets.forEach(bucket -> entities.add(bucket.legalEntityId()));
+        if (entities.size() > 1) {
+            throw new ReportingRefusals.CombinedEntityTotalException(List.of(METRIC_CODE), entities.size());
         }
     }
 

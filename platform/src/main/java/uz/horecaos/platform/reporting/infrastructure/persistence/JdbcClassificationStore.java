@@ -49,12 +49,27 @@ public class JdbcClassificationStore {
      * <p>Reads {@code fact_order_line} directly, no join back to {@code
      * fact_order}: unlike {@link JdbcReportingStore#readVariantSales}, ABC/XYZ
      * needs no fulfilment split, and the line fact already carries its own
-     * {@code location_id}. A line with no {@code variant_id} (a free-text or
+     * {@code location_id} and — since V0370 (ADR 0038, batch 6 review) — its
+     * own {@code legal_entity_id}, copied from the sibling {@code fact_order}
+     * row at close time. A line with no {@code variant_id} (a free-text or
      * removed-product line) is excluded — there is no stable key to classify
      * it under across a re-run.
+     *
+     * <p>{@code legalEntityIds} narrows the read the same way {@code
+     * locationIds} does; each returned row still carries its own {@link
+     * VariantBucketRow#legalEntityId()} so {@code ProductClassificationService}
+     * can refuse a run whose (possibly unfiltered) rows still span more than
+     * one entity, mirroring {@code ReportQueryService}'s {@code
+     * CombinedEntityTotalException} family for every other money metric
+     * (revenue.gross.v1 is money, ADR 0038).
      */
     public List<VariantBucketRow> readVariantBuckets(
-            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, int bucketDays) {
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<UUID> legalEntityIds,
+            int bucketDays) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -68,22 +83,29 @@ public class JdbcClassificationStore {
             params.put("locations", locationIds);
         }
 
+        String legalEntityFilter = "";
+        if (!legalEntityIds.isEmpty()) {
+            legalEntityFilter = " AND l.legal_entity_id IN (:legalEntities)";
+            params.put("legalEntities", legalEntityIds);
+        }
+
         return jdbc.sql("""
-                SELECT l.variant_id, l.category_id, max(l.product_name_snapshot) AS product_name,
+                SELECT l.variant_id, l.category_id, l.legal_entity_id, max(l.product_name_snapshot) AS product_name,
                        ((l.business_date - :from) / :bucketDays)::int AS bucket_index,
                        sum(l.quantity)::integer AS quantity,
                        sum(l.gross_som)::bigint AS gross_som
                   FROM reporting.fact_order_line l
                  WHERE l.tenant_id = :tenantId AND l.business_date BETWEEN :from AND :to
                    AND l.variant_id IS NOT NULL
-                """ + locationFilter + """
-                 GROUP BY l.variant_id, l.category_id, bucket_index
+                """ + locationFilter + legalEntityFilter + """
+                 GROUP BY l.variant_id, l.category_id, l.legal_entity_id, bucket_index
                  ORDER BY l.variant_id, bucket_index
                 """)
                 .params(params)
                 .query((ResultSet row, int number) -> new VariantBucketRow(
                         row.getObject("variant_id", UUID.class),
                         row.getObject("category_id", UUID.class),
+                        row.getObject("legal_entity_id", UUID.class),
                         row.getString("product_name"),
                         row.getInt("bucket_index"),
                         row.getInt("quantity"),
@@ -91,10 +113,11 @@ public class JdbcClassificationStore {
                 .list();
     }
 
-    /** One (product, bucket) aggregate — see {@link #readVariantBuckets}. */
+    /** One (product, legal entity, bucket) aggregate — see {@link #readVariantBuckets}. */
     public record VariantBucketRow(
             UUID variantId,
             @Nullable UUID categoryId,
+            @Nullable UUID legalEntityId,
             String productName,
             int bucketIndex,
             int quantity,

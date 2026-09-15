@@ -766,15 +766,17 @@ public class JdbcReportingStore {
         params.put("discount", fact.discountSom());
         params.put("net", fact.netSom());
         params.put("occurredAt", utc(fact.occurredAt()));
+        params.put("legalEntityId", fact.legalEntityId());
 
         jdbc.sql("""
                 INSERT INTO reporting.fact_order_line (
                     tenant_id, business_date, order_id, line_id, location_id, variant_id,
                     category_id, product_name_snapshot, quantity, gross_som, discount_som, net_som,
-                    occurred_at)
+                    occurred_at, legal_entity_id)
                 VALUES (
                     :tenantId, :businessDate, :orderId, :lineId, :locationId, :variantId,
-                    :categoryId, :productName, :quantity, :gross, :discount, :net, :occurredAt)
+                    :categoryId, :productName, :quantity, :gross, :discount, :net, :occurredAt,
+                    :legalEntityId)
                 """).params(params).update();
     }
 
