@@ -1467,6 +1467,32 @@ describe('OrderDetailPane: assign/unassign courier (wave P11, row 1.2e)', () => 
     expect(fixture.nativeElement.querySelector('[data-testid="order-detail-courier"]')).toBeNull();
   });
 
+  it('renders the courier ETA the delivery read carries (wave P11, row 2.1a) -- fetched since P11, never shown before this fix', async () => {
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () => Promise.resolve(deliveryResponse({ courierEtaAt: '2026-08-30T09:20:00Z' })),
+      },
+    });
+    const fixture = await render();
+
+    const eta = fixture.nativeElement.querySelector('[data-testid="order-detail-courier-eta"]');
+    // Asia/Tashkent is UTC+5, so 09:20 UTC renders as 14:20 local.
+    expect(eta?.textContent?.trim()).toBe('Courier ETA 14:20:00');
+  });
+
+  it('renders no courier ETA line when the delivery read carries none', async () => {
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: { delivery: () => Promise.resolve(deliveryResponse()) },
+    });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-courier-eta"]'),
+    ).toBeNull();
+  });
+
   it('assigns a courier through DispatchApi against the planId and version the delivery read returns', async () => {
     const assign = vi.fn().mockResolvedValue({
       applied: true,

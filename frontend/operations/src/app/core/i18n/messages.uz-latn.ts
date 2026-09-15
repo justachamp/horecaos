@@ -318,6 +318,7 @@ export const messagesUzLatn: MessageCatalogue = {
 
   'orders.detail.section.courier': 'Kuryer',
   'orders.detail.courier.assigned': 'Tayinlangan: {courier}',
+  'orders.detail.courier.eta': 'Kuryer {time} da',
   'orders.detail.courier.none': 'Kuryer tayinlanmagan',
   'orders.detail.courier.assign': 'Kuryer tayinlash',
   'orders.detail.courier.unassign': 'Kuryerni bekor qilish',

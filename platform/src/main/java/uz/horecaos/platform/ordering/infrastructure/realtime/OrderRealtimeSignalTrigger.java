@@ -47,9 +47,14 @@ import uz.horecaos.platform.telemetry.api.StreamChannel;
  * subscription set is fixed for the connection's life and there is no {@code
  * ORDER} {@link uz.horecaos.platform.iam.api.ResourceScope.ScopeType}. Both
  * frames are cheap (a signal is an identifier and a version, never the order
- * itself) and the detail pane discards what it is not currently showing by
- * {@code resourceId}, exactly the way a client filters any other broadcast
- * channel.
+ * itself). <strong>As of this build, {@code ORDER_DETAIL} has no consumer:</strong>
+ * {@code order-detail-pane.ts} does not inject {@code RealtimeClient} or
+ * filter a frame by {@code resourceId} — only {@code order-queue.ts} does,
+ * for {@code ORDER_QUEUE}/{@code COUNTERS} — so every {@code ORDER_DETAIL}
+ * frame this trigger emits is received by the shared connection and dropped
+ * unread. Publishing it here anyway keeps the channel's contract (every
+ * transition, unconditionally) ready for whichever change wires the pane's
+ * own accelerator, rather than back-filling history once that lands.
  *
  * <p><strong>Only the six status transitions and the order's own arrival.</strong>
  * An amendment, a revision, or a callback request/resolution also changes what

@@ -1091,6 +1091,19 @@ class KitchenExecutionTests {
     }
 
     @Test
+    @DisplayName("the order-keyed ticket lookup and its events, gap map row 1.2b's own reads, are equally invisible to"
+            + " another tenant -- findTicket's own isolation proves nothing about findTicketByOrder/eventsOf")
+    void theOrderKeyedTicketReadAndItsEventsAreInvisibleToAnotherTenant() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        UUID orderId = seedConfirmedOrder("A-063", null, null, null, burger);
+        TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+
+        UUID otherTenant = UUID.randomUUID();
+        assertThat(store.findTicketByOrder(otherTenant, orderId)).isEmpty();
+        assertThat(store.eventsOf(otherTenant, ticket.id())).isEmpty();
+    }
+
+    @Test
     @DisplayName("one order gets one ticket however many times its confirmation arrives")
     void aConfirmationReplayedProducesOneTicket() {
         brandRule(null, burger.productId(), null, StationRole.GRILL);

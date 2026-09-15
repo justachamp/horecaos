@@ -328,6 +328,7 @@ export const messagesEn = {
 
   'orders.detail.section.courier': 'Courier',
   'orders.detail.courier.assigned': 'Assigned to {courier}',
+  'orders.detail.courier.eta': 'Courier ETA {time}',
   'orders.detail.courier.none': 'No courier assigned',
   'orders.detail.courier.assign': 'Assign courier',
   'orders.detail.courier.unassign': 'Unassign',

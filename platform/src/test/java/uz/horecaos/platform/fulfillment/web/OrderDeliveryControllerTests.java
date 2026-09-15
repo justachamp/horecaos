@@ -209,6 +209,24 @@ class OrderDeliveryControllerTests {
         assertThat(refusal).isInstanceOf(ApiException.class);
     }
 
+    @Test
+    @DisplayName("a plan is not found under another tenant's id, even though the order id matches -- proves the"
+            + " tenant_id predicate in JdbcDeliveryPlanStore/JdbcAssignmentStore, not just order_id/plan_id")
+    void aPlanUnderAnotherTenantIsNotFound() {
+        // aPlanAtASiblingLocationIsNotFound (above) only proves the location boundary. Nothing
+        // else in this suite ever calls delivery() with a tenantId that disagrees with the
+        // plan's real tenant, so a future edit that dropped `tenant_id = :tenantId` from
+        // JdbcDeliveryPlanStore.findByOrder/courierEtaByOrder or JdbcAssignmentStore.findShipment
+        // -- leaving only order_id/plan_id, each already unique to this one tenant -- would still
+        // pass every other test here.
+        DeliveryPlan plan = openPlan();
+        UUID otherTenant = UUID.randomUUID();
+
+        Throwable refusal = catchThrowable(() -> controller.delivery(otherTenant, BRAND, branch, plan.orderId()));
+
+        assertThat(refusal).isInstanceOf(ApiException.class);
+    }
+
     // -------------------------------------------------------------- helpers
 
     private DeliveryPlan openPlan() {

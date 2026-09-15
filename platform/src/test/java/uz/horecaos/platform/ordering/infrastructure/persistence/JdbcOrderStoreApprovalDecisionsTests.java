@@ -127,6 +127,24 @@ class JdbcOrderStoreApprovalDecisionsTests {
         assertThat(orders.decisionsOf(TENANT, orderId)).isEmpty();
     }
 
+    @Test
+    @DisplayName("decisions are invisible to another tenant, even though the order id matches")
+    void decisionsOfIsEmptyForAnotherTenant() {
+        orders.insertApprovalDecision(
+                UUID.randomUUID(),
+                TENANT,
+                orderId,
+                "click-1",
+                "REJECT",
+                "HORECAOS_OPERATIONS",
+                "USER",
+                "op-a",
+                "OUT_OF_STOCK",
+                Instant.parse("2026-09-01T10:00:00Z"));
+
+        assertThat(orders.decisionsOf(UUID.randomUUID(), orderId)).isEmpty();
+    }
+
     // -------------------------------------------------------------- helpers
 
     private void seedTenancy() {

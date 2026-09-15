@@ -14,7 +14,7 @@ import { Versioned } from '../../core/api/aggregate-version';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
-import { TimeZone, formatDateTime, formatDuration } from '../../core/format/datetime';
+import { TimeZone, formatClock, formatDateTime, formatDuration } from '../../core/format/datetime';
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { formatMoney } from '../../core/format/money';
@@ -1279,6 +1279,21 @@ export class OrderDetailPane {
 
   protected canManageCourier(): boolean {
     return this.isDeliveryOrder() && this.delivery() !== null;
+  }
+
+  /**
+   * The courier ETA chip (wave P11, gap map row 2.1a) -- the winning
+   * partner quote's own ETA, fetched into {@link delivery} since that wave
+   * but never rendered until now. Mirrors `kitchen-queue-page.ts`'s own
+   * `courierEtaLabel` for the same field, under this pane's own i18n key
+   * rather than the kitchen board's.
+   */
+  protected courierEtaLabel(plan: OrderDeliveryResponse): string | null {
+    return plan.courierEtaAt
+      ? this.i18n.t('orders.detail.courier.eta', {
+          time: formatClock(new Date(plan.courierEtaAt), PLACEHOLDER_TIME_ZONE),
+        })
+      : null;
   }
 
   /** The roster entry's own `displayReference` — there is no name to resolve, the same limitation `CouriersApi.roster`'s own doc states. */
