@@ -4117,6 +4117,12 @@ export const messagesEn = {
   'reports.branches.column.averageCheck': 'Average check',
   'reports.branches.column.cancelShare': 'Cancelled, %',
   'reports.branches.column.prepTime': 'Prep. time',
+  // wave T06 (7.3): the leaderboard's three new columns and its secondary sort control.
+  'reports.branches.column.fulfilmentSplit': 'Delivery / Pickup / Aggregators',
+  'reports.branches.column.fulfilmentSplit.hint':
+    'Counts: delivery / pickup / aggregator orders, in that order.',
+  'reports.branches.column.onTime': 'On time, %',
+  'reports.branches.sort.label': 'Sort by',
   'reports.branches.sla.title': 'SLA time buckets',
   'reports.branches.sla.bucket.UNDER_30': '≤30',
   'reports.branches.sla.bucket.M30_35': '30–35',
@@ -4125,8 +4131,20 @@ export const messagesEn = {
   'reports.branches.sla.bucket.M50_60': '50–60',
   'reports.branches.sla.bucket.OVER_60': '>60',
   'reports.branches.sla.total': 'Total',
+  // wave T06 (7.3a): handover_time.median.v1 beside the bucket counts.
+  'reports.branches.sla.median': 'Median',
   'reports.branches.sla.version': 'Buckets: sla_bucket_set.v{version}',
   'reports.branches.minutesShort': '{minutes} min',
+
+  // wave T06 (7.3b): per-channel counts and the payment-method split.
+  'reports.branches.channels.title': 'By channel',
+  'reports.branches.channels.column.channel': 'Channel',
+  'reports.branches.channels.empty': 'No orders in this range.',
+  'reports.branches.payments.title': 'Payment methods',
+  'reports.branches.payments.column.method': 'Method',
+  'reports.branches.payments.column.count': 'Tenders',
+  'reports.branches.payments.column.amount': 'Amount',
+  'reports.branches.payments.empty': 'No tenders in this range.',
 
   // ---------------------------------------------------------------- reports 7.4 (T11, ADR 0125)
   'reports.couriers.title': 'Courier reports',

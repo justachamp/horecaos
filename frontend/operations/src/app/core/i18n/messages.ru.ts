@@ -4094,6 +4094,12 @@ export const messagesRu: MessageCatalogue = {
   'reports.branches.column.averageCheck': 'Средний чек',
   'reports.branches.column.cancelShare': 'Отмены, %',
   'reports.branches.column.prepTime': 'Ср. время приготовления',
+  // wave T06 (7.3): три новые колонки рейтинга и его вторичная сортировка.
+  'reports.branches.column.fulfilmentSplit': 'Доставка / Самовывоз / Агрегаторы',
+  'reports.branches.column.fulfilmentSplit.hint':
+    'Количество заказов: доставка / самовывоз / агрегаторы, в этом порядке.',
+  'reports.branches.column.onTime': 'В норме, %',
+  'reports.branches.sort.label': 'Сортировка',
   'reports.branches.sla.title': 'Интервалы SLA',
   'reports.branches.sla.bucket.UNDER_30': '≤30',
   'reports.branches.sla.bucket.M30_35': '30–35',
@@ -4102,8 +4108,20 @@ export const messagesRu: MessageCatalogue = {
   'reports.branches.sla.bucket.M50_60': '50–60',
   'reports.branches.sla.bucket.OVER_60': '>60',
   'reports.branches.sla.total': 'Всего',
+  // wave T06 (7.3a): handover_time.median.v1 рядом со счётчиками интервалов.
+  'reports.branches.sla.median': 'Медиана',
   'reports.branches.sla.version': 'Интервалы: sla_bucket_set.v{version}',
   'reports.branches.minutesShort': '{minutes} мин',
+
+  // wave T06 (7.3b): счётчики по каналам и разбивка по способам оплаты.
+  'reports.branches.channels.title': 'По каналам',
+  'reports.branches.channels.column.channel': 'Канал',
+  'reports.branches.channels.empty': 'Нет заказов за этот период.',
+  'reports.branches.payments.title': 'Способы оплаты',
+  'reports.branches.payments.column.method': 'Способ оплаты',
+  'reports.branches.payments.column.count': 'Операций',
+  'reports.branches.payments.column.amount': 'Сумма',
+  'reports.branches.payments.empty': 'Нет операций за этот период.',
 
   // ---------------------------------------------------------------- reports 7.4 (T11, ADR 0125)
   'reports.couriers.title': 'Отчёты по курьерам',
