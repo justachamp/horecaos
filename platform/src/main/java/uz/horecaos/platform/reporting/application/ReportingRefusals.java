@@ -104,4 +104,57 @@ public final class ReportingRefusals {
             return metricCode;
         }
     }
+
+    /**
+     * T13 (7.6a): a {@code /queries} request named both a customer-type-grain
+     * metric ({@code revenue.new_vs_returning.v1}) and a metric sourced from
+     * {@code agg_branch_day}. The two are read from different fact tables by
+     * different code paths and cannot share one slice, so answering both in
+     * one call would either silently drop one or fabricate a combined slice
+     * neither source actually produced.
+     */
+    public static final class MixedCustomerTypeGrainException extends IllegalArgumentException {
+
+        private final List<String> metricCodes;
+
+        public MixedCustomerTypeGrainException(List<String> metricCodes) {
+            super(("%s mixes a customer-type-grain metric with one sourced from agg_branch_day. "
+                            + "Request revenue.new_vs_returning.v1 on its own.")
+                    .formatted(String.join(", ", metricCodes)));
+            this.metricCodes = List.copyOf(metricCodes);
+        }
+
+        public List<String> metricCodes() {
+            return metricCodes;
+        }
+    }
+
+    /**
+     * T13 (7.6a): a cohort/retention read asked for a wider window than the
+     * read tracks. Every cohort read observes cohort formation and every
+     * subsequent month of retention inside the same {@code [from, to]}
+     * window ({@code CustomerCohortService.MAX_WINDOW_MONTHS}); a wider
+     * window would either silently truncate retention for the earliest
+     * cohorts or need data the request never bounded.
+     */
+    public static final class CohortRangeTooWideException extends IllegalArgumentException {
+
+        private final int requestedMonths;
+        private final int maxMonths;
+
+        public CohortRangeTooWideException(int requestedMonths, int maxMonths) {
+            super(("The cohort window covers %d months; the retention window tracks at most %d. " + "Narrow the range.")
+                    .formatted(requestedMonths, maxMonths));
+            this.requestedMonths = requestedMonths;
+            this.maxMonths = maxMonths;
+        }
+
+        public int requestedMonths() {
+            return requestedMonths;
+        }
+
+        public int maxMonths() {
+            return maxMonths;
+        }
+    }
 }

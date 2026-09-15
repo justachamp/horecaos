@@ -412,6 +412,75 @@ public class ReportingController {
         return ResponseEntity.ok(DemandHistoryResponse.of(result));
     }
 
+    // ------------------------------------------------------------- T13 (7.6/7.6a/7.6b)
+
+    @GetMapping("/customer-kpis")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "7.6: new/distinct customers, repeat share, order frequency, customer value, basket depth",
+            description = "One folded figure per metric over the whole requested range — a KPI "
+                    + "tile shows one number for its period, not a day-grain breakdown. Not "
+                    + "/queries: a distinct-customer count cannot be correctly summed across the "
+                    + "channel/fulfilment-type rows that pipeline rolls agg_branch_day up from. "
+                    + "customers.ltv.v1 is not here — it is registered unbuilt (no dim_customer "
+                    + "table exists) and every tile naming it must render that rather than a "
+                    + "number.")
+    public ResponseEntity<CustomerKpiResponse> customerKpis(
+            @PathVariable UUID tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId,
+            @RequestParam(required = false) List<UUID> legalEntityId) {
+
+        var result = queries.customerKpis(tenantId, from, to, orEmpty(locationId), orEmpty(legalEntityId));
+        return ResponseEntity.ok(CustomerKpiResponse.of(result));
+    }
+
+    @GetMapping("/customer-cohorts")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "7.6a: monthly cohorts by first-order month, and their retention curve",
+            description = "Every customer whose first-ever order fell inside [from, to], grouped "
+                    + "by that order's calendar month, with the share of each cohort placing any "
+                    + "order in every subsequent month through \"to\". Refuses a range covering "
+                    + "more months than the read tracks in one call rather than silently "
+                    + "truncating retention for the earliest cohorts.")
+    public ResponseEntity<CohortListResponse> customerCohorts(
+            @PathVariable UUID tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId) {
+
+        var result = queries.customerCohorts(tenantId, from, to, orEmpty(locationId));
+        return ResponseEntity.ok(new CohortListResponse(
+                result.cohorts().stream().map(CohortResponse::of).toList(),
+                result.windowMonths(),
+                ProvenanceResponse.of(result.provenance())));
+    }
+
+    @GetMapping("/customer-rfm")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "7.6b: the Recency x Frequency cross-tab, member counts and revenue per cell",
+            description = "Platform-fixed bands, never tenant-configurable — the same rule "
+                    + "sla_bucket_set.v1 already follows. Distinct from 5.3's segment builder: a "
+                    + "marketer can size one segment there and read the whole grid here to decide "
+                    + "which cell is worth targeting. Monetary is a cell value, not a third "
+                    + "bucketed axis.")
+    public ResponseEntity<RfmGridResponse> customerRfm(
+            @PathVariable UUID tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId,
+            @RequestParam(required = false) List<UUID> legalEntityId) {
+
+        var result = queries.customerRfm(tenantId, from, to, orEmpty(locationId), orEmpty(legalEntityId));
+        return ResponseEntity.ok(new RfmGridResponse(
+                result.cells().stream().map(RfmCellResponse::of).toList(),
+                result.totalCustomers(),
+                ProvenanceResponse.of(result.provenance())));
+    }
+
     /** The example this wave's own mission statement uses: "the last 4 Tuesdays". */
     private static final int DEMAND_SAMPLE_DEFAULT = 4;
 
@@ -808,6 +877,80 @@ public class ReportingController {
                     ProvenanceResponse.of(result.provenance()));
         }
     }
+
+    // ------------------------------------------------------------- T13 (7.6/7.6a/7.6b) responses
+
+    /**
+     * 7.6's KPI tiles. Every ratio is null exactly when there were no
+     * distinct customers (or, for basketDepth, no orders) to divide by —
+     * never a zero that would read as a real figure. customers.ltv.v1 is
+     * intentionally absent: it is registered unbuilt.
+     */
+    public record CustomerKpiResponse(
+            int newCustomers,
+            int distinctCustomers,
+            @Nullable Long repeatShareBasisPoints,
+            @Nullable Double orderFrequency,
+            @Nullable Long customerValueSom,
+            @Nullable Double basketDepth,
+            ProvenanceResponse provenance) {
+
+        static CustomerKpiResponse of(ReportQueryService.CustomerKpiResult result) {
+            return new CustomerKpiResponse(
+                    result.newCustomers(),
+                    result.distinctCustomers(),
+                    result.repeatShareBasisPoints(),
+                    result.orderFrequency(),
+                    result.customerValueSom(),
+                    result.basketDepth(),
+                    ProvenanceResponse.of(result.provenance()));
+        }
+    }
+
+    /**
+     * One month-offset point on a cohort's retention curve.
+     *
+     * @param retainedBasisPoints null when the cohort's own size is zero —
+     *                            never a zero that would read as "nobody
+     *                            came back"
+     */
+    public record RetentionPointResponse(
+            int monthOffset,
+            LocalDate orderMonth,
+            int customerCount,
+            @Nullable Long retainedBasisPoints) {
+
+        static RetentionPointResponse of(ReportQueryService.RetentionPoint point) {
+            return new RetentionPointResponse(
+                    point.monthOffset(), point.orderMonth(), point.customerCount(), point.retainedBasisPoints());
+        }
+    }
+
+    /** One cohort — every customer whose first order fell in {@code cohortMonth} — and its retention curve. */
+    public record CohortResponse(LocalDate cohortMonth, int size, List<RetentionPointResponse> points) {
+
+        static CohortResponse of(ReportQueryService.Cohort cohort) {
+            return new CohortResponse(
+                    cohort.cohortMonth(),
+                    cohort.size(),
+                    cohort.points().stream().map(RetentionPointResponse::of).toList());
+        }
+    }
+
+    /** 7.6a's cohort/retention grid. {@code windowMonths} is the widest range a single call tracks. */
+    public record CohortListResponse(List<CohortResponse> cohorts, int windowMonths, ProvenanceResponse provenance) {}
+
+    /** One (Recency band, Frequency band) cell of 7.6b's cross-tab. */
+    public record RfmCellResponse(String recencyBand, String frequencyBand, int memberCount, long revenueSom) {
+
+        static RfmCellResponse of(ReportQueryService.RfmCell cell) {
+            return new RfmCellResponse(
+                    cell.recency().name(), cell.frequency().name(), cell.memberCount(), cell.revenueSom());
+        }
+    }
+
+    /** 7.6b: the whole R×F grid — every (Recency, Frequency) combination, even empty ones. */
+    public record RfmGridResponse(List<RfmCellResponse> cells, int totalCustomers, ProvenanceResponse provenance) {}
 
     /**
      * One (terminal status, cancellation reason, disposition, liability) bucket.

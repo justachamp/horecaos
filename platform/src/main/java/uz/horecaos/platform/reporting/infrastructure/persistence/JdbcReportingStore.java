@@ -1872,6 +1872,248 @@ public class JdbcReportingStore {
                 .list();
     }
 
+    // ------------------------------------------------------------ T13 (7.6/7.6a/7.6b)
+
+    /**
+     * T13 (7.6a): {@code revenue.new_vs_returning.v1} — gross revenue of
+     * COMPLETED orders, grouped by business date, location, legal entity,
+     * and {@code is_first_order}. Straight off {@code reporting.fact_order}
+     * rather than {@code agg_branch_day}: the aggregate has no revenue split
+     * by first order, only the {@code distinct_customers}/{@code
+     * new_customers} counts.
+     */
+    public List<CustomerTypeDayAggregate> readCustomerTypeRevenue(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<UUID> legalEntityIds,
+            List<String> channelCodes) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        StringBuilder filter = new StringBuilder();
+        if (!locationIds.isEmpty()) {
+            filter.append(" AND location_id IN (:locations)");
+            params.put("locations", locationIds);
+        }
+        if (!legalEntityIds.isEmpty()) {
+            filter.append(" AND legal_entity_id IN (:legalEntities)");
+            params.put("legalEntities", legalEntityIds);
+        }
+        if (!channelCodes.isEmpty()) {
+            filter.append(" AND channel_code IN (:channels)");
+            params.put("channels", channelCodes);
+        }
+
+        return jdbc.sql("""
+                SELECT business_date, location_id, legal_entity_id, is_first_order,
+                       count(*)::integer AS order_count,
+                       sum(gross_revenue_som) AS gross_som
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND terminal_status = 'COMPLETED' AND is_first_order IS NOT NULL
+                """ + filter + """
+                 GROUP BY business_date, location_id, legal_entity_id, is_first_order
+                 ORDER BY business_date, location_id, legal_entity_id, is_first_order
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new CustomerTypeDayAggregate(
+                        row.getObject("business_date", LocalDate.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getObject("legal_entity_id", UUID.class),
+                        row.getBoolean("is_first_order"),
+                        row.getInt("order_count"),
+                        row.getLong("gross_som")))
+                .list();
+    }
+
+    /** One (date, location, legal entity, customer-type) cell of {@link #readCustomerTypeRevenue}. */
+    public record CustomerTypeDayAggregate(
+            LocalDate businessDate,
+            UUID locationId,
+            @Nullable UUID legalEntityId,
+            boolean isFirstOrder,
+            int orderCount,
+            long grossSom) {}
+
+    /**
+     * T13 (7.6): the KPI-tile figures {@code customers.new.v1} through
+     * {@code customers.basket_depth.v1} publish — one folded read over the
+     * whole requested range, the same shape {@code readPaymentMix}'s {@code
+     * overview} already uses for a tile that shows one number per period
+     * rather than a day-grain breakdown. {@code distinctCount} is a true
+     * {@code COUNT(DISTINCT ...)} over the range, never a sum of per-day or
+     * per-channel sub-counts — see {@code customers.distinct.v1}'s own
+     * openQuestion for why summing agg_branch_day rows would double count a
+     * customer who ordered on two channels the same day.
+     */
+    public CustomerKpiRow readCustomerKpis(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<UUID> legalEntityIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        StringBuilder filter = new StringBuilder();
+        if (!locationIds.isEmpty()) {
+            filter.append(" AND location_id IN (:locations)");
+            params.put("locations", locationIds);
+        }
+        if (!legalEntityIds.isEmpty()) {
+            filter.append(" AND legal_entity_id IN (:legalEntities)");
+            params.put("legalEntities", legalEntityIds);
+        }
+
+        return jdbc.sql("""
+                SELECT count(*)::integer AS order_count,
+                       count(DISTINCT customer_subject_hash)::integer AS distinct_customers,
+                       count(DISTINCT customer_subject_hash) FILTER (WHERE is_first_order)::integer
+                           AS new_customers,
+                       sum(item_count)::integer AS item_count_sum,
+                       sum(net_revenue_som) AS net_som,
+                       count(DISTINCT legal_entity_id)::integer AS legal_entity_count
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND terminal_status = 'COMPLETED' AND customer_subject_hash IS NOT NULL
+                """ + filter + """
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new CustomerKpiRow(
+                        row.getInt("order_count"),
+                        row.getInt("distinct_customers"),
+                        row.getInt("new_customers"),
+                        row.getInt("item_count_sum"),
+                        row.getLong("net_som"),
+                        row.getInt("legal_entity_count")))
+                .single();
+    }
+
+    /**
+     * The one row {@link #readCustomerKpis} returns — already-summed totals
+     * for the requested range; {@code ReportQueryService.customerKpis}
+     * derives the published ratios (repeat share, order frequency, customer
+     * value, basket depth) from these rather than the database.
+     *
+     * @param legalEntityCount distinct legal entities present in the read —
+     *                         {@code customers.value.v1} is money (ADR
+     *                         0038), so the caller refuses rather than folds
+     *                         a {@code customerValueSom} across more than one
+     *                         when no {@code legalEntityId} filter narrowed
+     *                         it
+     */
+    public record CustomerKpiRow(
+            int orderCount,
+            int distinctCustomers,
+            int newCustomers,
+            int itemCountSum,
+            long netSom,
+            int legalEntityCount) {}
+
+    /**
+     * T13 (7.6a): the cohort/retention grid. {@code cohort} is every
+     * customer whose first-ever order ({@code is_first_order = true},
+     * resolved against their full history, never only this range) fell in
+     * {@code [from, to]}; the join then counts, for each such cohort's
+     * calendar month, how many of its members placed any order (any
+     * terminal status, matching {@code customers.distinct.v1}'s own
+     * inclusion rule) in each calendar month from the cohort month through
+     * {@code to}. The {@code order_month = cohort_month} row is the cohort's
+     * own size — every member ordered in their own cohort month by
+     * definition — so {@code ReportQueryService} never issues a second query
+     * for it.
+     */
+    public List<CohortCell> readCustomerCohorts(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        StringBuilder filter = new StringBuilder();
+        if (!locationIds.isEmpty()) {
+            filter.append(" AND location_id IN (:locations)");
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                WITH cohort AS (
+                    SELECT customer_subject_hash,
+                           date_trunc('month', business_date)::date AS cohort_month
+                      FROM reporting.fact_order
+                     WHERE tenant_id = :tenantId AND is_first_order = true
+                       AND business_date BETWEEN :from AND :to
+                """ + filter + """
+                )
+                SELECT c.cohort_month,
+                       date_trunc('month', o.business_date)::date AS order_month,
+                       count(DISTINCT o.customer_subject_hash)::integer AS customer_count
+                  FROM cohort c
+                  JOIN reporting.fact_order o
+                    ON o.tenant_id = :tenantId AND o.customer_subject_hash = c.customer_subject_hash
+                   AND o.business_date BETWEEN :from AND :to
+                 GROUP BY c.cohort_month, date_trunc('month', o.business_date)
+                 ORDER BY c.cohort_month, order_month
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new CohortCell(
+                        row.getObject("cohort_month", LocalDate.class),
+                        row.getObject("order_month", LocalDate.class),
+                        row.getInt("customer_count")))
+                .list();
+    }
+
+    /** One (cohort month, order month) cell — see {@link #readCustomerCohorts}. */
+    public record CohortCell(LocalDate cohortMonth, LocalDate orderMonth, int customerCount) {}
+
+    /**
+     * T13 (7.6b): one customer's Recency/Frequency/Monetary inputs for the
+     * range — {@code ReportQueryService.customerRfm} buckets these into the
+     * platform-fixed R×F grid rather than this query, the same split {@code
+     * DayAggregator}/{@code ReportQueryService} already keep between "read
+     * the facts" and "bucket them" for {@code sla_bucket_set.v1}.
+     */
+    public List<CustomerRfmRow> readCustomerRfmInputs(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<UUID> legalEntityIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        StringBuilder filter = new StringBuilder();
+        if (!locationIds.isEmpty()) {
+            filter.append(" AND location_id IN (:locations)");
+            params.put("locations", locationIds);
+        }
+        if (!legalEntityIds.isEmpty()) {
+            filter.append(" AND legal_entity_id IN (:legalEntities)");
+            params.put("legalEntities", legalEntityIds);
+        }
+
+        return jdbc.sql("""
+                SELECT customer_subject_hash,
+                       count(*)::integer AS order_count,
+                       max(business_date) AS last_order_date,
+                       sum(net_revenue_som) AS net_som
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND terminal_status = 'COMPLETED' AND customer_subject_hash IS NOT NULL
+                """ + filter + """
+                 GROUP BY customer_subject_hash
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new CustomerRfmRow(
+                        row.getString("customer_subject_hash"),
+                        row.getInt("order_count"),
+                        row.getObject("last_order_date", LocalDate.class),
+                        row.getLong("net_som")))
+                .list();
+    }
+
+    /** One customer's RFM inputs for the range — see {@link #readCustomerRfmInputs}. */
+    public record CustomerRfmRow(String customerSubjectHash, int orderCount, LocalDate lastOrderDate, long netSom) {}
+
     /** Which end of an order-grain read to serve — see {@link #readOrders}. */
     public enum OrderSort {
         DATE_DESC,

@@ -77,6 +77,25 @@ public class ReportingApiErrorHandler {
                 Map.of("reason", "NON_SCALAR_METRIC", "metricCode", exception.metricCode()));
     }
 
+    /** T13 (7.6a): a customer-type-grain metric was mixed with an agg_branch_day metric in one call. */
+    @ExceptionHandler(ReportingRefusals.MixedCustomerTypeGrainException.class)
+    ProblemDetail mixedCustomerTypeGrain(ReportingRefusals.MixedCustomerTypeGrainException exception) {
+        return ApiProblem.withProperties(
+                ErrorCode.VALIDATION_FAILED,
+                message(exception),
+                Map.of("reason", "MIXED_CUSTOMER_TYPE_GRAIN", "metricCodes", exception.metricCodes()));
+    }
+
+    /** T13 (7.6a): a cohort/retention read asked for a range wider than its retention window. */
+    @ExceptionHandler(ReportingRefusals.CohortRangeTooWideException.class)
+    ProblemDetail cohortRangeTooWide(ReportingRefusals.CohortRangeTooWideException exception) {
+        Map<String, Object> properties = new HashMap<>();
+        properties.put("reason", "COHORT_RANGE_TOO_WIDE");
+        properties.put("requestedMonths", exception.requestedMonths());
+        properties.put("maxMonths", exception.maxMonths());
+        return ApiProblem.withProperties(ErrorCode.VALIDATION_FAILED, message(exception), properties);
+    }
+
     /** A signature is recorded once. Replacing it would lose who actually decided. */
     @ExceptionHandler(MetricSigningService.AlreadySignedException.class)
     ProblemDetail alreadySigned(MetricSigningService.AlreadySignedException exception) {
