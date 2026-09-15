@@ -1742,6 +1742,40 @@ class CustomerIdentityTests {
     }
 
     @Test
+    @DisplayName("a filter matching more than EXPORT_LIMIT rows truncates honestly rather than silently")
+    void exportTruncatesRatherThanSilentlyCuttingAtTheLimit() {
+        // One row past CustomerListQueryService.EXPORT_LIMIT (2000): wave P28's own
+        // named trap is a marketer who cannot tell a complete 2000-row export from a
+        // filter that actually matched 2001 and quietly lost the last one. A single
+        // bulk INSERT rather than 2001 identity.resolve calls -- this test is about
+        // the boundary exportFiltered enforces, not about account creation.
+        jdbc.sql("""
+                        INSERT INTO customer.customer_accounts (id, tenant_id, display_name, created_at)
+                        SELECT gen_random_uuid(), :tenantId, 'Bulk customer ' || generate_series, now()
+                        FROM generate_series(1, :count)
+                        """)
+                .param("tenantId", TENANT)
+                .param("count", CustomerListQueryService.EXPORT_LIMIT + 1)
+                .update();
+
+        var result = lists.exportFiltered(TENANT, null, null, "truncation-test", STAFF_ACTOR);
+
+        assertThat(result.truncated())
+                .as("a filter matching EXPORT_LIMIT + 1 rows must say so rather than returning a "
+                        + "complete-looking EXPORT_LIMIT-row page")
+                .isTrue();
+        assertThat(result.rows()).hasSize(CustomerListQueryService.EXPORT_LIMIT);
+        assertThat(jdbc.sql("""
+                        SELECT change_document ->> 'revealedCount', change_document ->> 'truncated'
+                        FROM audit.audit_events
+                        WHERE action_code = 'customer.list.exported'
+                        """)
+                        .query((row, number) -> row.getString(1) + "/" + row.getString(2))
+                        .single())
+                .isEqualTo(CustomerListQueryService.EXPORT_LIMIT + "/true");
+    }
+
+    @Test
     @DisplayName("a date of birth round-trips through encryption and is never stored as plaintext")
     void dateOfBirthRoundTrips() {
         var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-dob");
