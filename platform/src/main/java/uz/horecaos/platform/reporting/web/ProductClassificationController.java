@@ -71,6 +71,7 @@ public class ProductClassificationController {
                 body.from(),
                 body.to(),
                 orEmpty(body.locationIds()),
+                orEmpty(body.legalEntityIds()),
                 currentActor.get().subject());
         return ResponseEntity.ok(ClassificationRunResponse.of(
                 run, ReportingController.ProvenanceResponse.of(classification.provenanceFor(tenantId))));
@@ -104,11 +105,22 @@ public class ProductClassificationController {
         return value == null ? List.of() : value;
     }
 
-    /** @param locationIds omitted or empty means every location the caller may read */
+    /**
+     * @param locationIds    omitted or empty means every location the caller
+     *                       may read
+     * @param legalEntityIds ADR 0038 (V0370, batch 6 review): omitted or
+     *                       empty ranks revenue.gross.v1 across every legal
+     *                       entity the caller may read, refused with a
+     *                       {@code LEGAL_ENTITY_GROUPING_REQUIRED} problem
+     *                       (see {@link ReportingApiErrorHandler}) when more
+     *                       than one appears in range; naming one or more
+     *                       narrows the run to only those entities' orders
+     */
     public record ClassificationRunRequest(
             @NotNull LocalDate from,
             @NotNull LocalDate to,
-            @Nullable List<UUID> locationIds) {}
+            @Nullable List<UUID> locationIds,
+            @Nullable List<UUID> legalEntityIds) {}
 
     /** One computed run, mirroring {@link ClassificationRun}. */
     public record ClassificationRunResponse(

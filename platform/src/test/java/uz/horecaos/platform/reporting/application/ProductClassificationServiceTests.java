@@ -10,6 +10,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -39,6 +40,8 @@ class ProductClassificationServiceTests {
     private static final UUID VARIANT_ERRATIC = UUID.fromString("018f6f4e-3000-7000-8000-00000000e004");
     private static final UUID VARIANT_SMALL = UUID.fromString("018f6f4e-3000-7000-8000-00000000e005");
     private static final UUID CATEGORY = UUID.fromString("018f6f4e-3000-7000-8000-00000000e006");
+    private static final UUID LEGAL_ENTITY_A = UUID.fromString("018f6f4e-3000-7000-8000-00000000e007");
+    private static final UUID LEGAL_ENTITY_B = UUID.fromString("018f6f4e-3000-7000-8000-00000000e008");
 
     /** Exactly 28 days -- the floor -- so four 7-day buckets fit with none left over. */
     private static final LocalDate FROM = LocalDate.of(2026, 7, 1);
@@ -91,7 +94,7 @@ class ProductClassificationServiceTests {
     void aRunPersistsItsWindowThresholdsAndMetric() {
         insertLine(TENANT, FROM, VARIANT_STEADY, 10, 100_000L);
 
-        ClassificationRun run = service.run(TENANT, FROM, TO, List.of(), "staff-subject-1");
+        ClassificationRun run = service.run(TENANT, FROM, TO, List.of(), List.of(), "staff-subject-1");
 
         assertThat(run.from()).isEqualTo(FROM);
         assertThat(run.to()).isEqualTo(TO);
@@ -129,7 +132,8 @@ class ProductClassificationServiceTests {
         LocalDate monthToDateTo = LocalDate.of(2026, 7, 10);
         insertLine(TENANT, monthToDateFrom, VARIANT_STEADY, 10, 100_000L);
 
-        assertThatThrownBy(() -> service.run(TENANT, monthToDateFrom, monthToDateTo, List.of(), "staff-subject-1"))
+        assertThatThrownBy(() ->
+                        service.run(TENANT, monthToDateFrom, monthToDateTo, List.of(), List.of(), "staff-subject-1"))
                 .isInstanceOf(ReportingRefusals.RangeTooShortException.class)
                 .satisfies(exception -> {
                     var refusal = (ReportingRefusals.RangeTooShortException) exception;
@@ -149,7 +153,7 @@ class ProductClassificationServiceTests {
     void exactlyTwentyEightDaysIsAccepted() {
         insertLine(TENANT, FROM, VARIANT_STEADY, 10, 100_000L);
 
-        ClassificationRun run = service.run(TENANT, FROM, TO, List.of(), "staff-subject-1");
+        ClassificationRun run = service.run(TENANT, FROM, TO, List.of(), List.of(), "staff-subject-1");
 
         assertThat(run.rows()).hasSize(1);
     }
@@ -166,7 +170,7 @@ class ProductClassificationServiceTests {
         insertLineEvenlyAcrossBuckets(TENANT, VARIANT_ERRATIC, 15_000L, 16);
         insertLineEvenlyAcrossBuckets(TENANT, VARIANT_SMALL, 10_000L, 8);
 
-        ClassificationRun run = service.run(TENANT, FROM, TO, List.of(), "staff-subject-1");
+        ClassificationRun run = service.run(TENANT, FROM, TO, List.of(), List.of(), "staff-subject-1");
 
         assertThat(run.rows()).hasSize(3);
         ClassificationRun.Row steady = rowFor(run, VARIANT_STEADY);
@@ -188,7 +192,7 @@ class ProductClassificationServiceTests {
         // the steady product, spread with maximum unevenness instead.
         insertLine(TENANT, FROM, VARIANT_ERRATIC, 40, 40_000L);
 
-        ClassificationRun run = service.run(TENANT, FROM, TO, List.of(), "staff-subject-1");
+        ClassificationRun run = service.run(TENANT, FROM, TO, List.of(), List.of(), "staff-subject-1");
 
         ClassificationRun.Row steady = rowFor(run, VARIANT_STEADY);
         ClassificationRun.Row erratic = rowFor(run, VARIANT_ERRATIC);
@@ -205,10 +209,59 @@ class ProductClassificationServiceTests {
         insertLine(TENANT, FROM, VARIANT_STEADY, 10, 100_000L);
         insertLine(OTHER_TENANT, FROM, VARIANT_STEADY, 999, 999_000_000L);
 
-        ClassificationRun run = service.run(TENANT, FROM, TO, List.of(), "staff-subject-1");
+        ClassificationRun run = service.run(TENANT, FROM, TO, List.of(), List.of(), "staff-subject-1");
 
         assertThat(run.rows()).hasSize(1);
         assertThat(run.rows().get(0).quantityTotal()).isEqualTo(10);
+    }
+
+    /**
+     * ADR 0038 (V0370, batch 6 review): {@code revenue.gross.v1} is money, and
+     * a run that ranks it across two taxpayers with no way to narrow and no
+     * refusal reconciles to neither one's filing. Two lines under two
+     * distinct legal entities, no {@code legalEntityIds} narrowing -- the run
+     * must refuse rather than silently sum both into one ABC ranking.
+     */
+    @Test
+    void aRunSpanningMoreThanOneLegalEntityIsRefusedRatherThanCombined() {
+        insertLine(TENANT, FROM, VARIANT_STEADY, 10, 100_000L, LEGAL_ENTITY_A);
+        insertLine(TENANT, FROM, VARIANT_ERRATIC, 5, 50_000L, LEGAL_ENTITY_B);
+
+        assertThatThrownBy(() -> service.run(TENANT, FROM, TO, List.of(), List.of(), "staff-subject-1"))
+                .isInstanceOf(ReportingRefusals.CombinedEntityTotalException.class)
+                .satisfies(exception -> {
+                    var refusal = (ReportingRefusals.CombinedEntityTotalException) exception;
+                    assertThat(refusal.metricCodes()).containsExactly("revenue.gross.v1");
+                });
+
+        assertThat(jdbc.sql("SELECT count(*) FROM reporting.classification_run WHERE tenant_id = :t")
+                        .param("t", TENANT)
+                        .query(Integer.class)
+                        .single())
+                .as("a refused run writes nothing")
+                .isZero();
+    }
+
+    /**
+     * The partition half of the same fix: naming exactly one legal entity
+     * narrows {@code readVariantBuckets} to only that entity's lines rather
+     * than refusing outright, on the same footing {@code
+     * ReportQueryService#customerKpis} already narrows by {@code
+     * legalEntityIds} instead of always refusing a multi-entity tenant.
+     */
+    @Test
+    void narrowingToOneLegalEntityRanksOnlyThatEntitysRevenue() {
+        insertLine(TENANT, FROM, VARIANT_STEADY, 10, 100_000L, LEGAL_ENTITY_A);
+        // Wildly disproportionate on purpose: if the entity filter leaked,
+        // this line's revenue would dominate the ranking and the assertion
+        // below would fail loudly rather than by a rounding error.
+        insertLine(TENANT, FROM, VARIANT_STEADY, 999, 999_000_000L, LEGAL_ENTITY_B);
+
+        ClassificationRun run = service.run(TENANT, FROM, TO, List.of(), List.of(LEGAL_ENTITY_A), "staff-subject-1");
+
+        assertThat(run.rows()).hasSize(1);
+        assertThat(run.rows().get(0).quantityTotal()).isEqualTo(10);
+        assertThat(run.rows().get(0).revenueGrossSom()).isEqualTo(100_000L);
     }
 
     @Test
@@ -217,7 +270,7 @@ class ProductClassificationServiceTests {
 
         assertThat(service.latest(TENANT, FROM, TO, List.of())).isEmpty();
 
-        ClassificationRun first = service.run(TENANT, FROM, TO, List.of(), "staff-subject-1");
+        ClassificationRun first = service.run(TENANT, FROM, TO, List.of(), List.of(), "staff-subject-1");
         ClassificationRun found = service.latest(TENANT, FROM, TO, List.of()).orElseThrow();
         assertThat(found.id()).isEqualTo(first.id());
         assertThat(found.requestedBy()).isEqualTo(first.requestedBy());
@@ -250,14 +303,26 @@ class ProductClassificationServiceTests {
 
     /** One line on one day, straight into {@code fact_order_line} -- no {@code fact_order} row needed (no FK). */
     private void insertLine(UUID tenantId, LocalDate date, UUID variantId, int quantity, long grossSom) {
-        UUID orderId = orderId(tenantId + ":" + date + ":" + variantId + ":" + quantity);
+        insertLine(tenantId, date, variantId, quantity, grossSom, null);
+    }
+
+    /**
+     * Same as the five-arg overload, with an explicit {@code legal_entity_id}
+     * (V0370, batch 6 review) -- null on the same footing {@code
+     * fact_order.legal_entity_id} itself allows, a distinct fiscal identity
+     * otherwise.
+     */
+    private void insertLine(
+            UUID tenantId, LocalDate date, UUID variantId, int quantity, long grossSom, @Nullable UUID legalEntityId) {
+        UUID orderId = orderId(tenantId + ":" + date + ":" + variantId + ":" + quantity + ":" + legalEntityId);
         jdbc.sql("""
                 INSERT INTO reporting.fact_order_line (
                     tenant_id, business_date, order_id, line_id, location_id, variant_id, category_id,
-                    product_name_snapshot, quantity, gross_som, discount_som, net_som, occurred_at)
+                    product_name_snapshot, quantity, gross_som, discount_som, net_som, occurred_at,
+                    legal_entity_id)
                 VALUES (
                     :tenantId, :businessDate, :orderId, :lineId, :locationId, :variantId, :categoryId,
-                    :productName, :quantity, :gross, 0, :gross, :occurredAt)
+                    :productName, :quantity, :gross, 0, :gross, :occurredAt, :legalEntityId)
                 """)
                 .param("tenantId", tenantId)
                 .param("businessDate", date)
@@ -274,6 +339,7 @@ class ProductClassificationServiceTests {
                 // so a fixed time-of-day on the line's own business date is enough --
                 // the same footing VariantSalesReportingTests#insertLine already uses.
                 .param("occurredAt", date.atTime(9, 0).atOffset(ZoneOffset.UTC))
+                .param("legalEntityId", legalEntityId)
                 .update();
     }
 

@@ -473,7 +473,12 @@ public class DayCloseService {
                 // Wave W02 (7.8a): the line's own order occurred_at, so a line
                 // can be bucketed by operating-day hour without a join back to
                 // fact_order.
-                order.createdAt());
+                order.createdAt(),
+                // ADR 0038 (V0370, batch 6 review): the line's own order
+                // legal_entity_id, so ProductClassificationService can filter
+                // or refuse revenue.gross.v1 by legal entity without a join
+                // back to fact_order.
+                order.legalEntityId());
     }
 
     private static @Nullable Integer elapsed(@Nullable Instant from, @Nullable Instant to) {
