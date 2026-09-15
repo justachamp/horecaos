@@ -103,11 +103,20 @@
   endpoint to enable `AVAILABILITY_READ` on a binding (today, as with
   `pos_sync_schedules`, it is enabled directly), and propagation to a
   `QUANTITY`-tracked stock item, which `StockAvailabilityPort` has no operation
-  for at all yet.
+  for at all yet. 2026-09-15 (wave P42, gap map row `1.2i`): a mapping gap that
+  refuses an order export now reaches a tenant's own screen for the first
+  time — `OrderPosExportController` (ADR 0011) surfaces a `REJECTED` export's
+  `LINE_UNMAPPED`/`MODIFIER_UNMAPPED` error code and detail exactly as
+  `PosOrderExportService#prepare` raised it. Still not built: the "fix path"
+  itself, a link from that error to this ADR's own mapping screen
+  (`PosSyncRunController`/`frontend/operations`'s catalog sync pane) with the
+  offending item pre-selected — the screen this wave's own read points at
+  exists, but nothing draws the link between the two yet.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Date revised: 2026-08-23 (Clopos contract read; staging and difference engine
-  implemented)
+  implemented); 2026-09-15 (wave P42: a mapping-caused export failure is now
+  visible from the order it belongs to)
 - Deciders: Ayubkhon Abbosov (platform architecture)
 - Depends on: ADR 0010, ADR 0011, ADR 0016, ADR 0029, ADR 0030
 - Supersedes / Superseded by: —
