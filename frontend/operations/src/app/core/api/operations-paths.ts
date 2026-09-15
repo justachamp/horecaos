@@ -104,6 +104,17 @@ export const operationsPaths = {
     return `${OPERATIONS}${tenantBrand(scope)}/orders/counts`;
   },
 
+  /**
+   * IA 0.2a (wave T01): the caller's own orders today, by sales channel —
+   * `MyWorkQueryService`, self-scoped server-side by the token's own subject.
+   * No `actorId` query param is ever built here: the one this endpoint
+   * accepts exists only to be refused if it ever names anyone else, and this
+   * console never asks for anyone else's.
+   */
+  myWorkChannelMix(scope: LocationScope): string {
+    return `${this.orders(scope)}/my-work/channel-mix`;
+  },
+
   /** Carts started and never converted (IA 1.4, orders.md §6). Query params: `from`, `to`, `channelId`. */
   orderDrafts(scope: LocationScope): string {
     return `${this.orders(scope)}/drafts`;

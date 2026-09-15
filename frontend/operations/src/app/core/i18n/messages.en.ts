@@ -2107,6 +2107,20 @@ export const messagesEn = {
   'today.operators.notBuilt':
     'Arrives with the staff directory (IA 9.2, not yet built) — there is no way today to resolve who accepted an order to a name.',
 
+  // ---- IA 0.2 My work (my-work-page.ts) — wave T01 ----
+  'myWork.title': 'My work',
+  'myWork.subtitle': 'Your own orders and takings at this branch, today only.',
+  'myWork.loading': 'Loading your work',
+  'myWork.error': 'Could not load this',
+  'myWork.channel.title': 'My orders by channel',
+  'myWork.channel.period': 'Since {from}, this trading day',
+  'myWork.channel.empty': 'No orders of yours yet today',
+  'myWork.payment.title': 'Revenue by payment method',
+  'myWork.payment.empty': 'No takings recorded yet today',
+  'myWork.locked.title': 'Not available yet',
+  'myWork.locked.ask':
+    'Personal data and interface personalization wait on the staff-identity ADR, which the platform owner has not written yet.',
+
   // ---- IA 0.1e / X/X.3 Wallboard (wallboard-shell.ts) — wave T23 ----
   'wallboard.title': 'Live board',
   'wallboard.denied': 'No access to the live board',
