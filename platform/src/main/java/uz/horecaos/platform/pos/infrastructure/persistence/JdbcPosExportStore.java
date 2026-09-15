@@ -110,6 +110,48 @@ public class JdbcPosExportStore {
     }
 
     /**
+     * The operations-plane read of one order's export (wave P42, gap map row
+     * {@code 1.2i}): every field a merchant needs to see why a ticket did or
+     * did not reach the till, without the control-plane's protected recovery
+     * evidence ({@link #candidates} stays control-plane only, per ADR 0011).
+     *
+     * <p>{@code uq_pos_export_per_order} means at most one row ever answers
+     * this, so unlike {@code JdbcPosExportStatus#stateOf}'s defensive {@code
+     * ORDER BY ... LIMIT 1} (which reads the same table for a different,
+     * ordering-owned question), no ordering is needed here.
+     */
+    public Optional<ExportDetail> findDetailByOrder(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT id, order_id, state, attempt_count, external_order_id,
+                       requested_at, first_sent_at, settled_at,
+                       last_error_code, last_error,
+                       resolution_kind, resolution_reason, resolved_by, resolved_at,
+                       version
+                  FROM integration.pos_order_exports
+                 WHERE tenant_id = :tenantId AND order_id = :orderId
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> new ExportDetail(
+                        row.getObject("id", UUID.class),
+                        row.getObject("order_id", UUID.class),
+                        ExportState.valueOf(row.getString("state")),
+                        row.getInt("attempt_count"),
+                        row.getString("external_order_id"),
+                        row.getObject("requested_at", OffsetDateTime.class).toInstant(),
+                        toInstant(row.getObject("first_sent_at", OffsetDateTime.class)),
+                        toInstant(row.getObject("settled_at", OffsetDateTime.class)),
+                        row.getString("last_error_code"),
+                        row.getString("last_error"),
+                        row.getString("resolution_kind"),
+                        row.getString("resolution_reason"),
+                        row.getString("resolved_by"),
+                        toInstant(row.getObject("resolved_at", OffsetDateTime.class)),
+                        row.getLong("version")))
+                .optional();
+    }
+
+    /**
      * Moves an export to {@code SENT} and allocates its attempt number.
      *
      * <p>Conditional on the current state, so only one worker wins. The caller
@@ -518,5 +560,39 @@ public class JdbcPosExportStore {
             String customerPhoneHash,
             String externalVenueReference,
             Instant requestedAt,
+            long version) {}
+
+    /**
+     * The operations-plane read of one order's export (wave P42, gap map row
+     * {@code 1.2i}) — {@link #findDetailByOrder}'s own shape, carrying the
+     * error and resolution detail an operator needs and {@link ExportRow}
+     * does not.
+     *
+     * @param lastErrorCode  the adapter's own diagnostic code from the last
+     *                       settled attempt, e.g. {@code LINE_UNMAPPED} — an
+     *                       ADR 0012 mapping gap, not a customer fact
+     * @param lastError      the adapter's own diagnostic detail. Never a
+     *                       customer name, phone or address (ADR 0029) — every
+     *                       {@code ExportNotPossible}/provider refusal this
+     *                       column carries is about the order's shape, not
+     *                       about who placed it
+     * @param resolvedBy     the principal or adapter version that settled an
+     *                       uncertain export, never a customer
+     */
+    public record ExportDetail(
+            UUID exportId,
+            UUID orderId,
+            ExportState state,
+            int attemptCount,
+            @Nullable String externalOrderId,
+            Instant requestedAt,
+            @Nullable Instant firstSentAt,
+            @Nullable Instant settledAt,
+            @Nullable String lastErrorCode,
+            @Nullable String lastError,
+            @Nullable String resolutionKind,
+            @Nullable String resolutionReason,
+            @Nullable String resolvedBy,
+            @Nullable Instant resolvedAt,
             long version) {}
 }
