@@ -28,7 +28,12 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * {@code web.api.ErrorCode} is a change to a file every module shares and is left
  * to whoever owns that vocabulary.
  */
-@RestControllerAdvice(assignableTypes = {ReportingController.class, MetricSignatureController.class})
+@RestControllerAdvice(
+        assignableTypes = {
+            ReportingController.class,
+            MetricSignatureController.class,
+            ProductClassificationController.class
+        })
 public class ReportingApiErrorHandler {
 
     /** ADR 0043: an unknown metric id is rejected and never ignored. */
@@ -75,6 +80,18 @@ public class ReportingApiErrorHandler {
                 ErrorCode.VALIDATION_FAILED,
                 message(exception),
                 Map.of("reason", "NON_SCALAR_METRIC", "metricCode", exception.metricCode()));
+    }
+
+    /** T14 (7.7a/7.7b): the 28-day floor a classification run refuses to go under. */
+    @ExceptionHandler(ReportingRefusals.RangeTooShortException.class)
+    ProblemDetail rangeTooShort(ReportingRefusals.RangeTooShortException exception) {
+        return ApiProblem.withProperties(
+                ErrorCode.VALIDATION_FAILED,
+                message(exception),
+                Map.of(
+                        "reason", "RANGE_TOO_SHORT_FOR_CLASSIFICATION",
+                        "minimumDays", exception.minimumDays(),
+                        "actualDays", exception.actualDays()));
     }
 
     /** A signature is recorded once. Replacing it would lose who actually decided. */

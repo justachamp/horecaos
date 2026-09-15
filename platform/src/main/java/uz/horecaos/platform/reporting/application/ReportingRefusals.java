@@ -84,6 +84,39 @@ public final class ReportingRefusals {
     }
 
     /**
+     * T14 (7.7a/7.7b): a classification run was asked for over a range
+     * shorter than the 28-day floor.
+     *
+     * <p>The trap this exists to catch: the month preset is month-to-date, so
+     * the closest available pill silently produces a four-day window on the
+     * 4th of a month. statistics.md S2.7 is explicit that the floor is
+     * refused rather than narrowed — "a Pareto over four days is an artefact
+     * of one large party order" — so this throws instead of rounding the
+     * range up or answering anyway.
+     */
+    public static final class RangeTooShortException extends IllegalArgumentException {
+
+        private final int minimumDays;
+        private final int actualDays;
+
+        public RangeTooShortException(int minimumDays, int actualDays) {
+            super(("A classification run needs at least %d days; the requested range is %d "
+                            + "(statistics.md S2.7 — a shorter Pareto is an artefact of one large order).")
+                    .formatted(minimumDays, actualDays));
+            this.minimumDays = minimumDays;
+            this.actualDays = actualDays;
+        }
+
+        public int minimumDays() {
+            return minimumDays;
+        }
+
+        public int actualDays() {
+            return actualDays;
+        }
+    }
+
+    /**
      * The metric is not a single number per slice.
      *
      * <p>A median cannot be composed from per-slice medians and a distribution is
