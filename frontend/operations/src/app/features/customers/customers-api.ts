@@ -270,7 +270,15 @@ export interface LoyaltyEntry {
   readonly occurredAt: string;
 }
 
-/** Row 5.2e: `LoyaltyOperationsController.AdjustmentRequest` — one signed movement, one reason, no transfer. */
+/**
+ * Row 5.2e: `LoyaltyOperationsController.AdjustmentRequest` — one signed
+ * movement, one reason, no transfer.
+ *
+ * `actorSubject` is sent for wire compatibility with the published contract
+ * but the server never reads it for the ADR 0027 audit trail — it always
+ * names the authenticated caller's own token instead (wave P40 adversarial
+ * review; see `AdjustmentRequest.actorSubject`'s own doc).
+ */
 export interface LoyaltyAdjustmentRequest {
   readonly brandId: string;
   /** Signed whole som (`amountMinor`'s own doc): positive credits, negative debits. */
@@ -278,6 +286,7 @@ export interface LoyaltyAdjustmentRequest {
   readonly currency: string;
   readonly reasonCode: string;
   readonly reason: string;
+  /** Ignored by the server — kept only because the published schema still requires it. */
   readonly actorSubject: string;
   readonly correlationId?: string | null;
 }

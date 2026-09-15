@@ -58,12 +58,23 @@ class CourierPolicyEndpointTests {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private static final UUID TENANT = UUID.fromString("018fd600-4000-7000-8000-0000000000a1");
+    private static final UUID BRAND = UUID.fromString("018fd600-4000-7000-8000-0000000000b1");
+    private static final UUID LOCATION = UUID.fromString("018fd600-4000-7000-8000-0000000000c1");
+
+    /** A wholly separate tenant, for the cross-tenant isolation cases. */
+    private static final UUID OTHER_TENANT = UUID.fromString("018fd600-4000-7000-8000-0000000000a2");
 
     /** Holds {@code DELIVERY_POLICY_READ}/{@code DELIVERY_POLICY_WRITE} at TENANT (TENANT_ADMIN's own bundle). */
     private static final String MANAGER = "courier-policy-manager";
 
     /** No grant anywhere — the capability-refused negative case for both the read and the write. */
     private static final String NOBODY = "courier-policy-nobody";
+
+    /** Holds TENANT_ADMIN's bundle, but only on {@code OTHER_TENANT}. */
+    private static final String OTHER_TENANT_MANAGER = "courier-policy-other-tenant-manager";
+
+    /** Holds {@code BRAND_MANAGER}'s bundle at {@code BRAND} only — no TENANT-scope grant anywhere. */
+    private static final String BRAND_MANAGER = "courier-policy-brand-manager";
 
     private static final String FULL_POLICY_BODY = """
             {
@@ -148,9 +159,27 @@ class CourierPolicyEndpointTests {
                 VALUES (:id, 'courier-policy-endpoint', 'Legal', 'Display', 'UZS', 'Asia/Tashkent',
                         'ACTIVE', 0)
                 """).param("id", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :t, 'MAIN', 'main', 'Main', 'ACTIVE', 0)
+                """).param("id", BRAND).param("t", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
+                    timezone, status, version)
+                VALUES (:id, :t, :b, 'CENTRE', 'centre', 'Centre', 'Asia/Tashkent', 'ACTIVE', 0)
+                """).param("id", LOCATION).param("t", TENANT).param("b", BRAND).update();
+
+        jdbc.sql("""
+                INSERT INTO tenant.tenants (id, slug, legal_name, display_name, default_currency,
+                    default_timezone, status, version)
+                VALUES (:id, 'courier-policy-endpoint-other', 'Legal', 'Display', 'UZS', 'Asia/Tashkent',
+                        'ACTIVE', 0)
+                """).param("id", OTHER_TENANT).update();
 
         roleRegistry.synchronize();
-        grant(MANAGER, PlatformRole.TENANT_ADMIN);
+        grant(MANAGER, PlatformRole.TENANT_ADMIN, TENANT);
+        grant(OTHER_TENANT_MANAGER, PlatformRole.TENANT_ADMIN, OTHER_TENANT);
+        grantAtBrand(BRAND_MANAGER, PlatformRole.BRAND_MANAGER, BRAND);
     }
 
     @Test
@@ -241,6 +270,140 @@ class CourierPolicyEndpointTests {
         assertThat(attempt.getResponse().getStatus()).isEqualTo(403);
     }
 
+    @Test
+    @DisplayName("a BRAND_MANAGER holding no TENANT-scope grant can read and publish their own "
+            + "brand's courier policy, not only a TENANT_ADMIN")
+    void aBrandManagerWithOnlyABrandScopeGrantCanReadAndWriteTheirOwnBrandsPolicy() throws Exception {
+        // BRAND_MANAGER's grant is scoped to BRAND only (see grantAtBrand in reset()) — no
+        // TENANT-scope row exists anywhere for this subject. Enforcing GET/PUT at a fixed
+        // TENANT scope (the pre-fix behaviour) would refuse both calls below with 403
+        // regardless of brandId, even though PlatformRole bundles DELIVERY_POLICY_READ/WRITE
+        // into BRAND_MANAGER specifically so this call succeeds.
+        MvcResult read = mvc.perform(get(policyPathAtBrand()).with(tokenFor(BRAND_MANAGER)))
+                .andReturn();
+        assertThat(read.getResponse().getStatus())
+                .as("BRAND_MANAGER's own brand-scoped grant must satisfy a BRAND-scoped read")
+                .isEqualTo(200);
+
+        MvcResult written = mvc.perform(put(policyPathAtBrand())
+                        .with(tokenFor(BRAND_MANAGER))
+                        .header("Idempotency-Key", "courier-policy-write-brand-manager-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(FULL_POLICY_BODY))
+                .andReturn();
+        assertThat(written.getResponse().getStatus())
+                .as("BRAND_MANAGER's own brand-scoped grant must satisfy a BRAND-scoped publish")
+                .isEqualTo(200);
+        assertThat(json(written).path("winningScope").asText()).isEqualTo("BRAND");
+
+        // The same subject still has no standing over the plain TENANT-wide document.
+        MvcResult tenantAttempt =
+                mvc.perform(get(policyPath()).with(tokenFor(BRAND_MANAGER))).andReturn();
+        assertThat(tenantAttempt.getResponse().getStatus())
+                .as("a BRAND-scope grant must not reach the wider TENANT-scope document")
+                .isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("PUT .../courier-policy?brandId=... publishes at BRAND scope, wired through the "
+            + "resolver hierarchy rather than always landing on TENANT")
+    void aBrandScopedWritePublishesIndependentlyOfTheTenantDefault() throws Exception {
+        MvcResult written = mvc.perform(put(policyPathAtBrand())
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "courier-policy-write-brand-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(FULL_POLICY_BODY))
+                .andReturn();
+
+        assertThat(written.getResponse().getStatus()).isEqualTo(200);
+        JsonNode writtenBody = json(written);
+        assertThat(writtenBody.path("winningScope").asText())
+                .as("brandId alone, with no locationId, resolves a BRAND override")
+                .isEqualTo("BRAND");
+        assertNewFieldsMatchTheFullPolicyBody(writtenBody);
+
+        MvcResult tenantRead =
+                mvc.perform(get(policyPath()).with(tokenFor(MANAGER))).andReturn();
+        assertThat(tenantRead.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(tenantRead).path("gpsVerificationEnabled").asBoolean())
+                .as("a BRAND-scoped publish must not touch what the plain TENANT-wide GET resolves")
+                .isFalse();
+
+        MvcResult brandRead =
+                mvc.perform(get(policyPathAtBrand()).with(tokenFor(MANAGER))).andReturn();
+        assertThat(brandRead.getResponse().getStatus()).isEqualTo(200);
+        assertNewFieldsMatchTheFullPolicyBody(json(brandRead));
+    }
+
+    @Test
+    @DisplayName("PUT .../courier-policy?brandId=...&locationId=... publishes at LOCATION scope, "
+            + "narrower than and independent of the brand override")
+    void aLocationScopedWritePublishesIndependentlyOfTheBrandDefault() throws Exception {
+        mvc.perform(put(policyPathAtBrand())
+                .with(tokenFor(MANAGER))
+                .header("Idempotency-Key", "courier-policy-write-brand-2")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(FULL_POLICY_BODY));
+
+        MvcResult written = mvc.perform(put(policyPathAtLocation())
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "courier-policy-write-location-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(FULL_POLICY_BODY.replace(
+                                "\"gpsAcceptRadiusMeters\": 400", "\"gpsAcceptRadiusMeters\": 250")))
+                .andReturn();
+
+        assertThat(written.getResponse().getStatus()).isEqualTo(200);
+        JsonNode writtenBody = json(written);
+        assertThat(writtenBody.path("winningScope").asText())
+                .as("brandId and locationId together resolve a LOCATION override")
+                .isEqualTo("LOCATION");
+        assertThat(writtenBody.path("gpsAcceptRadiusMeters").asInt()).isEqualTo(250);
+
+        MvcResult brandRead =
+                mvc.perform(get(policyPathAtBrand()).with(tokenFor(MANAGER))).andReturn();
+        assertThat(json(brandRead).path("gpsAcceptRadiusMeters").asInt())
+                .as("a LOCATION-scoped publish must not touch the BRAND override beneath it")
+                .isEqualTo(400);
+
+        MvcResult locationRead =
+                mvc.perform(get(policyPathAtLocation()).with(tokenFor(MANAGER))).andReturn();
+        assertThat(json(locationRead).path("gpsAcceptRadiusMeters").asInt()).isEqualTo(250);
+    }
+
+    @Test
+    @DisplayName("a grant scoped to one tenant cannot read or write another tenant's courier policy")
+    void aGrantScopedToOneTenantCannotReachAnotherTenantsCourierPolicy() throws Exception {
+        MvcResult foreignRead = mvc.perform(get(policyPath(TENANT)).with(tokenFor(OTHER_TENANT_MANAGER)))
+                .andReturn();
+        assertThat(foreignRead.getResponse().getStatus())
+                .as("OTHER_TENANT_MANAGER's grant is scoped to OTHER_TENANT only")
+                .isEqualTo(403);
+
+        MvcResult foreignWrite = mvc.perform(put(policyPath(TENANT))
+                        .with(tokenFor(OTHER_TENANT_MANAGER))
+                        .header("Idempotency-Key", "courier-policy-cross-tenant-write-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(FULL_POLICY_BODY))
+                .andReturn();
+        assertThat(foreignWrite.getResponse().getStatus()).isEqualTo(403);
+
+        long tenantVersions = jdbc.sql("SELECT count(*) FROM tenant.policies WHERE key_code = "
+                        + "'courier.compensation' AND tenant_id = :t")
+                .param("t", TENANT)
+                .query(Long.class)
+                .single();
+        assertThat(tenantVersions)
+                .as("a refused cross-tenant write must publish nothing under TENANT")
+                .isZero();
+
+        MvcResult reverseRead = mvc.perform(get(policyPath(OTHER_TENANT)).with(tokenFor(MANAGER)))
+                .andReturn();
+        assertThat(reverseRead.getResponse().getStatus())
+                .as("and MANAGER's TENANT grant does not reach OTHER_TENANT either")
+                .isEqualTo(403);
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private static void assertNewFieldsMatchTheFullPolicyBody(JsonNode body) {
@@ -257,10 +420,22 @@ class CourierPolicyEndpointTests {
     }
 
     private static String policyPath() {
-        return "/api/v1/operations/tenants/" + TENANT + "/courier-policy";
+        return policyPath(TENANT);
     }
 
-    private void grant(String subject, PlatformRole role) {
+    private static String policyPath(UUID tenantId) {
+        return "/api/v1/operations/tenants/" + tenantId + "/courier-policy";
+    }
+
+    private static String policyPathAtBrand() {
+        return policyPath() + "?brandId=" + BRAND;
+    }
+
+    private static String policyPathAtLocation() {
+        return policyPath() + "?brandId=" + BRAND + "&locationId=" + LOCATION;
+    }
+
+    private void grant(String subject, PlatformRole role, UUID tenantId) {
         jdbc.sql("""
                 INSERT INTO iam.grants
                     (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
@@ -269,10 +444,28 @@ class CourierPolicyEndpointTests {
                         'ACTIVE', 'test-fixture', 'courier policy endpoint test', :validFrom)
                 ON CONFLICT DO NOTHING
                 """)
-                .param("id", UUID.nameUUIDFromBytes((subject + role.code() + TENANT).getBytes(UTF_8)))
+                .param("id", UUID.nameUUIDFromBytes((subject + role.code() + tenantId).getBytes(UTF_8)))
+                .param("tenantId", tenantId)
+                .param("subject", subject)
+                .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
+                .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    private void grantAtBrand(String subject, PlatformRole role, UUID brandId) {
+        jdbc.sql("""
+                INSERT INTO iam.grants
+                    (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
+                     status, granted_by, reason, valid_from)
+                VALUES (:id, :tenantId, :subject, :roleId, true, 'BRAND', :brandId,
+                        'ACTIVE', 'test-fixture', 'courier policy endpoint test', :validFrom)
+                ON CONFLICT DO NOTHING
+                """)
+                .param("id", UUID.nameUUIDFromBytes((subject + role.code() + brandId).getBytes(UTF_8)))
                 .param("tenantId", TENANT)
                 .param("subject", subject)
                 .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
+                .param("brandId", brandId)
                 .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
                 .update();
     }

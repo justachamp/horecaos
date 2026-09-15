@@ -67,6 +67,9 @@ class FloorPlanTableAndQrEndpointTests {
     private static final UUID BRAND = UUID.fromString("018fd500-4000-7000-8000-0000000000b1");
     private static final UUID LOCATION = UUID.fromString("018fd500-4000-7000-8000-0000000000c1");
 
+    /** A second branch in the same tenant. MANAGER holds no grant here. */
+    private static final UUID LOCATION_B = UUID.fromString("018fd500-4000-7000-8000-0000000000c2");
+
     /** Holds {@code DINEIN_FLOORPLAN_MANAGE}/{@code DINEIN_QR_ROTATE}/{@code RESERVATION_READ} at LOCATION. */
     private static final String MANAGER = "floorplan-manager";
 
@@ -262,6 +265,73 @@ class FloorPlanTableAndQrEndpointTests {
         assertThat(attempt.getResponse().getStatus()).isEqualTo(403);
     }
 
+    // ------------------------- location isolation (mirroring
+    // ReservationControllerLocationIsolationHttpTests' own style)
+
+    @Test
+    @DisplayName("PUT .../tables/{id} refuses a table belonging to a different branch")
+    void movingATableRefusesATableBelongingToAnotherBranch() throws Exception {
+        UUID tableAtLocationB = seedTableAtLocationB();
+
+        MvcResult attempt = mvc.perform(put(tablePath(tableAtLocationB))
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "move-table-cross-branch-1")
+                        .header("If-Match", "\"1\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"layoutX\":1,\"layoutY\":1,\"reason\":\"Should not happen\"}"))
+                .andReturn();
+
+        assertThat(attempt.getResponse().getStatus())
+                .as("MANAGER holds DINEIN_FLOORPLAN_MANAGE only at LOCATION; the table lives at LOCATION_B")
+                .isEqualTo(404);
+        assertThat(layoutXOfOptional(tableAtLocationB))
+                .as("a refused move must leave LOCATION_B's table exactly as it was")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("POST .../tables/{id}/status-changes refuses a table belonging to a different branch")
+    void changingStatusRefusesATableBelongingToAnotherBranch() throws Exception {
+        UUID tableAtLocationB = seedTableAtLocationB();
+
+        MvcResult attempt = mvc.perform(post(tablePath(tableAtLocationB) + "/status-changes")
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "status-change-cross-branch-1")
+                        .header("If-Match", "\"1\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"ARCHIVED\",\"reason\":\"Should not happen\"}"))
+                .andReturn();
+
+        assertThat(attempt.getResponse().getStatus())
+                .as("MANAGER holds DINEIN_FLOORPLAN_MANAGE only at LOCATION; the table lives at LOCATION_B")
+                .isEqualTo(404);
+        assertThat(statusOf(tableAtLocationB))
+                .as("a refused status change must leave LOCATION_B's table exactly as it was, "
+                        + "not archived and its guest tokens not revoked")
+                .isEqualTo("ACTIVE");
+    }
+
+    @Test
+    @DisplayName("POST .../tables/{id}/qr-token-rotations refuses a table belonging to a different branch")
+    void rotatingQrRefusesATableBelongingToAnotherBranch() throws Exception {
+        UUID tableAtLocationB = seedTableAtLocationB();
+
+        MvcResult attempt = mvc.perform(post(tablePath(tableAtLocationB) + "/qr-token-rotations")
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "rotate-cross-branch-1")
+                        .header("If-Match", "\"1\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Should not happen\"}"))
+                .andReturn();
+
+        assertThat(attempt.getResponse().getStatus())
+                .as("MANAGER holds DINEIN_QR_ROTATE only at LOCATION; the table lives at LOCATION_B")
+                .isEqualTo(404);
+        assertThat(qrTokenHashOfOptional(tableAtLocationB))
+                .as("a refused rotation must not mint or store a token for LOCATION_B's table")
+                .isEmpty();
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private UUID createSection() throws Exception {
@@ -293,6 +363,29 @@ class FloorPlanTableAndQrEndpointTests {
                 .param("id", id)
                 .query(BigDecimal.class)
                 .single();
+    }
+
+    /** Nullable — the seeded fixture table at LOCATION_B never has a layout point placed. */
+    private Optional<BigDecimal> layoutXOfOptional(UUID id) {
+        return jdbc.sql("SELECT layout_x FROM dinein.tables WHERE id = :id")
+                .param("id", id)
+                .query(BigDecimal.class)
+                .optional();
+    }
+
+    private String statusOf(UUID id) {
+        return jdbc.sql("SELECT status FROM dinein.tables WHERE id = :id")
+                .param("id", id)
+                .query(String.class)
+                .single();
+    }
+
+    /** Nullable — no digest until a rotation actually writes one. */
+    private Optional<String> qrTokenHashOfOptional(UUID id) {
+        return jdbc.sql("SELECT qr_token_hash FROM dinein.tables WHERE id = :id")
+                .param("id", id)
+                .query(String.class)
+                .optional();
     }
 
     private static JsonNode json(MvcResult result) throws Exception {
@@ -329,6 +422,51 @@ class FloorPlanTableAndQrEndpointTests {
                     timezone, status, version)
                 VALUES (:id, :t, :b, 'CENTRE', 'centre', 'Centre', 'Asia/Tashkent', 'ACTIVE', 0)
                 """).param("id", LOCATION).param("t", TENANT).param("b", BRAND).update();
+
+        jdbc.sql("""
+                INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
+                    timezone, status, version)
+                VALUES (:id, :t, :b, 'NORTH', 'north', 'North', 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", LOCATION_B)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .update();
+    }
+
+    /**
+     * A table at {@code LOCATION_B}, written directly the same way {@code
+     * ReservationControllerLocationIsolationHttpTests.seedReservation} seeds a
+     * cross-branch fixture — MANAGER's grant never reaches {@code LOCATION_B},
+     * so creating it through the authorized HTTP surface is not available here.
+     */
+    private UUID seedTableAtLocationB() {
+        UUID sectionId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO dinein.sections (id, tenant_id, brand_id, location_id, code, display_name,
+                    sort_order, status, version)
+                VALUES (:id, :t, :b, :l, 'PATIO', 'Patio', 1, 'ACTIVE', 1)
+                """)
+                .param("id", sectionId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("l", LOCATION_B)
+                .update();
+
+        UUID tableId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO dinein.tables (id, tenant_id, brand_id, location_id, section_id, code,
+                    display_name, seats, joinable, status, version)
+                VALUES (:id, :t, :b, :l, :s, 'B1', 'Branch B table 1', 4, false, 'ACTIVE', 1)
+                """)
+                .param("id", tableId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("l", LOCATION_B)
+                .param("s", sectionId)
+                .update();
+
+        return tableId;
     }
 
     private void grant(String subject, PlatformRole role, UUID locationId) {

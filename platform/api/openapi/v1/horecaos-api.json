@@ -40557,7 +40557,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/courier-policy" : {
       "get" : {
-        "description" : "Omit brandId/locationId for the tenant-wide resolution; supply either to see what a specific brand or location actually resolves. Wave P38 gave this document a writer beside this read (see PUT of the same path) and five new fields couriers.md §16 always named: the GPS master toggle with its accept and status-change radii, the kitchen-ready-only gate, when the customer's exact location is revealed, and the post-delivery payment check. Courier billing mode stays refused by ADR 0042 and has no field here; the telemetry collection gate is a separate, PLATFORM_ADMIN-only ADR 0030 key and is not part of this document.",
+        "description" : "Omit brandId/locationId for the tenant-wide resolution; supply either to see what a specific brand or location actually resolves. Wave P38 gave this document a writer beside this read (see PUT of the same path) and five new fields couriers.md §16 always named: the GPS master toggle with its accept and status-change radii, the kitchen-ready-only gate, when the customer's exact location is revealed, and the post-delivery payment check. Courier billing mode stays refused by ADR 0042 and has no field here; the telemetry collection gate is a separate, PLATFORM_ADMIN-only ADR 0030 key and is not part of this document. Authorization is checked against brandId/locationId's own resolved scope, not a fixed TENANT default, so a BRAND_MANAGER reading their own brand's policy is not refused for a grant the role bundle already gives them.",
         "operationId" : "courierPolicy",
         "parameters" : [ {
           "in" : "path",
@@ -40600,7 +40600,7 @@
         "tags" : [ "Courier operations" ]
       },
       "put" : {
-        "description" : "Whole-document replace: every field is required, because ADR 0030 versions the document as one unit rather than merging a partial write over the version it replaces. Omit brandId/locationId to publish the tenant-wide default; supply either to publish a brand or location override. The version this replaces is never touched — PolicyResolver.pinned keeps answering with it for whatever already resolved it.",
+        "description" : "Whole-document replace: every field is required, because ADR 0030 versions the document as one unit rather than merging a partial write over the version it replaces. Omit brandId/locationId to publish the tenant-wide default; supply either to publish a brand or location override. The version this replaces is never touched — PolicyResolver.pinned keeps answering with it for whatever already resolved it. Authorization is checked against that same resolved scope (see the class-level doc on courierPolicy above), so a BRAND_MANAGER publishing their own brand's override is not refused for a grant the role bundle already gives them.",
         "operationId" : "writeCourierPolicy",
         "parameters" : [ {
           "in" : "path",
@@ -42005,7 +42005,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/customers/{customerId}/loyalty/adjustments" : {
       "post" : {
-        "description" : "One account, one signed amount, one reason. Above the configured threshold it needs an ADR 0027 approval and returns PENDING until a second person decides it. There is no paired form and no transfer: two offsetting adjustments are two separate approved acts.",
+        "description" : "One account, one signed amount, one reason. Above the configured threshold it needs an ADR 0027 approval and returns PENDING until a second person decides it. There is no paired form and no transfer: two offsetting adjustments are two separate approved acts. The audit trail's actor is always the authenticated caller, never the request body's actorSubject — see that field's own doc.",
         "operationId" : "adjust_1",
         "parameters" : [ {
           "in" : "path",

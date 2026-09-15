@@ -4,16 +4,13 @@
   <p class="card__code q-mono">{{ tableCode() }}</p>
 
   @if (qrToken(); as token) {
-    <!-- Placeholder for P17's q-qr-code (X.35), not merged in this base — see this class's own doc. -->
-    <div class="card__mark" data-testid="table-print-card-mark" aria-hidden="true">
-      <div class="card__markGrid">
-        @for (cell of [1, 2, 3, 4, 5, 6, 7, 8, 9]; track cell) {
-          <span
-            class="card__markCell"
-            [class.card__markCell--on]="(cell + token.length) % 2 === 0"
-          ></span>
-        }
-      </div>
+    <div class="card__mark" data-testid="table-print-card-mark">
+      <q-qr-code
+        [value]="token"
+        [size]="120"
+        [label]="'shared.tablePrintCard.qrLabel' | t"
+        data-testid="table-print-card-qr"
+      />
     </div>
     <p class="card__tokenLabel q-caption">{{ 'shared.tablePrintCard.tokenLabel' | t }}</p>
     <p class="card__token q-mono" data-testid="table-print-card-token">{{ token }}</p>

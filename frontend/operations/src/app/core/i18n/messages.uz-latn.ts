@@ -5129,6 +5129,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'shared.dragDropAssign.rejected': 'Koʻchirib boʻlmadi: {reason}',
   'shared.dragDropAssign.rejectedUnknown': 'Koʻchirib boʻlmadi — qayta urinib koʻring.',
   // shared/ui — q-table-print-card (X.36, P38 toʻlqini)
+  'shared.tablePrintCard.qrLabel': 'Ushbu stolning QR kodi',
   'shared.tablePrintCard.tokenLabel': 'Kod (skanerlash ishlamasa, qoʻlda kiriting)',
   'shared.tablePrintCard.none': 'Bu stol uchun hali kod berilmagan.',
   // --- shared/ui q-secret-input (ADR 0106, gap-map row X.14) --------------

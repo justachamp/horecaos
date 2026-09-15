@@ -25,29 +25,15 @@
 }
 
 .card__mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin: 0 auto 12px;
   width: 140px;
   height: 140px;
   padding: 8px;
   border: 1px solid var(--q-ink);
   box-sizing: border-box;
-}
-
-.card__markGrid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-  gap: 4px;
-  width: 100%;
-  height: 100%;
-}
-
-.card__markCell {
-  background: transparent;
-}
-
-.card__markCell--on {
-  background: var(--q-ink);
 }
 
 .card__tokenLabel {

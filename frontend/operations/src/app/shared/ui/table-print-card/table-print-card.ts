@@ -1,24 +1,18 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { QQrCode } from '../qr-code';
 
 /**
  * A table's printable QR card (rows `10.5b`/`X.36`, wave P38) — what a
  * manager hands to whoever is walking the room with a printer after
  * issuing or rotating a table's code.
  *
- * **Stands in for `X.35`'s `q-qr-code` (wave P17), not merged yet.** This
- * wave's brief names `q-qr-code` as the component that renders the token as
- * a scannable code; P17 owns building it and has not landed in this
- * worktree's base (`shared/ui` carries no `qr-code` component at all). Per
- * the standing instruction for exactly this situation — "build the minimum
- * you need locally … rather than building that wave" — this component
- * renders the plaintext token as a labelled, monospaced block a staff
- * member can type into whatever scans it, inside the same card layout
- * `q-qr-code`'s own consumer will eventually fill with a real scannable
- * mark. Swapping the placeholder block for `<q-qr-code [value]="qrToken()">`
- * once P17 merges is the entire migration — nothing else about this
- * component's contract needs to change.
+ * Renders the token through `q-qr-code` (`X.35`, wave P17), which landed in
+ * this same integration — `qr-code.ts`'s own doc names this card as its
+ * third call site. A staff member handed the printed card can scan it
+ * directly; the token also still prints as text underneath, for the rare
+ * scan-fails case `shared.tablePrintCard.tokenLabel` already existed for.
  *
  * **Never caches the token.** `qrToken` is only ever the plaintext
  * `FloorPlanController` just minted, held by the host component for exactly
@@ -28,7 +22,7 @@ import { TPipe } from '../../../core/i18n/t.pipe';
  */
 @Component({
   selector: 'q-table-print-card',
-  imports: [TPipe],
+  imports: [TPipe, QQrCode],
   templateUrl: './table-print-card.html',
   styleUrl: './table-print-card.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
