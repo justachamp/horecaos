@@ -4012,6 +4012,43 @@
         },
         "type" : "object"
       },
+      "CohortListResponse" : {
+        "properties" : {
+          "cohorts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CohortResponse"
+            },
+            "type" : "array"
+          },
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "windowMonths" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CohortResponse" : {
+        "properties" : {
+          "cohortMonth" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "points" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetentionPointResponse"
+            },
+            "type" : "array"
+          },
+          "size" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "CommercialAdminControllerAdjustmentRequest" : {
         "properties" : {
           "approvedBy" : {
@@ -6614,6 +6651,38 @@
           },
           "status" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CustomerKpiResponse" : {
+        "properties" : {
+          "basketDepth" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "customerValueSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "distinctCustomers" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "newCustomers" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "orderFrequency" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "repeatShareBasisPoints" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -18418,6 +18487,27 @@
         "required" : [ "reason" ],
         "type" : "object"
       },
+      "RetentionPointResponse" : {
+        "properties" : {
+          "customerCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "monthOffset" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "orderMonth" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "retainedBasisPoints" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "RetentionRule" : {
         "properties" : {
           "code" : {
@@ -18805,6 +18895,43 @@
         "properties" : {
           "changed" : {
             "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "RfmCellResponse" : {
+        "properties" : {
+          "frequencyBand" : {
+            "type" : "string"
+          },
+          "memberCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "recencyBand" : {
+            "type" : "string"
+          },
+          "revenueSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "RfmGridResponse" : {
+        "properties" : {
+          "cells" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RfmCellResponse"
+            },
+            "type" : "array"
+          },
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "totalCustomers" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -60240,6 +60367,196 @@
         },
         "summary" : "7.4b: delivery-sum-by-tariff audit",
         "tags" : [ "Courier reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/customer-cohorts" : {
+      "get" : {
+        "description" : "Every customer whose first-ever order fell inside [from, to], grouped by that order's calendar month, with the share of each cohort placing any order in every subsequent month through \"to\". Refuses a range covering more months than the read tracks in one call rather than silently truncating retention for the earliest cohorts.",
+        "operationId" : "customerCohorts",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CohortListResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "7.6a: monthly cohorts by first-order month, and their retention curve",
+        "tags" : [ "Reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/customer-kpis" : {
+      "get" : {
+        "description" : "One folded figure per metric over the whole requested range — a KPI tile shows one number for its period, not a day-grain breakdown. Not /queries: a distinct-customer count cannot be correctly summed across the channel/fulfilment-type rows that pipeline rolls agg_branch_day up from. customers.ltv.v1 is not here — it is registered unbuilt (no dim_customer table exists) and every tile naming it must render that rather than a number.",
+        "operationId" : "customerKpis",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "legalEntityId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerKpiResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "7.6: new/distinct customers, repeat share, order frequency, customer value, basket depth",
+        "tags" : [ "Reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/customer-rfm" : {
+      "get" : {
+        "description" : "Platform-fixed bands, never tenant-configurable — the same rule sla_bucket_set.v1 already follows. Distinct from 5.3's segment builder: a marketer can size one segment there and read the whole grid here to decide which cell is worth targeting. Monetary is a cell value, not a third bucketed axis.",
+        "operationId" : "customerRfm",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "legalEntityId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RfmGridResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "7.6b: the Recency x Frequency cross-tab, member counts and revenue per cell",
+        "tags" : [ "Reporting" ]
       }
     },
     "/api/v1/tenants/{tenantId}/reporting/demand-history" : {
