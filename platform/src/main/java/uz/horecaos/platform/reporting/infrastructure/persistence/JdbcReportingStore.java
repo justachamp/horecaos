@@ -46,11 +46,27 @@ import uz.horecaos.platform.reporting.domain.MetricDefinition;
  * delivered instantly.
  *
  * <p>The source reads — {@link #readSourceOrders}, {@link #readSourceLines},
- * {@link #readSourceRefunds}, {@link #readSourceCallEvents} — are the only
- * statements in the reporting module that touch a module schema, and they are
- * read-only. Everything the read path uses stays inside {@code reporting},
- * which is what the {@code horecaos_reporting_read} role enforces at the
- * database.
+ * {@link #readSourceRefunds}, {@link #readSourceCallEvents}, {@link
+ * #readSourceDeliveries} and {@link #readSourceTenders} — are read-only and
+ * run only from {@code DayCloseService} at business-day close, projecting what
+ * they read into an immutable {@code reporting.fact_*} row.
+ *
+ * <p>They are not, however, the only statements here that touch a module
+ * schema outside {@code reporting} — an adversarial review (2026-09-14)
+ * found this doc overclaiming that they were. {@link #readTariffAudit},
+ * {@link #readExternalDeliveryCost}, {@link #readOrders}'s {@code is_preorder}
+ * subquery, and {@link #readCancellationReasons} also read a module schema
+ * directly ({@code fulfillment}, {@code ordering}, {@code kitchen}), and —
+ * unlike the source reads above — do so live, on every request, rather
+ * than once at close time into a fact. Each carries its own doc note
+ * explaining why it reads live rather than through a fact, and none of the
+ * four is actually covered by the {@code horecaos_reporting_read} database
+ * role this class otherwise documents: the running application connects as
+ * {@code horecaos_app} (a member of {@code horecaos_application}), not as
+ * that role, so nothing today enforces the boundary at the database for any
+ * query in this class. Whether these four should instead project into a fact
+ * — so a report never has to trade freshness for being closed — is an open
+ * design question tracked against ADR 0043, not resolved by this comment.
  */
 @Repository
 public class JdbcReportingStore {
@@ -835,12 +851,21 @@ public class JdbcReportingStore {
      * fulfillment.assignment_attempts} for {@code accepted_at}, which the
      * earning row itself does not carry (ADR 0042 never needed it).
      *
-     * <p>Read by {@code business_date} — already computed once, correctly, by
-     * {@code CourierAccrualService} at the moment of accrual — rather than by
-     * an instant range, the same choice every other {@code readSource*} here
-     * makes over {@code fact_order}'s own snapshotted date.
+     * <p>Read by an instant range against {@code delivered_at} — the same
+     * choice every other {@code readSource*} here makes over {@code
+     * fact_order}'s own snapshotted date — rather than by trusting the
+     * earning's own stored {@code business_date}. An adversarial review
+     * (2026-09-14) found the two could disagree: {@code
+     * CourierAccrualService} once stamped {@code business_date} from a plain
+     * UTC calendar date, so a delivery in the tenant's early-morning window
+     * was filed a day off and silently dropped by this method's previous
+     * exact-equality filter. {@code CourierAccrualService} now stamps the
+     * correct date too (through this same boundary), but re-deriving it here
+     * as well — rather than trusting a column written by a different module —
+     * keeps this read correct even if a future write path gets the stamp
+     * wrong again.
      */
-    public List<SourceDelivery> readSourceDeliveries(UUID tenantId, LocalDate businessDate) {
+    public List<SourceDelivery> readSourceDeliveries(UUID tenantId, Instant from, Instant to) {
         return jdbc.sql("""
                 SELECT earning.id AS earning_id, earning.courier_id, earning.location_id,
                        earning.shipment_id, earning.assignment_attempt_id, earning.distance_meters,
@@ -849,10 +874,12 @@ public class JdbcReportingStore {
                   FROM fulfillment.courier_assignment_earnings earning
                   JOIN fulfillment.assignment_attempts attempt
                     ON attempt.tenant_id = earning.tenant_id AND attempt.id = earning.assignment_attempt_id
-                 WHERE earning.tenant_id = :tenantId AND earning.business_date = :businessDate
+                 WHERE earning.tenant_id = :tenantId
+                   AND earning.delivered_at >= :from AND earning.delivered_at < :to
                 """)
                 .param("tenantId", tenantId)
-                .param("businessDate", businessDate)
+                .param("from", utc(from))
+                .param("to", utc(to))
                 .query((ResultSet row, int number) -> new SourceDelivery(
                         Objects.requireNonNull(row.getObject("earning_id", UUID.class)),
                         Objects.requireNonNull(row.getObject("courier_id", UUID.class)),
@@ -1001,10 +1028,16 @@ public class JdbcReportingStore {
      * tariff version, zone, band and final fee (ADR 0037); this joins it
      * through {@code quote_id -> orders.pricing_quote_id -> shipments} for
      * the one column none of the three tables has on its own: which courier
-     * actually worked the delivery. {@code reporting} reads across {@code
-     * fulfillment} and {@code ordering} here the same way {@link
-     * #readSourceOrders} already does for the close job — a live,
-     * cross-schema read for a report, never a decision.
+     * actually worked the delivery.
+     *
+     * <p>Unlike {@link #readSourceOrders} and this class's other {@code
+     * readSource*} methods, this is not a close-time read that gets
+     * projected into an immutable fact — it runs live, on every {@code
+     * GET .../tariff-audit} request (see the class doc above), so the same
+     * range re-read later can disagree if a resolution in it changes. That
+     * is an accepted trade for this specific report (an audit needs current
+     * state, not yesterday's snapshot of it), not a pattern ADR 0125 itself
+     * decides one way or the other — see the class doc's open question.
      *
      * <p>Grouped by tariff (not courier): the audit question is "did this
      * tariff charge what it should have", and {@code courierBreakdown}
@@ -1076,13 +1109,30 @@ public class JdbcReportingStore {
      * time, rather than written onto a line that by definition does not
      * exist), never folded into {@code PENDING} the way a bare {@code
      * COALESCE} against the enum's other unbilled-looking states would.
+     *
+     * <p>Takes an instant range, not the caller's raw date range — the same
+     * correction {@link #readTariffAudit} already applies. An adversarial
+     * review (2026-09-14) found the previous {@code delivered_at::date}
+     * version cast in the database session's own timezone rather than the
+     * tenant's business-day zone, misfiling a delivery near local midnight by
+     * a calendar day for any non-UTC tenant. {@link
+     * uz.horecaos.platform.reporting.application.ReportQueryService#externalDeliveryCost}
+     * is the one caller and resolves the range through {@code
+     * BusinessDayBoundary} before it reaches here.
+     *
+     * <p>Like {@link #readTariffAudit}, this is a live, request-time read
+     * across {@code fulfillment} and {@code ordering} — not a close-time
+     * source read projected into an immutable fact — so a re-read of the
+     * same range can disagree with an earlier one (a line matched or
+     * resolved in between). See the class doc's open question on whether
+     * this and its three siblings should instead be projected.
      */
     public List<ExternalDeliveryCostRow> readExternalDeliveryCost(
-            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+            UUID tenantId, Instant from, Instant to, List<UUID> locationIds) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
-        params.put("from", from);
-        params.put("to", to);
+        params.put("from", utc(from));
+        params.put("to", utc(to));
 
         String locationFilter = "";
         if (!locationIds.isEmpty()) {
@@ -1116,7 +1166,7 @@ public class JdbcReportingStore {
                         LIMIT 1) line ON true
                  WHERE shipment.tenant_id = :tenantId AND shipment.source_type = 'PARTNER'
                    AND shipment.status = 'DELIVERED'
-                   AND shipment.delivered_at::date BETWEEN :from AND :to
+                   AND shipment.delivered_at >= :from AND shipment.delivered_at < :to
                 """ + locationFilter + """
                  ORDER BY shipment.delivered_at DESC
                 """)
@@ -1415,6 +1465,16 @@ public class JdbcReportingStore {
      * cursor names), so it is silently ignored there rather than refused —
      * the two per-tab views a manager pages through today are «Заказы»
      * only.
+     *
+     * <p>{@code is_preorder} is the one column here not read off {@code
+     * fact_order} itself: a live {@code EXISTS} against {@code
+     * kitchen.tickets}, read on every call rather than snapshotted at close
+     * (an adversarial review, 2026-09-14, named this alongside {@link
+     * #readTariffAudit}/{@link #readExternalDeliveryCost} as a live,
+     * request-time read of a module schema outside {@code reporting} — see
+     * the class doc). A ticket's {@code release_mode} corrected after the
+     * order closed changes what a historical order shows on re-load, unlike
+     * every other column this method returns.
      */
     public List<OrderRow> readOrders(
             UUID tenantId,
@@ -1569,6 +1629,14 @@ public class JdbcReportingStore {
      * platform-fixed registry ({@code ordering.order_reject_reasons}) this
      * read does not cover; a code this map has no entry for is left for the
      * caller to render as-is rather than guessed at.
+     *
+     * <p>A live read of {@code ordering.order_outcome_reasons} on every call
+     * — not a source read projected into a fact at close time (an
+     * adversarial review, 2026-09-14, named this alongside {@link
+     * #readOrders}'s {@code is_preorder} join, {@link #readTariffAudit} and
+     * {@link #readExternalDeliveryCost} — see the class doc). A tenant
+     * renaming a reason's {@code internal_name} changes what a historical
+     * order's cancellation reason reads as on re-load.
      */
     public List<CancellationReasonRow> readCancellationReasons(UUID tenantId) {
         return jdbc.sql("""

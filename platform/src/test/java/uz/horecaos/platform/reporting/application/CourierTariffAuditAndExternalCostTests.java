@@ -1,6 +1,7 @@
 package uz.horecaos.platform.reporting.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -30,6 +31,7 @@ import uz.horecaos.platform.courier.domain.VerificationMethod;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierTypeRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore.InvoiceLineRow;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
 import uz.horecaos.platform.support.TestDatabase;
@@ -37,6 +39,8 @@ import uz.horecaos.platform.support.TestProtection;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * T11 7.4b/7.4c (ADR 0125): the delivery-sum-by-tariff audit and the
@@ -197,29 +201,117 @@ class CourierTariffAuditAndExternalCostTests {
     }
 
     @Test
-    @DisplayName(
-            "reconcileShipment marks a VARIANCE line MATCHED, and audits (without a status write) a genuinely unbilled shipment")
-    void reconcileShipmentClosesOutAVarianceLineAndAcknowledgesUnbilled() {
+    @DisplayName("reconcileShipment refuses a VARIANCE line and leaves its discrepancy exactly as it was")
+    void reconcileShipmentRefusesAVarianceLineAndPreservesItsAmount() {
         UUID varianceOrder = seedOrderAndShipment(courierA, "PARTNER", "DELIVERED", RESOLVED_AT);
-        UUID unbilledOrder = seedOrderAndShipment(courierB, "PARTNER", "DELIVERED", RESOLVED_AT);
         UUID varianceShipment = shipmentIdOf(varianceOrder);
-        UUID unbilledShipment = shipmentIdOf(unbilledOrder);
-        seedInvoiceLine(varianceShipment, 25_000, MatchStatus.VARIANCE, 5_000L);
+        UUID lineId = seedInvoiceLine(varianceShipment, 25_000, MatchStatus.VARIANCE, 5_000L);
 
-        boolean reconciledVariance =
-                partnerInvoices.reconcileShipment(TENANT, varianceShipment, manager(), "operator confirmed the charge");
-        boolean reconciledUnbilled =
-                partnerInvoices.reconcileShipment(TENANT, unbilledShipment, manager(), "checked, still unbilled");
+        assertThat(catchThrowable(() -> partnerInvoices.reconcileShipment(
+                        TENANT, varianceShipment, manager(), "operator tried to wave it through")))
+                .isInstanceOf(ApiException.class)
+                .satisfies(thrown ->
+                        assertThat(((ApiException) thrown).errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE));
 
-        assertThat(reconciledVariance).isTrue();
-        assertThat(reconciledUnbilled).isFalse();
-
+        // 2026-09-14 review: reconcile must never silently erase what the
+        // variance was -- the money discrepancy stays exactly as matching
+        // left it, available for resolveVariance's own accept/dispute choice.
         var result = queries.externalDeliveryCost(TENANT, DAY, DAY, List.of());
         var varianceRow = result.rows().stream()
                 .filter(row -> varianceShipment.equals(row.shipmentId()))
                 .findFirst()
                 .orElseThrow();
-        assertThat(varianceRow.matchStatus()).isEqualTo("MATCHED");
+        assertThat(varianceRow.matchStatus()).isEqualTo("VARIANCE");
+        assertThat(varianceRow.varianceMinor()).isEqualTo(5_000L);
+
+        InvoiceLineRow line =
+                costStore.deliveryLineForShipment(TENANT, varianceShipment).orElseThrow();
+        assertThat(line.id()).isEqualTo(lineId);
+        assertThat(line.matchStatus()).isEqualTo(MatchStatus.VARIANCE);
+        assertThat(line.varianceMinor()).isEqualTo(5_000L);
+        assertThat(line.reasonCode()).isEqualTo("AMOUNT_DIFFERS_FROM_BOOKING");
+    }
+
+    @Test
+    @DisplayName("reconcileShipment confirms an already-MATCHED line, and audits (without a status write) "
+            + "a genuinely unbilled shipment")
+    void reconcileShipmentConfirmsAMatchedLineAndAcknowledgesUnbilled() {
+        UUID matchedOrder = seedOrderAndShipment(courierA, "PARTNER", "DELIVERED", RESOLVED_AT);
+        UUID unbilledOrder = seedOrderAndShipment(courierB, "PARTNER", "DELIVERED", RESOLVED_AT);
+        UUID matchedShipment = shipmentIdOf(matchedOrder);
+        UUID unbilledShipment = shipmentIdOf(unbilledOrder);
+        seedInvoiceLine(matchedShipment, 20_000, MatchStatus.MATCHED, null);
+
+        boolean reconciledMatched =
+                partnerInvoices.reconcileShipment(TENANT, matchedShipment, manager(), "operator confirmed the charge");
+        boolean reconciledUnbilled =
+                partnerInvoices.reconcileShipment(TENANT, unbilledShipment, manager(), "checked, still unbilled");
+
+        assertThat(reconciledMatched).isTrue();
+        assertThat(reconciledUnbilled).isFalse();
+
+        var result = queries.externalDeliveryCost(TENANT, DAY, DAY, List.of());
+        var matchedRow = result.rows().stream()
+                .filter(row -> matchedShipment.equals(row.shipmentId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(matchedRow.matchStatus()).isEqualTo("MATCHED");
+    }
+
+    // ------------------------------------------------------------- isolation
+
+    @Test
+    @DisplayName("tariffAudit never crosses tenants")
+    void tariffAuditNeverCrossesTenants() {
+        UUID orderA = seedOrderAndShipment(courierA, "INTERNAL", "ASSIGNED", null);
+        seedFeeResolution(orderA, TARIFF, 1, 15_000);
+
+        TenantFixture other = seedOtherTenant();
+        UUID otherOrder = seedOrderAndShipment(
+                other.tenantId(),
+                other.brandId(),
+                other.locationId(),
+                other.channelId(),
+                other.publicationId(),
+                other.providerBindingId(),
+                other.courierId(),
+                "INTERNAL",
+                "ASSIGNED",
+                null);
+        seedFeeResolution(other.tenantId(), other.locationId(), otherOrder, TARIFF, 1, 99_000);
+
+        var result = queries.tariffAudit(TENANT, DAY, DAY, List.of());
+        assertThat(result.rows()).hasSize(1);
+        assertThat(result.rows().getFirst().totalFinalFeeMinor()).isEqualTo(15_000L);
+
+        var otherResult = queries.tariffAudit(other.tenantId(), DAY, DAY, List.of());
+        assertThat(otherResult.rows()).hasSize(1);
+        assertThat(otherResult.rows().getFirst().totalFinalFeeMinor()).isEqualTo(99_000L);
+    }
+
+    @Test
+    @DisplayName("externalDeliveryCost never crosses tenants")
+    void externalDeliveryCostNeverCrossesTenants() {
+        seedOrderAndShipment(courierA, "PARTNER", "DELIVERED", RESOLVED_AT);
+
+        TenantFixture other = seedOtherTenant();
+        seedOrderAndShipment(
+                other.tenantId(),
+                other.brandId(),
+                other.locationId(),
+                other.channelId(),
+                other.publicationId(),
+                other.providerBindingId(),
+                other.courierId(),
+                "PARTNER",
+                "DELIVERED",
+                RESOLVED_AT);
+
+        var result = queries.externalDeliveryCost(TENANT, DAY, DAY, List.of());
+        assertThat(result.rows()).hasSize(1);
+
+        var otherResult = queries.externalDeliveryCost(other.tenantId(), DAY, DAY, List.of());
+        assertThat(otherResult.rows()).hasSize(1);
     }
 
     // --------------------------------------------------------------- fixture
@@ -326,8 +418,13 @@ class CourierTariffAuditAndExternalCostTests {
     }
 
     private UUID seedCourier(CourierEngagementService engagements, UUID courierTypeId, String code) {
+        return seedCourier(TENANT, engagements, courierTypeId, code);
+    }
+
+    /** Isolation-test overload — see {@link #seedOtherTenant()}. */
+    private UUID seedCourier(UUID tenantId, CourierEngagementService engagements, UUID courierTypeId, String code) {
         var registration = engagements.register(new CourierEngagementService.NewCourier(
-                TENANT,
+                tenantId,
                 courierTypeId,
                 "keycloak-" + code,
                 code,
@@ -337,7 +434,7 @@ class CourierTariffAuditAndExternalCostTests {
                 "onboarding",
                 "corr"));
         engagements.verify(new CourierEngagementService.VerifyRegistration(
-                TENANT,
+                tenantId,
                 registration.engagementId(),
                 "31234567890" + code.charAt(code.length() - 1),
                 DAY.plusYears(1),
@@ -349,9 +446,152 @@ class CourierTariffAuditAndExternalCostTests {
         return registration.courierId();
     }
 
+    /**
+     * A second, wholly independent tenant — 2026-09-14 review: none of this
+     * suite's assertions could previously have failed if {@code tenant_id}
+     * were dropped from {@link ReportQueryService#tariffAudit} or {@link
+     * ReportQueryService#externalDeliveryCost}, since only {@link #TENANT}'s
+     * rows ever existed in the database during a run. Its own brand,
+     * location, channel, catalog, publication, provider binding and one
+     * courier, none shared with {@link #TENANT}'s fixture.
+     */
+    private TenantFixture seedOtherTenant() {
+        UUID tenantId = UUID.randomUUID();
+        UUID brandId = UUID.randomUUID();
+        UUID locationId = UUID.randomUUID();
+        UUID channelId = UUID.randomUUID();
+        UUID catalogId = UUID.randomUUID();
+        UUID publicationId = UUID.randomUUID();
+
+        jdbc.sql("""
+                INSERT INTO tenant.tenants (id, slug, legal_name, display_name, default_currency,
+                    default_timezone, status, version)
+                VALUES (:id, :slug, 'Legal 2', 'Display 2', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", tenantId)
+                .param("slug", "tariff-audit-other-tenant-" + tenantId)
+                .update();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'MAIN', 'main', 'Brand 2', 'ACTIVE', 0)
+                """).param("id", brandId).param("tenantId", tenantId).update();
+        jdbc.sql("""
+                INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
+                    timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, 'CENTRE', 'centre', 'Centre 2', 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", locationId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .update();
+        jdbc.sql("""
+                INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name, status)
+                VALUES (:id, :tenantId, 'STOREFRONT', 'WEB', 'Storefront 2', 'ACTIVE')
+                """).param("id", channelId).param("tenantId", tenantId).update();
+        jdbc.sql("""
+                INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
+                VALUES (:id, :tenantId, :brandId, 'MAIN', 'Main menu 2', 'ACTIVE')
+                """)
+                .param("id", catalogId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .update();
+        jdbc.sql("""
+                INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel, status,
+                    content_hash, activated_at)
+                VALUES (:id, :tenantId, :brandId, :catalogId, 'STOREFRONT', 'PUBLISHED', 'hash', now())
+                """)
+                .param("id", publicationId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("catalogId", catalogId)
+                .update();
+
+        // The provider environment row is shared (ON CONFLICT DO NOTHING,
+        // same as seedTenancy()); installations and bindings are tenant-owned.
+        UUID installationId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO integration.installations (id, tenant_id, provider_category, provider_type,
+                    environment_code, display_name, status)
+                VALUES (:id, :tenantId, 'DELIVERY', 'NOOR', 'tariff-audit-fixture', 'Noor', 'ACTIVE')
+                """).param("id", installationId).param("tenantId", tenantId).update();
+        UUID providerBindingId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO integration.bindings (id, tenant_id, installation_id, brand_id, location_id, status)
+                VALUES (:id, :tenantId, :installationId, :brandId, :locationId, 'ACTIVE')
+                """)
+                .param("id", providerBindingId)
+                .param("tenantId", tenantId)
+                .param("installationId", installationId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .update();
+
+        var courierStore = new JdbcCourierStore(jdbc);
+        var protection = TestProtection.envelope();
+        var policyResolver = new CourierPolicyResolver(new PolicyResolver() {
+            @Override
+            public <P> Optional<ResolvedPolicy<P>> resolve(PolicyKey<P> key, ResourceScope scope) {
+                return Optional.empty();
+            }
+
+            @Override
+            public <P> Optional<ResolvedPolicy<P>> pinned(PolicyKey<P> key, UUID policyId, int policyVersion) {
+                throw new UnsupportedOperationException("not exercised by this suite");
+            }
+        });
+        var engagements = new CourierEngagementService(
+                courierStore,
+                protection,
+                fact -> {},
+                policyResolver,
+                (t, a) -> false,
+                Clock.fixed(RESOLVED_AT, ZoneOffset.UTC));
+        UUID courierTypeId = UUID.randomUUID();
+        courierStore.insertType(new CourierTypeRow(
+                courierTypeId, tenantId, "SCOOTER", "Scooter", "SCOOTER", 0, 15_000, 2, 60, 0, "SHIFT", "ACTIVE", 1));
+        UUID courierId = seedCourier(tenantId, engagements, courierTypeId, "K-OTHER");
+
+        return new TenantFixture(tenantId, brandId, locationId, channelId, publicationId, providerBindingId, courierId);
+    }
+
+    private record TenantFixture(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID channelId,
+            UUID publicationId,
+            UUID providerBindingId,
+            UUID courierId) {}
+
     /** An order with a plan+shipment, in the given source/status; delivered_at set only when deliveredAt is given. */
     private UUID seedOrderAndShipment(UUID courierId, String sourceType, String status, @Nullable Instant deliveredAt) {
-        UUID orderId = seedOrder();
+        return seedOrderAndShipment(
+                TENANT,
+                BRAND,
+                branch,
+                channelId,
+                publicationId,
+                providerBindingId,
+                courierId,
+                sourceType,
+                status,
+                deliveredAt);
+    }
+
+    /** Isolation-test overload — see {@link #seedOtherTenant()}. */
+    private UUID seedOrderAndShipment(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID channelId,
+            UUID publicationId,
+            UUID providerBindingId,
+            UUID courierId,
+            String sourceType,
+            String status,
+            @Nullable Instant deliveredAt) {
+        UUID orderId = seedOrder(tenantId, brandId, locationId, channelId, publicationId);
         UUID planId = UUID.randomUUID();
         UUID shipmentId = UUID.randomUUID();
         OffsetDateTime anchor = OffsetDateTime.ofInstant(RESOLVED_AT, ZoneOffset.UTC);
@@ -369,9 +609,9 @@ class CourierTariffAuditAndExternalCostTests {
                   FROM (SELECT CAST(:anchor AS timestamptz) AS anchor) AS moment
                 """)
                 .param("id", planId)
-                .param("tenantId", TENANT)
-                .param("brandId", BRAND)
-                .param("locationId", branch)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
                 .param("orderId", orderId)
                 .param("anchor", anchor)
                 .update();
@@ -385,9 +625,9 @@ class CourierTariffAuditAndExternalCostTests {
                         :courierId, :providerBindingId, :providerType, :anchor, :deliveredAt)
                 """)
                 .param("id", shipmentId)
-                .param("tenantId", TENANT)
-                .param("brandId", BRAND)
-                .param("locationId", branch)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
                 .param("orderId", orderId)
                 .param("planId", planId)
                 .param("status", status)
@@ -415,7 +655,7 @@ class CourierTariffAuditAndExternalCostTests {
                         'partner_booking:DELIVERY', 'NOOR', 'fixture')
                     """)
                     .param("id", UUID.randomUUID())
-                    .param("tenantId", TENANT)
+                    .param("tenantId", tenantId)
                     .param("shipmentId", shipmentId)
                     .param("day", DAY)
                     .update();
@@ -433,6 +673,12 @@ class CourierTariffAuditAndExternalCostTests {
     }
 
     private void seedFeeResolution(UUID orderId, UUID tariffId, int tariffVersion, long finalFeeMinor) {
+        seedFeeResolution(TENANT, branch, orderId, tariffId, tariffVersion, finalFeeMinor);
+    }
+
+    /** Isolation-test overload — see {@link #seedOtherTenant()}. */
+    private void seedFeeResolution(
+            UUID tenantId, UUID locationId, UUID orderId, UUID tariffId, int tariffVersion, long finalFeeMinor) {
         jdbc.sql("""
                 INSERT INTO fulfillment.delivery_fee_resolutions (id, tenant_id, quote_id, location_id,
                     resolution_version, outcome, zone_id, zone_version, tariff_id, tariff_version,
@@ -444,8 +690,8 @@ class CourierTariffAuditAndExternalCostTests {
                  WHERE o.id = :orderId
                 """)
                 .param("id", UUID.randomUUID())
-                .param("tenantId", TENANT)
-                .param("locationId", branch)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .param("zoneId", ZONE)
                 .param("tariffId", tariffId)
                 .param("tariffVersion", tariffVersion)
@@ -462,10 +708,16 @@ class CourierTariffAuditAndExternalCostTests {
      * matchLine}, the same two-step real matching goes through.
      */
     private UUID seedInvoiceLine(UUID shipmentId, long amountMinor, MatchStatus status, @Nullable Long varianceMinor) {
+        return seedInvoiceLine(TENANT, shipmentId, amountMinor, status, varianceMinor);
+    }
+
+    /** Isolation-test overload — see {@link #seedOtherTenant()}. */
+    private UUID seedInvoiceLine(
+            UUID tenantId, UUID shipmentId, long amountMinor, MatchStatus status, @Nullable Long varianceMinor) {
         UUID invoiceId = UUID.randomUUID();
         costStore.insertInvoice(new JdbcDeliveryCostStore.InvoiceRow(
                 invoiceId,
-                TENANT,
+                tenantId,
                 "NOOR",
                 "INV-" + invoiceId,
                 null,
@@ -478,7 +730,7 @@ class CourierTariffAuditAndExternalCostTests {
         UUID lineId = UUID.randomUUID();
         costStore.insertInvoiceLine(new JdbcDeliveryCostStore.InvoiceLineRow(
                 lineId,
-                TENANT,
+                tenantId,
                 invoiceId,
                 "provider-ref-" + shipmentId,
                 null,
@@ -493,7 +745,7 @@ class CourierTariffAuditAndExternalCostTests {
                 null));
         if (status != MatchStatus.PENDING) {
             costStore.matchLine(
-                    TENANT,
+                    tenantId,
                     lineId,
                     shipmentId,
                     status,
@@ -504,6 +756,11 @@ class CourierTariffAuditAndExternalCostTests {
     }
 
     private UUID seedOrder() {
+        return seedOrder(TENANT, BRAND, branch, channelId, publicationId);
+    }
+
+    /** Isolation-test overload — see {@link #seedOtherTenant()}. */
+    private UUID seedOrder(UUID tenantId, UUID brandId, UUID locationId, UUID channelId, UUID publicationId) {
         UUID orderId = UUID.randomUUID();
         UUID quoteId = UUID.randomUUID();
         UUID cartId = UUID.randomUUID();
@@ -517,9 +774,9 @@ class CourierTariffAuditAndExternalCostTests {
                         45000, now() + interval '1 hour')
                 """)
                 .param("id", quoteId)
-                .param("tenantId", TENANT)
-                .param("brandId", BRAND)
-                .param("locationId", branch)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
                 .param("publicationId", publicationId)
                 .update();
         jdbc.sql("""
@@ -529,9 +786,9 @@ class CourierTariffAuditAndExternalCostTests {
                         :reference, now() + interval '1 hour')
                 """)
                 .param("id", cartId)
-                .param("tenantId", TENANT)
-                .param("brandId", BRAND)
-                .param("locationId", branch)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
                 .param("channelId", channelId)
                 .param("reference", reference)
                 .update();
@@ -547,9 +804,9 @@ class CourierTariffAuditAndExternalCostTests {
                 """)
                 .param("id", orderId)
                 .param("number", "TA-" + orderId.toString().substring(0, 8))
-                .param("tenantId", TENANT)
-                .param("brandId", BRAND)
-                .param("locationId", branch)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
                 .param("channelId", channelId)
                 .param("reference", reference)
                 .param("quoteId", quoteId)

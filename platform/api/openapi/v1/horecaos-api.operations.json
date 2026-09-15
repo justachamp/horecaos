@@ -25203,7 +25203,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/shipments/{shipmentId}/external-delivery-cost/reconcile" : {
       "post" : {
-        "description" : "Marks the shipment's DELIVERY-charge invoice line MATCHED when one exists. A shipment with no invoice line at all is genuinely UNBILLED -- nothing to reconcile against yet -- and the acknowledgement is recorded on the audit trail alone; reconciled is false on that response.",
+        "description" : "Marks the shipment's DELIVERY-charge invoice line MATCHED when one exists. A shipment with no invoice line at all is genuinely UNBILLED -- nothing to reconcile against yet -- and the acknowledgement is recorded on the audit trail alone; reconciled is false on that response. Refuses (UNPROCESSABLE_STATE) a line that is VARIANCE: that money discrepancy is disposed of only through the variance-acceptance endpoint's accept/dispute choice, never by this action.",
         "operationId" : "reconcileExternalDeliveryCost",
         "parameters" : [ {
           "in" : "path",

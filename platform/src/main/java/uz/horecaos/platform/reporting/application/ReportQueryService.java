@@ -183,16 +183,23 @@ public class ReportQueryService {
      * T11 (7.4c, ADR 0125): per-order external-delivery cost — the one
      * courier report that finds money. See {@link
      * JdbcReportingStore#readExternalDeliveryCost} for {@code UNBILLED}'s
-     * derivation and why it is never folded into {@code PENDING}.
+     * derivation and why it is never folded into {@code PENDING}. Resolves
+     * the tenant's own business-day boundary to turn the caller's date range
+     * into the instant range {@code shipment.delivered_at} is compared
+     * against, mirroring {@link #tariffAudit} — an adversarial review
+     * (2026-09-14) found this method previously passed the raw {@code
+     * LocalDate} range straight to the store, which cast {@code
+     * delivered_at} to a date in the database session's timezone rather than
+     * the tenant's.
      */
     @Transactional(readOnly = true)
     public ExternalDeliveryCostResult externalDeliveryCost(
             UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
         validateRange(from, to);
+        BusinessDayBoundary boundary = businessDays.boundaryFor(tenantId);
         List<JdbcReportingStore.ExternalDeliveryCostRow> rows =
-                store.readExternalDeliveryCost(tenantId, from, to, locationIds);
-        return new ExternalDeliveryCostResult(
-                rows, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+                store.readExternalDeliveryCost(tenantId, boundary.startOf(from), boundary.endOf(to), locationIds);
+        return new ExternalDeliveryCostResult(rows, provenance(tenantId, List.of(), boundary));
     }
 
     public record CourierLeaderboardResult(

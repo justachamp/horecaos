@@ -336,18 +336,30 @@ public class PartnerInvoiceService {
     /**
      * T11 (7.4c, ADR 0125): the per-line reconcile action the external-
      * delivery-cost report names — an operator confirming, by hand, that a
-     * {@code VARIANCE} or {@code UNMATCHED_LINE} row is settled, or noting an
-     * {@code UNBILLED} shipment has been checked and is being watched for
-     * rather than acted on again. Distinct from {@link #match}'s own bulk
-     * sweep: that runs once per imported invoice against every one of its
-     * lines; this runs once, by a person, against exactly the shipment a
-     * report row named.
+     * line already {@code MATCHED} is settled, or noting an {@code UNBILLED}
+     * shipment has been checked and is being watched for rather than acted
+     * on again. Distinct from {@link #match}'s own bulk sweep: that runs once
+     * per imported invoice against every one of its lines; this runs once,
+     * by a person, against exactly the shipment a report row named.
+     *
+     * <p>Refuses a {@code VARIANCE} line (2026-09-14 review): a variance is a
+     * real, non-zero difference between what HorecaOS accrued and what the
+     * partner billed, and {@link #resolveVariance} is the one path that
+     * disposes of it — {@code ACCEPTED} or {@code DISPUTED} — without ever
+     * erasing the amount. Before this guard, reconcile unconditionally wrote
+     * {@code MATCHED} with {@code variance_minor} and {@code reason_code}
+     * nulled out, silently writing off whatever the discrepancy was with no
+     * accept/dispute decision on record.
      *
      * @return {@code true} when a real invoice line was found and marked
      *         {@code MATCHED}; {@code false} for a shipment with no invoice
      *         line at all — genuinely {@code UNBILLED}, nothing to
      *         reconcile against yet, and the acknowledgement is recorded on
      *         the audit trail alone
+     * @throws ApiException {@code UNPROCESSABLE_STATE} if the line is
+     *                       {@code VARIANCE}; {@code RESOURCE_CONFLICT} if it
+     *                       raced into {@code VARIANCE} between this method's
+     *                       own read and its write
      */
     @Transactional
     public boolean reconcileShipment(UUID tenantId, UUID shipmentId, ActorRef actor, String reason) {
@@ -367,7 +379,16 @@ public class PartnerInvoiceService {
             return false;
         }
 
-        costs.matchLine(tenantId, line.get().id(), shipmentId, MatchStatus.MATCHED, null, "OPERATOR_RECONCILED");
+        if (line.get().matchStatus() == MatchStatus.VARIANCE) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "A VARIANCE line must be accepted or disputed via resolveVariance, not reconciled: "
+                            + line.get().id());
+        }
+
+        if (!costs.reconcileLine(tenantId, line.get().id(), shipmentId, "OPERATOR_RECONCILED")) {
+            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This line's match status changed under us");
+        }
 
         audit.record(AuditFact.of("partner.invoice.line.reconciled", AuditClass.BUSINESS)
                 .by(actor)

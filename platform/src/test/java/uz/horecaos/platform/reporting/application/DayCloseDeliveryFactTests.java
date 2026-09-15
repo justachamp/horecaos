@@ -192,6 +192,33 @@ class DayCloseDeliveryFactTests {
         assertThat(second).hasSize(1);
     }
 
+    @Test
+    @DisplayName("close never mixes one tenant's delivery fact into another's")
+    void closeNeverCrossesTenants() {
+        UUID otherTenant = seedOtherTenantDeliveryFact();
+
+        close.close(TENANT, DAY);
+        close.close(otherTenant, DAY);
+
+        List<Map<String, Object>> tenantRows = jdbc.sql(
+                        "SELECT courier_id FROM reporting.fact_delivery WHERE tenant_id = :t AND business_date = :d")
+                .param("t", TENANT)
+                .param("d", DAY)
+                .query()
+                .listOfRows();
+        List<Map<String, Object>> otherRows = jdbc.sql(
+                        "SELECT courier_id FROM reporting.fact_delivery WHERE tenant_id = :t AND business_date = :d")
+                .param("t", otherTenant)
+                .param("d", DAY)
+                .query()
+                .listOfRows();
+
+        assertThat(tenantRows).hasSize(1);
+        assertThat(tenantRows.getFirst().get("courier_id")).isEqualTo(courierId);
+        assertThat(otherRows).hasSize(1);
+        assertThat(otherRows.getFirst().get("courier_id")).isNotEqualTo(courierId);
+    }
+
     // --------------------------------------------------------------- fixture
 
     private void seedTenancy() {
@@ -216,8 +243,55 @@ class DayCloseDeliveryFactTests {
                 .update();
     }
 
+    /**
+     * A second, wholly independent tenant with its own brand, location and
+     * delivered earning — 2026-09-14 review: none of this suite's three
+     * tests could previously have failed if {@code tenant_id} were dropped
+     * from {@link JdbcReportingStore#readSourceDeliveries} or {@link
+     * JdbcReportingStore#insertDeliveryFact}, since only {@link #TENANT}'s
+     * rows ever existed in the database during a run.
+     *
+     * @return the other tenant's id
+     */
+    private UUID seedOtherTenantDeliveryFact() {
+        UUID tenantId = UUID.randomUUID();
+        UUID brandId = UUID.randomUUID();
+        UUID locationId = UUID.randomUUID();
+
+        jdbc.sql("""
+                INSERT INTO tenant.tenants (id, slug, legal_name, display_name, default_currency,
+                    default_timezone, status, version)
+                VALUES (:id, :slug, 'Legal 2', 'Display 2', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", tenantId)
+                .param("slug", "delivery-fact-other-tenant-" + tenantId)
+                .update();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'MAIN', 'main', 'Brand 2', 'ACTIVE', 0)
+                """).param("id", brandId).param("tenantId", tenantId).update();
+        jdbc.sql("""
+                INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
+                    timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, 'CENTRE', 'centre', 'Centre 2', 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", locationId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .update();
+
+        seedCourierDeliveryEarning(tenantId, brandId, locationId, "K-OTHER", "312345678902");
+        return tenantId;
+    }
+
     /** Courier, rate card, a delivered shipment chain, and one real accrual — see the class doc for why. */
     private UUID seedCourierDeliveryEarning() {
+        return seedCourierDeliveryEarning(TENANT, BRAND, branch, "K-001", "312345678901");
+    }
+
+    /** Isolation-test overload — see {@link #seedOtherTenantDeliveryFact()}. */
+    private UUID seedCourierDeliveryEarning(
+            UUID fixtureTenantId, UUID fixtureBrandId, UUID fixtureLocationId, String courierCode, String phone) {
         var protection = TestProtection.envelope();
         var policyResolver = new CourierPolicyResolver(new PolicyResolver() {
             @Override
@@ -253,16 +327,29 @@ class DayCloseDeliveryFactTests {
                 ledger,
                 policyResolver,
                 legalEntities,
-                protection);
+                protection,
+                new CourierBusinessDayWindowsAdapter(new BusinessDayService(store)));
 
         UUID courierTypeId = UUID.randomUUID();
         courierStore.insertType(new CourierTypeRow(
-                courierTypeId, TENANT, "SCOOTER", "Scooter", "SCOOTER", 0, 15_000, 2, 60, 0, "SHIFT", "ACTIVE", 1));
-        var registration = engagements.register(new CourierEngagementService.NewCourier(
-                TENANT,
                 courierTypeId,
-                "keycloak-courier",
-                "K-001",
+                fixtureTenantId,
+                "SCOOTER",
+                "Scooter",
+                "SCOOTER",
+                0,
+                15_000,
+                2,
+                60,
+                0,
+                "SHIFT",
+                "ACTIVE",
+                1));
+        var registration = engagements.register(new CourierEngagementService.NewCourier(
+                fixtureTenantId,
+                courierTypeId,
+                "keycloak-" + courierCode,
+                courierCode,
                 "Alisher Karimov",
                 DAY,
                 actor(),
@@ -270,9 +357,9 @@ class DayCloseDeliveryFactTests {
                 "corr"));
         UUID courierId = registration.courierId();
         engagements.verify(new CourierEngagementService.VerifyRegistration(
-                TENANT,
+                fixtureTenantId,
                 registration.engagementId(),
-                "312345678901",
+                phone,
                 DAY.plusYears(1),
                 VerificationMethod.MANUAL_ATTESTATION,
                 null,
@@ -281,17 +368,17 @@ class DayCloseDeliveryFactTests {
                 "corr"));
 
         UUID rateCardId = rateCards.author(new CourierRateCardService.NewRateCard(
-                TENANT,
-                BRAND,
+                fixtureTenantId,
+                fixtureBrandId,
                 null,
                 null,
                 "STANDARD",
                 1,
                 UZS,
                 List.of(new RateComponent(UUID.randomUUID(), RateComponentType.PER_KM_BAND, 0, 2_000, 0, null, null))));
-        rateCards.activate(TENANT, rateCardId, actor(), "activating");
+        rateCards.activate(fixtureTenantId, rateCardId, actor(), "activating");
 
-        UUID orderId = seedOrder();
+        UUID orderId = seedOrder(fixtureTenantId, fixtureBrandId, fixtureLocationId);
         UUID planId = UUID.randomUUID();
         UUID shipmentId = UUID.randomUUID();
         UUID attemptId = UUID.randomUUID();
@@ -310,9 +397,9 @@ class DayCloseDeliveryFactTests {
                   FROM (SELECT CAST(:anchor AS timestamptz) AS anchor) AS moment
                 """)
                 .param("id", planId)
-                .param("tenantId", TENANT)
-                .param("brandId", BRAND)
-                .param("locationId", branch)
+                .param("tenantId", fixtureTenantId)
+                .param("brandId", fixtureBrandId)
+                .param("locationId", fixtureLocationId)
                 .param("orderId", orderId)
                 .param("anchor", anchor)
                 .update();
@@ -324,9 +411,9 @@ class DayCloseDeliveryFactTests {
                         'INTERNAL', :courierId, :anchor)
                 """)
                 .param("id", shipmentId)
-                .param("tenantId", TENANT)
-                .param("brandId", BRAND)
-                .param("locationId", branch)
+                .param("tenantId", fixtureTenantId)
+                .param("brandId", fixtureBrandId)
+                .param("locationId", fixtureLocationId)
                 .param("orderId", orderId)
                 .param("planId", planId)
                 .param("courierId", courierId)
@@ -340,7 +427,7 @@ class DayCloseDeliveryFactTests {
                         'day-close-fixture', 'FLEET_AVAILABLE', :anchor, :acceptedAt)
                 """)
                 .param("id", attemptId)
-                .param("tenantId", TENANT)
+                .param("tenantId", fixtureTenantId)
                 .param("planId", planId)
                 .param("shipmentId", shipmentId)
                 .param("courierId", courierId)
@@ -349,9 +436,9 @@ class DayCloseDeliveryFactTests {
                 .update();
 
         accruals.recordDelivery(new CourierAccrualService.DeliveredAssignment(
-                TENANT,
-                BRAND,
-                branch,
+                fixtureTenantId,
+                fixtureBrandId,
+                fixtureLocationId,
                 courierId,
                 null,
                 shipmentId,
@@ -374,6 +461,11 @@ class DayCloseDeliveryFactTests {
     }
 
     private UUID seedOrder() {
+        return seedOrder(TENANT, BRAND, branch);
+    }
+
+    /** Isolation-test overload — see {@link #seedOtherTenantDeliveryFact()}. */
+    private UUID seedOrder(UUID tenantId, UUID brandId, UUID locationId) {
         UUID orderId = UUID.randomUUID();
         UUID quoteId = UUID.randomUUID();
         UUID cartId = UUID.randomUUID();
@@ -384,14 +476,14 @@ class DayCloseDeliveryFactTests {
         jdbc.sql("""
                 INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name, status)
                 VALUES (:id, :tenantId, 'STOREFRONT', 'WEB', 'Storefront', 'ACTIVE')
-                """).param("id", channelId).param("tenantId", TENANT).update();
+                """).param("id", channelId).param("tenantId", tenantId).update();
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :tenantId, :brandId, 'MAIN', 'Main menu', 'ACTIVE')
                 """)
                 .param("id", catalogId)
-                .param("tenantId", TENANT)
-                .param("brandId", BRAND)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .update();
         jdbc.sql("""
                 INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel, status,
@@ -399,8 +491,8 @@ class DayCloseDeliveryFactTests {
                 VALUES (:id, :tenantId, :brandId, :catalogId, 'STOREFRONT', 'PUBLISHED', 'hash', now())
                 """)
                 .param("id", publicationId)
-                .param("tenantId", TENANT)
-                .param("brandId", BRAND)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("catalogId", catalogId)
                 .update();
         jdbc.sql("""
@@ -411,9 +503,9 @@ class DayCloseDeliveryFactTests {
                         45000, now() + interval '1 hour')
                 """)
                 .param("id", quoteId)
-                .param("tenantId", TENANT)
-                .param("brandId", BRAND)
-                .param("locationId", branch)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
                 .param("publicationId", publicationId)
                 .update();
         jdbc.sql("""
@@ -423,9 +515,9 @@ class DayCloseDeliveryFactTests {
                         'fact-fixture', now() + interval '1 hour')
                 """)
                 .param("id", cartId)
-                .param("tenantId", TENANT)
-                .param("brandId", BRAND)
-                .param("locationId", branch)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
                 .param("channelId", channelId)
                 .update();
         jdbc.sql("""
@@ -439,9 +531,9 @@ class DayCloseDeliveryFactTests {
                         45000, :quoteId, 'hash', :publicationId, :cartId, 'fact-fixture', 1, now())
                 """)
                 .param("id", orderId)
-                .param("tenantId", TENANT)
-                .param("brandId", BRAND)
-                .param("locationId", branch)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
                 .param("channelId", channelId)
                 .param("quoteId", quoteId)
                 .param("publicationId", publicationId)
