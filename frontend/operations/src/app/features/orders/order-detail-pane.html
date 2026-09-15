@@ -244,6 +244,24 @@
                 }
               }
             </dl>
+
+            <!-- Delivery-exception band (gap map rows 1.2f/1.2g): every open ADR 0014
+                 sourcing or cancellation exception, most recent last. Empty for the
+                 ordinary case -- sourcing settled cleanly and nothing needs an operator. -->
+            @if (plan.exceptions.length > 0) {
+              <ul class="pane__delivery-exceptions" data-testid="order-detail-delivery-exceptions">
+                @for (exception of plan.exceptions; track exception.exceptionId) {
+                  <li class="pane__delivery-exception" role="alert">
+                    <span class="q-body-sm">{{
+                      deliveryExceptionReasonLabel(exception.reasonCode)
+                    }}</span>
+                    @if (exception.detail) {
+                      <span class="q-caption">{{ exception.detail }}</span>
+                    }
+                  </li>
+                }
+              </ul>
+            }
           }
         } @else {
           <div class="pane__money-error" role="alert" data-testid="order-detail-money-error">
@@ -770,6 +788,20 @@
                 <p class="q-caption">{{ 'orders.detail.courier.empty' | t }}</p>
               }
             }
+
+            <!-- The Millenium pattern (gap map row 1.2f): only offered while nobody
+                 carries this plan yet -- a courier partner is called, not assigned,
+                 and the quote-delta dialog is where any booking actually commits. -->
+            @if (!plan.shipment) {
+              <button
+                type="button"
+                class="pane__reveal-link"
+                (click)="openExternalCourierDialog()"
+                data-testid="order-detail-external-courier"
+              >
+                {{ 'orders.dialog.externalCourier.title' | t }}
+              </button>
+            }
           </div>
         }
       </section>
@@ -960,6 +992,17 @@
       [currency]="order()?.value.summary?.currency ?? 'UZS'"
       [busy]="busy()"
       (confirm)="onCashTenderedConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'externalCourier') {
+    <q-external-courier-dialog
+      [partners]="externalPartners()"
+      [quote]="externalQuote()"
+      [busy]="externalCourierBusy()"
+      (quoteRequested)="requestExternalQuote($event)"
+      (accepted)="acceptExternalBooking($event)"
+      (abandoned)="abandonExternalBooking($event)"
       (dismiss)="onDialogDismiss()"
     />
   }

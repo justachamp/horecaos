@@ -237,6 +237,20 @@ export const messagesEn = {
   'orders.dialog.note.save': 'Save',
   'orders.dialog.amendMenu.title': 'What would you like to change?',
 
+  // The Millenium pattern's own confirmation seam (gap map row 1.2f, wave P44).
+  'orders.dialog.externalCourier.title': 'Call an external courier',
+  'orders.dialog.externalCourier.noPartners':
+    'No external courier partner is configured for this branch.',
+  'orders.dialog.externalCourier.partner': 'Courier partner',
+  'orders.dialog.externalCourier.getQuote': 'Get quote',
+  'orders.dialog.externalCourier.customerFee': 'Customer’s delivery fee',
+  'orders.dialog.externalCourier.providerPrice': 'Courier’s price',
+  'orders.dialog.externalCourier.delta': 'Increase over the customer’s fee',
+  'orders.dialog.externalCourier.acknowledge': 'I confirm the branch will cover this increase.',
+  'orders.dialog.externalCourier.unavailable': 'This courier partner could not quote this journey.',
+  'orders.dialog.externalCourier.abandon': 'Decline this price',
+  'orders.dialog.externalCourier.accept': 'Book this courier',
+
   'orders.dialog.outcome.stockDisposition.RELEASE': 'Reservation released',
   'orders.dialog.outcome.stockDisposition.RETURN_TO_STOCK': 'Returned to stock',
   'orders.dialog.outcome.stockDisposition.WRITE_OFF': 'Written off',
@@ -279,6 +293,36 @@ export const messagesEn = {
   'orders.detail.money.deliveryProvider': 'Delivery (billed by provider)',
   'orders.detail.money.deliveryProviderUnknown': 'not tracked',
   'orders.detail.money.deliveryMargin': 'Delivery margin',
+
+  // Delivery-exception band (gap map rows 1.2f/1.2g, wave P44).
+  'orders.detail.delivery.exceptionReason.NO_PROVIDER': 'No courier provider available',
+  'orders.detail.delivery.exceptionReason.LATE_ASSIGNMENT': 'No courier assigned in time',
+  'orders.detail.delivery.exceptionReason.PROMISE_UNREACHABLE':
+    'The delivery promise can no longer be met',
+  'orders.detail.delivery.exceptionReason.AWAITING_RECONCILIATION':
+    'Booking outcome unconfirmed — check with the provider',
+  'orders.detail.delivery.exceptionReason.ABANDONED_HOLD':
+    'A provider hold was never confirmed or cancelled',
+  'orders.detail.delivery.exceptionReason.LATE_RESTAURANT': 'The kitchen ran late',
+  'orders.detail.delivery.exceptionReason.COURIER_NO_SHOW': 'The courier never arrived',
+  'orders.detail.delivery.exceptionReason.ADDRESS_ISSUE':
+    'The delivery address could not be resolved',
+  'orders.detail.delivery.exceptionReason.PROVIDER_CANCEL_UNCERTAIN':
+    'Cancellation with the courier is unconfirmed — check manually',
+  'orders.detail.delivery.exceptionReason.PROVIDER_CANCEL_FAILED':
+    'The courier could not be reached or refused to cancel — check manually',
+
+  // The cancel dialog's own provider-cancellation outcome (gap map row 1.2g, wave P44).
+  'orders.detail.delivery.cancelOutcome.INTERNAL_CANCELLED':
+    'The courier was removed from this order.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_CANCELLED':
+    'The courier provider confirmed the cancellation — free of charge.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_CANCELLED_CHARGEABLE':
+    'The courier provider confirmed the cancellation, but it is chargeable.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_UNCERTAIN':
+    'The courier provider’s cancellation could not be confirmed — check manually.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_FAILED':
+    'The courier provider refused or could not be reached — check manually.',
 
   'orders.detail.customer.name': 'Name',
   'orders.detail.customer.guest': 'Guest',

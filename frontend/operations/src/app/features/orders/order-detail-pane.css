@@ -294,6 +294,27 @@
   margin-top: 4px;
 }
 
+/* ---- delivery-exception band (gap map rows 1.2f/1.2g) ------------------ */
+
+.pane__delivery-exceptions {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pane__delivery-exception {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+  border-radius: 6px;
+}
+
 /* ---- customer / address (§3.7-§3.8) -------------------------------------- */
 
 .pane__fields {

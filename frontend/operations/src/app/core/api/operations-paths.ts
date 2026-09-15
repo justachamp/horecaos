@@ -560,6 +560,33 @@ export const operationsPaths = {
   },
 
   /**
+   * Every external courier partner this branch has configured (`DispatchController
+   * .externalPartners`, wave P44, gap map row 1.2f) — the picker behind «Вызвать курьера».
+   */
+  dispatchExternalPartners(scope: LocationScope, planId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/plans/${encodeURIComponent(planId)}/external-partners`;
+  },
+
+  /** A non-binding price from one partner, against the customer's own fee. Mutation: key required. */
+  dispatchExternalQuote(scope: LocationScope, planId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/plans/${encodeURIComponent(planId)}/external-quote`;
+  },
+
+  /** Accept or abandon a quoted external booking. Mutation: key required. */
+  dispatchExternalBook(scope: LocationScope, planId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/plans/${encodeURIComponent(planId)}/external-book`;
+  },
+
+  /**
+   * The dedicated, provider-notifying shipment cancel (`Capability.SHIPMENT_CANCEL`,
+   * wave P44, gap map row 1.2g) — distinct from {@link operationsPaths.dispatchUnassign},
+   * which never tells a PARTNER shipment's provider anything. Mutation: key required.
+   */
+  dispatchShipmentCancel(scope: LocationScope, shipmentId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/shipments/${encodeURIComponent(shipmentId)}/cancel`;
+  },
+
+  /**
    * The dispatcher's live map (ADR 0045, `OperationsCourierPositionController`,
    * IA 3.2) — on the ADR 0031 prefix, but under its own `operations/couriers`
    * sub-path rather than beside `dispatch`, matching the controller's own

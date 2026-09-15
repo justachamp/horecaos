@@ -227,6 +227,20 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.dialog.note.save': 'Saqlash',
   'orders.dialog.amendMenu.title': 'Nimani oʻzgartirmoqchisiz?',
 
+  // Tashqi kuryer chaqirishda narx tasdigʻi (boʻshliqlar xaritasi 1.2f, P44 toʻlqini).
+  'orders.dialog.externalCourier.title': 'Tashqi kuryer chaqirish',
+  'orders.dialog.externalCourier.noPartners': 'Bu filial uchun kuryerlik xizmati sozlanmagan.',
+  'orders.dialog.externalCourier.partner': 'Kuryerlik xizmati',
+  'orders.dialog.externalCourier.getQuote': 'Narxni bilish',
+  'orders.dialog.externalCourier.customerFee': 'Mijozdan olinadigan yetkazish narxi',
+  'orders.dialog.externalCourier.providerPrice': 'Kuryer narxi',
+  'orders.dialog.externalCourier.delta': 'Mijoz narxidan oshib ketgan summa',
+  'orders.dialog.externalCourier.acknowledge':
+    'Oshib ketgan summani filial toʻlashini tasdiqlayman.',
+  'orders.dialog.externalCourier.unavailable': 'Bu kuryerlik xizmati marshrut narxini bera olmadi.',
+  'orders.dialog.externalCourier.abandon': 'Bu narxdan voz kechish',
+  'orders.dialog.externalCourier.accept': 'Shu kuryerni buyurtma qilish',
+
   'orders.dialog.outcome.stockDisposition.RELEASE': 'Rezerv boʻshatildi',
   'orders.dialog.outcome.stockDisposition.RETURN_TO_STOCK': 'Omborga qaytarildi',
   'orders.dialog.outcome.stockDisposition.WRITE_OFF': 'Hisobdan chiqarildi',
@@ -269,6 +283,34 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.money.deliveryProvider': 'Yetkazish (provayderdan)',
   'orders.detail.money.deliveryProviderUnknown': 'kuzatilmagan',
   'orders.detail.money.deliveryMargin': 'Yetkazish marjasi',
+
+  // Yetkazishdagi istisnolar bandi (boʻshliqlar xaritasi 1.2f/1.2g, P44 toʻlqini).
+  'orders.detail.delivery.exceptionReason.NO_PROVIDER': 'Mavjud kuryerlik xizmati yoʻq',
+  'orders.detail.delivery.exceptionReason.LATE_ASSIGNMENT': 'Kuryer vaqtida tayinlanmadi',
+  'orders.detail.delivery.exceptionReason.PROMISE_UNREACHABLE':
+    'Vaʻda qilingan yetkazish vaqtiga endi erishib boʻlmaydi',
+  'orders.detail.delivery.exceptionReason.AWAITING_RECONCILIATION':
+    'Bron natijasi tasdiqlanmagan — xizmatdan aniqlang',
+  'orders.detail.delivery.exceptionReason.ABANDONED_HOLD':
+    'Provayderdagi rezerv na tasdiqlanmagan, na bekor qilingan',
+  'orders.detail.delivery.exceptionReason.LATE_RESTAURANT': 'Oshxona kechikdi',
+  'orders.detail.delivery.exceptionReason.COURIER_NO_SHOW': 'Kuryer kelmadi',
+  'orders.detail.delivery.exceptionReason.ADDRESS_ISSUE': 'Yetkazish manzilini aniqlab boʻlmadi',
+  'orders.detail.delivery.exceptionReason.PROVIDER_CANCEL_UNCERTAIN':
+    'Kuryerdagi bekor qilish tasdiqlanmagan — qoʻlda tekshiring',
+  'orders.detail.delivery.exceptionReason.PROVIDER_CANCEL_FAILED':
+    'Kuryer mavjud emas yoki bekor qilishdan bosh tortdi — qoʻlda tekshiring',
+
+  // Buyurtmani bekor qilish oynasidagi kuryerdagi bekor qilish natijasi (boʻshliqlar xaritasi 1.2g, P44 toʻlqini).
+  'orders.detail.delivery.cancelOutcome.INTERNAL_CANCELLED': 'Kuryer buyurtmadan olib tashlandi.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_CANCELLED':
+    'Kuryerlik xizmati bekor qilishni tasdiqladi — bepul.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_CANCELLED_CHARGEABLE':
+    'Kuryerlik xizmati bekor qilishni tasdiqladi, lekin bu pullik.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_UNCERTAIN':
+    'Kuryerlik xizmatidagi bekor qilish tasdiqlanmagan — qoʻlda tekshiring.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_FAILED':
+    'Kuryerlik xizmati bekor qilishdan bosh tortdi yoki mavjud emas — qoʻlda tekshiring.',
 
   'orders.detail.customer.name': 'Ism',
   'orders.detail.customer.guest': 'Mehmon',

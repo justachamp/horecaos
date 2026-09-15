@@ -26,7 +26,11 @@ import { StepItem, Steps } from '../../shared/ui/steps';
 import { Timeline, TimelineEntry } from '../../shared/ui/timeline';
 import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
-import { DispatchApi } from '../delivery/dispatch-api';
+import {
+  DispatchApi,
+  ExternalPartnerResponse,
+  ExternalQuoteResponse,
+} from '../delivery/dispatch-api';
 import { KitchenApi, KitchenEventResponse, KitchenEventsResponse } from '../kitchen/kitchen-api';
 import { deliveryLifecycleSteps } from './delivery-lifecycle-steps';
 import { kitchenLifecycleSteps } from './kitchen-lifecycle-steps';
@@ -36,7 +40,7 @@ import {
   actionLabel,
   decisionOutcomeLabel,
 } from './order-actions';
-import { DecisionResponse, OrderActionsApi } from './order-actions-api';
+import { DecisionResponse, OrderActionsApi, OrderCancellationResponse } from './order-actions-api';
 import { OrderAmendMenu } from './order-amend-menu';
 import {
   AmendmentResponse,
@@ -60,12 +64,15 @@ import { OrderHandoverPanel } from './order-handover-panel';
 import { orderLifecycleSteps } from './order-lifecycle-steps';
 import { MoneyReconciliation, reconcileMoney } from './order-money';
 import { OrderNoteDialog } from './order-note-dialog';
+import { ExternalBookingSubmission, ExternalCourierDialog } from './external-courier-dialog';
 import {
   outcomeKindLabel,
   outcomeSystemCategoryLabel,
   stockDispositionLabel,
   liabilityPartyLabel,
   customerRefundLabel,
+  deliveryCancellationOutcomeText,
+  deliveryExceptionReasonLabel,
 } from './order-outcome-labels';
 import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outcome-reason-dialog';
 import {
@@ -112,7 +119,8 @@ type DialogKind =
   | 'kitchenNote'
   | 'courierNote'
   | 'internalNote'
-  | 'cashTendered';
+  | 'cashTendered'
+  | 'externalCourier';
 
 /**
  * The order detail — `docs/operations-spec/orders.md` §3, docked beside the
@@ -145,6 +153,7 @@ type DialogKind =
     OrderCashTenderedDialog,
     OrderRejectReasonDialog,
     OrderHandoverPanel,
+    ExternalCourierDialog,
     Steps,
     Timeline,
     Combobox,
@@ -200,6 +209,11 @@ export class OrderDetailPane {
   protected readonly courierRoster = signal<readonly RosterEntryResponse[]>([]);
   protected readonly courierPickerOpen = signal(false);
   protected readonly assigningCourier = signal(false);
+
+  /** «Вызвать курьера» — the Millenium pattern's own confirmation seam (gap map row 1.2f). */
+  protected readonly externalPartners = signal<readonly ExternalPartnerResponse[]>([]);
+  protected readonly externalQuote = signal<ExternalQuoteResponse | null>(null);
+  protected readonly externalCourierBusy = signal(false);
 
   /**
    * `q-timeline`'s own shape, row `X.26` — the same idea as the staff
@@ -952,7 +966,7 @@ export class OrderDetailPane {
     const orderId = detail.value.summary.orderId;
     const version = detail.value.summary.version ?? 0;
 
-    void this.submitStateMutation(
+    void this.submitCancelMutation(
       this.actionsApi.cancelWithReason(
         scope,
         orderId,
@@ -1019,6 +1033,38 @@ export class OrderDetailPane {
     this.busy.set(true);
     try {
       await firstValueFrom(request);
+      await this.load(orderId);
+    } catch (error) {
+      this.handleMutationError(orderId, error, false);
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  /**
+   * `.../cancellations`' own mutation (gap map row 1.2g): identical to {@link
+   * submitStateMutation} except it also surfaces `deliveryCancellation` — what
+   * the cascade found out about the courier provider, in the same notice band
+   * every other mutation error already uses. `NOTHING_TO_CANCEL` and `PLAN_CANCELLED`
+   * say nothing here: neither one is a fact about a courier an operator needs
+   * to see.
+   */
+  private async submitCancelMutation(
+    request: Observable<OrderCancellationResponse>,
+  ): Promise<void> {
+    const orderId = this.order()?.value.summary.orderId;
+    if (!orderId) {
+      return;
+    }
+    this.busy.set(true);
+    try {
+      const result = await firstValueFrom(request);
+      const outcomeText = deliveryCancellationOutcomeText(result.deliveryCancellation, (key) =>
+        this.i18n.t(key),
+      );
+      if (outcomeText) {
+        this.notice.set(outcomeText);
+      }
       await this.load(orderId);
     } catch (error) {
       this.handleMutationError(orderId, error, false);
@@ -1382,6 +1428,82 @@ export class OrderDetailPane {
     }
   }
 
+  // ------------------------------------------------------------ §1.2f «Вызвать курьера»
+
+  /**
+   * Opens the Millenium-pattern confirmation dialog (gap map row 1.2f):
+   * fetches the branch's external partners fresh every time, since a binding
+   * disabled between two orders must not offer a partner that can no longer
+   * be booked.
+   */
+  protected async openExternalCourierDialog(): Promise<void> {
+    const scope = this.location.scope();
+    const plan = this.delivery();
+    if (!scope || !plan) {
+      return;
+    }
+    this.externalQuote.set(null);
+    this.dialog.set('externalCourier');
+    this.externalPartners.set(await this.dispatchApi.externalPartners(scope, plan.planId));
+  }
+
+  protected async requestExternalQuote(bindingId: string): Promise<void> {
+    const scope = this.location.scope();
+    const plan = this.delivery();
+    if (!scope || !plan) {
+      return;
+    }
+    this.externalCourierBusy.set(true);
+    try {
+      this.externalQuote.set(await this.dispatchApi.externalQuote(scope, plan.planId, bindingId));
+    } catch (error) {
+      this.noticeFromRevealError(error);
+    } finally {
+      this.externalCourierBusy.set(false);
+    }
+  }
+
+  protected async acceptExternalBooking(submission: ExternalBookingSubmission): Promise<void> {
+    await this.settleExternalBooking(submission, 'ACCEPT', 'OPERATIONS_EXTERNAL_BOOKING_ACCEPT');
+  }
+
+  protected async abandonExternalBooking(submission: ExternalBookingSubmission): Promise<void> {
+    await this.settleExternalBooking(submission, 'ABANDON', 'OPERATIONS_EXTERNAL_BOOKING_ABANDON');
+  }
+
+  private async settleExternalBooking(
+    submission: ExternalBookingSubmission,
+    decision: 'ACCEPT' | 'ABANDON',
+    reasonCode: string,
+  ): Promise<void> {
+    const scope = this.location.scope();
+    const plan = this.delivery();
+    const orderId = this.order()?.value.summary.orderId;
+    if (!scope || !plan || !orderId) {
+      return;
+    }
+    this.externalCourierBusy.set(true);
+    try {
+      const result = await this.dispatchApi.externalBook(
+        scope,
+        plan.planId,
+        submission.bindingId,
+        submission.quoteId,
+        decision,
+        reasonCode,
+      );
+      if (!result.applied && result.reason) {
+        this.notice.set(this.i18n.t('orders.detail.courier.refused', { reason: result.reason }));
+      }
+      this.dialog.set(null);
+      await this.loadDelivery(orderId);
+    } catch (error) {
+      this.noticeFromRevealError(error);
+    } finally {
+      this.externalCourierBusy.set(false);
+    }
+  }
+
   // ------------------------------------------------------------ §3.9 revisions (row 1.2p)
 
   /**
@@ -1440,6 +1562,11 @@ export class OrderDetailPane {
 
   protected customerRefundLabel(value: string): string {
     return customerRefundLabel(value, (key, values) => this.i18n.t(key, values));
+  }
+
+  /** The delivery-exception band's own reason label (gap map rows 1.2f/1.2g). */
+  protected deliveryExceptionReasonLabel(value: string): string {
+    return deliveryExceptionReasonLabel(value, (key, values) => this.i18n.t(key, values));
   }
 
   /**
