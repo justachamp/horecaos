@@ -23,6 +23,7 @@ import {
   RevisionResponse,
 } from './order-detail';
 import { OrderHandoverApi } from './order-handover-api';
+import { OrderPosExportApi, OrderPosExportView, PosExportView } from './order-pos-export-api';
 import { RejectReasonOption } from './order-reject-reason-dialog';
 import { RejectReasonsApi } from './order-reject-reasons-api';
 import { OrderRevealApi } from './order-reveal-api';
@@ -157,6 +158,7 @@ function configure(options: {
   dispatchApi?: Partial<DispatchApi>;
   couriersApi?: Partial<CouriersApi>;
   kitchenApi?: Partial<KitchenApi>;
+  posExportApi?: Partial<OrderPosExportApi>;
   scope?: typeof FAKE_SCOPE | null;
 }): void {
   TestBed.configureTestingModule({
@@ -212,6 +214,16 @@ function configure(options: {
             eventsForOrder: () =>
               Promise.resolve({ ticketId: null, ticketStatus: null, events: [] }),
           } as Partial<KitchenApi>),
+      },
+      // §3.11's POS row (wave P42, row 1.2i): every test not focused on it
+      // gets a harmless "no POS binding here" answer, the same rule
+      // OrderHandoverApi's own comment above states -- posCapable false is
+      // exactly what suppresses the whole section and the amend interlock.
+      {
+        provide: OrderPosExportApi,
+        useValue: options.posExportApi ?? {
+          forOrder: () => Promise.resolve({ posCapable: false, export: null }),
+        },
       },
     ],
   });
@@ -1856,5 +1868,146 @@ describe('OrderDetailPane: the losing side of a decision is shown (wave P11, row
     expect(
       fixture.nativeElement.querySelector('[data-testid="order-detail-timeline-losing-decisions"]'),
     ).toBeNull();
+  });
+});
+
+// ================================================================ wave P42: §3.11 POS export and its interlock
+
+/** A minimal `PosExportView`, overridable per test — mirrors `OrderPosExportController.ExportView`. */
+function posExportView(overrides: Partial<PosExportView> = {}): PosExportView {
+  return {
+    exportId: 'export-1',
+    state: 'ACCEPTED',
+    permitsAmendment: false,
+    attemptCount: 1,
+    externalOrderId: null,
+    requestedAt: '2026-09-15T09:00:00Z',
+    firstSentAt: '2026-09-15T09:00:01Z',
+    settledAt: '2026-09-15T09:00:02Z',
+    lastErrorCode: null,
+    lastError: null,
+    resolutionKind: null,
+    resolutionReason: null,
+    resolvedAt: null,
+    ...overrides,
+  };
+}
+
+/** The order this describe block amends throughout -- CONFIRMED with only AMEND offered, matching the P10 AMEND test's own fixture shape. */
+function amendableDetail() {
+  return detail({
+    summary: { ...detail().summary, status: 'CONFIRMED', actions: [{ action: 'AMEND' }] },
+  });
+}
+
+describe('OrderDetailPane: POS export and its §3.11 amendment interlock (wave P42, row 1.2i)', () => {
+  it('the section and the interlock are both absent when the tenant has no POS binding', async () => {
+    configure({
+      get: apiGet({ value: amendableDetail(), version: 3 }),
+      posExportApi: { forOrder: () => Promise.resolve({ posCapable: false, export: null }) },
+    });
+    const fixture = await render();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="order-detail-pos-export"]')).toBeNull();
+    // No POS binding means nothing to wait on either: AMEND stays enabled.
+    const primary = host.querySelector(
+      '[data-testid="order-detail-primary-action"]',
+    ) as HTMLButtonElement;
+    expect(primary.disabled).toBe(false);
+    expect(host.querySelector('[data-testid="order-detail-amend-blocked"]')).toBeNull();
+  });
+
+  it('renders the POS export section once the tenant is posCapable', async () => {
+    configure({
+      get: apiGet({ value: amendableDetail(), version: 3 }),
+      posExportApi: {
+        forOrder: () =>
+          Promise.resolve({
+            posCapable: true,
+            export: posExportView({
+              state: 'REJECTED',
+              permitsAmendment: true,
+              lastErrorCode: 'LINE_UNMAPPED',
+              lastError: 'no provider mapping',
+            }),
+          }),
+      },
+    });
+    const fixture = await render();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const section = host.querySelector('[data-testid="order-detail-pos-export"]');
+    expect(section).not.toBeNull();
+    expect(section!.textContent).toContain('till refused it');
+    // The Traps note this row exists for: never render a failed export as an
+    // order failure -- the reassurance sentence is what says so.
+    expect(
+      host.querySelector('[data-testid="order-detail-pos-export-reassurance"]')?.textContent,
+    ).toContain('order is fine');
+    expect(
+      host.querySelector('[data-testid="order-detail-pos-export-last-error"]')?.textContent,
+    ).toContain('no provider mapping');
+  });
+
+  it('disables AMEND and shows the reason while an export is unacknowledged', async () => {
+    configure({
+      get: apiGet({ value: amendableDetail(), version: 3 }),
+      posExportApi: {
+        forOrder: () =>
+          Promise.resolve({
+            posCapable: true,
+            export: posExportView({ state: 'ACCEPTED', permitsAmendment: false }),
+          }),
+      },
+    });
+    const fixture = await render();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const primary = host.querySelector(
+      '[data-testid="order-detail-primary-action"]',
+    ) as HTMLButtonElement;
+    expect(primary.disabled).toBe(true);
+    expect(host.querySelector('[data-testid="order-detail-amend-blocked"]')?.textContent).toContain(
+      'waiting on the POS',
+    );
+
+    // Defense in depth: even a click that reaches the handler must not open the menu.
+    primary.click();
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="order-amend-menu"]')).toBeNull();
+  });
+
+  it('leaves AMEND enabled once the export has settled (PENDING permits an amendment)', async () => {
+    configure({
+      get: apiGet({ value: amendableDetail(), version: 3 }),
+      posExportApi: {
+        forOrder: () =>
+          Promise.resolve({
+            posCapable: true,
+            export: posExportView({ state: 'PENDING', permitsAmendment: true }),
+          }),
+      },
+    });
+    const fixture = await render();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const primary = host.querySelector(
+      '[data-testid="order-detail-primary-action"]',
+    ) as HTMLButtonElement;
+    expect(primary.disabled).toBe(false);
+    expect(host.querySelector('[data-testid="order-detail-amend-blocked"]')).toBeNull();
+
+    primary.click();
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="order-amend-menu"]')).not.toBeNull();
   });
 });

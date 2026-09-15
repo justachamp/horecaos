@@ -434,6 +434,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.amendment.warning.CASH_TENDERED_INSUFFICIENT':
     '«Qancha pul bilan keladi» endi umumiy summadan kam — mijoz qoʻshib toʻlashi mumkin.',
   'orders.amendment.warning.acknowledge': 'Tushunarli',
+  'orders.detail.amend.blockedByPosExport': 'Tahrirlash mavjud emas: POS tasdiqlanishi kutilmoqda',
 
   'orders.detail.section.revisions': 'Revizialar ({count})',
   'orders.detail.revisions.show': 'Revizialarni koʻrsatish',
@@ -489,6 +490,27 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.fiscal.outcome.NO_PROVIDER_PATH':
     'Bu toʻlovni provayder orqali fiskallashtirib boʻlmaydi',
   'orders.detail.fiscal.outcome.NOT_WIRED': 'Provayder ulanmagan',
+
+  'orders.detail.section.posExport': 'Kassaga eksport',
+  'orders.detail.posExport.error': 'Kassaga eksportni yuklab boʻlmadi',
+  'orders.detail.posExport.notExportedYet': 'Hali kassaga yuborilmagan',
+  'orders.detail.posExport.reassurance':
+    'Buyurtma joyida — oshxonadagi nusxasi yetib bormagan boʻlishi mumkin.',
+  'orders.detail.posExport.lastError': 'Kassa javobi: {detail}',
+  'orders.detail.posExport.state.PENDING': 'Hali yuborilmagan',
+  'orders.detail.posExport.state.SENT': 'Yuborilmoqda…',
+  'orders.detail.posExport.state.ACCEPTED': 'Kassaga yetib bordi',
+  'orders.detail.posExport.state.REJECTED': 'Kassa rad etdi',
+  'orders.detail.posExport.state.UNCERTAIN': 'Noaniq — tekshirilmoqda',
+  'orders.detail.posExport.state.AWAITING_OPERATOR': 'Tekshiruv kerak',
+  'orders.detail.posExport.state.RESOLVED_LANDED': 'Kassada tasdiqlandi',
+  'orders.detail.posExport.state.RESOLVED_ABSENT': 'Yetib bormadi — qayta yuborish mumkin',
+  'orders.detail.posExport.state.ABANDONED': 'Yuborilmaydi',
+  'orders.detail.posExport.action.push': 'POSga yuborish',
+  'orders.detail.posExport.action.push.reason': 'Sabab',
+  'orders.detail.posExport.action.push.submit': 'Yuborish',
+  'orders.detail.posExport.action.push.submitting': 'Yuborilmoqda…',
+  'orders.detail.posExport.action.push.notSendable': 'Joriy holatda qayta yuborib boʻlmaydi',
 
   'orders.severity.blocked': 'aralashuv talab qilinadi',
   'orders.severity.approvalDeadline': '{mmss} ichida tasdiqlang',
