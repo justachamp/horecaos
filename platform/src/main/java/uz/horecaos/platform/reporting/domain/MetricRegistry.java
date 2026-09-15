@@ -54,6 +54,16 @@ public final class MetricRegistry {
      * {@code fact_order.seconds_total}) is older, but no definition named it until this wave. */
     private static final LocalDate P27_FULFILMENT_TIME = LocalDate.of(2026, 9, 14);
 
+    /**
+     * T13 (7.6/7.6a): when this build started registering the customer-grain
+     * metrics below. The source columns — {@code fact_order.is_first_order},
+     * {@code fact_order.customer_subject_hash}, {@code
+     * agg_branch_day.distinct_customers}/{@code new_customers} — are older
+     * (present since {@link #PILOT}), but no definition named them until
+     * this wave.
+     */
+    private static final LocalDate T13_CUSTOMER_ANALYTICS = LocalDate.of(2026, 9, 15);
+
     private static final Map<String, MetricDefinition> BY_CODE = index(List.of(
             new MetricDefinition(
                     new MetricId("revenue.gross", 1),
@@ -422,7 +432,255 @@ public final class MetricRegistry {
                             + "against what the provider actually remits after its own commission "
                             + "or fee — that is a payments-module concern this figure does not "
                             + "answer.",
-                    P39_TENDER_FACT)));
+                    P39_TENDER_FACT),
+            // Wave T06 (7.3): the branch leaderboard's «В норме %» column needs a
+            // denominator. orders.late.v1 already counts the numerator (closed,
+            // promised, late); promised_count has been written to
+            // reporting.agg_branch_day since V0031, but nothing named it as a
+            // registry id until now — the same "registry-and-endpoint gap over
+            // already-written data" P27_FULFILMENT_TIME's own comment describes.
+            // No effectiveFrom, same as orders.late.v1 itself: the two are read
+            // together and neither states a date the other does not.
+            new MetricDefinition(
+                    new MetricId("orders.promised", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.agg_branch_day.promised_count",
+                    true,
+                    Aggregation.COUNT,
+                    "PROMISED_AND_CLOSED",
+                    CurrencyRule.NONE,
+                    "Integer",
+                    MetricUnit.COUNT,
+                    "Count of closed orders that carried a promise to the customer — the "
+                            + "denominator orders.late.v1 needs to become an on-time percentage: "
+                            + "on-time % = 100 × (orders.promised.v1 − orders.late.v1) / "
+                            + "orders.promised.v1.",
+                    "Orders that carried a promise and reached a terminal status — the same "
+                            + "inclusion rule orders.late.v1 states.",
+                    "Orders with no promise, which are a third state and never counted toward "
+                            + "either the numerator or the denominator of an on-time share.",
+                    "Not applicable.",
+                    null,
+                    null),
+            // Wave T06 (7.3a): statistics.md §2.3's own «Медиана» column beside
+            // the SLA time buckets. sla_bucket_set.v1 already sources
+            // seconds_total; this is the same population's median, a
+            // registry-and-endpoint gap over already-written data rather than a
+            // new fact — the identical move P27_FULFILMENT_TIME's own comment
+            // describes for delivery_time.median.v1/pickup_time.median.v1.
+            // Distinct from prep_time.median.v1: that one reads
+            // seconds_to_ready (confirmation to ready) and excludes orders
+            // cancelled before production; this reads seconds_total (creation
+            // to close) over every fulfilment type, exactly what the six
+            // buckets beside it summarise.
+            new MetricDefinition(
+                    new MetricId("handover_time.median", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_order.seconds_total",
+                    true,
+                    Aggregation.MEDIAN,
+                    "CLOSED_ORDERS",
+                    CurrencyRule.NONE,
+                    "Seconds",
+                    MetricUnit.SECONDS,
+                    "Median seconds from order creation to close, over every fulfilment type — "
+                            + "the same population sla_bucket_set.v1 buckets, summarised as one "
+                            + "figure per branch.",
+                    "Every order with a closed_at.",
+                    "Orders still open at the close of the business day.",
+                    "Not applicable.",
+                    null,
+                    null),
+            // ---------------------------------------------------------------
+            // T13 (7.6/7.6a/7.6b): customer analytics. The grain the row's own
+            // evidence understated — reporting.fact_order already carries
+            // is_first_order and customer_subject_hash, and agg_branch_day
+            // already carries distinct_customers and new_customers — so
+            // new-versus-returning and a repeat-purchase distribution are
+            // derivable without any dim_customer table. Six of the seven are
+            // answered by GET .../reporting/customer-kpis rather than
+            // /queries: a distinct-customer count cannot be correctly summed
+            // across the channel/fulfilment-type rows the typed pipeline
+            // rolls agg_branch_day up from (a customer ordering on two
+            // channels the same day would double count), the same reason
+            // payment_mix.amount.v1 and receipt_depth.v1 above get their own
+            // endpoint rather than /queries.
+            new MetricDefinition(
+                    new MetricId("customers.new", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_order.customer_subject_hash, where is_first_order = true",
+                    true,
+                    Aggregation.COUNT_DISTINCT,
+                    "FIRST_ORDER_IN_RANGE",
+                    CurrencyRule.NONE,
+                    "Integer",
+                    MetricUnit.COUNT,
+                    "Count of distinct customers whose first-ever order (is_first_order = true, "
+                            + "computed against the customer's full order history, not just this "
+                            + "range) fell inside the requested range and location.",
+                    "Every order with a customer_subject_hash and is_first_order = true, "
+                            + "regardless of terminal status — a cancelled first order still means "
+                            + "the person is new.",
+                    "Guest orders with no customer account, which carry no customer_subject_hash " + "at all.",
+                    "Not applicable: a refund does not undo that an order was a customer's first.",
+                    "Answered by GET .../reporting/customer-kpis, not by /queries — see this "
+                            + "block's own note above.",
+                    T13_CUSTOMER_ANALYTICS),
+            new MetricDefinition(
+                    new MetricId("customers.distinct", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_order.customer_subject_hash",
+                    true,
+                    Aggregation.COUNT_DISTINCT,
+                    "ANY_ORDER_IN_RANGE",
+                    CurrencyRule.NONE,
+                    "Integer",
+                    MetricUnit.COUNT,
+                    "Count of distinct customers who placed at least one order in the requested "
+                            + "range and location, any terminal status.",
+                    "Every order with a customer_subject_hash, regardless of terminal status.",
+                    "Guest orders with no customer account.",
+                    "Not applicable.",
+                    "Answered by GET .../reporting/customer-kpis, not by /queries — see this "
+                            + "block's own note above.",
+                    T13_CUSTOMER_ANALYTICS),
+            new MetricDefinition(
+                    new MetricId("customers.repeat_share", 1),
+                    Grain.DAY_LOCATION,
+                    "customers.distinct.v1 less customers.new.v1, over customers.distinct.v1",
+                    true,
+                    Aggregation.RATIO,
+                    "SAME_AS_CUSTOMERS_DISTINCT",
+                    CurrencyRule.NONE,
+                    "Basis points, so six truncated shares still sum to the whole",
+                    MetricUnit.BASIS_POINTS,
+                    "Share of this range's distinct customers who were NOT ordering for the "
+                            + "first time — the returning share, in basis points of "
+                            + "customers.distinct.v1.",
+                    "Same inclusion as customers.distinct.v1 and customers.new.v1.",
+                    "Same exclusion as customers.distinct.v1 and customers.new.v1.",
+                    "Not applicable.",
+                    "Null rather than zero when customers.distinct.v1 is zero — a period with no "
+                            + "customers has no repeat share, and zero would read as \"nobody came "
+                            + "back\" rather than \"nobody came at all\". Answered by GET "
+                            + ".../reporting/customer-kpis, not by /queries.",
+                    T13_CUSTOMER_ANALYTICS),
+            new MetricDefinition(
+                    new MetricId("customers.order_frequency", 1),
+                    Grain.DAY_LOCATION,
+                    "orders.count.v1 over customers.distinct.v1",
+                    true,
+                    Aggregation.RATIO,
+                    "COMPLETED_ONLY",
+                    CurrencyRule.NONE,
+                    "Two decimal places; the whole figure is orders divided by customers, not "
+                            + "rounded to an integer",
+                    MetricUnit.COUNT,
+                    "Average number of COMPLETED orders per distinct customer in the requested "
+                            + "range and location. A period figure, never annualised.",
+                    "COMPLETED orders with a customer_subject_hash, over the same customers "
+                            + "customers.distinct.v1 counts.",
+                    "Guest orders (no customer_subject_hash) contribute to neither the numerator "
+                            + "nor the denominator.",
+                    "Not applicable: a refunded order was still placed.",
+                    "Null rather than zero when customers.distinct.v1 is zero. Answered by GET "
+                            + ".../reporting/customer-kpis, not by /queries.",
+                    T13_CUSTOMER_ANALYTICS),
+            new MetricDefinition(
+                    new MetricId("customers.value", 1),
+                    Grain.DAY_LOCATION_LEGAL_ENTITY,
+                    "revenue.net.v1 over customers.distinct.v1",
+                    true,
+                    Aggregation.RATIO,
+                    "COMPLETED_ONLY",
+                    CurrencyRule.UZS_SOM,
+                    "Whole som; no sub-unit exists and nothing divides by a hundred",
+                    MetricUnit.MONEY_SOM,
+                    "Net revenue over the requested range divided by the count of distinct "
+                            + "customers who ordered in it — what one customer was worth this "
+                            + "period, never a projected lifetime figure (that is customers.ltv.v1, "
+                            + "not built).",
+                    "COMPLETED orders with a customer_subject_hash.",
+                    "Guest orders, which have no customer to divide revenue across.",
+                    "A refund reduces revenue.net.v1 on its own business date, so this figure "
+                            + "moves with it the same way revenue.net.v1 does.",
+                    "Null rather than zero when customers.distinct.v1 is zero. Answered by GET "
+                            + ".../reporting/customer-kpis, not by /queries — money still refuses a "
+                            + "combined figure across legal entities (ADR 0038).",
+                    T13_CUSTOMER_ANALYTICS),
+            new MetricDefinition(
+                    new MetricId("customers.basket_depth", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_order.item_count over orders.count.v1",
+                    true,
+                    Aggregation.RATIO,
+                    "COMPLETED_ONLY",
+                    CurrencyRule.NONE,
+                    "One decimal place; the whole figure is items divided by orders, not rounded " + "to an integer",
+                    MetricUnit.COUNT,
+                    "Average item count per COMPLETED order in the requested range and location — "
+                            + "the same arithmetic receipt_depth.v1 already publishes at the "
+                            + "operator grain, here at the branch grain instead.",
+                    "Orders whose terminal status is COMPLETED.",
+                    "Cancelled, rejected, and expired orders — the same exclusion " + "orders.count.v1 states.",
+                    "Not applicable: a refund does not change what was ordered.",
+                    "Answered by GET .../reporting/customer-kpis, not by /queries — the same move "
+                            + "receipt_depth.v1 already makes for a shape agg_branch_day does not "
+                            + "carry.",
+                    T13_CUSTOMER_ANALYTICS),
+            new MetricDefinition(
+                    new MetricId("customers.ltv", 1),
+                    Grain.DAY_LOCATION_LEGAL_ENTITY,
+                    "reporting.fact_order, grouped by customer_subject_hash across ALL history",
+                    false,
+                    Aggregation.RATIO,
+                    "COMPLETED_ONLY",
+                    CurrencyRule.UZS_SOM,
+                    "Whole som; no sub-unit exists and nothing divides by a hundred",
+                    MetricUnit.MONEY_SOM,
+                    "Average lifetime net revenue per customer: for each customer active in the "
+                            + "requested range, their total net revenue across every order they "
+                            + "have ever placed, averaged across those customers.",
+                    "Would be every COMPLETED order a customer has ever placed, not only those in "
+                            + "the requested range.",
+                    "Guest orders, which have no customer to accrue a lifetime to.",
+                    "Would follow revenue.net.v1's own treatment.",
+                    "Not built. No dim_customer or agg_customer_lifetime table exists — "
+                            + "ADR 0043's implementation checklist deliberately does not build one "
+                            + "— and computing this from reporting.fact_order directly would mean "
+                            + "grouping by customer_subject_hash across every partition since the "
+                            + "tenant's first order, unbounded by the range a caller asked for. "
+                            + "customers.value.v1 above is the period figure this build actually "
+                            + "publishes; every surface naming this metric must render it unbuilt "
+                            + "rather than a number that quietly stops at the query range.",
+                    null),
+            // Money, so LEGAL_ENTITY is named (ADR 0038). Answered by the typed
+            // /queries pipeline unlike every other metric in this block: it is
+            // one value per (date, location, legal entity, customer type)
+            // slice, sourced from fact_order directly rather than
+            // agg_branch_day — see ReportQueryService#run's customer-type
+            // branch.
+            new MetricDefinition(
+                    new MetricId("revenue.new_vs_returning", 1),
+                    Grain.DAY_LOCATION_LEGAL_ENTITY_CUSTOMER_TYPE,
+                    "reporting.fact_order.gross_revenue_som, grouped by is_first_order",
+                    true,
+                    Aggregation.SUM,
+                    "COMPLETED_ONLY",
+                    CurrencyRule.UZS_SOM,
+                    "Whole som; no sub-unit exists and nothing divides by a hundred",
+                    MetricUnit.MONEY_SOM,
+                    "Gross revenue of COMPLETED orders, split by whether the order was the "
+                            + "customer's first (is_first_order). Gross, matching revenue.gross.v1, "
+                            + "not net: see refundTreatment below for why.",
+                    "COMPLETED orders with a non-null is_first_order.",
+                    "Guest orders (no customer_subject_hash, so is_first_order is null) and every "
+                            + "non-completing terminal status.",
+                    "Not applicable: reporting.fact_refund carries no customer_subject_hash or "
+                            + "is_first_order, so a refund cannot be attributed to a customer type "
+                            + "and this figure is never reduced by one the way revenue.net.v1 is.",
+                    null,
+                    T13_CUSTOMER_ANALYTICS)));
 
     private MetricRegistry() {}
 

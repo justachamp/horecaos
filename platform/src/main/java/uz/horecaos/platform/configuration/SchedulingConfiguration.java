@@ -210,9 +210,15 @@ public class SchedulingConfiguration {
      * could only ever be armed for a future moment by an operator watching
      * the clock — and {@code LoyaltySweeper.warnExpiringLots}, the pre-expiry
      * warning ADR 0046's own {@code expiryWarningDays} has been authorable,
-     * validated, and persisted since V0042 while nothing ever sent it.
+     * validated, and persisted since V0042 while nothing ever sent it. Wave
+     * W02 added the last two so far: {@code ForecastScheduler
+     * .generateDueForecasts} and {@code .backfillDueActuals}, ADR 0043's own
+     * "Forecasting" section's gap — {@code forecast_run}/{@code
+     * fact_forecast} (V0367) had no production caller until this wave gave
+     * {@code ForecastService} one, the same shape {@code DayCloseScheduler}
+     * gave {@code DayCloseService} in wave 6.
      */
-    static final int DEFAULT_POOL_SIZE = 62;
+    static final int DEFAULT_POOL_SIZE = 65;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

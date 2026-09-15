@@ -461,15 +461,24 @@ public class DayCloseService {
                 line.lineId(),
                 order.locationId(),
                 line.variantId(),
-                // The category needs a catalogue join that reaches into a module
-                // schema for a dimension this build does not cut by. Left null
-                // rather than half-resolved.
-                null,
+                // Wave W02: JdbcReportingStore#readSourceLines now resolves this
+                // with a catalogue join at read time, so the source line already
+                // carries the answer rather than this method guessing at one.
+                line.categoryId(),
                 line.productName(),
                 line.quantity(),
                 gross,
                 gross - line.finalAmountMinor(),
-                line.finalAmountMinor());
+                line.finalAmountMinor(),
+                // Wave W02 (7.8a): the line's own order occurred_at, so a line
+                // can be bucketed by operating-day hour without a join back to
+                // fact_order.
+                order.createdAt(),
+                // ADR 0038 (V0370, batch 6 review): the line's own order
+                // legal_entity_id, so ProductClassificationService can filter
+                // or refuse revenue.gross.v1 by legal entity without a join
+                // back to fact_order.
+                order.legalEntityId());
     }
 
     private static @Nullable Integer elapsed(@Nullable Instant from, @Nullable Instant to) {

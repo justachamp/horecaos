@@ -237,6 +237,20 @@ export const messagesEn = {
   'orders.dialog.note.save': 'Save',
   'orders.dialog.amendMenu.title': 'What would you like to change?',
 
+  // The Millenium pattern's own confirmation seam (gap map row 1.2f, wave P44).
+  'orders.dialog.externalCourier.title': 'Call an external courier',
+  'orders.dialog.externalCourier.noPartners':
+    'No external courier partner is configured for this branch.',
+  'orders.dialog.externalCourier.partner': 'Courier partner',
+  'orders.dialog.externalCourier.getQuote': 'Get quote',
+  'orders.dialog.externalCourier.customerFee': 'Customer’s delivery fee',
+  'orders.dialog.externalCourier.providerPrice': 'Courier’s price',
+  'orders.dialog.externalCourier.delta': 'Increase over the customer’s fee',
+  'orders.dialog.externalCourier.acknowledge': 'I confirm the branch will cover this increase.',
+  'orders.dialog.externalCourier.unavailable': 'This courier partner could not quote this journey.',
+  'orders.dialog.externalCourier.abandon': 'Decline this price',
+  'orders.dialog.externalCourier.accept': 'Book this courier',
+
   'orders.dialog.outcome.stockDisposition.RELEASE': 'Reservation released',
   'orders.dialog.outcome.stockDisposition.RETURN_TO_STOCK': 'Returned to stock',
   'orders.dialog.outcome.stockDisposition.WRITE_OFF': 'Written off',
@@ -279,6 +293,36 @@ export const messagesEn = {
   'orders.detail.money.deliveryProvider': 'Delivery (billed by provider)',
   'orders.detail.money.deliveryProviderUnknown': 'not tracked',
   'orders.detail.money.deliveryMargin': 'Delivery margin',
+
+  // Delivery-exception band (gap map rows 1.2f/1.2g, wave P44).
+  'orders.detail.delivery.exceptionReason.NO_PROVIDER': 'No courier provider available',
+  'orders.detail.delivery.exceptionReason.LATE_ASSIGNMENT': 'No courier assigned in time',
+  'orders.detail.delivery.exceptionReason.PROMISE_UNREACHABLE':
+    'The delivery promise can no longer be met',
+  'orders.detail.delivery.exceptionReason.AWAITING_RECONCILIATION':
+    'Booking outcome unconfirmed — check with the provider',
+  'orders.detail.delivery.exceptionReason.ABANDONED_HOLD':
+    'A provider hold was never confirmed or cancelled',
+  'orders.detail.delivery.exceptionReason.LATE_RESTAURANT': 'The kitchen ran late',
+  'orders.detail.delivery.exceptionReason.COURIER_NO_SHOW': 'The courier never arrived',
+  'orders.detail.delivery.exceptionReason.ADDRESS_ISSUE':
+    'The delivery address could not be resolved',
+  'orders.detail.delivery.exceptionReason.PROVIDER_CANCEL_UNCERTAIN':
+    'Cancellation with the courier is unconfirmed — check manually',
+  'orders.detail.delivery.exceptionReason.PROVIDER_CANCEL_FAILED':
+    'The courier could not be reached or refused to cancel — check manually',
+
+  // The cancel dialog's own provider-cancellation outcome (gap map row 1.2g, wave P44).
+  'orders.detail.delivery.cancelOutcome.INTERNAL_CANCELLED':
+    'The courier was removed from this order.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_CANCELLED':
+    'The courier provider confirmed the cancellation — free of charge.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_CANCELLED_CHARGEABLE':
+    'The courier provider confirmed the cancellation, but it is chargeable.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_UNCERTAIN':
+    'The courier provider’s cancellation could not be confirmed — check manually.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_FAILED':
+    'The courier provider refused or could not be reached — check manually.',
 
   'orders.detail.customer.name': 'Name',
   'orders.detail.customer.guest': 'Guest',
@@ -440,6 +484,21 @@ export const messagesEn = {
   'orders.detail.handover.bypassReason': 'Reason',
   'orders.detail.handover.bypassSupervisor': 'Supervisor name',
   'orders.detail.handover.bypassConfirm': 'Confirm override',
+
+  'orders.detail.section.payment': 'Payment',
+  'orders.detail.payment.error': 'The payment could not be loaded',
+  'orders.detail.payment.denied': 'No access to payment information',
+
+  'orders.detail.section.fiscal': 'Fiscal receipts',
+  'orders.detail.fiscal.error': 'The fiscal documents could not be loaded',
+  'orders.detail.fiscal.denied': 'No access to fiscal documents',
+  'orders.detail.fiscal.action.retry.result': 'Result: {outcome}',
+  'orders.detail.fiscal.outcome.ISSUED': 'Receipt issued',
+  'orders.detail.fiscal.outcome.ALREADY_ISSUED': 'A receipt already existed',
+  'orders.detail.fiscal.outcome.REJECTED': 'The provider rejected the request',
+  'orders.detail.fiscal.outcome.UNCERTAIN': 'The provider did not answer',
+  'orders.detail.fiscal.outcome.NO_PROVIDER_PATH': 'No provider can fiscalize this leg',
+  'orders.detail.fiscal.outcome.NOT_WIRED': 'No provider is connected',
 
   'orders.severity.blocked': 'needs attention',
   'orders.severity.approvalDeadline': 'confirm within {mmss}',
@@ -1576,6 +1635,13 @@ export const messagesEn = {
   'finance.paymentAttemptStatus.FAILED': 'Failed',
   'finance.paymentAttemptStatus.UNCERTAIN': 'Uncertain — provider did not answer',
 
+  'finance.fiscalDocumentStatus.NOT_APPLICABLE': 'Not applicable',
+  'finance.fiscalDocumentStatus.PENDING': 'Pending',
+  'finance.fiscalDocumentStatus.SUBMITTED': 'Submitted',
+  'finance.fiscalDocumentStatus.ISSUED': 'Issued',
+  'finance.fiscalDocumentStatus.FAILED': 'Failed',
+  'finance.fiscalDocumentStatus.BLOCKED': 'Blocked',
+
   'finance.entitlementScope.SUBTOTAL': 'Subtotal',
   'finance.entitlementScope.DELIVERY_FEE': 'Delivery fee',
   'finance.entitlementScope.BOTH': 'Both',
@@ -2106,6 +2172,20 @@ export const messagesEn = {
   'today.operators.title': 'Operators',
   'today.operators.notBuilt':
     'Arrives with the staff directory (IA 9.2, not yet built) — there is no way today to resolve who accepted an order to a name.',
+
+  // ---- IA 0.2 My work (my-work-page.ts) — wave T01 ----
+  'myWork.title': 'My work',
+  'myWork.subtitle': 'Your own orders and takings at this branch, today only.',
+  'myWork.loading': 'Loading your work',
+  'myWork.error': 'Could not load this',
+  'myWork.channel.title': 'My orders by channel',
+  'myWork.channel.period': 'Since {from}, this trading day',
+  'myWork.channel.empty': 'No orders of yours yet today',
+  'myWork.payment.title': 'Revenue by payment method',
+  'myWork.payment.empty': 'No takings recorded yet today',
+  'myWork.locked.title': 'Not available yet',
+  'myWork.locked.ask':
+    'Personal data and interface personalization wait on the staff-identity ADR, which the platform owner has not written yet.',
 
   // ---- IA 0.1e / X/X.3 Wallboard (wallboard-shell.ts) — wave T23 ----
   'wallboard.title': 'Live board',
@@ -3417,7 +3497,50 @@ export const messagesEn = {
   'reports.export.button': 'Export',
   'reports.export.notBuilt':
     'Export is not built yet — ADR 0043 puts it last, behind capabilities and an audited job queue',
+  'reports.export.hint': 'Open the export centre',
   'reports.unit.minutes': 'min',
+
+  // Row 7.2e: the export centre (ADR 0043/ADR 0029, wave P28)
+  'reports.nav.exports': 'Exports',
+  'reports.exportCentre.title': 'Export centre',
+  'reports.exportCentre.subtitle':
+    'Every export is queued, capability-gated and recorded — an audited PII egress (ADR 0043/ADR 0029).',
+  'reports.exportCentre.newTitle': 'New export',
+  'reports.exportCentre.reportLabel': 'Report',
+  'reports.exportCentre.reportOption.customerDirectory': 'Customer directory',
+  'reports.exportCentre.columnsLabel': 'Columns',
+  'reports.exportCentre.piiGroupLabel': 'Personal data (needs customer.pii.export)',
+  'reports.exportCentre.piiGroupHidden':
+    'Personal data columns are hidden — you do not hold customer.pii.export',
+  'reports.exportCentre.statusLabel': 'Status',
+  'reports.exportCentre.statusFilter.all': 'All statuses',
+  'reports.exportCentre.statusFilter.active': 'Active',
+  'reports.exportCentre.statusFilter.suspended': 'Suspended',
+  'reports.exportCentre.statusFilter.anonymized': 'Anonymized',
+  'reports.exportCentre.statusFilter.closed': 'Closed',
+  'reports.exportCentre.queryLabel': 'Search (name or phone)',
+  'reports.exportCentre.queryPlaceholder': 'Leave blank to export everyone',
+  'reports.exportCentre.purposeLabel': 'Purpose',
+  'reports.exportCentre.purposePlaceholder': 'Why is this export needed?',
+  'reports.exportCentre.submit': 'Queue export',
+  'reports.exportCentre.submitting': 'Queuing…',
+  'reports.exportCentre.error.noSelection': 'Choose at least one column',
+  'reports.exportCentre.error.purposeRequired': 'A purpose is required',
+  'reports.exportCentre.error.generic': 'Could not queue this export',
+  'reports.exportCentre.historyTitle': 'Recent exports',
+  'reports.exportCentre.historyEmpty': 'No exports yet',
+  'reports.exportCentre.status.QUEUED': 'Queued',
+  'reports.exportCentre.status.RUNNING': 'Running',
+  'reports.exportCentre.status.COMPLETE': 'Complete',
+  'reports.exportCentre.status.FAILED': 'Failed',
+  'reports.exportCentre.rowCount': '{count} row(s)',
+  'reports.exportCentre.truncated': 'truncated at {quota} rows',
+  'reports.exportCentre.piiIncluded': 'Includes personal data',
+  'reports.exportCentre.download': 'Download',
+  'reports.exportCentre.column.accountId': 'Account ID',
+  'reports.exportCentre.column.status': 'Status',
+  'reports.exportCentre.column.displayName': 'Name',
+  'reports.exportCentre.column.phone': 'Phone',
 
   'reports.filter.period.label': 'Period',
   'reports.filter.period.today': 'Today',
@@ -4117,6 +4240,12 @@ export const messagesEn = {
   'reports.branches.column.averageCheck': 'Average check',
   'reports.branches.column.cancelShare': 'Cancelled, %',
   'reports.branches.column.prepTime': 'Prep. time',
+  // wave T06 (7.3): the leaderboard's three new columns and its secondary sort control.
+  'reports.branches.column.fulfilmentSplit': 'Delivery / Pickup / Aggregators',
+  'reports.branches.column.fulfilmentSplit.hint':
+    'Counts: delivery / pickup / aggregator orders, in that order.',
+  'reports.branches.column.onTime': 'On time, %',
+  'reports.branches.sort.label': 'Sort by',
   'reports.branches.sla.title': 'SLA time buckets',
   'reports.branches.sla.bucket.UNDER_30': '≤30',
   'reports.branches.sla.bucket.M30_35': '30–35',
@@ -4125,8 +4254,20 @@ export const messagesEn = {
   'reports.branches.sla.bucket.M50_60': '50–60',
   'reports.branches.sla.bucket.OVER_60': '>60',
   'reports.branches.sla.total': 'Total',
+  // wave T06 (7.3a): handover_time.median.v1 beside the bucket counts.
+  'reports.branches.sla.median': 'Median',
   'reports.branches.sla.version': 'Buckets: sla_bucket_set.v{version}',
   'reports.branches.minutesShort': '{minutes} min',
+
+  // wave T06 (7.3b): per-channel counts and the payment-method split.
+  'reports.branches.channels.title': 'By channel',
+  'reports.branches.channels.column.channel': 'Channel',
+  'reports.branches.channels.empty': 'No orders in this range.',
+  'reports.branches.payments.title': 'Payment methods',
+  'reports.branches.payments.column.method': 'Method',
+  'reports.branches.payments.column.count': 'Tenders',
+  'reports.branches.payments.column.amount': 'Amount',
+  'reports.branches.payments.empty': 'No tenders in this range.',
 
   // ---------------------------------------------------------------- reports 7.4 (T11, ADR 0125)
   'reports.couriers.title': 'Courier reports',
@@ -4169,7 +4310,11 @@ export const messagesEn = {
   'reports.couriers.externalCost.status.UNMATCHED_LINE': 'Unmatched line',
 
   'reports.products.title': 'Product analytics',
+  'reports.products.tab.sales': 'Sales',
+  'reports.products.tab.abc': 'ABC',
+  'reports.products.tab.xyz': 'XYZ',
   'reports.products.column.name': 'Product',
+  'reports.products.column.category': 'Category',
   'reports.products.column.deliveryQty': 'Qty (delivery)',
   'reports.products.column.deliverySum': 'Sum (delivery)',
   'reports.products.column.pickupQty': 'Qty (pickup)',
@@ -4179,8 +4324,71 @@ export const messagesEn = {
   'reports.products.column.share': 'Revenue share',
   'reports.products.maybeMore':
     'There may be more products than shown — this is a bounded read, not a full export.',
-  'reports.products.abcXyzNotBuilt':
-    'ABC and XYZ classification are not built yet: reporting has no classification_run table and no registered metric for either (ADR 0043).',
+  'reports.products.stop': 'STOP',
+  'reports.products.dineInNote':
+    'Dine-in lines are summed into the total but split into neither the delivery nor the pickup column, so delivery plus pickup need not add up to the total.',
+  'reports.products.classification.rangeTooShort':
+    'ABC/XYZ needs a window of at least {minDays} days; the current period is {actualDays}. Widen the range or switch to a custom range of at least {minDays} days.',
+  'reports.products.classification.needsRun':
+    'No classification has been computed for this exact window yet.',
+  'reports.products.classification.runButton': 'Run classification',
+  'reports.products.classification.rerunButton': 'Recompute',
+  'reports.products.classification.running': 'Computing the classification…',
+  'reports.products.classification.window': 'Window',
+  'reports.products.classification.thresholds': 'thresholds',
+  'reports.products.classification.metric': 'metric',
+  'reports.products.classification.computedAt': 'computed',
+  'reports.products.classification.matrix': 'ABC×XYZ matrix — click a cell to filter the table',
+  'reports.products.classification.column.revenue': 'Revenue',
+  'reports.products.classification.column.share': 'Share, %',
+  'reports.products.classification.column.cumulativeShare': 'Cumulative share, %',
+  'reports.products.classification.column.class': 'Class',
+  'reports.products.classification.column.quantity': 'Qty',
+  'reports.products.classification.column.sum': 'Sum',
+  'reports.products.classification.column.mean': 'Mean',
+  'reports.products.classification.column.stddev': 'Std. deviation',
+  'reports.products.classification.column.cv': 'Coefficient of variation',
+
+  // ---------------------------------------------------------------- reports 7.6/7.6a/7.6b customer analytics (T13)
+  'reports.customers.title': 'Customer analytics',
+  'reports.customers.loading': 'Loading…',
+  'reports.customers.kpi.title': 'This period',
+  'reports.customers.kpi.newCustomers': 'New customers',
+  'reports.customers.kpi.distinctCustomers': 'Customers who ordered',
+  'reports.customers.kpi.repeatShare': 'Repeat share',
+  'reports.customers.kpi.orderFrequency': 'Orders per customer',
+  'reports.customers.kpi.customerValue': 'Customer value',
+  'reports.customers.kpi.basketDepth': 'Items per order',
+  'reports.customers.kpi.ltvTitle': 'Lifetime value',
+  'reports.customers.kpi.ltvNotBuilt':
+    'Not built: no customer-lifetime table exists yet. Rather than a number that quietly stops at the query range, this tile says so.',
+  'reports.customers.newVsReturning.title': 'New vs. returning revenue',
+  'reports.customers.newVsReturning.new': 'New customers',
+  'reports.customers.newVsReturning.returning': 'Returning customers',
+  'reports.customers.newVsReturning.share': 'Share of revenue',
+  'reports.customers.newVsReturning.empty':
+    'No completed order with a known customer in this period.',
+  'reports.customers.cohorts.title': 'Cohorts & retention',
+  'reports.customers.cohorts.intro':
+    'Every customer whose first order fell in this range, grouped by that month, and the share of each cohort ordering again in every month since.',
+  'reports.customers.cohorts.empty': 'No cohort started in this range.',
+  'reports.customers.cohorts.column.cohort': 'Cohort',
+  'reports.customers.cohorts.column.size': 'Members',
+  'reports.customers.cohorts.monthOffset': 'M+{offset}',
+  'reports.customers.cohorts.rangeTooWide':
+    'This range covers more months than one retention read tracks — narrow it to 12 months or fewer.',
+  'reports.customers.rfm.title': 'RFM: Recency × Frequency',
+  'reports.customers.rfm.intro':
+    'Platform-fixed bands, never tenant-configurable. Distinct from the Customers segment builder: size one segment there, read the whole grid here to see which cell is worth targeting.',
+  'reports.customers.rfm.totalCustomers': '{count} customers in this grid',
+  'reports.customers.rfm.column.members': 'Members',
+  'reports.customers.rfm.column.revenue': 'Revenue',
+  'reports.customers.rfm.recency.R1_RECENT': 'Recent (0–6 days)',
+  'reports.customers.rfm.recency.R2_LAPSING': 'Lapsing (7–29 days)',
+  'reports.customers.rfm.recency.R3_AT_RISK': 'At risk (30+ days)',
+  'reports.customers.rfm.frequency.F1_SINGLE': '1 order',
+  'reports.customers.rfm.frequency.F2_FEW': '2–3 orders',
+  'reports.customers.rfm.frequency.F3_FREQUENT': '4+ orders',
 
   // ---------------------------------------------------------------- reports 7.5/7.5a/7.5b staff (T12)
   'reports.staff.title': 'Staff reports',
@@ -4269,7 +4477,7 @@ export const messagesEn = {
     'Read receipts are not shown: there is no read status or read_at column recorded yet — this is unmeasured, not zero.',
 
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
-  'reports.forecast.title': 'Demand history',
+  'reports.forecast.title': 'Demand forecast',
   'reports.forecast.intro':
     'This shows what actually happened, not what might happen: the average number of completed orders in each hour, across the most recent occurrences of the selected weekday for which this location has order history. There is no model of future demand yet (ADR 0043).',
   'reports.forecast.loading': 'Loading…',
@@ -4295,6 +4503,30 @@ export const messagesEn = {
   'reports.forecast.weekOverview.show': 'Show whole week',
   'reports.forecast.weekOverview.loading': 'Loading the week…',
   'reports.forecast.weekOverview.error': 'Could not load the week overview.',
+
+  // ---------------------------------------------------------------- reports 7.8/7.8a/7.8b forecast model (wave W02)
+  'reports.forecast.branch.label': 'Branch',
+  'reports.forecast.holiday.mode.label': 'Holidays',
+  'reports.forecast.holiday.mode.include': 'Include',
+  'reports.forecast.holiday.mode.exclude': 'Exclude',
+  'reports.forecast.holiday.mode.weight': 'Half weight',
+  'reports.forecast.holiday.flag': 'Public holiday',
+  'reports.forecast.holiday.summary': '{count} of these dates fell on a public holiday.',
+  'reports.forecast.section.history': 'Historical average',
+  'reports.forecast.section.model': 'Forecast',
+  'reports.forecast.model.none': 'No forecast has been generated for this branch and weekday yet.',
+  'reports.forecast.model.caption':
+    'Model v{version}, {confidence}% confidence interval, forecasting {date}.',
+  'reports.forecast.model.column.forecast': 'Forecast',
+  'reports.forecast.model.column.interval': 'Range',
+  'reports.forecast.model.column.actual': 'Actual',
+  'reports.forecast.model.comparison.title': 'Forecast vs. actual',
+  'reports.forecast.column.date': 'Date',
+  'reports.forecast.breakdown.department': 'Department',
+  'reports.forecast.breakdown.product': 'Product',
+  'reports.forecast.breakdown.show': 'Show breakdown',
+  'reports.forecast.breakdown.empty': 'No department or product data in this sample.',
+  'reports.forecast.breakdown.error': 'Could not load the breakdown.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Cash',

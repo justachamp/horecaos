@@ -101,17 +101,15 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/staff/my-profile-page').then((m) => m.MyProfilePage),
       },
-      // IA 0.2 (My work): an honest not-built page, linked from 0.1's own
-      // toolbar — see `today-page.ts`'s doc for why every field it would
-      // show depends on data (order attribution, a staff person record)
-      // this build does not have.
+      // IA 0.2 (My work), wave T01: `0.2a`/`0.2b` are real (the actor-grouped
+      // channel read is self-scoped by the token's own subject, per
+      // MyWorkQueryService's own doc); `0.2c`/`0.2d` stay an honest locked
+      // band inside the page itself, naming the staff-identity ADR, rather
+      // than a second not-built route — see `my-work-page.ts`'s own doc for
+      // the boundary.
       {
         path: 'today/my-work',
-        loadComponent: () =>
-          import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-        data: {
-          spec: 'frontend-information-architecture.md §0.2 (My work) — no attribution or staff-identity data',
-        },
+        loadComponent: () => import('./features/today/my-work-page').then((m) => m.MyWorkPage),
       },
       {
         path: 'orders',
@@ -737,20 +735,21 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/reports/staff-report-page').then((m) => m.StaffReportPage),
           },
-          // 7.6 Customer analytics: none of its six published-formula tiles
-          // (new customers, basket depth, LTV, …) is a registered metric —
-          // ADR 0043's own status line names ABC/XYZ/RFM and forecasting as
-          // not built, and Band D's funnel needs `analytics.events`, which
-          // cannot be backfilled. RFM itself is real, in Customers 5.3.
+          // 7.6/7.6a/7.6b Customer analytics (T13): real now — MetricRegistry
+          // gained seven customer-grain metrics (`GET .../customer-kpis`),
+          // new-vs-returning revenue answers through the typed
+          // `GET .../queries` (`revenue.new_vs_returning.v1`, grouped by the
+          // new CUSTOMER_TYPE dimension), and cohorts/RFM are two new
+          // bespoke reads (`.../customer-cohorts`, `.../customer-rfm`) — see
+          // `customer-analytics-page.ts`'s own doc for what is scoped down.
+          // 7.6c (acquisition source, the pre-order funnel) stays blocked on
+          // ADR 0043's open legal input for behavioural telemetry.
           {
             path: 'customers',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: {
-              spec:
-                'frontend-information-architecture.md §7.6 (Customer analytics) — no registered ' +
-                'metric for any of its tiles; RFM lives in Customers 5.3 instead',
-            },
+              import('./features/reports/customer-analytics-page').then(
+                (m) => m.CustomerAnalyticsPage,
+              ),
           },
           // 7.9 Marketing reports (T15): 7.9a per-customer discount history and
           // 7.9b campaign delivery counts are real this wave — see
@@ -774,6 +773,16 @@ export const routes: Routes = [
             path: 'forecast',
             loadComponent: () =>
               import('./features/reports/demand-forecast-page').then((m) => m.DemandForecastPage),
+          },
+          // 7.2e (wave P28): the export centre — POST/GET .../reporting/exports
+          // under report.export, with the PII column group additionally
+          // gated on customer.pii.export. Only the customer directory report
+          // is wired server-side today; see `export-centre-page.ts`'s own
+          // doc for how a second report joins it.
+          {
+            path: 'exports',
+            loadComponent: () =>
+              import('./features/reports/export-centre-page').then((m) => m.ExportCentrePage),
           },
         ],
       },

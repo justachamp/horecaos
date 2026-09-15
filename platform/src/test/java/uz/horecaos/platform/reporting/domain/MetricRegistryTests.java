@@ -31,11 +31,101 @@ class MetricRegistryTests {
                 "sla_bucket_set.v1",
                 "channel_mix.count.v1",
                 "receipt_depth.v1",
-                "payment_mix.amount.v1");
+                "payment_mix.amount.v1",
+                "orders.promised.v1",
+                "handover_time.median.v1",
+                "customers.new.v1",
+                "customers.distinct.v1",
+                "customers.repeat_share.v1",
+                "customers.order_frequency.v1",
+                "customers.value.v1",
+                "customers.basket_depth.v1",
+                "customers.ltv.v1",
+                "revenue.new_vs_returning.v1");
 
         assertThat(named)
                 .allSatisfy(
                         code -> assertThat(MetricRegistry.find(code)).as(code).isPresent());
+    }
+
+    /**
+     * T13 (7.6/7.6a): a drift test naming each customer-grain metric and
+     * checking its formula is actually published — the credibility argument
+     * against Delever's unstated LTV only holds if every one of these keeps
+     * a non-blank definition, inclusion, exclusion and refund treatment
+     * rather than one quietly regressing to an empty string a future edit
+     * would not notice.
+     */
+    @Test
+    void everyCustomerAnalyticsMetricPublishesANonBlankFormula() {
+        List<String> customerGrainMetrics = List.of(
+                "customers.new.v1",
+                "customers.distinct.v1",
+                "customers.repeat_share.v1",
+                "customers.order_frequency.v1",
+                "customers.value.v1",
+                "customers.basket_depth.v1",
+                "customers.ltv.v1",
+                "revenue.new_vs_returning.v1");
+
+        assertThat(customerGrainMetrics).allSatisfy(code -> {
+            MetricDefinition metric = MetricRegistry.require(code);
+            assertThat(metric.definition()).as(code + " definition").isNotBlank();
+            assertThat(metric.inclusion()).as(code + " inclusion").isNotBlank();
+            assertThat(metric.exclusion()).as(code + " exclusion").isNotBlank();
+            assertThat(metric.refundTreatment()).as(code + " refundTreatment").isNotBlank();
+            assertThat(metric.sourceFact()).as(code + " sourceFact").isNotBlank();
+        });
+    }
+
+    @Test
+    void customersLtvIsDeclaredUnbuiltRatherThanApproximatedFromThePeriodFigure() {
+        // T13 (7.6): the row's own credibility argument against Delever's
+        // unstated LTV — an explicit "not built" beats a number that quietly
+        // stops at the query range and calls itself lifetime value.
+        MetricDefinition ltv = MetricRegistry.require("customers.ltv.v1");
+
+        assertThat(ltv.sourceAvailable()).isFalse();
+        assertThat(ltv.effectiveFrom()).as("an unbuilt metric governs no dates").isNull();
+        assertThat(ltv.openQuestion()).contains("dim_customer");
+        assertThat(ltv.isMoney()).isTrue();
+        assertThat(ltv.grain().namesLegalEntity()).isTrue();
+    }
+
+    @Test
+    void revenueByCustomerTypeIsBuiltAtTheCustomerTypeGrainAndIsMoney() {
+        // T13 (7.6a): unlike payment_mix.amount.v1 and receipt_depth.v1
+        // above, this one IS answered by the typed /queries pipeline — see
+        // ReportQueryService#run's customer-type branch.
+        MetricDefinition revenueByType = MetricRegistry.require("revenue.new_vs_returning.v1");
+
+        assertThat(revenueByType.sourceAvailable()).isTrue();
+        assertThat(revenueByType.grain()).isEqualTo(Grain.DAY_LOCATION_LEGAL_ENTITY_CUSTOMER_TYPE);
+        assertThat(revenueByType.grain().dimensions()).contains(Grain.Dimension.CUSTOMER_TYPE);
+        assertThat(revenueByType.isMoney()).isTrue();
+        assertThat(revenueByType.grain().namesLegalEntity()).isTrue();
+        assertThat(revenueByType.aggregation()).isEqualTo(MetricDefinition.Aggregation.SUM);
+    }
+
+    @Test
+    void everyCustomerKpiTileMetricIsAnsweredByTheDedicatedEndpointNotQueries() {
+        // T13 (7.6): the six built KPI-tile metrics all point callers at
+        // GET .../reporting/customer-kpis rather than /queries — a
+        // distinct-customer count cannot be correctly summed across the
+        // channel/fulfilment rows /queries rolls agg_branch_day up from.
+        List<String> kpiTileMetrics = List.of(
+                "customers.new.v1",
+                "customers.distinct.v1",
+                "customers.repeat_share.v1",
+                "customers.order_frequency.v1",
+                "customers.value.v1",
+                "customers.basket_depth.v1");
+
+        assertThat(kpiTileMetrics).allSatisfy(code -> {
+            MetricDefinition metric = MetricRegistry.require(code);
+            assertThat(metric.sourceAvailable()).as(code).isTrue();
+            assertThat(metric.openQuestion()).as(code).contains("customer-kpis");
+        });
     }
 
     @Test
@@ -105,6 +195,30 @@ class MetricRegistryTests {
         assertThat(paymentMix.grain().namesLegalEntity()).isTrue();
         assertThat(paymentMix.aggregation()).isEqualTo(MetricDefinition.Aggregation.DISTRIBUTION);
         assertThat(paymentMix.effectiveFrom()).isEqualTo(LocalDate.of(2026, 9, 14));
+    }
+
+    @Test
+    void ordersPromisedIsTheOnTimeDenominatorNotMoney() {
+        // Wave T06 (7.3): the branch leaderboard's «В норме %» denominator.
+        MetricDefinition promised = MetricRegistry.require("orders.promised.v1");
+
+        assertThat(promised.sourceAvailable()).isTrue();
+        assertThat(promised.grain()).isEqualTo(Grain.DAY_LOCATION);
+        assertThat(promised.isMoney()).isFalse();
+        assertThat(promised.aggregation()).isEqualTo(MetricDefinition.Aggregation.COUNT);
+    }
+
+    @Test
+    void handoverTimeMedianReadsSecondsTotalNotSecondsToReady() {
+        // Wave T06 (7.3a): the SLA table's «Медиана» column — the same
+        // population sla_bucket_set.v1 buckets, distinct from
+        // prep_time.median.v1's own seconds_to_ready.
+        MetricDefinition handover = MetricRegistry.require("handover_time.median.v1");
+
+        assertThat(handover.sourceAvailable()).isTrue();
+        assertThat(handover.grain()).isEqualTo(Grain.DAY_LOCATION);
+        assertThat(handover.aggregation()).isEqualTo(MetricDefinition.Aggregation.MEDIAN);
+        assertThat(handover.sourceFact()).isEqualTo("reporting.fact_order.seconds_total");
     }
 
     @Test

@@ -1,0 +1,11 @@
+-- Gap map P44 (fix6/orders-fulfilment): CancelRequest.reasonCode and
+-- ShipmentCancelRequest.reasonCode (OperationsOrderController, DispatchController)
+-- are both @Size(max = 64), matching the ordering.order_transitions /
+-- ordering.order_approval_decisions / reporting.fact_delivery (V0031)
+-- convention. fulfillment.shipments.cancellation_reason_code (V0054) was left
+-- at varchar(48), so any 49-64 char operator-entered reason overflows the
+-- column and aborts ShipmentCancellationService.applyCascade before the
+-- shipment is marked CANCELLED and the plan transitions -- a stuck shipment
+-- behind an order that already committed CANCELLED. Widen to match the
+-- already-accepted request size rather than narrow what operators can type.
+ALTER TABLE fulfillment.shipments ALTER COLUMN cancellation_reason_code TYPE varchar(64);

@@ -1,6 +1,6 @@
 .forecast {
   padding: 24px;
-  max-width: 720px;
+  max-width: 960px;
 }
 
 .header {
@@ -118,4 +118,69 @@
   padding: 6px 12px;
   text-align: right;
   border-bottom: 1px solid var(--q-hairline);
+}
+
+.forecast__branch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.forecast__branch select {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font: inherit;
+}
+
+.forecast__holiday-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.forecast__segmented {
+  display: inline-flex;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  overflow: hidden;
+}
+
+.forecast__segment {
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-right: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+  font: inherit;
+}
+
+.forecast__segment:last-child {
+  border-right: none;
+}
+
+.forecast__segment--active {
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.forecast__holiday-flag {
+  color: var(--q-warning-text);
+  margin-inline-start: 4px;
+}
+
+.forecast__model-section {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--q-hairline);
+}
+
+.forecast__comparison-heading {
+  margin: 20px 0 4px;
+}
+
+.forecast__breakdown {
+  margin-top: 20px;
 }

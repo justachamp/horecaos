@@ -3,6 +3,7 @@ package uz.horecaos.platform.reporting.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -20,6 +21,8 @@ import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggreg
 import uz.horecaos.platform.reporting.application.ReportingFacts.SlaBucketAggregate;
 import uz.horecaos.platform.reporting.domain.BusinessDayBoundary;
 import uz.horecaos.platform.reporting.domain.Grain;
+import uz.horecaos.platform.reporting.domain.HolidayCalendar;
+import uz.horecaos.platform.reporting.domain.HolidayMode;
 import uz.horecaos.platform.reporting.domain.MetricDefinition;
 import uz.horecaos.platform.reporting.domain.MetricRegistry;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
@@ -79,6 +82,20 @@ public class ReportQueryService {
             }
         }
 
+        // T13 (7.6a): revenue.new_vs_returning.v1 is sourced from fact_order
+        // directly, never agg_branch_day — a different physical read that
+        // cannot share a slice with every other metric here, so it is
+        // refused rather than silently dropped or silently answered alone.
+        boolean anyCustomerTypeGrain =
+                metrics.stream().anyMatch(metric -> metric.grain() == Grain.DAY_LOCATION_LEGAL_ENTITY_CUSTOMER_TYPE);
+        if (anyCustomerTypeGrain) {
+            if (metrics.size() > 1) {
+                throw new ReportingRefusals.MixedCustomerTypeGrainException(
+                        metrics.stream().map(metric -> metric.id().code()).toList());
+            }
+            return runCustomerTypeQuery(query, metrics.getFirst());
+        }
+
         BusinessDayBoundary boundary = businessDays.boundaryFor(query.tenantId());
         refuseMixedBoundaryRegime(query.tenantId(), query.from(), query.to());
 
@@ -112,17 +129,303 @@ public class ReportQueryService {
         return new ReportResult(resultRows, provenance(query.tenantId(), metrics, boundary));
     }
 
-    /** The fixed SLA distribution, which is several rows per slice rather than one value. */
+    /**
+     * T13 (7.6a): {@code revenue.new_vs_returning.v1} — the one {@code
+     * /queries} metric sourced from {@code reporting.fact_order} directly.
+     * {@link #run} branches here before touching {@code agg_branch_day} at
+     * all, mirroring that method's own shape (boundary refusal, entity-total
+     * refusal, slice/bucket fold) over {@link JdbcReportingStore.CustomerTypeDayAggregate}
+     * instead of {@code BranchDayAggregate}.
+     */
+    private ReportResult runCustomerTypeQuery(ReportQuery query, MetricDefinition metric) {
+        BusinessDayBoundary boundary = businessDays.boundaryFor(query.tenantId());
+        refuseMixedBoundaryRegime(query.tenantId(), query.from(), query.to());
+
+        List<JdbcReportingStore.CustomerTypeDayAggregate> rows = store.readCustomerTypeRevenue(
+                query.tenantId(),
+                query.from(),
+                query.to(),
+                query.locationIds(),
+                query.legalEntityIds(),
+                query.channelCodes());
+
+        if (metric.isMoney() && !query.groupsByLegalEntity()) {
+            Set<UUID> entities = new HashSet<>();
+            rows.forEach(row -> entities.add(row.legalEntityId()));
+            if (entities.size() > 1) {
+                throw new ReportingRefusals.CombinedEntityTotalException(
+                        List.of(metric.id().code()), entities.size());
+            }
+        }
+
+        Map<Slice, Long> bySlice = new LinkedHashMap<>();
+        for (JdbcReportingStore.CustomerTypeDayAggregate row : rows) {
+            bySlice.merge(customerTypeSliceOf(query, row), row.grossSom(), Long::sum);
+        }
+
+        List<ReportRow> resultRows = new ArrayList<>(bySlice.size());
+        bySlice.forEach((slice, grossSom) ->
+                resultRows.add(new ReportRow(slice, Map.of(metric.id().code(), grossSom))));
+        resultRows.sort(Comparator.comparing(row -> row.slice().sortKey()));
+
+        return new ReportResult(resultRows, provenance(query.tenantId(), List.of(metric), boundary));
+    }
+
+    /**
+     * T13 (7.6): the KPI-tile figures — one folded read over the whole
+     * requested range (never a day-grain breakdown; a tile shows one number
+     * for its period). {@code customers.ltv.v1} is not here: it is
+     * registered {@code sourceAvailable = false} and this method answers
+     * only the six the registry declares built.
+     */
     @Transactional(readOnly = true)
-    public SlaResult slaBuckets(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+    public CustomerKpiResult customerKpis(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<UUID> legalEntityIds) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        JdbcReportingStore.CustomerKpiRow row = store.readCustomerKpis(tenantId, from, to, locationIds, legalEntityIds);
+
+        // customers.value.v1 is money (ADR 0038): refused rather than folded
+        // across more than one legal entity when the caller did not narrow
+        // to one, the same rule /queries applies to every money metric.
+        if (legalEntityIds.isEmpty() && row.legalEntityCount() > 1) {
+            throw new ReportingRefusals.CombinedEntityTotalException(
+                    List.of("customers.value.v1"), row.legalEntityCount());
+        }
+
+        Long repeatShareBasisPoints = row.distinctCustomers() == 0
+                ? null
+                : Math.round(10_000.0 * (row.distinctCustomers() - row.newCustomers()) / row.distinctCustomers());
+        Double orderFrequency =
+                row.distinctCustomers() == 0 ? null : (double) row.orderCount() / row.distinctCustomers();
+        Long customerValueSom =
+                row.distinctCustomers() == 0 ? null : Math.round((double) row.netSom() / row.distinctCustomers());
+        Double basketDepth = row.orderCount() == 0 ? null : (double) row.itemCountSum() / row.orderCount();
+
+        List<MetricDefinition> metrics = List.of(
+                MetricRegistry.require("customers.new.v1"),
+                MetricRegistry.require("customers.distinct.v1"),
+                MetricRegistry.require("customers.repeat_share.v1"),
+                MetricRegistry.require("customers.order_frequency.v1"),
+                MetricRegistry.require("customers.value.v1"),
+                MetricRegistry.require("customers.basket_depth.v1"));
+
+        return new CustomerKpiResult(
+                row.newCustomers(),
+                row.distinctCustomers(),
+                repeatShareBasisPoints,
+                orderFrequency,
+                customerValueSom,
+                basketDepth,
+                provenance(tenantId, metrics, businessDays.boundaryFor(tenantId)));
+    }
+
+    public record CustomerKpiResult(
+            int newCustomers,
+            int distinctCustomers,
+            @Nullable Long repeatShareBasisPoints,
+            @Nullable Double orderFrequency,
+            @Nullable Long customerValueSom,
+            @Nullable Double basketDepth,
+            Provenance provenance) {}
+
+    /** How many months {@link #customerCohorts} tracks cohort formation and retention over, in one call. */
+    public static final int COHORT_WINDOW_MONTHS = 12;
+
+    /**
+     * T13 (7.6a): the cohort/retention grid. Refuses a range wider than
+     * {@link #COHORT_WINDOW_MONTHS} rather than silently truncating
+     * retention for the earliest cohorts in a wider request.
+     */
+    @Transactional(readOnly = true)
+    public CohortResult customerCohorts(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        validateRange(from, to);
+        int spanMonths = (int) (ChronoUnit.MONTHS.between(from.withDayOfMonth(1), to.withDayOfMonth(1)) + 1);
+        if (spanMonths > COHORT_WINDOW_MONTHS) {
+            throw new ReportingRefusals.CohortRangeTooWideException(spanMonths, COHORT_WINDOW_MONTHS);
+        }
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        List<JdbcReportingStore.CohortCell> cells = store.readCustomerCohorts(tenantId, from, to, locationIds);
+
+        Map<LocalDate, Map<LocalDate, Integer>> byCohort = new LinkedHashMap<>();
+        Map<LocalDate, Integer> cohortSizes = new LinkedHashMap<>();
+        for (JdbcReportingStore.CohortCell cell : cells) {
+            byCohort.computeIfAbsent(cell.cohortMonth(), ignored -> new LinkedHashMap<>())
+                    .put(cell.orderMonth(), cell.customerCount());
+            if (cell.orderMonth().equals(cell.cohortMonth())) {
+                cohortSizes.put(cell.cohortMonth(), cell.customerCount());
+            }
+        }
+
+        List<Cohort> cohorts = new ArrayList<>(byCohort.size());
+        byCohort.forEach((cohortMonth, byOrderMonth) -> {
+            int size = cohortSizes.getOrDefault(cohortMonth, 0);
+            List<RetentionPoint> points = new ArrayList<>();
+            byOrderMonth.forEach((orderMonth, count) -> {
+                int offset = (int) ChronoUnit.MONTHS.between(cohortMonth, orderMonth);
+                Long retainedBasisPoints = size == 0 ? null : Math.round(10_000.0 * count / size);
+                points.add(new RetentionPoint(offset, orderMonth, count, retainedBasisPoints));
+            });
+            points.sort(Comparator.comparingInt(RetentionPoint::monthOffset));
+            cohorts.add(new Cohort(cohortMonth, size, points));
+        });
+        cohorts.sort(Comparator.comparing(Cohort::cohortMonth));
+
+        return new CohortResult(
+                cohorts, COHORT_WINDOW_MONTHS, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    /**
+     * One cohort's retention curve.
+     *
+     * @param size the cohort's own member count — {@code monthOffset = 0}'s
+     *             {@code customerCount}, restated here so a caller never
+     *             recomputes it from {@code points}
+     */
+    public record Cohort(LocalDate cohortMonth, int size, List<RetentionPoint> points) {}
+
+    /**
+     * @param retainedBasisPoints null when the cohort's size is zero —
+     *                            never a zero that would read as "nobody
+     *                            came back" rather than "there is no cohort"
+     */
+    public record RetentionPoint(
+            int monthOffset,
+            LocalDate orderMonth,
+            int customerCount,
+            @Nullable Long retainedBasisPoints) {}
+
+    public record CohortResult(List<Cohort> cohorts, int windowMonths, Provenance provenance) {}
+
+    /**
+     * T13 (7.6b): platform-fixed Frequency bands — never tenant-configurable,
+     * the same rule {@code SlaBucketSet} already applies to elapsed-time
+     * buckets: an editable band would rewrite every grid already drawn and
+     * nothing would record that it happened.
+     */
+    public enum FrequencyBand {
+        F1_SINGLE,
+        F2_FEW,
+        F3_FREQUENT;
+
+        static FrequencyBand of(int orderCount) {
+            if (orderCount <= 1) {
+                return F1_SINGLE;
+            }
+            return orderCount <= 3 ? F2_FEW : F3_FREQUENT;
+        }
+    }
+
+    /** T13 (7.6b): platform-fixed Recency bands, in days before the range's own {@code to}. */
+    public enum RecencyBand {
+        R1_RECENT,
+        R2_LAPSING,
+        R3_AT_RISK;
+
+        static RecencyBand of(long daysSinceLastOrder) {
+            if (daysSinceLastOrder <= 6) {
+                return R1_RECENT;
+            }
+            return daysSinceLastOrder <= 29 ? R2_LAPSING : R3_AT_RISK;
+        }
+    }
+
+    /**
+     * T13 (7.6b): the R×F cross-tab — cells with member counts and revenue,
+     * distinct from 5.3's segment builder. Monetary is a cell value here,
+     * never a third bucketed axis: the row's own brief calls this "R×F", not
+     * a three-axis RFM cube.
+     *
+     * <p>{@code revenueSom} is money (ADR 0038): refused, like {@code customers.value.v1},
+     * rather than folded across more than one legal entity when the caller did not narrow to
+     * one — see the {@code readLegalEntityCount} call at the top of this method.
+     *
+     * @throws ReportingRefusals.CombinedEntityTotalException when {@code legalEntityIds} is
+     *         empty and the read spans more than one legal entity
+     */
+    @Transactional(readOnly = true)
+    public RfmResult customerRfm(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<UUID> legalEntityIds) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        // revenueSom below is money (ADR 0038): refused rather than folded across
+        // more than one legal entity when the caller did not narrow to one — the
+        // same rule customerKpis applies to customers.value.v1. readCustomerRfmInputs
+        // groups by customer_subject_hash alone, so the count comes from a second,
+        // cheap scalar read rather than a column on CustomerRfmRow — see
+        // readLegalEntityCount's own doc.
+        int legalEntityCount = store.readLegalEntityCount(tenantId, from, to, locationIds, legalEntityIds);
+        if (legalEntityIds.isEmpty() && legalEntityCount > 1) {
+            throw new ReportingRefusals.CombinedEntityTotalException(List.of("customers.value.v1"), legalEntityCount);
+        }
+
+        List<JdbcReportingStore.CustomerRfmRow> inputs =
+                store.readCustomerRfmInputs(tenantId, from, to, locationIds, legalEntityIds);
+
+        Map<RfmCellKey, RfmAccumulator> byCell = new LinkedHashMap<>();
+        for (JdbcReportingStore.CustomerRfmRow input : inputs) {
+            long daysSinceLastOrder = ChronoUnit.DAYS.between(input.lastOrderDate(), to);
+            RfmCellKey key = new RfmCellKey(RecencyBand.of(daysSinceLastOrder), FrequencyBand.of(input.orderCount()));
+            byCell.computeIfAbsent(key, ignored -> new RfmAccumulator()).add(input.netSom());
+        }
+
+        List<RfmCell> cells = new ArrayList<>();
+        for (RecencyBand recency : RecencyBand.values()) {
+            for (FrequencyBand frequency : FrequencyBand.values()) {
+                RfmAccumulator accumulator = byCell.get(new RfmCellKey(recency, frequency));
+                cells.add(new RfmCell(
+                        recency,
+                        frequency,
+                        accumulator == null ? 0 : accumulator.memberCount,
+                        accumulator == null ? 0L : accumulator.revenueSom));
+            }
+        }
+
+        return new RfmResult(cells, inputs.size(), provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    private record RfmCellKey(RecencyBand recency, FrequencyBand frequency) {}
+
+    private static final class RfmAccumulator {
+        private int memberCount;
+        private long revenueSom;
+
+        void add(long netSom) {
+            memberCount++;
+            revenueSom += netSom;
+        }
+    }
+
+    /** One (Recency band, Frequency band) cell of {@link #customerRfm}. */
+    public record RfmCell(RecencyBand recency, FrequencyBand frequency, int memberCount, long revenueSom) {}
+
+    public record RfmResult(List<RfmCell> cells, int totalCustomers, Provenance provenance) {}
+
+    /**
+     * The fixed SLA distribution, which is several rows per slice rather than
+     * one value — plus, wave T06 (7.3a), each branch's own {@code
+     * handover_time.median.v1}: statistics.md §2.3's «Медиана» column, over
+     * the same population the six buckets summarise. One extra grouped query,
+     * still the one request this endpoint always was.
+     */
+    @Transactional(readOnly = true)
+    public BranchSlaResult slaBuckets(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
         List<SlaBucketAggregate> rows = store.readSlaBuckets(tenantId, from, to).stream()
                 .filter(row -> locationIds.isEmpty() || locationIds.contains(row.scopeId()))
                 .toList();
-        return new SlaResult(
+        List<JdbcReportingStore.LocationMedianRow> medians =
+                store.medianSecondsTotalByLocation(tenantId, from, to, locationIds);
+        return new BranchSlaResult(
                 rows,
+                medians,
                 provenance(
                         tenantId,
-                        List.of(MetricRegistry.require("sla_bucket_set.v1")),
+                        List.of(
+                                MetricRegistry.require("sla_bucket_set.v1"),
+                                MetricRegistry.require("handover_time.median.v1")),
                         businessDays.boundaryFor(tenantId)));
     }
 
@@ -283,6 +586,30 @@ public class ReportQueryService {
     }
 
     /**
+     * Wave T06 (7.3): every branch's median preparation time from one query,
+     * replacing the branch leaderboard's previous one-{@link #preparationTime}
+     * -call-per-branch fan-out. {@code locationIds} narrows the same way every
+     * other read here does; empty means every branch the caller may read.
+     *
+     * <p>A branch with no order that reached READY in range is simply absent
+     * from {@code rows} — see {@code JdbcReportingStore#medianSecondsToReadyByLocation}'s
+     * own doc for why that is not a row carrying a null median.
+     */
+    @Transactional(readOnly = true)
+    public LocationMedianResult preparationTimeByLocation(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        validateRange(from, to);
+        List<JdbcReportingStore.LocationMedianRow> rows =
+                store.medianSecondsToReadyByLocation(tenantId, from, to, locationIds);
+        return new LocationMedianResult(
+                rows,
+                provenance(
+                        tenantId,
+                        List.of(MetricRegistry.require("prep_time.median.v1")),
+                        businessDays.boundaryFor(tenantId)));
+    }
+
+    /**
      * Wave P27 (7.1): the pickup/delivery elapsed-time tile — see {@code
      * JdbcReportingStore#medianSecondsTotalByFulfilment}'s own doc for why
      * this is a registry-and-endpoint gap over already-written data rather
@@ -362,12 +689,18 @@ public class ReportQueryService {
      */
     @Transactional(readOnly = true)
     public VariantSalesResult variantSales(
-            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, int limit) {
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> fulfilmentTypes,
+            int limit) {
 
         validateRange(from, to);
         refuseMixedBoundaryRegime(tenantId, from, to);
 
-        List<JdbcReportingStore.VariantSalesRow> rows = store.readVariantSales(tenantId, from, to, locationIds, limit);
+        List<JdbcReportingStore.VariantSalesRow> rows =
+                store.readVariantSales(tenantId, from, to, locationIds, fulfilmentTypes, limit);
         return new VariantSalesResult(
                 rows, rows.size() >= limit, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
     }
@@ -476,28 +809,45 @@ public class ReportQueryService {
      */
     @Transactional(readOnly = true)
     public DemandHistoryResult demandHistory(UUID tenantId, UUID locationId, int weekday, int sampleSize) {
+        return demandHistory(tenantId, locationId, weekday, sampleSize, HolidayMode.INCLUDE);
+    }
+
+    /**
+     * @param holidayMode 7.8b: INCLUDE (default, every qualifying date counts
+     *                    fully — see the no-arg overload), EXCLUDE (a flagged
+     *                    {@code tenant.public_holidays} date for the location's
+     *                    country is dropped from the sample) or WEIGHT (kept,
+     *                    counted at {@link HolidayAwareness#HOLIDAY_WEIGHT})
+     */
+    @Transactional(readOnly = true)
+    public DemandHistoryResult demandHistory(
+            UUID tenantId, UUID locationId, int weekday, int sampleSize, HolidayMode holidayMode) {
         BusinessDayBoundary boundary = businessDays.boundaryFor(tenantId);
         LocalDate to = LocalDate.now(clock.withZone(boundary.zone()));
         LocalDate from = to.minusDays(DEMAND_HISTORY_LOOKBACK_DAYS);
+        HolidayCalendar holidays = holidayCalendarFor(tenantId);
 
         JdbcReportingStore.DemandSample sample = store.readDemandHistory(
-                tenantId, locationId, weekday, from, to, boundary.zone().getId(), sampleSize);
+                tenantId,
+                locationId,
+                weekday,
+                from,
+                to,
+                boundary.zone().getId(),
+                businessDayStartLiteral(boundary),
+                sampleSize,
+                holidayMode,
+                holidays);
 
-        Map<LocalDate, Map<Integer, Integer>> byDateThenHour = new LinkedHashMap<>();
-        for (LocalDate date : sample.sampleDates()) {
-            byDateThenHour.put(date, new LinkedHashMap<>());
-        }
-        for (JdbcReportingStore.HourCount count : sample.hourCounts()) {
-            byDateThenHour
-                    .computeIfAbsent(count.businessDate(), ignored -> new LinkedHashMap<>())
-                    .put(count.hourOfDay(), count.orderCount());
-        }
+        Map<LocalDate, Map<Integer, Integer>> byDateThenHour = sample.byDateThenHour();
 
         int actualSampleSize = sample.sampleDates().size();
         List<HourDemand> hours = new ArrayList<>(24);
         for (int hour = 0; hour < 24; hour++) {
             Map<LocalDate, Integer> ordersByDate = new LinkedHashMap<>();
             int total = 0;
+            double weightedSum = 0;
+            double weightSum = 0;
             for (LocalDate date : sample.sampleDates()) {
                 // Explicitly zero, not absent: a sample date this location
                 // traded on but that had nothing in this particular hour is a
@@ -507,9 +857,14 @@ public class ReportQueryService {
                 int count = byDateThenHour.getOrDefault(date, Map.of()).getOrDefault(hour, 0);
                 ordersByDate.put(date, count);
                 total += count;
+                double weight = HolidayAwareness.weightOf(date, holidayMode, sample.holidayDates());
+                weightedSum += count * weight;
+                weightSum += weight;
             }
-            Double average =
-                    actualSampleSize >= DEMAND_HISTORY_MINIMUM_SAMPLE ? (double) total / actualSampleSize : null;
+            // Reduces to total / actualSampleSize whenever every weight is 1.0
+            // (INCLUDE and EXCLUDE always, WEIGHT with no holiday in sample) —
+            // the exact figure this method always computed before 7.8b.
+            Double average = actualSampleSize >= DEMAND_HISTORY_MINIMUM_SAMPLE ? weightedSum / weightSum : null;
             hours.add(new HourDemand(hour, ordersByDate, total, average));
         }
 
@@ -519,8 +874,23 @@ public class ReportQueryService {
                 sampleSize,
                 DEMAND_HISTORY_MINIMUM_SAMPLE,
                 sample.sampleDates(),
+                sample.holidayDates(),
+                holidayMode,
                 hours,
                 provenance(tenantId, List.of(), boundary));
+    }
+
+    /** 7.8b: the tenant's country's {@code tenant.public_holidays} rows, or {@link HolidayCalendar#EMPTY} when the tenant has none recorded. */
+    private HolidayCalendar holidayCalendarFor(UUID tenantId) {
+        return store.findTenantCountryCode(tenantId)
+                .map(store::readPublicHolidayRules)
+                .map(HolidayCalendar::of)
+                .orElse(HolidayCalendar.EMPTY);
+    }
+
+    /** {@code "HH:mm:ss"}, always with seconds, so Postgres parses it as an interval literal unambiguously. */
+    static String businessDayStartLiteral(BusinessDayBoundary boundary) {
+        return boundary.start().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
     }
 
     /** How far back {@link #demandHistory} looks for qualifying dates — the same span {@link ReportQuery#MAX_DAYS} bounds a typed query to. */
@@ -534,8 +904,14 @@ public class ReportQueryService {
      * Tuesday. Below it the caller still gets every raw count, in {@code
      * ordersByDate}, because a manager with one real week of data is better
      * served by that number than by nothing.
+     *
+     * <p>Package-private rather than {@code private}: {@link ForecastService}
+     * (wave W02) draws on the same trailing sample and enforces the identical
+     * gate before it will write a {@code fact_forecast} row, on purpose — a
+     * forecast is not allowed to look more confident than the honest average
+     * it is built from.
      */
-    private static final int DEMAND_HISTORY_MINIMUM_SAMPLE = 3;
+    static final int DEMAND_HISTORY_MINIMUM_SAMPLE = 3;
 
     /** One hour-of-day's demand sample — see {@link #demandHistory}. */
     public record HourDemand(
@@ -556,14 +932,185 @@ public class ReportQueryService {
      *                            thinner than asked for, empty when the
      *                            location has no history on this weekday at all
      */
+    /**
+     * @param holidayDates the subset of {@code sampleDates} a {@link
+     *                     HolidayCalendar} flagged (7.8b) — always populated,
+     *                     whatever {@code holidayMode} was requested; empty
+     *                     under {@code EXCLUDE} because a flagged date never
+     *                     reaches {@code sampleDates} in the first place
+     * @param holidayMode  what was requested — echoed back so a caller never
+     *                     has to remember what it asked for
+     */
     public record DemandHistoryResult(
             UUID locationId,
             int weekday,
             int requestedSampleSize,
             int minimumSampleSize,
             List<LocalDate> sampleDates,
+            Set<LocalDate> holidayDates,
+            HolidayMode holidayMode,
             List<HourDemand> hours,
             Provenance provenance) {}
+
+    /**
+     * Wave W02: {@link ForecastService}'s most recent run for one location
+     * and weekday — the seasonal-naive forecast, its confidence interval, and
+     * (once available) the actual — plus a short trend of earlier runs'
+     * forecast-vs-actual, the comparison 7.8's own row name asks for.
+     *
+     * <p>Empty when {@link ForecastScheduler} has not generated a run for
+     * this (tenant, location, weekday) yet, or the last run's sample was too
+     * thin to write any hour ({@code runId} is still present then — a run is
+     * always recorded — but {@code hours} is empty, the identical shape
+     * {@code demand-history} uses for "no history on this weekday" rather
+     * than a distinct error).
+     */
+    @Transactional(readOnly = true)
+    public DemandForecastResult demandForecast(UUID tenantId, UUID locationId, int weekday, int comparisonLimit) {
+        BusinessDayBoundary boundary = businessDays.boundaryFor(tenantId);
+        Optional<UUID> runId = store.findLatestForecastRunId(tenantId, locationId, weekday);
+        if (runId.isEmpty()) {
+            return new DemandForecastResult(
+                    locationId,
+                    weekday,
+                    null,
+                    ForecastService.MODEL_VERSION,
+                    ForecastService.CONFIDENCE_LEVEL,
+                    null,
+                    null,
+                    List.of(),
+                    List.of(),
+                    provenance(tenantId, List.of(), boundary));
+        }
+
+        JdbcReportingStore.ForecastRun run = store.findForecastRun(tenantId, runId.get())
+                .orElseThrow(() -> new IllegalStateException(
+                        "forecast_run %s was just found by findLatestForecastRunId but is now missing"
+                                .formatted(runId.get())));
+        List<JdbcReportingStore.ForecastRow> hourRows = store.readForecastHours(tenantId, runId.get());
+        List<JdbcReportingStore.ForecastRow> comparisonRows =
+                store.readForecastComparisons(tenantId, locationId, weekday, comparisonLimit);
+
+        return new DemandForecastResult(
+                locationId,
+                weekday,
+                runId.get(),
+                run.modelVersion(),
+                run.confidenceLevel(),
+                run.generatedAt(),
+                hourRows.isEmpty() ? null : hourRows.get(0).businessDate(),
+                hourRows.stream().map(DemandForecastHour::of).toList(),
+                comparisonRows.stream().map(DemandForecastComparison::of).toList(),
+                provenance(tenantId, List.of(), boundary));
+    }
+
+    /** One hour of the latest run's own forecast — see {@link #demandForecast}. */
+    public record DemandForecastHour(
+            int operatingHour,
+            double forecastQuantity,
+            double confidenceLow,
+            double confidenceHigh,
+            @Nullable Double actualQuantity,
+            @Nullable Double absolutePercentageError) {
+
+        static DemandForecastHour of(JdbcReportingStore.ForecastRow row) {
+            return new DemandForecastHour(
+                    row.operatingHour(),
+                    row.forecastQuantity(),
+                    row.confidenceLow(),
+                    row.confidenceHigh(),
+                    row.actualQuantity(),
+                    row.absolutePercentageError());
+        }
+    }
+
+    /** One earlier run's forecast for one business date and hour, with its actual once known — see {@link #demandForecast}. */
+    public record DemandForecastComparison(
+            LocalDate businessDate,
+            int operatingHour,
+            double forecastQuantity,
+            @Nullable Double actualQuantity,
+            @Nullable Double absolutePercentageError) {
+
+        static DemandForecastComparison of(JdbcReportingStore.ForecastRow row) {
+            return new DemandForecastComparison(
+                    row.businessDate(),
+                    row.operatingHour(),
+                    row.forecastQuantity(),
+                    row.actualQuantity(),
+                    row.absolutePercentageError());
+        }
+    }
+
+    /**
+     * @param runId          null when no run has ever been generated for this
+     *                       (tenant, location, weekday) — {@code hours} and
+     *                       {@code comparisons} are then both empty
+     * @param targetDate     the business date the latest run forecasts; null
+     *                       alongside an empty {@code hours} when the run's
+     *                       sample was too thin to write any
+     * @param comparisons    earlier runs' forecast-vs-actual, most recent
+     *                       business date first — 7.8's own "forecast vs
+     *                       actual" comparison
+     */
+    public record DemandForecastResult(
+            UUID locationId,
+            int weekday,
+            @Nullable UUID runId,
+            int modelVersion,
+            double confidenceLevel,
+            @Nullable Instant generatedAt,
+            @Nullable LocalDate targetDate,
+            List<DemandForecastHour> hours,
+            List<DemandForecastComparison> comparisons,
+            Provenance provenance) {}
+
+    /**
+     * 7.8a: the latest run's department (category) or product (variant)
+     * breakdown — {@code byProduct} chooses which. Empty exactly when {@link
+     * #demandForecast} would report an empty {@code hours} too: no run yet,
+     * or the branch-level sample was too thin for {@link ForecastService} to
+     * have generated anything under it.
+     */
+    @Transactional(readOnly = true)
+    public DemandForecastBreakdownResult demandForecastBreakdown(
+            UUID tenantId, UUID locationId, int weekday, boolean byProduct) {
+        Optional<UUID> runId = store.findLatestForecastRunId(tenantId, locationId, weekday);
+        if (runId.isEmpty()) {
+            return new DemandForecastBreakdownResult(locationId, weekday, byProduct, List.of());
+        }
+        List<JdbcReportingStore.ForecastRow> rows = store.readForecastBreakdown(tenantId, runId.get(), byProduct);
+        return new DemandForecastBreakdownResult(
+                locationId,
+                weekday,
+                byProduct,
+                rows.stream().map(DemandForecastBreakdownRow::of).toList());
+    }
+
+    /** One department or product's forecast for one operating hour, with its actual once known — see {@link #demandForecastBreakdown}. */
+    public record DemandForecastBreakdownRow(
+            @Nullable UUID categoryId,
+            @Nullable UUID variantId,
+            @Nullable String productName,
+            int operatingHour,
+            double forecastQuantity,
+            @Nullable Double actualQuantity,
+            @Nullable Double absolutePercentageError) {
+
+        static DemandForecastBreakdownRow of(JdbcReportingStore.ForecastRow row) {
+            return new DemandForecastBreakdownRow(
+                    row.categoryId(),
+                    row.variantId(),
+                    row.productName(),
+                    row.operatingHour(),
+                    row.forecastQuantity(),
+                    row.actualQuantity(),
+                    row.absolutePercentageError());
+        }
+    }
+
+    public record DemandForecastBreakdownResult(
+            UUID locationId, int weekday, boolean byProduct, List<DemandForecastBreakdownRow> rows) {}
 
     /** Every definition, with whether finance has signed it. */
     @Transactional(readOnly = true)
@@ -666,7 +1213,21 @@ public class ReportQueryService {
                 query.groupBy().contains(Grain.Dimension.FULFILMENT_TYPE)
                         ? row.key().fulfilmentType()
                         : null,
-                query.groupsByLegalEntity() ? row.key().legalEntityId() : null);
+                query.groupsByLegalEntity() ? row.key().legalEntityId() : null,
+                null);
+    }
+
+    /** T13 (7.6a): {@link #runCustomerTypeQuery}'s own slice key — customer type replaces channel/fulfilment. */
+    private static Slice customerTypeSliceOf(ReportQuery query, JdbcReportingStore.CustomerTypeDayAggregate row) {
+        return new Slice(
+                row.businessDate(),
+                query.groupBy().contains(Grain.Dimension.LOCATION) ? row.locationId() : null,
+                null,
+                null,
+                query.groupsByLegalEntity() ? row.legalEntityId() : null,
+                query.groupBy().contains(Grain.Dimension.CUSTOMER_TYPE)
+                        ? (row.isFirstOrder() ? "NEW" : "RETURNING")
+                        : null);
     }
 
     private Provenance provenance(UUID tenantId, List<MetricDefinition> metrics, BusinessDayBoundary boundary) {
@@ -694,16 +1255,25 @@ public class ReportQueryService {
                 store.readOpenDivergences(tenantId).size());
     }
 
-    /** One row's dimension values. Any of them null means "not grouped by". */
+    /**
+     * One row's dimension values. Any of them null means "not grouped by".
+     *
+     * @param customerType T13 (7.6a): {@code "NEW"} or {@code "RETURNING"},
+     *                     set only on a row from {@link #run}'s
+     *                     customer-type-grain branch — every other caller
+     *                     leaves it null, same as an ungrouped dimension.
+     */
     public record Slice(
             LocalDate businessDate,
             @Nullable UUID locationId,
             @Nullable String channelCode,
             @Nullable String fulfilmentType,
-            @Nullable UUID legalEntityId) {
+            @Nullable UUID legalEntityId,
+            @Nullable String customerType) {
 
         String sortKey() {
-            return "%s|%s|%s|%s|%s".formatted(businessDate, locationId, channelCode, fulfilmentType, legalEntityId);
+            return "%s|%s|%s|%s|%s|%s"
+                    .formatted(businessDate, locationId, channelCode, fulfilmentType, legalEntityId, customerType);
         }
     }
 
@@ -740,6 +1310,17 @@ public class ReportQueryService {
     public record ReportResult(List<ReportRow> rows, Provenance provenance) {}
 
     public record SlaResult(List<SlaBucketAggregate> buckets, Provenance provenance) {}
+
+    /**
+     * Wave T06 (7.3a): {@link #slaBuckets}'s own result — the {@code LOCATION}
+     * scope only, which is the one that carries a per-branch median. {@link
+     * #courierSlaBuckets} keeps returning the plain {@link SlaResult}: the
+     * courier scope (T11, 7.4a) has no median column to carry.
+     */
+    public record BranchSlaResult(
+            List<SlaBucketAggregate> buckets,
+            List<JdbcReportingStore.LocationMedianRow> medians,
+            Provenance provenance) {}
 
     /**
      * One payment-mix row: either an {@code overview} row ({@code locationId}
@@ -786,6 +1367,9 @@ public class ReportQueryService {
     }
 
     public record MedianResult(@Nullable Integer medianSeconds, Provenance provenance) {}
+
+    /** Wave T06 (7.3): every branch's median preparation time from one query — see {@link #preparationTimeByLocation}. */
+    public record LocationMedianResult(List<JdbcReportingStore.LocationMedianRow> rows, Provenance provenance) {}
 
     /**
      * @param maybeMore true when the bounded read came back full — there may be
@@ -913,6 +1497,7 @@ public class ReportQueryService {
         private int completed;
         private int cancelled;
         private int late;
+        private int promised;
 
         void add(BranchDayAggregate row) {
             gross += row.grossSom();
@@ -921,6 +1506,7 @@ public class ReportQueryService {
             completed += row.orderCount();
             cancelled += row.cancelledCount();
             late += row.lateCount();
+            promised += row.promisedCount();
         }
 
         @Nullable
@@ -934,6 +1520,8 @@ public class ReportQueryService {
                 case "orders.count.v1", "channel_mix.count.v1" -> (long) completed;
                 case "orders.cancelled.v1" -> (long) cancelled;
                 case "orders.late.v1" -> (long) late;
+                // Wave T06 (7.3): the on-time percentage's own denominator.
+                case "orders.promised.v1" -> (long) promised;
                 default ->
                     throw new IllegalStateException("The registry declares %s but this build cannot compute it"
                             .formatted(metric.id().code()));

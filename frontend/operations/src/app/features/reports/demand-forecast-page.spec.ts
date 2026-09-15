@@ -6,8 +6,14 @@ import { LocationScope } from '../../core/api/operations-paths';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
+import { LocationsApi } from '../settings/locations/locations-api';
 import { DemandForecastPage } from './demand-forecast-page';
-import { DemandHistoryResponse, HourDemandResponse, ReportingApi } from './reporting-api';
+import {
+  DemandForecastResponse,
+  DemandHistoryResponse,
+  HourDemandResponse,
+  ReportingApi,
+} from './reporting-api';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 
@@ -16,7 +22,7 @@ function provenance() {
     asOf: '2026-08-26T04:00:00Z',
     closedThrough: '2026-08-25',
     lastCloseCompletedAt: '2026-08-25T22:00:00Z',
-    businessDayStart: '00:00',
+    businessDayStart: '00:00:00',
     timezone: 'Asia/Tashkent',
     boundaryVersion: 1,
     metricVersions: [],
@@ -44,6 +50,8 @@ function response(overrides: Partial<DemandHistoryResponse> = {}): DemandHistory
     requestedSampleSize: 4,
     minimumSampleSize: 3,
     sampleDates: ['2026-08-25', '2026-08-18', '2026-08-11', '2026-08-04'],
+    holidayDates: [],
+    holidayMode: 'INCLUDE',
     hours: hours({
       18: {
         ordersByDate: { '2026-08-25': 8, '2026-08-18': 6, '2026-08-11': 4, '2026-08-04': 2 },
@@ -51,6 +59,23 @@ function response(overrides: Partial<DemandHistoryResponse> = {}): DemandHistory
         averageOrders: 5,
       },
     }),
+    provenance: provenance(),
+    ...overrides,
+  };
+}
+
+/** Wave W02: an empty run — the shape `demandForecast` returns before `ForecastScheduler` has ever generated one. */
+function emptyForecast(overrides: Partial<DemandForecastResponse> = {}): DemandForecastResponse {
+  return {
+    locationId: 'l1',
+    weekday: 2,
+    runId: null,
+    modelVersion: 1,
+    confidenceLevel: 0.8,
+    generatedAt: null,
+    targetDate: null,
+    hours: [],
+    comparisons: [],
     provenance: provenance(),
     ...overrides,
   };
@@ -66,7 +91,11 @@ describe('DemandForecastPage', () => {
 
   async function render(
     api: Partial<ReportingApi>,
-    locationOverrides: { scope?: LocationScope | null; denied?: boolean } = {},
+    options: {
+      readonly scope?: LocationScope | null;
+      readonly denied?: boolean;
+      readonly locations?: readonly { id: string; displayName: string }[];
+    } = {},
   ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [DemandForecastPage],
@@ -75,13 +104,24 @@ describe('DemandForecastPage', () => {
           provide: CurrentLocation,
           useValue: {
             scope: signal<LocationScope | null>(
-              'scope' in locationOverrides ? (locationOverrides.scope ?? null) : SCOPE,
+              'scope' in options ? (options.scope ?? null) : SCOPE,
             ),
-            denied: signal(locationOverrides.denied ?? false),
+            denied: signal(options.denied ?? false),
             ensureLoaded: () => Promise.resolve(),
           },
         },
-        { provide: ReportingApi, useValue: api },
+        {
+          provide: LocationsApi,
+          useValue: { list: vi.fn().mockResolvedValue(options.locations ?? []) },
+        },
+        {
+          provide: ReportingApi,
+          useValue: {
+            demandForecast: vi.fn().mockResolvedValue(emptyForecast()),
+            demandForecastBreakdown: vi.fn(),
+            ...api,
+          },
+        },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -110,26 +150,27 @@ describe('DemandForecastPage', () => {
     expect(table.textContent).toContain('5.0');
   });
 
-  it('never prints prediction language in any of the three locales — this is the whole point of the wave', async () => {
+  it('the demand-history section never prints prediction language, in any of the three locales', async () => {
     await render({ demandHistory: () => Promise.resolve(response()) });
-    const host = fixture.nativeElement as HTMLElement;
+    const section = () =>
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="demand-history-section"]',
+      ) as HTMLElement;
     const i18n = TestBed.inject(I18n);
 
     i18n.setLocale('en');
     fixture.detectChanges();
-    const en = host.textContent?.toLowerCase() ?? '';
-    expect(en).not.toContain('forecast');
-    expect(en).not.toContain('predict');
+    expect(section().textContent?.toLowerCase() ?? '').not.toContain('forecast');
 
     i18n.setLocale('ru');
     fixture.detectChanges();
-    const ru = host.textContent?.toLowerCase() ?? '';
+    const ru = section().textContent?.toLowerCase() ?? '';
     expect(ru).not.toContain('прогноз');
     expect(ru).not.toContain('предсказ');
 
     i18n.setLocale('uz-Latn');
     fixture.detectChanges();
-    const uz = host.textContent?.toLowerCase() ?? '';
+    const uz = section().textContent?.toLowerCase() ?? '';
     expect(uz).not.toContain('bashorat');
     expect(uz).not.toContain('prognoz');
   });
@@ -167,7 +208,8 @@ describe('DemandForecastPage', () => {
 
   it('reloads for the newly selected weekday', async () => {
     const demandHistory = vi.fn().mockResolvedValue(response());
-    await render({ demandHistory });
+    const demandForecast = vi.fn().mockResolvedValue(emptyForecast());
+    await render({ demandHistory, demandForecast });
 
     (fixture.nativeElement as HTMLElement)
       .querySelector<HTMLButtonElement>('[data-testid="forecast-weekday-4"]')
@@ -179,6 +221,224 @@ describe('DemandForecastPage', () => {
       locationId: 'l1',
       weekday: 4,
       sampleSize: 4,
+      holidayMode: 'INCLUDE',
+    });
+    expect(demandForecast).toHaveBeenLastCalledWith('t1', { locationId: 'l1', weekday: 4 });
+  });
+
+  it('7.8b: reloads under the selected holiday mode', async () => {
+    const demandHistory = vi.fn().mockResolvedValue(response());
+    await render({ demandHistory });
+
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('[data-testid="forecast-holiday-mode-EXCLUDE"]')
+      ?.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(demandHistory).toHaveBeenLastCalledWith('t1', {
+      locationId: 'l1',
+      weekday: 2,
+      sampleSize: 4,
+      holidayMode: 'EXCLUDE',
+    });
+  });
+
+  it('7.8b: flags a holiday sample date rather than rendering it identically to an ordinary one', async () => {
+    // The raw per-date table (below the minimum sample) is where a date's own
+    // flag renders — the sample-summary table above minimum shows only an
+    // hour/average grid, with the count of flagged dates in its own caption.
+    await render({
+      demandHistory: () =>
+        Promise.resolve(
+          response({
+            sampleDates: ['2026-08-18', '2026-08-11'],
+            holidayDates: ['2026-08-18'],
+            hours: hours({
+              12: {
+                ordersByDate: { '2026-08-18': 9, '2026-08-11': 5 },
+                totalOrders: 14,
+                averageOrders: null,
+              },
+            }),
+          }),
+        ),
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    const flagged = host.querySelector('[data-testid="forecast-holiday-2026-08-18"]');
+    expect(flagged).not.toBeNull();
+    expect(host.querySelector('[data-testid="forecast-holiday-2026-08-11"]')).toBeNull();
+  });
+
+  it('7.8b: names how many sample dates were holidays once there is enough history to average', async () => {
+    await render({
+      demandHistory: () => Promise.resolve(response({ holidayDates: ['2026-08-18'] })),
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="forecast-table"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="forecast-holiday-summary"]')?.textContent).toContain(
+      '1',
+    );
+  });
+
+  describe('the branch selector', () => {
+    it('is hidden for a single-location tenant (no other branches to switch to)', async () => {
+      await render({ demandHistory: () => Promise.resolve(response()) }, { locations: [] });
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="forecast-branch"]'),
+      ).toBeNull();
+    });
+
+    it('changes the series for both sections when a different branch is chosen', async () => {
+      const demandHistory = vi.fn().mockResolvedValue(response());
+      const demandForecast = vi.fn().mockResolvedValue(emptyForecast());
+      await render(
+        { demandHistory, demandForecast },
+        {
+          locations: [
+            { id: 'l1', displayName: 'Chilonzor' },
+            { id: 'l2', displayName: 'Yunusobod' },
+          ],
+        },
+      );
+      demandHistory.mockClear();
+      demandForecast.mockClear();
+
+      const select = (fixture.nativeElement as HTMLElement).querySelector<HTMLSelectElement>(
+        '[data-testid="forecast-branch"]',
+      );
+      expect(select).not.toBeNull();
+      select!.value = 'l2';
+      select!.dispatchEvent(new Event('change'));
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(demandHistory).toHaveBeenLastCalledWith('t1', {
+        locationId: 'l2',
+        weekday: 2,
+        sampleSize: 4,
+        holidayMode: 'INCLUDE',
+      });
+      expect(demandForecast).toHaveBeenLastCalledWith('t1', { locationId: 'l2', weekday: 2 });
+    });
+  });
+
+  describe('the forecast section (wave W02)', () => {
+    it('shows the model, its confidence interval and the sample size once a run exists', async () => {
+      await render({
+        demandHistory: () => Promise.resolve(response()),
+        demandForecast: () =>
+          Promise.resolve(
+            emptyForecast({
+              runId: 'r1',
+              targetDate: '2026-09-01',
+              hours: [
+                {
+                  operatingHour: 18,
+                  forecastQuantity: 10,
+                  confidenceLow: 7.9,
+                  confidenceHigh: 12.1,
+                  actualQuantity: null,
+                  absolutePercentageError: null,
+                },
+              ],
+              comparisons: [],
+            }),
+          ),
+      });
+
+      const host = fixture.nativeElement as HTMLElement;
+      const table = host.querySelector('[data-testid="forecast-model-table"]') as HTMLElement;
+      expect(table.textContent).toContain('18:00');
+      expect(table.textContent).toContain('10.0');
+      expect(table.textContent).toContain('7.9');
+      expect(table.textContent).toContain('12.1');
+    });
+
+    it('says plainly that no forecast has been generated yet, rather than an empty table', async () => {
+      await render({
+        demandHistory: () => Promise.resolve(response()),
+        demandForecast: () => Promise.resolve(emptyForecast({ runId: null })),
+      });
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="forecast-model-none"]'),
+      ).not.toBeNull();
+    });
+  });
+
+  describe('the department/product breakdown (7.8a)', () => {
+    /** The breakdown lives inside the forecast section, which needs a real run before it renders at all. */
+    function forecastWithARun(): DemandForecastResponse {
+      return emptyForecast({
+        runId: 'r1',
+        targetDate: '2026-09-01',
+        hours: [
+          {
+            operatingHour: 18,
+            forecastQuantity: 4,
+            confidenceLow: 3,
+            confidenceHigh: 5,
+            actualQuantity: null,
+            absolutePercentageError: null,
+          },
+        ],
+      });
+    }
+
+    it('is not fetched until the operator asks', async () => {
+      const demandForecastBreakdown = vi.fn();
+      await render({
+        demandHistory: () => Promise.resolve(response()),
+        demandForecast: () => Promise.resolve(forecastWithARun()),
+        demandForecastBreakdown,
+      });
+
+      expect(demandForecastBreakdown).not.toHaveBeenCalled();
+    });
+
+    it('fetches and renders once shown', async () => {
+      const demandForecastBreakdown = vi.fn().mockResolvedValue({
+        locationId: 'l1',
+        weekday: 2,
+        byProduct: false,
+        rows: [
+          {
+            categoryId: 'c1',
+            variantId: null,
+            productName: null,
+            operatingHour: 18,
+            forecastQuantity: 4,
+            actualQuantity: null,
+            absolutePercentageError: null,
+          },
+        ],
+      });
+      await render({
+        demandHistory: () => Promise.resolve(response()),
+        demandForecast: () => Promise.resolve(forecastWithARun()),
+        demandForecastBreakdown,
+      });
+
+      (fixture.nativeElement as HTMLElement)
+        .querySelector<HTMLButtonElement>('[data-testid="forecast-breakdown-show"]')
+        ?.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(demandForecastBreakdown).toHaveBeenCalledWith('t1', {
+        locationId: 'l1',
+        weekday: 2,
+        dimension: 'CATEGORY',
+      });
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="forecast-breakdown-table"]',
+        ),
+      ).not.toBeNull();
     });
   });
 

@@ -28,6 +28,34 @@ export interface DecisionResponse {
 }
 
 /**
+ * `OperationsOrderController.DeliveryCancellationOutcome` (wave P44, gap map
+ * row 1.2g) — what happened to this order's delivery plan the instant it was
+ * cancelled, if it had one.
+ */
+export interface DeliveryCancellationOutcome {
+  /**
+   * `ShipmentCancellationPort.Result`'s own name: `NOTHING_TO_CANCEL` |
+   * `PLAN_CANCELLED` | `INTERNAL_CANCELLED` | `PROVIDER_CANCELLED` |
+   * `PROVIDER_CANCELLED_CHARGEABLE` | `PROVIDER_UNCERTAIN` | `PROVIDER_FAILED`.
+   * The last two mean an operator must still resolve this by hand — see the
+   * order detail's own delivery-exception band.
+   */
+  readonly outcome: string;
+  readonly providerType: string | null;
+}
+
+/**
+ * `OperationsOrderController.OrderCancellationResponse` — `.../cancellations`'
+ * own response shape (wave P44, gap map row 1.2g), everything {@link
+ * DecisionResponse} carries plus `deliveryCancellation`. `null` for an order
+ * that never had a delivery plan (pickup, dine-in) and for a decision this
+ * call lost the race for (`!applied`).
+ */
+export interface OrderCancellationResponse extends DecisionResponse {
+  readonly deliveryCancellation: DeliveryCancellationOutcome | null;
+}
+
+/**
  * `POST .../approval-decisions`, `.../state-actions`, `.../cancellations` —
  * orders.md §4.3, the three mutations §4.2's `actions[]` can name today.
  *
@@ -107,8 +135,8 @@ export class OrderActionsApi {
     expectedVersion: number,
     reasonCode: string,
     note?: string,
-  ): Observable<DecisionResponse> {
-    return this.api.post<{ reasonCode: string; note?: string }, DecisionResponse>(
+  ): Observable<OrderCancellationResponse> {
+    return this.api.post<{ reasonCode: string; note?: string }, OrderCancellationResponse>(
       operationsPaths.orderCancellations(scope, orderId),
       command({ reasonCode, note: note ? note : undefined }),
       { expectedVersion },
@@ -131,8 +159,11 @@ export class OrderActionsApi {
     reasonId: string,
     reasonCode: string,
     note?: string,
-  ): Observable<DecisionResponse> {
-    return this.api.post<{ reasonCode: string; reasonId: string; note?: string }, DecisionResponse>(
+  ): Observable<OrderCancellationResponse> {
+    return this.api.post<
+      { reasonCode: string; reasonId: string; note?: string },
+      OrderCancellationResponse
+    >(
       operationsPaths.orderCancellations(scope, orderId),
       command({ reasonCode, reasonId, note: note ? note : undefined }),
       { expectedVersion },

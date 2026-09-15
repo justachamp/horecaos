@@ -37,4 +37,15 @@ export class LockedState {
 
   /** Who to ask. Defaults to "the tenant's owner, through the platform". */
   readonly askKey = input<MessageKey>('ui.locked.ask');
+
+  /**
+   * The headline. Defaults to the entitlement wall's own "Not included in
+   * this plan" — wave T01's reuse for `0.2c`/`0.2d` (a data-model gap behind
+   * an unwritten staff-identity ADR, not an unpurchased plan) is what this
+   * input exists for: the visual language of "locked, and here is why and
+   * who decides" is the same in both cases, but the reason is not a plan a
+   * buy button could ever fix, so the default title would be a false claim
+   * rather than a true one stated imprecisely.
+   */
+  readonly titleKey = input<MessageKey>('ui.locked.title');
 }

@@ -1,69 +1,288 @@
 <div class="products">
   <div class="header">
     <h1 class="q-title">{{ 'reports.products.title' | t }}</h1>
-    <q-provenance-banner [provenance]="provenance()" [requestedTo]="requestedTo()" />
+    @if (activeTab() === 'sales') {
+      <q-provenance-banner [provenance]="provenance()" [requestedTo]="requestedTo()" />
+    }
   </div>
 
-  @switch (state()) {
-    @case ('loading') {
-      <p class="q-body-sm">{{ 'reports.branches.loading' | t }}</p>
-    }
-    @case ('denied') {
-      <p class="q-body-sm denied">{{ 'reports.denied.notGranted' | t }}</p>
-    }
-    @case ('error') {
-      <div class="error-band" role="alert">
-        <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
-        <button type="button" class="secondary" (click)="retry()">
-          {{ 'reports.error.retry' | t }}
-        </button>
-      </div>
-    }
-    @case ('ready') {
-      <table class="table">
-        <thead>
-          <tr>
-            <th class="q-caption">{{ 'reports.products.column.name' | t }}</th>
-            <th class="q-caption num">{{ 'reports.products.column.deliveryQty' | t }}</th>
-            <th class="q-caption num">{{ 'reports.products.column.deliverySum' | t }}</th>
-            <th class="q-caption num">{{ 'reports.products.column.pickupQty' | t }}</th>
-            <th class="q-caption num">{{ 'reports.products.column.pickupSum' | t }}</th>
-            <th class="q-caption num">{{ 'reports.products.column.totalQty' | t }}</th>
-            <th class="q-caption num">{{ 'reports.products.column.totalSum' | t }}</th>
-            <th class="q-caption num">{{ 'reports.products.column.share' | t }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (row of rows(); track row.key) {
-            <tr>
-              <td class="q-body-sm">{{ row.name }}</td>
-              <td class="q-body-sm q-tnum num">
-                {{ row.deliveryQuantity === null ? '—' : formatCountValue(row.deliveryQuantity) }}
-              </td>
-              <td class="q-body-sm q-tnum num">
-                {{ row.deliveryNetSom === null ? '—' : formatMoneyValue(row.deliveryNetSom) }}
-              </td>
-              <td class="q-body-sm q-tnum num">
-                {{ row.pickupQuantity === null ? '—' : formatCountValue(row.pickupQuantity) }}
-              </td>
-              <td class="q-body-sm q-tnum num">
-                {{ row.pickupNetSom === null ? '—' : formatMoneyValue(row.pickupNetSom) }}
-              </td>
-              <td class="q-body-sm q-tnum num">{{ formatCountValue(row.quantity) }}</td>
-              <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.netSom) }}</td>
-              <td class="q-body-sm q-tnum num">{{ row.revenueSharePercent }}%</td>
-            </tr>
-          } @empty {
-            <tr>
-              <td class="q-body-sm empty" colspan="8">{{ 'reports.empty.period' | t }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-      @if (maybeMore()) {
-        <p class="q-caption">{{ 'reports.products.maybeMore' | t }}</p>
+  <div class="products__tabs" role="tablist">
+    <button
+      type="button"
+      role="tab"
+      class="tab"
+      [class.tab--active]="activeTab() === 'sales'"
+      [attr.aria-selected]="activeTab() === 'sales'"
+      (click)="selectTab('sales')"
+    >
+      {{ 'reports.products.tab.sales' | t }}
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="tab"
+      [class.tab--active]="activeTab() === 'abc'"
+      [attr.aria-selected]="activeTab() === 'abc'"
+      (click)="selectTab('abc')"
+    >
+      {{ 'reports.products.tab.abc' | t }}
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="tab"
+      [class.tab--active]="activeTab() === 'xyz'"
+      [attr.aria-selected]="activeTab() === 'xyz'"
+      (click)="selectTab('xyz')"
+    >
+      {{ 'reports.products.tab.xyz' | t }}
+    </button>
+  </div>
+
+  @if (activeTab() === 'sales') {
+    @switch (state()) {
+      @case ('loading') {
+        <p class="q-body-sm">{{ 'reports.branches.loading' | t }}</p>
       }
-      <p class="q-body-sm not-built-note">{{ 'reports.products.abcXyzNotBuilt' | t }}</p>
+      @case ('denied') {
+        <p class="q-body-sm denied">{{ 'reports.denied.notGranted' | t }}</p>
+      }
+      @case ('error') {
+        <div class="error-band" role="alert">
+          <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+          <button type="button" class="secondary" (click)="retry()">
+            {{ 'reports.error.retry' | t }}
+          </button>
+        </div>
+      }
+      @case ('ready') {
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'reports.products.column.name' | t }}</th>
+              <th class="q-caption">{{ 'reports.products.column.category' | t }}</th>
+              <th class="q-caption num">{{ 'reports.products.column.deliveryQty' | t }}</th>
+              <th class="q-caption num">{{ 'reports.products.column.deliverySum' | t }}</th>
+              <th class="q-caption num">{{ 'reports.products.column.pickupQty' | t }}</th>
+              <th class="q-caption num">{{ 'reports.products.column.pickupSum' | t }}</th>
+              <th class="q-caption num">{{ 'reports.products.column.totalQty' | t }}</th>
+              <th class="q-caption num">{{ 'reports.products.column.totalSum' | t }}</th>
+              <th class="q-caption num">{{ 'reports.products.column.share' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.key) {
+              <tr [class.row--stopped]="isStopped(row.variantId)">
+                <td class="q-body-sm">
+                  {{ row.name }}
+                  @if (isStopped(row.variantId)) {
+                    <span class="stop-badge">{{ 'reports.products.stop' | t }}</span>
+                  }
+                </td>
+                <td class="q-body-sm">{{ categoryLabel(row.categoryId) }}</td>
+                <td class="q-body-sm q-tnum num">
+                  {{ row.deliveryQuantity === null ? '—' : formatCountValue(row.deliveryQuantity) }}
+                </td>
+                <td class="q-body-sm q-tnum num">
+                  {{ row.deliveryNetSom === null ? '—' : formatMoneyValue(row.deliveryNetSom) }}
+                </td>
+                <td class="q-body-sm q-tnum num">
+                  {{ row.pickupQuantity === null ? '—' : formatCountValue(row.pickupQuantity) }}
+                </td>
+                <td class="q-body-sm q-tnum num">
+                  {{ row.pickupNetSom === null ? '—' : formatMoneyValue(row.pickupNetSom) }}
+                </td>
+                <td class="q-body-sm q-tnum num">{{ formatCountValue(row.quantity) }}</td>
+                <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.netSom) }}</td>
+                <td class="q-body-sm q-tnum num">{{ row.revenueSharePercent }}%</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td class="q-body-sm empty" colspan="9">{{ 'reports.empty.period' | t }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        @if (maybeMore()) {
+          <p class="q-caption">{{ 'reports.products.maybeMore' | t }}</p>
+        }
+        <p class="q-caption dine-in-note">{{ 'reports.products.dineInNote' | t }}</p>
+      }
+    }
+  }
+
+  @if (activeTab() === 'abc' || activeTab() === 'xyz') {
+    @switch (classificationState()) {
+      @case ('loading') {
+        <p class="q-body-sm">{{ 'reports.branches.loading' | t }}</p>
+      }
+      @case ('error') {
+        <div class="error-band" role="alert">
+          <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+          <button type="button" class="secondary" (click)="retryClassification()">
+            {{ 'reports.error.retry' | t }}
+          </button>
+        </div>
+      }
+      @case ('denied') {
+        <p class="q-body-sm denied">{{ 'reports.denied.notGranted' | t }}</p>
+      }
+      @case ('refused') {
+        <p class="q-body-sm classification-refused">
+          {{
+            'reports.products.classification.rangeTooShort'
+              | t: { minDays: minimumClassificationDays, actualDays: classificationRangeDays() }
+          }}
+        </p>
+      }
+      @case ('needsRun') {
+        <div class="classification-prompt">
+          <p class="q-body-sm">{{ 'reports.products.classification.needsRun' | t }}</p>
+          <button type="button" class="secondary" (click)="runClassificationNow()">
+            {{ 'reports.products.classification.runButton' | t }}
+          </button>
+        </div>
+      }
+      @case ('running') {
+        <p class="q-body-sm">{{ 'reports.products.classification.running' | t }}</p>
+      }
+      @case ('ready') {
+        @if (classificationCaption(); as caption) {
+          <div class="classification-caption q-caption q-tnum">
+            {{ 'reports.products.classification.window' | t }} {{ caption.window }}
+            ·
+            {{ 'reports.products.classification.thresholds' | t }} {{ caption.abcThresholds }}
+            ·
+            {{ 'reports.products.classification.metric' | t }} {{ caption.metric }}
+            ·
+            {{ 'reports.products.classification.computedAt' | t }} {{ caption.computedAt }}
+          </div>
+        }
+
+        <div
+          class="matrix"
+          role="group"
+          [attr.aria-label]="'reports.products.classification.matrix' | t"
+        >
+          @for (abcClass of ['A', 'B', 'C']; track abcClass) {
+            @for (xyzClass of ['X', 'Y', 'Z']; track xyzClass) {
+              <button
+                type="button"
+                class="matrix__cell"
+                [class.matrix__cell--active]="matrixCell() === abcClass + xyzClass"
+                (click)="toggleMatrixCell(abcClass + xyzClass)"
+              >
+                <span class="matrix__cell-label">{{ abcClass }}{{ xyzClass }}</span>
+                <span class="matrix__cell-count q-tnum">{{
+                  matrixCounts().get(abcClass + xyzClass) ?? 0
+                }}</span>
+              </button>
+            }
+          }
+        </div>
+
+        @if (activeTab() === 'abc') {
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'reports.products.column.name' | t }}</th>
+                <th class="q-caption">{{ 'reports.products.column.category' | t }}</th>
+                <th class="q-caption num">
+                  {{ 'reports.products.classification.column.revenue' | t }}
+                </th>
+                <th class="q-caption num">
+                  {{ 'reports.products.classification.column.share' | t }}
+                </th>
+                <th class="q-caption num">
+                  {{ 'reports.products.classification.column.cumulativeShare' | t }}
+                </th>
+                <th class="q-caption">{{ 'reports.products.classification.column.class' | t }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of filteredClassificationRows(); track row.key) {
+                <tr [class.row--stopped]="isStopped(row.variantId)">
+                  <td class="q-body-sm">
+                    {{ row.name }}
+                    @if (isStopped(row.variantId)) {
+                      <span class="stop-badge">{{ 'reports.products.stop' | t }}</span>
+                    }
+                  </td>
+                  <td class="q-body-sm">{{ categoryLabel(row.categoryId) }}</td>
+                  <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.revenueGrossSom) }}</td>
+                  <td class="q-body-sm q-tnum num">{{ row.revenueSharePercent }}%</td>
+                  <td class="q-body-sm q-tnum num classification-cumulative">
+                    {{ row.cumulativeSharePercent }}%
+                  </td>
+                  <td class="q-body-sm">
+                    <span class="class-badge" [attr.data-class]="row.abcClass">{{
+                      row.abcClass
+                    }}</span>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td class="q-body-sm empty" colspan="6">{{ 'reports.empty.period' | t }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'reports.products.column.name' | t }}</th>
+                <th class="q-caption">{{ 'reports.products.column.category' | t }}</th>
+                <th class="q-caption num">
+                  {{ 'reports.products.classification.column.quantity' | t }}
+                </th>
+                <th class="q-caption num">
+                  {{ 'reports.products.classification.column.sum' | t }}
+                </th>
+                <th class="q-caption num">
+                  {{ 'reports.products.classification.column.mean' | t }}
+                </th>
+                <th class="q-caption num">
+                  {{ 'reports.products.classification.column.stddev' | t }}
+                </th>
+                <th class="q-caption num">{{ 'reports.products.classification.column.cv' | t }}</th>
+                <th class="q-caption">{{ 'reports.products.classification.column.class' | t }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of filteredClassificationRows(); track row.key) {
+                <tr [class.row--stopped]="isStopped(row.variantId)">
+                  <td class="q-body-sm">
+                    {{ row.name }}
+                    @if (isStopped(row.variantId)) {
+                      <span class="stop-badge">{{ 'reports.products.stop' | t }}</span>
+                    }
+                  </td>
+                  <td class="q-body-sm">{{ categoryLabel(row.categoryId) }}</td>
+                  <td class="q-body-sm q-tnum num">{{ formatCountValue(row.quantity) }}</td>
+                  <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.revenueGrossSom) }}</td>
+                  <td class="q-body-sm q-tnum num">{{ row.mean.toFixed(1) }}</td>
+                  <td class="q-body-sm q-tnum num">{{ row.stddev.toFixed(1) }}</td>
+                  <td class="q-body-sm q-tnum num">{{ row.coefficientOfVariationPercent }}%</td>
+                  <td class="q-body-sm">
+                    <span class="class-badge" [attr.data-class]="row.xyzClass">{{
+                      row.xyzClass
+                    }}</span>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td class="q-body-sm empty" colspan="8">{{ 'reports.empty.period' | t }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+
+        <button type="button" class="secondary rerun-button" (click)="runClassificationNow()">
+          {{ 'reports.products.classification.rerunButton' | t }}
+        </button>
+      }
     }
   }
 </div>

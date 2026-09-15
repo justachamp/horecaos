@@ -11,10 +11,13 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -29,6 +32,8 @@ import uz.horecaos.platform.reporting.application.ReportingFacts.RefundFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.SlaBucketAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.TenderFact;
 import uz.horecaos.platform.reporting.domain.BusinessDayBoundary;
+import uz.horecaos.platform.reporting.domain.HolidayCalendar;
+import uz.horecaos.platform.reporting.domain.HolidayMode;
 import uz.horecaos.platform.reporting.domain.MetricDefinition;
 
 /**
@@ -297,12 +302,31 @@ public class JdbcReportingStore {
                 .list();
     }
 
+    /**
+     * Wave W02 (7.8a): resolves each line's department (category) alongside
+     * the fields {@code fact_order_line} has always carried. A product can sit
+     * in more than one {@code catalog.category_products} row and none is
+     * marked primary, so the tie-break — lowest {@code sort_order}, then
+     * lowest {@code category_id} — is applied here with a lateral join rather
+     * than left unresolved; {@code V0368}'s backfill for pre-existing rows
+     * uses the identical tie-break so a line resolved before and after this
+     * wave never disagrees about which category it belongs to.
+     */
     public List<SourceLine> readSourceLines(UUID tenantId, Instant from, Instant to) {
         return jdbc.sql("""
                 SELECT l.id, l.order_id, l.source_variant_id, l.product_name_snapshot,
-                       l.quantity, l.base_amount_minor, l.final_amount_minor
+                       l.quantity, l.base_amount_minor, l.final_amount_minor, resolved.category_id
                   FROM ordering.order_lines l
                   JOIN ordering.orders o ON o.id = l.order_id AND o.tenant_id = l.tenant_id
+                  LEFT JOIN catalog.variants v
+                    ON v.tenant_id = l.tenant_id AND v.id = l.source_variant_id
+                  LEFT JOIN LATERAL (
+                           SELECT cp.category_id
+                             FROM catalog.category_products cp
+                            WHERE cp.tenant_id = v.tenant_id AND cp.product_id = v.product_id
+                            ORDER BY cp.sort_order, cp.category_id
+                            LIMIT 1
+                       ) resolved ON true
                  WHERE l.tenant_id = :tenantId
                    AND o.created_at >= :from AND o.created_at < :to
                  ORDER BY l.order_id, l.line_number
@@ -317,7 +341,8 @@ public class JdbcReportingStore {
                         row.getString("product_name_snapshot"),
                         row.getInt("quantity"),
                         row.getLong("base_amount_minor"),
-                        row.getLong("final_amount_minor")))
+                        row.getLong("final_amount_minor"),
+                        row.getObject("category_id", UUID.class)))
                 .list();
     }
 
@@ -506,6 +531,7 @@ public class JdbcReportingStore {
             @Nullable String stockDisposition,
             @Nullable String liabilityParty) {}
 
+    /** @param categoryId wave W02 (7.8a): see {@link #readSourceLines}'s own doc for how this is resolved */
     public record SourceLine(
             UUID lineId,
             UUID orderId,
@@ -513,7 +539,8 @@ public class JdbcReportingStore {
             String productName,
             int quantity,
             long baseAmountMinor,
-            long finalAmountMinor) {}
+            long finalAmountMinor,
+            @Nullable UUID categoryId) {}
 
     public record SourceRefund(UUID refundId, UUID orderId, long amountMinor, Instant occurredAt) {}
 
@@ -738,14 +765,18 @@ public class JdbcReportingStore {
         params.put("gross", fact.grossSom());
         params.put("discount", fact.discountSom());
         params.put("net", fact.netSom());
+        params.put("occurredAt", utc(fact.occurredAt()));
+        params.put("legalEntityId", fact.legalEntityId());
 
         jdbc.sql("""
                 INSERT INTO reporting.fact_order_line (
                     tenant_id, business_date, order_id, line_id, location_id, variant_id,
-                    category_id, product_name_snapshot, quantity, gross_som, discount_som, net_som)
+                    category_id, product_name_snapshot, quantity, gross_som, discount_som, net_som,
+                    occurred_at, legal_entity_id)
                 VALUES (
                     :tenantId, :businessDate, :orderId, :lineId, :locationId, :variantId,
-                    :categoryId, :productName, :quantity, :gross, :discount, :net)
+                    :categoryId, :productName, :quantity, :gross, :discount, :net, :occurredAt,
+                    :legalEntityId)
                 """).params(params).update();
     }
 
@@ -1423,6 +1454,104 @@ public class JdbcReportingStore {
     }
 
     /**
+     * Wave T06 (7.3): every branch's median preparation time in one grouped
+     * query, rather than the caller fanning out one {@link
+     * #medianSecondsToReady} call per branch — the branch leaderboard's own
+     * previous shape, and the fan-out the wave's brief names by name. Postgres
+     * computes one {@code percentile_cont} per {@code GROUP BY} group in a
+     * single pass, so this costs one query plan rather than N of them.
+     *
+     * <p>A location with no order that reached READY in range is simply absent
+     * from the result — never a row carrying a null median, which would ask
+     * every caller to tell "no branch" apart from "no data" a second time. The
+     * caller (see {@code ReportQueryService#preparationTimeByLocation}) reads
+     * a missing location the same way {@link #medianSecondsToReady} already
+     * reads an entirely empty range: as null, not zero.
+     */
+    public List<LocationMedianRow> medianSecondsToReadyByLocation(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT location_id,
+                       percentile_cont(0.5) WITHIN GROUP (ORDER BY seconds_to_ready) AS median_seconds
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND seconds_to_ready IS NOT NULL
+                """ + locationFilter + """
+                 GROUP BY location_id
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new LocationMedianRow(
+                        row.getObject("location_id", UUID.class),
+                        roundedOrNull(row.getObject("median_seconds", Double.class))))
+                .list();
+    }
+
+    /**
+     * Wave T06 (7.3a): the SLA time-bucket table's own «Медиана» column, per
+     * branch, in one grouped query — the same {@code percentile_cont GROUP BY}
+     * shape {@link #medianSecondsToReadyByLocation} already establishes, over
+     * {@code seconds_total} rather than {@code seconds_to_ready}: {@code
+     * seconds_total} is exactly the column {@code DayAggregator.slaBuckets}
+     * buckets orders by (statistics.md §2.3's own «Медиана»), so this reads
+     * the median of the same population the six buckets beside it summarise —
+     * a summary statistic over the same distribution, not a second one.
+     *
+     * <p>A branch with no order carrying a {@code closed_at} in range is
+     * absent from the result, on the same footing as {@link
+     * #medianSecondsToReadyByLocation}: never a row with a null median.
+     */
+    public List<LocationMedianRow> medianSecondsTotalByLocation(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT location_id,
+                       percentile_cont(0.5) WITHIN GROUP (ORDER BY seconds_total) AS median_seconds
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND seconds_total IS NOT NULL
+                """ + locationFilter + """
+                 GROUP BY location_id
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new LocationMedianRow(
+                        row.getObject("location_id", UUID.class),
+                        roundedOrNull(row.getObject("median_seconds", Double.class))))
+                .list();
+    }
+
+    private static @Nullable Integer roundedOrNull(@Nullable Double value) {
+        return value == null ? null : (int) Math.round(value);
+    }
+
+    /**
+     * One branch's median — see {@link #medianSecondsToReadyByLocation} (prep
+     * time) and {@link #medianSecondsTotalByLocation} (handover time).
+     */
+    public record LocationMedianRow(
+            UUID locationId, @Nullable Integer medianSeconds) {}
+
+    /**
      * Order-grain rows straight off {@code fact_order}, for the three 7.2 tables
      * that are genuinely per-order rather than day-grain (ADR 0043's own
      * {@code sla-buckets}/{@code preparation-time} endpoints already establish
@@ -1670,7 +1799,12 @@ public class JdbcReportingStore {
      * needs it.
      */
     public List<VariantSalesRow> readVariantSales(
-            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, int limit) {
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> fulfilmentTypes,
+            int limit) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -1682,6 +1816,16 @@ public class JdbcReportingStore {
         if (!locationIds.isEmpty()) {
             locationFilter = " AND l.location_id IN (:locations)";
             params.put("locations", locationIds);
+        }
+
+        // Wave T14 (7.7): the filter bar's fulfilment control, wired in for the
+        // first time -- previously accepted and ignored. Narrows every column,
+        // total included, so a DINE_IN-only view answers with DINE_IN's own
+        // figures rather than the whole tenant's.
+        String fulfilmentFilter = "";
+        if (!fulfilmentTypes.isEmpty()) {
+            fulfilmentFilter = " AND o.fulfilment_type IN (:fulfilmentTypes)";
+            params.put("fulfilmentTypes", fulfilmentTypes);
         }
 
         return jdbc.sql("""
@@ -1697,7 +1841,7 @@ public class JdbcReportingStore {
                   JOIN reporting.fact_order o
                     ON o.tenant_id = l.tenant_id AND o.business_date = l.business_date AND o.order_id = l.order_id
                  WHERE l.tenant_id = :tenantId AND l.business_date BETWEEN :from AND :to
-                """ + locationFilter + """
+                """ + locationFilter + fulfilmentFilter + """
                  GROUP BY l.variant_id, l.category_id
                  ORDER BY total_net_som DESC, l.variant_id
                  LIMIT :limit
@@ -1872,6 +2016,321 @@ public class JdbcReportingStore {
                 .list();
     }
 
+    // ------------------------------------------------------------ T13 (7.6/7.6a/7.6b)
+
+    /**
+     * T13 (7.6a): {@code revenue.new_vs_returning.v1} — gross revenue of
+     * COMPLETED orders, grouped by business date, location, legal entity,
+     * and {@code is_first_order}. Straight off {@code reporting.fact_order}
+     * rather than {@code agg_branch_day}: the aggregate has no revenue split
+     * by first order, only the {@code distinct_customers}/{@code
+     * new_customers} counts.
+     */
+    public List<CustomerTypeDayAggregate> readCustomerTypeRevenue(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<UUID> legalEntityIds,
+            List<String> channelCodes) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        StringBuilder filter = new StringBuilder();
+        if (!locationIds.isEmpty()) {
+            filter.append(" AND location_id IN (:locations)");
+            params.put("locations", locationIds);
+        }
+        if (!legalEntityIds.isEmpty()) {
+            filter.append(" AND legal_entity_id IN (:legalEntities)");
+            params.put("legalEntities", legalEntityIds);
+        }
+        if (!channelCodes.isEmpty()) {
+            filter.append(" AND channel_code IN (:channels)");
+            params.put("channels", channelCodes);
+        }
+
+        return jdbc.sql("""
+                SELECT business_date, location_id, legal_entity_id, is_first_order,
+                       count(*)::integer AS order_count,
+                       sum(gross_revenue_som) AS gross_som
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND terminal_status = 'COMPLETED' AND is_first_order IS NOT NULL
+                """ + filter + """
+                 GROUP BY business_date, location_id, legal_entity_id, is_first_order
+                 ORDER BY business_date, location_id, legal_entity_id, is_first_order
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new CustomerTypeDayAggregate(
+                        row.getObject("business_date", LocalDate.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getObject("legal_entity_id", UUID.class),
+                        row.getBoolean("is_first_order"),
+                        row.getInt("order_count"),
+                        row.getLong("gross_som")))
+                .list();
+    }
+
+    /** One (date, location, legal entity, customer-type) cell of {@link #readCustomerTypeRevenue}. */
+    public record CustomerTypeDayAggregate(
+            LocalDate businessDate,
+            UUID locationId,
+            @Nullable UUID legalEntityId,
+            boolean isFirstOrder,
+            int orderCount,
+            long grossSom) {}
+
+    /**
+     * T13 (7.6): the KPI-tile figures {@code customers.new.v1} through
+     * {@code customers.basket_depth.v1} publish — one folded read over the
+     * whole requested range, the same shape {@code readPaymentMix}'s {@code
+     * overview} already uses for a tile that shows one number per period
+     * rather than a day-grain breakdown. {@code distinctCount} is a true
+     * {@code COUNT(DISTINCT ...)} over the range, never a sum of per-day or
+     * per-channel sub-counts — see {@code customers.distinct.v1}'s own
+     * openQuestion for why summing agg_branch_day rows would double count a
+     * customer who ordered on two channels the same day.
+     *
+     * <p>Two separate aggregates, not one shared {@code WHERE}: {@code
+     * order_count}/{@code item_count_sum}/{@code net_som}/{@code
+     * legal_entity_count} are {@code customers.basket_depth.v1}/{@code
+     * order_frequency.v1}/{@code value.v1}'s own {@code COMPLETED_ONLY}
+     * inputs, but {@code distinct_customers}/{@code new_customers} back
+     * {@code customers.distinct.v1}/{@code customers.new.v1}, whose
+     * registered inclusion rule (MetricRegistry) is "regardless of terminal
+     * status — a cancelled first order still means the person is new". A
+     * single COMPLETED-only {@code WHERE} clause used to answer both, which
+     * silently dropped a guest whose only order in range was cancelled.
+     */
+    public CustomerKpiRow readCustomerKpis(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<UUID> legalEntityIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        StringBuilder filter = new StringBuilder();
+        if (!locationIds.isEmpty()) {
+            filter.append(" AND location_id IN (:locations)");
+            params.put("locations", locationIds);
+        }
+        if (!legalEntityIds.isEmpty()) {
+            filter.append(" AND legal_entity_id IN (:legalEntities)");
+            params.put("legalEntities", legalEntityIds);
+        }
+
+        CompletedOrderTotals completed = jdbc.sql("""
+                SELECT count(*)::integer AS order_count,
+                       sum(item_count)::integer AS item_count_sum,
+                       sum(net_revenue_som) AS net_som,
+                       count(DISTINCT legal_entity_id)::integer AS legal_entity_count
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND terminal_status = 'COMPLETED' AND customer_subject_hash IS NOT NULL
+                """ + filter + """
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new CompletedOrderTotals(
+                        row.getInt("order_count"),
+                        row.getInt("item_count_sum"),
+                        row.getLong("net_som"),
+                        row.getInt("legal_entity_count")))
+                .single();
+
+        DistinctCustomerTotals distinct = jdbc.sql("""
+                SELECT count(DISTINCT customer_subject_hash)::integer AS distinct_customers,
+                       count(DISTINCT customer_subject_hash) FILTER (WHERE is_first_order)::integer
+                           AS new_customers
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND customer_subject_hash IS NOT NULL
+                """ + filter + """
+                """)
+                .params(params)
+                .query((ResultSet row, int number) ->
+                        new DistinctCustomerTotals(row.getInt("distinct_customers"), row.getInt("new_customers")))
+                .single();
+
+        return new CustomerKpiRow(
+                completed.orderCount(),
+                distinct.distinctCustomers(),
+                distinct.newCustomers(),
+                completed.itemCountSum(),
+                completed.netSom(),
+                completed.legalEntityCount());
+    }
+
+    /** {@link #readCustomerKpis}'s COMPLETED-only half — see that method's own doc. */
+    private record CompletedOrderTotals(int orderCount, int itemCountSum, long netSom, int legalEntityCount) {}
+
+    /** {@link #readCustomerKpis}'s any-terminal-status half — see that method's own doc. */
+    private record DistinctCustomerTotals(int distinctCustomers, int newCustomers) {}
+
+    /**
+     * The one row {@link #readCustomerKpis} returns — already-summed totals
+     * for the requested range; {@code ReportQueryService.customerKpis}
+     * derives the published ratios (repeat share, order frequency, customer
+     * value, basket depth) from these rather than the database.
+     *
+     * @param legalEntityCount distinct legal entities present in the read —
+     *                         {@code customers.value.v1} is money (ADR
+     *                         0038), so the caller refuses rather than folds
+     *                         a {@code customerValueSom} across more than one
+     *                         when no {@code legalEntityId} filter narrowed
+     *                         it
+     */
+    public record CustomerKpiRow(
+            int orderCount,
+            int distinctCustomers,
+            int newCustomers,
+            int itemCountSum,
+            long netSom,
+            int legalEntityCount) {}
+
+    /**
+     * T13 (7.6a): the cohort/retention grid. {@code cohort} is every
+     * customer whose first-ever order ({@code is_first_order = true},
+     * resolved against their full history, never only this range) fell in
+     * {@code [from, to]}; the join then counts, for each such cohort's
+     * calendar month, how many of its members placed any order (any
+     * terminal status, matching {@code customers.distinct.v1}'s own
+     * inclusion rule) in each calendar month from the cohort month through
+     * {@code to}. The {@code order_month = cohort_month} row is the cohort's
+     * own size — every member ordered in their own cohort month by
+     * definition — so {@code ReportQueryService} never issues a second query
+     * for it.
+     */
+    public List<CohortCell> readCustomerCohorts(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        StringBuilder filter = new StringBuilder();
+        if (!locationIds.isEmpty()) {
+            filter.append(" AND location_id IN (:locations)");
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                WITH cohort AS (
+                    SELECT customer_subject_hash,
+                           date_trunc('month', business_date)::date AS cohort_month
+                      FROM reporting.fact_order
+                     WHERE tenant_id = :tenantId AND is_first_order = true
+                       AND business_date BETWEEN :from AND :to
+                """ + filter + """
+                )
+                SELECT c.cohort_month,
+                       date_trunc('month', o.business_date)::date AS order_month,
+                       count(DISTINCT o.customer_subject_hash)::integer AS customer_count
+                  FROM cohort c
+                  JOIN reporting.fact_order o
+                    ON o.tenant_id = :tenantId AND o.customer_subject_hash = c.customer_subject_hash
+                   AND o.business_date BETWEEN :from AND :to
+                 GROUP BY c.cohort_month, date_trunc('month', o.business_date)
+                 ORDER BY c.cohort_month, order_month
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new CohortCell(
+                        row.getObject("cohort_month", LocalDate.class),
+                        row.getObject("order_month", LocalDate.class),
+                        row.getInt("customer_count")))
+                .list();
+    }
+
+    /** One (cohort month, order month) cell — see {@link #readCustomerCohorts}. */
+    public record CohortCell(LocalDate cohortMonth, LocalDate orderMonth, int customerCount) {}
+
+    /**
+     * T13 (7.6b): one customer's Recency/Frequency/Monetary inputs for the
+     * range — {@code ReportQueryService.customerRfm} buckets these into the
+     * platform-fixed R×F grid rather than this query, the same split {@code
+     * DayAggregator}/{@code ReportQueryService} already keep between "read
+     * the facts" and "bucket them" for {@code sla_bucket_set.v1}.
+     */
+    public List<CustomerRfmRow> readCustomerRfmInputs(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<UUID> legalEntityIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        StringBuilder filter = new StringBuilder();
+        if (!locationIds.isEmpty()) {
+            filter.append(" AND location_id IN (:locations)");
+            params.put("locations", locationIds);
+        }
+        if (!legalEntityIds.isEmpty()) {
+            filter.append(" AND legal_entity_id IN (:legalEntities)");
+            params.put("legalEntities", legalEntityIds);
+        }
+
+        return jdbc.sql("""
+                SELECT customer_subject_hash,
+                       count(*)::integer AS order_count,
+                       max(business_date) AS last_order_date,
+                       sum(net_revenue_som) AS net_som
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND terminal_status = 'COMPLETED' AND customer_subject_hash IS NOT NULL
+                """ + filter + """
+                 GROUP BY customer_subject_hash
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new CustomerRfmRow(
+                        row.getString("customer_subject_hash"),
+                        row.getInt("order_count"),
+                        row.getObject("last_order_date", LocalDate.class),
+                        row.getLong("net_som")))
+                .list();
+    }
+
+    /** One customer's RFM inputs for the range — see {@link #readCustomerRfmInputs}. */
+    public record CustomerRfmRow(String customerSubjectHash, int orderCount, LocalDate lastOrderDate, long netSom) {}
+
+    /**
+     * How many distinct legal entities are present in a COMPLETED-order read over the given
+     * range/location/entity filters (ADR 0038). {@link #readCustomerRfmInputs} groups by {@code
+     * customer_subject_hash} alone, so a per-row {@code legal_entity_id} would not give a
+     * tenant-wide distinct-entity count — one customer's own orders can themselves span more than
+     * one entity, and Postgres window functions do not support {@code COUNT(DISTINCT ...) OVER
+     * ()} — hence this second, cheap scalar query rather than a column on {@link CustomerRfmRow}.
+     * Mirrors {@link CustomerKpiRow#legalEntityCount()}'s own inline {@code
+     * count(DISTINCT legal_entity_id)}.
+     */
+    public int readLegalEntityCount(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<UUID> legalEntityIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        StringBuilder filter = new StringBuilder();
+        if (!locationIds.isEmpty()) {
+            filter.append(" AND location_id IN (:locations)");
+            params.put("locations", locationIds);
+        }
+        if (!legalEntityIds.isEmpty()) {
+            filter.append(" AND legal_entity_id IN (:legalEntities)");
+            params.put("legalEntities", legalEntityIds);
+        }
+
+        return jdbc.sql("""
+                SELECT count(DISTINCT legal_entity_id)::integer AS legal_entity_count
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND terminal_status = 'COMPLETED' AND customer_subject_hash IS NOT NULL
+                """ + filter + """
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> row.getInt("legal_entity_count"))
+                .single();
+    }
+
     /** Which end of an order-grain read to serve — see {@link #readOrders}. */
     public enum OrderSort {
         DATE_DESC,
@@ -2007,6 +2466,19 @@ public class JdbcReportingStore {
      *         when the location has never recorded a completed order on this
      *         weekday
      */
+    /**
+     * How many extra candidate dates {@link #readDemandHistory} pulls when
+     * {@code holidayMode} can drop one — {@code EXCLUDE} needs somewhere to
+     * find a replacement, and {@code WEIGHT}/{@code INCLUDE} need the same
+     * candidates annotated for {@code holidayDates} even though every one of
+     * them stays in the sample. Three times the requested sample size, capped
+     * so a sampleSize of 12 (the API's own {@code DEMAND_SAMPLE_MAX}) never
+     * asks for more than sixty candidate dates.
+     */
+    private static final int HOLIDAY_CANDIDATE_OVERFETCH = 3;
+
+    private static final int HOLIDAY_CANDIDATE_MAX = 60;
+
     public DemandSample readDemandHistory(
             UUID tenantId,
             UUID locationId,
@@ -2014,9 +2486,16 @@ public class JdbcReportingStore {
             LocalDate from,
             LocalDate to,
             String timezone,
-            int sampleSize) {
+            String businessDayStart,
+            int sampleSize,
+            HolidayMode holidayMode,
+            HolidayCalendar holidays) {
 
-        List<LocalDate> sampleDates = jdbc.sql("""
+        int candidateLimit = holidayMode == HolidayMode.INCLUDE
+                ? sampleSize
+                : Math.min(sampleSize * HOLIDAY_CANDIDATE_OVERFETCH, HOLIDAY_CANDIDATE_MAX);
+
+        List<LocalDate> candidates = jdbc.sql("""
                 SELECT business_date
                   FROM reporting.fact_order
                  WHERE tenant_id = :tenantId AND location_id = :locationId
@@ -2025,24 +2504,53 @@ public class JdbcReportingStore {
                    AND extract(isodow FROM business_date)::int = :weekday
                  GROUP BY business_date
                  ORDER BY business_date DESC
-                 LIMIT :sampleSize
+                 LIMIT :candidateLimit
                 """)
                 .param("tenantId", tenantId)
                 .param("locationId", locationId)
                 .param("from", from)
                 .param("to", to)
                 .param("weekday", weekday)
-                .param("sampleSize", sampleSize)
+                .param("candidateLimit", candidateLimit)
                 .query(LocalDate.class)
                 .list();
 
+        // EXCLUDE drops a flagged date from the candidate list before taking
+        // the top sampleSize, so an older non-holiday date fills the slot
+        // instead. INCLUDE and WEIGHT both keep every candidate — WEIGHT
+        // downweights a holiday date in ReportQueryService's average rather
+        // than removing it here.
+        List<LocalDate> sampleDates = (holidayMode == HolidayMode.EXCLUDE
+                        ? candidates.stream().filter(date -> !holidays.isHoliday(date))
+                        : candidates.stream())
+                .limit(sampleSize)
+                .toList();
+
         if (sampleDates.isEmpty()) {
-            return new DemandSample(List.of(), List.of());
+            return new DemandSample(List.of(), List.of(), Set.of());
         }
 
+        Set<LocalDate> holidayDates = new LinkedHashSet<>();
+        for (LocalDate date : sampleDates) {
+            if (holidays.isHoliday(date)) {
+                holidayDates.add(date);
+            }
+        }
+
+        // Operating-day-relative, not wall-clock: businessDayStart shifts the
+        // local timestamp back by the boundary's own start-of-day before the
+        // hour is extracted, so hour 0 is always the hour trading begins and
+        // an hour just before the next start reads as 23, whatever the
+        // tenant's own boundary is — 7.8's own named gap ("the hour axis is
+        // wall-clock 00:00-24:00 rather than the operating-day window that
+        // may cross midnight"). A midnight boundary (the platform default)
+        // shifts by nothing, so this is exactly the prior wall-clock
+        // behaviour for every tenant that has not moved its boundary.
         List<HourCount> hourCounts = jdbc.sql("""
                 SELECT business_date,
-                       extract(hour FROM (occurred_at AT TIME ZONE :timezone))::int AS hour_of_day,
+                       extract(hour FROM
+                           ((occurred_at AT TIME ZONE :timezone) - (:businessDayStart)::interval)
+                       )::int AS hour_of_day,
                        count(*) AS order_count
                   FROM reporting.fact_order
                  WHERE tenant_id = :tenantId AND location_id = :locationId
@@ -2053,6 +2561,7 @@ public class JdbcReportingStore {
                 .param("tenantId", tenantId)
                 .param("locationId", locationId)
                 .param("timezone", timezone)
+                .param("businessDayStart", businessDayStart)
                 .param("sampleDates", sampleDates)
                 .query((ResultSet row, int number) -> new HourCount(
                         row.getObject("business_date", LocalDate.class),
@@ -2060,22 +2569,411 @@ public class JdbcReportingStore {
                         row.getInt("order_count")))
                 .list();
 
-        return new DemandSample(sampleDates, hourCounts);
+        return new DemandSample(sampleDates, hourCounts, Set.copyOf(holidayDates));
     }
 
     /**
-     * The result of {@link #readDemandHistory}: which dates qualified, and
-     * their hourly order counts.
+     * The result of {@link #readDemandHistory}: which dates qualified, their
+     * hourly order counts, and which of those dates a {@link HolidayCalendar}
+     * flagged (7.8b) — always populated, whatever {@link HolidayMode} was
+     * asked for, since {@code EXCLUDE} already removed every holiday from
+     * {@code sampleDates} and so trivially returns an empty set here.
      *
      * @param sampleDates the qualifying business dates found, most recent
      *                    first — never more than the caller's {@code
      *                    sampleSize}, and shorter than it whenever the
      *                    location's history is thinner than asked for
      */
-    public record DemandSample(List<LocalDate> sampleDates, List<HourCount> hourCounts) {}
+    public record DemandSample(List<LocalDate> sampleDates, List<HourCount> hourCounts, Set<LocalDate> holidayDates) {
+
+        /**
+         * Zero-filled per {@code sampleDates}: a date this location traded on
+         * but with nothing in a given hour is a real zero data point, not an
+         * absent one — see {@code ReportQueryService#demandHistory}'s own
+         * comment on why skipping it would overstate every quiet hour.
+         * Shared by {@code ReportQueryService} and {@code ForecastService}
+         * (wave W02) so the two never zero-fill differently.
+         */
+        public Map<LocalDate, Map<Integer, Integer>> byDateThenHour() {
+            Map<LocalDate, Map<Integer, Integer>> result = new LinkedHashMap<>();
+            for (LocalDate date : sampleDates) {
+                result.put(date, new LinkedHashMap<>());
+            }
+            for (HourCount count : hourCounts) {
+                result.computeIfAbsent(count.businessDate(), ignored -> new LinkedHashMap<>())
+                        .put(count.hourOfDay(), count.orderCount());
+            }
+            return result;
+        }
+    }
+
+    /** The tenant's ADR 0090 market — the key {@link #readPublicHolidayRules} filters by for 7.8b. */
+    public Optional<String> findTenantCountryCode(UUID tenantId) {
+        return jdbc.sql("SELECT country_code FROM tenant.tenants WHERE id = :tenantId")
+                .param("tenantId", tenantId)
+                .query(String.class)
+                .optional();
+    }
+
+    /**
+     * 7.8b: every {@code tenant.public_holidays} row (ADR 0090, V0203) for one
+     * country, for {@link HolidayCalendar#of} to build a matcher from. Reads
+     * {@code tenant.*} directly rather than through a module API, the same
+     * established crossing {@link #findTenantTimezone} and {@code
+     * JdbcBusinessCalendarStore} already make for this exact table family.
+     */
+    public List<HolidayCalendar.Rule> readPublicHolidayRules(String countryCode) {
+        return jdbc.sql("""
+                SELECT month, day, holiday_date
+                  FROM tenant.public_holidays
+                 WHERE country_code = :countryCode
+                """)
+                .param("countryCode", countryCode)
+                .query((ResultSet row, int number) -> new HolidayCalendar.Rule(
+                        row.getObject("month", Integer.class),
+                        row.getObject("day", Integer.class),
+                        row.getObject("holiday_date", LocalDate.class)))
+                .list();
+    }
 
     /** One business date's order count for one local hour-of-day (0-23) — see {@link #readDemandHistory}. */
     public record HourCount(LocalDate businessDate, int hourOfDay, int orderCount) {}
+
+    // -------------------------------------------------- forecasting (wave W02)
+
+    /**
+     * Wave W02 (7.8a): every {@code fact_order_line} quantity behind {@code
+     * sampleDates}, at (business date, operating hour, category, variant)
+     * grain — {@link ForecastService} rolls this up by category for the
+     * department breakdown and by variant for the product breakdown, from the
+     * same read, rather than two separate queries running the same join
+     * twice. Joined to {@code fact_order} for the identical {@code
+     * terminal_status = 'COMPLETED'} filter {@link #readDemandHistory} uses,
+     * on purpose — see that method's own doc on why a second definition of
+     * "an order" here would be the exact disagreement ADR 0043 exists to
+     * prevent.
+     */
+    public List<DimensionHourCount> readLineDemandByDimension(
+            UUID tenantId, UUID locationId, List<LocalDate> sampleDates, String timezone, String businessDayStart) {
+        if (sampleDates.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                SELECT l.business_date,
+                       extract(hour FROM
+                           ((l.occurred_at AT TIME ZONE :timezone) - (:businessDayStart)::interval)
+                       )::int AS hour_of_day,
+                       l.category_id, l.variant_id, max(l.product_name_snapshot) AS product_name,
+                       sum(l.quantity)::integer AS qty
+                  FROM reporting.fact_order_line l
+                  JOIN reporting.fact_order o
+                    ON o.tenant_id = l.tenant_id AND o.business_date = l.business_date AND o.order_id = l.order_id
+                 WHERE l.tenant_id = :tenantId AND l.location_id = :locationId
+                   AND o.terminal_status = 'COMPLETED'
+                   AND l.business_date IN (:sampleDates)
+                 GROUP BY l.business_date, hour_of_day, l.category_id, l.variant_id
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("timezone", timezone)
+                .param("businessDayStart", businessDayStart)
+                .param("sampleDates", sampleDates)
+                .query((ResultSet row, int number) -> new DimensionHourCount(
+                        row.getObject("business_date", LocalDate.class),
+                        row.getInt("hour_of_day"),
+                        row.getObject("category_id", UUID.class),
+                        row.getObject("variant_id", UUID.class),
+                        row.getString("product_name"),
+                        row.getInt("qty")))
+                .list();
+    }
+
+    /** One business date's product/department quantity for one operating hour — see {@link #readLineDemandByDimension}. */
+    public record DimensionHourCount(
+            LocalDate businessDate,
+            int hourOfDay,
+            @Nullable UUID categoryId,
+            @Nullable UUID variantId,
+            @Nullable String productName,
+            int quantity) {}
+
+    /**
+     * Wave W02: {@link ForecastService#backfillActuals}'s branch-level actual
+     * for one already-closed business date — the same {@code
+     * terminal_status = 'COMPLETED'}, operating-hour-shifted read {@link
+     * #readDemandHistory} uses for its own hour counts, narrowed to one date
+     * instead of a sample.
+     */
+    public List<HourCount> readActualHourCounts(
+            UUID tenantId, UUID locationId, LocalDate businessDate, String timezone, String businessDayStart) {
+        return jdbc.sql("""
+                SELECT business_date,
+                       extract(hour FROM
+                           ((occurred_at AT TIME ZONE :timezone) - (:businessDayStart)::interval)
+                       )::int AS hour_of_day,
+                       count(*) AS order_count
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND location_id = :locationId
+                   AND terminal_status = 'COMPLETED'
+                   AND business_date = :businessDate
+                 GROUP BY business_date, hour_of_day
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("businessDate", businessDate)
+                .param("timezone", timezone)
+                .param("businessDayStart", businessDayStart)
+                .query((ResultSet row, int number) -> new HourCount(
+                        row.getObject("business_date", LocalDate.class),
+                        row.getInt("hour_of_day"),
+                        row.getInt("order_count")))
+                .list();
+    }
+
+    public void insertForecastRun(ForecastRun run) {
+        jdbc.sql("""
+                INSERT INTO reporting.forecast_run (
+                    run_id, tenant_id, location_id, weekday, model_version,
+                    requested_sample_size, confidence_level, holiday_mode, generated_at)
+                VALUES (
+                    :runId, :tenantId, :locationId, :weekday, :modelVersion,
+                    :sampleSize, :confidenceLevel, :holidayMode, :generatedAt)
+                """)
+                .param("runId", run.runId())
+                .param("tenantId", run.tenantId())
+                .param("locationId", run.locationId())
+                .param("weekday", run.weekday())
+                .param("modelVersion", run.modelVersion())
+                .param("sampleSize", run.requestedSampleSize())
+                .param("confidenceLevel", run.confidenceLevel())
+                .param("holidayMode", run.holidayMode().name())
+                .param("generatedAt", utc(run.generatedAt()))
+                .update();
+    }
+
+    /** One {@code forecast_run} row — see {@link #insertForecastRun} and {@link #findForecastRun}. */
+    public record ForecastRun(
+            UUID runId,
+            UUID tenantId,
+            UUID locationId,
+            int weekday,
+            int modelVersion,
+            int requestedSampleSize,
+            double confidenceLevel,
+            HolidayMode holidayMode,
+            Instant generatedAt) {}
+
+    public Optional<UUID> findLatestForecastRunId(UUID tenantId, UUID locationId, int weekday) {
+        return jdbc.sql("""
+                SELECT run_id FROM reporting.forecast_run
+                 WHERE tenant_id = :tenantId AND location_id = :locationId AND weekday = :weekday
+                 ORDER BY generated_at DESC
+                 LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("weekday", weekday)
+                .query(UUID.class)
+                .optional();
+    }
+
+    public Optional<ForecastRun> findForecastRun(UUID tenantId, UUID runId) {
+        return jdbc.sql("""
+                SELECT run_id, tenant_id, location_id, weekday, model_version,
+                       requested_sample_size, confidence_level, holiday_mode, generated_at
+                  FROM reporting.forecast_run
+                 WHERE tenant_id = :tenantId AND run_id = :runId
+                """)
+                .param("tenantId", tenantId)
+                .param("runId", runId)
+                .query((ResultSet row, int number) -> new ForecastRun(
+                        row.getObject("run_id", UUID.class),
+                        row.getObject("tenant_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getInt("weekday"),
+                        row.getInt("model_version"),
+                        row.getInt("requested_sample_size"),
+                        row.getBigDecimal("confidence_level").doubleValue(),
+                        HolidayMode.valueOf(row.getString("holiday_mode")),
+                        requireInstant(row, "generated_at")))
+                .optional();
+    }
+
+    public void insertForecastFact(ForecastFact fact) {
+        jdbc.sql("""
+                INSERT INTO reporting.fact_forecast (
+                    id, run_id, tenant_id, location_id, business_date, operating_hour,
+                    category_id, variant_id, product_name_snapshot,
+                    forecast_quantity, confidence_low, confidence_high, sample_size)
+                VALUES (
+                    :id, :runId, :tenantId, :locationId, :businessDate, :operatingHour,
+                    :categoryId, :variantId, :productName,
+                    :forecastQuantity, :confidenceLow, :confidenceHigh, :sampleSize)
+                """)
+                .param("id", fact.id())
+                .param("runId", fact.runId())
+                .param("tenantId", fact.tenantId())
+                .param("locationId", fact.locationId())
+                .param("businessDate", fact.businessDate())
+                .param("operatingHour", fact.operatingHour())
+                .param("categoryId", fact.categoryId())
+                .param("variantId", fact.variantId())
+                .param("productName", fact.productName())
+                .param("forecastQuantity", fact.forecastQuantity())
+                .param("confidenceLow", fact.confidenceLow())
+                .param("confidenceHigh", fact.confidenceHigh())
+                .param("sampleSize", fact.sampleSize())
+                .update();
+    }
+
+    /** One {@code fact_forecast} row at write time — see {@link #insertForecastFact}. */
+    public record ForecastFact(
+            UUID id,
+            UUID runId,
+            UUID tenantId,
+            UUID locationId,
+            LocalDate businessDate,
+            int operatingHour,
+            @Nullable UUID categoryId,
+            @Nullable UUID variantId,
+            @Nullable String productName,
+            double forecastQuantity,
+            double confidenceLow,
+            double confidenceHigh,
+            int sampleSize) {}
+
+    /** Branch-level rows only (both dimensions null) for one run, ordered by hour — {@link ForecastService}'s "forecast vs actual by hour" line. */
+    public List<ForecastRow> readForecastHours(UUID tenantId, UUID runId) {
+        return readForecastRows(tenantId, runId, "category_id IS NULL AND variant_id IS NULL");
+    }
+
+    /**
+     * Every branch-level {@code fact_forecast} row across every run this
+     * (tenant, location, weekday) has ever generated, most recent business
+     * date first — the forecast-vs-actual trend {@code
+     * ReportQueryService#demandForecast} exposes. {@code limit} bounds it the
+     * same way {@code sampleSize} bounds {@code demand-history}: recent and
+     * few, never the whole run history.
+     */
+    public List<ForecastRow> readForecastComparisons(UUID tenantId, UUID locationId, int weekday, int dateLimit) {
+        return jdbc.sql("""
+                SELECT f.id, f.run_id, f.tenant_id, f.location_id, f.business_date, f.operating_hour,
+                       f.category_id, f.variant_id, f.product_name_snapshot,
+                       f.forecast_quantity, f.confidence_low, f.confidence_high, f.sample_size,
+                       f.actual_quantity, f.absolute_percentage_error
+                  FROM reporting.fact_forecast f
+                  JOIN reporting.forecast_run r ON r.run_id = f.run_id AND r.tenant_id = f.tenant_id
+                 WHERE f.tenant_id = :tenantId AND f.location_id = :locationId AND r.weekday = :weekday
+                   AND f.category_id IS NULL AND f.variant_id IS NULL
+                   AND f.business_date IN (
+                       SELECT DISTINCT f2.business_date
+                         FROM reporting.fact_forecast f2
+                         JOIN reporting.forecast_run r2 ON r2.run_id = f2.run_id AND r2.tenant_id = f2.tenant_id
+                        WHERE f2.tenant_id = :tenantId AND f2.location_id = :locationId AND r2.weekday = :weekday
+                          AND f2.category_id IS NULL AND f2.variant_id IS NULL
+                        ORDER BY f2.business_date DESC
+                        LIMIT :dateLimit
+                   )
+                 ORDER BY f.business_date DESC, f.operating_hour
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("weekday", weekday)
+                .param("dateLimit", dateLimit)
+                .query(JdbcReportingStore::forecastRow)
+                .list();
+    }
+
+    /** 7.8a: one run's department rows (category set, variant null) or product rows (variant set), by hour. */
+    public List<ForecastRow> readForecastBreakdown(UUID tenantId, UUID runId, boolean byProduct) {
+        return readForecastRows(
+                tenantId,
+                runId,
+                byProduct ? "variant_id IS NOT NULL" : "category_id IS NOT NULL AND variant_id IS NULL");
+    }
+
+    private List<ForecastRow> readForecastRows(UUID tenantId, UUID runId, String dimensionFilter) {
+        String sql = """
+                SELECT id, run_id, tenant_id, location_id, business_date, operating_hour,
+                       category_id, variant_id, product_name_snapshot,
+                       forecast_quantity, confidence_low, confidence_high, sample_size,
+                       actual_quantity, absolute_percentage_error
+                  FROM reporting.fact_forecast
+                 WHERE tenant_id = :tenantId AND run_id = :runId AND """ + " " + dimensionFilter + " ORDER BY operating_hour";
+        return jdbc.sql(sql)
+                .param("tenantId", tenantId)
+                .param("runId", runId)
+                .query(JdbcReportingStore::forecastRow)
+                .list();
+    }
+
+    private static ForecastRow forecastRow(ResultSet row, int number) throws SQLException {
+        return new ForecastRow(
+                row.getObject("id", UUID.class),
+                row.getObject("run_id", UUID.class),
+                row.getObject("location_id", UUID.class),
+                row.getObject("business_date", LocalDate.class),
+                row.getInt("operating_hour"),
+                row.getObject("category_id", UUID.class),
+                row.getObject("variant_id", UUID.class),
+                row.getString("product_name_snapshot"),
+                row.getBigDecimal("forecast_quantity").doubleValue(),
+                row.getBigDecimal("confidence_low").doubleValue(),
+                row.getBigDecimal("confidence_high").doubleValue(),
+                row.getInt("sample_size"),
+                row.getObject("actual_quantity") == null
+                        ? null
+                        : row.getBigDecimal("actual_quantity").doubleValue(),
+                row.getObject("absolute_percentage_error") == null
+                        ? null
+                        : row.getBigDecimal("absolute_percentage_error").doubleValue());
+    }
+
+    /** One read {@code fact_forecast} row, actual/error null until the forecasted date's business day closes. */
+    public record ForecastRow(
+            UUID id,
+            UUID runId,
+            UUID locationId,
+            LocalDate businessDate,
+            int operatingHour,
+            @Nullable UUID categoryId,
+            @Nullable UUID variantId,
+            @Nullable String productName,
+            double forecastQuantity,
+            double confidenceLow,
+            double confidenceHigh,
+            int sampleSize,
+            @Nullable Double actualQuantity,
+            @Nullable Double absolutePercentageError) {}
+
+    /** Wave W02: every {@code fact_forecast} row for this tenant/date still waiting on an actual — {@link ForecastService#backfillActuals}'s worklist. */
+    public List<ForecastRow> findPendingForecastRows(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT id, run_id, tenant_id, location_id, business_date, operating_hour,
+                       category_id, variant_id, product_name_snapshot,
+                       forecast_quantity, confidence_low, confidence_high, sample_size,
+                       actual_quantity, absolute_percentage_error
+                  FROM reporting.fact_forecast
+                 WHERE tenant_id = :tenantId AND business_date = :businessDate AND actual_quantity IS NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("businessDate", businessDate)
+                .query(JdbcReportingStore::forecastRow)
+                .list();
+    }
+
+    public void updateForecastActual(UUID tenantId, UUID id, double actualQuantity, double absolutePercentageError) {
+        jdbc.sql("""
+                UPDATE reporting.fact_forecast
+                   SET actual_quantity = :actual, absolute_percentage_error = :ape
+                 WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("actual", actualQuantity)
+                .param("ape", absolutePercentageError)
+                .param("tenantId", tenantId)
+                .param("id", id)
+                .update();
+    }
 
     // ------------------------------------------------ runs and divergence
 
@@ -2220,6 +3118,14 @@ public class JdbcReportingStore {
     /** Tenants the day-close heartbeat has to consider. Suspended/archived tenants stop taking orders. */
     public List<UUID> activeTenantIds() {
         return jdbc.sql("SELECT id FROM tenant.tenants WHERE status = 'ACTIVE' ORDER BY id")
+                .query(UUID.class)
+                .list();
+    }
+
+    /** Wave W02: which locations {@link ForecastScheduler} generates a forecast for — reads {@code tenant.*} directly, the established crossing {@link #findTenantTimezone} already makes. */
+    public List<UUID> activeLocationIds(UUID tenantId) {
+        return jdbc.sql("SELECT id FROM tenant.locations WHERE tenant_id = :tenantId AND status = 'ACTIVE' ORDER BY id")
+                .param("tenantId", tenantId)
                 .query(UUID.class)
                 .list();
     }

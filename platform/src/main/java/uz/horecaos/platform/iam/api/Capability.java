@@ -1246,6 +1246,58 @@ public enum Capability {
     REPORTING_READ("reporting.read", "reporting", "read"),
 
     /**
+     * ADR 0043/ADR 0029, wave P28: taking a report's rows out of the console
+     * as an Excel/CSV file -- the export centre's own job, {@code POST
+     * .../reporting/exports} and {@code GET .../reporting/reports/{id}}.
+     *
+     * <p>Separate from {@link #REPORTING_READ}: reading a report on screen
+     * and carrying its rows out of the building are different acts, and ADR
+     * 0043 names the second as the one that ships "last, deliberately,
+     * behind capabilities and an audited job queue" -- the audited queue
+     * this capability now gates is {@code reporting.report_exports}.
+     * Holding it alone yields every non-PII column a report defines; the
+     * PII column group additionally needs {@link #CUSTOMER_PII_EXPORT}, so
+     * a principal who can export a report but not reveal a customer's
+     * contact details gets a file with that group silently omitted rather
+     * than a refusal -- ReportExportService computes the omission at
+     * request time from exactly this pair of checks.
+     */
+    REPORT_EXPORT("report.export", "report", "export"),
+
+    /**
+     * ADR 0043/ADR 0029, wave P28: additionally including a report export's
+     * PII column group -- {@link #REPORT_EXPORT} alone omits it.
+     *
+     * <p>Modelled on {@link #CUSTOMER_PII_REVEAL} and held the same narrow
+     * way {@link #AUDIENCE_EXPORT} is: a report export is a bulk read over
+     * however many rows a filter matches, not one customer's own record, so
+     * the same "an unrestricted download of the customer base is how a
+     * tenant's list ends up on a competitor's desk" argument applies at
+     * least as strongly here. Distinct from {@code CUSTOMER_PII_REVEAL}
+     * itself -- that capability opens one customer's own contact details on
+     * a support screen; this one lets a bulk export carry that column for
+     * however many customers a filter selects, which is the different
+     * blast radius {@link #AUDIENCE_EXPORT}'s own doc already draws against
+     * {@link #AUDIENCE_READ}.
+     */
+    CUSTOMER_PII_EXPORT("customer.pii.export", "customer", "pii-export"),
+
+    /**
+     * T14 (7.7a/7.7b), ADR 0134: starting a persisted ABC/XYZ classification
+     * run over the product report.
+     *
+     * <p>Its own capability rather than a use of {@link #REPORTING_READ}
+     * because a run is not a read: it writes {@code reporting.classification_run}
+     * and {@code classification_result} rows, and the window and thresholds
+     * those rows record are exactly what a manager points to when a product's
+     * class-C ruling is disputed — statistics.md S2.7's stated improvement
+     * over Delever, which shows only a class letter and nothing to check it
+     * against. Reusing {@code reporting.read} here would let every reader
+     * mint a new disputable record just by opening a tab.
+     */
+    REPORTING_CLASSIFICATION_RUN("reporting.classification.run", "reporting", "classification.run"),
+
+    /**
      * ADR 0043: recording finance's signature over a metric definition version.
      *
      * <p>Platform-scoped and never composed into a tenant role. A signature is

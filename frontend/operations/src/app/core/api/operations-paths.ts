@@ -104,6 +104,17 @@ export const operationsPaths = {
     return `${OPERATIONS}${tenantBrand(scope)}/orders/counts`;
   },
 
+  /**
+   * IA 0.2a (wave T01): the caller's own orders today, by sales channel —
+   * `MyWorkQueryService`, self-scoped server-side by the token's own subject.
+   * No `actorId` query param is ever built here: the one this endpoint
+   * accepts exists only to be refused if it ever names anyone else, and this
+   * console never asks for anyone else's.
+   */
+  myWorkChannelMix(scope: LocationScope): string {
+    return `${this.orders(scope)}/my-work/channel-mix`;
+  },
+
   /** Carts started and never converted (IA 1.4, orders.md §6). Query params: `from`, `to`, `channelId`. */
   orderDrafts(scope: LocationScope): string {
     return `${this.orders(scope)}/drafts`;
@@ -557,6 +568,33 @@ export const operationsPaths = {
   /** Why a `MANUAL_ACTION_REQUIRED` plan needs a human (§3.1). Read, same capability as {@link operationsPaths.dispatchQueue}. */
   dispatchExceptions(scope: LocationScope, planId: string): string {
     return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/plans/${encodeURIComponent(planId)}/exceptions`;
+  },
+
+  /**
+   * Every external courier partner this branch has configured (`DispatchController
+   * .externalPartners`, wave P44, gap map row 1.2f) — the picker behind «Вызвать курьера».
+   */
+  dispatchExternalPartners(scope: LocationScope, planId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/plans/${encodeURIComponent(planId)}/external-partners`;
+  },
+
+  /** A non-binding price from one partner, against the customer's own fee. Mutation: key required. */
+  dispatchExternalQuote(scope: LocationScope, planId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/plans/${encodeURIComponent(planId)}/external-quote`;
+  },
+
+  /** Accept or abandon a quoted external booking. Mutation: key required. */
+  dispatchExternalBook(scope: LocationScope, planId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/plans/${encodeURIComponent(planId)}/external-book`;
+  },
+
+  /**
+   * The dedicated, provider-notifying shipment cancel (`Capability.SHIPMENT_CANCEL`,
+   * wave P44, gap map row 1.2g) — distinct from {@link operationsPaths.dispatchUnassign},
+   * which never tells a PARTNER shipment's provider anything. Mutation: key required.
+   */
+  dispatchShipmentCancel(scope: LocationScope, shipmentId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/dispatch/shipments/${encodeURIComponent(shipmentId)}/cancel`;
   },
 
   /**

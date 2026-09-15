@@ -1,0 +1,84 @@
+<div class="my-work" data-testid="my-work-page">
+  <h1 class="q-title">{{ 'myWork.title' | t }}</h1>
+  <p class="q-body-sm my-work__subtitle">{{ 'myWork.subtitle' | t }}</p>
+
+  @switch (pageState()) {
+    @case ('loading') {
+      <p class="q-body-sm my-work__notice" data-testid="my-work-loading">
+        {{ 'myWork.loading' | t }}
+      </p>
+    }
+    @case ('denied') {
+      <q-denied-state capability="ORDER_READ" data-testid="my-work-denied" />
+    }
+    @case ('error') {
+      <p class="q-body-sm my-work__notice" role="alert" data-testid="my-work-error">
+        {{ 'myWork.error' | t }}
+      </p>
+    }
+    @case ('ready') {
+      <section class="my-work__band" data-testid="my-work-channel-band">
+        <h2 class="q-subhead">{{ 'myWork.channel.title' | t }}</h2>
+        @if (periodLabel(); as label) {
+          <p class="q-caption my-work__period" data-testid="my-work-channel-period">{{ label }}</p>
+        }
+        @switch (channelState()) {
+          @case ('loading') {
+            <p class="q-body-sm my-work__notice">{{ 'myWork.loading' | t }}</p>
+          }
+          @case ('denied') {
+            <q-denied-state capability="ORDER_READ" data-testid="my-work-channel-denied" />
+          }
+          @case ('error') {
+            <p class="q-body-sm my-work__notice" role="alert">{{ 'myWork.error' | t }}</p>
+          }
+          @case ('ready') {
+            @if (channelItems().length === 0) {
+              <p class="q-body-sm my-work__empty" data-testid="my-work-channel-empty">
+                {{ 'myWork.channel.empty' | t }}
+              </p>
+            } @else {
+              <q-bar-chart
+                [items]="channelItems()"
+                [ariaLabel]="'myWork.channel.title' | t"
+                scale="total"
+              />
+            }
+          }
+        }
+      </section>
+
+      <section class="my-work__band" data-testid="my-work-payment-band">
+        <h2 class="q-subhead">{{ 'myWork.payment.title' | t }}</h2>
+        @switch (paymentState()) {
+          @case ('loading') {
+            <p class="q-body-sm my-work__notice">{{ 'myWork.loading' | t }}</p>
+          }
+          @case ('denied') {
+            <q-denied-state capability="REPORTING_READ" data-testid="my-work-payment-denied" />
+          }
+          @case ('error') {
+            <p class="q-body-sm my-work__notice" role="alert">{{ 'myWork.error' | t }}</p>
+          }
+          @case ('ready') {
+            @if (paymentItems().length === 0) {
+              <p class="q-body-sm my-work__empty" data-testid="my-work-payment-empty">
+                {{ 'myWork.payment.empty' | t }}
+              </p>
+            } @else {
+              <q-donut-chart
+                [segments]="paymentItems()"
+                [ariaLabel]="'myWork.payment.title' | t"
+                [centerLabel]="paymentTotalDisplay()"
+              />
+            }
+          }
+        }
+      </section>
+
+      <section class="my-work__band" data-testid="my-work-locked-band">
+        <q-locked-state titleKey="myWork.locked.title" askKey="myWork.locked.ask" />
+      </section>
+    }
+  }
+</div>

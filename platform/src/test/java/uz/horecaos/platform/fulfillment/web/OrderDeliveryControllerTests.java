@@ -29,6 +29,7 @@ import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryPlan;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySubsidyBearer;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmentStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryCostSubsidyStore;
+import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryExceptionStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDispatchBranchStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcSourcingJobStore;
@@ -110,7 +111,8 @@ class OrderDeliveryControllerTests {
         planStore = new JdbcDeliveryPlanStore(jdbc);
         assignments = new JdbcAssignmentStore(jdbc);
         subsidies = new JdbcDeliveryCostSubsidyStore(jdbc);
-        controller = new OrderDeliveryController(planStore, assignments, subsidies);
+        controller =
+                new OrderDeliveryController(planStore, assignments, subsidies, new JdbcDeliveryExceptionStore(jdbc));
 
         seedTenancy();
         planning = new DeliveryPlanningService(

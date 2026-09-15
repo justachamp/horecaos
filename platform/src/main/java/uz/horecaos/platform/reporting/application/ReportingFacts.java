@@ -196,7 +196,28 @@ public final class ReportingFacts {
         }
     }
 
-    /** One order line, for the product cuts. */
+    /**
+     * One order line, for the product cuts.
+     *
+     * @param occurredAt     wave W02 (7.8a): the line's own order's {@code
+     *                       occurred_at}, copied rather than joined so a line
+     *                       can be bucketed by operating-day hour without a
+     *                       read back to {@code fact_order}
+     * @param categoryId     wave W02: resolved from {@code catalog.variants}
+     *                       via {@code catalog.category_products} at close
+     *                       time — see {@code JdbcReportingStore#readSourceLines}'s
+     *                       own doc for the tie-break when a product carries
+     *                       more than one category. Null when the variant has
+     *                       none
+     * @param legalEntityId  ADR 0038 (V0370, batch 6 review): the line's own
+     *                       order's {@code legal_entity_id}, copied the same
+     *                       way {@code occurredAt} is so {@code
+     *                       ProductClassificationService} can filter or refuse
+     *                       revenue.gross.v1 by legal entity without a read
+     *                       back to {@code fact_order}. Null means no fiscal
+     *                       identity was recorded on the order, its own group,
+     *                       never folded into a real entity
+     */
     public record OrderLineFact(
             UUID tenantId,
             LocalDate businessDate,
@@ -209,7 +230,9 @@ public final class ReportingFacts {
             int quantity,
             long grossSom,
             long discountSom,
-            long netSom) {}
+            long netSom,
+            Instant occurredAt,
+            @Nullable UUID legalEntityId) {}
 
     /**
      * The slice a branch-day aggregate is keyed by.

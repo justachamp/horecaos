@@ -89,7 +89,8 @@ class VariantSalesReportingTests {
         insertLine(TENANT, orderTwo, LOCATION_A, VARIANT_PIZZA, 1, 40_000L, 40_000L);
         insertLine(TENANT, orderTwo, LOCATION_A, VARIANT_SALAD, 3, 60_000L, 54_000L);
 
-        List<JdbcReportingStore.VariantSalesRow> rows = store.readVariantSales(TENANT, DAY, DAY, List.of(), 100);
+        List<JdbcReportingStore.VariantSalesRow> rows =
+                store.readVariantSales(TENANT, DAY, DAY, List.of(), List.of(), 100);
 
         assertThat(rows)
                 .extracting(JdbcReportingStore.VariantSalesRow::variantId)
@@ -117,7 +118,7 @@ class VariantSalesReportingTests {
         insertLine(TENANT, orderB, LOCATION_B, VARIANT_SALAD, 1, 20_000L, 20_000L);
 
         List<JdbcReportingStore.VariantSalesRow> rows =
-                store.readVariantSales(TENANT, DAY, DAY, List.of(LOCATION_A), 100);
+                store.readVariantSales(TENANT, DAY, DAY, List.of(LOCATION_A), List.of(), 100);
 
         assertThat(rows)
                 .extracting(JdbcReportingStore.VariantSalesRow::variantId)
@@ -131,10 +132,41 @@ class VariantSalesReportingTests {
         UUID theirs = insertOrder(OTHER_TENANT, "THEIRS", LOCATION_A, "DELIVERY");
         insertLine(OTHER_TENANT, theirs, LOCATION_A, VARIANT_PIZZA, 5, 200_000L, 200_000L);
 
-        List<JdbcReportingStore.VariantSalesRow> rows = store.readVariantSales(TENANT, DAY, DAY, List.of(), 100);
+        List<JdbcReportingStore.VariantSalesRow> rows =
+                store.readVariantSales(TENANT, DAY, DAY, List.of(), List.of(), 100);
 
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0).totalQuantity()).isEqualTo(1);
+    }
+
+    /**
+     * Wave T14 (7.7): the filter bar's fulfilment control used to be accepted
+     * and ignored. A DINE_IN order has no delivery or pickup column of its
+     * own (statistics.md's disclosed gap), so proving the filter actually
+     * narrows the query is the only way to see it take effect at all.
+     */
+    @Test
+    void fulfilmentTypeFilterNarrowsTheLinesConsideredIncludingTheTotals() {
+        UUID delivery = insertOrder(TENANT, "FUL-DELIVERY", LOCATION_A, "DELIVERY");
+        insertLine(TENANT, delivery, LOCATION_A, VARIANT_PIZZA, 2, 80_000L, 80_000L);
+        UUID dineIn = insertOrder(TENANT, "FUL-DINEIN", LOCATION_A, "DINE_IN");
+        insertLine(TENANT, dineIn, LOCATION_A, VARIANT_PIZZA, 5, 200_000L, 200_000L);
+
+        List<JdbcReportingStore.VariantSalesRow> unfiltered =
+                store.readVariantSales(TENANT, DAY, DAY, List.of(), List.of(), 100);
+        assertThat(unfiltered.get(0).totalQuantity())
+                .as("DINE_IN sums into the total though it has no split column of its own")
+                .isEqualTo(7);
+
+        List<JdbcReportingStore.VariantSalesRow> deliveryOnly =
+                store.readVariantSales(TENANT, DAY, DAY, List.of(), List.of("DELIVERY"), 100);
+        assertThat(deliveryOnly).hasSize(1);
+        assertThat(deliveryOnly.get(0).totalQuantity()).isEqualTo(2);
+
+        List<JdbcReportingStore.VariantSalesRow> dineInOnly =
+                store.readVariantSales(TENANT, DAY, DAY, List.of(), List.of("DINE_IN"), 100);
+        assertThat(dineInOnly).hasSize(1);
+        assertThat(dineInOnly.get(0).totalQuantity()).isEqualTo(5);
     }
 
     @Test
@@ -143,11 +175,11 @@ class VariantSalesReportingTests {
         insertLine(TENANT, order, LOCATION_A, VARIANT_PIZZA, 1, 40_000L, 40_000L);
         insertLine(TENANT, order, LOCATION_A, VARIANT_SALAD, 1, 20_000L, 20_000L);
 
-        var full = queries.variantSales(TENANT, DAY, DAY, List.of(), 1);
+        var full = queries.variantSales(TENANT, DAY, DAY, List.of(), List.of(), 1);
         assertThat(full.rows()).hasSize(1);
         assertThat(full.maybeMore()).isTrue();
 
-        var all = queries.variantSales(TENANT, DAY, DAY, List.of(), 100);
+        var all = queries.variantSales(TENANT, DAY, DAY, List.of(), List.of(), 100);
         assertThat(all.rows()).hasSize(2);
         assertThat(all.maybeMore()).isFalse();
         assertThat(all.provenance().timezone()).isEqualTo("Asia/Tashkent");
@@ -204,10 +236,10 @@ class VariantSalesReportingTests {
         jdbc.sql("""
                 INSERT INTO reporting.fact_order_line (
                     tenant_id, business_date, order_id, line_id, location_id, variant_id, category_id,
-                    product_name_snapshot, quantity, gross_som, discount_som, net_som)
+                    product_name_snapshot, quantity, gross_som, discount_som, net_som, occurred_at)
                 VALUES (
                     :tenantId, :businessDate, :orderId, :lineId, :locationId, :variantId, :categoryId,
-                    :productName, :quantity, :gross, :discount, :net)
+                    :productName, :quantity, :gross, :discount, :net, :occurredAt)
                 """)
                 .param("tenantId", tenantId)
                 .param("businessDate", DAY)
@@ -221,6 +253,11 @@ class VariantSalesReportingTests {
                 .param("gross", grossSom)
                 .param("discount", grossSom - netSom)
                 .param("net", netSom)
+                // Matches insertOrder's own occurred_at for the sibling
+                // fact_order row (the sample here is a fixed order-of-day, not
+                // order-specific), the (business_date, order_id) pairing the
+                // wave W02 backfill migration joins on.
+                .param("occurredAt", DAY.atTime(9, 0).minusHours(5).atOffset(ZoneOffset.UTC))
                 .update();
     }
 

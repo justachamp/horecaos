@@ -1,4 +1,5 @@
 import { MessageKey } from '../../core/i18n/messages.en';
+import { DeliveryCancellationOutcome } from './order-actions-api';
 import {
   CustomerRefund,
   LiabilityParty,
@@ -89,5 +90,60 @@ export function outcomeSystemCategoryLabel(value: string, translate: Translate):
 
 export function outcomeKindLabel(value: string, translate: Translate): string {
   const key = OUTCOME_KIND_LABEL_KEYS[value];
+  return key ? translate(key) : value;
+}
+
+/**
+ * `ShipmentCancellationPort.Result` (gap map row 1.2g) — what the cascade
+ * found out about the courier provider the instant an order was cancelled.
+ * `NOTHING_TO_CANCEL` and `PLAN_CANCELLED` have no key at all: neither is a
+ * fact about a courier, so both render nothing rather than an empty notice.
+ */
+const DELIVERY_CANCELLATION_OUTCOME_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
+  INTERNAL_CANCELLED: 'orders.detail.delivery.cancelOutcome.INTERNAL_CANCELLED',
+  PROVIDER_CANCELLED: 'orders.detail.delivery.cancelOutcome.PROVIDER_CANCELLED',
+  PROVIDER_CANCELLED_CHARGEABLE:
+    'orders.detail.delivery.cancelOutcome.PROVIDER_CANCELLED_CHARGEABLE',
+  PROVIDER_UNCERTAIN: 'orders.detail.delivery.cancelOutcome.PROVIDER_UNCERTAIN',
+  PROVIDER_FAILED: 'orders.detail.delivery.cancelOutcome.PROVIDER_FAILED',
+};
+
+/**
+ * The text the cancel dialog's own notice band shows once the cascade
+ * settles (gap map row 1.2g) — `null` when the order never had a courier to
+ * tell in the first place, which is the ordinary case for a pickup or
+ * dine-in order.
+ */
+export function deliveryCancellationOutcomeText(
+  outcome: DeliveryCancellationOutcome | null | undefined,
+  translate: Translate,
+): string | null {
+  if (!outcome) {
+    return null;
+  }
+  const key = DELIVERY_CANCELLATION_OUTCOME_LABEL_KEYS[outcome.outcome];
+  return key ? translate(key) : null;
+}
+
+/**
+ * `DeliveryExceptionReason` (ADR 0014) — the delivery-exception band's own
+ * reason label (gap map rows 1.2f/1.2g). A reason this client does not
+ * recognise yet renders as its own raw value, never a blank cell.
+ */
+const DELIVERY_EXCEPTION_REASON_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
+  NO_PROVIDER: 'orders.detail.delivery.exceptionReason.NO_PROVIDER',
+  LATE_ASSIGNMENT: 'orders.detail.delivery.exceptionReason.LATE_ASSIGNMENT',
+  PROMISE_UNREACHABLE: 'orders.detail.delivery.exceptionReason.PROMISE_UNREACHABLE',
+  AWAITING_RECONCILIATION: 'orders.detail.delivery.exceptionReason.AWAITING_RECONCILIATION',
+  ABANDONED_HOLD: 'orders.detail.delivery.exceptionReason.ABANDONED_HOLD',
+  LATE_RESTAURANT: 'orders.detail.delivery.exceptionReason.LATE_RESTAURANT',
+  COURIER_NO_SHOW: 'orders.detail.delivery.exceptionReason.COURIER_NO_SHOW',
+  ADDRESS_ISSUE: 'orders.detail.delivery.exceptionReason.ADDRESS_ISSUE',
+  PROVIDER_CANCEL_UNCERTAIN: 'orders.detail.delivery.exceptionReason.PROVIDER_CANCEL_UNCERTAIN',
+  PROVIDER_CANCEL_FAILED: 'orders.detail.delivery.exceptionReason.PROVIDER_CANCEL_FAILED',
+};
+
+export function deliveryExceptionReasonLabel(value: string, translate: Translate): string {
+  const key = DELIVERY_EXCEPTION_REASON_LABEL_KEYS[value];
   return key ? translate(key) : value;
 }

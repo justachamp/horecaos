@@ -21,6 +21,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
+import uz.horecaos.platform.reporting.domain.BusinessDayBoundary;
+import uz.horecaos.platform.reporting.domain.HolidayCalendar;
+import uz.horecaos.platform.reporting.domain.HolidayMode;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
 import uz.horecaos.platform.support.TestDatabase;
 
@@ -249,6 +252,112 @@ class DemandHistoryReportingTests {
         assertThat(result.provenance().timezone()).isEqualTo("Asia/Tashkent");
     }
 
+    // -------------------------------------------------- wave W02: operating-day hour axis
+
+    /**
+     * A 09:00 boundary: 08:59 Tashkent is still yesterday's business date, so
+     * an order at 08:45 has to land in operating hour 23 (the last hour
+     * before the next start), never wall-clock hour 8 — 7.8's own named gap
+     * ("the hour axis is wall-clock 00:00-24:00 rather than the operating-day
+     * window that may cross midnight").
+     */
+    @Test
+    void hourOfDayIsOperatingDayRelativeNotWallClockUnderANonMidnightBoundary() {
+        BusinessDayBoundary nineAm = new BusinessDayBoundary(TASHKENT, java.time.LocalTime.of(9, 0), 1);
+        store.upsertBoundary(TENANT, nineAm, TUE8.minusYears(1), null);
+
+        insertOrderAt(
+                TENANT, LOCATION_A, TUE8, TUE8.atTime(9, 15).atZone(TASHKENT).toInstant(), "COMPLETED");
+        insertOrderAt(
+                TENANT, LOCATION_A, TUE8, TUE8.atTime(8, 45).atZone(TASHKENT).toInstant(), "COMPLETED");
+
+        JdbcReportingStore.DemandSample sample = store.readDemandHistory(
+                TENANT,
+                LOCATION_A,
+                TUESDAY,
+                LocalDate.of(2020, 1, 1),
+                LocalDate.of(2030, 1, 1),
+                "Asia/Tashkent",
+                "09:00:00",
+                4,
+                HolidayMode.INCLUDE,
+                HolidayCalendar.EMPTY);
+
+        Map<Integer, Integer> hours = hourCountsFor(sample, TUE8);
+        assertThat(hours)
+                .containsEntry(0, 1)
+                .containsEntry(23, 1)
+                .doesNotContainKey(9)
+                .doesNotContainKey(8);
+    }
+
+    /** A midnight boundary (the platform default, and every other test in this class) leaves operating hour identical to wall-clock hour — the property the shift must not break. */
+    @Test
+    void hourOfDayIsUnchangedFromWallClockUnderTheDefaultMidnightBoundary() {
+        insertOrder(TENANT, LOCATION_A, TUE8, 14, "COMPLETED");
+
+        JdbcReportingStore.DemandSample sample = readAllHistory(TENANT, LOCATION_A, TUESDAY, 4);
+
+        assertThat(hourCountsFor(sample, TUE8)).containsEntry(14, 1);
+    }
+
+    // ----------------------------------------------------------- wave W02 (7.8b): holidays
+
+    /** ISO-8601: Saturday = 6. Four consecutive Saturdays where the newest, 2026-03-21, is Navruz (V0203's seeded UZ holiday, month=3 day=21) — hand-verified with the platform's own `date` binary before writing this file. */
+    private static final int SATURDAY = 6;
+
+    private static final LocalDate SAT_OLDEST = LocalDate.of(2026, 2, 21);
+    private static final LocalDate SAT_2 = LocalDate.of(2026, 2, 28);
+    private static final LocalDate SAT_3 = LocalDate.of(2026, 3, 7);
+    private static final LocalDate SAT_4 = LocalDate.of(2026, 3, 14);
+    private static final LocalDate NAVRUZ_SATURDAY = LocalDate.of(2026, 3, 21);
+
+    private void seedFourHolidayAwareSaturdays() {
+        insertOrders(TENANT, LOCATION_A, SAT_OLDEST, 12, 10, "COMPLETED");
+        insertOrders(TENANT, LOCATION_A, SAT_2, 12, 10, "COMPLETED");
+        insertOrders(TENANT, LOCATION_A, SAT_3, 12, 10, "COMPLETED");
+        insertOrders(TENANT, LOCATION_A, SAT_4, 12, 10, "COMPLETED");
+        insertOrders(TENANT, LOCATION_A, NAVRUZ_SATURDAY, 12, 2, "COMPLETED");
+    }
+
+    @Test
+    void navruzIsFlaggedInHolidayDatesUnderIncludeAndStillCountsFully() {
+        seedFourHolidayAwareSaturdays();
+
+        var result = queries.demandHistory(TENANT, LOCATION_A, SATURDAY, 4);
+
+        assertThat(result.sampleDates()).containsExactly(NAVRUZ_SATURDAY, SAT_4, SAT_3, SAT_2);
+        assertThat(result.holidayDates()).containsExactly(NAVRUZ_SATURDAY);
+        assertThat(result.holidayMode()).isEqualTo(HolidayMode.INCLUDE);
+        // (10 + 10 + 10 + 2) / 4 — every date counts fully under INCLUDE.
+        assertThat(result.hours().get(12).averageOrders()).isEqualTo(8.0);
+    }
+
+    @Test
+    void excludeDropsNavruzFromTheSampleAndAnOlderSaturdayFillsTheSlot() {
+        seedFourHolidayAwareSaturdays();
+
+        var result = queries.demandHistory(TENANT, LOCATION_A, SATURDAY, 4, HolidayMode.EXCLUDE);
+
+        assertThat(result.sampleDates()).containsExactly(SAT_4, SAT_3, SAT_2, SAT_OLDEST);
+        assertThat(result.sampleDates()).doesNotContain(NAVRUZ_SATURDAY);
+        assertThat(result.holidayDates()).isEmpty();
+        // (10 + 10 + 10 + 10) / 4 — Navruz never entered the sample at all.
+        assertThat(result.hours().get(12).averageOrders()).isEqualTo(10.0);
+    }
+
+    @Test
+    void weightCountsNavruzAtHalfWeightRatherThanDroppingOrIncludingItFully() {
+        seedFourHolidayAwareSaturdays();
+
+        var result = queries.demandHistory(TENANT, LOCATION_A, SATURDAY, 4, HolidayMode.WEIGHT);
+
+        assertThat(result.sampleDates()).containsExactly(NAVRUZ_SATURDAY, SAT_4, SAT_3, SAT_2);
+        assertThat(result.holidayDates()).containsExactly(NAVRUZ_SATURDAY);
+        // (10 + 10 + 10 + 2*0.5) / (1 + 1 + 1 + 0.5) = 31 / 3.5.
+        assertThat(result.hours().get(12).averageOrders()).isEqualTo(31.0 / 3.5);
+    }
+
     // ----------------------------------------------------------------- fixtures
 
     private JdbcReportingStore.DemandSample readAllHistory(
@@ -260,7 +369,10 @@ class DemandHistoryReportingTests {
                 LocalDate.of(2020, 1, 1),
                 LocalDate.of(2030, 1, 1),
                 "Asia/Tashkent",
-                sampleSize);
+                "00:00:00",
+                sampleSize,
+                HolidayMode.INCLUDE,
+                HolidayCalendar.EMPTY);
     }
 
     private static Map<Integer, Integer> hourCountsFor(JdbcReportingStore.DemandSample sample, LocalDate date) {

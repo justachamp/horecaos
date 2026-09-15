@@ -227,6 +227,20 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.dialog.note.save': 'Saqlash',
   'orders.dialog.amendMenu.title': 'Nimani oʻzgartirmoqchisiz?',
 
+  // Tashqi kuryer chaqirishda narx tasdigʻi (boʻshliqlar xaritasi 1.2f, P44 toʻlqini).
+  'orders.dialog.externalCourier.title': 'Tashqi kuryer chaqirish',
+  'orders.dialog.externalCourier.noPartners': 'Bu filial uchun kuryerlik xizmati sozlanmagan.',
+  'orders.dialog.externalCourier.partner': 'Kuryerlik xizmati',
+  'orders.dialog.externalCourier.getQuote': 'Narxni bilish',
+  'orders.dialog.externalCourier.customerFee': 'Mijozdan olinadigan yetkazish narxi',
+  'orders.dialog.externalCourier.providerPrice': 'Kuryer narxi',
+  'orders.dialog.externalCourier.delta': 'Mijoz narxidan oshib ketgan summa',
+  'orders.dialog.externalCourier.acknowledge':
+    'Oshib ketgan summani filial toʻlashini tasdiqlayman.',
+  'orders.dialog.externalCourier.unavailable': 'Bu kuryerlik xizmati marshrut narxini bera olmadi.',
+  'orders.dialog.externalCourier.abandon': 'Bu narxdan voz kechish',
+  'orders.dialog.externalCourier.accept': 'Shu kuryerni buyurtma qilish',
+
   'orders.dialog.outcome.stockDisposition.RELEASE': 'Rezerv boʻshatildi',
   'orders.dialog.outcome.stockDisposition.RETURN_TO_STOCK': 'Omborga qaytarildi',
   'orders.dialog.outcome.stockDisposition.WRITE_OFF': 'Hisobdan chiqarildi',
@@ -269,6 +283,34 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.money.deliveryProvider': 'Yetkazish (provayderdan)',
   'orders.detail.money.deliveryProviderUnknown': 'kuzatilmagan',
   'orders.detail.money.deliveryMargin': 'Yetkazish marjasi',
+
+  // Yetkazishdagi istisnolar bandi (boʻshliqlar xaritasi 1.2f/1.2g, P44 toʻlqini).
+  'orders.detail.delivery.exceptionReason.NO_PROVIDER': 'Mavjud kuryerlik xizmati yoʻq',
+  'orders.detail.delivery.exceptionReason.LATE_ASSIGNMENT': 'Kuryer vaqtida tayinlanmadi',
+  'orders.detail.delivery.exceptionReason.PROMISE_UNREACHABLE':
+    'Vaʻda qilingan yetkazish vaqtiga endi erishib boʻlmaydi',
+  'orders.detail.delivery.exceptionReason.AWAITING_RECONCILIATION':
+    'Bron natijasi tasdiqlanmagan — xizmatdan aniqlang',
+  'orders.detail.delivery.exceptionReason.ABANDONED_HOLD':
+    'Provayderdagi rezerv na tasdiqlanmagan, na bekor qilingan',
+  'orders.detail.delivery.exceptionReason.LATE_RESTAURANT': 'Oshxona kechikdi',
+  'orders.detail.delivery.exceptionReason.COURIER_NO_SHOW': 'Kuryer kelmadi',
+  'orders.detail.delivery.exceptionReason.ADDRESS_ISSUE': 'Yetkazish manzilini aniqlab boʻlmadi',
+  'orders.detail.delivery.exceptionReason.PROVIDER_CANCEL_UNCERTAIN':
+    'Kuryerdagi bekor qilish tasdiqlanmagan — qoʻlda tekshiring',
+  'orders.detail.delivery.exceptionReason.PROVIDER_CANCEL_FAILED':
+    'Kuryer mavjud emas yoki bekor qilishdan bosh tortdi — qoʻlda tekshiring',
+
+  // Buyurtmani bekor qilish oynasidagi kuryerdagi bekor qilish natijasi (boʻshliqlar xaritasi 1.2g, P44 toʻlqini).
+  'orders.detail.delivery.cancelOutcome.INTERNAL_CANCELLED': 'Kuryer buyurtmadan olib tashlandi.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_CANCELLED':
+    'Kuryerlik xizmati bekor qilishni tasdiqladi — bepul.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_CANCELLED_CHARGEABLE':
+    'Kuryerlik xizmati bekor qilishni tasdiqladi, lekin bu pullik.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_UNCERTAIN':
+    'Kuryerlik xizmatidagi bekor qilish tasdiqlanmagan — qoʻlda tekshiring.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_FAILED':
+    'Kuryerlik xizmati bekor qilishdan bosh tortdi yoki mavjud emas — qoʻlda tekshiring.',
 
   'orders.detail.customer.name': 'Ism',
   'orders.detail.customer.guest': 'Mehmon',
@@ -431,6 +473,22 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.handover.bypassReason': 'Sabab',
   'orders.detail.handover.bypassSupervisor': 'Supervayzer F.I.Sh.',
   'orders.detail.handover.bypassConfirm': 'Qoʻlda tasdiqlashni yakunlash',
+
+  'orders.detail.section.payment': 'Toʻlov',
+  'orders.detail.payment.error': 'Toʻlov maʻlumotlarini yuklab boʻlmadi',
+  'orders.detail.payment.denied': 'Toʻlov maʻlumotlariga kirish huquqi yoʻq',
+
+  'orders.detail.section.fiscal': 'Fiskal cheklar',
+  'orders.detail.fiscal.error': 'Fiskal hujjatlarni yuklab boʻlmadi',
+  'orders.detail.fiscal.denied': 'Fiskal hujjatlarga kirish huquqi yoʻq',
+  'orders.detail.fiscal.action.retry.result': 'Natija: {outcome}',
+  'orders.detail.fiscal.outcome.ISSUED': 'Chek chiqarildi',
+  'orders.detail.fiscal.outcome.ALREADY_ISSUED': 'Chek allaqachon mavjud edi',
+  'orders.detail.fiscal.outcome.REJECTED': 'Provayder soʻrovni rad etdi',
+  'orders.detail.fiscal.outcome.UNCERTAIN': 'Provayder javob bermadi',
+  'orders.detail.fiscal.outcome.NO_PROVIDER_PATH':
+    'Bu toʻlovni provayder orqali fiskallashtirib boʻlmaydi',
+  'orders.detail.fiscal.outcome.NOT_WIRED': 'Provayder ulanmagan',
 
   'orders.severity.blocked': 'aralashuv talab qilinadi',
   'orders.severity.approvalDeadline': '{mmss} ichida tasdiqlang',
@@ -1565,6 +1623,13 @@ export const messagesUzLatn: MessageCatalogue = {
   'finance.paymentAttemptStatus.FAILED': 'Amalga oshmadi',
   'finance.paymentAttemptStatus.UNCERTAIN': 'Nomaʻlum — provayder javob bermadi',
 
+  'finance.fiscalDocumentStatus.NOT_APPLICABLE': 'Talab qilinmaydi',
+  'finance.fiscalDocumentStatus.PENDING': 'Kutilmoqda',
+  'finance.fiscalDocumentStatus.SUBMITTED': 'Yuborilgan',
+  'finance.fiscalDocumentStatus.ISSUED': 'Berilgan',
+  'finance.fiscalDocumentStatus.FAILED': 'Rad etilgan',
+  'finance.fiscalDocumentStatus.BLOCKED': 'Bloklangan',
+
   'finance.entitlementScope.SUBTOTAL': 'Buyurtma summasi',
   'finance.entitlementScope.DELIVERY_FEE': 'Yetkazib berish narxi',
   'finance.entitlementScope.BOTH': 'Ikkalasiga ham',
@@ -2096,6 +2161,21 @@ export const messagesUzLatn: MessageCatalogue = {
   'today.operators.title': 'Operatorlar',
   'today.operators.notBuilt':
     'Xodimlar spravochnikasi bilan birga paydo boʻladi (IA 9.2, hali qurilmagan) — bugun buyurtmani qabul qilgan shaxsni ism bilan bogʻlash imkoni yoʻq.',
+
+  // ---- IA 0.2 Mening ishim (my-work-page.ts) — T01 toʻlqini ----
+  'myWork.title': 'Mening ishim',
+  'myWork.subtitle':
+    'Ushbu filialdagi shaxsiy buyurtmalaringiz va tushumingiz — faqat bugun uchun.',
+  'myWork.loading': 'Ish maʻlumotlari yuklanmoqda',
+  'myWork.error': 'Yuklab boʻlmadi',
+  'myWork.channel.title': 'Mening buyurtmalarim kanal boʻyicha',
+  'myWork.channel.period': '{from} dan, joriy savdo kuni',
+  'myWork.channel.empty': 'Bugun sizda hali buyurtmalar yoʻq',
+  'myWork.payment.title': 'Toʻlov usuli boʻyicha tushum',
+  'myWork.payment.empty': 'Bugun hali tushumlar qayd etilmagan',
+  'myWork.locked.title': 'Hali mavjud emas',
+  'myWork.locked.ask':
+    'Shaxsiy maʻlumotlar va interfeys shaxsiylashtirishi xodim identifikatsiyasi boʻyicha ADR kutmoqda — uni platforma egasi hali yozmagan.',
 
   // ---- IA 0.1e / X/X.3 Devor taxtasi (wallboard-shell.ts) — T23 toʻlqini ----
   'wallboard.title': 'Jonli taxta',
@@ -3411,7 +3491,50 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.export.button': 'Eksport',
   'reports.export.notBuilt':
     'Eksport hali qurilmagan — ADR 0043 uni oxiriga qoʻyadi, huquqlar va auditlanadigan navbatdan keyin',
+  'reports.export.hint': 'Eksport markazini ochish',
   'reports.unit.minutes': 'daq',
+
+  // Qator 7.2e: eksport markazi (ADR 0043/ADR 0029, P28 toʻlqini)
+  'reports.nav.exports': 'Eksport',
+  'reports.exportCentre.title': 'Eksport markazi',
+  'reports.exportCentre.subtitle':
+    'Har bir eksport navbatga qoʻyiladi, huquq bilan cheklanadi va qayd etiladi — auditlanadigan shaxsiy maʻlumot chiqishi (ADR 0043/ADR 0029).',
+  'reports.exportCentre.newTitle': 'Yangi eksport',
+  'reports.exportCentre.reportLabel': 'Hisobot',
+  'reports.exportCentre.reportOption.customerDirectory': 'Mijozlar roʻyxati',
+  'reports.exportCentre.columnsLabel': 'Ustunlar',
+  'reports.exportCentre.piiGroupLabel': 'Shaxsiy maʻlumot (customer.pii.export talab qilinadi)',
+  'reports.exportCentre.piiGroupHidden':
+    'Shaxsiy maʻlumot ustunlari yashirilgan — sizda customer.pii.export huquqi yoʻq',
+  'reports.exportCentre.statusLabel': 'Holat',
+  'reports.exportCentre.statusFilter.all': 'Barcha holatlar',
+  'reports.exportCentre.statusFilter.active': 'Faol',
+  'reports.exportCentre.statusFilter.suspended': 'Toʻxtatilgan',
+  'reports.exportCentre.statusFilter.anonymized': 'Anonimlashtirilgan',
+  'reports.exportCentre.statusFilter.closed': 'Yopilgan',
+  'reports.exportCentre.queryLabel': 'Qidiruv (ism yoki telefon)',
+  'reports.exportCentre.queryPlaceholder': 'Hammasini eksport qilish uchun boʻsh qoldiring',
+  'reports.exportCentre.purposeLabel': 'Maqsad',
+  'reports.exportCentre.purposePlaceholder': 'Bu eksport nima uchun kerak?',
+  'reports.exportCentre.submit': 'Navbatga qoʻyish',
+  'reports.exportCentre.submitting': 'Navbatga qoʻyilmoqda…',
+  'reports.exportCentre.error.noSelection': 'Kamida bitta ustun tanlang',
+  'reports.exportCentre.error.purposeRequired': 'Maqsadni koʻrsating',
+  'reports.exportCentre.error.generic': 'Eksportni navbatga qoʻyib boʻlmadi',
+  'reports.exportCentre.historyTitle': 'Soʻnggi eksportlar',
+  'reports.exportCentre.historyEmpty': 'Hali eksport yoʻq',
+  'reports.exportCentre.status.QUEUED': 'Navbatda',
+  'reports.exportCentre.status.RUNNING': 'Bajarilmoqda',
+  'reports.exportCentre.status.COMPLETE': 'Tayyor',
+  'reports.exportCentre.status.FAILED': 'Xato',
+  'reports.exportCentre.rowCount': '{count} qator',
+  'reports.exportCentre.truncated': '{quota} qatorgacha qisqartirildi',
+  'reports.exportCentre.piiIncluded': 'Shaxsiy maʻlumotni oʻz ichiga oladi',
+  'reports.exportCentre.download': 'Yuklab olish',
+  'reports.exportCentre.column.accountId': 'Akkaunt ID',
+  'reports.exportCentre.column.status': 'Holat',
+  'reports.exportCentre.column.displayName': 'Ism',
+  'reports.exportCentre.column.phone': 'Telefon',
 
   'reports.filter.period.label': 'Davr',
   'reports.filter.period.today': 'Bugun',
@@ -4119,6 +4242,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.branches.column.averageCheck': 'Oʻrtacha chek',
   'reports.branches.column.cancelShare': 'Bekor qilingan, %',
   'reports.branches.column.prepTime': 'Tayyorlash vaqti',
+  // wave T06 (7.3): reyting jadvalining uchta yangi ustuni va ikkinchi darajali saralash.
+  'reports.branches.column.fulfilmentSplit': 'Yetkazib berish / Olib ketish / Agregatorlar',
+  'reports.branches.column.fulfilmentSplit.hint':
+    'Buyurtmalar soni: yetkazib berish / olib ketish / agregator, shu tartibda.',
+  'reports.branches.column.onTime': 'Vaqtida, %',
+  'reports.branches.sort.label': 'Saralash',
   'reports.branches.sla.title': 'SLA vaqt oraliqlari',
   'reports.branches.sla.bucket.UNDER_30': '≤30',
   'reports.branches.sla.bucket.M30_35': '30–35',
@@ -4127,8 +4256,20 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.branches.sla.bucket.M50_60': '50–60',
   'reports.branches.sla.bucket.OVER_60': '>60',
   'reports.branches.sla.total': 'Jami',
+  // wave T06 (7.3a): oraliq hisoblari yonidagi handover_time.median.v1.
+  'reports.branches.sla.median': 'Mediana',
   'reports.branches.sla.version': 'Oraliqlar: sla_bucket_set.v{version}',
   'reports.branches.minutesShort': '{minutes} daq',
+
+  // wave T06 (7.3b): kanallar boʻyicha hisob va toʻlov usullari boʻyicha boʻlinish.
+  'reports.branches.channels.title': 'Kanallar boʻyicha',
+  'reports.branches.channels.column.channel': 'Kanal',
+  'reports.branches.channels.empty': 'Bu davrda buyurtmalar yoʻq.',
+  'reports.branches.payments.title': 'Toʻlov usullari',
+  'reports.branches.payments.column.method': 'Usul',
+  'reports.branches.payments.column.count': 'Operatsiyalar',
+  'reports.branches.payments.column.amount': 'Summa',
+  'reports.branches.payments.empty': 'Bu davrda operatsiyalar yoʻq.',
 
   // ---------------------------------------------------------------- reports 7.4 (T11, ADR 0125)
   'reports.couriers.title': 'Kuryerlar hisobotlari',
@@ -4171,7 +4312,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.couriers.externalCost.status.UNMATCHED_LINE': 'Mos kelmagan qator',
 
   'reports.products.title': 'Mahsulotlar tahlili',
+  'reports.products.tab.sales': 'Sotuvlar',
+  'reports.products.tab.abc': 'ABC',
+  'reports.products.tab.xyz': 'XYZ',
   'reports.products.column.name': 'Mahsulot',
+  'reports.products.column.category': 'Turkum',
   'reports.products.column.deliveryQty': 'Soni (yetkazib berish)',
   'reports.products.column.deliverySum': 'Summa (yetkazib berish)',
   'reports.products.column.pickupQty': 'Soni (olib ketish)',
@@ -4181,8 +4326,72 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.products.column.share': 'Tushumdagi ulush',
   'reports.products.maybeMore':
     'Mahsulotlar koʻproq boʻlishi mumkin — bu chegaralangan oʻqish, toʻliq eksport emas.',
-  'reports.products.abcXyzNotBuilt':
-    'ABC va XYZ tasnifi hali yaratilmagan: reportingʻda classification_run jadvali va roʻyxatga olingan metrika yoʻq (ADR 0043).',
+  'reports.products.stop': 'STOP',
+  'reports.products.dineInNote':
+    'Zalda buyurtmalar jamiga qoʻshiladi, lekin yetkazib berish yoki olib ketish ustunlariga kirmaydi, shuning uchun ular yigʻindisi jamiga teng boʻlmasligi mumkin.',
+  'reports.products.classification.rangeTooShort':
+    'ABC/XYZ uchun kamida {minDays} kunlik davr kerak; tanlangan davr {actualDays} kun. Davrni kengaytiring yoki kamida {minDays} kunlik erkin davr tanlang.',
+  'reports.products.classification.needsRun':
+    'Bu davr uchun tasniflash hisobi hali ishga tushirilmagan.',
+  'reports.products.classification.runButton': 'Hisoblashni ishga tushirish',
+  'reports.products.classification.rerunButton': 'Qayta hisoblash',
+  'reports.products.classification.running': 'Hisoblanmoqda…',
+  'reports.products.classification.window': 'Davr',
+  'reports.products.classification.thresholds': 'chegaralar',
+  'reports.products.classification.metric': 'metrika',
+  'reports.products.classification.computedAt': 'hisoblangan',
+  'reports.products.classification.matrix':
+    'ABC×XYZ matritsasi — jadvalni filtrlash uchun katakchani bosing',
+  'reports.products.classification.column.revenue': 'Tushum',
+  'reports.products.classification.column.share': 'Ulush, %',
+  'reports.products.classification.column.cumulativeShare': 'Yigʻma ulush, %',
+  'reports.products.classification.column.class': 'Sinf',
+  'reports.products.classification.column.quantity': 'Soni',
+  'reports.products.classification.column.sum': 'Summa',
+  'reports.products.classification.column.mean': 'Oʻrtacha',
+  'reports.products.classification.column.stddev': 'Standart chetlanish',
+  'reports.products.classification.column.cv': 'Variatsiya koeffitsienti',
+
+  // ---------------------------------------------------------------- reports 7.6/7.6a/7.6b customer analytics (T13)
+  'reports.customers.title': 'Mijozlar tahlili',
+  'reports.customers.loading': 'Yuklanmoqda…',
+  'reports.customers.kpi.title': 'Shu davr uchun',
+  'reports.customers.kpi.newCustomers': 'Yangi mijozlar',
+  'reports.customers.kpi.distinctCustomers': 'Buyurtma bergan mijozlar',
+  'reports.customers.kpi.repeatShare': 'Qaytganlar ulushi',
+  'reports.customers.kpi.orderFrequency': 'Mijozga buyurtmalar',
+  'reports.customers.kpi.customerValue': 'Mijoz qiymati',
+  'reports.customers.kpi.basketDepth': 'Buyurtmadagi pozitsiyalar',
+  'reports.customers.kpi.ltvTitle': 'Umrbod qiymat',
+  'reports.customers.kpi.ltvNotBuilt':
+    'Hali yaratilmagan: mijozning umrbod tarixi jadvali yoʻq. Soʻrov davri chegarasida jim toʻxtaydigan raqam oʻrniga, plitka buni ochiq aytadi.',
+  'reports.customers.newVsReturning.title': 'Tushum: yangi va qaytgan mijozlar',
+  'reports.customers.newVsReturning.new': 'Yangi mijozlar',
+  'reports.customers.newVsReturning.returning': 'Qaytgan mijozlar',
+  'reports.customers.newVsReturning.share': 'Tushumdagi ulush',
+  'reports.customers.newVsReturning.empty':
+    'Shu davrda mijozi maʻlum boʻlgan yakunlangan buyurtma yoʻq.',
+  'reports.customers.cohorts.title': 'Kohortalar va ushlab qolish',
+  'reports.customers.cohorts.intro':
+    'Birinchi buyurtmasi shu oraliqqa toʻgʻri kelgan har bir mijoz oʻsha oyga guruhlangan, va har bir kohortaning keyingi har bir oyda qayta buyurtma bergan ulushi.',
+  'reports.customers.cohorts.empty': 'Shu oraliqda birorta kohorta boshlanmagan.',
+  'reports.customers.cohorts.column.cohort': 'Kohorta',
+  'reports.customers.cohorts.column.size': 'Aʻzolar',
+  'reports.customers.cohorts.monthOffset': 'O+{offset}',
+  'reports.customers.cohorts.rangeTooWide':
+    'Bu oraliq bitta ushlab qolish oʻqishi kuzatadigan oylardan kengroq — uni 12 oy yoki kamroqqacha torayting.',
+  'reports.customers.rfm.title': 'RFM: soʻnggi marta × chastota',
+  'reports.customers.rfm.intro':
+    'Chegaralar platforma tomonidan belgilangan, tenant sozlay olmaydi. Bu «Mijozlar» segment konstruktoridan farq qiladi: u yerda bitta segment oʻlchanadi, bu yerda esa qaysi katakka eʻtibor qaratish kerakligini bilish uchun butun setka oʻqiladi.',
+  'reports.customers.rfm.totalCustomers': 'Bu setkada {count} mijoz',
+  'reports.customers.rfm.column.members': 'Aʻzolar',
+  'reports.customers.rfm.column.revenue': 'Tushum',
+  'reports.customers.rfm.recency.R1_RECENT': 'Yaqinda (0–6 kun)',
+  'reports.customers.rfm.recency.R2_LAPSING': 'Sovib bormoqda (7–29 kun)',
+  'reports.customers.rfm.recency.R3_AT_RISK': 'Xavf ostida (30+ kun)',
+  'reports.customers.rfm.frequency.F1_SINGLE': '1 ta buyurtma',
+  'reports.customers.rfm.frequency.F2_FEW': '2–3 ta buyurtma',
+  'reports.customers.rfm.frequency.F3_FREQUENT': '4+ buyurtma',
 
   // ---------------------------------------------------------------- reports 7.5/7.5a/7.5b staff (T12)
   'reports.staff.title': 'Xodimlar boʻyicha hisobotlar',
@@ -4273,7 +4482,7 @@ export const messagesUzLatn: MessageCatalogue = {
     'Oʻqilganlik belgilari koʻrsatilmaydi: hozircha na oʻqilgan holat, na oʻqilgan vaqt yozib borilmaydi — bu oʻlchanmagan, nolga teng emas.',
 
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
-  'reports.forecast.title': 'Talab tarixi',
+  'reports.forecast.title': 'Talab bashorati',
   'reports.forecast.intro':
     'Bu yerda nima sodir boʻlgani koʻrsatiladi, kelajakda nima boʻlishi mumkinligi emas: tanlangan hafta kunining ushbu joyda buyurtmalar tarixi mavjud boʻlgan soʻnggi holatlari boʻyicha har bir soatda bajarilgan buyurtmalarning oʻrtacha soni. Kelajakdagi talab modeli hozircha mavjud emas (ADR 0043).',
   'reports.forecast.loading': 'Yuklanmoqda…',
@@ -4299,6 +4508,31 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.forecast.weekOverview.show': 'Butun haftani koʻrsatish',
   'reports.forecast.weekOverview.loading': 'Hafta yuklanmoqda…',
   'reports.forecast.weekOverview.error': 'Hafta koʻrinishini yuklab boʻlmadi.',
+
+  // ---------------------------------------------------------------- reports 7.8/7.8a/7.8b forecast model (wave W02)
+  'reports.forecast.branch.label': 'Filial',
+  'reports.forecast.holiday.mode.label': 'Bayramlar',
+  'reports.forecast.holiday.mode.include': 'Hisobga olish',
+  'reports.forecast.holiday.mode.exclude': 'Chiqarib tashlash',
+  'reports.forecast.holiday.mode.weight': 'Yarim vazn',
+  'reports.forecast.holiday.flag': 'Davlat bayrami',
+  'reports.forecast.holiday.summary':
+    'Ushbu sanalardan {count} tasi davlat bayramiga toʻgʻri keldi.',
+  'reports.forecast.section.history': 'Tarixiy oʻrtacha',
+  'reports.forecast.section.model': 'Bashorat',
+  'reports.forecast.model.none': 'Bu filial va hafta kuni uchun hali bashorat tuzilmagan.',
+  'reports.forecast.model.caption':
+    'Model v{version}, {confidence}% ishonch oraligʻi, {date} uchun bashorat.',
+  'reports.forecast.model.column.forecast': 'Bashorat',
+  'reports.forecast.model.column.interval': 'Oraliq',
+  'reports.forecast.model.column.actual': 'Fakt',
+  'reports.forecast.model.comparison.title': 'Bashorat va fakt',
+  'reports.forecast.column.date': 'Sana',
+  'reports.forecast.breakdown.department': 'Boʻlim',
+  'reports.forecast.breakdown.product': 'Mahsulot',
+  'reports.forecast.breakdown.show': 'Taqsimotni koʻrsatish',
+  'reports.forecast.breakdown.empty': 'Bu tanlanmada boʻlim yoki mahsulot maʻlumotlari yoʻq.',
+  'reports.forecast.breakdown.error': 'Taqsimotni yuklab boʻlmadi.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Inkassatsiya',

@@ -327,6 +327,110 @@ public interface ShipmentBookingPort {
         }
     }
 
+    /**
+     * Cancels a live booking or hold at the partner (ADR 0014's {@code
+     * CancelShipment}, gap map row 1.2g).
+     *
+     * <p>Never throws for a partner refusal or fault, for the reason {@link
+     * #book} never does. {@link CancellationStatus#UNCERTAIN} is the one that
+     * matters: a timeout after the cancel reached the partner may or may not
+     * have taken, and the caller must not assume either — it belongs in
+     * {@code fulfillment.delivery_exceptions}, not in a shipment silently
+     * marked cancelled.
+     *
+     * <p>Defaulted for the same reason {@link #quote} is: a test double built
+     * before this method existed, and that never exercises cancellation, must
+     * not fail to compile over a capability it does not use.
+     */
+    default CancellationReceipt cancel(CancelCommand command) {
+        return CancellationReceipt.of(CancellationStatus.REJECTED, command, null, NOT_WIRED_REASON, null);
+    }
+
+    /**
+     * One cancellation attempt against one partner.
+     *
+     * @param externalReference the partner's own id for the booking being
+     *                          cancelled — {@code BookingReceipt.externalReference()}
+     *                          from whichever call won the shipment
+     * @param reasonCode        a short, non-PII code (ADR 0029) — never a free-text
+     *                          note, which a partner's own log might retain
+     */
+    record CancelCommand(
+            UUID commandId,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID bindingId,
+            String externalReference,
+            String reasonCode,
+            String correlationId) {
+
+        public CancelCommand {
+            Objects.requireNonNull(commandId, "A command id is required");
+            Objects.requireNonNull(tenantId, "A tenant id is required");
+            Objects.requireNonNull(bindingId, "A binding id is required");
+            Objects.requireNonNull(externalReference, "An external reference is required");
+            Objects.requireNonNull(reasonCode, "A reason code is required");
+        }
+
+        /** Names the shipment and nothing about who it was headed to. */
+        @Override
+        public String toString() {
+            return "CancelCommand[commandId=%s, reference=%s]".formatted(commandId, externalReference);
+        }
+    }
+
+    /**
+     * What a cancellation attempt produced.
+     *
+     * <p>Five rather than a boolean, mirroring {@link BookingStatus}: a partner
+     * cancellation can succeed for free, succeed but cost something, be refused
+     * (the delivery may already be under way), fault before reaching the
+     * partner, or leave the outcome genuinely unknown.
+     */
+    enum CancellationStatus {
+
+        /** The partner cancelled at no cost. */
+        CANCELLED,
+
+        /** The partner cancelled, but this cancellation is chargeable. */
+        CANCELLED_WITH_COST,
+
+        /** The partner refused on business grounds. The delivery may already be under way. */
+        REJECTED,
+
+        /** Transport fault, nothing happened at the partner. Safe to send again. */
+        RETRYABLE,
+
+        /** The partner may or may not have cancelled. Reconcile before anything else. */
+        UNCERTAIN
+    }
+
+    /**
+     * @param providerType present whenever a partner actually answered, absent
+     *                     only when no binding could be resolved at all
+     * @param errorCode    present on anything but a clean {@code CANCELLED}
+     * @param detail       present alongside {@code errorCode}, absent otherwise
+     */
+    record CancellationReceipt(
+            CancellationStatus status,
+            UUID commandId,
+            UUID bindingId,
+            @Nullable String providerType,
+            @Nullable String errorCode,
+            @Nullable String detail) {
+
+        public static CancellationReceipt of(
+                CancellationStatus status,
+                CancelCommand command,
+                @Nullable String providerType,
+                @Nullable String errorCode,
+                @Nullable String detail) {
+            return new CancellationReceipt(
+                    status, command.commandId(), command.bindingId(), providerType, errorCode, detail);
+        }
+    }
+
     /** Whether a real implementation is present. */
     default boolean isWired() {
         return true;

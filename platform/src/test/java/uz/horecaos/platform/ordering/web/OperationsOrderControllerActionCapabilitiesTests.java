@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import uz.horecaos.platform.fulfillment.api.ShipmentCancellationPort;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
@@ -18,6 +19,7 @@ import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.application.AggregatorOrderIntakeService;
 import uz.horecaos.platform.ordering.application.LiveBoardQueryService;
+import uz.horecaos.platform.ordering.application.MyWorkQueryService;
 import uz.horecaos.platform.ordering.application.OperatorCustomerLookupService;
 import uz.horecaos.platform.ordering.application.OperatorOrderingService;
 import uz.horecaos.platform.ordering.application.OrderAmendmentService;
@@ -68,7 +70,9 @@ class OperationsOrderControllerActionCapabilitiesTests {
                 mock(OperatorCustomerLookupService.class),
                 mock(OrderBulkActionService.class),
                 mock(LiveBoardQueryService.class),
-                mock(AggregatorOrderIntakeService.class));
+                mock(AggregatorOrderIntakeService.class),
+                mock(ShipmentCancellationPort.class),
+                mock(MyWorkQueryService.class));
     }
 
     @Test

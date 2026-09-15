@@ -824,6 +824,48 @@ public class JdbcOrderStore {
     }
 
     /**
+     * IA 0.2a: one operator's own orders, today, by sales channel — over
+     * {@code created_by_actor_id} and {@code ix_orders_created_by} (V0029),
+     * which have existed since ADR 0039 with nothing aggregating them.
+     *
+     * <p>{@code subject} is never a caller-supplied value: {@code
+     * MyWorkQueryService} resolves it from the authenticated token before this
+     * is ever called, and this method has no {@code locationId}-only or
+     * tenant-wide overload that could be asked about anyone else's. The
+     * predicate order — {@code tenant_id}, {@code created_by_actor_id}, then
+     * the {@code created_at} range — matches {@code ix_orders_created_by}
+     * exactly, so this is an index read, not a sequential scan of the day's
+     * orders. {@code location_id} narrows further but is not itself part of
+     * that index; a branch's own daily order volume is small enough that this
+     * does not need a second index of its own.
+     *
+     * <p>A single {@code CHANNEL} grouping set, unlike {@link #activeMix}'s
+     * two — this screen has no fulfilment-mode counterpart to render, and a
+     * grouping set nothing reads is a column nobody asked for.
+     */
+    public List<MixSliceRow> myWorkChannelMix(
+            UUID tenantId, UUID locationId, String subject, Instant from, Instant to) {
+        return jdbc.sql("""
+                SELECT 'CHANNEL' AS dimension, channel_code_snapshot AS slice_key, count(*) AS slice_count
+                FROM ordering.orders
+                WHERE tenant_id = :tenantId
+                  AND location_id = :locationId
+                  AND created_by_actor_id = :subject
+                  AND created_at >= :from AND created_at < :to
+                GROUP BY channel_code_snapshot
+                ORDER BY slice_count DESC, slice_key
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("subject", subject)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query((row, number) -> new MixSliceRow(
+                        row.getString("dimension"), row.getString("slice_key"), row.getLong("slice_count")))
+                .list();
+    }
+
+    /**
      * The nine aggregate columns {@link #counts} and {@link #countsByLocation}
      * share, so the two can never disagree about what a badge means.
      *

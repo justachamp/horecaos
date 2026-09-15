@@ -1,0 +1,124 @@
+<div class="fiscal-panel" data-testid="order-fiscal-panel">
+  @if (retryResult(); as result) {
+    <p class="q-body-sm fiscal-panel__notice" role="status" data-testid="order-fiscal-result">
+      {{
+        'orders.detail.fiscal.action.retry.result' | t: { outcome: outcomeLabel(result.outcome) }
+      }}
+    </p>
+    @if (result.warning; as warning) {
+      <p class="q-body-sm fiscal-panel__warning" role="status">{{ warning }}</p>
+    }
+  }
+
+  @if (loading()) {
+    <p class="q-body-sm fiscal-panel__state">{{ 'finance.fiscal.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm fiscal-panel__state" data-testid="order-fiscal-denied">
+      {{ 'orders.detail.fiscal.denied' | t }}
+    </p>
+  } @else if (loadError()) {
+    <p class="q-body-sm fiscal-panel__state" data-testid="order-fiscal-error">
+      {{ 'orders.detail.fiscal.error' | t }}
+    </p>
+  } @else if (documents().length === 0) {
+    <p class="q-body-sm fiscal-panel__note" data-testid="order-fiscal-empty">
+      {{ 'finance.fiscal.lookup.documents.empty' | t }}
+    </p>
+  } @else {
+    <table class="fiscal-panel__table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ 'finance.fiscal.field.documentType' | t }}</th>
+          <th class="q-caption">{{ 'finance.fiscal.field.provider' | t }}</th>
+          <th class="q-caption">{{ 'finance.fiscal.field.status' | t }}</th>
+          <th class="q-caption">{{ 'finance.fiscal.field.reason' | t }}</th>
+          <th class="q-caption">{{ 'finance.fiscal.field.evidence' | t }}</th>
+          <th class="q-caption"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (document of documents(); track document.documentId) {
+          <tr data-testid="order-fiscal-document-row">
+            <td class="q-body-sm">{{ document.documentType }}</td>
+            <td class="q-body-sm">{{ document.providerType }}</td>
+            <td class="q-body-sm">
+              <span class="status-badge" data-testid="order-fiscal-document-status">{{
+                statusLabel(document.status)
+              }}</span>
+            </td>
+            <td class="q-body-sm">{{ document.reasonCode }}</td>
+            <td class="q-body-sm">
+              {{
+                document.hasEvidence
+                  ? ('finance.fiscal.evidence.yes' | t)
+                  : ('finance.fiscal.evidence.no' | t)
+              }}
+            </td>
+            <td class="q-body-sm fiscal-panel__actions">
+              @if (canRetry(document)) {
+                <button
+                  type="button"
+                  class="fiscal-panel__link"
+                  (click)="startRetry(document)"
+                  data-testid="order-fiscal-retry-toggle"
+                >
+                  {{ 'finance.fiscal.action.retry' | t }}
+                </button>
+              }
+            </td>
+          </tr>
+          @if (retryingDocumentId() === document.documentId) {
+            <tr>
+              <td colspan="6">
+                <div class="fiscal-panel__form" data-testid="order-fiscal-retry-form">
+                  <label class="fiscal-panel__field">
+                    <span class="q-body-sm">{{ 'finance.fiscal.action.retry.reason' | t }}</span>
+                    <input
+                      type="text"
+                      class="fiscal-panel__input"
+                      [value]="retryReason()"
+                      (input)="setRetryReason($any($event.target).value)"
+                      data-testid="order-fiscal-retry-reason"
+                    />
+                  </label>
+                  @if (retryError(); as message) {
+                    <p
+                      class="q-body-sm fiscal-panel__error"
+                      role="alert"
+                      data-testid="order-fiscal-retry-error"
+                    >
+                      {{ message }}
+                    </p>
+                  }
+                  <div class="fiscal-panel__form-actions">
+                    <button
+                      type="button"
+                      class="fiscal-panel__button fiscal-panel__button--secondary"
+                      (click)="cancelRetry()"
+                      [disabled]="retrySubmitting()"
+                    >
+                      {{ 'finance.fiscal.cancel' | t }}
+                    </button>
+                    <button
+                      type="button"
+                      class="fiscal-panel__button"
+                      [disabled]="!canSubmitRetry()"
+                      (click)="submitRetry(document)"
+                      data-testid="order-fiscal-retry-submit"
+                    >
+                      {{
+                        retrySubmitting()
+                          ? ('finance.fiscal.submitting' | t)
+                          : ('finance.fiscal.action.retry.submit' | t)
+                      }}
+                    </button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  }
+</div>

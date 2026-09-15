@@ -1,0 +1,116 @@
+<div class="courier-dialog__backdrop" data-testid="external-courier-dialog">
+  <div
+    class="courier-dialog"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="'orders.dialog.externalCourier.title' | t"
+  >
+    <h2 class="q-emphasis courier-dialog__title">
+      {{ 'orders.dialog.externalCourier.title' | t }}
+    </h2>
+
+    @if (partners().length === 0) {
+      <p class="q-body-sm" data-testid="external-courier-no-partners">
+        {{ 'orders.dialog.externalCourier.noPartners' | t }}
+      </p>
+    } @else {
+      <label class="courier-dialog__field">
+        <span class="q-body-sm">{{ 'orders.dialog.externalCourier.partner' | t }}</span>
+        <select
+          class="courier-dialog__select"
+          data-testid="external-courier-partner-select"
+          [disabled]="busy()"
+          (change)="selectPartner($any($event.target).value)"
+        >
+          @for (partner of partners(); track partner.bindingId) {
+            <option [value]="partner.bindingId">{{ partner.providerType }}</option>
+          }
+        </select>
+      </label>
+
+      <button
+        type="button"
+        class="courier-dialog__quote-button"
+        data-testid="external-courier-quote"
+        [disabled]="busy()"
+        (click)="requestQuote()"
+      >
+        {{ 'orders.dialog.externalCourier.getQuote' | t }}
+      </button>
+
+      @if (quote(); as q) {
+        @if (q.priced) {
+          <dl class="courier-dialog__quote" data-testid="external-courier-quote-result">
+            <div class="courier-dialog__quote-row">
+              <dt class="q-body-sm">{{ 'orders.dialog.externalCourier.customerFee' | t }}</dt>
+              <dd class="q-mono q-tnum">
+                {{ formatMoneyMinor(q.customerDeliveryFeeMinor, q.currency ?? 'UZS') }}
+              </dd>
+            </div>
+            <div class="courier-dialog__quote-row">
+              <dt class="q-body-sm">{{ 'orders.dialog.externalCourier.providerPrice' | t }}</dt>
+              <dd class="q-mono q-tnum">
+                {{ formatMoneyMinor(q.priceMinor ?? 0, q.currency ?? 'UZS') }}
+              </dd>
+            </div>
+            @if (deltaPositive()) {
+              <div
+                class="courier-dialog__quote-row courier-dialog__quote-row--delta"
+                data-testid="external-courier-delta"
+              >
+                <dt class="q-body-sm">{{ 'orders.dialog.externalCourier.delta' | t }}</dt>
+                <dd class="q-mono q-tnum">
+                  +{{ formatMoneyMinor(q.deltaMinor ?? 0, q.currency ?? 'UZS') }}
+                </dd>
+              </div>
+              <label class="courier-dialog__acknowledge">
+                <input
+                  type="checkbox"
+                  data-testid="external-courier-acknowledge"
+                  [checked]="acknowledged()"
+                  (change)="toggleAcknowledged($any($event.target).checked)"
+                />
+                <span class="q-caption">{{ 'orders.dialog.externalCourier.acknowledge' | t }}</span>
+              </label>
+            }
+          </dl>
+        } @else {
+          <p
+            class="q-body-sm courier-dialog__unavailable"
+            data-testid="external-courier-unavailable"
+          >
+            {{ 'orders.dialog.externalCourier.unavailable' | t }}
+          </p>
+        }
+      }
+    }
+
+    <div class="courier-dialog__actions">
+      <button type="button" class="courier-dialog__dismiss" (click)="close()" [disabled]="busy()">
+        {{ 'orders.dialog.dismiss' | t }}
+      </button>
+      @if (quote(); as q) {
+        @if (q.priced) {
+          <button
+            type="button"
+            class="courier-dialog__abandon"
+            data-testid="external-courier-abandon"
+            (click)="confirmAbandon()"
+            [disabled]="busy()"
+          >
+            {{ 'orders.dialog.externalCourier.abandon' | t }}
+          </button>
+          <button
+            type="button"
+            class="courier-dialog__accept"
+            data-testid="external-courier-accept"
+            (click)="confirmAccept()"
+            [disabled]="!canAccept() || busy()"
+          >
+            {{ 'orders.dialog.externalCourier.accept' | t }}
+          </button>
+        }
+      }
+    </div>
+  </div>
+</div>

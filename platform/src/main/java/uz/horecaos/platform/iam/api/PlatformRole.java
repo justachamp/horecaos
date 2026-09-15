@@ -140,6 +140,12 @@ public enum PlatformRole {
                     // additionally need CUSTOMER_PII_REVEAL with a stated purpose, so
                     // this alone yields metrics and pseudonymous ids.
                     AUDIENCE_EXPORT,
+                    // ADR 0043/ADR 0029, wave P28: the export centre's PII column group,
+                    // held here alone for the identical reason AUDIENCE_EXPORT immediately
+                    // above it is — a bulk export over however many rows a filter matches
+                    // is the same blast radius as the audience download, over a different
+                    // screen.
+                    CUSTOMER_PII_EXPORT,
                     // ADR 0059 stage 3: the SendPulse contact-export import — see
                     // Capability.CUSTOMER_IMPORT's own comment for why this is the
                     // write-side mirror of AUDIENCE_EXPORT and held here alone.
@@ -325,6 +331,14 @@ public enum PlatformRole {
                     // ADR 0081: who from HorecaOS entered this account, and why.
                     SUPPORT_SESSION_READ,
                     REPORTING_READ,
+                    // ADR 0043/ADR 0029, wave P28: the export centre's own job —
+                    // taking a report's rows out of the console, beside the read
+                    // immediately above it. CUSTOMER_PII_EXPORT above is what
+                    // additionally admits the PII column group.
+                    REPORT_EXPORT,
+                    // T14/ADR 0134: the owner can defend a disputed ABC/XYZ class,
+                    // which needs the run that recorded it.
+                    REPORTING_CLASSIFICATION_RUN,
                     AUDIT_READ)),
 
     /** Everything the owner has except commercial and financial execution. */
@@ -490,7 +504,11 @@ public enum PlatformRole {
                     IAM_GRANT_MANAGE,
                     // ADR 0081: who from HorecaOS entered this account, and why.
                     SUPPORT_SESSION_READ,
-                    REPORTING_READ)),
+                    REPORTING_READ,
+                    // ADR 0043/ADR 0029, wave P28: the export centre's own job, same
+                    // reasoning as TENANT_OWNER's own copy of this pair. The PII column
+                    // group stays with the owner alone (CUSTOMER_PII_EXPORT above).
+                    REPORT_EXPORT)),
 
     /**
      * Money and commercial settings without catalogue authority. Holds
@@ -564,6 +582,14 @@ public enum PlatformRole {
                     // ADR 0095: finance is who answers "why is this still due".
                     COMMERCIAL_WALLET_READ,
                     REPORTING_READ,
+                    // ADR 0043/ADR 0029, wave P28: finance is who takes a figure out of
+                    // Reports for a statement or a filing. The PII column group stays
+                    // with the owner alone (CUSTOMER_PII_EXPORT).
+                    REPORT_EXPORT,
+                    // T14/ADR 0134: gross revenue classification is a finance
+                    // question as much as a merchandising one, and the run's
+                    // recorded thresholds are what finance would defend.
+                    REPORTING_CLASSIFICATION_RUN,
                     AUDIT_READ)),
 
     BRAND_MANAGER(
@@ -613,6 +639,11 @@ public enum PlatformRole {
                     NOTIFICATION_TEMPLATE_AUTHOR,
                     NOTIFICATION_ROUTING_MANAGE,
                     REPORTING_READ,
+                    // T14/ADR 0134: which products to promote, discount or take off
+                    // the menu is exactly this role's own call (CATALOG_AUTHOR,
+                    // PRICING_AUTHOR above), and the run's thresholds are what
+                    // defends a disputed class-C ruling.
+                    REPORTING_CLASSIFICATION_RUN,
                     // ADR 0060: a brand manager who can toggle the stop list needs a
                     // way to act on it from the pocket floor too.
                     INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE)),
@@ -696,6 +727,9 @@ public enum PlatformRole {
                     CONVERSATION_INBOX_MANAGE,
                     INTEGRATION_FAILURE_READ,
                     REPORTING_READ,
+                    // T14/ADR 0134: the branch's own stop-list call (OFFERING_MANAGE
+                    // above) is exactly what an AX/CZ classification informs.
+                    REPORTING_CLASSIFICATION_RUN,
                     // ADR 0060: the no-POS design center. A branch manager approves,
                     // advances, and 86's from the bot when there is no screen at all.
                     INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE,

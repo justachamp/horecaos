@@ -225,6 +225,20 @@ export const messagesRu: MessageCatalogue = {
   'orders.dialog.note.save': 'Сохранить',
   'orders.dialog.amendMenu.title': 'Что нужно изменить?',
 
+  // Конфирмация цены при вызове внешнего курьера (карта пробелов 1.2f, волна P44).
+  'orders.dialog.externalCourier.title': 'Вызвать курьера',
+  'orders.dialog.externalCourier.noPartners':
+    'Для этого филиала не настроена ни одна курьерская служба.',
+  'orders.dialog.externalCourier.partner': 'Курьерская служба',
+  'orders.dialog.externalCourier.getQuote': 'Узнать цену',
+  'orders.dialog.externalCourier.customerFee': 'Доставка с клиента',
+  'orders.dialog.externalCourier.providerPrice': 'Цена курьера',
+  'orders.dialog.externalCourier.delta': 'Превышение суммы клиента',
+  'orders.dialog.externalCourier.acknowledge': 'Подтверждаю, что превышение оплатит филиал.',
+  'orders.dialog.externalCourier.unavailable': 'Эта курьерская служба не смогла оценить маршрут.',
+  'orders.dialog.externalCourier.abandon': 'Отказаться от этой цены',
+  'orders.dialog.externalCourier.accept': 'Заказать этого курьера',
+
   'orders.dialog.outcome.stockDisposition.RELEASE': 'Резерв освобождён',
   'orders.dialog.outcome.stockDisposition.RETURN_TO_STOCK': 'Возврат на склад',
   'orders.dialog.outcome.stockDisposition.WRITE_OFF': 'Списание',
@@ -266,6 +280,34 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.money.deliveryProvider': 'Доставка (от партнёра)',
   'orders.detail.money.deliveryProviderUnknown': 'не отслеживается',
   'orders.detail.money.deliveryMargin': 'Маржа по доставке',
+
+  // Блок исключений доставки (карта пробелов 1.2f/1.2g, волна P44).
+  'orders.detail.delivery.exceptionReason.NO_PROVIDER': 'Нет доступной курьерской службы',
+  'orders.detail.delivery.exceptionReason.LATE_ASSIGNMENT': 'Курьер не назначен вовремя',
+  'orders.detail.delivery.exceptionReason.PROMISE_UNREACHABLE':
+    'Обещанное время доставки уже не может быть соблюдено',
+  'orders.detail.delivery.exceptionReason.AWAITING_RECONCILIATION':
+    'Результат бронирования не подтверждён — уточните у службы',
+  'orders.detail.delivery.exceptionReason.ABANDONED_HOLD':
+    'Резерв у партнёра не подтверждён и не отменён',
+  'orders.detail.delivery.exceptionReason.LATE_RESTAURANT': 'Кухня задержала заказ',
+  'orders.detail.delivery.exceptionReason.COURIER_NO_SHOW': 'Курьер не приехал',
+  'orders.detail.delivery.exceptionReason.ADDRESS_ISSUE': 'Не удалось определить адрес доставки',
+  'orders.detail.delivery.exceptionReason.PROVIDER_CANCEL_UNCERTAIN':
+    'Отмена у курьера не подтверждена — проверьте вручную',
+  'orders.detail.delivery.exceptionReason.PROVIDER_CANCEL_FAILED':
+    'Курьер недоступен или отказал в отмене — проверьте вручную',
+
+  // Исход отмены у курьера в диалоге отмены заказа (карта пробелов 1.2g, волна P44).
+  'orders.detail.delivery.cancelOutcome.INTERNAL_CANCELLED': 'Курьер снят с заказа.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_CANCELLED':
+    'Курьерская служба подтвердила отмену — бесплатно.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_CANCELLED_CHARGEABLE':
+    'Курьерская служба подтвердила отмену, но она платная.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_UNCERTAIN':
+    'Отмена у курьерской службы не подтверждена — проверьте вручную.',
+  'orders.detail.delivery.cancelOutcome.PROVIDER_FAILED':
+    'Курьерская служба отказала в отмене или недоступна — проверьте вручную.',
 
   'orders.detail.customer.name': 'Имя',
   'orders.detail.customer.guest': 'Гость',
@@ -426,6 +468,22 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.handover.bypassReason': 'Причина',
   'orders.detail.handover.bypassSupervisor': 'ФИО супервайзера',
   'orders.detail.handover.bypassConfirm': 'Подтвердить override',
+
+  'orders.detail.section.payment': 'Оплата',
+  'orders.detail.payment.error': 'Не удалось загрузить данные об оплате',
+  'orders.detail.payment.denied': 'Нет доступа к информации об оплате',
+
+  'orders.detail.section.fiscal': 'Фискальные чеки',
+  'orders.detail.fiscal.error': 'Не удалось загрузить фискальные документы',
+  'orders.detail.fiscal.denied': 'Нет доступа к фискальным документам',
+  'orders.detail.fiscal.action.retry.result': 'Результат: {outcome}',
+  'orders.detail.fiscal.outcome.ISSUED': 'Чек выдан',
+  'orders.detail.fiscal.outcome.ALREADY_ISSUED': 'Чек уже существовал',
+  'orders.detail.fiscal.outcome.REJECTED': 'Провайдер отклонил запрос',
+  'orders.detail.fiscal.outcome.UNCERTAIN': 'Провайдер не ответил',
+  'orders.detail.fiscal.outcome.NO_PROVIDER_PATH':
+    'Этот платёж нельзя фискализировать через провайдера',
+  'orders.detail.fiscal.outcome.NOT_WIRED': 'Провайдер не подключён',
 
   'orders.severity.blocked': 'требуется вмешательство',
   'orders.severity.approvalDeadline': 'подтвердить за {mmss}',
@@ -1551,6 +1609,13 @@ export const messagesRu: MessageCatalogue = {
   'finance.paymentAttemptStatus.FAILED': 'Не прошла',
   'finance.paymentAttemptStatus.UNCERTAIN': 'Неизвестно — провайдер не ответил',
 
+  'finance.fiscalDocumentStatus.NOT_APPLICABLE': 'Не применимо',
+  'finance.fiscalDocumentStatus.PENDING': 'Ожидает',
+  'finance.fiscalDocumentStatus.SUBMITTED': 'Отправлен',
+  'finance.fiscalDocumentStatus.ISSUED': 'Выдано',
+  'finance.fiscalDocumentStatus.FAILED': 'Отклонено',
+  'finance.fiscalDocumentStatus.BLOCKED': 'Заблокировано',
+
   'finance.entitlementScope.SUBTOTAL': 'Сумма заказа',
   'finance.entitlementScope.DELIVERY_FEE': 'Стоимость доставки',
   'finance.entitlementScope.BOTH': 'На обоих',
@@ -2079,6 +2144,20 @@ export const messagesRu: MessageCatalogue = {
   'today.operators.title': 'Операторы',
   'today.operators.notBuilt':
     'Появится вместе со справочником сотрудников (IA 9.2, ещё не построен) — сегодня нет способа сопоставить принявшего заказ с именем.',
+
+  // ---- IA 0.2 Моя работа (my-work-page.ts) — волна T01 ----
+  'myWork.title': 'Моя работа',
+  'myWork.subtitle': 'Ваши собственные заказы и выручка по этому филиалу — только за сегодня.',
+  'myWork.loading': 'Загрузка данных о вашей работе',
+  'myWork.error': 'Не удалось загрузить',
+  'myWork.channel.title': 'Мои заказы по каналам',
+  'myWork.channel.period': 'С {from}, текущий торговый день',
+  'myWork.channel.empty': 'Сегодня у вас пока нет заказов',
+  'myWork.payment.title': 'Выручка по способу оплаты',
+  'myWork.payment.empty': 'Пока нет поступлений за сегодня',
+  'myWork.locked.title': 'Пока недоступно',
+  'myWork.locked.ask':
+    'Личные данные и персонализация интерфейса ждут ADR об идентификации сотрудников, который владелец платформы ещё не написал.',
 
   // ---- IA 0.1e / X/X.3 Информационная панель (wallboard-shell.ts) — волна T23 ----
   'wallboard.title': 'Живая доска',
@@ -3390,7 +3469,50 @@ export const messagesRu: MessageCatalogue = {
   'reports.export.button': 'Экспорт',
   'reports.export.notBuilt':
     'Экспорт ещё не построен — ADR 0043 ставит его последним, после капабилити и аудируемой очереди задач',
+  'reports.export.hint': 'Открыть центр экспорта',
   'reports.unit.minutes': 'мин',
+
+  // Строка 7.2e: центр экспорта (ADR 0043/ADR 0029, волна P28)
+  'reports.nav.exports': 'Экспорт',
+  'reports.exportCentre.title': 'Центр экспорта',
+  'reports.exportCentre.subtitle':
+    'Каждый экспорт ставится в очередь, ограничен капабилити и фиксируется — аудируемая утечка персональных данных (ADR 0043/ADR 0029).',
+  'reports.exportCentre.newTitle': 'Новый экспорт',
+  'reports.exportCentre.reportLabel': 'Отчёт',
+  'reports.exportCentre.reportOption.customerDirectory': 'Справочник клиентов',
+  'reports.exportCentre.columnsLabel': 'Столбцы',
+  'reports.exportCentre.piiGroupLabel': 'Персональные данные (нужен customer.pii.export)',
+  'reports.exportCentre.piiGroupHidden':
+    'Столбцы с персональными данными скрыты — у вас нет capability customer.pii.export',
+  'reports.exportCentre.statusLabel': 'Статус',
+  'reports.exportCentre.statusFilter.all': 'Все статусы',
+  'reports.exportCentre.statusFilter.active': 'Активен',
+  'reports.exportCentre.statusFilter.suspended': 'Приостановлен',
+  'reports.exportCentre.statusFilter.anonymized': 'Обезличен',
+  'reports.exportCentre.statusFilter.closed': 'Закрыт',
+  'reports.exportCentre.queryLabel': 'Поиск (имя или телефон)',
+  'reports.exportCentre.queryPlaceholder': 'Оставьте пустым, чтобы выгрузить всех',
+  'reports.exportCentre.purposeLabel': 'Цель',
+  'reports.exportCentre.purposePlaceholder': 'Зачем нужен этот экспорт?',
+  'reports.exportCentre.submit': 'Поставить в очередь',
+  'reports.exportCentre.submitting': 'Ставим в очередь…',
+  'reports.exportCentre.error.noSelection': 'Выберите хотя бы один столбец',
+  'reports.exportCentre.error.purposeRequired': 'Укажите цель',
+  'reports.exportCentre.error.generic': 'Не удалось поставить экспорт в очередь',
+  'reports.exportCentre.historyTitle': 'Недавние экспорты',
+  'reports.exportCentre.historyEmpty': 'Экспортов ещё не было',
+  'reports.exportCentre.status.QUEUED': 'В очереди',
+  'reports.exportCentre.status.RUNNING': 'Выполняется',
+  'reports.exportCentre.status.COMPLETE': 'Готово',
+  'reports.exportCentre.status.FAILED': 'Ошибка',
+  'reports.exportCentre.rowCount': 'строк: {count}',
+  'reports.exportCentre.truncated': 'обрезано до {quota} строк',
+  'reports.exportCentre.piiIncluded': 'Содержит персональные данные',
+  'reports.exportCentre.download': 'Скачать',
+  'reports.exportCentre.column.accountId': 'ID аккаунта',
+  'reports.exportCentre.column.status': 'Статус',
+  'reports.exportCentre.column.displayName': 'Имя',
+  'reports.exportCentre.column.phone': 'Телефон',
 
   'reports.filter.period.label': 'Период',
   'reports.filter.period.today': 'Сегодня',
@@ -4094,6 +4216,12 @@ export const messagesRu: MessageCatalogue = {
   'reports.branches.column.averageCheck': 'Средний чек',
   'reports.branches.column.cancelShare': 'Отмены, %',
   'reports.branches.column.prepTime': 'Ср. время приготовления',
+  // wave T06 (7.3): три новые колонки рейтинга и его вторичная сортировка.
+  'reports.branches.column.fulfilmentSplit': 'Доставка / Самовывоз / Агрегаторы',
+  'reports.branches.column.fulfilmentSplit.hint':
+    'Количество заказов: доставка / самовывоз / агрегаторы, в этом порядке.',
+  'reports.branches.column.onTime': 'В норме, %',
+  'reports.branches.sort.label': 'Сортировка',
   'reports.branches.sla.title': 'Интервалы SLA',
   'reports.branches.sla.bucket.UNDER_30': '≤30',
   'reports.branches.sla.bucket.M30_35': '30–35',
@@ -4102,8 +4230,20 @@ export const messagesRu: MessageCatalogue = {
   'reports.branches.sla.bucket.M50_60': '50–60',
   'reports.branches.sla.bucket.OVER_60': '>60',
   'reports.branches.sla.total': 'Всего',
+  // wave T06 (7.3a): handover_time.median.v1 рядом со счётчиками интервалов.
+  'reports.branches.sla.median': 'Медиана',
   'reports.branches.sla.version': 'Интервалы: sla_bucket_set.v{version}',
   'reports.branches.minutesShort': '{minutes} мин',
+
+  // wave T06 (7.3b): счётчики по каналам и разбивка по способам оплаты.
+  'reports.branches.channels.title': 'По каналам',
+  'reports.branches.channels.column.channel': 'Канал',
+  'reports.branches.channels.empty': 'Нет заказов за этот период.',
+  'reports.branches.payments.title': 'Способы оплаты',
+  'reports.branches.payments.column.method': 'Способ оплаты',
+  'reports.branches.payments.column.count': 'Операций',
+  'reports.branches.payments.column.amount': 'Сумма',
+  'reports.branches.payments.empty': 'Нет операций за этот период.',
 
   // ---------------------------------------------------------------- reports 7.4 (T11, ADR 0125)
   'reports.couriers.title': 'Отчёты по курьерам',
@@ -4146,7 +4286,11 @@ export const messagesRu: MessageCatalogue = {
   'reports.couriers.externalCost.status.UNMATCHED_LINE': 'Несопоставленная строка',
 
   'reports.products.title': 'Аналитика по товарам',
+  'reports.products.tab.sales': 'Продажи',
+  'reports.products.tab.abc': 'ABC',
+  'reports.products.tab.xyz': 'XYZ',
   'reports.products.column.name': 'Продукт',
+  'reports.products.column.category': 'Категория',
   'reports.products.column.deliveryQty': 'Кол-во (доставка)',
   'reports.products.column.deliverySum': 'Сумма (доставка)',
   'reports.products.column.pickupQty': 'Кол-во (самовывоз)',
@@ -4156,8 +4300,72 @@ export const messagesRu: MessageCatalogue = {
   'reports.products.column.share': 'Доля выручки',
   'reports.products.maybeMore':
     'Товаров может быть больше — это ограниченная выборка, а не полная выгрузка.',
-  'reports.products.abcXyzNotBuilt':
-    'ABC- и XYZ-классификация пока не реализованы: в reporting нет таблицы classification_run и зарегистрированной метрики (ADR 0043).',
+  'reports.products.stop': 'СТОП',
+  'reports.products.dineInNote':
+    'Заказы в зале суммируются в «Итого», но не входят ни в столбец доставки, ни в столбец самовывоза, поэтому доставка плюс самовывоз не обязаны сходиться с итогом.',
+  'reports.products.classification.rangeTooShort':
+    'Для ABC/XYZ нужен период не короче {minDays} дней; выбран период {actualDays} дн. Расширьте диапазон или выберите произвольный период не короче {minDays} дней.',
+  'reports.products.classification.needsRun':
+    'Для этого периода расчёт классификации ещё не запускался.',
+  'reports.products.classification.runButton': 'Запустить расчёт',
+  'reports.products.classification.rerunButton': 'Пересчитать',
+  'reports.products.classification.running': 'Выполняется расчёт…',
+  'reports.products.classification.window': 'Окно',
+  'reports.products.classification.thresholds': 'пороги',
+  'reports.products.classification.metric': 'метрика',
+  'reports.products.classification.computedAt': 'рассчитано',
+  'reports.products.classification.matrix':
+    'Матрица ABC×XYZ — нажмите на ячейку, чтобы отфильтровать таблицу',
+  'reports.products.classification.column.revenue': 'Выручка',
+  'reports.products.classification.column.share': 'Доля, %',
+  'reports.products.classification.column.cumulativeShare': 'Накопленная доля, %',
+  'reports.products.classification.column.class': 'Класс',
+  'reports.products.classification.column.quantity': 'Кол-во',
+  'reports.products.classification.column.sum': 'Сумма',
+  'reports.products.classification.column.mean': 'Среднее',
+  'reports.products.classification.column.stddev': 'Стандартное отклонение',
+  'reports.products.classification.column.cv': 'Коэффициент вариации',
+
+  // ---------------------------------------------------------------- reports 7.6/7.6a/7.6b customer analytics (T13)
+  'reports.customers.title': 'Аналитика по клиентам',
+  'reports.customers.loading': 'Загрузка…',
+  'reports.customers.kpi.title': 'За этот период',
+  'reports.customers.kpi.newCustomers': 'Новые клиенты',
+  'reports.customers.kpi.distinctCustomers': 'Клиенты с заказом',
+  'reports.customers.kpi.repeatShare': 'Доля повторных',
+  'reports.customers.kpi.orderFrequency': 'Заказов на клиента',
+  'reports.customers.kpi.customerValue': 'Ценность клиента',
+  'reports.customers.kpi.basketDepth': 'Позиций в заказе',
+  'reports.customers.kpi.ltvTitle': 'Пожизненная ценность',
+  'reports.customers.kpi.ltvNotBuilt':
+    'Не реализовано: таблицы истории клиента ещё нет. Вместо числа, которое тихо обрывается на границе периода, плитка честно говорит об этом.',
+  'reports.customers.newVsReturning.title': 'Выручка: новые и вернувшиеся',
+  'reports.customers.newVsReturning.new': 'Новые клиенты',
+  'reports.customers.newVsReturning.returning': 'Вернувшиеся клиенты',
+  'reports.customers.newVsReturning.share': 'Доля выручки',
+  'reports.customers.newVsReturning.empty':
+    'В этом периоде нет завершённого заказа с известным клиентом.',
+  'reports.customers.cohorts.title': 'Когорты и удержание',
+  'reports.customers.cohorts.intro':
+    'Каждый клиент, чей первый заказ попал в этот диапазон, сгруппирован по месяцу, и доля когорты, заказавшей снова в каждый последующий месяц.',
+  'reports.customers.cohorts.empty': 'В этом диапазоне не началось ни одной когорты.',
+  'reports.customers.cohorts.column.cohort': 'Когорта',
+  'reports.customers.cohorts.column.size': 'Участников',
+  'reports.customers.cohorts.monthOffset': 'М+{offset}',
+  'reports.customers.cohorts.rangeTooWide':
+    'Этот диапазон шире, чем отслеживает одно чтение удержания — сузьте его до 12 месяцев или меньше.',
+  'reports.customers.rfm.title': 'RFM: давность × частота',
+  'reports.customers.rfm.intro':
+    'Границы зафиксированы платформой и не настраиваются тенантом. Это не конструктор сегментов «Клиентов»: там собирают один сегмент, здесь читают всю сетку, чтобы понять, какая ячейка стоит внимания.',
+  'reports.customers.rfm.totalCustomers': 'Клиентов в этой сетке: {count}',
+  'reports.customers.rfm.column.members': 'Участников',
+  'reports.customers.rfm.column.revenue': 'Выручка',
+  'reports.customers.rfm.recency.R1_RECENT': 'Недавно (0–6 дней)',
+  'reports.customers.rfm.recency.R2_LAPSING': 'Затихают (7–29 дней)',
+  'reports.customers.rfm.recency.R3_AT_RISK': 'Под риском (30+ дней)',
+  'reports.customers.rfm.frequency.F1_SINGLE': '1 заказ',
+  'reports.customers.rfm.frequency.F2_FEW': '2–3 заказа',
+  'reports.customers.rfm.frequency.F3_FREQUENT': '4+ заказов',
 
   // ---------------------------------------------------------------- reports 7.5/7.5a/7.5b staff (T12)
   'reports.staff.title': 'Отчёты по персоналу',
@@ -4248,7 +4456,7 @@ export const messagesRu: MessageCatalogue = {
     'Отметки о прочтении не показаны: пока не фиксируется ни статус прочтения, ни дата прочтения — это не измерено, а не равно нулю.',
 
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
-  'reports.forecast.title': 'История спроса',
+  'reports.forecast.title': 'Прогноз спроса',
   'reports.forecast.intro':
     'Здесь показано то, что произошло на самом деле, а не то, что может произойти: среднее количество завершённых заказов в каждый час за последние по времени случаи выбранного дня недели, по которым в этой точке есть история заказов. Модели будущего спроса пока не существует (ADR 0043).',
   'reports.forecast.loading': 'Загрузка…',
@@ -4274,6 +4482,30 @@ export const messagesRu: MessageCatalogue = {
   'reports.forecast.weekOverview.show': 'Показать всю неделю',
   'reports.forecast.weekOverview.loading': 'Загрузка недели…',
   'reports.forecast.weekOverview.error': 'Не удалось загрузить обзор недели.',
+
+  // ---------------------------------------------------------------- reports 7.8/7.8a/7.8b forecast model (wave W02)
+  'reports.forecast.branch.label': 'Филиал',
+  'reports.forecast.holiday.mode.label': 'Праздники',
+  'reports.forecast.holiday.mode.include': 'Учитывать',
+  'reports.forecast.holiday.mode.exclude': 'Исключить',
+  'reports.forecast.holiday.mode.weight': 'Половинный вес',
+  'reports.forecast.holiday.flag': 'Государственный праздник',
+  'reports.forecast.holiday.summary': '{count} из этих дат пришлись на государственный праздник.',
+  'reports.forecast.section.history': 'Историческое среднее',
+  'reports.forecast.section.model': 'Прогноз',
+  'reports.forecast.model.none': 'Прогноз для этого филиала и дня недели ещё не построен.',
+  'reports.forecast.model.caption':
+    'Модель v{version}, доверительный интервал {confidence}%, прогноз на {date}.',
+  'reports.forecast.model.column.forecast': 'Прогноз',
+  'reports.forecast.model.column.interval': 'Диапазон',
+  'reports.forecast.model.column.actual': 'Факт',
+  'reports.forecast.model.comparison.title': 'Прогноз и факт',
+  'reports.forecast.column.date': 'Дата',
+  'reports.forecast.breakdown.department': 'Отдел',
+  'reports.forecast.breakdown.product': 'Товар',
+  'reports.forecast.breakdown.show': 'Показать разбивку',
+  'reports.forecast.breakdown.empty': 'В этой выборке нет данных по отделам или товарам.',
+  'reports.forecast.breakdown.error': 'Не удалось загрузить разбивку.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Инкассация',

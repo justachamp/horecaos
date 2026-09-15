@@ -61,6 +61,55 @@ export interface ExceptionResponse {
   readonly raisedAt: string;
 }
 
+/** Mirrors `DispatchController.ExternalPartnerResponse` — the picker behind «Вызвать курьера» (gap map row 1.2f). */
+export interface ExternalPartnerResponse {
+  readonly bindingId: string;
+  readonly providerType: string;
+  readonly supportsHold: boolean;
+}
+
+/**
+ * Mirrors `DispatchController.ExternalQuoteResponse` — the Millenium
+ * pattern's own price-against-the-customer's-fee read (gap map row 1.2f).
+ * `deltaMinor` is `priceMinor - customerDeliveryFeeMinor`: positive is the
+ * increase a dialog must confirm before anything books.
+ */
+export interface ExternalQuoteResponse {
+  readonly priced: boolean;
+  readonly quoteId?: string | null;
+  readonly bindingId?: string | null;
+  readonly providerType?: string | null;
+  readonly priceMinor?: number | null;
+  readonly currency?: string | null;
+  readonly customerDeliveryFeeMinor: number;
+  readonly deltaMinor?: number | null;
+  readonly failureCode?: string | null;
+}
+
+/** Mirrors `DispatchController.ExternalBookResponse`. */
+export interface ExternalBookResponse {
+  readonly applied: boolean;
+  readonly abandoned: boolean;
+  readonly planVersion?: number | null;
+  readonly shipmentId?: string | null;
+  /** Set only on a refused ACCEPT: `QUOTE_EXPIRED` | `ALREADY_ASSIGNED` | `ALREADY_BEING_SOURCED` | a booking status name. */
+  readonly reason?: string | null;
+}
+
+/**
+ * Mirrors `DispatchController.ShipmentCancelResponse` (`Capability
+ * .SHIPMENT_CANCEL`, gap map row 1.2g) — what the provider actually said
+ * when this shipment was cancelled directly, independent of unassign.
+ */
+export interface ShipmentCancelResponse {
+  readonly applied: boolean;
+  /** Present only when `applied`: `INTERNAL_CANCELLED` | `PROVIDER_CANCELLED` | `PROVIDER_CANCELLED_CHARGEABLE` | `PROVIDER_UNCERTAIN` | `PROVIDER_FAILED`. */
+  readonly outcome?: string | null;
+  readonly providerType?: string | null;
+  /** Present only when `!applied`: `STALE_VERSION` | `ALREADY_CANCELLED` | `ALREADY_DELIVERED`. */
+  readonly conflictReason?: string | null;
+}
+
 /**
  * The dispatch board (operations §3.1) — `DispatchController` (ADR 0014,
  * wave 30). The fleet rail reuses {@link CouriersApi.roster} rather than a
@@ -115,5 +164,80 @@ export class DispatchApi {
       this.api.get<readonly ExceptionResponse[]>(operationsPaths.dispatchExceptions(scope, planId)),
     );
     return result.value ?? [];
+  }
+
+  /** «Вызвать курьера»'s picker (gap map row 1.2f). Empty for a tenant running an in-house fleet only. */
+  async externalPartners(
+    scope: LocationScope,
+    planId: string,
+  ): Promise<readonly ExternalPartnerResponse[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly ExternalPartnerResponse[]>(
+        operationsPaths.dispatchExternalPartners(scope, planId),
+      ),
+    );
+    return result.value ?? [];
+  }
+
+  /**
+   * The Millenium pattern's own non-binding quote (gap map row 1.2f). Never
+   * books anything — the partner is only asked to create a live delivery once
+   * the operator calls {@link externalBook} with `ACCEPT`.
+   */
+  async externalQuote(
+    scope: LocationScope,
+    planId: string,
+    bindingId: string,
+  ): Promise<ExternalQuoteResponse> {
+    return firstValueFrom(
+      this.api.post<{ bindingId: string }, ExternalQuoteResponse>(
+        operationsPaths.dispatchExternalQuote(scope, planId),
+        command({ bindingId }),
+      ),
+    );
+  }
+
+  /**
+   * Accept or abandon a quote {@link externalQuote} already recorded.
+   * `quoteId` is what makes a price increase impossible to accept implicitly:
+   * the server books whatever price it persisted under that id, never one
+   * this call could carry.
+   */
+  async externalBook(
+    scope: LocationScope,
+    planId: string,
+    bindingId: string,
+    quoteId: string,
+    decision: 'ACCEPT' | 'ABANDON',
+    reasonCode: string,
+  ): Promise<ExternalBookResponse> {
+    return firstValueFrom(
+      this.api.post<
+        { bindingId: string; quoteId: string; decision: string; reasonCode: string },
+        ExternalBookResponse
+      >(
+        operationsPaths.dispatchExternalBook(scope, planId),
+        command({ bindingId, quoteId, decision, reasonCode }),
+      ),
+    );
+  }
+
+  /**
+   * The dedicated, provider-notifying shipment cancel (`Capability
+   * .SHIPMENT_CANCEL`, gap map row 1.2g) — distinct from {@link unassign},
+   * which never tells a PARTNER shipment's provider anything.
+   */
+  async cancelShipment(
+    scope: LocationScope,
+    shipmentId: string,
+    expectedVersion: number,
+    reasonCode: string,
+  ): Promise<ShipmentCancelResponse> {
+    return firstValueFrom(
+      this.api.post<{ expectedVersion: number; reasonCode: string }, ShipmentCancelResponse>(
+        operationsPaths.dispatchShipmentCancel(scope, shipmentId),
+        command({ expectedVersion, reasonCode }),
+      ),
+    );
   }
 }

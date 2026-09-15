@@ -29,6 +29,8 @@ export type Capability =
   | 'LOYALTY_ADJUST'
   | 'IAM_GRANT_MANAGE'
   | 'REPORTING_READ'
+  | 'REPORT_EXPORT'
+  | 'CUSTOMER_PII_EXPORT'
   | 'PAYMENT_READ'
   | 'CATALOG_READ'
   | 'REFERRAL_READ'

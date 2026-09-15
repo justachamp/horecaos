@@ -47,7 +47,22 @@ public enum Grain {
      * {@code sla_bucket_set.v1}.
      */
     DAY_LOCATION_LEGAL_ENTITY_PAYMENT_METHOD(
-            List.of(Dimension.LOCATION, Dimension.LEGAL_ENTITY, Dimension.PAYMENT_METHOD));
+            List.of(Dimension.LOCATION, Dimension.LEGAL_ENTITY, Dimension.PAYMENT_METHOD)),
+
+    /**
+     * T13 (7.6a): the new-versus-returning revenue cut, over {@code
+     * reporting.fact_order.is_first_order} directly rather than {@code
+     * agg_branch_day} — the aggregate has no revenue split by first order,
+     * only the {@code distinct_customers}/{@code new_customers} counts. Money,
+     * so {@link Dimension#LEGAL_ENTITY} has to be named here too, the same
+     * rule {@link #DAY_LOCATION_LEGAL_ENTITY_PAYMENT_METHOD} already follows.
+     * Unlike that grain, this one <em>is</em> answered by the typed {@code
+     * /queries} pipeline (see {@code ReportQueryService#run}'s
+     * customer-type branch) — it is a single value per slice, just sourced
+     * from a different fact table than every other {@code /queries} metric.
+     */
+    DAY_LOCATION_LEGAL_ENTITY_CUSTOMER_TYPE(
+            List.of(Dimension.LOCATION, Dimension.LEGAL_ENTITY, Dimension.CUSTOMER_TYPE));
 
     /** The axes a reporting query may group by. */
     public enum Dimension {
@@ -68,7 +83,17 @@ public enum Grain {
          * ADR 0038 tenant payment-method registry code, snapshotted onto the
          * tender. Never a second enum of payment types.
          */
-        PAYMENT_METHOD
+        PAYMENT_METHOD,
+
+        /**
+         * T13 (7.6a): {@code "NEW"} or {@code "RETURNING"}, derived from
+         * {@code reporting.fact_order.is_first_order}. Never a third value —
+         * an order with no customer account at all (no {@code
+         * customer_subject_hash}) has no first-order flag either and is
+         * excluded from this dimension entirely rather than folded into
+         * either bucket.
+         */
+        CUSTOMER_TYPE
     }
 
     // ImmutableEnumChecker judges by the field's declared type, which is the

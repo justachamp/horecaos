@@ -13,6 +13,7 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.customers.api.BusinessDayWindows;
+import uz.horecaos.platform.customers.api.CustomerDirectoryExportPort;
 import uz.horecaos.platform.customers.api.CustomerOrderActivityPort;
 import uz.horecaos.platform.customers.domain.PhoneNumber;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
@@ -47,8 +48,17 @@ public class CustomerListQueryService {
      */
     private static final int MIN_PHONE_DIGITS = 7;
 
-    /** Bounds a filtered export to something a browser can hold and an operator can open in Excel. */
-    private static final int EXPORT_LIMIT = 2000;
+    /**
+     * Bounds a filtered export to something a browser can hold and an operator can open in Excel.
+     *
+     * <p>Public rather than private since wave P28, and equal to {@link
+     * CustomerDirectoryExportPort#PII_ROW_LIMIT} by reference rather than by two hand-typed
+     * {@code 2000}s: the export centre's own job table records that constant as the row quota
+     * it applies to a {@code CUSTOMER_DIRECTORY} export which includes the PII column group, and
+     * {@code reporting} cannot import this class to read it directly (see that interface's own
+     * doc for why the constant lives there).
+     */
+    public static final int EXPORT_LIMIT = CustomerDirectoryExportPort.PII_ROW_LIMIT;
 
     private final JdbcCustomerStore store;
     private final FieldProtection protection;

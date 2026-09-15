@@ -33,6 +33,11 @@ export const reportsPaths = {
     return `${TENANT_REPORTING(tenantId)}/preparation-time`;
   },
 
+  /** Wave T06 (7.3): every branch's median preparation time from one request, not a fan-out. */
+  preparationTimeByLocation(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/preparation-time-by-location`;
+  },
+
   /** Order-grain rows behind 7.2's «Этапы», «Заказы» and «Опоздания» tables. */
   orders(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/orders`;
@@ -46,6 +51,16 @@ export const reportsPaths = {
   /** Per-variant sales behind 7.7's «Продажи» tab — wave 39. */
   variantSales(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/variant-sales`;
+  },
+
+  /** T14 (7.7a/7.7b, ADR 0134): start a persisted ABC/XYZ classification run. */
+  classificationRuns(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/classification-runs`;
+  },
+
+  /** T14: the most recently computed run over an exact window — a read, not a run. */
+  classificationRunsLatest(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/classification-runs/latest`;
   },
 
   /**
@@ -70,6 +85,16 @@ export const reportsPaths = {
    */
   demandHistory(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/demand-history`;
+  },
+
+  /** Wave W02: the seasonal-naive forecast, confidence interval and forecast-vs-actual comparison, the model `demand-history` itself deliberately never was. */
+  demandForecast(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/demand-forecast`;
+  },
+
+  /** Wave W02 (7.8a): the latest forecast run's department or product breakdown. */
+  demandForecastBreakdown(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/demand-forecast/breakdown`;
   },
 
   /**
@@ -103,6 +128,27 @@ export const reportsPaths = {
   },
 
   /**
+   * T13 (7.6): new/distinct customers, repeat share, order frequency,
+   * customer value and basket depth — folded over the whole requested
+   * range. Its own endpoint, not `/queries`: a distinct-customer count
+   * cannot be correctly summed across the channel/fulfilment rows that
+   * pipeline rolls `agg_branch_day` up from.
+   */
+  customerKpis(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/customer-kpis`;
+  },
+
+  /** T13 (7.6a): monthly cohorts by first-order month, and their retention curve. */
+  customerCohorts(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/customer-cohorts`;
+  },
+
+  /** T13 (7.6b): the Recency x Frequency cross-tab, member counts and revenue per cell. */
+  customerRfm(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/customer-rfm`;
+  },
+
+  /**
    * T11 (7.4/7.4a/7.4b/7.4c, ADR 0125): `CourierReportController`'s own
    * sub-tree — a separate class server-side (see its own doc for why), and a
    * separate path segment here so the four courier reads read as one group
@@ -122,6 +168,20 @@ export const reportsPaths = {
 
   courierExternalDeliveryCost(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/couriers/external-delivery-cost`;
+  },
+
+  /**
+   * ADR 0043/ADR 0029, wave P28: the export centre's own job queue —
+   * `POST` queues one under `report.export`, `GET` is the job history the
+   * export centre screen renders.
+   */
+  exports(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/exports`;
+  },
+
+  /** One report export's status, by id — what the export centre screen polls. */
+  reportExport(tenantId: string, exportId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/reports/${encodeURIComponent(exportId)}`;
   },
 } as const;
 

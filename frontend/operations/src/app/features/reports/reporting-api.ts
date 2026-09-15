@@ -2,6 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
+import { command } from '../../core/api/idempotency';
+import { ApiError } from '../../core/api/problem-details';
 import { reportsPaths } from '../../core/api/reports-paths';
 
 /**
@@ -54,8 +56,63 @@ export interface RowResponse {
   readonly channelCode: string | null;
   readonly fulfilmentType: string | null;
   readonly legalEntityId: string | null;
+  /**
+   * T13 (7.6a): `'NEW'` or `'RETURNING'`, set only on a
+   * `revenue.new_vs_returning.v1` row. Optional rather than required-nullable
+   * so every other caller's existing fixtures (this field did not exist
+   * before this wave) do not have to be revisited to add a null they never
+   * cared about.
+   */
+  readonly customerType?: 'NEW' | 'RETURNING' | null;
   /** Metric code to figure. Absent means the slice had nothing to compute it from — never a zero. */
   readonly values: Readonly<Record<string, number | null>>;
+}
+
+/**
+ * ADR 0043/ADR 0029, wave P28's own export centre. Mirrors
+ * `ReportExportController.ReportExportRequest` — `columns` is what the
+ * column chooser asked for, not what the job actually produced; the PII
+ * group in it is silently dropped server-side when the requester lacks
+ * `customer.pii.export` rather than refusing the whole request. See
+ * `ExportColumnChooser` for the report-specific column vocabulary.
+ */
+export interface ReportExportRequest {
+  readonly reportKey: string;
+  readonly columns: readonly string[];
+  readonly status?: string | null;
+  readonly query?: string | null;
+  readonly purpose: string;
+}
+
+/** Mirrors `ReportExportController.ReportExportQueuedResponse`. */
+export interface ReportExportQueuedResponse {
+  readonly exportId: string;
+  readonly status: string;
+}
+
+/**
+ * One export job's status — what the export centre's history list polls.
+ * Mirrors `ReportExportController.ReportExportStatusResponse`.
+ *
+ * @property columns the effective columns the artefact actually carries —
+ *   never the requested set, so a PII omission is visible here rather than
+ *   only inferable from `includesPiiColumns`.
+ * @property downloadUrl a short-lived signed URL, present only once
+ *   `status` is `COMPLETE`.
+ */
+export interface ReportExportStatusResponse {
+  readonly exportId: string;
+  readonly reportKey: string;
+  readonly status: 'QUEUED' | 'RUNNING' | 'COMPLETE' | 'FAILED';
+  readonly columns: readonly string[];
+  readonly includesPiiColumns: boolean;
+  readonly rowQuota: number;
+  readonly rowCount: number | null;
+  readonly truncated: boolean;
+  readonly failureReason: string | null;
+  readonly createdAt: string;
+  readonly completedAt: string | null;
+  readonly downloadUrl: string | null;
 }
 
 export interface QueryResponse {
@@ -71,13 +128,32 @@ export interface BucketResponse {
   readonly shareBasisPoints: number;
 }
 
+/**
+ * Wave T06 (7.3/7.3a): one branch's median — mirrors
+ * `ReportingController.LocationMedianResponse`. `medianSeconds` is null only
+ * when the caller asks for the wrong shape; a branch with nothing to compute
+ * a median from is simply absent from the parent list, never a row here.
+ */
+export interface LocationMedianResponse {
+  readonly locationId: string;
+  readonly medianSeconds: number | null;
+}
+
+/** @property medians wave T06 (7.3a): each branch's handover_time.median.v1, alongside the bucket counts. */
 export interface SlaResponse {
   readonly buckets: readonly BucketResponse[];
+  readonly medians: readonly LocationMedianResponse[];
   readonly provenance: ProvenanceResponse;
 }
 
 export interface MedianResponse {
   readonly medianSeconds: number | null;
+  readonly provenance: ProvenanceResponse;
+}
+
+/** Wave T06 (7.3): every branch's median preparation time from one request. */
+export interface LocationMedianListResponse {
+  readonly rows: readonly LocationMedianResponse[];
   readonly provenance: ProvenanceResponse;
 }
 
@@ -195,6 +271,47 @@ export interface VariantSalesListResponse {
 }
 
 /**
+ * T14 (7.7a/7.7b, ADR 0134): one product's persisted ABC/XYZ classification.
+ * Mirrors `ProductClassificationController.ClassificationRowResponse`.
+ */
+export interface ClassificationRowResponse {
+  readonly variantId: string;
+  readonly categoryId: string | null;
+  readonly productName: string;
+  readonly revenueGrossSom: number;
+  readonly revenueShareBasisPoints: number;
+  readonly cumulativeShareBasisPoints: number;
+  readonly abcClass: 'A' | 'B' | 'C';
+  readonly quantityTotal: number;
+  readonly meanQuantityPerBucket: number;
+  readonly stddevQuantityPerBucket: number;
+  readonly coefficientOfVariationBasisPoints: number;
+  readonly xyzClass: 'X' | 'Y' | 'Z';
+}
+
+/**
+ * T14: one persisted classification run — the window, the recorded
+ * thresholds, and every product's class. Mirrors
+ * `ProductClassificationController.ClassificationRunResponse`.
+ */
+export interface ClassificationRunResponse {
+  readonly runId: string;
+  readonly from: string;
+  readonly to: string;
+  readonly locationIds: readonly string[];
+  readonly metricCode: string;
+  readonly abcThresholdABasisPoints: number;
+  readonly abcThresholdBBasisPoints: number;
+  readonly xyzThresholdXBasisPoints: number;
+  readonly xyzThresholdYBasisPoints: number;
+  readonly bucketDays: number;
+  readonly bucketCount: number;
+  readonly computedAt: string;
+  readonly rows: readonly ClassificationRowResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/**
  * One hour-of-day's demand sample behind 7.8 (wave 48). Mirrors
  * {@code ReportingController.HourDemandResponse}.
  *
@@ -220,6 +337,8 @@ export interface HourDemandResponse {
  * number traces back to `sampleDates`, real business dates a manager could
  * look up in 7.2's order log.
  */
+export type HolidayMode = 'INCLUDE' | 'EXCLUDE' | 'WEIGHT';
+
 export interface DemandHistoryResponse {
   readonly locationId: string;
   /** ISO-8601: 1 = Monday .. 7 = Sunday. */
@@ -227,8 +346,70 @@ export interface DemandHistoryResponse {
   readonly requestedSampleSize: number;
   readonly minimumSampleSize: number;
   readonly sampleDates: readonly string[];
+  /** 7.8b: the subset of `sampleDates` a `tenant.public_holidays` rule flagged — populated whatever `holidayMode` was requested. */
+  readonly holidayDates: readonly string[];
+  readonly holidayMode: HolidayMode;
   readonly hours: readonly HourDemandResponse[];
   readonly provenance: ProvenanceResponse;
+}
+
+/**
+ * Wave W02 (7.8): one hour of the latest forecast run — mirrors
+ * `ReportingController.DemandForecastHourResponse`.
+ */
+export interface DemandForecastHourResponse {
+  readonly operatingHour: number;
+  readonly forecastQuantity: number;
+  readonly confidenceLow: number;
+  readonly confidenceHigh: number;
+  readonly actualQuantity: number | null;
+  readonly absolutePercentageError: number | null;
+}
+
+/** One earlier run's forecast-vs-actual for one business date and hour — mirrors `ReportingController.DemandForecastComparisonResponse`. */
+export interface DemandForecastComparisonResponse {
+  readonly businessDate: string;
+  readonly operatingHour: number;
+  readonly forecastQuantity: number;
+  readonly actualQuantity: number | null;
+  readonly absolutePercentageError: number | null;
+}
+
+/**
+ * Wave W02 (7.8): the seasonal-naive forecast for one location and weekday.
+ * `runId` null and `hours` empty means `ForecastScheduler` has not generated
+ * a usable run yet.
+ */
+export interface DemandForecastResponse {
+  readonly locationId: string;
+  readonly weekday: number;
+  readonly runId: string | null;
+  readonly modelVersion: number;
+  readonly confidenceLevel: number;
+  readonly generatedAt: string | null;
+  readonly targetDate: string | null;
+  readonly hours: readonly DemandForecastHourResponse[];
+  readonly comparisons: readonly DemandForecastComparisonResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/** One department or product row of the breakdown — mirrors `ReportingController.DemandForecastBreakdownRowResponse`. */
+export interface DemandForecastBreakdownRowResponse {
+  readonly categoryId: string | null;
+  readonly variantId: string | null;
+  readonly productName: string | null;
+  readonly operatingHour: number;
+  readonly forecastQuantity: number;
+  readonly actualQuantity: number | null;
+  readonly absolutePercentageError: number | null;
+}
+
+/** Wave W02 (7.8a): the latest forecast run's department or product breakdown. */
+export interface DemandForecastBreakdownResponse {
+  readonly locationId: string;
+  readonly weekday: number;
+  readonly byProduct: boolean;
+  readonly rows: readonly DemandForecastBreakdownRowResponse[];
 }
 
 /**
@@ -376,6 +557,81 @@ export interface ExternalDeliveryCostResponse {
   readonly provenance: ProvenanceResponse;
 }
 
+/**
+ * T13 (7.6): the six built KPI-tile figures — folded over the whole
+ * requested range, never a day-grain breakdown. Mirrors
+ * `ReportingController.CustomerKpiResponse`. `customers.ltv.v1` is not
+ * here: it is registered `sourceAvailable = false`.
+ *
+ * @property repeatShareBasisPoints null when distinctCustomers is zero —
+ *   never a zero that would read as "nobody came back".
+ * @property customerValueSom null when distinctCustomers is zero.
+ * @property basketDepth null when there were no orders to divide items by.
+ */
+export interface CustomerKpiResponse {
+  readonly newCustomers: number;
+  readonly distinctCustomers: number;
+  readonly repeatShareBasisPoints: number | null;
+  readonly orderFrequency: number | null;
+  readonly customerValueSom: number | null;
+  readonly basketDepth: number | null;
+  readonly provenance: ProvenanceResponse;
+}
+
+/**
+ * T13 (7.6a): one month-offset point on a cohort's retention curve. Mirrors
+ * `ReportingController.RetentionPointResponse`.
+ *
+ * @property retainedBasisPoints null when the cohort's own size is zero.
+ */
+export interface RetentionPointResponse {
+  readonly monthOffset: number;
+  readonly orderMonth: string;
+  readonly customerCount: number;
+  readonly retainedBasisPoints: number | null;
+}
+
+/** T13 (7.6a): one cohort and its retention curve. Mirrors `ReportingController.CohortResponse`. */
+export interface CohortResponse {
+  readonly cohortMonth: string;
+  readonly size: number;
+  readonly points: readonly RetentionPointResponse[];
+}
+
+/** T13 (7.6a): the cohort/retention grid. Mirrors `ReportingController.CohortListResponse`. */
+export interface CohortListResponse {
+  readonly cohorts: readonly CohortResponse[];
+  /** The widest range a single call tracks — narrow the request past this and the server refuses. */
+  readonly windowMonths: number;
+  readonly provenance: ProvenanceResponse;
+}
+
+/** T13 (7.6b): platform-fixed Frequency bands — never tenant-configurable. */
+export type FrequencyBand = 'F1_SINGLE' | 'F2_FEW' | 'F3_FREQUENT';
+
+/** T13 (7.6b): platform-fixed Recency bands, in days before the range's own `to`. */
+export type RecencyBand = 'R1_RECENT' | 'R2_LAPSING' | 'R3_AT_RISK';
+
+/** T13 (7.6b): one (Recency, Frequency) cell of the cross-tab. Mirrors `ReportingController.RfmCellResponse`. */
+export interface RfmCellResponse {
+  readonly recencyBand: RecencyBand;
+  readonly frequencyBand: FrequencyBand;
+  readonly memberCount: number;
+  readonly revenueSom: number;
+}
+
+/**
+ * T13 (7.6b): the whole R×F grid, all nine cells even when empty. Mirrors
+ * `ReportingController.RfmGridResponse`. Distinct from 5.3's segment
+ * builder: a marketer can size one segment there and read this whole grid
+ * to decide which cell is worth targeting.
+ */
+export interface RfmGridResponse {
+  readonly cells: readonly RfmCellResponse[];
+  readonly totalCustomers: number;
+  readonly provenance: ProvenanceResponse;
+}
+
 export interface QueryParams {
   readonly from: string;
   readonly to: string;
@@ -441,6 +697,23 @@ export class ReportingApi {
   async preparationTime(tenantId: string, params: RangeParams): Promise<MedianResponse> {
     const result = await firstValueFrom(
       this.api.get<MedianResponse>(reportsPaths.preparationTime(tenantId), {
+        params: { from: params.from, to: params.to, locationId: params.locationId },
+      }),
+    );
+    return result.value;
+  }
+
+  /**
+   * Wave T06 (7.3): every branch's median preparation time from one request —
+   * replaces the branch leaderboard's previous one-{@link preparationTime}
+   * -call-per-branch fan-out.
+   */
+  async preparationTimeByLocation(
+    tenantId: string,
+    params: RangeParams,
+  ): Promise<LocationMedianListResponse> {
+    const result = await firstValueFrom(
+      this.api.get<LocationMedianListResponse>(reportsPaths.preparationTimeByLocation(tenantId), {
         params: { from: params.from, to: params.to, locationId: params.locationId },
       }),
     );
@@ -547,7 +820,12 @@ export class ReportingApi {
   /** 7.8's historical average — see {@link DemandHistoryResponse}'s own doc. */
   async demandHistory(
     tenantId: string,
-    params: { readonly locationId: string; readonly weekday: number; readonly sampleSize?: number },
+    params: {
+      readonly locationId: string;
+      readonly weekday: number;
+      readonly sampleSize?: number;
+      readonly holidayMode?: HolidayMode;
+    },
   ): Promise<DemandHistoryResponse> {
     const result = await firstValueFrom(
       this.api.get<DemandHistoryResponse>(reportsPaths.demandHistory(tenantId), {
@@ -555,15 +833,66 @@ export class ReportingApi {
           locationId: params.locationId,
           weekday: params.weekday,
           sampleSize: params.sampleSize,
+          holidayMode: params.holidayMode,
         },
       }),
     );
     return result.value;
   }
 
+  /** Wave W02: the seasonal-naive forecast, its confidence interval and the forecast-vs-actual comparison — see {@link DemandForecastResponse}'s own doc. */
+  async demandForecast(
+    tenantId: string,
+    params: {
+      readonly locationId: string;
+      readonly weekday: number;
+      readonly comparisonLimit?: number;
+    },
+  ): Promise<DemandForecastResponse> {
+    const result = await firstValueFrom(
+      this.api.get<DemandForecastResponse>(reportsPaths.demandForecast(tenantId), {
+        params: {
+          locationId: params.locationId,
+          weekday: params.weekday,
+          comparisonLimit: params.comparisonLimit,
+        },
+      }),
+    );
+    return result.value;
+  }
+
+  /** Wave W02 (7.8a): the latest forecast run's department or product breakdown. */
+  async demandForecastBreakdown(
+    tenantId: string,
+    params: {
+      readonly locationId: string;
+      readonly weekday: number;
+      readonly dimension: 'CATEGORY' | 'VARIANT';
+    },
+  ): Promise<DemandForecastBreakdownResponse> {
+    const result = await firstValueFrom(
+      this.api.get<DemandForecastBreakdownResponse>(
+        reportsPaths.demandForecastBreakdown(tenantId),
+        {
+          params: {
+            locationId: params.locationId,
+            weekday: params.weekday,
+            dimension: params.dimension,
+          },
+        },
+      ),
+    );
+    return result.value;
+  }
+
+  /**
+   * Wave T14 (7.7): `fulfilmentType` now reaches the query, previously
+   * accepted nowhere and the filter bar's control read by nothing — see
+   * `product-analytics-page.ts`'s own doc for the defect this replaced.
+   */
   async variantSales(
     tenantId: string,
-    params: RangeParams & { readonly limit?: number },
+    params: RangeParams & { readonly fulfilmentType?: readonly string[]; readonly limit?: number },
   ): Promise<VariantSalesListResponse> {
     const result = await firstValueFrom(
       this.api.get<VariantSalesListResponse>(reportsPaths.variantSales(tenantId), {
@@ -571,6 +900,7 @@ export class ReportingApi {
           from: params.from,
           to: params.to,
           locationId: params.locationId,
+          fulfilmentType: params.fulfilmentType,
           limit: params.limit,
         },
       }),
@@ -646,6 +976,62 @@ export class ReportingApi {
     return result.value;
   }
 
+  /** T13 (7.6): the KPI-tile figures — new/distinct customers, repeat share, order frequency, customer value, basket depth. */
+  async customerKpis(
+    tenantId: string,
+    params: {
+      readonly from: string;
+      readonly to: string;
+      readonly locationId?: readonly string[];
+      readonly legalEntityId?: readonly string[];
+    },
+  ): Promise<CustomerKpiResponse> {
+    const result = await firstValueFrom(
+      this.api.get<CustomerKpiResponse>(reportsPaths.customerKpis(tenantId), {
+        params: {
+          from: params.from,
+          to: params.to,
+          locationId: params.locationId,
+          legalEntityId: params.legalEntityId,
+        },
+      }),
+    );
+    return result.value;
+  }
+
+  /** T13 (7.6a): monthly cohorts by first-order month, and their retention curve. */
+  async customerCohorts(tenantId: string, params: RangeParams): Promise<CohortListResponse> {
+    const result = await firstValueFrom(
+      this.api.get<CohortListResponse>(reportsPaths.customerCohorts(tenantId), {
+        params: { from: params.from, to: params.to, locationId: params.locationId },
+      }),
+    );
+    return result.value;
+  }
+
+  /** T13 (7.6b): the Recency x Frequency cross-tab, member counts and revenue per cell. */
+  async customerRfm(
+    tenantId: string,
+    params: {
+      readonly from: string;
+      readonly to: string;
+      readonly locationId?: readonly string[];
+      readonly legalEntityId?: readonly string[];
+    },
+  ): Promise<RfmGridResponse> {
+    const result = await firstValueFrom(
+      this.api.get<RfmGridResponse>(reportsPaths.customerRfm(tenantId), {
+        params: {
+          from: params.from,
+          to: params.to,
+          locationId: params.locationId,
+          legalEntityId: params.legalEntityId,
+        },
+      }),
+    );
+    return result.value;
+  }
+
   /** T11 (7.4c): per-order external-delivery cost — the one courier report that finds money. */
   async courierExternalDeliveryCost(
     tenantId: string,
@@ -660,5 +1046,90 @@ export class ReportingApi {
       ),
     );
     return result.value;
+  }
+
+  // ---------------------------------------------- row 7.2e: the export centre
+
+  /** Queues a report export under `report.export`; returns immediately with an id to poll. */
+  async requestExport(
+    tenantId: string,
+    request: ReportExportRequest,
+  ): Promise<ReportExportQueuedResponse> {
+    return firstValueFrom(
+      this.api.post<ReportExportRequest, ReportExportQueuedResponse>(
+        reportsPaths.exports(tenantId),
+        command(request),
+      ),
+    );
+  }
+
+  /**
+   * T14 (7.7a/7.7b, ADR 0134): computes and persists a new ABC/XYZ run.
+   * `Capability.REPORTING_CLASSIFICATION_RUN`, not `reporting.read` — a run
+   * writes rows, so this is a `POST` with its own idempotency key rather
+   * than a side effect of opening a tab.
+   */
+  async runClassification(
+    tenantId: string,
+    params: {
+      readonly from: string;
+      readonly to: string;
+      readonly locationIds?: readonly string[];
+    },
+  ): Promise<ClassificationRunResponse> {
+    return firstValueFrom(
+      this.api.post<
+        { readonly from: string; readonly to: string; readonly locationIds?: readonly string[] },
+        ClassificationRunResponse
+      >(
+        reportsPaths.classificationRuns(tenantId),
+        command({ from: params.from, to: params.to, locationIds: params.locationIds }),
+      ),
+    );
+  }
+
+  /** One export job's status — what the export centre screen polls. */
+  async exportStatus(tenantId: string, exportId: string): Promise<ReportExportStatusResponse> {
+    const result = await firstValueFrom(
+      this.api.get<ReportExportStatusResponse>(reportsPaths.reportExport(tenantId, exportId)),
+    );
+    return result.value;
+  }
+
+  /** The export centre's own job history, newest first. */
+  async recentExports(
+    tenantId: string,
+    limit = 50,
+  ): Promise<readonly ReportExportStatusResponse[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly ReportExportStatusResponse[]>(reportsPaths.exports(tenantId), {
+        params: { limit },
+      }),
+    );
+    return result.value ?? [];
+  }
+
+  /**
+   * The most recently computed run over this exact window, or `null` when
+   * nobody has run one yet — a plain `reporting.read`, unlike {@link
+   * runClassification}.
+   */
+  async latestClassification(
+    tenantId: string,
+    params: { readonly from: string; readonly to: string; readonly locationId?: readonly string[] },
+  ): Promise<ClassificationRunResponse | null> {
+    try {
+      const result = await firstValueFrom(
+        this.api.get<ClassificationRunResponse>(reportsPaths.classificationRunsLatest(tenantId), {
+          params: { from: params.from, to: params.to, locationId: params.locationId },
+        }),
+      );
+      return result.value;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return null;
+      }
+      throw error;
+    }
   }
 }
