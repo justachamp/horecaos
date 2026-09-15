@@ -33,6 +33,11 @@ export const reportsPaths = {
     return `${TENANT_REPORTING(tenantId)}/preparation-time`;
   },
 
+  /** Wave T06 (7.3): every branch's median preparation time from one request, not a fan-out. */
+  preparationTimeByLocation(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/preparation-time-by-location`;
+  },
+
   /** Order-grain rows behind 7.2's «Этапы», «Заказы» and «Опоздания» tables. */
   orders(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/orders`;
