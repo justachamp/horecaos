@@ -4230,6 +4230,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.nav.customers': 'Mijozlar',
   'reports.nav.marketing': 'Marketing',
   'reports.nav.forecast': 'Talab',
+  'reports.nav.geography': 'Geografiya',
 
   'reports.branches.title': 'Filiallar va SLA hisobotlari',
   'reports.branches.loading': 'Yuklanmoqda…',
@@ -4533,6 +4534,27 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.forecast.breakdown.show': 'Taqsimotni koʻrsatish',
   'reports.forecast.breakdown.empty': 'Bu tanlanmada boʻlim yoki mahsulot maʻlumotlari yoʻq.',
   'reports.forecast.breakdown.error': 'Taqsimotni yuklab boʻlmadi.',
+
+  // ---------------------------------------------------------------- 7.10 Geography: histograms and the week grid (wave W04)
+  'reports.geography.title': 'Geografiya',
+  'reports.geography.intro':
+    'Yetkazib berish vaqti va masofasi gistogrammalari, hafta kuni/soat issiqlik jadvali.',
+  'reports.geography.loading': 'Yuklanmoqda…',
+  'reports.geography.mapDeferred':
+    'Zichlik xaritasi va buyurtma nuqtalari xarita provayderigacha kechiktirildi (X.4).',
+  'reports.geography.branch.label': 'Filial',
+  'reports.geography.section.histograms': 'Yetkazib berish vaqti va masofasi gistogrammalari',
+  'reports.geography.histogram.duration.title': 'Qayta ishlash vaqti',
+  'reports.geography.histogram.distance.title': 'Masofa',
+  'reports.geography.histogram.distance.unavailable':
+    'Hali koʻrsatilmagan — fact_delivery masofani saqlaydi, lekin oraliq oʻqish yoʻq.',
+  'reports.geography.section.cohort': 'Hafta kuni va soat boʻyicha buyurtmalar',
+  'reports.geography.cohort.intro': 'Soatiga oʻrtacha buyurtmalar, hafta kuni boʻyicha. Bosing.',
+  'reports.geography.drillDown.title': 'Buyurtmalar — {weekday}, {hour}',
+  'reports.geography.drillDown.close': 'Yopish',
+  'reports.geography.drillDown.loading': 'Yuklanmoqda…',
+  'reports.geography.drillDown.empty': 'Tanlangan sanalarda mos buyurtmalar yoʻq.',
+  'reports.geography.drillDown.truncated': 'Eng soʻnggi 300 ta buyurtma — yana boʻlishi mumkin.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Inkassatsiya',
