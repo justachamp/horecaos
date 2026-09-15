@@ -2294,7 +2294,56 @@ export interface DeliveryTariffControllerVersionView {
   version?: number;
 }
 
+export interface DemandForecastBreakdownResponse {
+  byProduct?: boolean;
+  locationId?: string;
+  rows?: Array<DemandForecastBreakdownRowResponse>;
+  weekday?: number;
+}
+
+export interface DemandForecastBreakdownRowResponse {
+  absolutePercentageError?: number;
+  actualQuantity?: number;
+  categoryId?: string;
+  forecastQuantity?: number;
+  operatingHour?: number;
+  productName?: string;
+  variantId?: string;
+}
+
+export interface DemandForecastComparisonResponse {
+  absolutePercentageError?: number;
+  actualQuantity?: number;
+  businessDate?: string;
+  forecastQuantity?: number;
+  operatingHour?: number;
+}
+
+export interface DemandForecastHourResponse {
+  absolutePercentageError?: number;
+  actualQuantity?: number;
+  confidenceHigh?: number;
+  confidenceLow?: number;
+  forecastQuantity?: number;
+  operatingHour?: number;
+}
+
+export interface DemandForecastResponse {
+  comparisons?: Array<DemandForecastComparisonResponse>;
+  confidenceLevel?: number;
+  generatedAt?: string;
+  hours?: Array<DemandForecastHourResponse>;
+  locationId?: string;
+  modelVersion?: number;
+  provenance?: ProvenanceResponse;
+  runId?: string;
+  targetDate?: string;
+  weekday?: number;
+}
+
 export interface DemandHistoryResponse {
+  holidayDates?: Array<string>;
+  holidayMode?: "INCLUDE" | "EXCLUDE" | "WEIGHT";
   hours?: Array<HourDemandResponse>;
   locationId?: string;
   minimumSampleSize?: number;
@@ -8489,7 +8538,9 @@ export interface Operations {
   "leaderboard": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/couriers/leaderboard"; request: { parameters: { path: { tenantId: string }; query: { from: string; to: string } } }; responses: { "200": LeaderboardResponse } };
   "slaBuckets_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/couriers/sla-buckets"; request: { parameters: { path: { tenantId: string }; query: { from: string; to: string } } }; responses: { "200": CourierSlaResponse } };
   "tariffAudit": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/couriers/tariff-audit"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": TariffAuditResponse } };
-  "demandHistory": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/demand-history"; request: { parameters: { path: { tenantId: string }; query: { locationId: string; sampleSize?: number; weekday: number } } }; responses: { "200": DemandHistoryResponse } };
+  "demandForecast": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/demand-forecast"; request: { parameters: { path: { tenantId: string }; query: { comparisonLimit?: number; locationId: string; weekday: number } } }; responses: { "200": DemandForecastResponse } };
+  "demandForecastBreakdown": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/demand-forecast/breakdown"; request: { parameters: { path: { tenantId: string }; query: { dimension: "CATEGORY" | "VARIANT"; locationId: string; weekday: number } } }; responses: { "200": DemandForecastBreakdownResponse } };
+  "demandHistory": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/demand-history"; request: { parameters: { path: { tenantId: string }; query: { holidayMode?: "INCLUDE" | "EXCLUDE" | "WEIGHT"; locationId: string; sampleSize?: number; weekday: number } } }; responses: { "200": DemandHistoryResponse } };
   "fulfilmentTime": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/fulfilment-time"; request: { parameters: { path: { tenantId: string }; query: { from: string; fulfilmentType: string; locationId?: Array<string>; to: string } } }; responses: { "200": MedianResponse } };
   "metrics": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/metrics"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<MetricResponse> } };
   "operatorLeaderboard": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/operator-leaderboard"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": OperatorLeaderboardResponse } };
