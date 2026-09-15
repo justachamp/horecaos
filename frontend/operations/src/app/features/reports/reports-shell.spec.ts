@@ -40,6 +40,7 @@ describe('ReportsShell filter bar visibility (wave W02)', () => {
             children: [
               { path: 'overview', component: DummyTabComponent },
               { path: 'forecast', component: DummyTabComponent },
+              { path: 'geography', component: DummyTabComponent },
             ],
           },
         ]),
@@ -101,5 +102,19 @@ describe('ReportsShell filter bar visibility (wave W02)', () => {
         '[data-testid="reports-shell-filter-bar"]',
       ),
     ).not.toBeNull();
+  });
+
+  // Wave W04: §7.10's own axes (a fixed window, a weekday sample) fit this
+  // bar no better than 7.8's do — see `geography-page.ts`'s own doc.
+  it('hides the filter bar entirely on the geography tab too', async () => {
+    await render();
+    await router.navigateByUrl('/statistics/geography');
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="reports-shell-filter-bar"]',
+      ),
+    ).toBeNull();
   });
 });
