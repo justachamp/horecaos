@@ -1885,6 +1885,8 @@ public class OperationsOrderController {
             String status,
             int version,
             boolean applied,
+            @Nullable String effectiveDecisionId,
+            @Nullable String effectiveAction,
             @Nullable DeliveryCancellationOutcome deliveryCancellation) {
 
         static OrderCancellationResponse of(
@@ -1894,6 +1896,13 @@ public class OperationsOrderController {
                     result.status().name(),
                     result.orderVersion(),
                     result.applied(),
+                    // Always null here, exactly as DecisionResponse's own doc already
+                    // says of this endpoint: cancellations has no competing decision
+                    // to report the effective one of. Kept on the wire rather than
+                    // dropped, so a client built against the old DecisionResponse
+                    // shape does not lose a field the OpenAPI contract still promises.
+                    null,
+                    null,
                     outcome == null ? null : DeliveryCancellationOutcome.of(outcome));
         }
     }

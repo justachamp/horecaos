@@ -1465,6 +1465,20 @@ export interface DeleteStationCapacityRequest {
   expectedVersion: number;
 }
 
+export interface DeliveryCancellationOutcome {
+  outcome?: string;
+  providerType?: string;
+}
+
+export interface DeliveryExceptionResponse {
+  detail?: string;
+  exceptionId?: string;
+  raisedAt?: string;
+  reasonCode?: string;
+  severity?: string;
+  status?: string;
+}
+
 export interface DeliveryTariffControllerBandRequest {
   bandSet?: string;
   baseMinor?: number;
@@ -1700,6 +1714,21 @@ export interface ExportRequest {
   purpose: string;
 }
 
+export interface ExternalBookRequest {
+  bindingId: string;
+  decision: "ACCEPT" | "ABANDON";
+  quoteId: string;
+  reasonCode: string;
+}
+
+export interface ExternalBookResponse {
+  abandoned?: boolean;
+  applied?: boolean;
+  planVersion?: number;
+  reason?: string;
+  shipmentId?: string;
+}
+
 export interface ExternalDeliveryCostResponse {
   provenance?: ProvenanceResponse;
   rows?: Array<ExternalDeliveryCostRowResponse>;
@@ -1719,6 +1748,28 @@ export interface ExternalDeliveryCostRowResponse {
   reconciliationStatus?: string;
   shipmentId?: string;
   varianceMinor?: number;
+}
+
+export interface ExternalPartnerResponse {
+  bindingId?: string;
+  providerType?: string;
+  supportsHold?: boolean;
+}
+
+export interface ExternalQuoteRequest {
+  bindingId: string;
+}
+
+export interface ExternalQuoteResponse {
+  bindingId?: string;
+  currency?: string;
+  customerDeliveryFeeMinor?: number;
+  deltaMinor?: number;
+  failureCode?: string;
+  priceMinor?: number;
+  priced?: boolean;
+  providerType?: string;
+  quoteId?: string;
 }
 
 export interface FiscalDocumentControllerResolutionRequest {
@@ -2643,6 +2694,16 @@ export interface OrderActionResponse {
   targetStatus?: string;
 }
 
+export interface OrderCancellationResponse {
+  applied?: boolean;
+  deliveryCancellation?: DeliveryCancellationOutcome;
+  effectiveAction?: string;
+  effectiveDecisionId?: string;
+  orderId?: string;
+  status?: string;
+  version?: number;
+}
+
 export interface OrderCountTotalsResponse {
   awaitingApproval?: number;
   cancelled?: number;
@@ -2677,6 +2738,7 @@ export interface OrderDeliveryResponse {
   currency?: string;
   customerDeliveryFeeMinor?: number;
   estimatedReadyAt?: string;
+  exceptions?: Array<DeliveryExceptionResponse>;
   planId?: string;
   planStatus?: string;
   planVersion?: number;
@@ -4002,6 +4064,18 @@ export interface SettlementPeriodResponse {
   status?: string;
 }
 
+export interface ShipmentCancelRequest {
+  expectedVersion: number;
+  reasonCode: string;
+}
+
+export interface ShipmentCancelResponse {
+  applied?: boolean;
+  conflictReason?: string;
+  outcome?: string;
+  providerType?: string;
+}
+
 export interface ShipmentResponse {
   assignedAt?: string;
   courierId?: string;
@@ -4766,8 +4840,12 @@ export interface Operations {
   "setCapacity": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/capacity"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: CapacityRequest }; responses: { "200": unknown } };
   "assign_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/assign"; request: { parameters: { path: { brandId: string; locationId: string; planId: string; tenantId: string } }; body: AssignRequest }; responses: { "200": DispatchResponse } };
   "exceptions": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/exceptions"; request: { parameters: { path: { brandId: string; locationId: string; planId: string; tenantId: string } } }; responses: { "200": Array<DispatchControllerExceptionResponse> } };
+  "externalBook": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/external-book"; request: { parameters: { path: { brandId: string; locationId: string; planId: string; tenantId: string } }; body: ExternalBookRequest }; responses: { "200": ExternalBookResponse } };
+  "externalPartners": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/external-partners"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<ExternalPartnerResponse> } };
+  "externalQuote": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/external-quote"; request: { parameters: { path: { brandId: string; locationId: string; planId: string; tenantId: string } }; body: ExternalQuoteRequest }; responses: { "200": ExternalQuoteResponse } };
   "unassign": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/unassign"; request: { parameters: { path: { brandId: string; locationId: string; planId: string; tenantId: string } }; body: UnassignRequest }; responses: { "200": DispatchResponse } };
   "queue": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/queue"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<PlanQueueResponse> } };
+  "cancelShipment": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/shipments/{shipmentId}/cancel"; request: { parameters: { path: { brandId: string; locationId: string; shipmentId: string; tenantId: string } }; body: ShipmentCancelRequest }; responses: { "200": ShipmentCancelResponse } };
   "policy": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/lateness-policy"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LatenessPolicyResponse } };
   "delivery": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/delivery"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderDeliveryResponse } };
   "severity": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/lateness"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderLatenessResponse } };
@@ -5016,7 +5094,7 @@ export interface Operations {
   "confirmAmendment": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/amendments/{amendmentId}/confirmation"; request: { parameters: { path: { amendmentId: string; brandId: string; locationId: string; orderId: string; tenantId: string } }; body: ConfirmAmendmentRequest }; responses: { "200": unknown } };
   "decide": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/approval-decisions"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: OperationsOrderControllerDecisionRequest }; responses: { "200": OperationsOrderControllerDecisionResponse } };
   "recordCallProvenance": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/call-provenance"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: CallProvenanceRequest }; responses: { "200": unknown } };
-  "cancel": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/cancellations"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: OperationsOrderControllerCancelRequest }; responses: { "200": OperationsOrderControllerDecisionResponse } };
+  "cancel": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/cancellations"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: OperationsOrderControllerCancelRequest }; responses: { "200": OrderCancellationResponse } };
   "complete": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/completion"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: CompleteRequest }; responses: { "200": OperationsOrderControllerDecisionResponse } };
   "revealAddress": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/customer/address"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": OperationsOrderControllerAddressResponse } };
   "revealPhone": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/customer/phone"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": PhoneRevealResponse } };

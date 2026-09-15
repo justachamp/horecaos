@@ -4657,6 +4657,42 @@
         "required" : [ "expectedVersion" ],
         "type" : "object"
       },
+      "DeliveryCancellationOutcome" : {
+        "properties" : {
+          "outcome" : {
+            "type" : "string"
+          },
+          "providerType" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "DeliveryExceptionResponse" : {
+        "properties" : {
+          "detail" : {
+            "type" : "string"
+          },
+          "exceptionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "raisedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "type" : "string"
+          },
+          "severity" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "DeliveryTariffControllerBandRequest" : {
         "properties" : {
           "bandSet" : {
@@ -5426,6 +5462,51 @@
         "required" : [ "purpose" ],
         "type" : "object"
       },
+      "ExternalBookRequest" : {
+        "properties" : {
+          "bindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "decision" : {
+            "enum" : [ "ACCEPT", "ABANDON" ],
+            "type" : "string"
+          },
+          "quoteId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "bindingId", "decision", "quoteId", "reasonCode" ],
+        "type" : "object"
+      },
+      "ExternalBookResponse" : {
+        "properties" : {
+          "abandoned" : {
+            "type" : "boolean"
+          },
+          "applied" : {
+            "type" : "boolean"
+          },
+          "planVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "shipmentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ExternalDeliveryCostResponse" : {
         "properties" : {
           "provenance" : {
@@ -5488,6 +5569,68 @@
           "varianceMinor" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ExternalPartnerResponse" : {
+        "properties" : {
+          "bindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "providerType" : {
+            "type" : "string"
+          },
+          "supportsHold" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "ExternalQuoteRequest" : {
+        "properties" : {
+          "bindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "bindingId" ],
+        "type" : "object"
+      },
+      "ExternalQuoteResponse" : {
+        "properties" : {
+          "bindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "customerDeliveryFeeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "deltaMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "failureCode" : {
+            "type" : "string"
+          },
+          "priceMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "priced" : {
+            "type" : "boolean"
+          },
+          "providerType" : {
+            "type" : "string"
+          },
+          "quoteId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -8388,6 +8531,34 @@
         },
         "type" : "object"
       },
+      "OrderCancellationResponse" : {
+        "properties" : {
+          "applied" : {
+            "type" : "boolean"
+          },
+          "deliveryCancellation" : {
+            "$ref" : "#/components/schemas/DeliveryCancellationOutcome"
+          },
+          "effectiveAction" : {
+            "type" : "string"
+          },
+          "effectiveDecisionId" : {
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "OrderCountTotalsResponse" : {
         "properties" : {
           "awaitingApproval" : {
@@ -8509,6 +8680,12 @@
           "estimatedReadyAt" : {
             "format" : "date-time",
             "type" : "string"
+          },
+          "exceptions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DeliveryExceptionResponse"
+            },
+            "type" : "array"
           },
           "planId" : {
             "format" : "uuid",
@@ -12709,6 +12886,38 @@
             "type" : "string"
           },
           "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ShipmentCancelRequest" : {
+        "properties" : {
+          "expectedVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reasonCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "expectedVersion", "reasonCode" ],
+        "type" : "object"
+      },
+      "ShipmentCancelResponse" : {
+        "properties" : {
+          "applied" : {
+            "type" : "boolean"
+          },
+          "conflictReason" : {
+            "type" : "string"
+          },
+          "outcome" : {
+            "type" : "string"
+          },
+          "providerType" : {
             "type" : "string"
           }
         },
@@ -17435,6 +17644,180 @@
         "tags" : [ "Dispatch board" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/external-book" : {
+      "post" : {
+        "description" : "The confirmation seam ADR 0014's alternatives table calls out by name: a re-quote above the customer's own delivery fee is never booked without this call, and the price booked is always the one fulfillment.delivery_quotes already recorded under quoteId -- never a figure the request body carries.",
+        "operationId" : "externalBook",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "planId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExternalBookRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExternalBookResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Accept or abandon a quoted external booking",
+        "tags" : [ "Dispatch board" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/external-partners" : {
+      "get" : {
+        "description" : "The picker behind «call an external courier» (gap map row 1.2f). Empty is an ordinary answer for a tenant running an in-house fleet only.",
+        "operationId" : "externalPartners",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ExternalPartnerResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every external courier partner configured for this branch",
+        "tags" : [ "Dispatch board" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/external-quote" : {
+      "post" : {
+        "description" : "The Millenium pattern (gap map row 1.2f): asks one partner what this journey would cost right now and records the answer as evidence the same way automated sourcing does. Never books anything -- the partner is only asked to create a live delivery once the operator calls external-book with ACCEPT.",
+        "operationId" : "externalQuote",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "planId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExternalQuoteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExternalQuoteResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A non-binding price from one external courier partner, against the customer's fee",
+        "tags" : [ "Dispatch board" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/plans/{planId}/unassign" : {
       "post" : {
         "description" : "Returns the plan to the sourcing pool. Refused once the shipment has moved past PICKUP_PENDING — a courier already holding the food is not unassigned out from under them.",
@@ -17543,6 +17926,69 @@
           }
         },
         "summary" : "Every plan this branch has open",
+        "tags" : [ "Dispatch board" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/shipments/{shipmentId}/cancel" : {
+      "post" : {
+        "description" : "Distinct from unassign: a PARTNER shipment's provider is called and its answer classified into a free cancel, a chargeable one, or UNCERTAIN, which opens fulfillment.delivery_exceptions and leaves the plan MANUAL_ACTION_REQUIRED rather than guess. An INTERNAL shipment is cancelled locally only -- notifying the courier is ADR 0042's own concern.",
+        "operationId" : "cancelShipment",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "shipmentId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ShipmentCancelRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ShipmentCancelResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Cancel one shipment, telling the provider (ADR 0014, gap map row 1.2g)",
         "tags" : [ "Dispatch board" ]
       }
     },
@@ -29444,7 +29890,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/OperationsOrderControllerDecisionResponse"
+                  "$ref" : "#/components/schemas/OrderCancellationResponse"
                 }
               }
             },
