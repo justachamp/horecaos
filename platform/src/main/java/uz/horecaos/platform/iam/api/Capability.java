@@ -1283,6 +1283,21 @@ public enum Capability {
     CUSTOMER_PII_EXPORT("customer.pii.export", "customer", "pii-export"),
 
     /**
+     * T14 (7.7a/7.7b), ADR 0134: starting a persisted ABC/XYZ classification
+     * run over the product report.
+     *
+     * <p>Its own capability rather than a use of {@link #REPORTING_READ}
+     * because a run is not a read: it writes {@code reporting.classification_run}
+     * and {@code classification_result} rows, and the window and thresholds
+     * those rows record are exactly what a manager points to when a product's
+     * class-C ruling is disputed — statistics.md S2.7's stated improvement
+     * over Delever, which shows only a class letter and nothing to check it
+     * against. Reusing {@code reporting.read} here would let every reader
+     * mint a new disputable record just by opening a tab.
+     */
+    REPORTING_CLASSIFICATION_RUN("reporting.classification.run", "reporting", "classification.run"),
+
+    /**
      * ADR 0043: recording finance's signature over a metric definition version.
      *
      * <p>Platform-scoped and never composed into a tenant role. A signature is

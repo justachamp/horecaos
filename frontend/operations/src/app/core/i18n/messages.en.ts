@@ -4310,7 +4310,11 @@ export const messagesEn = {
   'reports.couriers.externalCost.status.UNMATCHED_LINE': 'Unmatched line',
 
   'reports.products.title': 'Product analytics',
+  'reports.products.tab.sales': 'Sales',
+  'reports.products.tab.abc': 'ABC',
+  'reports.products.tab.xyz': 'XYZ',
   'reports.products.column.name': 'Product',
+  'reports.products.column.category': 'Category',
   'reports.products.column.deliveryQty': 'Qty (delivery)',
   'reports.products.column.deliverySum': 'Sum (delivery)',
   'reports.products.column.pickupQty': 'Qty (pickup)',
@@ -4320,8 +4324,30 @@ export const messagesEn = {
   'reports.products.column.share': 'Revenue share',
   'reports.products.maybeMore':
     'There may be more products than shown — this is a bounded read, not a full export.',
-  'reports.products.abcXyzNotBuilt':
-    'ABC and XYZ classification are not built yet: reporting has no classification_run table and no registered metric for either (ADR 0043).',
+  'reports.products.stop': 'STOP',
+  'reports.products.dineInNote':
+    'Dine-in lines are summed into the total but split into neither the delivery nor the pickup column, so delivery plus pickup need not add up to the total.',
+  'reports.products.classification.rangeTooShort':
+    'ABC/XYZ needs a window of at least {minDays} days; the current period is {actualDays}. Widen the range or switch to a custom range of at least {minDays} days.',
+  'reports.products.classification.needsRun':
+    'No classification has been computed for this exact window yet.',
+  'reports.products.classification.runButton': 'Run classification',
+  'reports.products.classification.rerunButton': 'Recompute',
+  'reports.products.classification.running': 'Computing the classification…',
+  'reports.products.classification.window': 'Window',
+  'reports.products.classification.thresholds': 'thresholds',
+  'reports.products.classification.metric': 'metric',
+  'reports.products.classification.computedAt': 'computed',
+  'reports.products.classification.matrix': 'ABC×XYZ matrix — click a cell to filter the table',
+  'reports.products.classification.column.revenue': 'Revenue',
+  'reports.products.classification.column.share': 'Share, %',
+  'reports.products.classification.column.cumulativeShare': 'Cumulative share, %',
+  'reports.products.classification.column.class': 'Class',
+  'reports.products.classification.column.quantity': 'Qty',
+  'reports.products.classification.column.sum': 'Sum',
+  'reports.products.classification.column.mean': 'Mean',
+  'reports.products.classification.column.stddev': 'Std. deviation',
+  'reports.products.classification.column.cv': 'Coefficient of variation',
 
   // ---------------------------------------------------------------- reports 7.6/7.6a/7.6b customer analytics (T13)
   'reports.customers.title': 'Customer analytics',

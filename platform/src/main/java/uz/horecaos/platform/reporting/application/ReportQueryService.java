@@ -671,12 +671,18 @@ public class ReportQueryService {
      */
     @Transactional(readOnly = true)
     public VariantSalesResult variantSales(
-            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, int limit) {
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> fulfilmentTypes,
+            int limit) {
 
         validateRange(from, to);
         refuseMixedBoundaryRegime(tenantId, from, to);
 
-        List<JdbcReportingStore.VariantSalesRow> rows = store.readVariantSales(tenantId, from, to, locationIds, limit);
+        List<JdbcReportingStore.VariantSalesRow> rows =
+                store.readVariantSales(tenantId, from, to, locationIds, fulfilmentTypes, limit);
         return new VariantSalesResult(
                 rows, rows.size() >= limit, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
     }

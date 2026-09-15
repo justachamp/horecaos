@@ -4312,7 +4312,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.couriers.externalCost.status.UNMATCHED_LINE': 'Mos kelmagan qator',
 
   'reports.products.title': 'Mahsulotlar tahlili',
+  'reports.products.tab.sales': 'Sotuvlar',
+  'reports.products.tab.abc': 'ABC',
+  'reports.products.tab.xyz': 'XYZ',
   'reports.products.column.name': 'Mahsulot',
+  'reports.products.column.category': 'Turkum',
   'reports.products.column.deliveryQty': 'Soni (yetkazib berish)',
   'reports.products.column.deliverySum': 'Summa (yetkazib berish)',
   'reports.products.column.pickupQty': 'Soni (olib ketish)',
@@ -4322,8 +4326,31 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.products.column.share': 'Tushumdagi ulush',
   'reports.products.maybeMore':
     'Mahsulotlar koʻproq boʻlishi mumkin — bu chegaralangan oʻqish, toʻliq eksport emas.',
-  'reports.products.abcXyzNotBuilt':
-    'ABC va XYZ tasnifi hali yaratilmagan: reportingʻda classification_run jadvali va roʻyxatga olingan metrika yoʻq (ADR 0043).',
+  'reports.products.stop': 'STOP',
+  'reports.products.dineInNote':
+    'Zalda buyurtmalar jamiga qoʻshiladi, lekin yetkazib berish yoki olib ketish ustunlariga kirmaydi, shuning uchun ular yigʻindisi jamiga teng boʻlmasligi mumkin.',
+  'reports.products.classification.rangeTooShort':
+    'ABC/XYZ uchun kamida {minDays} kunlik davr kerak; tanlangan davr {actualDays} kun. Davrni kengaytiring yoki kamida {minDays} kunlik erkin davr tanlang.',
+  'reports.products.classification.needsRun':
+    'Bu davr uchun tasniflash hisobi hali ishga tushirilmagan.',
+  'reports.products.classification.runButton': 'Hisoblashni ishga tushirish',
+  'reports.products.classification.rerunButton': 'Qayta hisoblash',
+  'reports.products.classification.running': 'Hisoblanmoqda…',
+  'reports.products.classification.window': 'Davr',
+  'reports.products.classification.thresholds': 'chegaralar',
+  'reports.products.classification.metric': 'metrika',
+  'reports.products.classification.computedAt': 'hisoblangan',
+  'reports.products.classification.matrix':
+    'ABC×XYZ matritsasi — jadvalni filtrlash uchun katakchani bosing',
+  'reports.products.classification.column.revenue': 'Tushum',
+  'reports.products.classification.column.share': 'Ulush, %',
+  'reports.products.classification.column.cumulativeShare': 'Yigʻma ulush, %',
+  'reports.products.classification.column.class': 'Sinf',
+  'reports.products.classification.column.quantity': 'Soni',
+  'reports.products.classification.column.sum': 'Summa',
+  'reports.products.classification.column.mean': 'Oʻrtacha',
+  'reports.products.classification.column.stddev': 'Standart chetlanish',
+  'reports.products.classification.column.cv': 'Variatsiya koeffitsienti',
 
   // ---------------------------------------------------------------- reports 7.6/7.6a/7.6b customer analytics (T13)
   'reports.customers.title': 'Mijozlar tahlili',

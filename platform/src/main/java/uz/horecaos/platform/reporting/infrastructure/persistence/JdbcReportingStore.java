@@ -1797,7 +1797,12 @@ public class JdbcReportingStore {
      * needs it.
      */
     public List<VariantSalesRow> readVariantSales(
-            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, int limit) {
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> fulfilmentTypes,
+            int limit) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -1809,6 +1814,16 @@ public class JdbcReportingStore {
         if (!locationIds.isEmpty()) {
             locationFilter = " AND l.location_id IN (:locations)";
             params.put("locations", locationIds);
+        }
+
+        // Wave T14 (7.7): the filter bar's fulfilment control, wired in for the
+        // first time -- previously accepted and ignored. Narrows every column,
+        // total included, so a DINE_IN-only view answers with DINE_IN's own
+        // figures rather than the whole tenant's.
+        String fulfilmentFilter = "";
+        if (!fulfilmentTypes.isEmpty()) {
+            fulfilmentFilter = " AND o.fulfilment_type IN (:fulfilmentTypes)";
+            params.put("fulfilmentTypes", fulfilmentTypes);
         }
 
         return jdbc.sql("""
@@ -1824,7 +1839,7 @@ public class JdbcReportingStore {
                   JOIN reporting.fact_order o
                     ON o.tenant_id = l.tenant_id AND o.business_date = l.business_date AND o.order_id = l.order_id
                  WHERE l.tenant_id = :tenantId AND l.business_date BETWEEN :from AND :to
-                """ + locationFilter + """
+                """ + locationFilter + fulfilmentFilter + """
                  GROUP BY l.variant_id, l.category_id
                  ORDER BY total_net_som DESC, l.variant_id
                  LIMIT :limit

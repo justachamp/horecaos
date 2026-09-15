@@ -53,6 +53,16 @@ export const reportsPaths = {
     return `${TENANT_REPORTING(tenantId)}/variant-sales`;
   },
 
+  /** T14 (7.7a/7.7b, ADR 0134): start a persisted ABC/XYZ classification run. */
+  classificationRuns(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/classification-runs`;
+  },
+
+  /** T14: the most recently computed run over an exact window — a read, not a run. */
+  classificationRunsLatest(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/classification-runs/latest`;
+  },
+
   /**
    * T12 (7.5): orders taken, revenue, average check, average handling time,
    * delivery/pickup/dine-in and a per-channel breakdown — one row per

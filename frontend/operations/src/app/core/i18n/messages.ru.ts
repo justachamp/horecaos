@@ -4286,7 +4286,11 @@ export const messagesRu: MessageCatalogue = {
   'reports.couriers.externalCost.status.UNMATCHED_LINE': 'Несопоставленная строка',
 
   'reports.products.title': 'Аналитика по товарам',
+  'reports.products.tab.sales': 'Продажи',
+  'reports.products.tab.abc': 'ABC',
+  'reports.products.tab.xyz': 'XYZ',
   'reports.products.column.name': 'Продукт',
+  'reports.products.column.category': 'Категория',
   'reports.products.column.deliveryQty': 'Кол-во (доставка)',
   'reports.products.column.deliverySum': 'Сумма (доставка)',
   'reports.products.column.pickupQty': 'Кол-во (самовывоз)',
@@ -4296,8 +4300,31 @@ export const messagesRu: MessageCatalogue = {
   'reports.products.column.share': 'Доля выручки',
   'reports.products.maybeMore':
     'Товаров может быть больше — это ограниченная выборка, а не полная выгрузка.',
-  'reports.products.abcXyzNotBuilt':
-    'ABC- и XYZ-классификация пока не реализованы: в reporting нет таблицы classification_run и зарегистрированной метрики (ADR 0043).',
+  'reports.products.stop': 'СТОП',
+  'reports.products.dineInNote':
+    'Заказы в зале суммируются в «Итого», но не входят ни в столбец доставки, ни в столбец самовывоза, поэтому доставка плюс самовывоз не обязаны сходиться с итогом.',
+  'reports.products.classification.rangeTooShort':
+    'Для ABC/XYZ нужен период не короче {minDays} дней; выбран период {actualDays} дн. Расширьте диапазон или выберите произвольный период не короче {minDays} дней.',
+  'reports.products.classification.needsRun':
+    'Для этого периода расчёт классификации ещё не запускался.',
+  'reports.products.classification.runButton': 'Запустить расчёт',
+  'reports.products.classification.rerunButton': 'Пересчитать',
+  'reports.products.classification.running': 'Выполняется расчёт…',
+  'reports.products.classification.window': 'Окно',
+  'reports.products.classification.thresholds': 'пороги',
+  'reports.products.classification.metric': 'метрика',
+  'reports.products.classification.computedAt': 'рассчитано',
+  'reports.products.classification.matrix':
+    'Матрица ABC×XYZ — нажмите на ячейку, чтобы отфильтровать таблицу',
+  'reports.products.classification.column.revenue': 'Выручка',
+  'reports.products.classification.column.share': 'Доля, %',
+  'reports.products.classification.column.cumulativeShare': 'Накопленная доля, %',
+  'reports.products.classification.column.class': 'Класс',
+  'reports.products.classification.column.quantity': 'Кол-во',
+  'reports.products.classification.column.sum': 'Сумма',
+  'reports.products.classification.column.mean': 'Среднее',
+  'reports.products.classification.column.stddev': 'Стандартное отклонение',
+  'reports.products.classification.column.cv': 'Коэффициент вариации',
 
   // ---------------------------------------------------------------- reports 7.6/7.6a/7.6b customer analytics (T13)
   'reports.customers.title': 'Аналитика по клиентам',

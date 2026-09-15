@@ -345,15 +345,19 @@ public class ReportingController {
                     + "own order for the fulfilment type. Not a registry metric: the registry's "
                     + "one-value-per-slice contract does not express a per-product breakdown, the "
                     + "same reason order-grain reads get their own endpoint rather than folding "
-                    + "into /queries.")
+                    + "into /queries. fulfilmentType narrows every column, including the totals: a "
+                    + "DINE_IN order has no delivery or pickup column of its own, so the totals "
+                    + "with no filter applied can exceed delivery plus pickup by exactly its share.")
     public ResponseEntity<VariantSalesListResponse> variantSales(
             @PathVariable UUID tenantId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) List<UUID> locationId,
+            @RequestParam(required = false) List<String> fulfilmentType,
             @RequestParam(required = false) Integer limit) {
 
-        var result = queries.variantSales(tenantId, from, to, orEmpty(locationId), clampVariantLimit(limit));
+        var result = queries.variantSales(
+                tenantId, from, to, orEmpty(locationId), orEmpty(fulfilmentType), clampVariantLimit(limit));
         return ResponseEntity.ok(new VariantSalesListResponse(
                 result.rows().stream().map(VariantSalesRowResponse::of).toList(),
                 result.maybeMore(),

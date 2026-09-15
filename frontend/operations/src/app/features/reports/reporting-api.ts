@@ -3,6 +3,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { command } from '../../core/api/idempotency';
+import { ApiError } from '../../core/api/problem-details';
 import { reportsPaths } from '../../core/api/reports-paths';
 
 /**
@@ -266,6 +267,47 @@ export interface VariantSalesRowResponse {
 export interface VariantSalesListResponse {
   readonly rows: readonly VariantSalesRowResponse[];
   readonly maybeMore: boolean;
+  readonly provenance: ProvenanceResponse;
+}
+
+/**
+ * T14 (7.7a/7.7b, ADR 0134): one product's persisted ABC/XYZ classification.
+ * Mirrors `ProductClassificationController.ClassificationRowResponse`.
+ */
+export interface ClassificationRowResponse {
+  readonly variantId: string;
+  readonly categoryId: string | null;
+  readonly productName: string;
+  readonly revenueGrossSom: number;
+  readonly revenueShareBasisPoints: number;
+  readonly cumulativeShareBasisPoints: number;
+  readonly abcClass: 'A' | 'B' | 'C';
+  readonly quantityTotal: number;
+  readonly meanQuantityPerBucket: number;
+  readonly stddevQuantityPerBucket: number;
+  readonly coefficientOfVariationBasisPoints: number;
+  readonly xyzClass: 'X' | 'Y' | 'Z';
+}
+
+/**
+ * T14: one persisted classification run — the window, the recorded
+ * thresholds, and every product's class. Mirrors
+ * `ProductClassificationController.ClassificationRunResponse`.
+ */
+export interface ClassificationRunResponse {
+  readonly runId: string;
+  readonly from: string;
+  readonly to: string;
+  readonly locationIds: readonly string[];
+  readonly metricCode: string;
+  readonly abcThresholdABasisPoints: number;
+  readonly abcThresholdBBasisPoints: number;
+  readonly xyzThresholdXBasisPoints: number;
+  readonly xyzThresholdYBasisPoints: number;
+  readonly bucketDays: number;
+  readonly bucketCount: number;
+  readonly computedAt: string;
+  readonly rows: readonly ClassificationRowResponse[];
   readonly provenance: ProvenanceResponse;
 }
 
@@ -843,9 +885,14 @@ export class ReportingApi {
     return result.value;
   }
 
+  /**
+   * Wave T14 (7.7): `fulfilmentType` now reaches the query, previously
+   * accepted nowhere and the filter bar's control read by nothing — see
+   * `product-analytics-page.ts`'s own doc for the defect this replaced.
+   */
   async variantSales(
     tenantId: string,
-    params: RangeParams & { readonly limit?: number },
+    params: RangeParams & { readonly fulfilmentType?: readonly string[]; readonly limit?: number },
   ): Promise<VariantSalesListResponse> {
     const result = await firstValueFrom(
       this.api.get<VariantSalesListResponse>(reportsPaths.variantSales(tenantId), {
@@ -853,6 +900,7 @@ export class ReportingApi {
           from: params.from,
           to: params.to,
           locationId: params.locationId,
+          fulfilmentType: params.fulfilmentType,
           limit: params.limit,
         },
       }),
@@ -1015,6 +1063,31 @@ export class ReportingApi {
     );
   }
 
+  /**
+   * T14 (7.7a/7.7b, ADR 0134): computes and persists a new ABC/XYZ run.
+   * `Capability.REPORTING_CLASSIFICATION_RUN`, not `reporting.read` — a run
+   * writes rows, so this is a `POST` with its own idempotency key rather
+   * than a side effect of opening a tab.
+   */
+  async runClassification(
+    tenantId: string,
+    params: {
+      readonly from: string;
+      readonly to: string;
+      readonly locationIds?: readonly string[];
+    },
+  ): Promise<ClassificationRunResponse> {
+    return firstValueFrom(
+      this.api.post<
+        { readonly from: string; readonly to: string; readonly locationIds?: readonly string[] },
+        ClassificationRunResponse
+      >(
+        reportsPaths.classificationRuns(tenantId),
+        command({ from: params.from, to: params.to, locationIds: params.locationIds }),
+      ),
+    );
+  }
+
   /** One export job's status — what the export centre screen polls. */
   async exportStatus(tenantId: string, exportId: string): Promise<ReportExportStatusResponse> {
     const result = await firstValueFrom(
@@ -1034,5 +1107,29 @@ export class ReportingApi {
       }),
     );
     return result.value ?? [];
+  }
+
+  /**
+   * The most recently computed run over this exact window, or `null` when
+   * nobody has run one yet — a plain `reporting.read`, unlike {@link
+   * runClassification}.
+   */
+  async latestClassification(
+    tenantId: string,
+    params: { readonly from: string; readonly to: string; readonly locationId?: readonly string[] },
+  ): Promise<ClassificationRunResponse | null> {
+    try {
+      const result = await firstValueFrom(
+        this.api.get<ClassificationRunResponse>(reportsPaths.classificationRunsLatest(tenantId), {
+          params: { from: params.from, to: params.to, locationId: params.locationId },
+        }),
+      );
+      return result.value;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return null;
+      }
+      throw error;
+    }
   }
 }
