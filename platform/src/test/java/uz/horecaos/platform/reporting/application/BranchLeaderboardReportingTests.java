@@ -51,6 +51,7 @@ class BranchLeaderboardReportingTests {
     private static final UUID LOCATION_A = UUID.fromString("018f6f4e-3000-7000-8000-00000000d002");
     private static final UUID LOCATION_B = UUID.fromString("018f6f4e-3000-7000-8000-00000000d003");
     private static final UUID LOCATION_C = UUID.fromString("018f6f4e-3000-7000-8000-00000000d004");
+    private static final UUID OTHER_TENANT = UUID.fromString("018f6f4e-3000-7000-8000-00000000d0ff");
 
     private static final LocalDate DAY = LocalDate.of(2026, 8, 21);
     private static final LocalDate DAY_2 = DAY.plusDays(1);
@@ -91,12 +92,17 @@ class BranchLeaderboardReportingTests {
         Clock clock = Clock.fixed(Instant.parse("2026-08-22T04:00:00Z"), ZoneOffset.UTC);
         queries = new ReportQueryService(store, new BusinessDayService(store), clock);
 
+        seedTenant(TENANT, "branch-leaderboard-tenant");
+        seedTenant(OTHER_TENANT, "branch-leaderboard-other-tenant");
+    }
+
+    private void seedTenant(UUID tenantId, String slug) {
         jdbc.sql("""
                 INSERT INTO tenant.tenants (id, slug, legal_name, display_name, default_currency,
                     default_timezone, status, version)
-                VALUES (:id, 'branch-leaderboard-tenant', 'Legal', 'Osh Markazi', 'UZS',
+                VALUES (:id, :slug, 'Legal', 'Osh Markazi', 'UZS',
                     'Asia/Tashkent', 'ACTIVE', 0)
-                """).param("id", TENANT).update();
+                """).param("id", tenantId).param("slug", slug).update();
     }
 
     // ------------------------------------------- groupBy=['LOCATION', 'FULFILMENT_TYPE']
@@ -309,6 +315,28 @@ class BranchLeaderboardReportingTests {
                 .containsExactly(LOCATION_A);
     }
 
+    /**
+     * 2026-09-14 review: no test in this file seeded a second tenant, so a regression dropping
+     * {@code tenant_id} from {@link JdbcReportingStore#medianSecondsToReadyByLocation} would pass
+     * every other test here unchanged.
+     */
+    @Test
+    void medianSecondsToReadyByLocationNeverCrossesTenants() {
+        insertReadyOrder("A-1", LOCATION_A, 600);
+        // OTHER_TENANT: the same location and business date, a wildly different duration --
+        // would move the median below if it ever leaked into TENANT's own read.
+        insertReadyOrder(OTHER_TENANT, "other-A-1", LOCATION_A, 60_000);
+
+        List<JdbcReportingStore.LocationMedianRow> rows =
+                store.medianSecondsToReadyByLocation(TENANT, DAY, DAY, List.of());
+
+        assertThat(rows)
+                .extracting(JdbcReportingStore.LocationMedianRow::locationId)
+                .containsExactly(LOCATION_A);
+        // A single order's own value: 600-120 = 480, unmoved by OTHER_TENANT's row.
+        assertThat(rows.getFirst().medianSeconds()).isEqualTo(480);
+    }
+
     @Test
     void theServiceMethodStatesItsProvenanceLikeEveryOtherReport() {
         insertReadyOrder("A-1", LOCATION_A, 600);
@@ -336,6 +364,21 @@ class BranchLeaderboardReportingTests {
         assertThat(rows)
                 .extracting(JdbcReportingStore.LocationMedianRow::medianSeconds)
                 .as("seconds_total itself, not seconds_total minus the prep-time offset")
+                .containsExactly(600);
+    }
+
+    /** Same gap as {@link #medianSecondsToReadyByLocationNeverCrossesTenants}, for {@link
+     * JdbcReportingStore#medianSecondsTotalByLocation}. */
+    @Test
+    void medianSecondsTotalByLocationNeverCrossesTenants() {
+        insertReadyOrder("A-1", LOCATION_A, 600);
+        insertReadyOrder(OTHER_TENANT, "other-A-1", LOCATION_A, 60_000);
+
+        List<JdbcReportingStore.LocationMedianRow> rows =
+                store.medianSecondsTotalByLocation(TENANT, DAY, DAY, List.of());
+
+        assertThat(rows)
+                .extracting(JdbcReportingStore.LocationMedianRow::medianSeconds)
                 .containsExactly(600);
     }
 
@@ -424,10 +467,15 @@ class BranchLeaderboardReportingTests {
 
     /** One {@code fact_order} row that reached READY {@code secondsTotal} seconds after creation. */
     private void insertReadyOrder(String seed, UUID locationId, int secondsTotal) {
+        insertReadyOrder(TENANT, seed, locationId, secondsTotal);
+    }
+
+    /** {@link #insertReadyOrder}, naming a tenant — the cross-tenant isolation tests' own fixture. */
+    private void insertReadyOrder(UUID tenantId, String seed, UUID locationId, int secondsTotal) {
         OffsetDateTime created = tashkent(9, 0);
         Map<String, Object> params = new HashMap<>();
-        params.put("tenantId", TENANT);
-        params.put("orderId", orderId(seed));
+        params.put("tenantId", tenantId);
+        params.put("orderId", orderId(tenantId + ":" + seed));
         params.put("businessDate", DAY);
         params.put("boundaryVersion", 1);
         params.put("occurredAt", created);

@@ -2091,6 +2091,17 @@ public class JdbcReportingStore {
      * per-channel sub-counts — see {@code customers.distinct.v1}'s own
      * openQuestion for why summing agg_branch_day rows would double count a
      * customer who ordered on two channels the same day.
+     *
+     * <p>Two separate aggregates, not one shared {@code WHERE}: {@code
+     * order_count}/{@code item_count_sum}/{@code net_som}/{@code
+     * legal_entity_count} are {@code customers.basket_depth.v1}/{@code
+     * order_frequency.v1}/{@code value.v1}'s own {@code COMPLETED_ONLY}
+     * inputs, but {@code distinct_customers}/{@code new_customers} back
+     * {@code customers.distinct.v1}/{@code customers.new.v1}, whose
+     * registered inclusion rule (MetricRegistry) is "regardless of terminal
+     * status — a cancelled first order still means the person is new". A
+     * single COMPLETED-only {@code WHERE} clause used to answer both, which
+     * silently dropped a guest whose only order in range was cancelled.
      */
     public CustomerKpiRow readCustomerKpis(
             UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<UUID> legalEntityIds) {
@@ -2109,11 +2120,8 @@ public class JdbcReportingStore {
             params.put("legalEntities", legalEntityIds);
         }
 
-        return jdbc.sql("""
+        CompletedOrderTotals completed = jdbc.sql("""
                 SELECT count(*)::integer AS order_count,
-                       count(DISTINCT customer_subject_hash)::integer AS distinct_customers,
-                       count(DISTINCT customer_subject_hash) FILTER (WHERE is_first_order)::integer
-                           AS new_customers,
                        sum(item_count)::integer AS item_count_sum,
                        sum(net_revenue_som) AS net_som,
                        count(DISTINCT legal_entity_id)::integer AS legal_entity_count
@@ -2123,15 +2131,41 @@ public class JdbcReportingStore {
                 """ + filter + """
                 """)
                 .params(params)
-                .query((ResultSet row, int number) -> new CustomerKpiRow(
+                .query((ResultSet row, int number) -> new CompletedOrderTotals(
                         row.getInt("order_count"),
-                        row.getInt("distinct_customers"),
-                        row.getInt("new_customers"),
                         row.getInt("item_count_sum"),
                         row.getLong("net_som"),
                         row.getInt("legal_entity_count")))
                 .single();
+
+        DistinctCustomerTotals distinct = jdbc.sql("""
+                SELECT count(DISTINCT customer_subject_hash)::integer AS distinct_customers,
+                       count(DISTINCT customer_subject_hash) FILTER (WHERE is_first_order)::integer
+                           AS new_customers
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND customer_subject_hash IS NOT NULL
+                """ + filter + """
+                """)
+                .params(params)
+                .query((ResultSet row, int number) ->
+                        new DistinctCustomerTotals(row.getInt("distinct_customers"), row.getInt("new_customers")))
+                .single();
+
+        return new CustomerKpiRow(
+                completed.orderCount(),
+                distinct.distinctCustomers(),
+                distinct.newCustomers(),
+                completed.itemCountSum(),
+                completed.netSom(),
+                completed.legalEntityCount());
     }
+
+    /** {@link #readCustomerKpis}'s COMPLETED-only half — see that method's own doc. */
+    private record CompletedOrderTotals(int orderCount, int itemCountSum, long netSom, int legalEntityCount) {}
+
+    /** {@link #readCustomerKpis}'s any-terminal-status half — see that method's own doc. */
+    private record DistinctCustomerTotals(int distinctCustomers, int newCustomers) {}
 
     /**
      * The one row {@link #readCustomerKpis} returns — already-summed totals
@@ -2255,6 +2289,45 @@ public class JdbcReportingStore {
 
     /** One customer's RFM inputs for the range — see {@link #readCustomerRfmInputs}. */
     public record CustomerRfmRow(String customerSubjectHash, int orderCount, LocalDate lastOrderDate, long netSom) {}
+
+    /**
+     * How many distinct legal entities are present in a COMPLETED-order read over the given
+     * range/location/entity filters (ADR 0038). {@link #readCustomerRfmInputs} groups by {@code
+     * customer_subject_hash} alone, so a per-row {@code legal_entity_id} would not give a
+     * tenant-wide distinct-entity count — one customer's own orders can themselves span more than
+     * one entity, and Postgres window functions do not support {@code COUNT(DISTINCT ...) OVER
+     * ()} — hence this second, cheap scalar query rather than a column on {@link CustomerRfmRow}.
+     * Mirrors {@link CustomerKpiRow#legalEntityCount()}'s own inline {@code
+     * count(DISTINCT legal_entity_id)}.
+     */
+    public int readLegalEntityCount(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<UUID> legalEntityIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        StringBuilder filter = new StringBuilder();
+        if (!locationIds.isEmpty()) {
+            filter.append(" AND location_id IN (:locations)");
+            params.put("locations", locationIds);
+        }
+        if (!legalEntityIds.isEmpty()) {
+            filter.append(" AND legal_entity_id IN (:legalEntities)");
+            params.put("legalEntities", legalEntityIds);
+        }
+
+        return jdbc.sql("""
+                SELECT count(DISTINCT legal_entity_id)::integer AS legal_entity_count
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND terminal_status = 'COMPLETED' AND customer_subject_hash IS NOT NULL
+                """ + filter + """
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> row.getInt("legal_entity_count"))
+                .single();
+    }
 
     /** Which end of an order-grain read to serve — see {@link #readOrders}. */
     public enum OrderSort {

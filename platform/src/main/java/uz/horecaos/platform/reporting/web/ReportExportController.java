@@ -37,7 +37,11 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * <p>The PII column group is never a 403. A caller who lacks {@link Capability#CUSTOMER_PII_EXPORT}
  * still queues successfully; the columns that group would have carried are silently absent from
  * {@code effectiveColumns} and the artefact it produces — see {@link
- * ReportExportService#requestExport}'s own doc for where that decision is made.
+ * ReportExportService#requestExport}'s own doc for where that decision is made. The same grant is
+ * re-checked, per viewer, on every poll and every history read: {@code GET .../reports/{id}} and
+ * {@code GET .../exports} redact another principal's PII columns and download URL rather than
+ * ever leaking them to a {@code REPORT_EXPORT}-only holder — see {@link
+ * ReportExportService#status} and {@link ReportExportService#recentExports}.
  */
 @RestController
 @RequestMapping("/api/v1/tenants/{tenantId}/reporting")
@@ -90,10 +94,12 @@ public class ReportExportController {
             summary = "One report export's status",
             description = "What the export centre screen polls: QUEUED/RUNNING/COMPLETE/FAILED, "
                     + "the effective columns actually produced, whether the row quota truncated "
-                    + "the result, and a short-lived download URL once COMPLETE.")
+                    + "the result, and a short-lived download URL once COMPLETE. A viewer who "
+                    + "lacks customer.pii.export never sees another principal's PII columns or "
+                    + "download URL here, even for their own completed export.")
     public ResponseEntity<ReportExportStatusResponse> reportExportStatus(
             @PathVariable UUID tenantId, @PathVariable UUID id) {
-        return exports.status(tenantId, id)
+        return exports.status(tenantId, id, currentActorHoldsPiiCapability(tenantId))
                 .map(view -> ResponseEntity.ok(ReportExportStatusResponse.of(view)))
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such report export"));
     }
@@ -102,13 +108,26 @@ public class ReportExportController {
     @RequiresCapability(Capability.REPORT_EXPORT)
     @Operation(
             summary = "Recent report exports",
-            description = "The export centre screen's own job history, newest first.")
+            description = "The export centre screen's own job history, newest first. A viewer "
+                    + "who lacks customer.pii.export never sees another principal's PII columns "
+                    + "or download URL in this list.")
     public ResponseEntity<List<ReportExportStatusResponse>> recentExports(
             @PathVariable UUID tenantId, @RequestParam(defaultValue = "50") int limit) {
         int bounded = Math.clamp(limit, 1, 200);
-        return ResponseEntity.ok(exports.recentExports(tenantId, bounded).stream()
+        boolean holdsPiiCapability = currentActorHoldsPiiCapability(tenantId);
+        return ResponseEntity.ok(exports.recentExports(tenantId, bounded, holdsPiiCapability).stream()
                 .map(ReportExportStatusResponse::of)
                 .toList());
+    }
+
+    /**
+     * The polling/listing principal's own {@code customer.pii.export} grant — re-checked on
+     * every read because it is never the same principal as the one who queued the export (the
+     * export centre's job history is tenant-wide, not per-requester).
+     */
+    private boolean currentActorHoldsPiiCapability(UUID tenantId) {
+        return authorization.has(
+                currentActor.get().subject(), Capability.CUSTOMER_PII_EXPORT, ResourceScope.tenant(tenantId));
     }
 
     public record ReportExportRequest(
