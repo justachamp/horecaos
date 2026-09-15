@@ -220,6 +220,8 @@ export interface HourDemandResponse {
  * number traces back to `sampleDates`, real business dates a manager could
  * look up in 7.2's order log.
  */
+export type HolidayMode = 'INCLUDE' | 'EXCLUDE' | 'WEIGHT';
+
 export interface DemandHistoryResponse {
   readonly locationId: string;
   /** ISO-8601: 1 = Monday .. 7 = Sunday. */
@@ -227,8 +229,70 @@ export interface DemandHistoryResponse {
   readonly requestedSampleSize: number;
   readonly minimumSampleSize: number;
   readonly sampleDates: readonly string[];
+  /** 7.8b: the subset of `sampleDates` a `tenant.public_holidays` rule flagged — populated whatever `holidayMode` was requested. */
+  readonly holidayDates: readonly string[];
+  readonly holidayMode: HolidayMode;
   readonly hours: readonly HourDemandResponse[];
   readonly provenance: ProvenanceResponse;
+}
+
+/**
+ * Wave W02 (7.8): one hour of the latest forecast run — mirrors
+ * `ReportingController.DemandForecastHourResponse`.
+ */
+export interface DemandForecastHourResponse {
+  readonly operatingHour: number;
+  readonly forecastQuantity: number;
+  readonly confidenceLow: number;
+  readonly confidenceHigh: number;
+  readonly actualQuantity: number | null;
+  readonly absolutePercentageError: number | null;
+}
+
+/** One earlier run's forecast-vs-actual for one business date and hour — mirrors `ReportingController.DemandForecastComparisonResponse`. */
+export interface DemandForecastComparisonResponse {
+  readonly businessDate: string;
+  readonly operatingHour: number;
+  readonly forecastQuantity: number;
+  readonly actualQuantity: number | null;
+  readonly absolutePercentageError: number | null;
+}
+
+/**
+ * Wave W02 (7.8): the seasonal-naive forecast for one location and weekday.
+ * `runId` null and `hours` empty means `ForecastScheduler` has not generated
+ * a usable run yet.
+ */
+export interface DemandForecastResponse {
+  readonly locationId: string;
+  readonly weekday: number;
+  readonly runId: string | null;
+  readonly modelVersion: number;
+  readonly confidenceLevel: number;
+  readonly generatedAt: string | null;
+  readonly targetDate: string | null;
+  readonly hours: readonly DemandForecastHourResponse[];
+  readonly comparisons: readonly DemandForecastComparisonResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/** One department or product row of the breakdown — mirrors `ReportingController.DemandForecastBreakdownRowResponse`. */
+export interface DemandForecastBreakdownRowResponse {
+  readonly categoryId: string | null;
+  readonly variantId: string | null;
+  readonly productName: string | null;
+  readonly operatingHour: number;
+  readonly forecastQuantity: number;
+  readonly actualQuantity: number | null;
+  readonly absolutePercentageError: number | null;
+}
+
+/** Wave W02 (7.8a): the latest forecast run's department or product breakdown. */
+export interface DemandForecastBreakdownResponse {
+  readonly locationId: string;
+  readonly weekday: number;
+  readonly byProduct: boolean;
+  readonly rows: readonly DemandForecastBreakdownRowResponse[];
 }
 
 /**
@@ -547,7 +611,12 @@ export class ReportingApi {
   /** 7.8's historical average — see {@link DemandHistoryResponse}'s own doc. */
   async demandHistory(
     tenantId: string,
-    params: { readonly locationId: string; readonly weekday: number; readonly sampleSize?: number },
+    params: {
+      readonly locationId: string;
+      readonly weekday: number;
+      readonly sampleSize?: number;
+      readonly holidayMode?: HolidayMode;
+    },
   ): Promise<DemandHistoryResponse> {
     const result = await firstValueFrom(
       this.api.get<DemandHistoryResponse>(reportsPaths.demandHistory(tenantId), {
@@ -555,8 +624,54 @@ export class ReportingApi {
           locationId: params.locationId,
           weekday: params.weekday,
           sampleSize: params.sampleSize,
+          holidayMode: params.holidayMode,
         },
       }),
+    );
+    return result.value;
+  }
+
+  /** Wave W02: the seasonal-naive forecast, its confidence interval and the forecast-vs-actual comparison — see {@link DemandForecastResponse}'s own doc. */
+  async demandForecast(
+    tenantId: string,
+    params: {
+      readonly locationId: string;
+      readonly weekday: number;
+      readonly comparisonLimit?: number;
+    },
+  ): Promise<DemandForecastResponse> {
+    const result = await firstValueFrom(
+      this.api.get<DemandForecastResponse>(reportsPaths.demandForecast(tenantId), {
+        params: {
+          locationId: params.locationId,
+          weekday: params.weekday,
+          comparisonLimit: params.comparisonLimit,
+        },
+      }),
+    );
+    return result.value;
+  }
+
+  /** Wave W02 (7.8a): the latest forecast run's department or product breakdown. */
+  async demandForecastBreakdown(
+    tenantId: string,
+    params: {
+      readonly locationId: string;
+      readonly weekday: number;
+      readonly dimension: 'CATEGORY' | 'VARIANT';
+    },
+  ): Promise<DemandForecastBreakdownResponse> {
+    const result = await firstValueFrom(
+      this.api.get<DemandForecastBreakdownResponse>(
+        reportsPaths.demandForecastBreakdown(tenantId),
+        {
+          params: {
+            locationId: params.locationId,
+            weekday: params.weekday,
+            dimension: params.dimension,
+          },
+        },
+      ),
     );
     return result.value;
   }

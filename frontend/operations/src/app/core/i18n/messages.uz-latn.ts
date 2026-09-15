@@ -4273,7 +4273,7 @@ export const messagesUzLatn: MessageCatalogue = {
     'Oʻqilganlik belgilari koʻrsatilmaydi: hozircha na oʻqilgan holat, na oʻqilgan vaqt yozib borilmaydi — bu oʻlchanmagan, nolga teng emas.',
 
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
-  'reports.forecast.title': 'Talab tarixi',
+  'reports.forecast.title': 'Talab bashorati',
   'reports.forecast.intro':
     'Bu yerda nima sodir boʻlgani koʻrsatiladi, kelajakda nima boʻlishi mumkinligi emas: tanlangan hafta kunining ushbu joyda buyurtmalar tarixi mavjud boʻlgan soʻnggi holatlari boʻyicha har bir soatda bajarilgan buyurtmalarning oʻrtacha soni. Kelajakdagi talab modeli hozircha mavjud emas (ADR 0043).',
   'reports.forecast.loading': 'Yuklanmoqda…',
@@ -4299,6 +4299,31 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.forecast.weekOverview.show': 'Butun haftani koʻrsatish',
   'reports.forecast.weekOverview.loading': 'Hafta yuklanmoqda…',
   'reports.forecast.weekOverview.error': 'Hafta koʻrinishini yuklab boʻlmadi.',
+
+  // ---------------------------------------------------------------- reports 7.8/7.8a/7.8b forecast model (wave W02)
+  'reports.forecast.branch.label': 'Filial',
+  'reports.forecast.holiday.mode.label': 'Bayramlar',
+  'reports.forecast.holiday.mode.include': 'Hisobga olish',
+  'reports.forecast.holiday.mode.exclude': 'Chiqarib tashlash',
+  'reports.forecast.holiday.mode.weight': 'Yarim vazn',
+  'reports.forecast.holiday.flag': 'Davlat bayrami',
+  'reports.forecast.holiday.summary':
+    'Ushbu sanalardan {count} tasi davlat bayramiga toʻgʻri keldi.',
+  'reports.forecast.section.history': 'Tarixiy oʻrtacha',
+  'reports.forecast.section.model': 'Bashorat',
+  'reports.forecast.model.none': 'Bu filial va hafta kuni uchun hali bashorat tuzilmagan.',
+  'reports.forecast.model.caption':
+    'Model v{version}, {confidence}% ishonch oraligʻi, {date} uchun bashorat.',
+  'reports.forecast.model.column.forecast': 'Bashorat',
+  'reports.forecast.model.column.interval': 'Oraliq',
+  'reports.forecast.model.column.actual': 'Fakt',
+  'reports.forecast.model.comparison.title': 'Bashorat va fakt',
+  'reports.forecast.column.date': 'Sana',
+  'reports.forecast.breakdown.department': 'Boʻlim',
+  'reports.forecast.breakdown.product': 'Mahsulot',
+  'reports.forecast.breakdown.show': 'Taqsimotni koʻrsatish',
+  'reports.forecast.breakdown.empty': 'Bu tanlanmada boʻlim yoki mahsulot maʻlumotlari yoʻq.',
+  'reports.forecast.breakdown.error': 'Taqsimotni yuklab boʻlmadi.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Inkassatsiya',

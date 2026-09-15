@@ -24,6 +24,21 @@
     @case ('ready') {
       @if (response(); as r) {
         <div class="forecast__controls">
+          @if (locations().length > 1) {
+            <label class="forecast__branch">
+              <span class="q-caption">{{ 'reports.forecast.branch.label' | t }}</span>
+              <select
+                [value]="selectedLocationId()"
+                (change)="selectBranch($any($event.target).value)"
+                data-testid="forecast-branch"
+              >
+                @for (location of locations(); track location.id) {
+                  <option [value]="location.id">{{ location.displayName }}</option>
+                }
+              </select>
+            </label>
+          }
+
           <div class="forecast__weekdays" role="tablist">
             @for (day of WEEKDAYS; track day) {
               <button
@@ -52,95 +67,329 @@
               }
             </select>
           </label>
+
+          <div
+            class="forecast__holiday-mode"
+            role="group"
+            [attr.aria-label]="'reports.forecast.holiday.mode.label' | t"
+          >
+            <span class="q-caption">{{ 'reports.forecast.holiday.mode.label' | t }}</span>
+            <div class="forecast__segmented">
+              @for (mode of HOLIDAY_MODES; track mode) {
+                <button
+                  type="button"
+                  class="forecast__segment"
+                  [class.forecast__segment--active]="mode === holidayMode()"
+                  [attr.aria-pressed]="mode === holidayMode()"
+                  (click)="selectHolidayMode(mode)"
+                  [attr.data-testid]="'forecast-holiday-mode-' + mode"
+                >
+                  {{ holidayModeLabel(mode) }}
+                </button>
+              }
+            </div>
+          </div>
         </div>
 
-        <q-provenance-banner [provenance]="r.provenance" />
+        <!-- The demand-history section: an honest historical average, never a forecast in its own copy. -->
+        <section data-testid="demand-history-section">
+          <h2 class="q-subhead">{{ 'reports.forecast.section.history' | t }}</h2>
 
-        <div class="forecast__week-overview">
-          @if (weekGrid(); as grid) {
-            <q-heatmap-chart
-              [rows]="grid"
-              [ariaLabel]="'reports.forecast.weekOverview.title' | t"
-            />
-          } @else {
-            <button
-              type="button"
-              class="secondary"
-              (click)="showWeekOverview()"
-              [disabled]="weekGridLoading()"
-              data-testid="forecast-week-overview-button"
-            >
-              {{ 'reports.forecast.weekOverview.show' | t }}
-            </button>
-            @if (weekGridLoading()) {
-              <p class="q-caption" data-testid="forecast-week-overview-loading">
-                {{ 'reports.forecast.weekOverview.loading' | t }}
-              </p>
-            }
-            @if (weekGridError()) {
-              <p
-                class="q-caption forecast__week-overview-error"
-                data-testid="forecast-week-overview-error"
+          <q-provenance-banner [provenance]="r.provenance" />
+
+          <div class="forecast__week-overview">
+            @if (weekGrid(); as grid) {
+              <q-heatmap-chart
+                [rows]="grid"
+                [ariaLabel]="'reports.forecast.weekOverview.title' | t"
+              />
+            } @else {
+              <button
+                type="button"
+                class="secondary"
+                (click)="showWeekOverview()"
+                [disabled]="weekGridLoading()"
+                data-testid="forecast-week-overview-button"
               >
-                {{ 'reports.forecast.weekOverview.error' | t }}
-              </p>
+                {{ 'reports.forecast.weekOverview.show' | t }}
+              </button>
+              @if (weekGridLoading()) {
+                <p class="q-caption" data-testid="forecast-week-overview-loading">
+                  {{ 'reports.forecast.weekOverview.loading' | t }}
+                </p>
+              }
+              @if (weekGridError()) {
+                <p
+                  class="q-caption forecast__week-overview-error"
+                  data-testid="forecast-week-overview-error"
+                >
+                  {{ 'reports.forecast.weekOverview.error' | t }}
+                </p>
+              }
             }
-          }
-        </div>
+          </div>
 
-        @if (r.sampleDates.length === 0) {
-          <p class="q-body-sm forecast__state" data-testid="forecast-no-history">
-            {{ 'reports.forecast.thin.zero' | t }}
-          </p>
-        } @else if (belowMinimum(r)) {
-          <p class="q-body-sm forecast__state" data-testid="forecast-thin-sample">
-            {{
-              r.sampleDates.length === 1
-                ? ('reports.forecast.thin.one' | t)
-                : ('reports.forecast.thin.two' | t)
-            }}
-          </p>
-          <table class="forecast__table" data-testid="forecast-raw-table">
-            <thead>
-              <tr>
-                <th class="q-caption">{{ 'reports.forecast.column.hour' | t }}</th>
-                @for (date of r.sampleDates; track date) {
-                  <th class="q-caption q-tnum">{{ ddmmyyyy(date) }}</th>
-                }
-              </tr>
-            </thead>
-            <tbody>
-              @for (hour of r.hours; track hour.hourOfDay) {
+          @if (r.sampleDates.length === 0) {
+            <p class="q-body-sm forecast__state" data-testid="forecast-no-history">
+              {{ 'reports.forecast.thin.zero' | t }}
+            </p>
+          } @else if (belowMinimum(r)) {
+            <p class="q-body-sm forecast__state" data-testid="forecast-thin-sample">
+              {{
+                r.sampleDates.length === 1
+                  ? ('reports.forecast.thin.one' | t)
+                  : ('reports.forecast.thin.two' | t)
+              }}
+            </p>
+            <table class="forecast__table" data-testid="forecast-raw-table">
+              <thead>
                 <tr>
-                  <td>{{ hourWindowLabel(hour.hourOfDay) }}</td>
+                  <th class="q-caption">{{ 'reports.forecast.column.hour' | t }}</th>
                   @for (date of r.sampleDates; track date) {
-                    <td class="q-tnum">{{ hour.ordersByDate[date] ?? 0 }}</td>
+                    <th class="q-caption q-tnum">
+                      {{ ddmmyyyy(date) }}
+                      @if (isHoliday(r, date)) {
+                        <span
+                          class="forecast__holiday-flag"
+                          [attr.data-testid]="'forecast-holiday-' + date"
+                          [title]="'reports.forecast.holiday.flag' | t"
+                          >★</span
+                        >
+                      }
+                    </th>
                   }
                 </tr>
-              }
-            </tbody>
-          </table>
-        } @else {
-          <p class="q-body-sm forecast__state" data-testid="forecast-sample-summary">
-            {{ 'reports.forecast.sample.summary' | t: { count: r.sampleDates.length } }}
-          </p>
-          <table class="forecast__table" data-testid="forecast-table">
-            <thead>
-              <tr>
-                <th class="q-caption">{{ 'reports.forecast.column.hour' | t }}</th>
-                <th class="q-caption q-tnum">{{ 'reports.forecast.column.average' | t }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (hour of r.hours; track hour.hourOfDay) {
+              </thead>
+              <tbody>
+                @for (hour of r.hours; track hour.hourOfDay) {
+                  <tr>
+                    <td>{{ hourWindowLabel(hour.hourOfDay) }}</td>
+                    @for (date of r.sampleDates; track date) {
+                      <td class="q-tnum">{{ hour.ordersByDate[date] ?? 0 }}</td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          } @else {
+            <p class="q-body-sm forecast__state" data-testid="forecast-sample-summary">
+              {{ 'reports.forecast.sample.summary' | t: { count: r.sampleDates.length } }}
+            </p>
+            @if (r.holidayDates.length > 0) {
+              <p class="q-caption forecast__state" data-testid="forecast-holiday-summary">
+                {{ 'reports.forecast.holiday.summary' | t: { count: r.holidayDates.length } }}
+              </p>
+            }
+            <table class="forecast__table" data-testid="forecast-table">
+              <thead>
                 <tr>
-                  <td>{{ hourWindowLabel(hour.hourOfDay) }}</td>
-                  <td class="q-tnum">{{ formatAverage(hour.averageOrders) }}</td>
+                  <th class="q-caption">{{ 'reports.forecast.column.hour' | t }}</th>
+                  <th class="q-caption q-tnum">{{ 'reports.forecast.column.average' | t }}</th>
                 </tr>
+              </thead>
+              <tbody>
+                @for (hour of r.hours; track hour.hourOfDay) {
+                  <tr>
+                    <td>{{ hourWindowLabel(hour.hourOfDay) }}</td>
+                    <td class="q-tnum">{{ formatAverage(hour.averageOrders) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </section>
+
+        <!-- Wave W02: the genuine forecast — model version, confidence interval, and the actual once known. -->
+        <section data-testid="demand-forecast-section" class="forecast__model-section">
+          <h2 class="q-subhead">{{ 'reports.forecast.section.model' | t }}</h2>
+
+          @switch (forecastState()) {
+            @case ('loading') {
+              <p class="q-body-sm">{{ 'reports.forecast.loading' | t }}</p>
+            }
+            @case ('error') {
+              <div class="error-band" role="alert">
+                <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="retryForecast()"
+                  data-testid="forecast-model-retry"
+                >
+                  {{ 'reports.error.retry' | t }}
+                </button>
+              </div>
+            }
+            @case ('ready') {
+              @if (forecast(); as f) {
+                @if (f.runId === null || f.hours.length === 0) {
+                  <p class="q-body-sm forecast__state" data-testid="forecast-model-none">
+                    {{ 'reports.forecast.model.none' | t }}
+                  </p>
+                } @else {
+                  <p class="q-caption forecast__state">
+                    {{
+                      'reports.forecast.model.caption'
+                        | t
+                          : {
+                              version: f.modelVersion,
+                              confidence: confidencePercent(f.confidenceLevel),
+                              date: f.targetDate ? ddmmyyyy(f.targetDate) : '',
+                            }
+                    }}
+                  </p>
+                  <table class="forecast__table" data-testid="forecast-model-table">
+                    <thead>
+                      <tr>
+                        <th class="q-caption">{{ 'reports.forecast.column.hour' | t }}</th>
+                        <th class="q-caption q-tnum">
+                          {{ 'reports.forecast.model.column.forecast' | t }}
+                        </th>
+                        <th class="q-caption q-tnum">
+                          {{ 'reports.forecast.model.column.interval' | t }}
+                        </th>
+                        <th class="q-caption q-tnum">
+                          {{ 'reports.forecast.model.column.actual' | t }}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (hour of f.hours; track hour.operatingHour) {
+                        <tr>
+                          <td>{{ hourWindowLabel(hour.operatingHour) }}</td>
+                          <td class="q-tnum">{{ formatAverage(hour.forecastQuantity) }}</td>
+                          <td class="q-tnum">
+                            {{ formatAverage(hour.confidenceLow) }}–{{
+                              formatAverage(hour.confidenceHigh)
+                            }}
+                          </td>
+                          <td class="q-tnum">
+                            {{
+                              hour.actualQuantity === null
+                                ? '—'
+                                : formatAverage(hour.actualQuantity)
+                            }}
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+
+                  @if (f.comparisons.length > 0) {
+                    <h3 class="q-body-sm forecast__comparison-heading">
+                      {{ 'reports.forecast.model.comparison.title' | t }}
+                    </h3>
+                    <table class="forecast__table" data-testid="forecast-comparison-table">
+                      <thead>
+                        <tr>
+                          <th class="q-caption">{{ 'reports.forecast.column.date' | t }}</th>
+                          <th class="q-caption">{{ 'reports.forecast.column.hour' | t }}</th>
+                          <th class="q-caption q-tnum">
+                            {{ 'reports.forecast.model.column.forecast' | t }}
+                          </th>
+                          <th class="q-caption q-tnum">
+                            {{ 'reports.forecast.model.column.actual' | t }}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (
+                          row of f.comparisons;
+                          track row.businessDate + ':' + row.operatingHour
+                        ) {
+                          @if (row.actualQuantity !== null) {
+                            <tr>
+                              <td>{{ ddmmyyyy(row.businessDate) }}</td>
+                              <td>{{ hourWindowLabel(row.operatingHour) }}</td>
+                              <td class="q-tnum">{{ formatAverage(row.forecastQuantity) }}</td>
+                              <td class="q-tnum">{{ formatAverage(row.actualQuantity) }}</td>
+                            </tr>
+                          }
+                        }
+                      </tbody>
+                    </table>
+                  }
+
+                  <!-- 7.8a: department/product breakdown, opt-in like the week overview above. -->
+                  <div class="forecast__breakdown">
+                    @if (breakdown(); as b) {
+                      <div class="forecast__segmented" role="group">
+                        <button
+                          type="button"
+                          class="forecast__segment"
+                          [class.forecast__segment--active]="breakdownDimension() === 'CATEGORY'"
+                          (click)="selectBreakdownDimension('CATEGORY')"
+                          data-testid="forecast-breakdown-category"
+                        >
+                          {{ 'reports.forecast.breakdown.department' | t }}
+                        </button>
+                        <button
+                          type="button"
+                          class="forecast__segment"
+                          [class.forecast__segment--active]="breakdownDimension() === 'VARIANT'"
+                          (click)="selectBreakdownDimension('VARIANT')"
+                          data-testid="forecast-breakdown-product"
+                        >
+                          {{ 'reports.forecast.breakdown.product' | t }}
+                        </button>
+                      </div>
+                      @if (b.rows.length === 0) {
+                        <p class="q-caption forecast__state">
+                          {{ 'reports.forecast.breakdown.empty' | t }}
+                        </p>
+                      } @else {
+                        <table class="forecast__table" data-testid="forecast-breakdown-table">
+                          <thead>
+                            <tr>
+                              <th class="q-caption">
+                                {{
+                                  breakdownDimension() === 'CATEGORY'
+                                    ? ('reports.forecast.breakdown.department' | t)
+                                    : ('reports.forecast.breakdown.product' | t)
+                                }}
+                              </th>
+                              <th class="q-caption">{{ 'reports.forecast.column.hour' | t }}</th>
+                              <th class="q-caption q-tnum">
+                                {{ 'reports.forecast.model.column.forecast' | t }}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (
+                              row of b.rows;
+                              track row.categoryId + ':' + row.variantId + ':' + row.operatingHour
+                            ) {
+                              <tr>
+                                <td>{{ row.productName ?? row.categoryId ?? row.variantId }}</td>
+                                <td>{{ hourWindowLabel(row.operatingHour) }}</td>
+                                <td class="q-tnum">{{ formatAverage(row.forecastQuantity) }}</td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      }
+                    } @else {
+                      <button
+                        type="button"
+                        class="secondary"
+                        (click)="showBreakdown()"
+                        [disabled]="breakdownState() === 'loading'"
+                        data-testid="forecast-breakdown-show"
+                      >
+                        {{ 'reports.forecast.breakdown.show' | t }}
+                      </button>
+                      @if (breakdownState() === 'error') {
+                        <p class="q-caption forecast__week-overview-error">
+                          {{ 'reports.forecast.breakdown.error' | t }}
+                        </p>
+                      }
+                    }
+                  </div>
+                }
               }
-            </tbody>
-          </table>
-        }
+            }
+          }
+        </section>
       }
     }
   }

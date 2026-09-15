@@ -4248,7 +4248,7 @@ export const messagesRu: MessageCatalogue = {
     'Отметки о прочтении не показаны: пока не фиксируется ни статус прочтения, ни дата прочтения — это не измерено, а не равно нулю.',
 
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
-  'reports.forecast.title': 'История спроса',
+  'reports.forecast.title': 'Прогноз спроса',
   'reports.forecast.intro':
     'Здесь показано то, что произошло на самом деле, а не то, что может произойти: среднее количество завершённых заказов в каждый час за последние по времени случаи выбранного дня недели, по которым в этой точке есть история заказов. Модели будущего спроса пока не существует (ADR 0043).',
   'reports.forecast.loading': 'Загрузка…',
@@ -4274,6 +4274,30 @@ export const messagesRu: MessageCatalogue = {
   'reports.forecast.weekOverview.show': 'Показать всю неделю',
   'reports.forecast.weekOverview.loading': 'Загрузка недели…',
   'reports.forecast.weekOverview.error': 'Не удалось загрузить обзор недели.',
+
+  // ---------------------------------------------------------------- reports 7.8/7.8a/7.8b forecast model (wave W02)
+  'reports.forecast.branch.label': 'Филиал',
+  'reports.forecast.holiday.mode.label': 'Праздники',
+  'reports.forecast.holiday.mode.include': 'Учитывать',
+  'reports.forecast.holiday.mode.exclude': 'Исключить',
+  'reports.forecast.holiday.mode.weight': 'Половинный вес',
+  'reports.forecast.holiday.flag': 'Государственный праздник',
+  'reports.forecast.holiday.summary': '{count} из этих дат пришлись на государственный праздник.',
+  'reports.forecast.section.history': 'Историческое среднее',
+  'reports.forecast.section.model': 'Прогноз',
+  'reports.forecast.model.none': 'Прогноз для этого филиала и дня недели ещё не построен.',
+  'reports.forecast.model.caption':
+    'Модель v{version}, доверительный интервал {confidence}%, прогноз на {date}.',
+  'reports.forecast.model.column.forecast': 'Прогноз',
+  'reports.forecast.model.column.interval': 'Диапазон',
+  'reports.forecast.model.column.actual': 'Факт',
+  'reports.forecast.model.comparison.title': 'Прогноз и факт',
+  'reports.forecast.column.date': 'Дата',
+  'reports.forecast.breakdown.department': 'Отдел',
+  'reports.forecast.breakdown.product': 'Товар',
+  'reports.forecast.breakdown.show': 'Показать разбивку',
+  'reports.forecast.breakdown.empty': 'В этой выборке нет данных по отделам или товарам.',
+  'reports.forecast.breakdown.error': 'Не удалось загрузить разбивку.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Инкассация',
