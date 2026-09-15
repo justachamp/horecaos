@@ -3719,6 +3719,12 @@ export interface MyReferralResponse {
   redeemedAs?: ReferralStorefrontControllerRedemptionResponse;
 }
 
+export interface MyWorkChannelMixResponse {
+  channelMix?: Array<OrderMixSliceResponse>;
+  periodFrom?: string;
+  periodTo?: string;
+}
+
 export interface NewRateCardRequest {
   brandId: string;
   cardVersion?: number;
@@ -8352,6 +8358,7 @@ export interface Operations {
   "counts_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/counts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { from?: string; period?: "ALL_TIME" | "BUSINESS_DAY"; to?: string } } }; responses: { "200": OrderCountsResponse } };
   "customerLookup": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/customer-lookups"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: OperationsOrderControllerCustomerLookupRequest }; responses: { "200": CustomerLookupResponse } };
   "drafts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/drafts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channelId?: string; from?: string; limit?: number; to?: string } } }; responses: { "200": Array<DraftCartResponse> } };
+  "myWorkChannelMix": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/my-work/channel-mix"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { actorId?: string } } }; responses: { "200": MyWorkChannelMixResponse } };
   "rejectReasons": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/reject-reasons"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<RejectReasonResponse> } };
   "detail_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string }; query: { revision?: number } } }; responses: { "200": OrderDetailResponse } };
   "listAmendments": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/amendments"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": Array<AmendmentResponse> } };

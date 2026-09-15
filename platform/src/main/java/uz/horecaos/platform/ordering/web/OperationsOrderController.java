@@ -46,6 +46,7 @@ import uz.horecaos.platform.ordering.application.AggregatorOrderIntakeService;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
 import uz.horecaos.platform.ordering.application.LiveBoardQueryService;
+import uz.horecaos.platform.ordering.application.MyWorkQueryService;
 import uz.horecaos.platform.ordering.application.OperatorCustomerLookupService;
 import uz.horecaos.platform.ordering.application.OperatorOrderingService;
 import uz.horecaos.platform.ordering.application.OrderAction;
@@ -110,6 +111,7 @@ public class OperationsOrderController {
     private final OrderBulkActionService bulkActions;
     private final LiveBoardQueryService liveBoard;
     private final AggregatorOrderIntakeService aggregatorOrders;
+    private final MyWorkQueryService myWork;
 
     /**
      * Every capability {@link OrderActionsPolicy#availableFor} reads. Computed
@@ -141,7 +143,8 @@ public class OperationsOrderController {
             OperatorCustomerLookupService customerLookup,
             OrderBulkActionService bulkActions,
             LiveBoardQueryService liveBoard,
-            AggregatorOrderIntakeService aggregatorOrders) {
+            AggregatorOrderIntakeService aggregatorOrders,
+            MyWorkQueryService myWork) {
         this.orderQuery = orderQuery;
         this.orderState = orderState;
         this.outcomes = outcomes;
@@ -156,6 +159,7 @@ public class OperationsOrderController {
         this.bulkActions = bulkActions;
         this.liveBoard = liveBoard;
         this.aggregatorOrders = aggregatorOrders;
+        this.myWork = myWork;
     }
 
     /**
@@ -573,6 +577,37 @@ public class OperationsOrderController {
 
         var board = liveBoard.forLocation(tenantId, brandId, locationId, period, from, to);
         return ResponseEntity.ok(OrderCountsResponse.of(board, period));
+    }
+
+    @GetMapping("/my-work/channel-mix")
+    @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "IA 0.2a: the caller's own orders today, by sales channel",
+            description = "The one actor view this build can answer honestly: self-scoped by the "
+                    + "token's own subject, never by a request parameter. `actorId` exists only so "
+                    + "a caller can state its own subject back and be understood — passing any "
+                    + "other value is refused with 403 INSUFFICIENT_CAPABILITY rather than answered "
+                    + "with an empty or a substituted result, because `ORDER_READ` at this scope, "
+                    + "however wide the grant, never authorizes reading another operator's own "
+                    + "statistics; there is no staff directory yet to say whose they even are "
+                    + "(the staff-identity ADR, IA `0.2c`/`0.2d`). Cut to the tenant's own business "
+                    + "day (ADR 0043), the same boundary the live board's counters use.")
+    public ResponseEntity<MyWorkChannelMixResponse> myWorkChannelMix(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestParam(required = false) @Nullable String actorId) {
+
+        String subject = currentActor.get().subject();
+        if (actorId != null && !actorId.equals(subject)) {
+            throw new ApiException(
+                    ErrorCode.INSUFFICIENT_CAPABILITY,
+                    "My-work statistics are scoped to the caller's own subject; no capability "
+                            + "widens this read to another operator");
+        }
+
+        MyWorkQueryService.ChannelMix mix = myWork.channelMixForCaller(tenantId, locationId, subject);
+        return ResponseEntity.ok(MyWorkChannelMixResponse.of(mix));
     }
 
     @GetMapping("/drafts")
@@ -2207,6 +2242,26 @@ public class OperationsOrderController {
                     .filter(row -> dimension.equals(row.dimension()))
                     .map(row -> new OrderMixSliceResponse(row.key(), row.orders()))
                     .toList();
+        }
+    }
+
+    /**
+     * {@code GET .../orders/my-work/channel-mix} (IA 0.2a): the caller's own
+     * orders today, by sales channel. Reuses {@link OrderMixSliceResponse}
+     * rather than a second, identically-shaped record — the OpenAPI schema
+     * name space does not need two.
+     *
+     * @param periodFrom the tenant's business-day start this was cut to (ADR 0043)
+     * @param periodTo   the business-day end, exclusive
+     */
+    public record MyWorkChannelMixResponse(
+            Instant periodFrom, Instant periodTo, List<OrderMixSliceResponse> channelMix) {
+
+        static MyWorkChannelMixResponse of(MyWorkQueryService.ChannelMix mix) {
+            return new MyWorkChannelMixResponse(
+                    mix.window().from(),
+                    mix.window().to(),
+                    OrderMixSliceResponse.of(mix.channels(), JdbcOrderStore.MixSliceRow.CHANNEL));
         }
     }
 

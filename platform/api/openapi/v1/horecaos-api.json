@@ -11707,6 +11707,25 @@
         },
         "type" : "object"
       },
+      "MyWorkChannelMixResponse" : {
+        "properties" : {
+          "channelMix" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OrderMixSliceResponse"
+            },
+            "type" : "array"
+          },
+          "periodFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "periodTo" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "NewRateCardRequest" : {
         "properties" : {
           "brandId" : {
@@ -53944,6 +53963,58 @@
           }
         },
         "summary" : "Carts started and never converted (IA 1.4)",
+        "tags" : [ "Operations orders" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/my-work/channel-mix" : {
+      "get" : {
+        "description" : "The one actor view this build can answer honestly: self-scoped by the token's own subject, never by a request parameter. `actorId` exists only so a caller can state its own subject back and be understood — passing any other value is refused with 403 INSUFFICIENT_CAPABILITY rather than answered with an empty or a substituted result, because `ORDER_READ` at this scope, however wide the grant, never authorizes reading another operator's own statistics; there is no staff directory yet to say whose they even are (the staff-identity ADR, IA `0.2c`/`0.2d`). Cut to the tenant's own business day (ADR 0043), the same boundary the live board's counters use.",
+        "operationId" : "myWorkChannelMix",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "actorId",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MyWorkChannelMixResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "IA 0.2a: the caller's own orders today, by sales channel",
         "tags" : [ "Operations orders" ]
       }
     },
