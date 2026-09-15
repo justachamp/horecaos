@@ -11,16 +11,27 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
-import { TimeZone, formatClock } from '../../core/format/datetime';
+import {
+  TimeZone,
+  formatClock,
+  parseZonedDatetimeLocal,
+  toZonedDatetimeLocal,
+} from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { LocationsApi } from '../settings/locations/locations-api';
 import { describeApiError } from '../orders/order-errors';
 import { KitchenApi, TicketResponse } from './kitchen-api';
 
 /** Same cadence as the KDS queue (kitchen-queue-page.ts), until ADR 0045 exists. */
 const POLL_INTERVAL_MS = 10_000;
 
-/** See `order-queue.ts`'s identical constant — no location carries a timezone on any response this board reaches yet. */
+/**
+ * Used until {@link BufferPage.locationTimeZone} resolves (or if it never
+ * does — see {@link BufferPage.loadLocationTimeZone}'s best-effort fetch).
+ * See `order-queue.ts`'s identical constant, and `reservations-page.ts`'s
+ * `FALLBACK_TIME_ZONE`, which this mirrors.
+ */
 const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
 
 /**
@@ -56,6 +67,7 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
 export class BufferPage implements OnInit {
   private readonly kitchen = inject(KitchenApi);
   private readonly location = inject(CurrentLocation);
+  private readonly locationsApi = inject(LocationsApi);
   private readonly i18n = inject(I18n);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -65,6 +77,8 @@ export class BufferPage implements OnInit {
   protected readonly lastError = signal<ApiError | null>(null);
   protected readonly busyTicketIds = signal<ReadonlySet<string>>(new Set());
   protected readonly actionNotice = signal<string | null>(null);
+  /** The branch's real IANA zone once {@link loadLocationTimeZone} resolves; {@link PLACEHOLDER_TIME_ZONE} until then. */
+  protected readonly locationTimeZone = signal<TimeZone>(PLACEHOLDER_TIME_ZONE);
 
   /** The one row, if any, whose fire-time editor is open. */
   protected readonly editingTicketId = signal<string | null>(null);
@@ -101,7 +115,9 @@ export class BufferPage implements OnInit {
       // fire time to never, which the endpoint bounds identically.
       return true;
     }
-    return new Date(editedAt).getTime() > honestRelease.getTime();
+    return (
+      parseZonedDatetimeLocal(editedAt, this.locationTimeZone()).getTime() > honestRelease.getTime()
+    );
   });
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
@@ -122,7 +138,29 @@ export class BufferPage implements OnInit {
 
   private async start(): Promise<void> {
     await this.location.ensureLoaded();
+    void this.loadLocationTimeZone();
     await this.refresh();
+  }
+
+  /**
+   * Best-effort: `LocationsApi.profile` is the same real `Location.timezone`
+   * `reservations-page.ts` already resolves this way. A caller without
+   * `location.read` at this branch (or any other failure) leaves {@link
+   * locationTimeZone} at {@link PLACEHOLDER_TIME_ZONE} — no worse than this
+   * screen's behavior before this zone was wired in, never blocking the
+   * board itself on this fetch.
+   */
+  private async loadLocationTimeZone(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      const profile = await this.locationsApi.profile(scope);
+      this.locationTimeZone.set(profile.timezone);
+    } catch {
+      // Fall back silently — see doc comment above.
+    }
   }
 
   private async refresh(): Promise<void> {
@@ -154,12 +192,14 @@ export class BufferPage implements OnInit {
   }
 
   protected releaseAtLabel(ticket: TicketResponse): string | null {
-    return ticket.releaseAt ? formatClock(new Date(ticket.releaseAt), PLACEHOLDER_TIME_ZONE) : null;
+    return ticket.releaseAt
+      ? formatClock(new Date(ticket.releaseAt), this.locationTimeZone())
+      : null;
   }
 
   protected targetReadyLabel(ticket: TicketResponse): string | null {
     return ticket.targetReadyAt
-      ? formatClock(new Date(ticket.targetReadyAt), PLACEHOLDER_TIME_ZONE)
+      ? formatClock(new Date(ticket.targetReadyAt), this.locationTimeZone())
       : null;
   }
 
@@ -207,11 +247,13 @@ export class BufferPage implements OnInit {
     this.actionNotice.set(null);
   }
 
-  /** Opens the row's fire-time editor, pre-filled with its current `releaseAt`. */
+  /** Opens the row's fire-time editor, pre-filled with its current `releaseAt`, read in {@link locationTimeZone}. */
   protected startEdit(ticket: TicketResponse): void {
     this.editingTicketId.set(ticket.ticketId);
     this.editReleaseAtLocal.set(
-      ticket.releaseAt ? toDatetimeLocal(new Date(ticket.releaseAt)) : '',
+      ticket.releaseAt
+        ? toZonedDatetimeLocal(new Date(ticket.releaseAt), this.locationTimeZone())
+        : '',
     );
     this.editReasonCode.set('');
     this.editError.set(null);
@@ -247,9 +289,13 @@ export class BufferPage implements OnInit {
       return;
     }
     // The <input type="datetime-local">'s value has no timezone of its own;
-    // new Date(...) parses it as the browser's local time, the same honest
-    // reading campaigns-page.ts's identical scheduledAt field documents.
-    const releaseAt = local === '' ? null : new Date(local).toISOString();
+    // read it as wall-clock time in the branch's own zone (locationTimeZone,
+    // best-effort resolved by loadLocationTimeZone — PLACEHOLDER_TIME_ZONE
+    // until then), not whatever zone the operator's device happens to be
+    // set to. campaigns-page.ts's identical scheduledAt field still has the
+    // old `new Date(local)` browser-local bug this fixes.
+    const releaseAt =
+      local === '' ? null : parseZonedDatetimeLocal(local, this.locationTimeZone()).toISOString();
     const mode = releaseAt === null ? 'MANUAL_HOLD' : 'SCHEDULED';
     const applied = await this.applyReschedule(ticket, mode, releaseAt, reason || undefined);
     if (applied) {
@@ -337,13 +383,4 @@ function latestHonestRelease(ticket: TicketResponse): Date | null {
     return null;
   }
   return new Date(new Date(ticket.targetReadyAt).getTime() - ticket.prepEstimateSeconds * 1000);
-}
-
-/** `new Date()` in `<input type="datetime-local">`'s own value shape, in the browser's local time. */
-function toDatetimeLocal(date: Date): string {
-  const pad = (value: number): string => String(value).padStart(2, '0');
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-    `T${pad(date.getHours())}:${pad(date.getMinutes())}`
-  );
 }

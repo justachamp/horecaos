@@ -25,11 +25,13 @@
  * without weakening correctness.
  *
  * **Not verified against a physical scanner in this environment** — no
- * camera or reference decoder is available here (see this repo's own
- * `qr-encode.spec.ts` for the structural checks that *are* run: finder/timing
- * pattern shape, matrix dimensions, format-info self-consistency). Spot-check
- * a real render with a phone camera before this reaches a printed table card
- * or a production kitchen tablet.
+ * camera is available here, though `qr-encode.spec.ts` does round-trip every
+ * rendered matrix through a from-spec reference decoder (in addition to the
+ * structural checks: finder/timing pattern shape, matrix dimensions,
+ * format-info self-consistency), recovering both the exact payload text and
+ * the Reed–Solomon error-correction codewords. Spot-check a real render with
+ * a phone camera before this reaches a printed table card or a production
+ * kitchen tablet.
  */
 
 /** Thrown when a payload exceeds this encoder's 106-byte ceiling (version 5, level L). */
@@ -50,9 +52,9 @@ export interface QrMatrix {
   readonly modules: readonly (readonly boolean[])[];
 }
 
-/** One row per supported version (index 0 = version 1). */
-const DATA_CODEWORDS: readonly number[] = [19, 34, 55, 80, 108];
-const EC_CODEWORDS: readonly number[] = [7, 10, 15, 20, 26];
+/** One row per supported version (index 0 = version 1). Exported for round-trip decode tests. */
+export const DATA_CODEWORDS: readonly number[] = [19, 34, 55, 80, 108];
+export const EC_CODEWORDS: readonly number[] = [7, 10, 15, 20, 26];
 
 /** `floor((dataCodewords*8 - 12) / 8)` — 12 bits is the byte-mode mode+length-indicator overhead (versions 1–9). */
 export const QR_BYTE_CAPACITY: readonly number[] = DATA_CODEWORDS.map((cw) =>
@@ -176,7 +178,8 @@ function reedSolomonGenerator(ecCount: number): number[] {
   return poly;
 }
 
-function reedSolomonEncode(dataCodewords: number[], ecCount: number): number[] {
+/** Exported so a round-trip decode test can recompute the expected EC codewords without duplicating the GF(256) math. */
+export function reedSolomonEncode(dataCodewords: number[], ecCount: number): number[] {
   const generator = reedSolomonGenerator(ecCount);
   const buffer = [...dataCodewords, ...new Array<number>(ecCount).fill(0)];
   for (let i = 0; i < dataCodewords.length; i++) {
@@ -296,8 +299,13 @@ function renderMatrix(version: number, codewords: number[]): QrMatrix {
   const bits = codewordsToBits(codewords);
   let bitIndex = 0;
   let upward = true;
-  for (let colPair = size - 1; colPair > 0; colPair -= 2) {
-    const col = colPair === 6 ? 5 : colPair; // column 6 is the timing column — shift left past it
+  for (let col = size - 1; col > 0; col -= 2) {
+    if (col === 6) {
+      // Column 6 is the timing column — skip it by mutating the loop counter itself,
+      // so the *next* decrement continues the zigzag from column 5 (5,3,1,...) instead
+      // of restarting the even/odd parity from an unshifted column 6.
+      col = 5;
+    }
     for (let step = 0; step < size; step++) {
       const row = upward ? size - 1 - step : step;
       for (const c of [col, col - 1]) {

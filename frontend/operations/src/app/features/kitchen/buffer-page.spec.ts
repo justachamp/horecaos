@@ -5,11 +5,44 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { zonedTimeToInstant } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
+import { LocationView, LocationsApi } from '../settings/locations/locations-api';
 import { BoardResponse, KitchenApi, TicketResponse } from './kitchen-api';
 import { BufferPage } from './buffer-page';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
+/** Matches `BufferPage`'s own `PLACEHOLDER_TIME_ZONE`, so a test that never overrides `LocationsApi.profile` still reads a stable, known zone. */
+const ZONE = 'Asia/Tashkent';
+
+function locationView(overrides: Partial<LocationView> = {}): LocationView {
+  return {
+    id: 'l1',
+    tenantId: 't1',
+    brandId: 'b1',
+    code: 'CENTRE',
+    slug: 'centre',
+    displayName: 'Centre',
+    timezone: ZONE,
+    status: 'ACTIVE',
+    addressLine: null,
+    district: null,
+    city: null,
+    landmark: null,
+    contactPhone: null,
+    latitude: null,
+    longitude: null,
+    coordinateSource: 'NOT_GEOCODED',
+    ...overrides,
+  };
+}
+
+function defaultLocationsApi(overrides: Partial<LocationsApi> = {}): Partial<LocationsApi> {
+  return {
+    profile: () => Promise.resolve(locationView()),
+    ...overrides,
+  };
+}
 
 function held(overrides: Partial<TicketResponse>): TicketResponse {
   return {
@@ -37,7 +70,10 @@ async function flushMicrotasks(): Promise<void> {
 describe('BufferPage', () => {
   let fixture: ComponentFixture<BufferPage>;
 
-  async function render(kitchenApi: Partial<KitchenApi>): Promise<void> {
+  async function render(
+    kitchenApi: Partial<KitchenApi>,
+    options: { locationsApi?: Partial<LocationsApi> } = {},
+  ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [BufferPage],
       providers: [
@@ -50,6 +86,7 @@ describe('BufferPage', () => {
           },
         },
         { provide: KitchenApi, useValue: kitchenApi },
+        { provide: LocationsApi, useValue: options.locationsApi ?? defaultLocationsApi() },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -142,11 +179,49 @@ describe('BufferPage', () => {
     expect(call[1]).toBe('ticket-1');
     expect(call[2]).toBe(1);
     expect(call[3]).toBe('SCHEDULED');
-    expect(new Date(call[4] as string).getTime()).toBe(new Date('2026-09-14T19:30').getTime());
+    // Read in the branch's own zone (ZONE, resolved through LocationsApi), not
+    // whatever zone the machine running this test happens to be set to.
+    expect(new Date(call[4] as string).getTime()).toBe(
+      zonedTimeToInstant('2026-09-14', 19.5, ZONE).getTime(),
+    );
     // No promise on this fixture, so no reason is required or sent.
     expect(call[5]).toBeUndefined();
 
     expect(host.querySelector('[data-testid="buffer-edit-row"]')).toBeNull();
+  });
+
+  it("interprets the edited fire time in the branch's own zone, not the browser's (T02 gap-map regression: buffer-page.ts previously did `new Date(local).toISOString()`)", async () => {
+    const board: BoardResponse = { tickets: [held({})], warnings: [] };
+    const rescheduled = { ...held({}), releaseMode: 'SCHEDULED' as const };
+    const reschedule = vi.fn().mockReturnValue(of(rescheduled));
+    // A zone several hours off Asia/Tashkent (UTC+5, no DST): if the edit were
+    // ever parsed as the browser/test-runner's own local time (almost always
+    // UTC in CI) instead of this resolved zone, the asserted instant below
+    // would be wrong by that offset.
+    const REMOTE_ZONE = 'America/New_York';
+    await render(
+      { board: () => Promise.resolve(board), reschedule },
+      { locationsApi: { profile: () => Promise.resolve(locationView({ timezone: REMOTE_ZONE })) } },
+    );
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="buffer-edit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const input = host.querySelector('[data-testid="buffer-edit-release-at"]') as HTMLInputElement;
+    input.value = '2026-09-14T19:30';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    (host.querySelector('[data-testid="buffer-edit-submit"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(reschedule).toHaveBeenCalledTimes(1);
+    const call = reschedule.mock.calls[0];
+    expect(new Date(call[4] as string).getTime()).toBe(
+      zonedTimeToInstant('2026-09-14', 19.5, REMOTE_ZONE).getTime(),
+    );
   });
 
   it('requires a reason to hold or re-time a ticket that already has a promise', async () => {
@@ -190,6 +265,7 @@ describe('BufferPage', () => {
           },
         },
         { provide: KitchenApi, useValue: { board: vi.fn() } },
+        { provide: LocationsApi, useValue: defaultLocationsApi() },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
