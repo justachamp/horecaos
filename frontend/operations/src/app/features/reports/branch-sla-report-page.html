@@ -24,15 +24,31 @@
     }
     @case ('ready') {
       <h2 class="q-subhead">{{ 'reports.branches.leaderboard.title' | t }}</h2>
+
+      <div class="sort-controls" role="group" [attr.aria-label]="'reports.branches.sort.label' | t">
+        @for (key of sortKeys; track key) {
+          <button
+            type="button"
+            class="segment"
+            [class.segment--active]="sortBy() === key"
+            (click)="selectSort(key)"
+          >
+            {{ sortLabel(key) }}
+          </button>
+        }
+      </div>
+
       <table class="table">
         <thead>
           <tr>
             <th class="q-caption">{{ 'reports.branches.column.name' | t }}</th>
             <th class="q-caption num">{{ 'reports.branches.column.orders' | t }}</th>
+            <th class="q-caption num">{{ 'reports.branches.column.fulfilmentSplit' | t }}</th>
             <th class="q-caption num">{{ 'reports.branches.column.revenue' | t }}</th>
             <th class="q-caption num">{{ 'reports.branches.column.averageCheck' | t }}</th>
-            <th class="q-caption num">{{ 'reports.branches.column.cancelShare' | t }}</th>
             <th class="q-caption num">{{ 'reports.branches.column.prepTime' | t }}</th>
+            <th class="q-caption num">{{ 'reports.branches.column.cancelShare' | t }}</th>
+            <th class="q-caption num">{{ 'reports.branches.column.onTime' | t }}</th>
           </tr>
         </thead>
         <tbody>
@@ -40,16 +56,25 @@
             <tr>
               <td class="q-body-sm">{{ row.name }}</td>
               <td class="q-body-sm q-tnum num">{{ formatCountValue(row.orderCount) }}</td>
+              <td class="q-body-sm q-tnum num">
+                {{ formatCountValue(row.deliveryCount) }} /
+                {{ formatCountValue(row.pickupCount) }} /
+                {{ formatCountValue(row.aggregatorCount) }}
+              </td>
               <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.grossSom) }}</td>
               <td class="q-body-sm q-tnum num">
                 {{ row.averageCheckSom === null ? '—' : formatMoneyValue(row.averageCheckSom) }}
               </td>
-              <td class="q-body-sm q-tnum num">{{ row.cancelShare }}</td>
               <td class="q-body-sm q-tnum num">{{ formatPrep(row.prepMedianSeconds) }}</td>
+              <td class="q-body-sm q-tnum num">{{ row.cancelShare }}</td>
+              <td class="q-body-sm q-tnum num">{{ formatOnTime(row.onTimeSharePercent) }}</td>
             </tr>
           }
         </tbody>
       </table>
+      <p class="q-caption fulfilment-split-hint">
+        {{ 'reports.branches.column.fulfilmentSplit.hint' | t }}
+      </p>
 
       <h2 class="q-subhead sla-title">{{ 'reports.branches.sla.title' | t }}</h2>
       <q-histogram-chart
@@ -65,6 +90,7 @@
               <th class="q-caption num">{{ bucketLabel(bucket) }}</th>
             }
             <th class="q-caption num">{{ 'reports.branches.sla.total' | t }}</th>
+            <th class="q-caption num">{{ 'reports.branches.sla.median' | t }}</th>
           </tr>
         </thead>
         <tbody>
@@ -83,6 +109,7 @@
                 </td>
               }
               <td class="q-body-sm q-tnum num">{{ formatCountValue(row.total) }}</td>
+              <td class="q-body-sm q-tnum num">{{ formatPrep(row.medianSeconds) }}</td>
             </tr>
           }
         </tbody>
@@ -90,6 +117,64 @@
       <p class="q-caption bucket-version">
         {{ 'reports.branches.sla.version' | t: { version: slaBucketSetVersion } }}
       </p>
+
+      <h2 class="q-subhead channels-title">{{ 'reports.branches.channels.title' | t }}</h2>
+      <table class="table channels-table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'reports.branches.column.name' | t }}</th>
+            <th class="q-caption">{{ 'reports.branches.channels.column.channel' | t }}</th>
+            <th class="q-caption num">{{ 'reports.branches.column.orders' | t }}</th>
+            <th class="q-caption num">{{ 'reports.branches.column.averageCheck' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of channelRows(); track row.locationId + '|' + row.channelCode) {
+            <tr>
+              <td class="q-body-sm">{{ row.locationName }}</td>
+              <td class="q-body-sm">{{ row.channelName }}</td>
+              <td class="q-body-sm q-tnum num">{{ formatCountValue(row.orderCount) }}</td>
+              <td class="q-body-sm q-tnum num">
+                {{ row.averageCheckSom === null ? '—' : formatMoneyValue(row.averageCheckSom) }}
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm muted" colspan="4">
+                {{ 'reports.branches.channels.empty' | t }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <h2 class="q-subhead payments-title">{{ 'reports.branches.payments.title' | t }}</h2>
+      <table class="table payments-table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'reports.branches.column.name' | t }}</th>
+            <th class="q-caption">{{ 'reports.branches.payments.column.method' | t }}</th>
+            <th class="q-caption num">{{ 'reports.branches.payments.column.count' | t }}</th>
+            <th class="q-caption num">{{ 'reports.branches.payments.column.amount' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of paymentSplitRows(); track row.locationId + '|' + row.paymentMethodCode) {
+            <tr>
+              <td class="q-body-sm">{{ row.locationName }}</td>
+              <td class="q-body-sm">{{ row.paymentMethodName }}</td>
+              <td class="q-body-sm q-tnum num">{{ formatCountValue(row.tenderCount) }}</td>
+              <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.amountSom) }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm muted" colspan="4">
+                {{ 'reports.branches.payments.empty' | t }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
     }
   }
 </div>
