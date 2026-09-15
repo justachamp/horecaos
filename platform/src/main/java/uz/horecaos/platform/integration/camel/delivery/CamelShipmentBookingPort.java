@@ -239,6 +239,90 @@ public class CamelShipmentBookingPort implements ShipmentBookingPort {
     }
 
     /**
+     * Cancels a live booking or hold at the partner (ADR 0014's {@code
+     * CancelShipment}, gap map row 1.2g).
+     *
+     * <p>Resolved by binding id alone rather than re-derived from the booking
+     * capability codes {@link #book} uses: a cancel targets the exact partner
+     * that carried the shipment, whatever that partner declares today, and a
+     * binding that lost its booking capability since must still be reachable
+     * to cancel what it already booked. Tenant-scoped, never brand/location —
+     * the shipment already proves those; re-checking them here would refuse a
+     * legitimate cancel the moment a location's own binding assignment changes.
+     */
+    @Override
+    public CancellationReceipt cancel(CancelCommand command) {
+        Optional<BindingRef> resolved = installations.binding(command.tenantId(), command.bindingId());
+        if (resolved.isEmpty()) {
+            return CancellationReceipt.of(
+                    CancellationStatus.REJECTED,
+                    command,
+                    null,
+                    "BINDING_UNAVAILABLE",
+                    "Binding " + command.bindingId() + " is not available");
+        }
+        BindingRef binding = resolved.get();
+
+        ProviderOutcome outcome = send(new DeliveryOperation(
+                command.commandId(),
+                command.tenantId(),
+                binding,
+                DeliveryCapability.CANCEL_SHIPMENT,
+                null,
+                command.externalReference(),
+                command.reasonCode(),
+                command.correlationId()));
+
+        return translateCancellation(outcome, command, binding);
+    }
+
+    /**
+     * ADR 0007's four outcomes onto this port's five cancellation ones.
+     *
+     * <p>{@code paidCancellation} is Yandex's own flag ({@code
+     * YandexDeliveryAdapter#cancelShipment}, which already queries {@code
+     * cancel-info} before cancelling) and is simply absent on a partner that
+     * never classifies cost — Noor's cancel is a bare {@code SUCCESS} either
+     * way, and an absent flag reads as free rather than as chargeable, which
+     * is the honest answer for a partner that has nothing to say about cost.
+     */
+    private static CancellationReceipt translateCancellation(
+            ProviderOutcome outcome, CancelCommand command, BindingRef binding) {
+        return switch (outcome.status()) {
+            case SUCCESS ->
+                CancellationReceipt.of(
+                        Boolean.TRUE.equals(outcome.normalized().get("paidCancellation"))
+                                ? CancellationStatus.CANCELLED_WITH_COST
+                                : CancellationStatus.CANCELLED,
+                        command,
+                        binding.providerType(),
+                        null,
+                        null);
+            case REJECTED ->
+                CancellationReceipt.of(
+                        CancellationStatus.REJECTED,
+                        command,
+                        binding.providerType(),
+                        outcome.errorCode(),
+                        outcome.detail());
+            case RETRYABLE ->
+                CancellationReceipt.of(
+                        CancellationStatus.RETRYABLE,
+                        command,
+                        binding.providerType(),
+                        outcome.errorCode(),
+                        outcome.detail());
+            case UNCERTAIN ->
+                CancellationReceipt.of(
+                        CancellationStatus.UNCERTAIN,
+                        command,
+                        binding.providerType(),
+                        outcome.errorCode(),
+                        outcome.detail());
+        };
+    }
+
+    /**
      * Re-resolves the command's binding against the scope it was authorised for.
      *
      * <p>Constrained on tenant, brand and location rather than looked up by id,
