@@ -4225,6 +4225,7 @@ export const messagesRu: MessageCatalogue = {
   'reports.nav.customers': 'Клиенты',
   'reports.nav.marketing': 'Маркетинг',
   'reports.nav.forecast': 'Спрос',
+  'reports.nav.geography': 'География',
 
   'reports.branches.title': 'Отчёты по филиалам и SLA',
   'reports.branches.loading': 'Загрузка…',
@@ -4527,6 +4528,28 @@ export const messagesRu: MessageCatalogue = {
   'reports.forecast.breakdown.show': 'Показать разбивку',
   'reports.forecast.breakdown.empty': 'В этой выборке нет данных по отделам или товарам.',
   'reports.forecast.breakdown.error': 'Не удалось загрузить разбивку.',
+
+  // ---------------------------------------------------------------- 7.10 Geography: histograms and the week grid (wave W04)
+  'reports.geography.title': 'География',
+  'reports.geography.intro':
+    'Гистограммы времени и расстояния доставки, и тепловая карта по дням и часам.',
+  'reports.geography.loading': 'Загрузка…',
+  'reports.geography.mapDeferred':
+    'Карта плотности и точки заказов отложены до выбора картопровайдера (см. X.4).',
+  'reports.geography.branch.label': 'Филиал',
+  'reports.geography.section.histograms': 'Гистограммы времени и расстояния доставки',
+  'reports.geography.histogram.duration.title': 'Время обработки',
+  'reports.geography.histogram.distance.title': 'Расстояние',
+  'reports.geography.histogram.distance.unavailable':
+    'Пока не отображается — fact_delivery хранит расстояние, но чтения по интервалам нет.',
+  'reports.geography.section.cohort': 'Заказы по дню недели и часу',
+  'reports.geography.cohort.intro': 'Среднее число заказов в час, по дням недели. Нажмите ячейку.',
+  'reports.geography.drillDown.title': 'Заказы — {weekday}, {hour}',
+  'reports.geography.drillDown.close': 'Закрыть',
+  'reports.geography.drillDown.loading': 'Загрузка…',
+  'reports.geography.drillDown.empty': 'Нет подходящих заказов в выбранных датах.',
+  'reports.geography.drillDown.truncated':
+    'Последние 300 заказов за период — их может быть больше.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Инкассация',

@@ -1,0 +1,186 @@
+<div class="geography">
+  <div class="header">
+    <h1 class="q-title">{{ 'reports.geography.title' | t }}</h1>
+    <p class="q-body-sm geography__intro">{{ 'reports.geography.intro' | t }}</p>
+  </div>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'reports.geography.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied" data-testid="geography-denied">
+        {{ 'reports.denied.notGranted' | t }}
+      </p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+      </div>
+    }
+    @case ('ready') {
+      @if (locations().length > 1) {
+        <label class="geography__branch">
+          <span class="q-caption">{{ 'reports.geography.branch.label' | t }}</span>
+          <select
+            [value]="selectedLocationId()"
+            (change)="selectBranch($any($event.target).value)"
+            data-testid="geography-branch"
+          >
+            @for (location of locations(); track location.id) {
+              <option [value]="location.id">{{ location.displayName }}</option>
+            }
+          </select>
+        </label>
+      }
+
+      <p class="q-caption geography__map-deferred" data-testid="geography-map-deferred">
+        {{ 'reports.geography.mapDeferred' | t }}
+      </p>
+
+      <!-- 7.10b: delivery-time and distance histograms -->
+      <section data-testid="geography-histogram-section">
+        <h2 class="q-subhead">{{ 'reports.geography.section.histograms' | t }}</h2>
+
+        @switch (histogramState()) {
+          @case ('loading') {
+            <p class="q-body-sm">{{ 'reports.geography.loading' | t }}</p>
+          }
+          @case ('error') {
+            <div class="error-band" role="alert">
+              <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+              <button
+                type="button"
+                class="secondary"
+                (click)="retryHistogram()"
+                data-testid="geography-histogram-retry"
+              >
+                {{ 'reports.error.retry' | t }}
+              </button>
+            </div>
+          }
+          @case ('ready') {
+            <q-provenance-banner [provenance]="histogramProvenance()" />
+            <div class="geography__histograms">
+              <div class="geography__histogram">
+                <h3 class="q-body-sm">{{ 'reports.geography.histogram.duration.title' | t }}</h3>
+                <q-histogram-chart
+                  [buckets]="durationBuckets()"
+                  [ariaLabel]="'reports.geography.histogram.duration.title' | t"
+                  [valueFormatter]="formatCount"
+                  data-testid="geography-duration-histogram"
+                />
+              </div>
+              <div class="geography__histogram">
+                <h3 class="q-body-sm">{{ 'reports.geography.histogram.distance.title' | t }}</h3>
+                <p
+                  class="q-body-sm geography__unavailable"
+                  data-testid="geography-distance-unavailable"
+                >
+                  {{ 'reports.geography.histogram.distance.unavailable' | t }}
+                </p>
+              </div>
+            </div>
+          }
+        }
+      </section>
+
+      <!-- 7.10c: day-of-week x hour cohort grid -->
+      <section data-testid="geography-cohort-section">
+        <h2 class="q-subhead">{{ 'reports.geography.section.cohort' | t }}</h2>
+        <p class="q-body-sm geography__intro">{{ 'reports.geography.cohort.intro' | t }}</p>
+
+        <label class="geography__sample-size">
+          <span class="q-caption">{{ 'reports.forecast.sampleSize.label' | t }}</span>
+          <select
+            [value]="sampleSize()"
+            (change)="selectSampleSize(+$any($event.target).value)"
+            data-testid="geography-sample-size"
+          >
+            @for (option of SAMPLE_SIZE_OPTIONS; track option) {
+              <option [value]="option">
+                {{ 'reports.forecast.sampleSize.option' | t: { count: option } }}
+              </option>
+            }
+          </select>
+        </label>
+
+        @switch (weekGridState()) {
+          @case ('loading') {
+            <p class="q-body-sm">{{ 'reports.geography.loading' | t }}</p>
+          }
+          @case ('error') {
+            <div class="error-band" role="alert">
+              <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+              <button
+                type="button"
+                class="secondary"
+                (click)="retryWeekGrid()"
+                data-testid="geography-week-grid-retry"
+              >
+                {{ 'reports.error.retry' | t }}
+              </button>
+            </div>
+          }
+          @case ('ready') {
+            @if (weekGrid(); as grid) {
+              <q-heatmap-chart
+                [rows]="grid"
+                [ariaLabel]="'reports.geography.section.cohort' | t"
+                (cellClicked)="onCellClicked($event)"
+                data-testid="geography-week-grid"
+              />
+            }
+          }
+        }
+
+        @if (drillDown(); as d) {
+          <div
+            class="geography__drilldown"
+            role="dialog"
+            [attr.aria-label]="
+              'reports.geography.drillDown.title'
+                | t: { weekday: weekdayLabel(d.weekday), hour: d.hourLabel }
+            "
+            data-testid="geography-drilldown"
+          >
+            <div class="geography__drilldown-header">
+              <h3 class="q-body-sm">
+                {{
+                  'reports.geography.drillDown.title'
+                    | t: { weekday: weekdayLabel(d.weekday), hour: d.hourLabel }
+                }}
+              </h3>
+              <button
+                type="button"
+                class="secondary"
+                (click)="closeDrillDown()"
+                data-testid="geography-drilldown-close"
+              >
+                {{ 'reports.geography.drillDown.close' | t }}
+              </button>
+            </div>
+
+            @if (drillDownLoading()) {
+              <p class="q-body-sm">{{ 'reports.geography.drillDown.loading' | t }}</p>
+            } @else {
+              @if (d.maybeIncomplete) {
+                <p
+                  class="q-caption geography__drilldown-truncated"
+                  data-testid="geography-drilldown-truncated"
+                >
+                  {{ 'reports.geography.drillDown.truncated' | t }}
+                </p>
+              }
+              <q-order-rows-table
+                [rows]="d.rows"
+                [columns]="drillDownColumns"
+                emptyMessageKey="reports.geography.drillDown.empty"
+              />
+            }
+          </div>
+        }
+      </section>
+    }
+  }
+</div>

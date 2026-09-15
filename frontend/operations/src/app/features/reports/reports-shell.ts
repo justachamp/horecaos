@@ -47,11 +47,15 @@ import { Granularity, PeriodPreset, ReportsFilterState } from './reports-filter-
  * still routing to the shared `NotBuiltPage`, naming the fact family it is
  * missing rather than shipping a chart over nothing.
  *
- * **7.8 Demand stays off this bar.** Its unit is not a date span but "the
- * most recent occurrences of one weekday", an axis the bar has no control
- * for — the same selective applicability 7.3 and 7.7 already have (they read
- * `range()` only, not branch/channel/legal-entity yet; wiring those tabs to
- * the fuller state is those waves' own follow-up, not reopened here).
+ * **7.8 Demand and 7.10 Geography stay off this bar.** Neither's unit is a
+ * date span over many branches: 7.8's is "the most recent occurrences of one
+ * weekday" and 7.10's is a single selected branch, both axes this bar has no
+ * control for — the same selective applicability 7.3 and 7.7 already have
+ * (they read `range()` only, not branch/channel/legal-entity yet; wiring
+ * those tabs to the fuller state is those waves' own follow-up, not reopened
+ * here). Wave W04 (7.10b/7.10c) is this section's first honest surfacing —
+ * no route, tab or placeholder existed for it before; see
+ * `geography-page.ts`'s own doc for what ships and what stays deferred.
  */
 @Component({
   selector: 'q-reports-shell',

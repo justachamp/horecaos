@@ -774,6 +774,17 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/reports/demand-forecast-page').then((m) => m.DemandForecastPage),
           },
+          // 7.10b/7.10c Geography (wave W04): §7.10 had no route, no nav
+          // entry and no placeholder before this wave — unlike every other
+          // unbuilt reports section. This ships the histogram and cohort-
+          // grid sub-rows; the map-shaped rows (7.10/7.10a, order-density
+          // heatmap and today's orders as pins) stay deferred with X.4 and
+          // are named as such on the page itself, not silently absent.
+          {
+            path: 'geography',
+            loadComponent: () =>
+              import('./features/reports/geography-page').then((m) => m.GeographyPage),
+          },
           // 7.2e (wave P28): the export centre — POST/GET .../reporting/exports
           // under report.export, with the PII column group additionally
           // gated on customer.pii.export. Only the customer directory report
