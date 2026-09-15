@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
@@ -46,6 +54,13 @@ interface HoverTip {
  * their own row. `value: null` (`HourDemandResponse.averageOrders`'s own
  * honesty rule — a sample thinner than the location's minimum) renders as a
  * hatched, uncoloured cell, never a fabricated shade of the lowest step.
+ *
+ * `cellClicked` (wave W04, 7.10c) is optional and inert unless a caller binds
+ * it — every existing caller that only renders the grid is unaffected. A
+ * caller that does bind it (the day-of-week x hour cohort grid's own
+ * drill-down) receives the clicked cell's own `rowKey`/`colKey` back exactly
+ * as it supplied them in `rows()`, never a re-derived index, so the caller's
+ * own domain ids (a weekday number, an hour-of-day) round-trip untouched.
  */
 @Component({
   selector: 'q-heatmap-chart',
@@ -60,6 +75,8 @@ export class HeatmapChart {
   readonly rows = input.required<readonly ChartHeatRow[]>();
   readonly ariaLabel = input.required<string>();
   readonly valueFormatter = input<ChartValueFormatter>(DEFAULT_VALUE_FORMATTER);
+  /** Wave W04 (7.10c): fires on a cell click with the row/col keys `rows()` supplied — see this class's own doc. */
+  readonly cellClicked = output<{ readonly rowKey: string; readonly colKey: string }>();
 
   protected readonly width = WIDTH;
   protected readonly rowLabelWidth = ROW_LABEL_WIDTH;
@@ -127,6 +144,10 @@ export class HeatmapChart {
 
   protected clearHover(): void {
     this.hover.set(null);
+  }
+
+  protected onCellClick(cell: Cell): void {
+    this.cellClicked.emit({ rowKey: cell.rowKey, colKey: cell.colKey });
   }
 
   private noDataLabel(): string {
