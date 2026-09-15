@@ -150,20 +150,18 @@ describe('ProductAnalyticsPage', () => {
               .mockReturnValue(
                 of([{ catalogId: 'catalog-1', code: 'main', name: 'Main', status: 'ACTIVE' }]),
               ),
-            listCategories: vi
-              .fn()
-              .mockReturnValue(
-                of([
-                  {
-                    categoryId: 'category-mains',
-                    code: 'mains',
-                    name: 'Основные блюда',
-                    sortOrder: 0,
-                    status: 'ACTIVE',
-                    productCount: 1,
-                  },
-                ]),
-              ),
+            listCategories: vi.fn().mockReturnValue(
+              of([
+                {
+                  categoryId: 'category-mains',
+                  code: 'mains',
+                  name: 'Основные блюда',
+                  sortOrder: 0,
+                  status: 'ACTIVE',
+                  productCount: 1,
+                },
+              ]),
+            ),
             variantsAtLocation: vi.fn().mockReturnValue(
               of({
                 items: [
