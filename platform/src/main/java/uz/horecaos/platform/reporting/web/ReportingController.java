@@ -21,6 +21,7 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.reporting.application.ReportQuery;
 import uz.horecaos.platform.reporting.application.ReportQueryService;
 import uz.horecaos.platform.reporting.domain.Grain;
+import uz.horecaos.platform.reporting.domain.HolidayMode;
 import uz.horecaos.platform.reporting.domain.MetricDefinition;
 import uz.horecaos.platform.reporting.domain.SlaBucketSet;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
@@ -412,15 +413,19 @@ public class ReportingController {
             summary = "Historical average order count by hour, for one location and weekday",
             description = "Not a forecast (the owner's 2026-09-05 decision, ADR 0043's "
                     + "implementation status): an average of completed orders in each hour, over "
-                    + "the location's most recent occurrences of the requested weekday. Below "
-                    + "minimumSampleSize qualifying dates, averageOrders is null on every hour and "
-                    + "ordersByDate carries the raw per-date counts instead, so a sample too thin "
-                    + "to mean anything is never shown as a confident number.")
+                    + "the location's most recent occurrences of the requested weekday. hourOfDay "
+                    + "is operating-day-relative (0 is the location's own business-day start), not "
+                    + "wall-clock. Below minimumSampleSize qualifying dates, averageOrders is null "
+                    + "on every hour and ordersByDate carries the raw per-date counts instead, so a "
+                    + "sample too thin to mean anything is never shown as a confident number. "
+                    + "holidayMode (7.8b) controls how a tenant.public_holidays date in the sample "
+                    + "counts: INCLUDE (default) fully, EXCLUDE not at all, WEIGHT at half.")
     public ResponseEntity<DemandHistoryResponse> demandHistory(
             @PathVariable UUID tenantId,
             @RequestParam UUID locationId,
             @RequestParam int weekday,
-            @RequestParam(required = false) Integer sampleSize) {
+            @RequestParam(required = false) Integer sampleSize,
+            @RequestParam(required = false) HolidayMode holidayMode) {
 
         if (weekday < 1 || weekday > 7) {
             throw new ApiException(
@@ -429,7 +434,12 @@ public class ReportingController {
                     Map.of("weekday", weekday));
         }
 
-        var result = queries.demandHistory(tenantId, locationId, weekday, clampDemandSampleSize(sampleSize));
+        var result = queries.demandHistory(
+                tenantId,
+                locationId,
+                weekday,
+                clampDemandSampleSize(sampleSize),
+                holidayMode == null ? HolidayMode.INCLUDE : holidayMode);
         return ResponseEntity.ok(DemandHistoryResponse.of(result));
     }
 
@@ -447,6 +457,82 @@ public class ReportingController {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "sampleSize must be at least 1", Map.of());
         }
         return Math.min(requested, DEMAND_SAMPLE_MAX);
+    }
+
+    @GetMapping("/demand-forecast")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary =
+                    "The seasonal-naive forecast for one location and weekday, with its confidence interval and comparison to what actually happened",
+            description = "Wave W02. hourOfDay is operating-day-relative, matching demand-history. "
+                    + "runId is null when ForecastScheduler has not generated a run for this location "
+                    + "and weekday yet; hours is empty when the run exists but its sample was too thin "
+                    + "to publish any hour (the same refusal demand-history makes). actualQuantity and "
+                    + "absolutePercentageError are null on an hour until that business date's day closes.")
+    public ResponseEntity<DemandForecastResponse> demandForecast(
+            @PathVariable UUID tenantId,
+            @RequestParam UUID locationId,
+            @RequestParam int weekday,
+            @RequestParam(required = false) Integer comparisonLimit) {
+
+        if (weekday < 1 || weekday > 7) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "weekday must be between 1 (Monday) and 7 (Sunday), ISO-8601",
+                    Map.of("weekday", weekday));
+        }
+
+        var result =
+                queries.demandForecast(tenantId, locationId, weekday, clampForecastComparisonDates(comparisonLimit));
+        return ResponseEntity.ok(DemandForecastResponse.of(result));
+    }
+
+    /** How many of the weekday's earlier forecasted business dates {@code comparisons} covers, every hour of each. */
+    private static final int FORECAST_COMPARISON_DEFAULT_DATES = 4;
+
+    private static final int FORECAST_COMPARISON_MAX_DATES = 24;
+
+    private static int clampForecastComparisonDates(@Nullable Integer requested) {
+        if (requested == null) {
+            return FORECAST_COMPARISON_DEFAULT_DATES;
+        }
+        if (requested < 1) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "comparisonLimit must be at least 1", Map.of());
+        }
+        return Math.min(requested, FORECAST_COMPARISON_MAX_DATES);
+    }
+
+    @GetMapping("/demand-forecast/breakdown")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "7.8a: the latest forecast run's department or product breakdown",
+            description = "dimension=CATEGORY groups by kitchen/menu category (department); "
+                    + "dimension=VARIANT groups by product, capped to the best-selling products in "
+                    + "the sample the run was generated from. No confidence interval at this grain in "
+                    + "this wave — confidenceLow/confidenceHigh do not appear on these rows at all, "
+                    + "unlike the branch-level demand-forecast.")
+    public ResponseEntity<DemandForecastBreakdownResponse> demandForecastBreakdown(
+            @PathVariable UUID tenantId,
+            @RequestParam UUID locationId,
+            @RequestParam int weekday,
+            @RequestParam ForecastDimension dimension) {
+
+        if (weekday < 1 || weekday > 7) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "weekday must be between 1 (Monday) and 7 (Sunday), ISO-8601",
+                    Map.of("weekday", weekday));
+        }
+
+        var result =
+                queries.demandForecastBreakdown(tenantId, locationId, weekday, dimension == ForecastDimension.VARIANT);
+        return ResponseEntity.ok(DemandForecastBreakdownResponse.of(result));
+    }
+
+    /** {@code demandForecastBreakdown}'s {@code dimension} query parameter. */
+    public enum ForecastDimension {
+        CATEGORY,
+        VARIANT
     }
 
     private static final int VARIANT_SALES_DEFAULT_LIMIT = 200;
@@ -828,6 +914,9 @@ public class ReportingController {
             int requestedSampleSize,
             int minimumSampleSize,
             List<LocalDate> sampleDates,
+            /** 7.8b: the subset of {@code sampleDates} a {@code tenant.public_holidays} rule flagged — populated whatever {@code holidayMode} was requested. */
+            List<LocalDate> holidayDates,
+            HolidayMode holidayMode,
             List<HourDemandResponse> hours,
             ProvenanceResponse provenance) {
 
@@ -838,8 +927,120 @@ public class ReportingController {
                     result.requestedSampleSize(),
                     result.minimumSampleSize(),
                     result.sampleDates(),
+                    result.holidayDates().stream().sorted().toList(),
+                    result.holidayMode(),
                     result.hours().stream().map(HourDemandResponse::of).toList(),
                     ProvenanceResponse.of(result.provenance()));
+        }
+    }
+
+    /** One hour of the latest forecast run — mirrors {@code ReportQueryService.DemandForecastHour}. */
+    public record DemandForecastHourResponse(
+            int operatingHour,
+            double forecastQuantity,
+            double confidenceLow,
+            double confidenceHigh,
+            @Nullable Double actualQuantity,
+            @Nullable Double absolutePercentageError) {
+
+        static DemandForecastHourResponse of(ReportQueryService.DemandForecastHour hour) {
+            return new DemandForecastHourResponse(
+                    hour.operatingHour(),
+                    hour.forecastQuantity(),
+                    hour.confidenceLow(),
+                    hour.confidenceHigh(),
+                    hour.actualQuantity(),
+                    hour.absolutePercentageError());
+        }
+    }
+
+    /** One earlier run's forecast-vs-actual for one business date and hour — mirrors {@code ReportQueryService.DemandForecastComparison}. */
+    public record DemandForecastComparisonResponse(
+            LocalDate businessDate,
+            int operatingHour,
+            double forecastQuantity,
+            @Nullable Double actualQuantity,
+            @Nullable Double absolutePercentageError) {
+
+        static DemandForecastComparisonResponse of(ReportQueryService.DemandForecastComparison comparison) {
+            return new DemandForecastComparisonResponse(
+                    comparison.businessDate(),
+                    comparison.operatingHour(),
+                    comparison.forecastQuantity(),
+                    comparison.actualQuantity(),
+                    comparison.absolutePercentageError());
+        }
+    }
+
+    /**
+     * Wave W02 (7.8): the seasonal-naive forecast for one location and
+     * weekday. {@code runId} null and {@code hours} empty means {@code
+     * ForecastScheduler} has not generated a usable run yet — never rendered
+     * as a zero-filled chart.
+     */
+    public record DemandForecastResponse(
+            UUID locationId,
+            int weekday,
+            @Nullable UUID runId,
+            int modelVersion,
+            double confidenceLevel,
+            @Nullable Instant generatedAt,
+            @Nullable LocalDate targetDate,
+            List<DemandForecastHourResponse> hours,
+            List<DemandForecastComparisonResponse> comparisons,
+            ProvenanceResponse provenance) {
+
+        static DemandForecastResponse of(ReportQueryService.DemandForecastResult result) {
+            return new DemandForecastResponse(
+                    result.locationId(),
+                    result.weekday(),
+                    result.runId(),
+                    result.modelVersion(),
+                    result.confidenceLevel(),
+                    result.generatedAt(),
+                    result.targetDate(),
+                    result.hours().stream().map(DemandForecastHourResponse::of).toList(),
+                    result.comparisons().stream()
+                            .map(DemandForecastComparisonResponse::of)
+                            .toList(),
+                    ProvenanceResponse.of(result.provenance()));
+        }
+    }
+
+    /** One department or product row of the breakdown — mirrors {@code ReportQueryService.DemandForecastBreakdownRow}. */
+    public record DemandForecastBreakdownRowResponse(
+            @Nullable UUID categoryId,
+            @Nullable UUID variantId,
+            @Nullable String productName,
+            int operatingHour,
+            double forecastQuantity,
+            @Nullable Double actualQuantity,
+            @Nullable Double absolutePercentageError) {
+
+        static DemandForecastBreakdownRowResponse of(ReportQueryService.DemandForecastBreakdownRow row) {
+            return new DemandForecastBreakdownRowResponse(
+                    row.categoryId(),
+                    row.variantId(),
+                    row.productName(),
+                    row.operatingHour(),
+                    row.forecastQuantity(),
+                    row.actualQuantity(),
+                    row.absolutePercentageError());
+        }
+    }
+
+    /** Wave W02 (7.8a): the latest forecast run's department or product breakdown. */
+    public record DemandForecastBreakdownResponse(
+            UUID locationId, int weekday, boolean byProduct, List<DemandForecastBreakdownRowResponse> rows) {
+
+        static DemandForecastBreakdownResponse of(ReportQueryService.DemandForecastBreakdownResult result) {
+            return new DemandForecastBreakdownResponse(
+                    result.locationId(),
+                    result.weekday(),
+                    result.byProduct(),
+                    result.rows().stream()
+                            .map(DemandForecastBreakdownRowResponse::of)
+                            .toList());
         }
     }
 

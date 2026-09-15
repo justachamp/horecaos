@@ -204,10 +204,10 @@ class VariantSalesReportingTests {
         jdbc.sql("""
                 INSERT INTO reporting.fact_order_line (
                     tenant_id, business_date, order_id, line_id, location_id, variant_id, category_id,
-                    product_name_snapshot, quantity, gross_som, discount_som, net_som)
+                    product_name_snapshot, quantity, gross_som, discount_som, net_som, occurred_at)
                 VALUES (
                     :tenantId, :businessDate, :orderId, :lineId, :locationId, :variantId, :categoryId,
-                    :productName, :quantity, :gross, :discount, :net)
+                    :productName, :quantity, :gross, :discount, :net, :occurredAt)
                 """)
                 .param("tenantId", tenantId)
                 .param("businessDate", DAY)
@@ -221,6 +221,11 @@ class VariantSalesReportingTests {
                 .param("gross", grossSom)
                 .param("discount", grossSom - netSom)
                 .param("net", netSom)
+                // Matches insertOrder's own occurred_at for the sibling
+                // fact_order row (the sample here is a fixed order-of-day, not
+                // order-specific), the (business_date, order_id) pairing the
+                // wave W02 backfill migration joins on.
+                .param("occurredAt", DAY.atTime(9, 0).minusHours(5).atOffset(ZoneOffset.UTC))
                 .update();
     }
 

@@ -4410,7 +4410,7 @@ export const messagesEn = {
     'Read receipts are not shown: there is no read status or read_at column recorded yet — this is unmeasured, not zero.',
 
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
-  'reports.forecast.title': 'Demand history',
+  'reports.forecast.title': 'Demand forecast',
   'reports.forecast.intro':
     'This shows what actually happened, not what might happen: the average number of completed orders in each hour, across the most recent occurrences of the selected weekday for which this location has order history. There is no model of future demand yet (ADR 0043).',
   'reports.forecast.loading': 'Loading…',
@@ -4436,6 +4436,30 @@ export const messagesEn = {
   'reports.forecast.weekOverview.show': 'Show whole week',
   'reports.forecast.weekOverview.loading': 'Loading the week…',
   'reports.forecast.weekOverview.error': 'Could not load the week overview.',
+
+  // ---------------------------------------------------------------- reports 7.8/7.8a/7.8b forecast model (wave W02)
+  'reports.forecast.branch.label': 'Branch',
+  'reports.forecast.holiday.mode.label': 'Holidays',
+  'reports.forecast.holiday.mode.include': 'Include',
+  'reports.forecast.holiday.mode.exclude': 'Exclude',
+  'reports.forecast.holiday.mode.weight': 'Half weight',
+  'reports.forecast.holiday.flag': 'Public holiday',
+  'reports.forecast.holiday.summary': '{count} of these dates fell on a public holiday.',
+  'reports.forecast.section.history': 'Historical average',
+  'reports.forecast.section.model': 'Forecast',
+  'reports.forecast.model.none': 'No forecast has been generated for this branch and weekday yet.',
+  'reports.forecast.model.caption':
+    'Model v{version}, {confidence}% confidence interval, forecasting {date}.',
+  'reports.forecast.model.column.forecast': 'Forecast',
+  'reports.forecast.model.column.interval': 'Range',
+  'reports.forecast.model.column.actual': 'Actual',
+  'reports.forecast.model.comparison.title': 'Forecast vs. actual',
+  'reports.forecast.column.date': 'Date',
+  'reports.forecast.breakdown.department': 'Department',
+  'reports.forecast.breakdown.product': 'Product',
+  'reports.forecast.breakdown.show': 'Show breakdown',
+  'reports.forecast.breakdown.empty': 'No department or product data in this sample.',
+  'reports.forecast.breakdown.error': 'Could not load the breakdown.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Cash',

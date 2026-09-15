@@ -7303,8 +7303,175 @@
         },
         "type" : "object"
       },
+      "DemandForecastBreakdownResponse" : {
+        "properties" : {
+          "byProduct" : {
+            "type" : "boolean"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DemandForecastBreakdownRowResponse"
+            },
+            "type" : "array"
+          },
+          "weekday" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "DemandForecastBreakdownRowResponse" : {
+        "properties" : {
+          "absolutePercentageError" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "actualQuantity" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "forecastQuantity" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "operatingHour" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "productName" : {
+            "type" : "string"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "DemandForecastComparisonResponse" : {
+        "properties" : {
+          "absolutePercentageError" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "actualQuantity" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "businessDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "forecastQuantity" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "operatingHour" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "DemandForecastHourResponse" : {
+        "properties" : {
+          "absolutePercentageError" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "actualQuantity" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "confidenceHigh" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "confidenceLow" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "forecastQuantity" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "operatingHour" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "DemandForecastResponse" : {
+        "properties" : {
+          "comparisons" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DemandForecastComparisonResponse"
+            },
+            "type" : "array"
+          },
+          "confidenceLevel" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "generatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "hours" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DemandForecastHourResponse"
+            },
+            "type" : "array"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "modelVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "runId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "targetDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "weekday" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "DemandHistoryResponse" : {
         "properties" : {
+          "holidayDates" : {
+            "items" : {
+              "format" : "date",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "holidayMode" : {
+            "enum" : [ "INCLUDE", "EXCLUDE", "WEIGHT" ],
+            "type" : "string"
+          },
           "hours" : {
             "items" : {
               "$ref" : "#/components/schemas/HourDemandResponse"
@@ -60882,9 +61049,115 @@
         "tags" : [ "Courier reporting" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/reporting/demand-forecast" : {
+      "get" : {
+        "description" : "Wave W02. hourOfDay is operating-day-relative, matching demand-history. runId is null when ForecastScheduler has not generated a run for this location and weekday yet; hours is empty when the run exists but its sample was too thin to publish any hour (the same refusal demand-history makes). actualQuantity and absolutePercentageError are null on an hour until that business date's day closes.",
+        "operationId" : "demandForecast",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "weekday",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "comparisonLimit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DemandForecastResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The seasonal-naive forecast for one location and weekday, with its confidence interval and comparison to what actually happened",
+        "tags" : [ "Reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/demand-forecast/breakdown" : {
+      "get" : {
+        "description" : "dimension=CATEGORY groups by kitchen/menu category (department); dimension=VARIANT groups by product, capped to the best-selling products in the sample the run was generated from. No confidence interval at this grain in this wave — confidenceLow/confidenceHigh do not appear on these rows at all, unlike the branch-level demand-forecast.",
+        "operationId" : "demandForecastBreakdown",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "weekday",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "dimension",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "CATEGORY", "VARIANT" ],
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DemandForecastBreakdownResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "7.8a: the latest forecast run's department or product breakdown",
+        "tags" : [ "Reporting" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/reporting/demand-history" : {
       "get" : {
-        "description" : "Not a forecast (the owner's 2026-09-05 decision, ADR 0043's implementation status): an average of completed orders in each hour, over the location's most recent occurrences of the requested weekday. Below minimumSampleSize qualifying dates, averageOrders is null on every hour and ordersByDate carries the raw per-date counts instead, so a sample too thin to mean anything is never shown as a confident number.",
+        "description" : "Not a forecast (the owner's 2026-09-05 decision, ADR 0043's implementation status): an average of completed orders in each hour, over the location's most recent occurrences of the requested weekday. hourOfDay is operating-day-relative (0 is the location's own business-day start), not wall-clock. Below minimumSampleSize qualifying dates, averageOrders is null on every hour and ordersByDate carries the raw per-date counts instead, so a sample too thin to mean anything is never shown as a confident number. holidayMode (7.8b) controls how a tenant.public_holidays date in the sample counts: INCLUDE (default) fully, EXCLUDE not at all, WEIGHT at half.",
         "operationId" : "demandHistory",
         "parameters" : [ {
           "in" : "path",
@@ -60917,6 +61190,14 @@
           "schema" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "holidayMode",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "INCLUDE", "EXCLUDE", "WEIGHT" ],
+            "type" : "string"
           }
         } ],
         "responses" : {

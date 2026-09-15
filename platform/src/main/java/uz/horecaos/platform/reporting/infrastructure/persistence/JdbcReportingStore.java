@@ -11,10 +11,13 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -29,6 +32,8 @@ import uz.horecaos.platform.reporting.application.ReportingFacts.RefundFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.SlaBucketAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.TenderFact;
 import uz.horecaos.platform.reporting.domain.BusinessDayBoundary;
+import uz.horecaos.platform.reporting.domain.HolidayCalendar;
+import uz.horecaos.platform.reporting.domain.HolidayMode;
 import uz.horecaos.platform.reporting.domain.MetricDefinition;
 
 /**
@@ -297,12 +302,31 @@ public class JdbcReportingStore {
                 .list();
     }
 
+    /**
+     * Wave W02 (7.8a): resolves each line's department (category) alongside
+     * the fields {@code fact_order_line} has always carried. A product can sit
+     * in more than one {@code catalog.category_products} row and none is
+     * marked primary, so the tie-break — lowest {@code sort_order}, then
+     * lowest {@code category_id} — is applied here with a lateral join rather
+     * than left unresolved; {@code V0368}'s backfill for pre-existing rows
+     * uses the identical tie-break so a line resolved before and after this
+     * wave never disagrees about which category it belongs to.
+     */
     public List<SourceLine> readSourceLines(UUID tenantId, Instant from, Instant to) {
         return jdbc.sql("""
                 SELECT l.id, l.order_id, l.source_variant_id, l.product_name_snapshot,
-                       l.quantity, l.base_amount_minor, l.final_amount_minor
+                       l.quantity, l.base_amount_minor, l.final_amount_minor, resolved.category_id
                   FROM ordering.order_lines l
                   JOIN ordering.orders o ON o.id = l.order_id AND o.tenant_id = l.tenant_id
+                  LEFT JOIN catalog.variants v
+                    ON v.tenant_id = l.tenant_id AND v.id = l.source_variant_id
+                  LEFT JOIN LATERAL (
+                           SELECT cp.category_id
+                             FROM catalog.category_products cp
+                            WHERE cp.tenant_id = v.tenant_id AND cp.product_id = v.product_id
+                            ORDER BY cp.sort_order, cp.category_id
+                            LIMIT 1
+                       ) resolved ON true
                  WHERE l.tenant_id = :tenantId
                    AND o.created_at >= :from AND o.created_at < :to
                  ORDER BY l.order_id, l.line_number
@@ -317,7 +341,8 @@ public class JdbcReportingStore {
                         row.getString("product_name_snapshot"),
                         row.getInt("quantity"),
                         row.getLong("base_amount_minor"),
-                        row.getLong("final_amount_minor")))
+                        row.getLong("final_amount_minor"),
+                        row.getObject("category_id", UUID.class)))
                 .list();
     }
 
@@ -506,6 +531,7 @@ public class JdbcReportingStore {
             @Nullable String stockDisposition,
             @Nullable String liabilityParty) {}
 
+    /** @param categoryId wave W02 (7.8a): see {@link #readSourceLines}'s own doc for how this is resolved */
     public record SourceLine(
             UUID lineId,
             UUID orderId,
@@ -513,7 +539,8 @@ public class JdbcReportingStore {
             String productName,
             int quantity,
             long baseAmountMinor,
-            long finalAmountMinor) {}
+            long finalAmountMinor,
+            @Nullable UUID categoryId) {}
 
     public record SourceRefund(UUID refundId, UUID orderId, long amountMinor, Instant occurredAt) {}
 
@@ -738,14 +765,16 @@ public class JdbcReportingStore {
         params.put("gross", fact.grossSom());
         params.put("discount", fact.discountSom());
         params.put("net", fact.netSom());
+        params.put("occurredAt", utc(fact.occurredAt()));
 
         jdbc.sql("""
                 INSERT INTO reporting.fact_order_line (
                     tenant_id, business_date, order_id, line_id, location_id, variant_id,
-                    category_id, product_name_snapshot, quantity, gross_som, discount_som, net_som)
+                    category_id, product_name_snapshot, quantity, gross_som, discount_som, net_som,
+                    occurred_at)
                 VALUES (
                     :tenantId, :businessDate, :orderId, :lineId, :locationId, :variantId,
-                    :categoryId, :productName, :quantity, :gross, :discount, :net)
+                    :categoryId, :productName, :quantity, :gross, :discount, :net, :occurredAt)
                 """).params(params).update();
     }
 
@@ -2105,6 +2134,19 @@ public class JdbcReportingStore {
      *         when the location has never recorded a completed order on this
      *         weekday
      */
+    /**
+     * How many extra candidate dates {@link #readDemandHistory} pulls when
+     * {@code holidayMode} can drop one — {@code EXCLUDE} needs somewhere to
+     * find a replacement, and {@code WEIGHT}/{@code INCLUDE} need the same
+     * candidates annotated for {@code holidayDates} even though every one of
+     * them stays in the sample. Three times the requested sample size, capped
+     * so a sampleSize of 12 (the API's own {@code DEMAND_SAMPLE_MAX}) never
+     * asks for more than sixty candidate dates.
+     */
+    private static final int HOLIDAY_CANDIDATE_OVERFETCH = 3;
+
+    private static final int HOLIDAY_CANDIDATE_MAX = 60;
+
     public DemandSample readDemandHistory(
             UUID tenantId,
             UUID locationId,
@@ -2112,9 +2154,16 @@ public class JdbcReportingStore {
             LocalDate from,
             LocalDate to,
             String timezone,
-            int sampleSize) {
+            String businessDayStart,
+            int sampleSize,
+            HolidayMode holidayMode,
+            HolidayCalendar holidays) {
 
-        List<LocalDate> sampleDates = jdbc.sql("""
+        int candidateLimit = holidayMode == HolidayMode.INCLUDE
+                ? sampleSize
+                : Math.min(sampleSize * HOLIDAY_CANDIDATE_OVERFETCH, HOLIDAY_CANDIDATE_MAX);
+
+        List<LocalDate> candidates = jdbc.sql("""
                 SELECT business_date
                   FROM reporting.fact_order
                  WHERE tenant_id = :tenantId AND location_id = :locationId
@@ -2123,24 +2172,53 @@ public class JdbcReportingStore {
                    AND extract(isodow FROM business_date)::int = :weekday
                  GROUP BY business_date
                  ORDER BY business_date DESC
-                 LIMIT :sampleSize
+                 LIMIT :candidateLimit
                 """)
                 .param("tenantId", tenantId)
                 .param("locationId", locationId)
                 .param("from", from)
                 .param("to", to)
                 .param("weekday", weekday)
-                .param("sampleSize", sampleSize)
+                .param("candidateLimit", candidateLimit)
                 .query(LocalDate.class)
                 .list();
 
+        // EXCLUDE drops a flagged date from the candidate list before taking
+        // the top sampleSize, so an older non-holiday date fills the slot
+        // instead. INCLUDE and WEIGHT both keep every candidate — WEIGHT
+        // downweights a holiday date in ReportQueryService's average rather
+        // than removing it here.
+        List<LocalDate> sampleDates = (holidayMode == HolidayMode.EXCLUDE
+                        ? candidates.stream().filter(date -> !holidays.isHoliday(date))
+                        : candidates.stream())
+                .limit(sampleSize)
+                .toList();
+
         if (sampleDates.isEmpty()) {
-            return new DemandSample(List.of(), List.of());
+            return new DemandSample(List.of(), List.of(), Set.of());
         }
 
+        Set<LocalDate> holidayDates = new LinkedHashSet<>();
+        for (LocalDate date : sampleDates) {
+            if (holidays.isHoliday(date)) {
+                holidayDates.add(date);
+            }
+        }
+
+        // Operating-day-relative, not wall-clock: businessDayStart shifts the
+        // local timestamp back by the boundary's own start-of-day before the
+        // hour is extracted, so hour 0 is always the hour trading begins and
+        // an hour just before the next start reads as 23, whatever the
+        // tenant's own boundary is — 7.8's own named gap ("the hour axis is
+        // wall-clock 00:00-24:00 rather than the operating-day window that
+        // may cross midnight"). A midnight boundary (the platform default)
+        // shifts by nothing, so this is exactly the prior wall-clock
+        // behaviour for every tenant that has not moved its boundary.
         List<HourCount> hourCounts = jdbc.sql("""
                 SELECT business_date,
-                       extract(hour FROM (occurred_at AT TIME ZONE :timezone))::int AS hour_of_day,
+                       extract(hour FROM
+                           ((occurred_at AT TIME ZONE :timezone) - (:businessDayStart)::interval)
+                       )::int AS hour_of_day,
                        count(*) AS order_count
                   FROM reporting.fact_order
                  WHERE tenant_id = :tenantId AND location_id = :locationId
@@ -2151,6 +2229,7 @@ public class JdbcReportingStore {
                 .param("tenantId", tenantId)
                 .param("locationId", locationId)
                 .param("timezone", timezone)
+                .param("businessDayStart", businessDayStart)
                 .param("sampleDates", sampleDates)
                 .query((ResultSet row, int number) -> new HourCount(
                         row.getObject("business_date", LocalDate.class),
@@ -2158,22 +2237,411 @@ public class JdbcReportingStore {
                         row.getInt("order_count")))
                 .list();
 
-        return new DemandSample(sampleDates, hourCounts);
+        return new DemandSample(sampleDates, hourCounts, Set.copyOf(holidayDates));
     }
 
     /**
-     * The result of {@link #readDemandHistory}: which dates qualified, and
-     * their hourly order counts.
+     * The result of {@link #readDemandHistory}: which dates qualified, their
+     * hourly order counts, and which of those dates a {@link HolidayCalendar}
+     * flagged (7.8b) — always populated, whatever {@link HolidayMode} was
+     * asked for, since {@code EXCLUDE} already removed every holiday from
+     * {@code sampleDates} and so trivially returns an empty set here.
      *
      * @param sampleDates the qualifying business dates found, most recent
      *                    first — never more than the caller's {@code
      *                    sampleSize}, and shorter than it whenever the
      *                    location's history is thinner than asked for
      */
-    public record DemandSample(List<LocalDate> sampleDates, List<HourCount> hourCounts) {}
+    public record DemandSample(List<LocalDate> sampleDates, List<HourCount> hourCounts, Set<LocalDate> holidayDates) {
+
+        /**
+         * Zero-filled per {@code sampleDates}: a date this location traded on
+         * but with nothing in a given hour is a real zero data point, not an
+         * absent one — see {@code ReportQueryService#demandHistory}'s own
+         * comment on why skipping it would overstate every quiet hour.
+         * Shared by {@code ReportQueryService} and {@code ForecastService}
+         * (wave W02) so the two never zero-fill differently.
+         */
+        public Map<LocalDate, Map<Integer, Integer>> byDateThenHour() {
+            Map<LocalDate, Map<Integer, Integer>> result = new LinkedHashMap<>();
+            for (LocalDate date : sampleDates) {
+                result.put(date, new LinkedHashMap<>());
+            }
+            for (HourCount count : hourCounts) {
+                result.computeIfAbsent(count.businessDate(), ignored -> new LinkedHashMap<>())
+                        .put(count.hourOfDay(), count.orderCount());
+            }
+            return result;
+        }
+    }
+
+    /** The tenant's ADR 0090 market — the key {@link #readPublicHolidayRules} filters by for 7.8b. */
+    public Optional<String> findTenantCountryCode(UUID tenantId) {
+        return jdbc.sql("SELECT country_code FROM tenant.tenants WHERE id = :tenantId")
+                .param("tenantId", tenantId)
+                .query(String.class)
+                .optional();
+    }
+
+    /**
+     * 7.8b: every {@code tenant.public_holidays} row (ADR 0090, V0203) for one
+     * country, for {@link HolidayCalendar#of} to build a matcher from. Reads
+     * {@code tenant.*} directly rather than through a module API, the same
+     * established crossing {@link #findTenantTimezone} and {@code
+     * JdbcBusinessCalendarStore} already make for this exact table family.
+     */
+    public List<HolidayCalendar.Rule> readPublicHolidayRules(String countryCode) {
+        return jdbc.sql("""
+                SELECT month, day, holiday_date
+                  FROM tenant.public_holidays
+                 WHERE country_code = :countryCode
+                """)
+                .param("countryCode", countryCode)
+                .query((ResultSet row, int number) -> new HolidayCalendar.Rule(
+                        row.getObject("month", Integer.class),
+                        row.getObject("day", Integer.class),
+                        row.getObject("holiday_date", LocalDate.class)))
+                .list();
+    }
 
     /** One business date's order count for one local hour-of-day (0-23) — see {@link #readDemandHistory}. */
     public record HourCount(LocalDate businessDate, int hourOfDay, int orderCount) {}
+
+    // -------------------------------------------------- forecasting (wave W02)
+
+    /**
+     * Wave W02 (7.8a): every {@code fact_order_line} quantity behind {@code
+     * sampleDates}, at (business date, operating hour, category, variant)
+     * grain — {@link ForecastService} rolls this up by category for the
+     * department breakdown and by variant for the product breakdown, from the
+     * same read, rather than two separate queries running the same join
+     * twice. Joined to {@code fact_order} for the identical {@code
+     * terminal_status = 'COMPLETED'} filter {@link #readDemandHistory} uses,
+     * on purpose — see that method's own doc on why a second definition of
+     * "an order" here would be the exact disagreement ADR 0043 exists to
+     * prevent.
+     */
+    public List<DimensionHourCount> readLineDemandByDimension(
+            UUID tenantId, UUID locationId, List<LocalDate> sampleDates, String timezone, String businessDayStart) {
+        if (sampleDates.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                SELECT l.business_date,
+                       extract(hour FROM
+                           ((l.occurred_at AT TIME ZONE :timezone) - (:businessDayStart)::interval)
+                       )::int AS hour_of_day,
+                       l.category_id, l.variant_id, max(l.product_name_snapshot) AS product_name,
+                       sum(l.quantity)::integer AS qty
+                  FROM reporting.fact_order_line l
+                  JOIN reporting.fact_order o
+                    ON o.tenant_id = l.tenant_id AND o.business_date = l.business_date AND o.order_id = l.order_id
+                 WHERE l.tenant_id = :tenantId AND l.location_id = :locationId
+                   AND o.terminal_status = 'COMPLETED'
+                   AND l.business_date IN (:sampleDates)
+                 GROUP BY l.business_date, hour_of_day, l.category_id, l.variant_id
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("timezone", timezone)
+                .param("businessDayStart", businessDayStart)
+                .param("sampleDates", sampleDates)
+                .query((ResultSet row, int number) -> new DimensionHourCount(
+                        row.getObject("business_date", LocalDate.class),
+                        row.getInt("hour_of_day"),
+                        row.getObject("category_id", UUID.class),
+                        row.getObject("variant_id", UUID.class),
+                        row.getString("product_name"),
+                        row.getInt("qty")))
+                .list();
+    }
+
+    /** One business date's product/department quantity for one operating hour — see {@link #readLineDemandByDimension}. */
+    public record DimensionHourCount(
+            LocalDate businessDate,
+            int hourOfDay,
+            @Nullable UUID categoryId,
+            @Nullable UUID variantId,
+            @Nullable String productName,
+            int quantity) {}
+
+    /**
+     * Wave W02: {@link ForecastService#backfillActuals}'s branch-level actual
+     * for one already-closed business date — the same {@code
+     * terminal_status = 'COMPLETED'}, operating-hour-shifted read {@link
+     * #readDemandHistory} uses for its own hour counts, narrowed to one date
+     * instead of a sample.
+     */
+    public List<HourCount> readActualHourCounts(
+            UUID tenantId, UUID locationId, LocalDate businessDate, String timezone, String businessDayStart) {
+        return jdbc.sql("""
+                SELECT business_date,
+                       extract(hour FROM
+                           ((occurred_at AT TIME ZONE :timezone) - (:businessDayStart)::interval)
+                       )::int AS hour_of_day,
+                       count(*) AS order_count
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND location_id = :locationId
+                   AND terminal_status = 'COMPLETED'
+                   AND business_date = :businessDate
+                 GROUP BY business_date, hour_of_day
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("businessDate", businessDate)
+                .param("timezone", timezone)
+                .param("businessDayStart", businessDayStart)
+                .query((ResultSet row, int number) -> new HourCount(
+                        row.getObject("business_date", LocalDate.class),
+                        row.getInt("hour_of_day"),
+                        row.getInt("order_count")))
+                .list();
+    }
+
+    public void insertForecastRun(ForecastRun run) {
+        jdbc.sql("""
+                INSERT INTO reporting.forecast_run (
+                    run_id, tenant_id, location_id, weekday, model_version,
+                    requested_sample_size, confidence_level, holiday_mode, generated_at)
+                VALUES (
+                    :runId, :tenantId, :locationId, :weekday, :modelVersion,
+                    :sampleSize, :confidenceLevel, :holidayMode, :generatedAt)
+                """)
+                .param("runId", run.runId())
+                .param("tenantId", run.tenantId())
+                .param("locationId", run.locationId())
+                .param("weekday", run.weekday())
+                .param("modelVersion", run.modelVersion())
+                .param("sampleSize", run.requestedSampleSize())
+                .param("confidenceLevel", run.confidenceLevel())
+                .param("holidayMode", run.holidayMode().name())
+                .param("generatedAt", utc(run.generatedAt()))
+                .update();
+    }
+
+    /** One {@code forecast_run} row — see {@link #insertForecastRun} and {@link #findForecastRun}. */
+    public record ForecastRun(
+            UUID runId,
+            UUID tenantId,
+            UUID locationId,
+            int weekday,
+            int modelVersion,
+            int requestedSampleSize,
+            double confidenceLevel,
+            HolidayMode holidayMode,
+            Instant generatedAt) {}
+
+    public Optional<UUID> findLatestForecastRunId(UUID tenantId, UUID locationId, int weekday) {
+        return jdbc.sql("""
+                SELECT run_id FROM reporting.forecast_run
+                 WHERE tenant_id = :tenantId AND location_id = :locationId AND weekday = :weekday
+                 ORDER BY generated_at DESC
+                 LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("weekday", weekday)
+                .query(UUID.class)
+                .optional();
+    }
+
+    public Optional<ForecastRun> findForecastRun(UUID tenantId, UUID runId) {
+        return jdbc.sql("""
+                SELECT run_id, tenant_id, location_id, weekday, model_version,
+                       requested_sample_size, confidence_level, holiday_mode, generated_at
+                  FROM reporting.forecast_run
+                 WHERE tenant_id = :tenantId AND run_id = :runId
+                """)
+                .param("tenantId", tenantId)
+                .param("runId", runId)
+                .query((ResultSet row, int number) -> new ForecastRun(
+                        row.getObject("run_id", UUID.class),
+                        row.getObject("tenant_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getInt("weekday"),
+                        row.getInt("model_version"),
+                        row.getInt("requested_sample_size"),
+                        row.getBigDecimal("confidence_level").doubleValue(),
+                        HolidayMode.valueOf(row.getString("holiday_mode")),
+                        requireInstant(row, "generated_at")))
+                .optional();
+    }
+
+    public void insertForecastFact(ForecastFact fact) {
+        jdbc.sql("""
+                INSERT INTO reporting.fact_forecast (
+                    id, run_id, tenant_id, location_id, business_date, operating_hour,
+                    category_id, variant_id, product_name_snapshot,
+                    forecast_quantity, confidence_low, confidence_high, sample_size)
+                VALUES (
+                    :id, :runId, :tenantId, :locationId, :businessDate, :operatingHour,
+                    :categoryId, :variantId, :productName,
+                    :forecastQuantity, :confidenceLow, :confidenceHigh, :sampleSize)
+                """)
+                .param("id", fact.id())
+                .param("runId", fact.runId())
+                .param("tenantId", fact.tenantId())
+                .param("locationId", fact.locationId())
+                .param("businessDate", fact.businessDate())
+                .param("operatingHour", fact.operatingHour())
+                .param("categoryId", fact.categoryId())
+                .param("variantId", fact.variantId())
+                .param("productName", fact.productName())
+                .param("forecastQuantity", fact.forecastQuantity())
+                .param("confidenceLow", fact.confidenceLow())
+                .param("confidenceHigh", fact.confidenceHigh())
+                .param("sampleSize", fact.sampleSize())
+                .update();
+    }
+
+    /** One {@code fact_forecast} row at write time — see {@link #insertForecastFact}. */
+    public record ForecastFact(
+            UUID id,
+            UUID runId,
+            UUID tenantId,
+            UUID locationId,
+            LocalDate businessDate,
+            int operatingHour,
+            @Nullable UUID categoryId,
+            @Nullable UUID variantId,
+            @Nullable String productName,
+            double forecastQuantity,
+            double confidenceLow,
+            double confidenceHigh,
+            int sampleSize) {}
+
+    /** Branch-level rows only (both dimensions null) for one run, ordered by hour — {@link ForecastService}'s "forecast vs actual by hour" line. */
+    public List<ForecastRow> readForecastHours(UUID tenantId, UUID runId) {
+        return readForecastRows(tenantId, runId, "category_id IS NULL AND variant_id IS NULL");
+    }
+
+    /**
+     * Every branch-level {@code fact_forecast} row across every run this
+     * (tenant, location, weekday) has ever generated, most recent business
+     * date first — the forecast-vs-actual trend {@code
+     * ReportQueryService#demandForecast} exposes. {@code limit} bounds it the
+     * same way {@code sampleSize} bounds {@code demand-history}: recent and
+     * few, never the whole run history.
+     */
+    public List<ForecastRow> readForecastComparisons(UUID tenantId, UUID locationId, int weekday, int dateLimit) {
+        return jdbc.sql("""
+                SELECT f.id, f.run_id, f.tenant_id, f.location_id, f.business_date, f.operating_hour,
+                       f.category_id, f.variant_id, f.product_name_snapshot,
+                       f.forecast_quantity, f.confidence_low, f.confidence_high, f.sample_size,
+                       f.actual_quantity, f.absolute_percentage_error
+                  FROM reporting.fact_forecast f
+                  JOIN reporting.forecast_run r ON r.run_id = f.run_id AND r.tenant_id = f.tenant_id
+                 WHERE f.tenant_id = :tenantId AND f.location_id = :locationId AND r.weekday = :weekday
+                   AND f.category_id IS NULL AND f.variant_id IS NULL
+                   AND f.business_date IN (
+                       SELECT DISTINCT f2.business_date
+                         FROM reporting.fact_forecast f2
+                         JOIN reporting.forecast_run r2 ON r2.run_id = f2.run_id AND r2.tenant_id = f2.tenant_id
+                        WHERE f2.tenant_id = :tenantId AND f2.location_id = :locationId AND r2.weekday = :weekday
+                          AND f2.category_id IS NULL AND f2.variant_id IS NULL
+                        ORDER BY f2.business_date DESC
+                        LIMIT :dateLimit
+                   )
+                 ORDER BY f.business_date DESC, f.operating_hour
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("weekday", weekday)
+                .param("dateLimit", dateLimit)
+                .query(JdbcReportingStore::forecastRow)
+                .list();
+    }
+
+    /** 7.8a: one run's department rows (category set, variant null) or product rows (variant set), by hour. */
+    public List<ForecastRow> readForecastBreakdown(UUID tenantId, UUID runId, boolean byProduct) {
+        return readForecastRows(
+                tenantId,
+                runId,
+                byProduct ? "variant_id IS NOT NULL" : "category_id IS NOT NULL AND variant_id IS NULL");
+    }
+
+    private List<ForecastRow> readForecastRows(UUID tenantId, UUID runId, String dimensionFilter) {
+        String sql = """
+                SELECT id, run_id, tenant_id, location_id, business_date, operating_hour,
+                       category_id, variant_id, product_name_snapshot,
+                       forecast_quantity, confidence_low, confidence_high, sample_size,
+                       actual_quantity, absolute_percentage_error
+                  FROM reporting.fact_forecast
+                 WHERE tenant_id = :tenantId AND run_id = :runId AND """ + " " + dimensionFilter + " ORDER BY operating_hour";
+        return jdbc.sql(sql)
+                .param("tenantId", tenantId)
+                .param("runId", runId)
+                .query(JdbcReportingStore::forecastRow)
+                .list();
+    }
+
+    private static ForecastRow forecastRow(ResultSet row, int number) throws SQLException {
+        return new ForecastRow(
+                row.getObject("id", UUID.class),
+                row.getObject("run_id", UUID.class),
+                row.getObject("location_id", UUID.class),
+                row.getObject("business_date", LocalDate.class),
+                row.getInt("operating_hour"),
+                row.getObject("category_id", UUID.class),
+                row.getObject("variant_id", UUID.class),
+                row.getString("product_name_snapshot"),
+                row.getBigDecimal("forecast_quantity").doubleValue(),
+                row.getBigDecimal("confidence_low").doubleValue(),
+                row.getBigDecimal("confidence_high").doubleValue(),
+                row.getInt("sample_size"),
+                row.getObject("actual_quantity") == null
+                        ? null
+                        : row.getBigDecimal("actual_quantity").doubleValue(),
+                row.getObject("absolute_percentage_error") == null
+                        ? null
+                        : row.getBigDecimal("absolute_percentage_error").doubleValue());
+    }
+
+    /** One read {@code fact_forecast} row, actual/error null until the forecasted date's business day closes. */
+    public record ForecastRow(
+            UUID id,
+            UUID runId,
+            UUID locationId,
+            LocalDate businessDate,
+            int operatingHour,
+            @Nullable UUID categoryId,
+            @Nullable UUID variantId,
+            @Nullable String productName,
+            double forecastQuantity,
+            double confidenceLow,
+            double confidenceHigh,
+            int sampleSize,
+            @Nullable Double actualQuantity,
+            @Nullable Double absolutePercentageError) {}
+
+    /** Wave W02: every {@code fact_forecast} row for this tenant/date still waiting on an actual — {@link ForecastService#backfillActuals}'s worklist. */
+    public List<ForecastRow> findPendingForecastRows(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT id, run_id, tenant_id, location_id, business_date, operating_hour,
+                       category_id, variant_id, product_name_snapshot,
+                       forecast_quantity, confidence_low, confidence_high, sample_size,
+                       actual_quantity, absolute_percentage_error
+                  FROM reporting.fact_forecast
+                 WHERE tenant_id = :tenantId AND business_date = :businessDate AND actual_quantity IS NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("businessDate", businessDate)
+                .query(JdbcReportingStore::forecastRow)
+                .list();
+    }
+
+    public void updateForecastActual(UUID tenantId, UUID id, double actualQuantity, double absolutePercentageError) {
+        jdbc.sql("""
+                UPDATE reporting.fact_forecast
+                   SET actual_quantity = :actual, absolute_percentage_error = :ape
+                 WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("actual", actualQuantity)
+                .param("ape", absolutePercentageError)
+                .param("tenantId", tenantId)
+                .param("id", id)
+                .update();
+    }
 
     // ------------------------------------------------ runs and divergence
 
@@ -2318,6 +2786,14 @@ public class JdbcReportingStore {
     /** Tenants the day-close heartbeat has to consider. Suspended/archived tenants stop taking orders. */
     public List<UUID> activeTenantIds() {
         return jdbc.sql("SELECT id FROM tenant.tenants WHERE status = 'ACTIVE' ORDER BY id")
+                .query(UUID.class)
+                .list();
+    }
+
+    /** Wave W02: which locations {@link ForecastScheduler} generates a forecast for — reads {@code tenant.*} directly, the established crossing {@link #findTenantTimezone} already makes. */
+    public List<UUID> activeLocationIds(UUID tenantId) {
+        return jdbc.sql("SELECT id FROM tenant.locations WHERE tenant_id = :tenantId AND status = 'ACTIVE' ORDER BY id")
+                .param("tenantId", tenantId)
                 .query(UUID.class)
                 .list();
     }

@@ -77,6 +77,16 @@ export const reportsPaths = {
     return `${TENANT_REPORTING(tenantId)}/demand-history`;
   },
 
+  /** Wave W02: the seasonal-naive forecast, confidence interval and forecast-vs-actual comparison, the model `demand-history` itself deliberately never was. */
+  demandForecast(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/demand-forecast`;
+  },
+
+  /** Wave W02 (7.8a): the latest forecast run's department or product breakdown. */
+  demandForecastBreakdown(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/demand-forecast/breakdown`;
+  },
+
   /**
    * 10.10c: the version card — which bucket definitions the `/sla-buckets`
    * distribution above was computed under. Read-only; `ReportingController`

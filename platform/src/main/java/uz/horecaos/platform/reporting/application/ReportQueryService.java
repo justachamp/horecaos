@@ -20,6 +20,8 @@ import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggreg
 import uz.horecaos.platform.reporting.application.ReportingFacts.SlaBucketAggregate;
 import uz.horecaos.platform.reporting.domain.BusinessDayBoundary;
 import uz.horecaos.platform.reporting.domain.Grain;
+import uz.horecaos.platform.reporting.domain.HolidayCalendar;
+import uz.horecaos.platform.reporting.domain.HolidayMode;
 import uz.horecaos.platform.reporting.domain.MetricDefinition;
 import uz.horecaos.platform.reporting.domain.MetricRegistry;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
@@ -511,28 +513,45 @@ public class ReportQueryService {
      */
     @Transactional(readOnly = true)
     public DemandHistoryResult demandHistory(UUID tenantId, UUID locationId, int weekday, int sampleSize) {
+        return demandHistory(tenantId, locationId, weekday, sampleSize, HolidayMode.INCLUDE);
+    }
+
+    /**
+     * @param holidayMode 7.8b: INCLUDE (default, every qualifying date counts
+     *                    fully — see the no-arg overload), EXCLUDE (a flagged
+     *                    {@code tenant.public_holidays} date for the location's
+     *                    country is dropped from the sample) or WEIGHT (kept,
+     *                    counted at {@link HolidayAwareness#HOLIDAY_WEIGHT})
+     */
+    @Transactional(readOnly = true)
+    public DemandHistoryResult demandHistory(
+            UUID tenantId, UUID locationId, int weekday, int sampleSize, HolidayMode holidayMode) {
         BusinessDayBoundary boundary = businessDays.boundaryFor(tenantId);
         LocalDate to = LocalDate.now(clock.withZone(boundary.zone()));
         LocalDate from = to.minusDays(DEMAND_HISTORY_LOOKBACK_DAYS);
+        HolidayCalendar holidays = holidayCalendarFor(tenantId);
 
         JdbcReportingStore.DemandSample sample = store.readDemandHistory(
-                tenantId, locationId, weekday, from, to, boundary.zone().getId(), sampleSize);
+                tenantId,
+                locationId,
+                weekday,
+                from,
+                to,
+                boundary.zone().getId(),
+                businessDayStartLiteral(boundary),
+                sampleSize,
+                holidayMode,
+                holidays);
 
-        Map<LocalDate, Map<Integer, Integer>> byDateThenHour = new LinkedHashMap<>();
-        for (LocalDate date : sample.sampleDates()) {
-            byDateThenHour.put(date, new LinkedHashMap<>());
-        }
-        for (JdbcReportingStore.HourCount count : sample.hourCounts()) {
-            byDateThenHour
-                    .computeIfAbsent(count.businessDate(), ignored -> new LinkedHashMap<>())
-                    .put(count.hourOfDay(), count.orderCount());
-        }
+        Map<LocalDate, Map<Integer, Integer>> byDateThenHour = sample.byDateThenHour();
 
         int actualSampleSize = sample.sampleDates().size();
         List<HourDemand> hours = new ArrayList<>(24);
         for (int hour = 0; hour < 24; hour++) {
             Map<LocalDate, Integer> ordersByDate = new LinkedHashMap<>();
             int total = 0;
+            double weightedSum = 0;
+            double weightSum = 0;
             for (LocalDate date : sample.sampleDates()) {
                 // Explicitly zero, not absent: a sample date this location
                 // traded on but that had nothing in this particular hour is a
@@ -542,9 +561,14 @@ public class ReportQueryService {
                 int count = byDateThenHour.getOrDefault(date, Map.of()).getOrDefault(hour, 0);
                 ordersByDate.put(date, count);
                 total += count;
+                double weight = HolidayAwareness.weightOf(date, holidayMode, sample.holidayDates());
+                weightedSum += count * weight;
+                weightSum += weight;
             }
-            Double average =
-                    actualSampleSize >= DEMAND_HISTORY_MINIMUM_SAMPLE ? (double) total / actualSampleSize : null;
+            // Reduces to total / actualSampleSize whenever every weight is 1.0
+            // (INCLUDE and EXCLUDE always, WEIGHT with no holiday in sample) —
+            // the exact figure this method always computed before 7.8b.
+            Double average = actualSampleSize >= DEMAND_HISTORY_MINIMUM_SAMPLE ? weightedSum / weightSum : null;
             hours.add(new HourDemand(hour, ordersByDate, total, average));
         }
 
@@ -554,8 +578,23 @@ public class ReportQueryService {
                 sampleSize,
                 DEMAND_HISTORY_MINIMUM_SAMPLE,
                 sample.sampleDates(),
+                sample.holidayDates(),
+                holidayMode,
                 hours,
                 provenance(tenantId, List.of(), boundary));
+    }
+
+    /** 7.8b: the tenant's country's {@code tenant.public_holidays} rows, or {@link HolidayCalendar#EMPTY} when the tenant has none recorded. */
+    private HolidayCalendar holidayCalendarFor(UUID tenantId) {
+        return store.findTenantCountryCode(tenantId)
+                .map(store::readPublicHolidayRules)
+                .map(HolidayCalendar::of)
+                .orElse(HolidayCalendar.EMPTY);
+    }
+
+    /** {@code "HH:mm:ss"}, always with seconds, so Postgres parses it as an interval literal unambiguously. */
+    static String businessDayStartLiteral(BusinessDayBoundary boundary) {
+        return boundary.start().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
     }
 
     /** How far back {@link #demandHistory} looks for qualifying dates — the same span {@link ReportQuery#MAX_DAYS} bounds a typed query to. */
@@ -569,8 +608,14 @@ public class ReportQueryService {
      * Tuesday. Below it the caller still gets every raw count, in {@code
      * ordersByDate}, because a manager with one real week of data is better
      * served by that number than by nothing.
+     *
+     * <p>Package-private rather than {@code private}: {@link ForecastService}
+     * (wave W02) draws on the same trailing sample and enforces the identical
+     * gate before it will write a {@code fact_forecast} row, on purpose — a
+     * forecast is not allowed to look more confident than the honest average
+     * it is built from.
      */
-    private static final int DEMAND_HISTORY_MINIMUM_SAMPLE = 3;
+    static final int DEMAND_HISTORY_MINIMUM_SAMPLE = 3;
 
     /** One hour-of-day's demand sample — see {@link #demandHistory}. */
     public record HourDemand(
@@ -591,14 +636,185 @@ public class ReportQueryService {
      *                            thinner than asked for, empty when the
      *                            location has no history on this weekday at all
      */
+    /**
+     * @param holidayDates the subset of {@code sampleDates} a {@link
+     *                     HolidayCalendar} flagged (7.8b) — always populated,
+     *                     whatever {@code holidayMode} was requested; empty
+     *                     under {@code EXCLUDE} because a flagged date never
+     *                     reaches {@code sampleDates} in the first place
+     * @param holidayMode  what was requested — echoed back so a caller never
+     *                     has to remember what it asked for
+     */
     public record DemandHistoryResult(
             UUID locationId,
             int weekday,
             int requestedSampleSize,
             int minimumSampleSize,
             List<LocalDate> sampleDates,
+            Set<LocalDate> holidayDates,
+            HolidayMode holidayMode,
             List<HourDemand> hours,
             Provenance provenance) {}
+
+    /**
+     * Wave W02: {@link ForecastService}'s most recent run for one location
+     * and weekday — the seasonal-naive forecast, its confidence interval, and
+     * (once available) the actual — plus a short trend of earlier runs'
+     * forecast-vs-actual, the comparison 7.8's own row name asks for.
+     *
+     * <p>Empty when {@link ForecastScheduler} has not generated a run for
+     * this (tenant, location, weekday) yet, or the last run's sample was too
+     * thin to write any hour ({@code runId} is still present then — a run is
+     * always recorded — but {@code hours} is empty, the identical shape
+     * {@code demand-history} uses for "no history on this weekday" rather
+     * than a distinct error).
+     */
+    @Transactional(readOnly = true)
+    public DemandForecastResult demandForecast(UUID tenantId, UUID locationId, int weekday, int comparisonLimit) {
+        BusinessDayBoundary boundary = businessDays.boundaryFor(tenantId);
+        Optional<UUID> runId = store.findLatestForecastRunId(tenantId, locationId, weekday);
+        if (runId.isEmpty()) {
+            return new DemandForecastResult(
+                    locationId,
+                    weekday,
+                    null,
+                    ForecastService.MODEL_VERSION,
+                    ForecastService.CONFIDENCE_LEVEL,
+                    null,
+                    null,
+                    List.of(),
+                    List.of(),
+                    provenance(tenantId, List.of(), boundary));
+        }
+
+        JdbcReportingStore.ForecastRun run = store.findForecastRun(tenantId, runId.get())
+                .orElseThrow(() -> new IllegalStateException(
+                        "forecast_run %s was just found by findLatestForecastRunId but is now missing"
+                                .formatted(runId.get())));
+        List<JdbcReportingStore.ForecastRow> hourRows = store.readForecastHours(tenantId, runId.get());
+        List<JdbcReportingStore.ForecastRow> comparisonRows =
+                store.readForecastComparisons(tenantId, locationId, weekday, comparisonLimit);
+
+        return new DemandForecastResult(
+                locationId,
+                weekday,
+                runId.get(),
+                run.modelVersion(),
+                run.confidenceLevel(),
+                run.generatedAt(),
+                hourRows.isEmpty() ? null : hourRows.get(0).businessDate(),
+                hourRows.stream().map(DemandForecastHour::of).toList(),
+                comparisonRows.stream().map(DemandForecastComparison::of).toList(),
+                provenance(tenantId, List.of(), boundary));
+    }
+
+    /** One hour of the latest run's own forecast — see {@link #demandForecast}. */
+    public record DemandForecastHour(
+            int operatingHour,
+            double forecastQuantity,
+            double confidenceLow,
+            double confidenceHigh,
+            @Nullable Double actualQuantity,
+            @Nullable Double absolutePercentageError) {
+
+        static DemandForecastHour of(JdbcReportingStore.ForecastRow row) {
+            return new DemandForecastHour(
+                    row.operatingHour(),
+                    row.forecastQuantity(),
+                    row.confidenceLow(),
+                    row.confidenceHigh(),
+                    row.actualQuantity(),
+                    row.absolutePercentageError());
+        }
+    }
+
+    /** One earlier run's forecast for one business date and hour, with its actual once known — see {@link #demandForecast}. */
+    public record DemandForecastComparison(
+            LocalDate businessDate,
+            int operatingHour,
+            double forecastQuantity,
+            @Nullable Double actualQuantity,
+            @Nullable Double absolutePercentageError) {
+
+        static DemandForecastComparison of(JdbcReportingStore.ForecastRow row) {
+            return new DemandForecastComparison(
+                    row.businessDate(),
+                    row.operatingHour(),
+                    row.forecastQuantity(),
+                    row.actualQuantity(),
+                    row.absolutePercentageError());
+        }
+    }
+
+    /**
+     * @param runId          null when no run has ever been generated for this
+     *                       (tenant, location, weekday) — {@code hours} and
+     *                       {@code comparisons} are then both empty
+     * @param targetDate     the business date the latest run forecasts; null
+     *                       alongside an empty {@code hours} when the run's
+     *                       sample was too thin to write any
+     * @param comparisons    earlier runs' forecast-vs-actual, most recent
+     *                       business date first — 7.8's own "forecast vs
+     *                       actual" comparison
+     */
+    public record DemandForecastResult(
+            UUID locationId,
+            int weekday,
+            @Nullable UUID runId,
+            int modelVersion,
+            double confidenceLevel,
+            @Nullable Instant generatedAt,
+            @Nullable LocalDate targetDate,
+            List<DemandForecastHour> hours,
+            List<DemandForecastComparison> comparisons,
+            Provenance provenance) {}
+
+    /**
+     * 7.8a: the latest run's department (category) or product (variant)
+     * breakdown — {@code byProduct} chooses which. Empty exactly when {@link
+     * #demandForecast} would report an empty {@code hours} too: no run yet,
+     * or the branch-level sample was too thin for {@link ForecastService} to
+     * have generated anything under it.
+     */
+    @Transactional(readOnly = true)
+    public DemandForecastBreakdownResult demandForecastBreakdown(
+            UUID tenantId, UUID locationId, int weekday, boolean byProduct) {
+        Optional<UUID> runId = store.findLatestForecastRunId(tenantId, locationId, weekday);
+        if (runId.isEmpty()) {
+            return new DemandForecastBreakdownResult(locationId, weekday, byProduct, List.of());
+        }
+        List<JdbcReportingStore.ForecastRow> rows = store.readForecastBreakdown(tenantId, runId.get(), byProduct);
+        return new DemandForecastBreakdownResult(
+                locationId,
+                weekday,
+                byProduct,
+                rows.stream().map(DemandForecastBreakdownRow::of).toList());
+    }
+
+    /** One department or product's forecast for one operating hour, with its actual once known — see {@link #demandForecastBreakdown}. */
+    public record DemandForecastBreakdownRow(
+            @Nullable UUID categoryId,
+            @Nullable UUID variantId,
+            @Nullable String productName,
+            int operatingHour,
+            double forecastQuantity,
+            @Nullable Double actualQuantity,
+            @Nullable Double absolutePercentageError) {
+
+        static DemandForecastBreakdownRow of(JdbcReportingStore.ForecastRow row) {
+            return new DemandForecastBreakdownRow(
+                    row.categoryId(),
+                    row.variantId(),
+                    row.productName(),
+                    row.operatingHour(),
+                    row.forecastQuantity(),
+                    row.actualQuantity(),
+                    row.absolutePercentageError());
+        }
+    }
+
+    public record DemandForecastBreakdownResult(
+            UUID locationId, int weekday, boolean byProduct, List<DemandForecastBreakdownRow> rows) {}
 
     /** Every definition, with whether finance has signed it. */
     @Transactional(readOnly = true)
