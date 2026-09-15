@@ -254,10 +254,10 @@ class ProductClassificationServiceTests {
         jdbc.sql("""
                 INSERT INTO reporting.fact_order_line (
                     tenant_id, business_date, order_id, line_id, location_id, variant_id, category_id,
-                    product_name_snapshot, quantity, gross_som, discount_som, net_som)
+                    product_name_snapshot, quantity, gross_som, discount_som, net_som, occurred_at)
                 VALUES (
                     :tenantId, :businessDate, :orderId, :lineId, :locationId, :variantId, :categoryId,
-                    :productName, :quantity, :gross, 0, :gross)
+                    :productName, :quantity, :gross, 0, :gross, :occurredAt)
                 """)
                 .param("tenantId", tenantId)
                 .param("businessDate", date)
@@ -269,6 +269,11 @@ class ProductClassificationServiceTests {
                 .param("productName", nameOf(variantId))
                 .param("quantity", quantity)
                 .param("gross", grossSom)
+                // Wave W02's V0368 made this NOT NULL after this test was written; no
+                // sibling fact_order row exists to match (see this method's own doc),
+                // so a fixed time-of-day on the line's own business date is enough --
+                // the same footing VariantSalesReportingTests#insertLine already uses.
+                .param("occurredAt", date.atTime(9, 0).atOffset(ZoneOffset.UTC))
                 .update();
     }
 
