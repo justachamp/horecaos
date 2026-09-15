@@ -304,6 +304,65 @@ class ReportingControllerCapabilityHttpTests {
         assertThat(ok.getResponse().getContentAsString()).contains("\"totalCustomers\":0");
     }
 
+    // ------------------------------------------------------------------------- W02 demand-forecast
+    // 2026-09-14 review: the two demand-forecast endpoints new this wave were
+    // never covered here despite this suite's own stated purpose being the
+    // controller's capability wiring as a whole.
+
+    @Test
+    void demandForecastRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/demand-forecast")
+                        .with(tokenFor(DISPATCHER))
+                        .queryParam("locationId", UUID.randomUUID().toString())
+                        .queryParam("weekday", "2"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.REPORTING_READ.code());
+    }
+
+    @Test
+    void demandForecastSucceedsWithReportingRead() throws Exception {
+        MvcResult ok = mvc.perform(get(REPORTING + "/demand-forecast")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("locationId", UUID.randomUUID().toString())
+                        .queryParam("weekday", "2"))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        assertThat(ok.getResponse().getContentAsString()).contains("\"hours\":[]");
+    }
+
+    @Test
+    void demandForecastBreakdownRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/demand-forecast/breakdown")
+                        .with(tokenFor(DISPATCHER))
+                        .queryParam("locationId", UUID.randomUUID().toString())
+                        .queryParam("weekday", "2")
+                        .queryParam("dimension", "CATEGORY"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.REPORTING_READ.code());
+    }
+
+    @Test
+    void demandForecastBreakdownSucceedsWithReportingRead() throws Exception {
+        MvcResult ok = mvc.perform(get(REPORTING + "/demand-forecast/breakdown")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("locationId", UUID.randomUUID().toString())
+                        .queryParam("weekday", "2")
+                        .queryParam("dimension", "CATEGORY"))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        assertThat(ok.getResponse().getContentAsString()).contains("\"rows\":[]");
+    }
+
     @Test
     void metricsDictionaryPublishesTheCustomerAnalyticsFormulas() throws Exception {
         MvcResult ok =

@@ -302,27 +302,62 @@ public class ReportExportService {
         }
     }
 
+    /**
+     * @param viewerHoldsPiiCapability the polling principal's own {@code customer.pii.export}
+     *     grant (not the exporter's, which is already baked into the row) — see {@link
+     *     #toView} for why a second principal's grant has to be re-checked on every read
+     */
     @Transactional(readOnly = true)
-    public Optional<ExportStatusView> status(UUID tenantId, UUID id) {
-        return store.find(tenantId, id).map(row -> toView(row));
+    public Optional<ExportStatusView> status(UUID tenantId, UUID id, boolean viewerHoldsPiiCapability) {
+        return store.find(tenantId, id).map(row -> toView(row, viewerHoldsPiiCapability));
     }
 
+    /** @param viewerHoldsPiiCapability see {@link #status}'s own doc */
     @Transactional(readOnly = true)
-    public List<ExportStatusView> recentExports(UUID tenantId, int limit) {
-        return store.listRecent(tenantId, limit).stream().map(this::toView).toList();
+    public List<ExportStatusView> recentExports(UUID tenantId, int limit, boolean viewerHoldsPiiCapability) {
+        return store.listRecent(tenantId, limit).stream()
+                .map(row -> toView(row, viewerHoldsPiiCapability))
+                .toList();
     }
 
-    private ExportStatusView toView(ExportRow row) {
+    /**
+     * A stored row's {@code includesPiiColumns}/{@code effectiveColumns} were decided once, at
+     * queue time, from the <em>requester's</em> own {@code customer.pii.export} grant ({@link
+     * #requestExport}'s own doc). Every {@code REPORT_EXPORT} holder in the tenant can poll or
+     * list that same row (P28's export-centre history), so the PII group is re-redacted here,
+     * per read, against the <em>viewer's</em> own grant: a row whose PII columns the viewer is
+     * not entitled to see reports {@code includesPiiColumns = false}, strips the PII columns out
+     * of {@code effectiveColumns}, and never presigns a download URL.
+     */
+    private ExportStatusView toView(ExportRow row, boolean viewerHoldsPiiCapability) {
+        boolean redact = row.includesPiiColumns() && !viewerHoldsPiiCapability;
+
+        List<String> storedColumns = row.effectiveColumns();
+        List<String> effectiveColumns = storedColumns;
+        if (redact) {
+            Optional<ReportExportDefinition> definition = ReportExportRegistry.find(row.reportKey());
+            effectiveColumns = definition
+                    .map(def -> storedColumns.stream()
+                            .filter(column -> !def.isPiiColumn(column))
+                            .toList())
+                    // Defensive: an unknown report key can't tell PII columns from ordinary
+                    // ones, so redact every column rather than guess and risk a leak.
+                    .orElse(List.of());
+        }
+
         URI downloadUrl = null;
-        if ("COMPLETE".equals(row.status()) && row.artifactBucket() != null && row.artifactObjectKey() != null) {
+        if (!redact
+                && "COMPLETE".equals(row.status())
+                && row.artifactBucket() != null
+                && row.artifactObjectKey() != null) {
             downloadUrl = storage.presignDownload(row.artifactBucket(), row.artifactObjectKey(), Duration.ofMinutes(5));
         }
         return new ExportStatusView(
                 row.id(),
                 row.reportKey(),
                 row.status(),
-                row.effectiveColumns(),
-                row.includesPiiColumns(),
+                effectiveColumns,
+                redact ? false : row.includesPiiColumns(),
                 row.rowQuota(),
                 row.rowCount(),
                 row.truncated(),

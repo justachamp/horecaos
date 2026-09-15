@@ -45,6 +45,7 @@ class ForecastServiceTests {
     private static final UUID TENANT = UUID.fromString("018f6f4e-4000-7000-8000-00000000f001");
     private static final UUID BRAND = UUID.fromString("018f6f4e-4000-7000-8000-00000000f002");
     private static final UUID LOCATION_A = UUID.fromString("018f6f4e-4000-7000-8000-00000000f003");
+    private static final UUID OTHER_TENANT = UUID.fromString("018f6f4e-4000-7000-8000-00000000f0ff");
 
     private static final UUID CATEGORY = UUID.fromString("018f6f4e-4000-7000-8000-00000000f010");
     private static final UUID VARIANT = UUID.fromString("018f6f4e-4000-7000-8000-00000000f011");
@@ -102,6 +103,7 @@ class ForecastServiceTests {
         forecasts = new ForecastService(store, new BusinessDayService(store), clock);
 
         seedTenant(TENANT);
+        seedTenant(OTHER_TENANT);
     }
 
     // ------------------------------------------------------------ generation
@@ -177,6 +179,31 @@ class ForecastServiceTests {
         assertThat(hourRow(hours, 9).forecastQuantity()).isZero();
     }
 
+    /**
+     * 2026-09-14 review: no test in this file seeded a second tenant, so a regression dropping
+     * {@code tenant_id} from the demand-history read behind {@link ForecastService#generateForecast}
+     * would pass every other test here unchanged.
+     */
+    @Test
+    void generateForecastNeverCrossesTenants() {
+        insertOrders(TUE1, 18, 8);
+        insertOrders(TUE2, 18, 10);
+        insertOrders(TUE3, 18, 12);
+        insertOrders(TUE4, 18, 10);
+        // OTHER_TENANT: the same location/weekday/hour, a wildly different volume --
+        // would move the mean and sample size below if it ever leaked into TENANT's read.
+        insertOrders(OTHER_TENANT, TUE1, 18, 500);
+        insertOrders(OTHER_TENANT, TUE2, 18, 500);
+        insertOrders(OTHER_TENANT, TUE3, 18, 500);
+        insertOrders(OTHER_TENANT, TUE4, 18, 500);
+
+        var result = forecasts.generateForecast(TENANT, LOCATION_A, TUESDAY, 4, HolidayMode.INCLUDE);
+
+        var hour18 = hourRow(store.readForecastHours(TENANT, result.runId()), 18);
+        assertThat(hour18.sampleSize()).isEqualTo(4);
+        assertThat(hour18.forecastQuantity()).isEqualTo(10.0);
+    }
+
     // -------------------------------------------------------------- backfill
 
     @Test
@@ -212,6 +239,33 @@ class ForecastServiceTests {
     @Test
     void backfillActualsIsANoOpWhenNothingIsPending() {
         assertThat(forecasts.backfillActuals(TENANT, TARGET_TUESDAY)).isZero();
+    }
+
+    /**
+     * 2026-09-14 review: same gap as {@link #generateForecastNeverCrossesTenants}, for {@link
+     * ForecastService#backfillActuals}.
+     */
+    @Test
+    void backfillActualsNeverCrossesTenants() {
+        insertOrders(TUE1, 18, 8);
+        insertOrders(TUE2, 18, 10);
+        insertOrders(TUE3, 18, 12);
+        insertOrders(TUE4, 18, 10);
+        var result = forecasts.generateForecast(TENANT, LOCATION_A, TUESDAY, 4, HolidayMode.INCLUDE);
+
+        insertOrders(TARGET_TUESDAY, 18, 11);
+        // OTHER_TENANT trades heavily at the same location/date/hour -- must never fold into
+        // TENANT's own backfilled actual.
+        insertOrders(OTHER_TENANT, TARGET_TUESDAY, 18, 777);
+
+        int updated = forecasts.backfillActuals(TENANT, TARGET_TUESDAY);
+
+        assertThat(updated).isEqualTo(24);
+        var hour18 = hourRow(store.readForecastHours(TENANT, result.runId()), 18);
+        assertThat(hour18.actualQuantity()).isEqualTo(11.0);
+
+        // OTHER_TENANT has no forecast run of its own, so nothing is pending for it either.
+        assertThat(forecasts.backfillActuals(OTHER_TENANT, TARGET_TUESDAY)).isZero();
     }
 
     // ------------------------------------------------------------- breakdown
@@ -264,19 +318,29 @@ class ForecastServiceTests {
     }
 
     private void insertOrders(LocalDate businessDate, int localHour, int count) {
+        insertOrders(TENANT, businessDate, localHour, count);
+    }
+
+    /** {@link #insertOrders}, naming a tenant — the cross-tenant isolation tests' own fixture. */
+    private void insertOrders(UUID tenantId, LocalDate businessDate, int localHour, int count) {
         for (int i = 0; i < count; i++) {
             insertOrderAt(
+                    tenantId,
                     businessDate,
                     businessDate.atTime(localHour, 0).atZone(TASHKENT).toInstant());
         }
     }
 
     private void insertOrderAt(LocalDate businessDate, Instant occurredAt) {
-        UUID orderId = orderId(TENANT + ":" + sequence++);
+        insertOrderAt(TENANT, businessDate, occurredAt);
+    }
+
+    private void insertOrderAt(UUID tenantId, LocalDate businessDate, Instant occurredAt) {
+        UUID orderId = orderId(tenantId + ":" + sequence++);
         OffsetDateTime occurredAtOffset = occurredAt.atOffset(ZoneOffset.UTC);
 
         Map<String, Object> params = new HashMap<>();
-        params.put("tenantId", TENANT);
+        params.put("tenantId", tenantId);
         params.put("orderId", orderId);
         params.put("businessDate", businessDate);
         params.put("boundaryVersion", 1);

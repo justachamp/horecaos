@@ -138,7 +138,8 @@ class ReportExportServiceTests {
 
         assertThat(service.processNextQueued()).isTrue();
 
-        ReportExportService.ExportStatusView view = service.status(TENANT, id).orElseThrow();
+        ReportExportService.ExportStatusView view =
+                service.status(TENANT, id, false).orElseThrow();
         assertThat(view.status()).isEqualTo("COMPLETE");
         assertThat(view.rowQuota()).isEqualTo(ReportExportService.DEFAULT_ROW_QUOTA);
         assertThat(view.truncated())
@@ -209,7 +210,8 @@ class ReportExportServiceTests {
         // No exception above: the request is accepted even though "phone" was asked for.
         assertThat(service.processNextQueued()).isTrue();
 
-        ReportExportService.ExportStatusView view = service.status(TENANT, id).orElseThrow();
+        ReportExportService.ExportStatusView view =
+                service.status(TENANT, id, false).orElseThrow();
         assertThat(view.status()).isEqualTo("COMPLETE");
         assertThat(view.includesPiiColumns()).isFalse();
         assertThat(view.effectiveColumns()).containsExactly("accountId", "status", "displayName");
@@ -240,11 +242,62 @@ class ReportExportServiceTests {
 
         assertThat(service.processNextQueued()).isTrue();
 
-        ReportExportService.ExportStatusView view = service.status(TENANT, id).orElseThrow();
+        ReportExportService.ExportStatusView view =
+                service.status(TENANT, id, true).orElseThrow();
         assertThat(view.includesPiiColumns()).isTrue();
         assertThat(view.effectiveColumns()).contains("phone");
+        assertThat(view.downloadUrl()).isNotNull();
         String csv = new String(storage.puts.get(0).content(), StandardCharsets.UTF_8);
         assertThat(csv).contains("+998900000003");
+    }
+
+    @Test
+    @DisplayName("a principal without customer.pii.export polling or listing another principal's "
+            + "PII export never sees the PII columns or the download URL")
+    void statusAndHistoryRedactPiiFromAViewerWhoLacksTheCapability() {
+        insertOneCustomer("Ada Lovelace", "+998900000004");
+
+        // Requested by a principal who DOES hold customer.pii.export -- the row is stored
+        // with the phone column included and a real artefact behind it.
+        UUID id = service.requestExport(
+                TENANT,
+                ReportExportRegistry.CUSTOMER_DIRECTORY,
+                List.of("accountId", "status", "displayName", "phone"),
+                null,
+                null,
+                "cross-viewer-pii-test",
+                SUBJECT,
+                true);
+        assertThat(service.processNextQueued()).isTrue();
+
+        // A second principal in the same tenant, REPORT_EXPORT-only (no customer.pii.export),
+        // polls that same export's status.
+        ReportExportService.ExportStatusView statusView =
+                service.status(TENANT, id, false).orElseThrow();
+        assertThat(statusView.includesPiiColumns())
+                .as("redacted for a viewer without customer.pii.export")
+                .isFalse();
+        assertThat(statusView.effectiveColumns())
+                .doesNotContain("phone")
+                .containsExactly("accountId", "status", "displayName");
+        assertThat(statusView.downloadUrl())
+                .as("no presigned URL for a PII export the viewer cannot see")
+                .isNull();
+
+        // Same redaction reading the job history list.
+        List<ReportExportService.ExportStatusView> history = service.recentExports(TENANT, 50, false);
+        assertThat(history).hasSize(1);
+        ReportExportService.ExportStatusView historyView = history.get(0);
+        assertThat(historyView.includesPiiColumns()).isFalse();
+        assertThat(historyView.effectiveColumns()).doesNotContain("phone");
+        assertThat(historyView.downloadUrl()).isNull();
+
+        // The PII-holding principal themselves still sees the phone column and the URL.
+        ReportExportService.ExportStatusView ownerView =
+                service.status(TENANT, id, true).orElseThrow();
+        assertThat(ownerView.includesPiiColumns()).isTrue();
+        assertThat(ownerView.effectiveColumns()).contains("phone");
+        assertThat(ownerView.downloadUrl()).isNotNull();
     }
 
     private long auditFactCount() {

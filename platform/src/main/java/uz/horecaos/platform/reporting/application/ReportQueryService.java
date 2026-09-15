@@ -337,12 +337,30 @@ public class ReportQueryService {
      * distinct from 5.3's segment builder. Monetary is a cell value here,
      * never a third bucketed axis: the row's own brief calls this "R×F", not
      * a three-axis RFM cube.
+     *
+     * <p>{@code revenueSom} is money (ADR 0038): refused, like {@code customers.value.v1},
+     * rather than folded across more than one legal entity when the caller did not narrow to
+     * one — see the {@code readLegalEntityCount} call at the top of this method.
+     *
+     * @throws ReportingRefusals.CombinedEntityTotalException when {@code legalEntityIds} is
+     *         empty and the read spans more than one legal entity
      */
     @Transactional(readOnly = true)
     public RfmResult customerRfm(
             UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<UUID> legalEntityIds) {
         validateRange(from, to);
         refuseMixedBoundaryRegime(tenantId, from, to);
+
+        // revenueSom below is money (ADR 0038): refused rather than folded across
+        // more than one legal entity when the caller did not narrow to one — the
+        // same rule customerKpis applies to customers.value.v1. readCustomerRfmInputs
+        // groups by customer_subject_hash alone, so the count comes from a second,
+        // cheap scalar read rather than a column on CustomerRfmRow — see
+        // readLegalEntityCount's own doc.
+        int legalEntityCount = store.readLegalEntityCount(tenantId, from, to, locationIds, legalEntityIds);
+        if (legalEntityIds.isEmpty() && legalEntityCount > 1) {
+            throw new ReportingRefusals.CombinedEntityTotalException(List.of("customers.value.v1"), legalEntityCount);
+        }
 
         List<JdbcReportingStore.CustomerRfmRow> inputs =
                 store.readCustomerRfmInputs(tenantId, from, to, locationIds, legalEntityIds);

@@ -46,6 +46,7 @@ class CustomerAnalyticsReportingTests {
     private static final UUID LOCATION_A = UUID.fromString("018f6f4e-3000-7000-8000-00000000e003");
     private static final UUID ENTITY_A = UUID.fromString("018f6f4e-3000-7000-8000-00000000e004");
     private static final UUID ENTITY_B = UUID.fromString("018f6f4e-3000-7000-8000-00000000e005");
+    private static final UUID OTHER_TENANT = UUID.fromString("018f6f4e-3000-7000-8000-00000000e0ff");
 
     private static final LocalDate DAY = LocalDate.of(2026, 8, 21);
 
@@ -84,6 +85,7 @@ class CustomerAnalyticsReportingTests {
         queries = new ReportQueryService(store, new BusinessDayService(store), clock);
 
         seedTenant(TENANT);
+        seedTenant(OTHER_TENANT);
     }
 
     // ----------------------------------------------------------- 7.6 customer-kpis
@@ -126,6 +128,30 @@ class CustomerAnalyticsReportingTests {
                 .isNull();
         assertThat(result.orderFrequency()).isNull();
         assertThat(result.customerValueSom()).isNull();
+        assertThat(result.basketDepth()).isNull();
+    }
+
+    /**
+     * MetricRegistry's own registered inclusion rule for {@code customers.new.v1}/{@code
+     * customers.distinct.v1}: "Every order with a customer_subject_hash ..., regardless of
+     * terminal status — a cancelled first order still means the person is new." A single
+     * COMPLETED-only {@code WHERE} clause used to answer distinct/new customers too, which
+     * silently dropped a guest whose only order in range never completed.
+     */
+    @Test
+    void aCustomersOnlyOrderBeingCancelledStillCountsThemAsNewAndDistinct() {
+        insertOrder("c1-cancelled-only", "C1", true, ENTITY_A, "CANCELLED", 500_000, 5);
+
+        var result = queries.customerKpis(TENANT, DAY, DAY, List.of(), List.of());
+
+        assertThat(result.distinctCustomers())
+                .as("customers.distinct.v1 counts regardless of terminal status")
+                .isEqualTo(1);
+        assertThat(result.newCustomers())
+                .as("customers.new.v1: a cancelled first order still means the person is new")
+                .isEqualTo(1);
+        // The COMPLETED-only figures (order_count/net_som/item_count_sum) are untouched:
+        // nothing here completed, so basket depth stays null rather than a fabricated zero.
         assertThat(result.basketDepth()).isNull();
     }
 
@@ -335,6 +361,77 @@ class CustomerAnalyticsReportingTests {
         });
     }
 
+    /**
+     * ADR 0038, the same rule {@link #kpisRefuseACombinedTotalAcrossTwoLegalEntitiesUnlessNarrowed}
+     * and {@link #revenueByCustomerTypeRefusesACombinedTotalAcrossTwoLegalEntities} already apply:
+     * {@code revenueSom} is money, so it is refused rather than folded across more than one legal
+     * entity when the caller did not narrow to one.
+     */
+    @Test
+    void rfmRefusesACombinedTotalAcrossTwoLegalEntitiesUnlessNarrowed() {
+        insertOrder("a-1", "C1", true, ENTITY_A, "COMPLETED", 50_000, 1);
+        insertOrder("b-1", "C2", true, ENTITY_B, "COMPLETED", 60_000, 1);
+
+        assertThatThrownBy(() -> queries.customerRfm(TENANT, DAY, DAY, List.of(), List.of()))
+                .isInstanceOf(ReportingRefusals.CombinedEntityTotalException.class)
+                .hasMessageContaining("customers.value.v1");
+
+        // Narrowed to one entity: answered rather than refused.
+        var result = queries.customerRfm(TENANT, DAY, DAY, List.of(), List.of(ENTITY_A));
+        assertThat(result.totalCustomers()).isEqualTo(1);
+        assertThat(result.cells())
+                .filteredOn(cell -> cell.memberCount() > 0)
+                .singleElement()
+                .satisfies(cell -> assertThat(cell.revenueSom()).isEqualTo(50_000L));
+    }
+
+    // ----------------------------------------------- T13/W02/T06 cross-tenant isolation (medium)
+
+    /**
+     * 2026-09-14 review: none of T13's new reads had a cross-tenant test, unlike {@code
+     * ProductClassificationServiceTests#resultsNeverCrossTenants} in the same wave group. A
+     * regression that dropped {@code tenant_id = :tenantId} from {@code readCustomerKpis}, {@code
+     * readCustomerCohorts}, {@code readCustomerRfmInputs}, or {@code readCustomerTypeRevenue}
+     * would pass every other test in this file unchanged.
+     */
+    @Test
+    void customerKpisCohortsRfmAndRevenueByCustomerTypeNeverCrossTenants() {
+        insertOrder("mine", "C1", true, ENTITY_A, "COMPLETED", 50_000, 2);
+        // OTHER_TENANT: a wildly different order (huge money, a different customer, the same
+        // business date and legal entity id) that would visibly change every read below if any
+        // of them ever leaked across tenants.
+        insertOrderForTenant(OTHER_TENANT, "not-mine", "INTRUDER", true, ENTITY_A, "COMPLETED", 999_000_000, 999);
+
+        var kpis = queries.customerKpis(TENANT, DAY, DAY, List.of(), List.of());
+        assertThat(kpis.distinctCustomers()).isEqualTo(1);
+        assertThat(kpis.newCustomers()).isEqualTo(1);
+        assertThat(kpis.customerValueSom()).isEqualTo(50_000L);
+
+        var cohorts = queries.customerCohorts(TENANT, DAY.withDayOfMonth(1), DAY, List.of());
+        assertThat(cohorts.cohorts()).hasSize(1);
+        assertThat(cohorts.cohorts().getFirst().size()).isEqualTo(1);
+
+        var rfm = queries.customerRfm(TENANT, DAY, DAY, List.of(), List.of());
+        assertThat(rfm.totalCustomers()).isEqualTo(1);
+        assertThat(rfm.cells())
+                .filteredOn(cell -> cell.memberCount() > 0)
+                .singleElement()
+                .satisfies(cell -> assertThat(cell.revenueSom()).isEqualTo(50_000L));
+
+        var revenueByType = queries.run(new ReportQuery(
+                TENANT,
+                DAY,
+                DAY,
+                List.of("revenue.new_vs_returning.v1"),
+                List.of(Grain.Dimension.CUSTOMER_TYPE),
+                List.of(),
+                List.of(),
+                List.of()));
+        assertThat(revenueByType.rows()).hasSize(1);
+        assertThat(revenueByType.rows().getFirst().values().get("revenue.new_vs_returning.v1"))
+                .isEqualTo(50_000L);
+    }
+
     // ----------------------------------------------------------------------- fixtures
 
     private static UUID orderId(String seed) {
@@ -362,6 +459,7 @@ class CustomerAnalyticsReportingTests {
             long grossSom,
             int itemCount) {
         insertRow(
+                TENANT,
                 businessDate,
                 seed,
                 customerHash(customerKey),
@@ -373,7 +471,34 @@ class CustomerAnalyticsReportingTests {
     }
 
     private void insertGuestOrder(String seed, UUID legalEntityId, String status, long grossSom, int itemCount) {
-        insertRow(DAY, seed, null, false, legalEntityId, status, grossSom, itemCount);
+        insertRow(TENANT, DAY, seed, null, false, legalEntityId, status, grossSom, itemCount);
+    }
+
+    /**
+     * The tenant-isolation fixture's own entry point: identical to {@link #insertOrder} but for
+     * an arbitrary tenant, so a cross-tenant test can seed a second tenant's row that would
+     * visibly change the first tenant's read if any query here ever dropped its {@code
+     * tenant_id} filter.
+     */
+    private void insertOrderForTenant(
+            UUID tenantId,
+            String seed,
+            String customerKey,
+            boolean isFirstOrder,
+            UUID legalEntityId,
+            String status,
+            long grossSom,
+            int itemCount) {
+        insertRow(
+                tenantId,
+                DAY,
+                seed,
+                customerHash(customerKey),
+                isFirstOrder,
+                legalEntityId,
+                status,
+                grossSom,
+                itemCount);
     }
 
     /** A stand-in for the ADR 0029 keyed hash — this test never carries a real customer account. */
@@ -382,6 +507,7 @@ class CustomerAnalyticsReportingTests {
     }
 
     private void insertRow(
+            UUID tenantId,
             LocalDate businessDate,
             String seed,
             @Nullable String customerSubjectHash,
@@ -394,8 +520,8 @@ class CustomerAnalyticsReportingTests {
         OffsetDateTime created = businessDate.atTime(9, 0).atOffset(ZoneOffset.of("+05:00"));
 
         Map<String, Object> params = new HashMap<>();
-        params.put("tenantId", TENANT);
-        params.put("orderId", orderId(seed));
+        params.put("tenantId", tenantId);
+        params.put("orderId", orderId(tenantId + ":" + seed));
         params.put("businessDate", businessDate);
         params.put("boundaryVersion", 1);
         params.put("occurredAt", created);
