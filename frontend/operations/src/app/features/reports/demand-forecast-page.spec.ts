@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { ApiError } from '../../core/api/problem-details';
@@ -86,8 +86,27 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
+// `defaultWeekday()` in demand-forecast-page.ts reads the real wall-clock day
+// to pick the component's initial `weekday` signal — a reasonable default in
+// production, but it made this spec file's fixtures (all built around
+// weekday 2 / Tuesday, e.g. `response()`'s `sampleDates` above) pass only on
+// a Tuesday and fail on every other day. Faking only `Date` (never
+// `setTimeout`) pins that initial weekday without disturbing
+// `flushMicrotasks`, which relies on a real macrotask to flush pending
+// promises.
+const FIXED_TUESDAY = new Date('2026-08-25T10:00:00Z');
+
 describe('DemandForecastPage', () => {
   let fixture: ComponentFixture<DemandForecastPage>;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(FIXED_TUESDAY);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   async function render(
     api: Partial<ReportingApi>,
