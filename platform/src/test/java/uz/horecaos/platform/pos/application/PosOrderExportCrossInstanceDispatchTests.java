@@ -21,8 +21,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
@@ -400,7 +402,8 @@ class PosOrderExportCrossInstanceDispatchTests {
                 // one — nothing in this class exercises that requirement.
                 (tenantId, brandId, priceableIds) -> Map.of(),
                 event -> {},
-                clock);
+                clock,
+                new TransactionTemplate(new DataSourceTransactionManager(db.dataSource())));
     }
 
     private ExportState exportState(UUID orderId) {
@@ -430,12 +433,27 @@ class PosOrderExportCrossInstanceDispatchTests {
                 1);
     }
 
-    /** Fires exactly what a committing transaction manager fires, and no more. */
+    /**
+     * Fires exactly what a committing transaction manager fires, and no more.
+     *
+     * <p>{@code afterCompletion} is not decoration: {@code exports.open(...)}
+     * above ran its JdbcClient statements while synchronization was manually
+     * active, so Spring's own {@code DataSourceUtils} registered a connection
+     * synchronization alongside the trigger's hint one, in the same list this
+     * method reads. A real {@code AbstractPlatformTransactionManager} fires
+     * {@code afterCompletion} on every synchronization once it has committed,
+     * which is what releases and unbinds that connection; skipping it here
+     * left one bound to this thread for {@code db.dataSource()} forever,
+     * invisible until something later tried to open a real transaction of its
+     * own on the same thread and found the key already taken.
+     */
     private static void commit() {
         List<TransactionSynchronization> registered =
                 List.copyOf(TransactionSynchronizationManager.getSynchronizations());
         TransactionSynchronizationManager.clearSynchronization();
         registered.forEach(TransactionSynchronization::afterCommit);
+        registered.forEach(
+                synchronization -> synchronization.afterCompletion(TransactionSynchronization.STATUS_COMMITTED));
     }
 
     // ------------------------------------------------------------------ fixture
