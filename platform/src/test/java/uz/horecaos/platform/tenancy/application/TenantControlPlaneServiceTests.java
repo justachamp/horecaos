@@ -1046,6 +1046,21 @@ class TenantControlPlaneServiceTests {
                     .toList();
         }
 
+        @Override
+        public List<Brand> findActiveBrands(TenantId tenantId) {
+            List<Brand> ofTenant = brands.values().stream()
+                    .filter(brand -> brand.tenantId().equals(tenantId))
+                    .toList();
+            boolean anyActive = ofTenant.stream()
+                    .anyMatch(
+                            brand -> brand.status() == uz.horecaos.platform.tenancy.domain.OperatingUnitStatus.ACTIVE);
+            return ofTenant.stream()
+                    .filter(brand -> brand.status() == uz.horecaos.platform.tenancy.domain.OperatingUnitStatus.ACTIVE
+                            || (!anyActive
+                                    && brand.status() == uz.horecaos.platform.tenancy.domain.OperatingUnitStatus.DRAFT))
+                    .toList();
+        }
+
         /**
          * Same reasoning as {@link #updateLocationPlace}: the aggregate held here
          * is the instance the service just mutated, so the write is already

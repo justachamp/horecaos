@@ -248,6 +248,29 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
     }
 
     @Override
+    public List<Brand> findActiveBrands(TenantId tenantId) {
+        // The NOT EXISTS clause is evaluated against the same tenant.brands
+        // rows this query itself reads, in the one statement, so the "has any
+        // brand gone live" answer cannot read stale relative to the rows
+        // returned beside it.
+        return jdbc.sql("""
+                        SELECT b.id, b.tenant_id, b.code, b.slug, b.display_name, b.status, b.version
+                          FROM tenant.brands b
+                         WHERE b.tenant_id = :tenantId
+                           AND (
+                             b.status = 'ACTIVE'
+                             OR (b.status = 'DRAFT' AND NOT EXISTS (
+                                   SELECT 1 FROM tenant.brands sibling
+                                    WHERE sibling.tenant_id = b.tenant_id AND sibling.status = 'ACTIVE'))
+                           )
+                         ORDER BY b.display_name, b.id
+                        """)
+                .param("tenantId", tenantId.value())
+                .query(JdbcTenantControlPlaneStore::mapBrand)
+                .list();
+    }
+
+    @Override
     public BrandProfile findBrandProfile(TenantId tenantId, BrandId brandId) {
         BrandContact contact = jdbc.sql("""
                         SELECT contact_phone, telegram_handle FROM tenant.brands

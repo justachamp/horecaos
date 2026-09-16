@@ -212,6 +212,34 @@ class OrderingOnboardingStepHandlersTests {
         assertThat(result.outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
     }
 
+    /**
+     * The defect this ADR 0099-spirited fix closes (2026-09-16, tenant
+     * {@code qoida} in pre-production): a second, unfinished brand's location
+     * — no channel, no fulfilment mode, nothing — used to fail this whole
+     * step even though the fixture's own brand is fully sellable. A brand
+     * that is not {@code ACTIVE} cannot sell anyway, so its locations are not
+     * smoke-tested.
+     */
+    @Test
+    void passesIgnoringALocationOnANonActiveBrand() {
+        UUID channelId = insertChannel();
+        bindChannelToLocation(channelId);
+        enableFulfillmentMode(channelId, "PICKUP");
+        UUID variantId = insertProductAndVariant("BURGER");
+        insertPublication();
+        insertLocationOffering(variantId);
+        seedPricing(variantId);
+        inventory().listVariantAtLocation(tenantId, brandId, locationId, variantId, TrackingMode.BINARY);
+
+        UUID otherBrandId = insertSecondBrand("PARKED", "DRAFT");
+        insertLocationUnderBrand(otherBrandId, "PARKED01");
+        // PARKED01 has no channel at all — would fail NO_CHANNEL if checked.
+
+        StepResult result = handler().execute(context());
+
+        assertThat(result.outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
+    }
+
     private InventoryService inventory() {
         return new InventoryService(new JdbcInventoryStore(jdbc), event -> {}, CLOCK);
     }
@@ -277,6 +305,38 @@ class OrderingOnboardingStepHandlersTests {
                 .param("brandId", brandId)
                 .param("slug", "l-" + locationId.toString().substring(0, 8))
                 .update();
+    }
+
+    /** A second brand of the fixture's tenant, in an arbitrary status, for tests naming one that cannot sell. */
+    private UUID insertSecondBrand(String code, String status) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, :code, :slug, :code, :status, 0)
+                """)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .param("slug", "b-" + id.toString().substring(0, 8))
+                .param("status", status)
+                .update();
+        return id;
+    }
+
+    private UUID insertLocationUnderBrand(UUID ownerBrandId, String code) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.locations
+                    (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, :code, :slug, :code, 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", ownerBrandId)
+                .param("code", code)
+                .param("slug", "l-" + id.toString().substring(0, 8))
+                .update();
+        return id;
     }
 
     private UUID insertChannel() {

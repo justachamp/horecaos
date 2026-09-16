@@ -151,7 +151,8 @@ class OnboardingServiceTests {
                 published,
                 mapper,
                 clock,
-                controlPlane);
+                controlPlane,
+                store);
 
         insertTemplate();
         insertTenant();
@@ -573,7 +574,8 @@ class OnboardingServiceTests {
                 published,
                 JsonMapper.builder().build(),
                 clock,
-                controlPlane);
+                controlPlane,
+                store);
         UUID runId = serviceMissingOneHandler.startRun(
                 TENANT, TEMPLATE, 1, Map.of("ownerEmail", "owner@acme.example"), ADMIN);
 
@@ -692,6 +694,76 @@ class OnboardingServiceTests {
         assertThat(jdbc.sql("""
                 SELECT count(*) FROM audit.audit_events WHERE action_code = 'tenant.activated'
                 """).query(Long.class).single()).isEqualTo(1L);
+    }
+
+    /**
+     * The regression a 2026-09-16 review caught: {@code
+     * CatalogReadinessValidate} and its siblings now skip a brand that
+     * cannot sell as a result of this activation (a later {@code DRAFT}
+     * brand added after the tenant already has one {@code ACTIVE} brand),
+     * but skipped is not the same as safe — before this fix, {@code
+     * activateDraftBrandsAndLocations} swept every {@code DRAFT} brand of
+     * the tenant unconditionally, so the very brand every readiness step
+     * just excluded got promoted to {@code ACTIVE} (and storefront
+     * discoverable) anyway the moment {@code TENANT_ACTIVATE} ran. This
+     * fixture's own {@code BRAND} is already {@code ACTIVE} (see {@link
+     * #insertTenant()}), so a second, still-{@code DRAFT} brand added here
+     * is exactly the "brand nobody validated" case — the fixture's fake
+     * {@code AlwaysCompletes} handlers complete every readiness step
+     * regardless (this test is about the activation sweep, not the real
+     * readiness checks, which have their own tests next to {@code
+     * OnboardingStepHandlers}), so the run reaches {@code READY} and
+     * activates either way; only the sweep's own scope decides EMPTY's fate.
+     */
+    @Test
+    void activationDoesNotPromoteALaterDraftBrandThisRunNeverValidated() {
+        UUID emptyBrandId = insertSecondDraftBrandWithLocation();
+
+        UUID runId = startRun();
+        drain(runId);
+
+        assertThat(service.activate(runId, ADMIN, "go live").activated()).isTrue();
+
+        assertThat(brandStatus(BRAND))
+                .as("the tenant's original, already-ACTIVE brand is untouched")
+                .isEqualTo("ACTIVE");
+        assertThat(brandStatus(emptyBrandId))
+                .as("EMPTY was skipped by every readiness check (no catalog, no media, no payment or "
+                        + "delivery config) and must stay DRAFT until a run that actually validates it "
+                        + "activates it — not be swept up by this one just because TENANT_ACTIVATE ran")
+                .isEqualTo("DRAFT");
+        assertThat(jdbc.sql("SELECT status FROM tenant.locations WHERE brand_id = :brandId")
+                        .param("brandId", emptyBrandId)
+                        .query(String.class)
+                        .single())
+                .as("EMPTY's own location must likewise stay DRAFT and storefront-undiscoverable")
+                .isEqualTo("DRAFT");
+    }
+
+    /** A second brand, DRAFT with a DRAFT location, that no readiness check will ever be asked about here. */
+    private UUID insertSecondDraftBrandWithLocation() {
+        UUID emptyBrandId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'EMPTY', 'empty-brand', 'Empty Brand', 'DRAFT', 0)
+                """).param("id", emptyBrandId).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.locations
+                    (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, 'EMPTYLOC', 'empty-loc', 'Empty Location', 'Asia/Tashkent', 'DRAFT', 0)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", emptyBrandId)
+                .update();
+        return emptyBrandId;
+    }
+
+    private String brandStatus(UUID brandId) {
+        return jdbc.sql("SELECT status FROM tenant.brands WHERE id = :id")
+                .param("id", brandId)
+                .query(String.class)
+                .single();
     }
 
     @Test
@@ -1211,7 +1283,8 @@ class OnboardingServiceTests {
                 published,
                 JsonMapper.builder().build(),
                 clock,
-                controlPlane);
+                controlPlane,
+                store);
     }
 
     /** A stand-in for ADR 0099's step, doing whatever the test needs it to do. */

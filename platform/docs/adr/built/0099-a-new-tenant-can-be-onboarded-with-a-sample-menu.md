@@ -528,6 +528,74 @@ anonymous storefront menu endpoint returns ten priced products for its location.
 A second run for the same tenant completes `SAMPLE_MENU_PUBLISH` without
 creating an eleventh product.
 
+## Status addition (2026-09-16)
+
+Pre-production found a defect this record's own Context did not anticipate:
+`CATALOG_READINESS_VALIDATE` iterated *every* brand of the tenant with no
+status filter, so a brand added after go-live and not yet set up — `DRAFT`,
+or one the owner had `ARCHIVED` — failed the whole check and blocked
+activation, even when another brand of the same tenant was fully published
+and sellable. Tenant `qoida` hit exactly this: one ready brand (published
+menu, available offerings) and one empty second brand it could never
+activate past.
+
+The fix (`OnboardingStepHandlers.CatalogReadinessValidate`,
+`TenantControlPlaneStore#findActiveBrands`) scopes readiness to the brands
+that can actually sell as a result of the activation being validated:
+`ACTIVE` brands, plus — only for a tenant that has never yet had any brand
+reach `ACTIVE` — its `DRAFT` ones too. The second half is not a carve-out;
+it is what keeps this record's own exit criterion true, since
+`activateDraftBrandsAndLocations` promotes every `DRAFT` brand in one sweep
+and a brand-new tenant's only brand is necessarily `DRAFT` for the whole of
+`CATALOG_READINESS_VALIDATE` and `ACTIVATION_SMOKE_TEST` — both of which
+this record's own exit criterion requires `COMPLETED` before
+`TENANT_ACTIVATE` ever runs. `OnboardingFullRunIntegrationTests` pins this:
+a realistic tenant's single `DRAFT` brand and location must still reach
+`READY`, exactly as this record's Testing section already asserted.
+
+What this changes for this record's own scope: nothing about the *first*
+onboarding of a tenant with two brands created together — both are `DRAFT`
+with nothing yet `ACTIVE`, so both are still judged, and the Implementation
+status bullet's "a tenant with two brands still fails catalogue readiness on
+the second" remains true for that case. What changes is the *later* case —
+a second brand created (or archived) after the tenant already went live —
+which this record never considered and which is now skipped, named in the
+step's `skippedBrands` result. `MediaReadinessValidate`,
+`PaymentConfigurationValidate`, `DeliveryConfigurationValidate` and
+`ACTIVATION_SMOKE_TEST` (in `ordering`, this record's own sibling handler)
+apply the identical scope for the same reason, everywhere each already
+looped over every brand or every location of every brand.
+
+## Status addition (2026-09-16, activation sweep)
+
+Review of the addition above caught the gap it left open: "skipped, not
+required" was only true of the readiness checks, not of activation itself.
+`OnboardingService#activateDraftBrandsAndLocations` — which the previous
+addition correctly described as promoting "every `DRAFT` brand [of the
+tenant] in one sweep" — did exactly that, unconditionally, regardless of
+which brands the same run's readiness steps had actually judged. A brand
+`CATALOG_READINESS_VALIDATE` skipped and named in `skippedBrands` because it
+could not sell (no catalogue, no media, no payment or delivery
+configuration) was, on the very same `TENANT_ACTIVATE`, promoted to `ACTIVE`
+and storefront-discoverable anyway: skipped meant "not required to be
+ready," not "will not go live."
+
+The fix scopes `activateDraftBrandsAndLocations` to
+`TenantControlPlaneStore#findActiveBrands` too — the identical set
+`CatalogReadinessValidate` and its siblings already judge — so a brand
+outside it (a later `DRAFT` brand added after the tenant's first brand went
+live, or a `SUSPENDED`/`ARCHIVED` one) is swept by neither the readiness
+checks nor the activation that follows them. It stays `DRAFT` until a run
+that actually includes it in `findActiveBrands` — because it is still the
+tenant's only brand, or because it has since become `ACTIVE` on its own
+merits — activates it instead. `OnboardingServiceTests
+.activationDoesNotPromoteALaterDraftBrandThisRunNeverValidated` and
+`OnboardingFullRunIntegrationTests
+.aSecondRunAddingAnEmptyBrandDoesNotActivateItUntilItIsActuallyReady` pin
+this end to end: a second onboarding run for an already-`ACTIVE` tenant that
+adds an empty brand reaches `READY` and activates (`MAIN` is unaffected),
+but the empty brand and its location remain `DRAFT`.
+
 ## References
 
 - [ADR 0008](../built/0008-resumable-tenant-onboarding-workflow.md)

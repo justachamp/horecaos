@@ -486,9 +486,19 @@ class OnboardingOutboxIntegrationTests {
                 ApplicationEventPublisher events,
                 ObjectMapper objectMapper,
                 Clock clock,
-                TenantControlPlaneService controlPlane) {
+                TenantControlPlaneService controlPlane,
+                TenantControlPlaneStore controlPlaneStore) {
             return new OnboardingService(
-                    jdbc, transactions, handlers, recorder, approvals, events, objectMapper, clock, controlPlane);
+                    jdbc,
+                    transactions,
+                    handlers,
+                    recorder,
+                    approvals,
+                    events,
+                    objectMapper,
+                    clock,
+                    controlPlane,
+                    controlPlaneStore);
         }
     }
 }
