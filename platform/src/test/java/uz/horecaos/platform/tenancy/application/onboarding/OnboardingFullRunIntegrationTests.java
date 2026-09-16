@@ -655,7 +655,7 @@ class OnboardingFullRunIntegrationTests {
                 new OnboardingStepHandlers.DeliveryConfigurationValidate(tenants, jdbc, CLOCK),
                 new OnboardingStepHandlers.PosBindingsValidate(jdbc),
                 new OnboardingStepHandlers.CatalogReadinessValidate(tenants, jdbc),
-                new OnboardingStepHandlers.MediaReadinessValidate(jdbc, media),
+                new OnboardingStepHandlers.MediaReadinessValidate(jdbc, media, tenants),
                 new OnboardingStepHandlers.FrontendDomainValidate(),
                 new OrderingOnboardingStepHandlers.ActivationSmokeTest(
                         jdbc, channels, serviceability, pricing, inventory, CLOCK));

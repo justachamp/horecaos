@@ -103,6 +103,28 @@ public interface TenantControlPlaneStore {
 
     List<Brand> findBrands(TenantId tenantId);
 
+    /**
+     * Every brand of this tenant that can sell as a result of activating —
+     * onboarding readiness (ADR 0099's spirit: activation must prove the
+     * tenant can take an order, not that every brand row is complete) judges
+     * only these, so that a tenant whose other brand is ready is never
+     * blocked by one that is not.
+     *
+     * <p>That set is {@code ACTIVE} brands, plus — only when the tenant has
+     * never yet had any brand reach {@code ACTIVE} — its {@code DRAFT} ones
+     * too. The second half is not an exception to "only {@code ACTIVE}
+     * sells"; it falls out of how activation itself works: {@code
+     * OnboardingService#activateDraftBrandsAndLocations} promotes every
+     * {@code DRAFT} brand of the tenant in one sweep the moment activation
+     * succeeds, so a brand-new tenant's very first brand — the one this
+     * activation is <em>for</em> — is {@code DRAFT} at the exact moment
+     * readiness is checked, simply because nothing has activated yet. Once
+     * one brand has gone live, a later {@code DRAFT} brand is presumed not
+     * part of what a subsequent activation is proving and is treated the
+     * same as {@code SUSPENDED} or {@code ARCHIVED}: skipped, not required.
+     */
+    List<Brand> findActiveBrands(TenantId tenantId);
+
     /** Persists the brand's current status (activate/suspend/archive). */
     void updateBrandStatus(Brand brand);
 

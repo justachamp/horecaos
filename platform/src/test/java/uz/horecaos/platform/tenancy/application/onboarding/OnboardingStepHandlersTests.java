@@ -204,6 +204,20 @@ class OnboardingStepHandlersTests {
                 .isEqualTo(StepResult.Outcome.COMPLETED);
     }
 
+    /** The defect this fix closes (2026-09-16): a location on a brand nobody can sell from must not block MAIN's. */
+    @Test
+    void paymentConfigurationIgnoresALocationOnANonActiveBrand() {
+        insertLegalEntity("ACME", "ACTIVE");
+
+        UUID otherBrandId = insertSecondBrand("PARKED", "ARCHIVED");
+        insertLocationUnderBrand(otherBrandId, "PARKED01");
+        // PARKED01 has no legal entity at all — would fail NO_LEGAL_ENTITY if checked.
+
+        StepResult result = paymentHandler().execute(context());
+
+        assertThat(result.outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
+    }
+
     private OnboardingStepHandlers.PaymentConfigurationValidate paymentHandler() {
         return new OnboardingStepHandlers.PaymentConfigurationValidate(
                 tenants, new JdbcLegalEntityStore(jdbc), jdbc, CLOCK);
@@ -248,6 +262,23 @@ class OnboardingStepHandlersTests {
         giveLocationCoordinates(locationId, 41.311081, 69.240562);
         UUID tariffId = seedFlatTariff("FLAT", 10_000L);
         activeDeliveryZone(tariffId);
+
+        StepResult result = deliveryHandler().execute(context());
+
+        assertThat(result.outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
+    }
+
+    /** The defect this fix closes (2026-09-16): a location on a brand nobody can sell from must not block MAIN's. */
+    @Test
+    void deliveryConfigurationIgnoresALocationOnANonActiveBrand() {
+        enableFulfillmentMode(channelId, "PICKUP");
+
+        UUID otherBrandId = insertSecondBrand("PARKED", "ARCHIVED");
+        UUID otherLocationId = insertLocationUnderBrand(otherBrandId, "PARKED01");
+        UUID otherChannelId = insertChannel("PARKED-STOREFRONT", "WEB");
+        bindChannelToLocation(otherChannelId, otherLocationId);
+        enableFulfillmentMode(otherChannelId, "DELIVERY");
+        // PARKED01 offers delivery but has no zone bound — would fail NO_DELIVERY_ZONE if checked.
 
         StepResult result = deliveryHandler().execute(context());
 
@@ -323,8 +354,94 @@ class OnboardingStepHandlersTests {
         assertThat(result.outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
     }
 
+    /**
+     * The bootstrap case {@code findActiveBrands}'s own javadoc calls out:
+     * every real tenant's very first brand is {@code DRAFT} — not {@code
+     * ACTIVE} — for the whole of onboarding's validating phase, because
+     * {@code TENANT_ACTIVATE} is what promotes it and that step runs last,
+     * gated behind a platform administrator. A readiness check that only
+     * ever accepted {@code ACTIVE} brands would fail {@code NO_ACTIVE_BRAND}
+     * on every brand-new tenant's first run — confirmed by
+     * {@code OnboardingFullRunIntegrationTests}, which drives this exact
+     * handler through the real workflow with a {@code DRAFT} brand and
+     * requires it {@code COMPLETED}.
+     */
+    @Test
+    void catalogReadinessPassesForAStillDraftBrandWhenTheTenantHasNeverActivated() {
+        jdbc.sql("UPDATE tenant.brands SET status = 'DRAFT' WHERE id = :id")
+                .param("id", brandId)
+                .update();
+        UUID catalogId = insertCatalog();
+        UUID variantId = insertProductAndVariant("BURGER");
+        insertPublication(catalogId, "STOREFRONT");
+        insertLocationOffering(variantId, "AVAILABLE");
+
+        StepResult result = catalogHandler().execute(context());
+
+        assertThat(result.outcome())
+                .as("a brand-new tenant's only brand is DRAFT throughout onboarding; it must still be judged")
+                .isEqualTo(StepResult.Outcome.COMPLETED);
+        @SuppressWarnings("unchecked")
+        List<String> skipped = (List<String>) result.result().get("skippedBrands");
+        assertThat(skipped).as("the DRAFT brand was judged, not skipped").isEmpty();
+    }
+
+    /**
+     * The defect this ADR 0099-spirited fix closes (2026-09-16, tenant
+     * {@code qoida} in pre-production): a second brand with no catalog at all
+     * — DRAFT, still being set up, or ARCHIVED, parked by the owner — used to
+     * fail the whole tenant's catalogue readiness even though the fixture's
+     * own MAIN brand is fully ready. It must be skipped and named instead.
+     */
+    @Test
+    void catalogReadinessSkipsANonActiveBrandAndRecordsIt() {
+        UUID catalogId = insertCatalog();
+        UUID variantId = insertProductAndVariant("BURGER");
+        insertPublication(catalogId, "STOREFRONT");
+        insertLocationOffering(variantId, "AVAILABLE");
+        insertSecondBrand("EMPTY", "DRAFT");
+
+        StepResult result = catalogHandler().execute(context());
+
+        assertThat(result.outcome())
+                .as("MAIN is fully ready; EMPTY has no catalog but cannot sell anyway while DRAFT")
+                .isEqualTo(StepResult.Outcome.COMPLETED);
+        @SuppressWarnings("unchecked")
+        List<String> skipped = (List<String>) result.result().get("skippedBrands");
+        assertThat(skipped).containsExactly("EMPTY:DRAFT");
+    }
+
+    /** The other half: a tenant with nothing sellable at all is the case this step exists to catch. */
+    @Test
+    void catalogReadinessFailsWhenTheOnlyBrandIsArchived() {
+        jdbc.sql("UPDATE tenant.brands SET status = 'ARCHIVED' WHERE id = :id")
+                .param("id", brandId)
+                .update();
+
+        StepResult result = catalogHandler().execute(context());
+
+        assertThat(result.outcome()).isEqualTo(StepResult.Outcome.FAILED);
+        assertThat(result.errorCode()).isEqualTo("NO_ACTIVE_BRAND");
+    }
+
     private OnboardingStepHandlers.CatalogReadinessValidate catalogHandler() {
         return new OnboardingStepHandlers.CatalogReadinessValidate(tenants, jdbc);
+    }
+
+    /** A second brand of the fixture's tenant, in an arbitrary status, with no catalog of its own. */
+    private UUID insertSecondBrand(String code, String status) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, :code, :slug, :code, :status, 0)
+                """)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .param("slug", "b-" + id.toString().substring(0, 8))
+                .param("status", status)
+                .update();
+        return id;
     }
 
     // ------------------------------------------------------------ MEDIA_READINESS_VALIDATE
@@ -360,13 +477,28 @@ class OnboardingStepHandlersTests {
         assertThat(result.outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
     }
 
+    /** The defect this fix closes (2026-09-16): a broken reference on a brand nobody can sell from must not block MAIN's. */
+    @Test
+    void mediaReadinessIgnoresAReferenceOnANonActiveBrand() {
+        UUID otherBrandId = insertSecondBrand("PARKED", "ARCHIVED");
+        UUID assetId = insertMediaAsset("PENDING_UPLOAD");
+        referenceMediaAssetForBrand(otherBrandId, assetId);
+        // Referenced by PARKED, not yet AVAILABLE — would fail MEDIA_NOT_AVAILABLE if checked.
+
+        StepResult result = mediaHandler().execute(context());
+
+        assertThat(result.outcome())
+                .as("MAIN references no media at all; PARKED's broken reference must not block it")
+                .isEqualTo(StepResult.Outcome.COMPLETED);
+    }
+
     private OnboardingStepHandlers.MediaReadinessValidate mediaHandler() {
         JdbcMediaAssetStore store = new JdbcMediaAssetStore(jdbc);
         MediaAvailability media = (tid, assetIds) -> assetIds.stream()
                 .allMatch(id -> store.findOwned(tid, id)
                         .map(asset -> asset.status().isDisplayable())
                         .orElse(false));
-        return new OnboardingStepHandlers.MediaReadinessValidate(jdbc, media);
+        return new OnboardingStepHandlers.MediaReadinessValidate(jdbc, media, tenants);
     }
 
     // ------------------------------------------------------------ FRONTEND_DOMAIN_VALIDATE
@@ -421,6 +553,11 @@ class OnboardingStepHandlersTests {
 
     /** A second location under the fixture's own brand, for tests that need more than one. */
     private UUID insertSecondLocation(String code) {
+        return insertLocationUnderBrand(brandId, code);
+    }
+
+    /** A location under an arbitrary brand — for tests naming a second, non-{@code ACTIVE} brand. */
+    private UUID insertLocationUnderBrand(UUID ownerBrandId, String code) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO tenant.locations
@@ -429,7 +566,7 @@ class OnboardingStepHandlersTests {
                 """)
                 .param("id", id)
                 .param("tenantId", tenantId)
-                .param("brandId", brandId)
+                .param("brandId", ownerBrandId)
                 .param("code", code)
                 .param("slug", "l-" + id.toString().substring(0, 8))
                 .update();
@@ -706,12 +843,16 @@ class OnboardingStepHandlersTests {
     }
 
     private void referenceMediaAsset(UUID assetId) {
+        referenceMediaAssetForBrand(brandId, assetId);
+    }
+
+    private void referenceMediaAssetForBrand(UUID ownerBrandId, UUID assetId) {
         jdbc.sql("""
                 INSERT INTO catalog.media_relations (tenant_id, brand_id, entity_type, entity_id, media_asset_id, role)
                 VALUES (:tenantId, :brandId, 'PRODUCT', :entityId, :assetId, 'PRIMARY')
                 """)
                 .param("tenantId", tenantId)
-                .param("brandId", brandId)
+                .param("brandId", ownerBrandId)
                 .param("entityId", UUID.randomUUID())
                 .param("assetId", assetId)
                 .update();

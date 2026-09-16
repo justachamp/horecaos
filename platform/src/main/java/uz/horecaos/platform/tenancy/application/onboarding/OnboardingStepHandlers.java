@@ -32,6 +32,7 @@ import uz.horecaos.platform.tenancy.application.invitations.OwnerInvitations;
 import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
 import uz.horecaos.platform.tenancy.domain.Brand;
 import uz.horecaos.platform.tenancy.domain.Location;
+import uz.horecaos.platform.tenancy.domain.OperatingUnitStatus;
 
 /**
  * The buildable ADR 0008 step handlers.
@@ -392,6 +393,12 @@ public final class OnboardingStepHandlers {
      * provider method and has no binding for it is a different, real gap and
      * still fails: immaturity elsewhere is not a reason to accept a
      * configured-but-broken payment method here.
+     *
+     * <p>Only locations of a brand that can sell as a result of activating
+     * are checked (2026-09-16, via {@code allLocations} — see {@link
+     * TenantControlPlaneStore#findActiveBrands} for the exact rule) — a
+     * location left behind on a brand nobody can sell from must not fail
+     * this for the whole tenant.
      */
     @Component
     public static class PaymentConfigurationValidate implements OnboardingStepHandler {
@@ -516,6 +523,12 @@ public final class OnboardingStepHandlers {
      * <p><strong>Owner-decided default (2026-08-30):</strong> a location with
      * no channel offering {@code DELIVERY} passes without a zone or tariff —
      * pickup-only is a normal v1 shape, not an incomplete one.
+     *
+     * <p>Only locations of a brand that can sell as a result of activating
+     * are checked (2026-09-16, via {@code allLocations} — see {@link
+     * TenantControlPlaneStore#findActiveBrands} for the exact rule) — a
+     * location left behind on a brand nobody can sell from must not fail
+     * this for the whole tenant.
      *
      * <p>Reads {@code fulfillment}'s schema directly rather than importing its
      * Java types; see this file's class javadoc for why.
@@ -703,9 +716,28 @@ public final class OnboardingStepHandlers {
     }
 
     /**
-     * Validates catalogue readiness (ADR 0016): every brand has a {@code
-     * PUBLISHED} publication on the storefront channel with at least one item
-     * actually available to order somewhere.
+     * Validates catalogue readiness (ADR 0016): every brand that can sell as
+     * a result of activating has a {@code PUBLISHED} publication on the
+     * storefront channel with at least one item actually available to order
+     * somewhere.
+     *
+     * <p><strong>Owner-decided default (2026-09-16):</strong> readiness
+     * judges only brands that can sell at activation (ADR 0099's spirit —
+     * activation must prove the tenant can take an order, not that every
+     * brand row is complete): {@code ACTIVE} brands, plus — only when the
+     * tenant has never yet had a brand reach {@code ACTIVE} — its {@code
+     * DRAFT} ones too, because a brand-new tenant's very first brand is
+     * necessarily {@code DRAFT} until {@code TENANT_ACTIVATE} promotes it
+     * (see {@link TenantControlPlaneStore#findActiveBrands} for why this is
+     * not an inconsistency). A {@code SUSPENDED} brand, an {@code ARCHIVED}
+     * one, or — once the tenant has gone live at least once — a later {@code
+     * DRAFT} one the owner has not gotten to yet, is skipped rather than
+     * failing the whole run, and named in {@code skippedBrands} so the
+     * control plane can show why. A tenant with nothing that qualifies fails
+     * {@code NO_ACTIVE_BRAND} — activating a tenant with nothing sellable is
+     * the case this step exists to catch, and {@code
+     * BrandsAndLocationsValidate}'s own "has a brand" check does not, because
+     * it does not look at status.
      *
      * <p>Reads {@code catalog}'s schema directly rather than importing its
      * Java types; see this file's class javadoc for why.
@@ -733,7 +765,27 @@ public final class OnboardingStepHandlers {
         public StepResult execute(StepContext context) {
             TenantId tenantId = new TenantId(context.tenantId());
 
-            for (Brand brand : tenants.findBrands(tenantId)) {
+            // findBrands rather than findActiveBrands: this step also needs
+            // the skipped side of the split, which findActiveBrands alone
+            // does not report — see that method's own javadoc for the exact
+            // rule applied identically here.
+            List<Brand> allBrands = tenants.findBrands(tenantId);
+            boolean anyBrandHasGoneLive =
+                    allBrands.stream().anyMatch(brand -> brand.status() == OperatingUnitStatus.ACTIVE);
+            List<Brand> activeBrands = allBrands.stream()
+                    .filter(brand -> brand.status() == OperatingUnitStatus.ACTIVE
+                            || (!anyBrandHasGoneLive && brand.status() == OperatingUnitStatus.DRAFT))
+                    .toList();
+            if (activeBrands.isEmpty()) {
+                return StepResult.failed(
+                        "NO_ACTIVE_BRAND", "The tenant has no brand able to sell, now or once activated");
+            }
+            List<String> skippedBrands = allBrands.stream()
+                    .filter(brand -> !activeBrands.contains(brand))
+                    .map(brand -> "%s:%s".formatted(brand.code(), brand.status()))
+                    .toList();
+
+            for (Brand brand : activeBrands) {
                 UUID brandId = brand.id().value();
                 if (!published(context.tenantId(), brandId)) {
                     return StepResult.failed(
@@ -747,7 +799,7 @@ public final class OnboardingStepHandlers {
                             "Brand %s has a published menu with no item available to order".formatted(brand.code()));
                 }
             }
-            return StepResult.completed(Map.of(), null);
+            return StepResult.completed(Map.of("skippedBrands", skippedBrands), null);
         }
 
         private boolean published(UUID tenantId, UUID brandId) {
@@ -783,16 +835,25 @@ public final class OnboardingStepHandlers {
      * tenant with a reference to an asset that is not {@code AVAILABLE} fails
      * — exactly the broken-image gap this check exists to catch before
      * go-live rather than after a customer sees it.
+     *
+     * <p><strong>Owner-decided default (2026-09-16):</strong> scoped to
+     * brands that can sell as a result of activating, same as {@link
+     * CatalogReadinessValidate} and {@link TenantControlPlaneStore#findActiveBrands}:
+     * a broken media reference left on a {@code SUSPENDED} or {@code
+     * ARCHIVED} brand, or on a later {@code DRAFT} one added after the
+     * tenant already went live, must not block the tenant's ready brand.
      */
     @Component
     public static class MediaReadinessValidate implements OnboardingStepHandler {
 
         private final JdbcClient jdbc;
         private final MediaAvailability media;
+        private final TenantControlPlaneStore tenants;
 
-        public MediaReadinessValidate(JdbcClient jdbc, MediaAvailability media) {
+        public MediaReadinessValidate(JdbcClient jdbc, MediaAvailability media, TenantControlPlaneStore tenants) {
             this.jdbc = jdbc;
             this.media = media;
+            this.tenants = tenants;
         }
 
         @Override
@@ -802,10 +863,25 @@ public final class OnboardingStepHandlers {
 
         @Override
         public StepResult execute(StepContext context) {
+            List<UUID> activeBrandIds = tenants.findActiveBrands(new TenantId(context.tenantId())).stream()
+                    .map(brand -> brand.id().value())
+                    .toList();
+            if (activeBrandIds.isEmpty()) {
+                // No brand to check media for. CATALOG_READINESS_VALIDATE
+                // (step 9, before this one) is where "the tenant has nothing
+                // sellable" is caught — NO_ACTIVE_BRAND, and this required step
+                // never runs against a failed run. Nothing referenced by a
+                // sellable brand is nothing to validate here either way.
+                return StepResult.completed(
+                        Map.of("note", "No media referenced yet; nothing to validate", "referenced", 0), null);
+            }
+
             List<UUID> referenced = jdbc.sql("""
-                    SELECT DISTINCT media_asset_id FROM catalog.media_relations WHERE tenant_id = :tenantId
+                    SELECT DISTINCT media_asset_id FROM catalog.media_relations
+                     WHERE tenant_id = :tenantId AND brand_id = ANY(:brandIds)
                     """)
                     .param("tenantId", context.tenantId())
+                    .param("brandIds", activeBrandIds.toArray(new UUID[0]))
                     .query(UUID.class)
                     .list();
 
@@ -851,10 +927,20 @@ public final class OnboardingStepHandlers {
         }
     }
 
-    /** Every location across every brand of a tenant, for handlers that must validate all of them. */
+    /**
+     * Every location of every brand of a tenant that can sell as a result of
+     * activating, for handlers that must validate all of them.
+     *
+     * <p>Scoped that way (2026-09-16) via {@link TenantControlPlaneStore#findActiveBrands} —
+     * the same rule {@link CatalogReadinessValidate} applies: a location that
+     * still belongs to a {@code SUSPENDED} or {@code ARCHIVED} brand, or to a
+     * later {@code DRAFT} one added after the tenant already went live, must
+     * not fail payment or delivery readiness for the whole tenant over
+     * configuration nobody can sell against yet.
+     */
     private static List<Location> allLocations(TenantControlPlaneStore tenants, TenantId tenantId) {
         List<Location> locations = new ArrayList<>();
-        for (Brand brand : tenants.findBrands(tenantId)) {
+        for (Brand brand : tenants.findActiveBrands(tenantId)) {
             locations.addAll(tenants.findLocations(brand));
         }
         return locations;

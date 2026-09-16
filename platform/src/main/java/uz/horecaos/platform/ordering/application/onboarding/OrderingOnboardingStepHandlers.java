@@ -335,6 +335,17 @@ public final class OrderingOnboardingStepHandlers {
      * atomically before it holds anything — never the reservation itself,
      * because a smoke test that held real stock during onboarding would take
      * inventory away from a location that has not even opened.
+     *
+     * <p><strong>Owner-decided default (2026-09-16):</strong> only locations
+     * of a brand that can sell as a result of activating are smoke-tested,
+     * the same scope {@code
+     * tenancy.application.onboarding.OnboardingStepHandlers.CatalogReadinessValidate}
+     * applies (see {@code TenantControlPlaneStore.findActiveBrands}'s own
+     * javadoc for the exact rule, including why a brand-new tenant's own
+     * {@code DRAFT} brand still counts): a location left behind on a {@code
+     * SUSPENDED} or {@code ARCHIVED} brand, or on a later {@code DRAFT} one
+     * added after the tenant already went live, must not fail this for the
+     * whole tenant.
      */
     @Component
     public static class ActivationSmokeTest implements OnboardingStepHandler {
@@ -440,9 +451,25 @@ public final class OrderingOnboardingStepHandlers {
             return StepResult.completed(Map.of(), null);
         }
 
+        /**
+         * Locations of the tenant's brands that can sell as a result of
+         * activating — see this handler's own javadoc, and {@code
+         * TenantControlPlaneStore.findActiveBrands}'s, for the exact rule
+         * this mirrors in raw SQL rather than importing (see this file's
+         * class javadoc for why).
+         */
         private List<LocationRow> locationsOf(UUID tenantId) {
             return jdbc.sql("""
-                    SELECT id, brand_id, code FROM tenant.locations WHERE tenant_id = :tenantId
+                    SELECT l.id, l.brand_id, l.code
+                      FROM tenant.locations l
+                      JOIN tenant.brands b ON b.tenant_id = l.tenant_id AND b.id = l.brand_id
+                     WHERE l.tenant_id = :tenantId
+                       AND (
+                         b.status = 'ACTIVE'
+                         OR (b.status = 'DRAFT' AND NOT EXISTS (
+                               SELECT 1 FROM tenant.brands sibling
+                                WHERE sibling.tenant_id = b.tenant_id AND sibling.status = 'ACTIVE'))
+                       )
                     """)
                     .param("tenantId", tenantId)
                     .query((row, n) -> new LocationRow(
