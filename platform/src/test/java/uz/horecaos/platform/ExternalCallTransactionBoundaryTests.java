@@ -595,9 +595,19 @@ class ExternalCallTransactionBoundaryTests {
                 ApplicationEventPublisher events,
                 ObjectMapper mapper,
                 Clock clock,
-                TenantControlPlaneService controlPlane) {
+                TenantControlPlaneService controlPlane,
+                TenantControlPlaneStore controlPlaneStore) {
             return new OnboardingService(
-                    client, transactions, List.of(handler), recorder, approvals, events, mapper, clock, controlPlane);
+                    client,
+                    transactions,
+                    List.of(handler),
+                    recorder,
+                    approvals,
+                    events,
+                    mapper,
+                    clock,
+                    controlPlane,
+                    controlPlaneStore);
         }
 
         @Bean

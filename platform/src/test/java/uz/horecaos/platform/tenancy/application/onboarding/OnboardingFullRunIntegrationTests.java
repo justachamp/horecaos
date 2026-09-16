@@ -187,7 +187,8 @@ class OnboardingFullRunIntegrationTests {
                 event -> {},
                 JsonMapper.builder().build(),
                 CLOCK,
-                controlPlane);
+                controlPlane,
+                new JdbcTenantControlPlaneStore(jdbc));
 
         tenantId = UUID.randomUUID();
         brandId = UUID.randomUUID();
@@ -395,6 +396,85 @@ class OnboardingFullRunIntegrationTests {
     private String locationStatus() {
         return jdbc.sql("SELECT status FROM tenant.locations WHERE id = :id")
                 .param("id", locationId)
+                .query(String.class)
+                .single();
+    }
+
+    /**
+     * The exact gap a 2026-09-16 review named: a real second onboarding run
+     * for a tenant that has already gone live, adding a brand with nothing
+     * behind it yet, driven by the real {@code CATALOG_READINESS_VALIDATE}
+     * and its siblings — not a stand-in. Every one of them correctly skips
+     * EMPTY (that is what the same-dated fix on {@code
+     * TenantControlPlaneStore#findActiveBrands} proved), but skipped must
+     * not mean "promoted to {@code ACTIVE} anyway the moment {@code
+     * TENANT_ACTIVATE} runs", which is exactly what {@code
+     * OnboardingService#activateDraftBrandsAndLocations} did before it was
+     * scoped to the same {@code findActiveBrands} set the readiness checks
+     * use.
+     */
+    @Test
+    void aSecondRunAddingAnEmptyBrandDoesNotActivateItUntilItIsActuallyReady() {
+        UUID firstRunId = startRealisticRun();
+        drain(firstRunId);
+        assertThat(service.activate(firstRunId, ADMIN, "go live").activated()).isTrue();
+        assertThat(controlPlane.getBrands(new TenantId(tenantId)))
+                .extracting(TenantControlPlaneService.BrandView::status)
+                .containsExactly(OperatingUnitStatus.ACTIVE);
+
+        // EMPTY: no catalog, no media, no payment/delivery config beyond what
+        // the DRAFT row itself implies — exactly what a readiness check would
+        // have to fail on if it were ever asked to look.
+        UUID emptyBrandId = UUID.randomUUID();
+        UUID emptyLocationId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'EMPTY', :slug, 'Empty Brand', 'DRAFT', 0)
+                """)
+                .param("id", emptyBrandId)
+                .param("tenantId", tenantId)
+                .param("slug", "empty-brand-" + emptyBrandId.toString().substring(0, 8))
+                .update();
+        jdbc.sql("""
+                INSERT INTO tenant.locations
+                    (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, 'EMPTYLOC', :slug, 'Empty Location', 'Asia/Tashkent', 'DRAFT', 0)
+                """)
+                .param("id", emptyLocationId)
+                .param("tenantId", tenantId)
+                .param("brandId", emptyBrandId)
+                .param("slug", "empty-loc-" + emptyLocationId.toString().substring(0, 8))
+                .update();
+
+        UUID secondRunId = startRealisticRun();
+        drain(secondRunId);
+
+        assertThat(service.outstandingRequiredSteps(secondRunId))
+                .as("last CATALOG_READINESS_VALIDATE error: " + lastErrorOf(secondRunId, "CATALOG_READINESS_VALIDATE"))
+                .isEmpty();
+        assertThat(runStatus(secondRunId))
+                .as("MAIN is already ACTIVE and fully ready; EMPTY must be skipped, not block the run")
+                .isEqualTo("READY");
+
+        assertThat(service.activate(secondRunId, ADMIN, "go live again").activated())
+                .isTrue();
+
+        assertThat(brandStatusOf(emptyBrandId))
+                .as("EMPTY was named in every readiness step's own skippedBrands and never actually "
+                        + "validated; TENANT_ACTIVATE succeeding for MAIN must not silently promote it "
+                        + "to ACTIVE and storefront-discoverable too")
+                .isEqualTo("DRAFT");
+        assertThat(jdbc.sql("SELECT status FROM tenant.locations WHERE id = :id")
+                        .param("id", emptyLocationId)
+                        .query(String.class)
+                        .single())
+                .as("EMPTY's own location must stay DRAFT and storefront-undiscoverable too")
+                .isEqualTo("DRAFT");
+    }
+
+    private String brandStatusOf(UUID brandId) {
+        return jdbc.sql("SELECT status FROM tenant.brands WHERE id = :id")
+                .param("id", brandId)
                 .query(String.class)
                 .single();
     }

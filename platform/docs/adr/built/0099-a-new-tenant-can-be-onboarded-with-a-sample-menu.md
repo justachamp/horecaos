@@ -566,6 +566,36 @@ step's `skippedBrands` result. `MediaReadinessValidate`,
 apply the identical scope for the same reason, everywhere each already
 looped over every brand or every location of every brand.
 
+## Status addition (2026-09-16, activation sweep)
+
+Review of the addition above caught the gap it left open: "skipped, not
+required" was only true of the readiness checks, not of activation itself.
+`OnboardingService#activateDraftBrandsAndLocations` — which the previous
+addition correctly described as promoting "every `DRAFT` brand [of the
+tenant] in one sweep" — did exactly that, unconditionally, regardless of
+which brands the same run's readiness steps had actually judged. A brand
+`CATALOG_READINESS_VALIDATE` skipped and named in `skippedBrands` because it
+could not sell (no catalogue, no media, no payment or delivery
+configuration) was, on the very same `TENANT_ACTIVATE`, promoted to `ACTIVE`
+and storefront-discoverable anyway: skipped meant "not required to be
+ready," not "will not go live."
+
+The fix scopes `activateDraftBrandsAndLocations` to
+`TenantControlPlaneStore#findActiveBrands` too — the identical set
+`CatalogReadinessValidate` and its siblings already judge — so a brand
+outside it (a later `DRAFT` brand added after the tenant's first brand went
+live, or a `SUSPENDED`/`ARCHIVED` one) is swept by neither the readiness
+checks nor the activation that follows them. It stays `DRAFT` until a run
+that actually includes it in `findActiveBrands` — because it is still the
+tenant's only brand, or because it has since become `ACTIVE` on its own
+merits — activates it instead. `OnboardingServiceTests
+.activationDoesNotPromoteALaterDraftBrandThisRunNeverValidated` and
+`OnboardingFullRunIntegrationTests
+.aSecondRunAddingAnEmptyBrandDoesNotActivateItUntilItIsActuallyReady` pin
+this end to end: a second onboarding run for an already-`ACTIVE` tenant that
+adds an empty brand reaches `READY` and activates (`MAIN` is unaffected),
+but the empty brand and its location remain `DRAFT`.
+
 ## References
 
 - [ADR 0008](../built/0008-resumable-tenant-onboarding-workflow.md)

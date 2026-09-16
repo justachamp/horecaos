@@ -44,6 +44,7 @@ import uz.horecaos.platform.tenancy.api.TenantReady;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService;
+import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
 import uz.horecaos.platform.tenancy.domain.OperatingUnitStatus;
 
 /**
@@ -76,6 +77,7 @@ public class OnboardingService implements OnboardingHealthQuery {
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final TenantControlPlaneService controlPlane;
+    private final TenantControlPlaneStore controlPlaneStore;
 
     // A template rather than @Transactional on the pieces of runNextStep, for the
     // reason the scheduler used to get wrong: a bean calling its own annotated
@@ -90,7 +92,8 @@ public class OnboardingService implements OnboardingHealthQuery {
             ApplicationEventPublisher events,
             ObjectMapper objectMapper,
             Clock clock,
-            TenantControlPlaneService controlPlane) {
+            TenantControlPlaneService controlPlane,
+            TenantControlPlaneStore controlPlaneStore) {
         this.jdbc = jdbc;
         this.transactions = transactions;
         this.handlers = handlers.stream()
@@ -101,6 +104,7 @@ public class OnboardingService implements OnboardingHealthQuery {
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.controlPlane = controlPlane;
+        this.controlPlaneStore = controlPlaneStore;
     }
 
     /** Creates a run with every step materialised, blocked ones included. */
@@ -843,10 +847,29 @@ public class OnboardingService implements OnboardingHealthQuery {
      * compare-and-set already limits how often that can happen for one run, but
      * nothing stops a second run for the same tenant, so the status check
      * carries the real guarantee.
+     *
+     * <p><strong>Scoped to {@link TenantControlPlaneStore#findActiveBrands} —
+     * not every brand of the tenant.</strong> That is the exact set {@code
+     * CatalogReadinessValidate}, {@code MediaReadinessValidate}, {@code
+     * PaymentConfigurationValidate}, {@code DeliveryConfigurationValidate} and
+     * the ordering module's {@code ActivationSmokeTest} judged during this
+     * run's {@code VALIDATING} phase; a brand outside it (a later {@code
+     * DRAFT} brand added after the tenant already has one {@code ACTIVE}
+     * brand, or a {@code SUSPENDED}/{@code ARCHIVED} one) was named only in
+     * {@code skippedBrands} and never required to have a published menu,
+     * working media, payment configuration, delivery configuration, or a
+     * proven order flow. Sweeping it here anyway would promote it to {@code
+     * ACTIVE} and storefront-discoverable — exactly the broken-tenant
+     * condition those checks exist to catch — the moment a platform
+     * administrator approves {@code TENANT_ACTIVATE} for a brand they never
+     * actually validated. A brand this sweep will not touch stays {@code
+     * DRAFT} until a run that includes it in {@code findActiveBrands} (i.e.
+     * one where it is still the tenant's only brand, or where it has passed
+     * its own readiness) activates it instead.
      */
     private void activateDraftBrandsAndLocations(TenantId tenantId) {
-        for (var brand : controlPlane.getBrands(tenantId)) {
-            BrandId brandId = new BrandId(brand.id());
+        for (var brand : controlPlaneStore.findActiveBrands(tenantId)) {
+            BrandId brandId = brand.id();
             if (brand.status() == OperatingUnitStatus.DRAFT) {
                 controlPlane.activateBrand(tenantId, brandId);
             }
