@@ -30,11 +30,11 @@ re-reading the evidence.
 
 | | BUILT | PARTIAL | NOT BUILT | BLOCKED | Total |
 |---|---|---|---|---|---|
-| **P** — pilot | 81 | 56 | 13 | 1 | **151** |
+| **P** — pilot | 81 | 57 | 12 | 1 | **151** |
 | **2** — parity | 48 | 32 | 17 | 3 | **100** |
-| **3** — tail | 11 | 8 | 9 | 2 | **30** |
+| **3** — tail | 12 | 8 | 8 | 2 | **30** |
 | **?** — no IA row | 3 | 0 | 4 | 0 | **7** |
-| **Total** | **143** | **96** | **43** | **6** | **288** |
+| **Total** | **144** | **97** | **41** | **6** | **288** |
 
 **Re-audited 2026-09-13 after batches 1 and 2 merged; 46 rows changed status.** (27 waves,
 main at `99f4af70` — see the wave index for which.)
@@ -144,6 +144,72 @@ kitchen station/routing, noted on the row; `7.6a`'s new-vs-returning revenue spl
 only, `reporting.fact_refund` carrying no customer attribution to net it, also noted on the
 row.)
 
+**Re-audit after batch 7, 2026-09-16: 2 of 3 re-checked rows changed status, closing PART
+C's wave plan.** (Two waves — `P42` (POS export on the order) and `W04` (geography
+histograms and the week grid) — plus a review-fix round (`fix7-pos-export` and
+`fix7-geography`, both merged, closing all 8 confirmed adversarial-review findings: the
+§3.11 AMEND-interlock bypass when a POS binding later drops `ORDER_EXPORT` capability while
+a real, unsettled export row still exists; the `pos.export_push_requested` audit write not
+sharing a transaction with the state change it describes, now inside
+`PosOrderExportService`'s own `TransactionTemplate` unit of work; raw, potentially
+address-bearing Clopos provider text surfaced verbatim in `ExportView.lastError`/
+`PushResultResponse.detail`, now a platform-authored sentence keyed off `errorCode`; no
+HTTP-level capability-refusal or genuine cross-tenant isolation test for the two new POS
+export endpoints, now `OrderPosExportControllerEndpointTests`; a geography branch-switch
+race letting a slower stale-branch response overwrite the newly selected branch's
+histogram/grid, now guarded by a load-generation counter; the cohort grid's operating-hour
+math untested against a non-midnight `businessDayStart`; and the drill-down fetching by
+date-range instead of the sampled weekday, almost never representing older sampled weeks)
+landed on `wave141-integration`, worktree HEAD `19b5f97c`. Every row a wave claimed, plus
+every row PART C assigns to these two waves, was verified against the code on this branch
+rather than copied, per the platform owner's standing rule. `7.10b` moves NOT BUILT →
+PARTIAL and `7.10c` moves PARTIAL → BUILT, both matching what `W04`'s own report claimed:
+`7.10b`'s duration histogram is real and tested (`q-histogram-chart` over the existing
+`GET .../reporting/sla-buckets`, no new endpoint or SQL) and its distance half is honestly
+not-yet-available — `T11`'s `reporting.fact_delivery` carries the raw `distance_meters`/
+`transit_seconds` but no endpoint buckets it yet; `7.10c`'s seven-call cohort grid and its
+per-sampled-date drill-down (capped at 300 rows, an honest "there may be more" note when a
+date's own read came back full) are both real and tested. `1.2i` moves NOT BUILT → PARTIAL
+— less far than `P42`'s own claimed BUILT: the operations-plane read
+(`OrderPosExportController`, `GET .../pos-export`, `POS_EXPORT_READ`) and push/retry
+(`POST .../pos-export/push`, `POS_EXPORT_RESOLVE`) are real, wired to `OrderDetailPane`'s
+new POS export section and the §3.11 AMEND interlock, and tested — but the row's own name
+is "POS integration errors *with a fix path*", and `orders.md` §3.11 (which `P42`'s own
+commits updated) says outright that the fix path itself — the deep link from a
+`LINE_UNMAPPED`/`MODIFIER_UNMAPPED` error to the ADR 0012 catalog-sync mapping screen with
+the offending item pre-selected — "is not built either"; the console surfaces the adapter's
+error code and detail honestly but links nowhere, so a named capability is absent and the
+row is held at PARTIAL. Also noted on `1.2i`: `POS_EXPORT_READ`/`POS_EXPORT_RESOLVE` are
+granted only to `TENANT_OWNER`, `TENANT_ADMIN` and the two support-session roles, not
+`BRAND_MANAGER` or `LOCATION_MANAGER` — verified consistent with `P12`'s own
+`PAYMENT_READ`/`FISCAL_DOCUMENT_READ` pattern, so a note rather than a further downgrade.
+One discrepancy surfaced and not acted on: `P42`'s own wave report and the integration
+notes both claim the wave "removed [the] stale gap-map row quoting the dead
+`order_process_states.POS_ORDER_EXPORT` column" from this document — `git diff` of this
+file between the batch-6 merge (`90bb2ca5`) and batch-7's HEAD is empty, so no such edit
+exists on this branch. The only place that sentence appears in this document is PART C's
+own `P42` brief, present unchanged since this document's original creation and never a
+PART A row to begin with — flagged as a wave-report overclaim, per this document's own
+standing caution, rather than reverted, since there was nothing on this branch to revert.
+While recounting, the §1 and §7 section-header tallies were found already stale
+independently of this batch's own row moves (§1 read 17/15/8, true count even before this
+batch's `1.2i` move was 18/16/6; §7 read 13/13/13 against a true 22/12/5) — corrected to
+the row-level truth (§1 now 18/17/5, §7 now 22/12/5) alongside this batch's own two moves,
+rather than compounding a stale base with a fresh delta.
+
+This closes PART C's wave plan: every wave in the wave index has now either been built and
+verified against the code, or is explicitly deferred (PART B's Blocked and Deferred tables)
+or struck as superseded by a decision (PART B's "Amend the IA, do not build"). The 47 rows
+still NOT BUILT or BLOCKED, grouped by the reason this document itself gives:
+- **Blocked-by-ADR-input (26):** `0.1d`, `0.2c`, `0.2d`, `1.3d`, `2.5a`, `3.8`, `4.2a`,
+  `4.2b`, `4.2c`, `4.4a`, `4.4c`, `4.5b`, `4.6a`, `5.5`, `6.1`, `6.3b`, `6.7`, `6.8`, `7.6c`,
+  `7.9`, `8/X.2`, `9.2`, `9.2b`, `9/X.2`, `9/X.3`, `10.14`.
+- **Owner decision (9):** `2.1b`, `2.6a`, `3.1b`, `4.7`, `4.9`, `5.2f`, `6.3a`, `8/X.3`,
+  `10.5`.
+- **Provider input (3):** `6.4a`, `7.10`, `7.10a`.
+- **Deferred-by-design (9):** `1.1d`, `1.2c`, `1.2d`, `1.6a`, `2.1d`, `6.5`, `6.7a`, `7.7c`,
+  `9.2d`.
+
 143 rows of 288 are finished. The pilot tier alone carries 69 rows that are neither
 built nor blocked, and **56 of them are PARTIAL** — a real screen against a real endpoint
 with one named capability missing. That ratio is still the single most useful fact in this
@@ -245,7 +311,7 @@ cannot do today, not a restatement of the row title.
 
 ## §1 — Orders: queue, detail, taking an order, amendments, outcomes, inbox
 
-40 rows — 17 built · 15 partial · 8 not built
+40 rows — 18 built · 17 partial · 5 not built
 
 | # | Row | Tier | Status | What is missing | Size | Blocked by | Wave | Reader said |
 |---|---|---|---|---|---|---|---|---|
@@ -267,7 +333,7 @@ cannot do today, not a restatement of the row title.
 | `1.2f` | Provider quote-delta confirmation (the Millenium pattern) | P | PARTIAL | The Millenium seam (quote against the customer estimate, accept-at-persisted-price-only, abandon, `DELIVERY_COST_SUBSIDY` on accept) is built and tested end to end, wired to a real «Вызвать курьера» action with its quote-delta dialog (`ExternalCourierDialog`, `DispatchApi.externalPartners`/`externalQuote`/`externalBook`) — but only on the order detail pane. The brief named the dispatch board as a second surface for the same action; `dispatch-board-page.ts` is untouched (its own doc comment still says "no 'call an external courier' (`P44`)"), so the seam is reachable from one of the two named screens. | L | — | P44 |  |
 | `1.2g` | Cascading cancel at the provider | P | PARTIAL | The cascade an operator actually triggers is real: cancelling an order calls `ShipmentCancellationPort.cancelForOrder` (`OperationsOrderController.cancel`, after the order's own commit), which tells the provider or raises a `fulfillment.delivery_exceptions` row, surfaced in the order detail's notice band and a new delivery-exception band — wired and tested. But `DispatchController`'s dedicated `POST .../shipments/{shipmentId}/cancel` (`Capability.SHIPMENT_CANCEL`, the ADR-0014-named endpoint this row's brief also asked for) and its `DispatchApi.cancelShipment()` client method have no console caller anywhere in `frontend/operations` — no button invokes it. Held at PARTIAL for the same "built, no consumer" reason as `X.32`/`X.38`/`4.2g`. | M | — | P44 |  |
 | `1.2h †` | The three comment channels (customer→order, customer→line, operator→kitchen) | P | BUILT | Residue: courier and internal notes have no materialized "current value" column (zero migration budget this wave) — the §3.6 «Комментарии» block shows "None yet — see history" for both until the operator opens the amendment history (`OrderAmendmentService`); the current value is always readable there, just not inlined a second time. | L | — | P10 | NOT BUILT |
-| `1.2i` | Print to POS, and POS integration errors with a fix path | P | NOT BUILT | An operator cannot push an order to the POS or retry a failed push, and when a POS export fails they see nothing — the failure is visible only to a platform operator in the control plane. | XL | — | P42 |  |
+| `1.2i` | Print to POS, and POS integration errors with a fix path | P | PARTIAL | An operations-plane read (`OrderPosExportController`, `GET .../orders/{orderId}/pos-export`, `POS_EXPORT_READ`) and a push/retry command (`POST .../pos-export/push`, `POS_EXPORT_RESOLVE`) are real, wired to `OrderDetailPane`'s new POS export section and the §3.11 AMEND interlock (`export.state().permitsAmendment()`), and tested end to end including HTTP-level capability refusal and cross-tenant isolation. A review round closed four confirmed findings first: the interlock silently disarming when a binding later drops `ORDER_EXPORT` capability while a real export is still unsettled, the audit write not sharing a transaction with the state change, raw provider text (address-shaped PII) reaching the console verbatim, and the missing HTTP/cross-tenant tests. Held at PARTIAL, not the wave's claimed BUILT: the row's own name is "POS integration errors *with a fix path*", and `orders.md` §3.11 says the fix path itself — a deep link from a `LINE_UNMAPPED`/`MODIFIER_UNMAPPED` error to the ADR 0012 catalog-sync mapping screen with the item pre-selected — is not built; the console shows the adapter's own error code and detail honestly but links nowhere. `POS_EXPORT_READ`/`POS_EXPORT_RESOLVE` are also granted only to `TENANT_OWNER`, `TENANT_ADMIN` and the two support-session roles, not `BRAND_MANAGER` or `LOCATION_MANAGER` — consistent with `P12`'s own money-panel capabilities, not a regression. | XL | — | P42 |  |
 | `1.2j` | Complete with completion reason | P | BUILT | — | M | — | P09 |  |
 | `1.2k` | Cancel with reason + write-off type | P | PARTIAL | Order detail now offers a reasoned Cancel past CONFIRMED via the registry-backed dialog, and the write-off type is recorded through the resolved outcome reason — but `order-queue.ts`'s row-level Cancel button still uses the old free-text/reasonless dialog, and `actions[]` now offers CANCEL on CONFIRMED/PREPARING/READY/FULFILLING rows there too, so clicking Cancel from the board on those statuses is refused by the server with a generic conflict notice; an operator must open the order detail pane to actually cancel one. | M | — | P09 |  |
 | `1.2l` | Оплата panel and manual re-fiscalize on the order | P | BUILT | Two self-contained panels (`OrderPaymentPanel`, `OrderFiscalPanel`) are mounted on `order-detail-pane.html` between the handover section and the timeline — tender, attempt history, re-presentation (payment link/invoice push, QR) from the existing `PaymentsApi`, and fiscal document state plus manual re-fiscalize (`retry`, gated on `FiscalDocumentService.retry`'s own refusal rule) from the previously-dead `FiscalApi.forOrder`. Every status renders through a localized label, never a raw enum token. Unblock is deliberately not offered. | M | — | P12 |  |
@@ -417,7 +483,7 @@ cannot do today, not a restatement of the row title.
 
 ## §7 — Reports
 
-39 rows — 12 built · 13 partial · 14 not built
+39 rows — 22 built · 12 partial · 5 not built
 
 | # | Row | Tier | Status | What is missing | Size | Blocked by | Wave | Reader said |
 |---|---|---|---|---|---|---|---|---|
@@ -458,8 +524,8 @@ cannot do today, not a restatement of the row title.
 | `7.9b` | Marketing reports — campaign delivery and read statistics | 2 | BUILT | `GET .../campaigns/{campaignId}/recipients/counts` and the report's campaign tab render pending/queued/deferred/refused/total, with an explicit note that read receipts have no data source (`NotificationStatus` has no READ state) rather than showing a false zero. Promo-code summary/per-code redemption detail (`7.9`) stays deferred, per ADR 0023 — not a gap in this row. | L | — | T15 |  |
 | `7.10` | Geography — order-density heatmap over the delivery zones | 3 | NOT BUILT | Nobody can see where orders actually come from against the zone boundaries they drew, so a badly cut zone or a missing branch catchment is undetectable from the console. | XL | PART 4 pilot blocker: no MapCanvas/PolygonEditor primitive exists, and Yandex Maps credentials are a provider input nobody has supplied | deferred |  |
 | `7.10a` | Geography — today's orders as pins | 3 | NOT BUILT | A dispatcher cannot see the day's orders on a map, so clustering and outlier drops have to be inferred from the order list. | L | Same MapCanvas gap as 7.10 | deferred |  |
-| `7.10b` | Geography — delivery-time and distance histograms | 3 | NOT BUILT | A manager cannot see the distribution of delivery durations or distances — only the fixed six SLA buckets per branch — so a long tail of far deliveries stays invisible. | L | — | W04 |  |
-| `7.10c †` | Geography — day-of-week × hour cohort grid | 3 | PARTIAL | A manager cannot read the whole week as one heat grid to decide staffing, and cannot click a cell to see the orders behind it. | M | — | W04 | NOT BUILT |
+| `7.10b` | Geography — delivery-time and distance histograms | 3 | PARTIAL | A duration histogram (`q-histogram-chart`) is real and tested, over the existing `GET .../reporting/sla-buckets` narrowed to the selected branch — no new endpoint or SQL. The distance half stays honestly not-yet-available: `T11`'s `reporting.fact_delivery` carries raw `distance_meters`/`transit_seconds` per delivery, but no endpoint buckets it into a histogram-ready read yet, so the second chart names the gap on the page rather than rendering nothing. | L | — | W04 |  |
+| `7.10c †` | Geography — day-of-week × hour cohort grid | 3 | BUILT | Seven `GET .../reporting/demand-history` calls (one per weekday) for the selected branch, coloured by `averageOrders` via `q-heatmap-chart` (gained an optional `cellClicked` output for this), plus cell drill-down through a bounded `GET .../reporting/orders` call per sampled date filtered to the clicked weekday/hour, capped at 300 rows with an honest "there may be more" note when a date's own read came back full. A review round fixed a branch-switch race (a load-generation counter now discards a superseded response), operating-hour math untested against a non-midnight `businessDayStart`, and the drill-down originally fetching by date-range rather than the sampled weekday. | M | — | W04 | NOT BUILT |
 
 ## §8 — Finance
 

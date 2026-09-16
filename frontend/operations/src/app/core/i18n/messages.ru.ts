@@ -429,6 +429,7 @@ export const messagesRu: MessageCatalogue = {
   'orders.amendment.warning.CASH_TENDERED_INSUFFICIENT':
     '«Сдача с» теперь меньше итоговой суммы — клиент может доплатить.',
   'orders.amendment.warning.acknowledge': 'Понятно',
+  'orders.detail.amend.blockedByPosExport': 'Изменение недоступно: ожидается подтверждение POS',
 
   'orders.detail.section.revisions': 'Ревизии ({count})',
   'orders.detail.revisions.show': 'Показать ревизии',
@@ -484,6 +485,26 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.fiscal.outcome.NO_PROVIDER_PATH':
     'Этот платёж нельзя фискализировать через провайдера',
   'orders.detail.fiscal.outcome.NOT_WIRED': 'Провайдер не подключён',
+
+  'orders.detail.section.posExport': 'Экспорт в кассу',
+  'orders.detail.posExport.error': 'Не удалось загрузить экспорт в кассу',
+  'orders.detail.posExport.notExportedYet': 'Ещё не отправлен на кассу',
+  'orders.detail.posExport.reassurance': 'С заказом всё в порядке — не дошла его копия на кухне.',
+  'orders.detail.posExport.lastError': 'Касса ответила: {detail}',
+  'orders.detail.posExport.state.PENDING': 'Ещё не отправлен',
+  'orders.detail.posExport.state.SENT': 'Отправляется…',
+  'orders.detail.posExport.state.ACCEPTED': 'Дошёл до кассы',
+  'orders.detail.posExport.state.REJECTED': 'Касса отклонила',
+  'orders.detail.posExport.state.UNCERTAIN': 'Неизвестно — проверяется',
+  'orders.detail.posExport.state.AWAITING_OPERATOR': 'Требуется проверка',
+  'orders.detail.posExport.state.RESOLVED_LANDED': 'Подтверждено на кассе',
+  'orders.detail.posExport.state.RESOLVED_ABSENT': 'Не дошёл — можно отправить снова',
+  'orders.detail.posExport.state.ABANDONED': 'Не будет отправлен',
+  'orders.detail.posExport.action.push': 'Отправить в POS',
+  'orders.detail.posExport.action.push.reason': 'Причина',
+  'orders.detail.posExport.action.push.submit': 'Отправить',
+  'orders.detail.posExport.action.push.submitting': 'Отправка…',
+  'orders.detail.posExport.action.push.notSendable': 'Нельзя отправить повторно в этом состоянии',
 
   'orders.severity.blocked': 'требуется вмешательство',
   'orders.severity.approvalDeadline': 'подтвердить за {mmss}',
@@ -4204,6 +4225,7 @@ export const messagesRu: MessageCatalogue = {
   'reports.nav.customers': 'Клиенты',
   'reports.nav.marketing': 'Маркетинг',
   'reports.nav.forecast': 'Спрос',
+  'reports.nav.geography': 'География',
 
   'reports.branches.title': 'Отчёты по филиалам и SLA',
   'reports.branches.loading': 'Загрузка…',
@@ -4506,6 +4528,28 @@ export const messagesRu: MessageCatalogue = {
   'reports.forecast.breakdown.show': 'Показать разбивку',
   'reports.forecast.breakdown.empty': 'В этой выборке нет данных по отделам или товарам.',
   'reports.forecast.breakdown.error': 'Не удалось загрузить разбивку.',
+
+  // ---------------------------------------------------------------- 7.10 Geography: histograms and the week grid (wave W04)
+  'reports.geography.title': 'География',
+  'reports.geography.intro':
+    'Гистограммы времени и расстояния доставки, и тепловая карта по дням и часам.',
+  'reports.geography.loading': 'Загрузка…',
+  'reports.geography.mapDeferred':
+    'Карта плотности и точки заказов отложены до выбора картопровайдера (см. X.4).',
+  'reports.geography.branch.label': 'Филиал',
+  'reports.geography.section.histograms': 'Гистограммы времени и расстояния доставки',
+  'reports.geography.histogram.duration.title': 'Время обработки',
+  'reports.geography.histogram.distance.title': 'Расстояние',
+  'reports.geography.histogram.distance.unavailable':
+    'Пока не отображается — fact_delivery хранит расстояние, но чтения по интервалам нет.',
+  'reports.geography.section.cohort': 'Заказы по дню недели и часу',
+  'reports.geography.cohort.intro': 'Среднее число заказов в час, по дням недели. Нажмите ячейку.',
+  'reports.geography.drillDown.title': 'Заказы — {weekday}, {hour}',
+  'reports.geography.drillDown.close': 'Закрыть',
+  'reports.geography.drillDown.loading': 'Загрузка…',
+  'reports.geography.drillDown.empty': 'Нет подходящих заказов в выбранных датах.',
+  'reports.geography.drillDown.truncated':
+    'Хотя бы одна из выбранных дат достигла своего лимита чтения — в этот день заказов может быть больше.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Инкассация',

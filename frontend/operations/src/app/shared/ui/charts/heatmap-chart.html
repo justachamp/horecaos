@@ -16,6 +16,7 @@
           [attr.height]="cell.height"
           (mouseenter)="showHover(cell)"
           (mouseleave)="clearHover()"
+          (click)="onCellClick(cell)"
         />
       } @else {
         <rect
@@ -27,6 +28,7 @@
           [style.fill]="cell.color"
           (mouseenter)="showHover(cell)"
           (mouseleave)="clearHover()"
+          (click)="onCellClick(cell)"
         />
       }
     }

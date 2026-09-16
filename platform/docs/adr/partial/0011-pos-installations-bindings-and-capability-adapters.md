@@ -17,7 +17,32 @@
   `PosOrderExportService` implements `open`, `send`, `discoverOutcome` and
   `settleByOperator` with `ExportStateMachine` and `UncertainExportResolver`,
   and `PosOrderExportController` exposes the `AWAITING_OPERATOR` queue,
-  candidates, discovery and resolution. The gap that mattered is closed:
+  candidates, discovery and resolution — but until wave P42 that surface was
+  control-plane only, reachable by a platform operator and nobody at the
+  tenant. 2026-09-15 (wave P42, gap map row `1.2i`): `OrderPosExportController`
+  is a tenant-scoped sibling at `GET/POST
+  /api/v1/operations/tenants/{tenantId}/orders/{orderId}/pos-export[/push]`,
+  behind `pos.export.read`/`pos.export.resolve` exactly as already registered
+  — a merchant can now see why her order's ticket did not reach the till and
+  push or retry it herself, and the affordance is suppressed entirely
+  (`posCapable=false`) when the location's own binding does not declare
+  `ORDER_EXPORT`. It answers `OrderDirectory`'s own small read, never
+  `OperationsOrderController`'s `OrderDetailResponse`, for the reason
+  `OrderDeliveryController` (wave P11) already gives: no second writer or
+  reader of that record.
+  The &sect;3.11 amendment interlock is now on the console too, driven by the
+  new `ExportState#permitsAmendment` (a hand-kept mirror of `ordering`'s own
+  `PosExportStatus#settledFor`, which was already enforcing the same rule
+  server-side and is untouched by this wave). The gap map row 1.2i's own
+  "POS export driven at all through `order_process_states.POS_ORDER_EXPORT`"
+  line is about a column nothing has ever written, not about POS export
+  itself — orders.md's own table now says so plainly rather than reading as
+  though POS export were unbuilt; see that document's own correction below.
+  Not built by this wave: a "fix path" link from a `LINE_UNMAPPED`/
+  `MODIFIER_UNMAPPED` error to the ADR 0012 mapping table with the item
+  pre-selected — the new read surfaces the adapter's own error code and
+  detail honestly, but a merchant still has to find the mapping screen
+  herself. The gap that mattered is closed:
   `PosOrderExportTrigger` listens for `ordering.api.OrderConfirmed` and calls
   `open` at `BEFORE_COMMIT`, so the export row and the confirmation that caused
   it commit together, then dispatches `send` from a `@Scheduled` loop rather than
@@ -58,7 +83,9 @@
 - Date decided: 2026-08-20
 - Date revised: 2026-08-23 (Clopos contract read; capability model and export
   path implemented); 2026-09-08 (Q1/Q7/Q18 answered by Clopos via the owner;
-  order-acceptance mode exposed as a tenant setting)
+  order-acceptance mode exposed as a tenant setting); 2026-09-15 (wave P42:
+  the operations-plane export read/push/retry and the &sect;3.11 amendment
+  interlock)
 - Deciders: Ayubkhon Abbosov (platform architecture)
 - Depends on: ADR 0007, ADR 0008, ADR 0026, ADR 0028, ADR 0029, ADR 0033
 - Supersedes / Superseded by: —

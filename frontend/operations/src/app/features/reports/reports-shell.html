@@ -57,6 +57,14 @@
     >
     <a
       class="reports-shell__tab q-body-sm"
+      routerLink="/statistics/geography"
+      routerLinkActive="reports-shell__tab--active"
+      #geographyTab="routerLinkActive"
+      data-testid="reports-nav-geography"
+      >{{ 'reports.nav.geography' | t }}</a
+    >
+    <a
+      class="reports-shell__tab q-body-sm"
       routerLink="/statistics/exports"
       routerLinkActive="reports-shell__tab--active"
       data-testid="reports-nav-exports"
@@ -71,8 +79,14 @@
     not merely unread. Wave W02 hides the whole bar on that route rather
     than rendering controls the page would silently ignore; that screen's
     own branch selector lives in `demand-forecast-page.html` instead.
+
+    Wave W04's Geography tab hides the bar for the same reason: both of its
+    rows are single-branch analyses (a fixed recent window for the
+    histogram, "the most recent N occurrences of a weekday" for the cohort
+    grid), not a period-over-many-branches cut this bar's axes fit. Its own
+    branch selector lives in `geography-page.html` instead.
   -->
-  @if (!forecastTab.isActive) {
+  @if (!forecastTab.isActive && !geographyTab.isActive) {
     <q-filter-bar
       [hasSecondary]="true"
       [chips]="chips()"

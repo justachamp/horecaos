@@ -10,9 +10,17 @@
  * only — neither controller takes a brand or a location path segment, so this
  * file needs only `tenantId` where `catalog-paths.ts` needs a full brand
  * scope.
+ *
+ * `OrderPosExportController` (wave P42, gap map row `1.2i`) is the one
+ * exception: it is the operations-plane sibling read/command over an order's
+ * own export, correctly on `/api/v1/operations/**`, and it lives here rather
+ * than in `operations-paths.ts` because it is still POS domain — the same
+ * `pos_order_exports` table `syncRuns`/`mappings` above read, seen from the
+ * order it belongs to instead of the binding it was sent through.
  */
 
 const CONTROL_PLANE = '/api/v1/control-plane';
+const OPERATIONS = '/api/v1/operations';
 
 /** The one identifier every path here needs (ADR 0025, tenant scope). */
 export interface TenantScope {
@@ -81,5 +89,21 @@ export const posPaths = {
   /** Match every unambiguous name pair for one binding and entity type. */
   mappingsBulkAutoMatch(scope: TenantScope): string {
     return `${posPaths.mappings(scope)}/bulk-auto-match`;
+  },
+
+  // ---------------------------------------------------------- order export (operations plane)
+
+  /**
+   * `OrderPosExportController.forOrder` (wave P42, gap map row `1.2i`) — one
+   * order's export to the branch's till, and whether the affordance applies
+   * at all (`posCapable`).
+   */
+  orderPosExport(scope: TenantScope, orderId: string): string {
+    return `${OPERATIONS}${tenant(scope)}/orders/${encodeURIComponent(orderId)}/pos-export`;
+  },
+
+  /** Push a pending export, or retry one the state machine still permits sending. Mutation: key and reason required. */
+  orderPosExportPush(scope: TenantScope, orderId: string): string {
+    return `${posPaths.orderPosExport(scope, orderId)}/push`;
   },
 };

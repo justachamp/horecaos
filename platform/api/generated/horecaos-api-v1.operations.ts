@@ -2965,6 +2965,31 @@ export interface OrderPaymentResponse {
   returned?: ApiMoney;
 }
 
+export interface OrderPosExportControllerExportView {
+  attemptCount?: number;
+  exportId?: string;
+  externalOrderId?: string;
+  firstSentAt?: string;
+  lastError?: string;
+  lastErrorCode?: string;
+  permitsAmendment?: boolean;
+  requestedAt?: string;
+  resolutionKind?: string;
+  resolutionReason?: string;
+  resolvedAt?: string;
+  settledAt?: string;
+  state?: string;
+}
+
+export interface OrderPosExportControllerPushRequest {
+  reason: string;
+}
+
+export interface OrderPosExportResponse {
+  export?: OrderPosExportControllerExportView;
+  posCapable?: boolean;
+}
+
 export interface OrderRowResponse {
   businessDate?: string;
   cancellationReasonCode?: string;
@@ -3373,6 +3398,13 @@ export interface PublishRequest {
 export interface PurchaseModuleRequest {
   moduleId: string;
   quantity?: number;
+}
+
+export interface PushResultResponse {
+  detail?: string;
+  errorCode?: string;
+  state?: string;
+  status?: string;
 }
 
 export interface QueryResponse {
@@ -5165,8 +5197,10 @@ export interface Operations {
   "update_2": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };
   "reimburseDeliveryFee": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/delivery-fee-reimbursements"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: RefundRequest }; responses: { "200": RemedyResponse } };
   "grantFutureDiscount": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/future-discounts"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: FutureDiscountRequest }; responses: { "200": RemedyResponse } };
-  "forOrder_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/payment"; request: { parameters: { path: { orderId: string; tenantId: string } } }; responses: { "200": OrderPaymentResponse } };
+  "forOrder_3": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/payment"; request: { parameters: { path: { orderId: string; tenantId: string } } }; responses: { "200": OrderPaymentResponse } };
   "rePresent": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/payment/re-presentations"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: RePresentationRequest }; responses: { "200": OperationsPaymentControllerPaymentSessionResponse } };
+  "forOrder_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/pos-export"; request: { parameters: { path: { orderId: string; tenantId: string } } }; responses: { "200": OrderPosExportResponse } };
+  "push": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/pos-export/push"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: OrderPosExportControllerPushRequest }; responses: { "200": PushResultResponse } };
   "recordRefund": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/refunds"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: RefundRequest }; responses: { "200": RemedyResponse } };
   "remediesOfOrder": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/remedies"; request: { parameters: { path: { orderId: string; tenantId: string } } }; responses: { "200": Array<RemedyResponse> } };
   "partnerInvoices": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices"; request: { parameters: { path: { tenantId: string }; query: { limit?: number; status?: string } } }; responses: { "200": Array<PartnerInvoiceResponse> } };

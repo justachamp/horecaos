@@ -1,0 +1,123 @@
+.geography {
+  padding: 24px;
+  max-width: 960px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.geography__intro {
+  color: var(--q-ink-subtle);
+  max-width: 60ch;
+}
+
+.denied {
+  color: var(--q-ink-muted);
+}
+
+.error-band {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--q-error-tint);
+  border-radius: var(--q-radius);
+}
+
+.secondary {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
+
+.geography__branch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.geography__branch select,
+.geography__sample-size select {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font: inherit;
+}
+
+.geography__map-deferred {
+  color: var(--q-ink-muted);
+  max-width: 60ch;
+  margin-bottom: 20px;
+}
+
+section {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--q-hairline);
+}
+
+section:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.geography__histograms {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 12px;
+}
+
+.geography__histogram h3 {
+  margin-bottom: 8px;
+}
+
+.geography__unavailable {
+  color: var(--q-ink-muted);
+  padding: 12px;
+  border: 1px dashed var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.geography__sample-size {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 12px 0;
+}
+
+.geography__state {
+  color: var(--q-ink-subtle);
+  margin: 8px 0;
+}
+
+.geography__drilldown {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-surface-1);
+}
+
+.geography__drilldown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.geography__drilldown-truncated {
+  color: var(--q-warning-text);
+  margin-bottom: 8px;
+}

@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.catalog.api.PackageCodeLookup;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
 import uz.horecaos.platform.integration.api.provider.ProviderEntityMappingLookup;
@@ -119,6 +120,16 @@ public class PosOrderExportService {
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
+    /**
+     * Wraps exactly the write {@link #send(UUID, UUID, AuditWriter)} makes once
+     * the provider call has returned -- never the call itself. {@code
+     * @Transactional} cannot express that from inside this class: a method
+     * calling its own annotated method skips the proxy entirely, so the write
+     * would silently run without a transaction (the same reasoning {@code
+     * PaymentAttemptService} documents for its own {@code unitOfWork}).
+     */
+    private final TransactionTemplate unitOfWork;
+
     public PosOrderExportService(
             PosAdapterRegistry adapters,
             ProviderInstallationLookup installations,
@@ -129,7 +140,8 @@ public class PosOrderExportService {
             PosOrderSource orders,
             PackageCodeLookup packageCodes,
             ApplicationEventPublisher events,
-            Clock clock) {
+            Clock clock,
+            TransactionTemplate unitOfWork) {
         this.adapters = adapters;
         this.installations = installations;
         this.mappings = mappings;
@@ -140,6 +152,7 @@ public class PosOrderExportService {
         this.packageCodes = packageCodes;
         this.events = events;
         this.clock = clock;
+        this.unitOfWork = unitOfWork;
     }
 
     /**
@@ -222,8 +235,32 @@ public class PosOrderExportService {
      * sent, and {@code RESOLVED_ABSENT}, meaning somebody established that the
      * previous attempt did not land. Any other state returns without touching the
      * provider.
+     *
+     * <p>Writes no audit fact. The automatic trigger that calls this overload has
+     * no operator to attribute one to; the one caller that does — the operations
+     * console's push/retry action — calls {@link #send(UUID, UUID, AuditWriter)}
+     * instead.
      */
     public ProviderOutcome send(UUID tenantId, UUID exportId) {
+        return send(tenantId, exportId, null);
+    }
+
+    /**
+     * {@link #send(UUID, UUID)}, for a caller — the operations console's
+     * push/retry action — that must also record an ADR 0027 audit fact for the
+     * attempt.
+     *
+     * <p>{@code auditWriter} runs inside the same {@link #unitOfWork} transaction
+     * as the write it describes wherever this method persists a state change, so
+     * a caller that throws while recording the fact rolls the state change back
+     * with it, rather than leaving one committed with no fact to defend it. A
+     * refusal that persists nothing at all (already claimed by another worker,
+     * or not in a state {@link ExportStateMachine} permits sending from) still
+     * calls {@code auditWriter}, just with no write for it to be atomic with.
+     * The provider call itself stays outside any transaction either way — see
+     * the class doc on why a connection is never held across it.
+     */
+    public ProviderOutcome send(UUID tenantId, UUID exportId, @Nullable AuditWriter auditWriter) {
         // The outbound half, refused rather than skipped. An export row can only
         // exist here if it predates the import or if open() was bypassed, and
         // either way putting it on the wire prints a ticket in a live kitchen.
@@ -231,20 +268,33 @@ public class PosOrderExportService {
 
         Optional<JdbcPosExportStore.ExportRow> row = exports.find(tenantId, exportId);
         if (row.isEmpty()) {
-            return ProviderOutcome.rejected("EXPORT_UNKNOWN", "No such export");
+            ProviderOutcome outcome = ProviderOutcome.rejected("EXPORT_UNKNOWN", "No such export");
+            if (auditWriter != null) {
+                auditWriter.write(null, outcome);
+            }
+            return outcome;
         }
         JdbcPosExportStore.ExportRow export = row.get();
 
         if (!ExportStateMachine.permits(export.state(), ExportState.SENT)) {
-            return ProviderOutcome.rejected(
+            ProviderOutcome outcome = ProviderOutcome.rejected(
                     "EXPORT_NOT_SENDABLE", "An export in %s is not sent again".formatted(export.state()));
+            if (auditWriter != null) {
+                auditWriter.write(export.state(), outcome);
+            }
+            return outcome;
         }
 
         Optional<Integer> attempt = exports.claimForAttempt(tenantId, exportId, export.state(), clock.instant());
         if (attempt.isEmpty()) {
             // Somebody else claimed it between the read and the update. Doing
             // nothing is the correct response and the only safe one.
-            return ProviderOutcome.rejected("EXPORT_CLAIMED_ELSEWHERE", "Another worker is sending this export");
+            ProviderOutcome outcome =
+                    ProviderOutcome.rejected("EXPORT_CLAIMED_ELSEWHERE", "Another worker is sending this export");
+            if (auditWriter != null) {
+                auditWriter.write(export.state(), outcome);
+            }
+            return outcome;
         }
         int attemptNumber = attempt.get();
         Instant startedAt = clock.instant();
@@ -253,33 +303,35 @@ public class PosOrderExportService {
         try {
             prepared = prepare(tenantId, export);
         } catch (ExportNotPossible refusal) {
-            exports.recordAttempt(
-                    tenantId,
-                    exportId,
-                    attemptNumber,
-                    "REJECTED",
-                    refusal.code(),
-                    refusal.detail(),
-                    startedAt,
-                    clock.instant());
-            exports.settle(
-                    tenantId, exportId, ExportState.REJECTED, null, refusal.code(), refusal.detail(), clock.instant());
-            return ProviderOutcome.rejected(refusal.code(), refusal.detail());
+            ProviderOutcome outcome = ProviderOutcome.rejected(refusal.code(), refusal.detail());
+            unitOfWork.executeWithoutResult(ignored -> {
+                exports.recordAttempt(
+                        tenantId,
+                        exportId,
+                        attemptNumber,
+                        "REJECTED",
+                        refusal.code(),
+                        refusal.detail(),
+                        startedAt,
+                        clock.instant());
+                exports.settle(
+                        tenantId,
+                        exportId,
+                        ExportState.REJECTED,
+                        null,
+                        refusal.code(),
+                        refusal.detail(),
+                        clock.instant());
+                if (auditWriter != null) {
+                    auditWriter.write(ExportState.REJECTED, outcome);
+                }
+            });
+            return outcome;
         }
 
         ExportResult result = prepared.adapter().exportOrder(prepared.context(), prepared.order());
         ProviderOutcome outcome = result.outcome();
         Instant finishedAt = clock.instant();
-
-        exports.recordAttempt(
-                tenantId,
-                exportId,
-                attemptNumber,
-                outcome.status().name(),
-                outcome.errorCode(),
-                outcome.detail(),
-                startedAt,
-                finishedAt);
 
         ExportState next =
                 switch (outcome.status()) {
@@ -298,24 +350,46 @@ public class PosOrderExportService {
                                 : ExportState.UNCERTAIN;
                 };
 
-        exports.settle(
-                tenantId,
-                exportId,
-                next,
-                result.externalOrderId(),
-                outcome.errorCode(),
-                outcome.detail(),
-                clock.instant());
+        // ADR 0027: the attempt history, the export's new state, and (when a
+        // person asked for this) the fact that they did, commit as one unit.
+        // The provider call above is deliberately outside it — see the class
+        // doc on why a connection is never held across it — but everything
+        // from here down is this attempt's actual write, and a caller left
+        // holding half of it would be worse off than one that had not tried.
+        unitOfWork.executeWithoutResult(ignored -> {
+            exports.recordAttempt(
+                    tenantId,
+                    exportId,
+                    attemptNumber,
+                    outcome.status().name(),
+                    outcome.errorCode(),
+                    outcome.detail(),
+                    startedAt,
+                    finishedAt);
 
-        if (next == ExportState.ACCEPTED && result.approvalPending()) {
-            // The till is a genuine authority for this order and was asked to
-            // decide, not merely told about a decision already made (ADR 0002,
-            // ADR 0011 §6.4) — see OrderExport#requireProviderApproval on
-            // #prepare. Flagged after the settle above, on purpose: by the time
-            // this line runs the row is already ACCEPTED with its
-            // external_order_id, which is the poll's own precondition.
-            exports.markRequiresPosApproval(tenantId, exportId);
-        }
+            exports.settle(
+                    tenantId,
+                    exportId,
+                    next,
+                    result.externalOrderId(),
+                    outcome.errorCode(),
+                    outcome.detail(),
+                    clock.instant());
+
+            if (next == ExportState.ACCEPTED && result.approvalPending()) {
+                // The till is a genuine authority for this order and was asked to
+                // decide, not merely told about a decision already made (ADR 0002,
+                // ADR 0011 §6.4) — see OrderExport#requireProviderApproval on
+                // #prepare. Flagged after the settle above, on purpose: by the time
+                // this line runs the row is already ACCEPTED with its
+                // external_order_id, which is the poll's own precondition.
+                exports.markRequiresPosApproval(tenantId, exportId);
+            }
+
+            if (auditWriter != null) {
+                auditWriter.write(next, outcome);
+            }
+        });
 
         if (next == ExportState.UNCERTAIN) {
             // Logged at warn because somebody has to look at it, and without a
@@ -329,6 +403,19 @@ public class PosOrderExportService {
                     outcome.errorCode());
         }
         return outcome;
+    }
+
+    /**
+     * What one push attempt should be defended with, recorded exactly once per
+     * {@link #send(UUID, UUID, AuditWriter)} call.
+     *
+     * @param settledState the export's state after this attempt, or {@code null}
+     *                      for the one refusal ({@code EXPORT_UNKNOWN}) that
+     *                      found no row to report a state for
+     */
+    @FunctionalInterface
+    public interface AuditWriter {
+        void write(@Nullable ExportState settledState, ProviderOutcome outcome);
     }
 
     /**

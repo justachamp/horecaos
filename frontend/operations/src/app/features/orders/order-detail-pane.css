@@ -119,6 +119,12 @@
   color: var(--q-ink-subtle);
 }
 
+/* §3.11 amendment interlock (wave P42): the reason a temporarily disabled AMEND carries, per §4.2's own rule. */
+.pane__amend-blocked {
+  margin: 4px 0 0;
+  color: var(--q-ink-muted);
+}
+
 .pane__actions {
   display: flex;
   align-items: center;
@@ -404,4 +410,73 @@
 
 .pane__courier q-combobox {
   width: 100%;
+}
+
+/* ---- POS export (§3.11, row 1.2i, wave P42) ------------------------------ */
+
+.pane__pos-export-result {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.pane__pos-export-reassurance {
+  margin: 2px 0 0;
+  color: var(--q-ink-muted);
+}
+
+.pane__pos-export-error {
+  margin: 4px 0 0;
+  color: var(--q-error-text);
+}
+
+.pane__pos-export-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.pane__pos-export-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pane__pos-export-input {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+  font-size: var(--q-type-body-sm);
+}
+
+.pane__pos-export-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.pane__pos-export-button {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.pane__pos-export-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.pane__pos-export-button--secondary {
+  background: transparent;
 }

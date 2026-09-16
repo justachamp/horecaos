@@ -111,4 +111,23 @@ describe('HeatmapChart', () => {
     expect(table.textContent).toContain('02:00');
     expect(table.textContent).toContain('8');
   });
+
+  // Wave W04 (7.10c): the cohort grid's own cell drill-down reads this back.
+  it("emits the clicked cell's own row/col keys, coloured and empty cells alike", () => {
+    const fixture = render();
+    const host = fixture.nativeElement as HTMLElement;
+    const clicks: { rowKey: string; colKey: string }[] = [];
+    fixture.componentInstance.cellClicked.subscribe((event) => clicks.push(event));
+
+    const coloured = host.querySelectorAll('.q-chart__cell:not(.q-chart__cell--empty)')[0];
+    coloured.dispatchEvent(new Event('click'));
+    expect(clicks).toEqual([{ rowKey: '1', colKey: '0' }]);
+
+    const empty = host.querySelector('.q-chart__cell--empty')!;
+    empty.dispatchEvent(new Event('click'));
+    expect(clicks).toEqual([
+      { rowKey: '1', colKey: '0' },
+      { rowKey: '1', colKey: '1' },
+    ]);
+  });
 });

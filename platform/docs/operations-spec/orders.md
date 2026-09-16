@@ -888,10 +888,28 @@ The POS failure causes Delever names — unmapped product, unmapped payment type
 product inactive in the POS — each get a **fix path**, not just a message: a
 link to the catalog sync mapping table (IA 4.5) with that item pre-selected.
 
+**Built for the POS row only (wave P42), against the real table rather than
+this one.** `order_process_states.POS_ORDER_EXPORT` is still never written —
+the platform's actual POS export state lives in `integration.pos_order_exports`
+and always has, since before this table was even proposed — so
+`OrderPosExportController` (&sect;4.8, ADR 0011) reads and acts on that table
+directly rather than waiting on a column nothing drives. `ORDER_PAYMENT` and
+`ORDER_INVENTORY`'s own failures already have their own panels (&sect;3.9's
+Оплата/Фискализация, wave P12); `RESTAURANT_APPROVAL`, `ORDER_FULFILLMENT` and
+`ORDER_NOTIFICATION` remain exactly what this section originally proposed and
+nothing has built: a generic table over `order_process_states`, which stays
+unread for every concern except `ORDER_INVENTORY`. The **fix path** the
+paragraph above describes — a link from a `LINE_UNMAPPED`/
+`MODIFIER_UNMAPPED` error to the mapping table with the item pre-selected —
+is not built either; the POS row surfaces the adapter's own error code and
+detail honestly, but does not yet link anywhere.
+
 **Never apply an amendment while a POS export attempt is unacknowledged**
-(ADR 0039). The amendment affordances disappear and this panel explains why: the
-failure being prevented is a kitchen holding two tickets for one order and
-cooking the first.
+(ADR 0039, built — wave P42). The amendment control renders disabled with the
+reason attached, per &sect;4.2's own rule for a temporary block — never
+hidden outright, since the order itself is one that will very likely become
+amendable again once the export settles. The failure being prevented is a
+kitchen holding two tickets for one order and cooking the first.
 
 ### 3.12 Attribution
 
@@ -1105,18 +1123,30 @@ screen having no path to that controller yet.
 - **Отменить у службы** — cascading cancel; states whether the provider permits
   it.
 
-### 4.8 POS (ADR 0011 / 0012, not built)
+### 4.8 POS (ADR 0011 / 0012, built — wave P42)
 
 **Печать** does not print locally; it sends a print request to the POS. Say so
 in the label — **Печать в POS** — because an operator who thinks a printer is
 attached will press it twice.
 
-The action is **absent** where the location's POS binding declares no `print`
-capability (ADR 0011 capability matrix, IA 3.2). Not disabled — absent. This is
-the whole reason the capability matrix exists.
+The action is **absent** where the location's POS binding declares no
+`ORDER_EXPORT` capability (ADR 0011 capability matrix, IA 3.2) — `posCapable`
+on `OrderPosExportController`'s own read. Not disabled — absent, and the whole
+Интеграции panel (&sect;3.11) with it. This is the whole reason the capability
+matrix exists.
 
-**Отправить в POS повторно** appears when `POS_ORDER_EXPORT` is
-`FAILED_RETRYABLE` or `MANUAL_ACTION_REQUIRED`.
+**Отправить в POS повторно** appears once an export exists and is not one the
+state machine will send again unasked — `ExportState` names the states that
+still permit it (`PENDING`, before anything has been sent; `RESOLVED_ABSENT`,
+once an operator or the recovery read established the till does not have it).
+An export the till has already accepted, or one mid-flight (`SENT`), or one
+waiting on a control-plane decision (`UNCERTAIN`/`AWAITING_OPERATOR`) answers
+honestly rather than resending blindly: `POST .../pos-export/push`
+(`OrderPosExportController`, `pos.export.resolve`, reason required) always
+returns `200` with the state it found, never a silent no-op. This is the
+console-facing half of the same rule &sect;3.11 states: a failed export is
+never rendered as an order failure, because the order is real and only its
+kitchen copy may be missing.
 
 ### 4.9 Payment (ADR 0013, not built)
 
@@ -1479,7 +1509,16 @@ query string lands in an access log.
 | The order timeline reading the kitchen ticket | ADR 0041 (nothing left to build; a join to write) | The production lane of the timeline; §1.2, §3.10. (`kitchen.tickets`/`ticket_events` are **built** — V0030 — and serve the kitchen board itself.) |
 | Shift enforcement on assignment | ADR 0042 | The off-shift courier state; §4.7. (`fulfillment.courier_shifts` is itself **built** — V0040.) |
 | `GET /operations/streams` and the `ORDER_QUEUE` / `ORDER_DETAIL` / `COUNTERS` channels | ADR 0045 | Live counts and live rows; §1.6 |
-| POS export driven at all through `order_process_states.POS_ORDER_EXPORT`, which is recognised by the schema and written by nothing | ADR 0011 / 0012 | Печать в POS and resend, §3.11, §4.8. Not the amendment interlock (§3.11, §4.4) any more: `OrderAmendmentService` now reads the export's real state from `integration.pos_order_exports` via `PosExportStatus` instead of this dead column. |
+
+Removed 2026-09-15 (wave P42): the row that used to stand here, «POS export
+driven at all through `order_process_states.POS_ORDER_EXPORT`, which is
+recognised by the schema and written by nothing», named a column and not a
+capability — that column stays permanently unwritten by design (ADR 0011's
+export state machine reads and writes `integration.pos_order_exports`
+instead, and always did), so quoting it here read as though POS export itself
+were unbuilt. What the row's own "Blocks" column pointed at — Печать в POS
+and resend (§3.11, §4.8) and the §3.11 amendment interlock — is now built;
+see §3.11 and §4.8's own notes for what wave P42 did and did not close.
 
 Three things that have **no owning decision at all**, and each is a genuine gap
 rather than an unbuilt one:

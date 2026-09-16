@@ -445,6 +445,7 @@ export const messagesEn = {
   'orders.amendment.warning.CASH_TENDERED_INSUFFICIENT':
     'Change due is now short of the total — the customer can hand over more.',
   'orders.amendment.warning.acknowledge': 'Got it',
+  'orders.detail.amend.blockedByPosExport': 'Editing unavailable: waiting on the POS',
 
   'orders.detail.section.revisions': 'Revisions ({count})',
   'orders.detail.revisions.show': 'Show revisions',
@@ -499,6 +500,26 @@ export const messagesEn = {
   'orders.detail.fiscal.outcome.UNCERTAIN': 'The provider did not answer',
   'orders.detail.fiscal.outcome.NO_PROVIDER_PATH': 'No provider can fiscalize this leg',
   'orders.detail.fiscal.outcome.NOT_WIRED': 'No provider is connected',
+
+  'orders.detail.section.posExport': 'POS export',
+  'orders.detail.posExport.error': 'Could not load the POS export',
+  'orders.detail.posExport.notExportedYet': 'Not yet sent to the till',
+  'orders.detail.posExport.reassurance': 'The order is fine — its kitchen copy may be missing.',
+  'orders.detail.posExport.lastError': 'The till answered: {detail}',
+  'orders.detail.posExport.state.PENDING': 'Not yet sent',
+  'orders.detail.posExport.state.SENT': 'Sending…',
+  'orders.detail.posExport.state.ACCEPTED': 'Reached the till',
+  'orders.detail.posExport.state.REJECTED': 'The till refused it',
+  'orders.detail.posExport.state.UNCERTAIN': 'Unknown — checking',
+  'orders.detail.posExport.state.AWAITING_OPERATOR': 'Needs review',
+  'orders.detail.posExport.state.RESOLVED_LANDED': 'Confirmed at the till',
+  'orders.detail.posExport.state.RESOLVED_ABSENT': 'Not received — can send again',
+  'orders.detail.posExport.state.ABANDONED': 'Will not be sent',
+  'orders.detail.posExport.action.push': 'Send to POS',
+  'orders.detail.posExport.action.push.reason': 'Reason',
+  'orders.detail.posExport.action.push.submit': 'Send',
+  'orders.detail.posExport.action.push.submitting': 'Sending…',
+  'orders.detail.posExport.action.push.notSendable': 'Cannot be sent again from this state',
 
   'orders.severity.blocked': 'needs attention',
   'orders.severity.approvalDeadline': 'confirm within {mmss}',
@@ -4228,6 +4249,7 @@ export const messagesEn = {
   'reports.nav.customers': 'Customers',
   'reports.nav.marketing': 'Marketing',
   'reports.nav.forecast': 'Demand',
+  'reports.nav.geography': 'Geography',
 
   'reports.branches.title': 'Branch & SLA reports',
   'reports.branches.loading': 'Loading…',
@@ -4527,6 +4549,27 @@ export const messagesEn = {
   'reports.forecast.breakdown.show': 'Show breakdown',
   'reports.forecast.breakdown.empty': 'No department or product data in this sample.',
   'reports.forecast.breakdown.error': 'Could not load the breakdown.',
+
+  // ---------------------------------------------------------------- 7.10 Geography: histograms and the week grid (wave W04)
+  'reports.geography.title': 'Geography',
+  'reports.geography.intro': 'Delivery-time and distance histograms, and a day/hour heat grid.',
+  'reports.geography.loading': 'Loading…',
+  'reports.geography.mapDeferred':
+    "Density heatmap and today's orders as pins are deferred pending a map provider (see X.4).",
+  'reports.geography.branch.label': 'Branch',
+  'reports.geography.section.histograms': 'Delivery-time and distance histograms',
+  'reports.geography.histogram.duration.title': 'Handover time',
+  'reports.geography.histogram.distance.title': 'Distance',
+  'reports.geography.histogram.distance.unavailable':
+    'Not shown yet — fact_delivery has the distance, but no bucketed read over it.',
+  'reports.geography.section.cohort': 'Orders by day of week and hour',
+  'reports.geography.cohort.intro': 'Average completed orders per hour, by weekday. Click a cell.',
+  'reports.geography.drillDown.title': 'Orders — {weekday}, {hour}',
+  'reports.geography.drillDown.close': 'Close',
+  'reports.geography.drillDown.loading': 'Loading…',
+  'reports.geography.drillDown.empty': 'No matching orders in the sampled dates.',
+  'reports.geography.drillDown.truncated':
+    'At least one sampled date hit its own read cap — there may be more orders that day.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Cash',

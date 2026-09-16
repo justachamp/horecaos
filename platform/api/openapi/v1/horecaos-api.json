@@ -8849,38 +8849,6 @@
         "required" : [ "purpose" ],
         "type" : "object"
       },
-      "ExportView" : {
-        "properties" : {
-          "attemptCount" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "correlationReference" : {
-            "type" : "string"
-          },
-          "exportId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "externalOrderId" : {
-            "type" : "string"
-          },
-          "orderId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "requestedAt" : {
-            "type" : "string"
-          },
-          "state" : {
-            "type" : "string"
-          },
-          "venue" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "ExternalBookRequest" : {
         "properties" : {
           "bindingId" : {
@@ -14101,6 +14069,78 @@
         },
         "type" : "object"
       },
+      "OrderPosExportControllerExportView" : {
+        "properties" : {
+          "attemptCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "exportId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "externalOrderId" : {
+            "type" : "string"
+          },
+          "firstSentAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "lastError" : {
+            "type" : "string"
+          },
+          "lastErrorCode" : {
+            "type" : "string"
+          },
+          "permitsAmendment" : {
+            "type" : "boolean"
+          },
+          "requestedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "resolutionKind" : {
+            "type" : "string"
+          },
+          "resolutionReason" : {
+            "type" : "string"
+          },
+          "resolvedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "settledAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "state" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderPosExportControllerPushRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "OrderPosExportResponse" : {
+        "properties" : {
+          "export" : {
+            "$ref" : "#/components/schemas/OrderPosExportControllerExportView"
+          },
+          "posCapable" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "OrderResponse" : {
         "properties" : {
           "confirmedAt" : {
@@ -14774,20 +14814,6 @@
         },
         "type" : "object"
       },
-      "PageExportView" : {
-        "properties" : {
-          "items" : {
-            "items" : {
-              "$ref" : "#/components/schemas/ExportView"
-            },
-            "type" : "array"
-          },
-          "nextCursor" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "PageFailureSummary" : {
         "properties" : {
           "items" : {
@@ -14933,6 +14959,20 @@
           "items" : {
             "items" : {
               "$ref" : "#/components/schemas/PolicyResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PagePosOrderExportControllerExportView" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PosOrderExportControllerExportView"
             },
             "type" : "array"
           },
@@ -15244,6 +15284,55 @@
             "type" : "integer"
           }
         },
+        "type" : "object"
+      },
+      "PartnerOrderControllerPushRequest" : {
+        "properties" : {
+          "discountFunding" : {
+            "type" : "string"
+          },
+          "displayCode" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "externalOrderId" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
+            "maxLength" : 16,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "handoverCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Line"
+            },
+            "maxItems" : 2147483647,
+            "minItems" : 1,
+            "type" : "array"
+          },
+          "pickupExpectedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "totals" : {
+            "$ref" : "#/components/schemas/Totals"
+          },
+          "venueReference" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "externalOrderId", "fulfillmentMode", "lines", "totals", "venueReference" ],
         "type" : "object"
       },
       "PasswordResetAcceptRequest" : {
@@ -16260,6 +16349,38 @@
         },
         "type" : "object"
       },
+      "PosOrderExportControllerExportView" : {
+        "properties" : {
+          "attemptCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "correlationReference" : {
+            "type" : "string"
+          },
+          "exportId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "externalOrderId" : {
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "requestedAt" : {
+            "type" : "string"
+          },
+          "state" : {
+            "type" : "string"
+          },
+          "venue" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PosOrderExportControllerResolutionRequest" : {
         "properties" : {
           "decision" : {
@@ -17024,55 +17145,6 @@
         "required" : [ "moduleId" ],
         "type" : "object"
       },
-      "PushRequest" : {
-        "properties" : {
-          "discountFunding" : {
-            "type" : "string"
-          },
-          "displayCode" : {
-            "maxLength" : 128,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "externalOrderId" : {
-            "maxLength" : 128,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "fulfillmentMode" : {
-            "maxLength" : 16,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "handoverCode" : {
-            "maxLength" : 64,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "lines" : {
-            "items" : {
-              "$ref" : "#/components/schemas/Line"
-            },
-            "maxItems" : 2147483647,
-            "minItems" : 1,
-            "type" : "array"
-          },
-          "pickupExpectedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "totals" : {
-            "$ref" : "#/components/schemas/Totals"
-          },
-          "venueReference" : {
-            "maxLength" : 128,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "externalOrderId", "fulfillmentMode", "lines", "totals", "venueReference" ],
-        "type" : "object"
-      },
       "PushResponse" : {
         "properties" : {
           "orderId" : {
@@ -17093,6 +17165,23 @@
               "type" : "string"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PushResultResponse" : {
+        "properties" : {
+          "detail" : {
+            "type" : "string"
+          },
+          "errorCode" : {
+            "type" : "string"
+          },
+          "state" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -33963,7 +34052,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/PageExportView"
+                  "$ref" : "#/components/schemas/PagePosOrderExportControllerExportView"
                 }
               }
             },
@@ -45266,7 +45355,7 @@
     "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/payment" : {
       "get" : {
         "description" : "The order is read through OrderDirectory rather than the ordering module's own detail endpoint, so this stays a payments-side read: the public order number and total are enough to confirm this is the right order, without reaching into lines, notes or the encrypted fields that belong to a different capability. A null intent is not an error -- it is an order that was never checked out for payment, or one whose intent has gone terminal (cancelled, expired, failed) and is no longer the order's live obligation. `payment` is the IA's payment[] array -- every tender of the order's settlement (ADR 0046), in the sequence it settles, empty for an order with no settlement at all.",
-        "operationId" : "forOrder_2",
+        "operationId" : "forOrder_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -45345,6 +45434,90 @@
         },
         "summary" : "Re-issue the checkout surface -- a link, or an invoice pushed to a phone",
         "tags" : [ "Order payments" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/pos-export" : {
+      "get" : {
+        "description" : "`export` is read independently of `posCapable`: a location's binding can stop declaring ORDER_EXPORT (ADR 0011) after an order already has a real, unsettled export row, and the &sect;3.11 AMEND interlock has to keep seeing that row -- and its `permitsAmendment` signal -- regardless. `posCapable` gates only the push/retry affordance; `export` is null for an order that has not yet opened an export row at all (not yet confirmed, or confirmed too recently for the trigger to have run) -- not an error.",
+        "operationId" : "forOrder_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrderPosExportResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether this order reached the branch's till, and why not if it did not",
+        "tags" : [ "Order POS export" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/pos-export/push" : {
+      "post" : {
+        "description" : "The same `PosOrderExportService#send` the automatic trigger uses, called by a person instead of a scheduler. Refuses -- without touching the provider -- for an export the state machine does not permit sending again (already accepted, already sent, or waiting on the control-plane recovery read); the response says which state it is in rather than throwing, because that refusal is an ordinary answer, not a fault.",
+        "operationId" : "push_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OrderPosExportControllerPushRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PushResultResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Push this order to the till, or retry a push that is safe to repeat",
+        "tags" : [ "Order POS export" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/refunds" : {
@@ -46807,7 +46980,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/PushRequest"
+                "$ref" : "#/components/schemas/PartnerOrderControllerPushRequest"
               }
             }
           },
@@ -63364,6 +63537,9 @@
   }, {
     "description" : "ADR 0085: control-plane alerts kept as incidents",
     "name" : "Incidents"
+  }, {
+    "description" : "One order's export to the branch's point of sale, and pushing or retrying it from the console",
+    "name" : "Order POS export"
   }, {
     "description" : "Production tickets, the buffer, and station advances",
     "name" : "Kitchen board"
