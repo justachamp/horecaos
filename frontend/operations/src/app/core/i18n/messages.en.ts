@@ -4568,7 +4568,8 @@ export const messagesEn = {
   'reports.geography.drillDown.close': 'Close',
   'reports.geography.drillDown.loading': 'Loading…',
   'reports.geography.drillDown.empty': 'No matching orders in the sampled dates.',
-  'reports.geography.drillDown.truncated': 'Most recent 300 orders in range — there may be more.',
+  'reports.geography.drillDown.truncated':
+    'At least one sampled date hit its own read cap — there may be more orders that day.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Cash',

@@ -4576,7 +4576,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.geography.drillDown.close': 'Yopish',
   'reports.geography.drillDown.loading': 'Yuklanmoqda…',
   'reports.geography.drillDown.empty': 'Tanlangan sanalarda mos buyurtmalar yoʻq.',
-  'reports.geography.drillDown.truncated': 'Eng soʻnggi 300 ta buyurtma — yana boʻlishi mumkin.',
+  'reports.geography.drillDown.truncated':
+    'Kamida bitta tanlangan sana oʻz oʻqish chegarasiga yetdi — oʻsha kuni yana buyurtmalar boʻlishi mumkin.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Inkassatsiya',
