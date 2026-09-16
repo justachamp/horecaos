@@ -59,6 +59,16 @@ const SAMPLE_SIZE_OPTIONS: readonly number[] = [4, 8, 12];
 /** The histogram section's own fixed window — a first cut, not yet wired to `ReportsFilterState` (see this file's own doc). */
 const HISTOGRAM_WINDOW_DAYS = 30;
 
+/**
+ * Per-sample-date cap for {@link GeographyPage.loadDrillDown}'s own
+ * `/reporting/orders` calls — one call per entry in the clicked weekday's
+ * `sampleDates`, so this is a per-day budget, not a budget shared across the
+ * whole sampled span. At the largest {@link SAMPLE_SIZE_OPTIONS} (12) that's
+ * at most 12 small requests, not one spanning read starved by the branch's
+ * most recent days.
+ */
+const DRILLDOWN_ORDERS_PER_DATE_LIMIT = 100;
+
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
 type SecondaryLoadState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -69,7 +79,7 @@ interface DrillDown {
   /** `18:00–19:00`, operating-day-relative — see {@link hourWindowLabel}. Computed once at click time, not re-derived in the template. */
   readonly hourLabel: string;
   readonly rows: readonly OrderRowResponse[];
-  /** True when the underlying 300-row read came back full — there may be more matches this drill-down missed. */
+  /** True when at least one sampled date's own bounded read came back full — there may be more matches that date missed. */
   readonly maybeIncomplete: boolean;
 }
 
@@ -106,11 +116,12 @@ interface DrillDown {
  * point rather than one of several sections on a page. Cell drill-down is
  * the one new client behaviour: `/reporting/orders` has no weekday or
  * hour-of-day filter, so the response's own `occurredAt` is filtered
- * client-side against the clicked cell's weekday/hour, over the exact
- * `sampleDates` that weekday's own `demandHistory` response already named,
- * bounded to the most recent 300 orders in that span — honestly labelled
- * as possibly incomplete when the underlying read itself came back full
- * (`maybeMore`).
+ * client-side against the clicked cell's weekday/hour — one bounded
+ * `/reporting/orders` call *per* entry in that weekday's own `sampleDates`
+ * (not one call spanning the earliest-to-latest sample date), so a busy
+ * recent day cannot crowd out an older sampled week the way a single
+ * shared cap would. Each per-date call is honestly labelled as possibly
+ * incomplete when its own read came back full (`maybeMore`).
  *
  * **Filtering.** Unlike most of §7, this page does not read
  * `ReportsFilterState` at all — both rows are single-branch analyses (the
@@ -166,6 +177,15 @@ export class GeographyPage implements OnInit {
 
   private scope: LocationScope | null = null;
 
+  /**
+   * Bumped on every branch selection so a slower stale-branch response
+   * cannot overwrite the newly selected branch's data. {@link loadHistogram}
+   * and {@link loadWeekGrid} each capture the generation in force when they
+   * start and discard their own writes if it has since moved on — see their
+   * own doc comments.
+   */
+  private loadGeneration = 0;
+
   async ngOnInit(): Promise<void> {
     await this.location.ensureLoaded();
     const scope = this.location.scope();
@@ -177,8 +197,9 @@ export class GeographyPage implements OnInit {
     this.selectedLocationId.set(scope.locationId);
     await this.loadBranchOptions(scope);
     this.state.set('ready');
-    void this.loadHistogram();
-    void this.loadWeekGrid();
+    const generation = ++this.loadGeneration;
+    void this.loadHistogram(generation);
+    void this.loadWeekGrid(generation);
   }
 
   protected weekdayLabel(weekday: number): string {
@@ -195,8 +216,9 @@ export class GeographyPage implements OnInit {
     }
     this.selectedLocationId.set(locationId);
     this.drillDown.set(null);
-    void this.loadHistogram();
-    void this.loadWeekGrid();
+    const generation = ++this.loadGeneration;
+    void this.loadHistogram(generation);
+    void this.loadWeekGrid(generation);
   }
 
   protected selectSampleSize(size: number): void {
@@ -204,15 +226,17 @@ export class GeographyPage implements OnInit {
       return;
     }
     this.sampleSize.set(size);
-    void this.loadWeekGrid();
+    void this.loadWeekGrid(++this.loadGeneration);
   }
 
   protected retryHistogram(): void {
-    void this.loadHistogram();
+    // No new selection was made — replay the still-current generation, the
+    // same one whose failed load left the section in its `error` state.
+    void this.loadHistogram(this.loadGeneration);
   }
 
   protected retryWeekGrid(): void {
-    void this.loadWeekGrid();
+    void this.loadWeekGrid(this.loadGeneration);
   }
 
   protected closeDrillDown(): void {
@@ -235,7 +259,16 @@ export class GeographyPage implements OnInit {
     }
   }
 
-  private async loadHistogram(): Promise<void> {
+  /**
+   * `generation` is the {@link loadGeneration} value current when this load
+   * was kicked off (see {@link selectBranch}). If a newer selection has
+   * since bumped it, this response is for a branch that is no longer
+   * selected — the state-changing writes below are skipped so a slower
+   * stale-branch response cannot overwrite the newly selected branch's
+   * histogram (the newer generation's own load, in flight or already
+   * resolved, owns those writes instead).
+   */
+  private async loadHistogram(generation: number): Promise<void> {
     const scope = this.scope;
     const locationId = this.selectedLocationId();
     if (!scope || !locationId) {
@@ -250,6 +283,9 @@ export class GeographyPage implements OnInit {
         to,
         locationId: [locationId],
       });
+      if (generation !== this.loadGeneration) {
+        return;
+      }
       this.histogramProvenance.set(result.provenance);
       const totals = new Map<SlaBucketCode, number>(SLA_BUCKETS.map((code) => [code, 0]));
       for (const bucket of result.buckets) {
@@ -268,14 +304,17 @@ export class GeographyPage implements OnInit {
       this.histogramState.set('ready');
     } catch (error) {
       if (error instanceof ApiError) {
-        this.histogramState.set('error');
+        if (generation === this.loadGeneration) {
+          this.histogramState.set('error');
+        }
       } else {
         throw error;
       }
     }
   }
 
-  private async loadWeekGrid(): Promise<void> {
+  /** See {@link loadHistogram}'s doc — same generation guard, same reason. */
+  private async loadWeekGrid(generation: number): Promise<void> {
     const scope = this.scope;
     const locationId = this.selectedLocationId();
     if (!scope || !locationId) {
@@ -293,6 +332,9 @@ export class GeographyPage implements OnInit {
           }),
         ),
       );
+      if (generation !== this.loadGeneration) {
+        return;
+      }
       this.weekGridResponses.set(responses);
       this.weekGrid.set(
         WEEKDAYS.map((weekday, index) => ({
@@ -308,7 +350,9 @@ export class GeographyPage implements OnInit {
       this.weekGridState.set('ready');
     } catch (error) {
       if (error instanceof ApiError) {
-        this.weekGridState.set('error');
+        if (generation === this.loadGeneration) {
+          this.weekGridState.set('error');
+        }
       } else {
         throw error;
       }
@@ -326,28 +370,37 @@ export class GeographyPage implements OnInit {
     this.drillDownLoading.set(true);
     this.drillDown.set({ weekday, hour, hourLabel, rows: [], maybeIncomplete: false });
     try {
-      const sorted = [...response.sampleDates].sort();
-      const result = await this.api.orders(scope.tenantId, {
-        from: sorted[0],
-        to: sorted[sorted.length - 1],
-        locationId: [locationId],
-        sort: 'DATE_DESC',
-        limit: 300,
-      });
-      const sampleDateSet = new Set(response.sampleDates);
       const zone = response.provenance.timezone;
       const businessDayStart = response.provenance.businessDayStart;
-      const matched = result.rows.filter(
-        (row) =>
-          sampleDateSet.has(row.businessDate) &&
-          operatingHourOf(row.occurredAt, zone, businessDayStart) === hour,
+      // One bounded call per sampled date rather than one call spanning
+      // earliest-to-latest sample date — see this file's own doc and
+      // DRILLDOWN_ORDERS_PER_DATE_LIMIT's doc for why: a shared cap over the
+      // whole span left older sampled weeks almost never represented,
+      // because the branch's most recent days (across every weekday, not
+      // just the clicked one) exhausted it first.
+      const results = await Promise.all(
+        response.sampleDates.map((date) =>
+          this.api.orders(scope.tenantId, {
+            from: date,
+            to: date,
+            locationId: [locationId],
+            sort: 'DATE_DESC',
+            limit: DRILLDOWN_ORDERS_PER_DATE_LIMIT,
+          }),
+        ),
       );
+      const matched = results
+        .flatMap((result) => result.rows)
+        .filter((row) => operatingHourOf(row.occurredAt, zone, businessDayStart) === hour);
       this.drillDown.set({
         weekday,
         hour,
         hourLabel,
         rows: matched,
-        maybeIncomplete: result.maybeMore,
+        // True when any one sampled date's own read came back full — each
+        // call is scoped to a single business day, so this reflects that
+        // day's own cap, not a budget shared across the whole span.
+        maybeIncomplete: results.some((result) => result.maybeMore),
       });
     } catch (error) {
       if (error instanceof ApiError) {

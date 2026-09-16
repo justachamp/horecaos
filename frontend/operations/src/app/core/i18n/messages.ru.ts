@@ -4549,7 +4549,7 @@ export const messagesRu: MessageCatalogue = {
   'reports.geography.drillDown.loading': 'Загрузка…',
   'reports.geography.drillDown.empty': 'Нет подходящих заказов в выбранных датах.',
   'reports.geography.drillDown.truncated':
-    'Последние 300 заказов за период — их может быть больше.',
+    'Хотя бы одна из выбранных дат достигла своего лимита чтения — в этот день заказов может быть больше.',
 
   // ---------------------------------------------------------------- finance 8.3-8.6 and nav (wave 39)
   'finance.nav.cash': 'Инкассация',

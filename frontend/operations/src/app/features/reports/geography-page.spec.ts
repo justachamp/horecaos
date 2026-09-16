@@ -92,6 +92,16 @@ function slaBuckets(overrides: Partial<SlaResponse> = {}): SlaResponse {
   return { buckets, medians: [], provenance: provenance(), ...overrides };
 }
 
+function bucketRow(locationId: string, orderCount: number): BucketResponse {
+  return {
+    businessDate: '2026-09-14',
+    locationId,
+    bucketCode: 'UNDER_30',
+    orderCount,
+    shareBasisPoints: 10000,
+  };
+}
+
 function orderRow(overrides: Partial<OrderRowResponse> = {}): OrderRowResponse {
   return {
     orderId: 'o1',
@@ -282,19 +292,40 @@ describe('GeographyPage', () => {
       expect(demandHistory).toHaveBeenCalledWith('t1', expect.objectContaining({ sampleSize: 8 }));
     });
 
-    it('clicking a cell drills down through /reporting/orders, capped at 300 rows and filtered to that cell', async () => {
+    it('clicking a cell drills down through one bounded /reporting/orders call per sampled date, filtered to that cell', async () => {
       const matching = orderRow({
         orderId: 'o-match',
         publicOrderNumber: 'MATCH01',
+        businessDate: '2026-08-25',
         occurredAt: '2026-08-25T13:15:00Z',
       });
       // Same business date, wrong hour (Tashkent local 10:00, not 18:00) — must be filtered out.
       const wrongHour = orderRow({
         orderId: 'o-wrong-hour',
         publicOrderNumber: 'WRONG01',
+        businessDate: '2026-08-25',
         occurredAt: '2026-08-25T05:00:00Z',
       });
-      const orders = vi.fn().mockResolvedValue(orderList([matching, wrongHour]));
+      // The *older* of the two sampled Mondays (demandResponse's own
+      // sampleDates: ['2026-08-25', '2026-08-18']) — a single spanning
+      // from/to read capped at 300 rows would have this crowded out by
+      // whatever the branch did most recently across every weekday; a
+      // per-date call cannot lose it.
+      const olderMatch = orderRow({
+        orderId: 'o-older-match',
+        publicOrderNumber: 'OLDER01',
+        businessDate: '2026-08-18',
+        occurredAt: '2026-08-18T13:15:00Z',
+      });
+      const orders = vi
+        .fn()
+        .mockImplementation((_tenantId: string, params: { readonly from: string }) =>
+          Promise.resolve(
+            params.from === '2026-08-25'
+              ? orderList([matching, wrongHour])
+              : orderList([olderMatch]),
+          ),
+        );
       await render({ orders });
 
       const host = fixture.nativeElement as HTMLElement;
@@ -304,21 +335,30 @@ describe('GeographyPage', () => {
       await flushMicrotasks();
       fixture.detectChanges();
 
+      expect(orders).toHaveBeenCalledTimes(2);
       expect(orders).toHaveBeenCalledWith('t1', {
-        from: '2026-08-18',
+        from: '2026-08-25',
         to: '2026-08-25',
         locationId: ['l1'],
         sort: 'DATE_DESC',
-        limit: 300,
+        limit: 100,
+      });
+      expect(orders).toHaveBeenCalledWith('t1', {
+        from: '2026-08-18',
+        to: '2026-08-18',
+        locationId: ['l1'],
+        sort: 'DATE_DESC',
+        limit: 100,
       });
 
       const panel = host.querySelector('[data-testid="geography-drilldown"]') as HTMLElement;
       expect(panel).not.toBeNull();
       expect(panel.textContent).toContain('MATCH01');
+      expect(panel.textContent).toContain('OLDER01');
       expect(panel.textContent).not.toContain('WRONG01');
     });
 
-    it('names the drill-down as possibly incomplete when the underlying 300-row read came back full', async () => {
+    it('names the drill-down as possibly incomplete when a sampled date’s own read came back full', async () => {
       const matching = orderRow({ orderId: 'o-match', occurredAt: '2026-08-25T13:15:00Z' });
       const orders = vi.fn().mockResolvedValue(orderList([matching], true));
       await render({ orders });
@@ -330,6 +370,82 @@ describe('GeographyPage', () => {
       fixture.detectChanges();
 
       expect(host.querySelector('[data-testid="geography-drilldown-truncated"]')).not.toBeNull();
+    });
+
+    it('computes the cohort grid and its drill-down relative to a non-midnight businessDayStart, not the wall-clock hour', async () => {
+      const nonMidnightProvenance = { ...provenance(), businessDayStart: '22:00:00' };
+      const demandHistory = vi
+        .fn()
+        .mockImplementation((_tenantId: string, params: { weekday: number }) => {
+          if (params.weekday !== 1) {
+            return Promise.resolve({
+              locationId: 'l1',
+              weekday: params.weekday,
+              requestedSampleSize: 4,
+              minimumSampleSize: 3,
+              sampleDates: [],
+              holidayDates: [],
+              holidayMode: 'INCLUDE',
+              hours: hours(),
+              provenance: nonMidnightProvenance,
+            });
+          }
+          return Promise.resolve({
+            locationId: 'l1',
+            weekday: 1,
+            requestedSampleSize: 4,
+            minimumSampleSize: 3,
+            // A 22:00 business day starting 2026-08-24 runs into the small
+            // hours of 2026-08-25 local time — still business date 08-24.
+            sampleDates: ['2026-08-24'],
+            holidayDates: [],
+            holidayMode: 'INCLUDE',
+            // Operating hour 2 — wall-clock 00:00-01:00, two hours into a
+            // business day that started the evening before at 22:00.
+            hours: hours({
+              2: { ordersByDate: { '2026-08-24': 3 }, totalOrders: 3, averageOrders: 3 },
+            }),
+            provenance: nonMidnightProvenance,
+          });
+        });
+      // occurredAt just after local midnight — still inside business date
+      // 2026-08-24's operating day, which started the evening before.
+      const crossingMidnight = orderRow({
+        orderId: 'o-crossing',
+        publicOrderNumber: 'CROSS01',
+        businessDate: '2026-08-24',
+        occurredAt: '2026-08-24T19:30:00Z', // 2026-08-25T00:30 Asia/Tashkent
+      });
+      const orders = vi.fn().mockResolvedValue(orderList([crossingMidnight]));
+      await render({ demandHistory, orders });
+
+      const host = fixture.nativeElement as HTMLElement;
+      // Monday is the grid's first row; operating hour 2 is the 3rd cell (0-indexed 2).
+      const cell = host.querySelectorAll('.q-chart__cell')[2];
+      cell.dispatchEvent(new Event('click'));
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(orders).toHaveBeenCalledWith('t1', {
+        from: '2026-08-24',
+        to: '2026-08-24',
+        locationId: ['l1'],
+        sort: 'DATE_DESC',
+        limit: 100,
+      });
+
+      const panel = host.querySelector('[data-testid="geography-drilldown"]') as HTMLElement;
+      expect(panel).not.toBeNull();
+      // The panel title interpolates hourWindowLabel, and the match below
+      // depends on operatingHourOf: a regression that dropped either
+      // function's businessDayStart offset (defaulting to a naive
+      // wall-clock window/hour) would show/match 02:00-03:00 here instead
+      // of the true 22:00-relative window — every other test in this file
+      // leaves businessDayStart at '00:00:00', where the two computations
+      // coincide and would not catch that regression.
+      expect(panel.textContent).toContain('00:00–01:00');
+      expect(panel.textContent).not.toContain('02:00–03:00');
+      expect(panel.textContent).toContain('CROSS01');
     });
 
     it('closes the drill-down panel on request', async () => {
@@ -393,6 +509,64 @@ describe('GeographyPage', () => {
         't1',
         expect.objectContaining({ locationId: 'l2' }),
       );
+    });
+
+    it('discards a slower stale-branch histogram response once a newer branch selection has superseded it', async () => {
+      const resolvers = new Map<string, (value: SlaResponse) => void>();
+      const slaBucketsFn = vi.fn().mockImplementation(
+        (_tenantId: string, params: { readonly locationId: readonly string[] }) =>
+          new Promise<SlaResponse>((resolve) => {
+            resolvers.set(params.locationId[0], resolve);
+          }),
+      );
+      const demandHistory = vi
+        .fn()
+        .mockImplementation((_tenantId: string, params: { weekday: number }) =>
+          Promise.resolve(demandResponse(params.weekday)),
+        );
+      await render(
+        { slaBuckets: slaBucketsFn, demandHistory },
+        {
+          locations: [
+            { id: 'l1', displayName: 'Chilonzor' },
+            { id: 'l2', displayName: 'Yunusobod' },
+          ],
+        },
+      );
+      // ngOnInit's own initial load (branch l1, the default location) is in
+      // flight, unresolved.
+      expect(resolvers.has('l1')).toBe(true);
+
+      const host = fixture.nativeElement as HTMLElement;
+      const select = host.querySelector<HTMLSelectElement>('[data-testid="geography-branch"]')!;
+      select.value = 'l2';
+      select.dispatchEvent(new Event('change'));
+      await flushMicrotasks();
+      fixture.detectChanges();
+      expect(resolvers.has('l2')).toBe(true);
+
+      const table = () =>
+        host.querySelector(
+          '[data-testid="geography-duration-histogram"] [data-testid="q-histogram-chart-table"]',
+        ) as HTMLElement | null;
+
+      // Branch B (l2), selected second, resolves first — the realistic case
+      // this finding is about.
+      resolvers.get('l2')!(slaBuckets({ buckets: [bucketRow('l2', 42)] }));
+      await flushMicrotasks();
+      fixture.detectChanges();
+      expect(table()?.textContent).toContain('42');
+
+      // Branch A's (l1) slower, now-stale response resolves after — it must
+      // not overwrite branch B's data on screen, even though the <select>
+      // has shown l2 selected the whole time.
+      resolvers.get('l1')!(slaBuckets({ buckets: [bucketRow('l1', 999)] }));
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(select.value).toBe('l2');
+      expect(table()?.textContent).toContain('42');
+      expect(table()?.textContent).not.toContain('999');
     });
   });
 });
