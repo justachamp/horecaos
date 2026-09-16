@@ -59,8 +59,12 @@ class PresetVerificationCodeConfigurationTests {
     void productionWithPreprodHasThePresetBean() {
         // deploy/compose.production.yml's actual pre-production shape:
         // SPRING_PROFILES_ACTIVE=production,preprod, HORECAOS_ENVIRONMENT left at
-        // its non-production default, and the two preset variables filled in.
-        runner.withPropertyValues("spring.profiles.active=production,preprod", PHONE_PROPERTY + "=" + PRESET)
+        // its non-production default, the phone filled in and — just as
+        // faithfully — the code variable left PRESENT and empty rather than
+        // absent, exactly what ${HORECAOS_VERIFICATION_PRESET_CODE:-} produces
+        // when the operator has not typed one.
+        runner.withPropertyValues(
+                        "spring.profiles.active=production,preprod", PHONE_PROPERTY + "=" + PRESET, CODE_PROPERTY + "=")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasSingleBean(PresetVerificationCodeSource.class);
@@ -70,7 +74,7 @@ class PresetVerificationCodeConfigurationTests {
 
                     PresetVerificationCodeSource source = context.getBean(PresetVerificationCodeSource.class);
                     assertThat(source.codeFor(PRESET).value())
-                            .as("the default code, since the compose file leaves the code variable unset")
+                            .as("the default code, from a code property that is present but blank")
                             .isEqualTo("000000");
                     assertThat(source.codeFor(PRESET).requiresDelivery()).isFalse();
 

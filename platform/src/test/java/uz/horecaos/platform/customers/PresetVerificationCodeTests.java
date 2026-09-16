@@ -84,6 +84,22 @@ class PresetVerificationCodeTests {
     }
 
     @Test
+    @DisplayName("a blank code falls back to the default rather than refusing to start")
+    void aBlankCodeFallsBackToTheDefault() {
+        // deploy/compose.production.yml writes
+        // HORECAOS_CUSTOMERS_VERIFICATION_PRESET_CODE: ${HORECAOS_VERIFICATION_PRESET_CODE:-}
+        // into the container, so an operator who filled in only the phone
+        // number gets this property *present* and empty, never absent. Spring's
+        // own "${...:000000}" annotation default only fires on absent, so this
+        // constructor has to treat blank the same way itself, or the default the
+        // owner was promised would instead be a startup failure.
+        Code code = new PresetVerificationCodeSource(PRESET, "", "local", random).codeFor(PRESET);
+
+        assertThat(code.value()).isEqualTo("000000");
+        assertThat(code.requiresDelivery()).isFalse();
+    }
+
+    @Test
     @DisplayName("a number that is not an Uzbek mobile fails at startup too")
     void aMistypedNumberIsRefusedAtConstruction() {
         assertThatThrownBy(() -> source("not-a-number", "424242")).isInstanceOf(IllegalArgumentException.class);

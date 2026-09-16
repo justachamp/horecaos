@@ -79,6 +79,13 @@ public class PresetVerificationCodeSource implements VerificationCodeSource {
     public static final String CODE_PROPERTY = "horecaos.customers.verification.preset.code";
 
     /**
+     * What {@link #CODE_PROPERTY} means when nobody has typed a code —
+     * including the case {@code @Value}'s own annotation default cannot
+     * catch, see the constructor.
+     */
+    private static final String DEFAULT_CODE = "000000";
+
+    /**
      * The fourth lock's own property. Same spelling every other
      * {@code @Value("${horecaos.environment:local}")} injection point in this
      * codebase uses, named here as a constant only because this class's
@@ -94,7 +101,7 @@ public class PresetVerificationCodeSource implements VerificationCodeSource {
 
     public PresetVerificationCodeSource(
             @Value("${" + PHONE_PROPERTY + "}") String presetPhone,
-            @Value("${" + CODE_PROPERTY + ":000000}") String presetCode,
+            @Value("${" + CODE_PROPERTY + ":" + DEFAULT_CODE + "}") String presetCode,
             @Value("${" + ENVIRONMENT_PROPERTY + ":local}") String environment,
             RandomVerificationCodeSource everybodyElse) {
 
@@ -114,10 +121,24 @@ public class PresetVerificationCodeSource implements VerificationCodeSource {
         // or code is a startup failure naming the property rather than a
         // sign-in that silently never works.
         this.presetDestination = PhoneNumber.requireDeliverableMobile(presetPhone);
-        if (!VerificationCode.isWellFormed(presetCode)) {
+
+        // Blank, not just absent, falls back to the default. @Value's own
+        // ":000000" only fires when Spring's Environment has no entry for
+        // CODE_PROPERTY at all — true when nobody ever exported the variable,
+        // which is how a laptop leaves it. deploy/compose.production.yml
+        // instead writes HORECAOS_CUSTOMERS_VERIFICATION_PRESET_CODE:
+        // ${HORECAOS_VERIFICATION_PRESET_CODE:-} into the container, which
+        // sets the OS environment variable to the empty string rather than
+        // leaving it unset whenever the operator has not filled it in — a
+        // *present*, blank property that the annotation default never sees.
+        // Without this, an operator who filled in only the phone number and
+        // left the code at its documented default would get a container that
+        // refuses to start, over a variable they never touched.
+        String effectiveCode = presetCode.isBlank() ? DEFAULT_CODE : presetCode;
+        if (!VerificationCode.isWellFormed(effectiveCode)) {
             throw new IllegalStateException(CODE_PROPERTY + " must be " + VerificationCode.LENGTH + " digits");
         }
-        this.presetCode = presetCode;
+        this.presetCode = effectiveCode;
         this.everybodyElse = everybodyElse;
     }
 
