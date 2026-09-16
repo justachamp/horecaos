@@ -9,12 +9,14 @@
 # provider categories a tenant may hold a credential for; no `delete`, `list`
 # or `sudo` anywhere, and nothing outside production. If the AppRole credential
 # on the host is stolen, the attacker can read production secrets — which is
-# bad — and can add a new version of a provider credential, but cannot destroy
-# anything, cannot touch the platform-owned categories (database, object
-# storage, identity admin, data encryption), cannot enumerate paths, cannot
-# reach staging or local, and cannot see the audit devices that recorded them
-# doing it. Rotation after such a theft is therefore a real remedy rather than
-# a gesture.
+# bad — and can write a new version of ANY tenant's provider credential, not
+# just add one: the AppRole is one platform-wide identity, so like the blanket
+# read these grants are scoped per category across the whole store, never per
+# tenant. What the thief still cannot do: destroy anything (no delete, and KV v2
+# keeps every earlier version), touch the platform-owned categories (database,
+# object storage, identity admin, data encryption), enumerate paths, reach
+# staging or local, or see the audit devices that recorded them doing it.
+# Rotation after such a theft is therefore a real remedy rather than a gesture.
 
 path "horecaos/data/production/*" {
   capabilities = ["read"]
@@ -24,9 +26,10 @@ path "horecaos/data/production/*" {
 # merchant-binding rotation) POSTs a value once to
 # horecaos/data/production/<category>/tenant-<tenantId>/<uuid> under one of the
 # tenant-writable categories (SecretCategory.tenantWritable()). KV v2 needs
-# `create` for a new path and `update` for a new version. OpenBao applies the
-# MOST SPECIFIC matching path, not the union, so `read` is repeated here or the
-# resolver would lose the secrets the door just wrote. Platform-owned
+# `create` for a new path and `update` for a new version; every door write
+# mints a fresh path today, so `create` is what is exercised. OpenBao applies
+# the MOST SPECIFIC matching path, not the union, so `read` is repeated here or
+# the resolver would lose the secrets the door just wrote. Platform-owned
 # categories deliberately stay read-only.
 path "horecaos/data/production/provider_pos/*" {
   capabilities = ["create", "update", "read"]

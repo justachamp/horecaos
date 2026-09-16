@@ -4,12 +4,17 @@
 # provider categories a tenant may hold a credential for; no `delete`, `list`
 # or `sudo` anywhere, and nothing outside this environment. If the AppRole
 # credential on the host is stolen, the attacker can read this environment's
-# secrets — which is bad — and can add a new version of a provider credential,
-# but cannot destroy anything, cannot touch the platform-owned categories
-# (database, object storage, identity admin, data encryption), cannot
-# enumerate paths, cannot reach another environment's store, and cannot see
-# the audit devices that recorded them doing it. Rotation after such a theft
-# is therefore a real remedy rather than a gesture.
+# secrets — which is bad — and can write a new version of ANY tenant's
+# provider credential, not just add one: the AppRole is one platform-wide
+# identity, so like the blanket read above these grants are scoped per
+# category across the whole environment, never per tenant (an ACL cannot say
+# "only paths this door itself minted"; per-tenant identities would be a
+# different architecture, not a policy tweak). What the thief still cannot do:
+# destroy anything (no delete, and KV v2 keeps every earlier version), touch
+# the platform-owned categories (database, object storage, identity admin,
+# data encryption), enumerate paths, reach another environment's store, or
+# see the audit devices that recorded them doing it. Rotation after such a
+# theft is therefore a real remedy rather than a gesture.
 #
 # @ENVIRONMENT@ is HORECAOS_ENVIRONMENT, filled in by whatever loads this file
 # -- the runbook, keycloak-stage2.sh, unattended-boot.sh, local-smoke.sh -- so
@@ -25,10 +30,13 @@ path "horecaos/data/@ENVIRONMENT@/*" {
 # mints a fresh, platform-generated reference under one of the tenant-writable
 # categories (SecretCategory.tenantWritable()) and POSTs the value once to
 # horecaos/data/<env>/<category>/tenant-<tenantId>/<uuid>; merchant-binding
-# rotation writes the same way. KV v2 needs `create` for a new path and `update`
-# for a new version of an existing one. OpenBao applies the MOST SPECIFIC
-# matching path, not the union of all matches, so each block below must repeat
-# `read` or the resolver would lose the very secrets the door just wrote.
+# rotation and partner-client secrets go through the same door. KV v2 needs
+# `create` for a new path and `update` for a new version of an existing one;
+# today every door write mints a fresh path, so `create` is what is exercised
+# and `update` is there for OpenBaoSecretWriter's documented rotate-in-place
+# contract. OpenBao applies the MOST SPECIFIC matching path, not the union of
+# all matches, so each block below must repeat `read` or the resolver would
+# lose the very secrets the door just wrote.
 # Without these blocks the door fails closed: the console shows "Something went
 # wrong" and platform-app logs SecretWriteFailedException (pre-production,
 # 2026-09-16). The platform-owned categories deliberately stay read-only.
