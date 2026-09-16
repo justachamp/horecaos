@@ -324,8 +324,26 @@ services:
       # even on a single-replica deployment it means a rollback to an older
       # image cannot start without first arguing with the schema history.
       SPRING_FLYWAY_ENABLED: "false"
-      SPRING_PROFILES_ACTIVE: production
+      # `production` by default. The pre-production host — no SMS gateway
+      # bound, no real customer traffic — is the one place this is
+      # `production,preprod`: PresetVerificationCodeSource's @Profile admits
+      # `preprod`, so the fixed one-time code below can exist there and
+      # nowhere else this variable is left at its default. See
+      # deploy/env.template's "Pre-production only" section before setting
+      # this to anything other than the default.
+      SPRING_PROFILES_ACTIVE: ${HORECAOS_SPRING_PROFILES:-production}
       HORECAOS_ENVIRONMENT: ${HORECAOS_ENVIRONMENT:-production}
+      # ADR 0051's fixed one-time code for one test customer number. Empty in
+      # every real deployment — an unset HORECAOS_VERIFICATION_PRESET_PHONE
+      # resolves both of these to the empty string, which
+      # PresetVerificationCodePhoneConfiguredCondition treats as "not
+      # configured" rather than attempting to build a bean around a blank
+      # number. The property names on the right are Spring Boot's own relaxed
+      # binding of the environment-variable spelling on the left onto
+      # horecaos.customers.verification.preset.{phone,code} — verified
+      # against Spring Boot 4.1's relaxed-binding rules, not guessed.
+      HORECAOS_CUSTOMERS_VERIFICATION_PRESET_PHONE: ${HORECAOS_VERIFICATION_PRESET_PHONE:-}
+      HORECAOS_CUSTOMERS_VERIFICATION_PRESET_CODE: ${HORECAOS_VERIFICATION_PRESET_CODE:-}
 
       HORECAOS_DB_URL: jdbc:postgresql://platform-db:5432/horecaos
       HORECAOS_DB_USERNAME: horecaos_app

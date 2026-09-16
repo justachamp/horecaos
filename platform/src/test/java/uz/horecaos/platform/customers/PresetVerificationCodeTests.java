@@ -84,13 +84,29 @@ class PresetVerificationCodeTests {
     }
 
     @Test
+    @DisplayName("a blank code falls back to the default rather than refusing to start")
+    void aBlankCodeFallsBackToTheDefault() {
+        // deploy/compose.production.yml writes
+        // HORECAOS_CUSTOMERS_VERIFICATION_PRESET_CODE: ${HORECAOS_VERIFICATION_PRESET_CODE:-}
+        // into the container, so an operator who filled in only the phone
+        // number gets this property *present* and empty, never absent. Spring's
+        // own "${...:000000}" annotation default only fires on absent, so this
+        // constructor has to treat blank the same way itself, or the default the
+        // owner was promised would instead be a startup failure.
+        Code code = new PresetVerificationCodeSource(PRESET, "", random).codeFor(PRESET);
+
+        assertThat(code.value()).isEqualTo("000000");
+        assertThat(code.requiresDelivery()).isFalse();
+    }
+
+    @Test
     @DisplayName("a number that is not an Uzbek mobile fails at startup too")
     void aMistypedNumberIsRefusedAtConstruction() {
         assertThatThrownBy(() -> source("not-a-number", "424242")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    @DisplayName("the preset source cannot exist outside a local profile")
+    @DisplayName("the preset source cannot exist outside a local or preprod profile")
     void theSourceIsProfileBound() {
         org.springframework.context.annotation.Profile profile =
                 PresetVerificationCodeSource.class.getAnnotation(org.springframework.context.annotation.Profile.class);
@@ -99,7 +115,7 @@ class PresetVerificationCodeTests {
                 .as("the first of the three locks. Without it the guard is the only one, "
                         + "and a guard can be disabled by removing a bean")
                 .isNotNull();
-        assertThat(profile.value()).containsExactlyInAnyOrder("local", "test", "default");
+        assertThat(profile.value()).containsExactlyInAnyOrder("local", "test", "default", "preprod");
     }
 
     // ----------------------------------------------------------------- the guard
@@ -187,6 +203,34 @@ class PresetVerificationCodeTests {
         mixed.setProperty(PresetVerificationCodeSource.PHONE_PROPERTY, PRESET);
 
         assertThatThrownBy(() -> verify(mixed)).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("preprod alone starts with a preset, which is what the profile is for")
+    void preprodAloneIsAllowed() {
+        MockEnvironment preprod = new MockEnvironment();
+        preprod.setActiveProfiles("preprod");
+        preprod.setProperty(PresetVerificationCodeSource.PHONE_PROPERTY, PRESET);
+
+        verify(preprod);
+    }
+
+    @Test
+    @DisplayName("production and preprod together is the real pre-production deploy shape, and starts")
+    void productionWithPreprodIsAllowed() {
+        // deploy/compose.production.yml sets SPRING_PROFILES_ACTIVE to exactly
+        // this on the pre-production host: production plus preprod, never
+        // preprod alone. This is the guard's whole reason to know about preprod
+        // at all — and it is also the real pre-production shape even though
+        // horecaos.environment reads "production" there too (that property is
+        // the secret namespace, not a deployment label — see
+        // PresetVerificationCodeSource's class doc), which is exactly why this
+        // guard's profile check, not that property, is what has to admit it.
+        MockEnvironment preprod = new MockEnvironment();
+        preprod.setActiveProfiles("production", "preprod");
+        preprod.setProperty(PresetVerificationCodeSource.PHONE_PROPERTY, PRESET);
+
+        verify(preprod);
     }
 
     // ------------------------------------------------------------------ helpers

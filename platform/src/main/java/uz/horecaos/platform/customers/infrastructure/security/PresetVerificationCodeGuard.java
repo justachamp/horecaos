@@ -28,12 +28,31 @@ import org.springframework.stereotype.Component;
  *
  * <p>Registered unconditionally, on purpose. A guard that only existed when the
  * thing it guards existed would be absent in precisely the case it is for.
+ *
+ * <p>{@code preprod} is a second, narrower exception to "non-local profile" here:
+ * the pre-production host runs {@code SPRING_PROFILES_ACTIVE=production,preprod}
+ * by design (its own SMS gateway is unbound, and the preset is how its storefront
+ * customer journey is proven end to end), so a profile set that contains
+ * {@code preprod} is permitted regardless of what else is active — including
+ * {@code production} beside it. That is not a gap: {@code preprod} is an
+ * operator-set, per-host Spring profile that the real production deployment never
+ * carries — nothing in {@code deploy/compose.production.yml} adds it by default,
+ * and putting it in {@code SPRING_PROFILES_ACTIVE} is a deliberate action on one
+ * host's own env file, not a value that travels with the image. This class
+ * deliberately does not also check {@code horecaos.environment}: that property is
+ * the OpenBao/data-encryption-key secret namespace, and the pre-production host
+ * legitimately shares the real production segment there (see
+ * {@link PresetVerificationCodeSource}'s class doc), so it cannot tell the two
+ * hosts apart and is not a signal this guard — or the bean it guards — relies on.
  */
 @Component
 public class PresetVerificationCodeGuard implements ApplicationRunner {
 
     /** The same set the other two guards use, and the same one {@code local-fixtures} is bound to. */
     private static final Set<String> LOCAL_PROFILES = Set.of("local", "test", "default");
+
+    /** The one non-local profile this guard also admits. See the class doc above. */
+    private static final String PREPROD_PROFILE = "preprod";
 
     private final Environment environment;
 
@@ -63,7 +82,8 @@ public class PresetVerificationCodeGuard implements ApplicationRunner {
 
         List<String> active = List.of(environment.getActiveProfiles());
         boolean localOnly = active.isEmpty() || active.stream().allMatch(LOCAL_PROFILES::contains);
-        if (localOnly) {
+        boolean preprod = active.contains(PREPROD_PROFILE);
+        if (localOnly || preprod) {
             return;
         }
 

@@ -571,17 +571,43 @@ account fails; the named account succeeds and prompts for its second factor.
 redirect URI or a rotated secret is wrong, repeat the relevant step with
 corrected values — nothing here needs to be undone first.
 
-### Profiles: no local fixtures in production
+### Profiles: no local fixtures in production — and what pre-production sets on purpose
 
-`deploy/compose.production.yml` sets `SPRING_PROFILES_ACTIVE: production`
-and nothing else. This matters because of exactly one line in
-[`docs/local-fixtures.md`](../local-fixtures.md): the `local` profile is
-what adds `classpath:db/local-fixtures` to Flyway's scan locations, and nothing
-outside that profile ever creates the demo tenant, the preset-OTP phone
-number, or the fake CLICK payment provider. Section 4's migration run above
-therefore applied only `classpath:db/migration` — production has zero
-tenants, zero orders, and zero customers until the pilot tenant is onboarded
-through the real API in section 5.
+`deploy/compose.production.yml` sets
+`SPRING_PROFILES_ACTIVE: ${HORECAOS_SPRING_PROFILES:-production}` — `production`
+alone by default, everywhere `HORECAOS_SPRING_PROFILES` is left unset. This
+matters because of exactly one line in
+[`docs/local-fixtures.md`](../local-fixtures.md): the `local` profile is what
+adds `classpath:db/local-fixtures` to Flyway's scan locations, and neither the
+default `production` profile nor the pre-production addition below ever does
+that. Section 4's migration run above therefore applied only
+`classpath:db/migration` regardless of which of the two profiles this host
+runs — real production has zero tenants, zero orders, and zero customers until
+the pilot tenant is onboarded through the real API in section 5.
+
+**On the real production host, stop here:** leave `HORECAOS_SPRING_PROFILES`,
+`HORECAOS_VERIFICATION_PRESET_PHONE`, and `HORECAOS_VERIFICATION_PRESET_CODE`
+unset, and leave `HORECAOS_ENVIRONMENT` at its `production` default. Nothing
+in that configuration creates the demo tenant, the preset-OTP phone number, or
+the fake CLICK payment provider — that claim still holds exactly as written
+above, for this one host.
+
+**The pre-production host is the deliberate exception** (ADR 0051): it has no
+SMS gateway bound, so its env file additionally sets
+`HORECAOS_SPRING_PROFILES=production,preprod` (never bare `preprod` — the
+`production` profile stays too) and populates
+`HORECAOS_VERIFICATION_PRESET_PHONE`/`HORECAOS_VERIFICATION_PRESET_CODE`, so
+that one storefront test number gets a fixed six-digit code and every other
+number still needs a real transport. `HORECAOS_ENVIRONMENT` stays at its
+`production` default on this host too — pre-production's OpenBao and
+data-encryption keys were provisioned under that same segment, not one of its
+own, so it is not a variable this feature touches. The `preprod` Spring
+profile is the only switch: `PresetVerificationCodeSource` refuses to even
+construct its bean under any profile set that lacks it. See
+[`deploy/README.md`](../../../deploy/README.md)'s pre-production paragraph and
+[`deploy/env.template`](../../../deploy/env.template)'s "Pre-production only"
+section for the exact variables, the full three-lock explanation, and why
+`HORECAOS_ENVIRONMENT` is deliberately not one of them.
 
 **Check:**
 
@@ -598,7 +624,15 @@ docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/product
   exec platform-app env | grep SPRING_PROFILES_ACTIVE
 ```
 
-reads `SPRING_PROFILES_ACTIVE=production`, never `local`.
+reads `SPRING_PROFILES_ACTIVE=production` on the real production host, or
+`SPRING_PROFILES_ACTIVE=production,preprod` on the pre-production host — never
+bare `local`. Either output is correct for its own host; what would actually
+be wrong is `production,preprod` on a host meant to be real production, or
+bare `production` on the pre-production host (the storefront test customer
+would then get no preset and the end-to-end check in section 7 would have no
+way to sign in without a real SMS gateway). If the output does not match the
+host you are on, check `HORECAOS_SPRING_PROFILES` in this host's env file
+before assuming the deploy itself is broken.
 
 ---
 

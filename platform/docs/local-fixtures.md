@@ -97,11 +97,21 @@ and comes back `NO_PROVIDER_BINDING` until an operator has configured one. See
 [what a tenant must supply](providers/sms-gateway-vas.md#what-a-tenant-must-supply)
 and [ADR 0051](adr/built/0051-customer-session-authentication.md).
 
-**This cannot reach a deployment.** The preset bean is not created outside a
-local profile, and `PresetVerificationCodeGuard` refuses to *start* a non-local
-profile that has either property set. A fixed one-time code in production would
-be a complete authentication bypass, so the failure mode is a container that will
-not come up.
+**This cannot reach real production.** The preset bean is created only under a
+local profile or the pre-production host's `preprod` profile, and
+`PresetVerificationCodeGuard` refuses to *start* any other profile that has
+either property set. Pre-production is a deliberate, narrower exception, not a
+gap: `preprod` is an operator-set, per-host Spring profile that the real
+production deployment never carries by default, so a deploy-time typo cannot
+turn this on for the actual production deployment by accident. `HORECAOS_ENVIRONMENT`
+plays no part in that check — it names the OpenBao/data-encryption-key
+namespace, not a deployment label, and pre-production legitimately shares
+real production's segment there (see `PresetVerificationCodeSource`'s class
+doc for why). See the "Profiles" section of
+[the production runbook](runbooks/production-setup.md) for exactly which host
+sets what. A fixed one-time code reaching real production would be a complete
+authentication bypass, so the failure mode there is a container that will not
+come up.
 
 ## Staff operations
 
