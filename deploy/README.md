@@ -65,6 +65,20 @@ it honest: it runs the unmodified `compose.production.yml` against a fresh
 volume on a machine that is neither Sarkor nor aHOST, and a green run is
 evidence the file itself has not quietly grown a provider dependency.
 
+One more variable is pre-production only (ADR 0051): `HORECAOS_SPRING_PROFILES`
+adds the `preprod` Spring profile beside the default `production` one, and
+`HORECAOS_VERIFICATION_PRESET_PHONE`/`HORECAOS_VERIFICATION_PRESET_CODE` give
+the storefront's one test customer number a fixed one-time code so it can sign
+in with no SMS gateway bound — every other number still needs a real
+transport and gets a real random code. All three are empty by default, which
+is what every real deployment leaves them; `PresetVerificationCodeSource`
+also refuses to even construct itself when `HORECAOS_ENVIRONMENT` says the
+real `production` segment, so a pre-production host must set that variable to
+something else (for example `preprod`) before this works at all — see
+`env.template`'s "Pre-production only" section for the exact variables and
+why the Spring profile alone is not trusted to prove a host is not real
+production.
+
 ## Relationship to `platform/compose.production.yaml` (read this before deploying)
 
 **Deploy from THIS directory.** This is ADR 0061's registry-pull model —

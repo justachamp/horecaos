@@ -90,16 +90,39 @@ class PresetVerificationCodeTests {
     }
 
     @Test
-    @DisplayName("the preset source cannot exist outside a local profile")
+    @DisplayName("the fourth lock: construction itself refuses when horecaos.environment is the real production")
+    void constructionRefusesTheRealProductionEnvironment() {
+        assertThatThrownBy(() -> new PresetVerificationCodeSource(PRESET, "424242", "production", random))
+                .as("a preprod Spring profile is not, by itself, proof this is not the real "
+                        + "production environment — this is the lock for exactly that gap")
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(PresetVerificationCodeSource.PHONE_PROPERTY)
+                .hasMessageContaining(PresetVerificationCodeSource.ENVIRONMENT_PROPERTY)
+                .hasMessageContaining("production");
+    }
+
+    @Test
+    @DisplayName("any environment other than the real production is fine")
+    void constructionAllowsEveryOtherEnvironment() {
+        for (String environment : new String[] {"local", "preprod", "staging", "test"}) {
+            assertThat(new PresetVerificationCodeSource(PRESET, "424242", environment, random)
+                            .codeFor(PRESET)
+                            .value())
+                    .isEqualTo("424242");
+        }
+    }
+
+    @Test
+    @DisplayName("the preset source cannot exist outside a local or preprod profile")
     void theSourceIsProfileBound() {
         org.springframework.context.annotation.Profile profile =
                 PresetVerificationCodeSource.class.getAnnotation(org.springframework.context.annotation.Profile.class);
 
         assertThat(profile)
-                .as("the first of the three locks. Without it the guard is the only one, "
+                .as("the first of the four locks. Without it the guard is the only one, "
                         + "and a guard can be disabled by removing a bean")
                 .isNotNull();
-        assertThat(profile.value()).containsExactlyInAnyOrder("local", "test", "default");
+        assertThat(profile.value()).containsExactlyInAnyOrder("local", "test", "default", "preprod");
     }
 
     // ----------------------------------------------------------------- the guard
@@ -189,10 +212,36 @@ class PresetVerificationCodeTests {
         assertThatThrownBy(() -> verify(mixed)).isInstanceOf(IllegalStateException.class);
     }
 
+    @Test
+    @DisplayName("preprod alone starts with a preset, which is what the profile is for")
+    void preprodAloneIsAllowed() {
+        MockEnvironment preprod = new MockEnvironment();
+        preprod.setActiveProfiles("preprod");
+        preprod.setProperty(PresetVerificationCodeSource.PHONE_PROPERTY, PRESET);
+
+        verify(preprod);
+    }
+
+    @Test
+    @DisplayName("production and preprod together is the real pre-production deploy shape, and starts")
+    void productionWithPreprodIsAllowed() {
+        // deploy/compose.production.yml sets SPRING_PROFILES_ACTIVE to exactly
+        // this on the pre-production host: production plus preprod, never
+        // preprod alone. This is the guard's whole reason to know about preprod
+        // at all — PresetVerificationCodeSource's own constructor carries the
+        // finer check (horecaos.environment) that still refuses the one deploy
+        // this profile combination cannot rule out on its own.
+        MockEnvironment preprod = new MockEnvironment();
+        preprod.setActiveProfiles("production", "preprod");
+        preprod.setProperty(PresetVerificationCodeSource.PHONE_PROPERTY, PRESET);
+
+        verify(preprod);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private PresetVerificationCodeSource source(String phone, String code) {
-        return new PresetVerificationCodeSource(phone, code, random);
+        return new PresetVerificationCodeSource(phone, code, "local", random);
     }
 
     private static void verify(org.springframework.core.env.Environment environment) {

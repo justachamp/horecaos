@@ -28,12 +28,27 @@ import org.springframework.stereotype.Component;
  *
  * <p>Registered unconditionally, on purpose. A guard that only existed when the
  * thing it guards existed would be absent in precisely the case it is for.
+ *
+ * <p>{@code preprod} is a second, narrower exception to "non-local profile" here:
+ * the pre-production host runs {@code SPRING_PROFILES_ACTIVE=production,preprod}
+ * by design (its own SMS gateway is unbound, and the preset is how its storefront
+ * customer journey is proven end to end), so a profile set that contains
+ * {@code preprod} is permitted regardless of what else is active — including
+ * {@code production} beside it. That is not a gap: {@link PresetVerificationCodeSource}'s
+ * own constructor carries the guard that matters for exactly this combination,
+ * refusing to build the bean at all when {@code horecaos.environment} says the
+ * real production environment. This class only ever sees Spring profiles, which
+ * is a coarser signal a deploy-time typo can satisfy by accident; that is why the
+ * finer one lives on the bean itself rather than here.
  */
 @Component
 public class PresetVerificationCodeGuard implements ApplicationRunner {
 
     /** The same set the other two guards use, and the same one {@code local-fixtures} is bound to. */
     private static final Set<String> LOCAL_PROFILES = Set.of("local", "test", "default");
+
+    /** The one non-local profile this guard also admits. See the class doc above. */
+    private static final String PREPROD_PROFILE = "preprod";
 
     private final Environment environment;
 
@@ -63,7 +78,8 @@ public class PresetVerificationCodeGuard implements ApplicationRunner {
 
         List<String> active = List.of(environment.getActiveProfiles());
         boolean localOnly = active.isEmpty() || active.stream().allMatch(LOCAL_PROFILES::contains);
-        if (localOnly) {
+        boolean preprod = active.contains(PREPROD_PROFILE);
+        if (localOnly || preprod) {
             return;
         }
 
