@@ -100,14 +100,14 @@ jobs:
 
       - name: Verify
         # Two forks with an explicit ceiling each: the hosted runner's memory is
-        # the binding constraint, not its cores. Four forks defaulting to a
-        # quarter of RAM apiece ran the runner out of memory on 2026-09-15
-        # (OutOfMemoryError: Metaspace inside a fork, then a hang to the timeout).
-        # Metaspace is the figure that grows with the suite: one long-lived fork
-        # loads every Spring test context's generated classes, and 768m was
-        # exhausted after ~2400 tests on 2026-09-15; 2g leaves ~7GB for two
-        # forks on the 15GB runner alongside their PostgreSQL containers.
-        run: ./mvnw --batch-mode verify -Dhorecaos.test.forks=2 "-Dhorecaos.test.jvmArgs=-Xmx1536m -XX:MaxMetaspaceSize=2048m"
+        # the binding constraint, not its cores. Measured 2026-09-16 with the full
+        # suite (4866 tests) under exactly these flags: a long-lived fork peaks at
+        # ~2.3GB of live heap once Spring's test-context cache fills (1.5g died of
+        # heap exhaustion while loading a context), and metaspace stays under 1g;
+        # capping the context cache at 8 keeps that peak bounded as the suite grows.
+        # The 'OutOfMemoryError: Metaspace' lines in earlier CI logs were a test
+        # (ProcessFatalErrorTests) throwing that error on purpose.
+        run: ./mvnw --batch-mode verify -Dhorecaos.test.forks=2 "-Dhorecaos.test.jvmArgs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dspring.test.context.cache.maxSize=8"
 
       - name: OpenAPI compatibility and generated TypeScript clients
         run: |
