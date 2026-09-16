@@ -99,22 +99,27 @@ public class OrderPosExportController {
     @RequiresCapability(Capability.POS_EXPORT_READ)
     @Operation(
             summary = "Whether this order reached the branch's till, and why not if it did not",
-            description = "`posCapable` is false when the location's primary POS binding does not "
-                    + "declare ORDER_EXPORT (ADR 0011) -- the console suppresses the whole affordance "
-                    + "in that case, and `export` is always null alongside it. `export` is otherwise "
-                    + "null for an order that has not yet opened an export row (not yet confirmed, or "
-                    + "confirmed too recently for the trigger to have run) -- not an error.")
+            description = "`export` is read independently of `posCapable`: a location's binding can "
+                    + "stop declaring ORDER_EXPORT (ADR 0011) after an order already has a real, "
+                    + "unsettled export row, and the &sect;3.11 AMEND interlock has to keep seeing "
+                    + "that row -- and its `permitsAmendment` signal -- regardless. `posCapable` gates "
+                    + "only the push/retry affordance; `export` is null for an order that has not yet "
+                    + "opened an export row at all (not yet confirmed, or confirmed too recently for "
+                    + "the trigger to have run) -- not an error.")
     public ResponseEntity<OrderPosExportResponse> forOrder(@PathVariable UUID tenantId, @PathVariable UUID orderId) {
         OrderDirectory.OrderSummary order = orders.summary(tenantId, orderId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
 
         boolean posCapable = posCapable(tenantId, order);
-        ExportView export = posCapable
-                ? exportStore
-                        .findDetailByOrder(tenantId, orderId)
-                        .map(ExportView::of)
-                        .orElse(null)
-                : null;
+        // Read regardless of posCapable: a real, unsettled export row must
+        // still surface -- and still disarm the AMEND interlock via
+        // ExportView#permitsAmendment -- even after the binding stops
+        // declaring ORDER_EXPORT. posCapable only gates the push/retry
+        // action below, never this read.
+        ExportView export = exportStore
+                .findDetailByOrder(tenantId, orderId)
+                .map(ExportView::of)
+                .orElse(null);
 
         return ResponseEntity.ok(new OrderPosExportResponse(posCapable, export));
     }
@@ -148,7 +153,30 @@ public class OrderPosExportController {
                         "This order's POS export could not be opened",
                         Map.of("reason", "EXPORT_NOT_OPENABLE")));
 
-        ProviderOutcome outcome = exports.send(tenantId, exportId);
+        // ADR 0027: who asked the till to try again, and why -- an operator
+        // asserting a push is a claim somebody may later have to defend against
+        // a kitchen that says it never saw the ticket. Written by
+        // PosOrderExportService itself, inside the same transaction as the
+        // state change it describes, rather than as a separate write after
+        // that change has already committed.
+        ProviderOutcome outcome = exports.send(
+                tenantId,
+                exportId,
+                (settledState, sendOutcome) ->
+                        audit.record(AuditFact.of("pos.export_push_requested", AuditClass.BUSINESS)
+                                .by(ActorRef.user(currentActor.get().subject(), null))
+                                .at(ResourceScope.tenant(tenantId))
+                                .target("PosOrderExport", exportId)
+                                .because(request.reason())
+                                .changed(Map.of(
+                                        "outcome",
+                                        sendOutcome.status().name(),
+                                        "state",
+                                        settledState == null ? "" : settledState.name()))
+                                .usingCapability(Capability.POS_EXPORT_RESOLVE.code())
+                                .correlatedBy(exportId.toString())
+                                .occurredAt(clock.instant())
+                                .build()));
 
         ExportState settledState = exportStore
                 .findDetailByOrder(tenantId, orderId)
@@ -156,24 +184,49 @@ public class OrderPosExportController {
                 .orElseThrow(() ->
                         new IllegalStateException("The export just opened or sent has vanished for order " + orderId));
 
-        // ADR 0027: who asked the till to try again, and why -- an operator
-        // asserting a push is a claim somebody may later have to defend against
-        // a kitchen that says it never saw the ticket.
-        audit.record(AuditFact.of("pos.export_push_requested", AuditClass.BUSINESS)
-                .by(ActorRef.user(currentActor.get().subject(), null))
-                .at(ResourceScope.tenant(tenantId))
-                .target("PosOrderExport", exportId)
-                .because(request.reason())
-                .changed(Map.of(
-                        "outcome", outcome.status().name(),
-                        "state", settledState.name()))
-                .usingCapability(Capability.POS_EXPORT_RESOLVE.code())
-                .correlatedBy(exportId.toString())
-                .occurredAt(clock.instant())
-                .build());
-
         return ResponseEntity.ok(new PushResultResponse(
-                outcome.status().name(), settledState.name(), outcome.errorCode(), outcome.detail()));
+                outcome.status().name(),
+                settledState.name(),
+                outcome.errorCode(),
+                safeErrorMessage(outcome.errorCode())));
+    }
+
+    /**
+     * A platform-authored description of {@code errorCode}, never the
+     * provider's own text (ADR 0029).
+     *
+     * <p>{@code CloposEnvelope#trim}'s own comment records why: a Clopos error
+     * body has been observed to echo request content back, and a request body
+     * here carries a customer's name, phone and address. Nothing downstream of
+     * the adapter can tell a genuinely diagnostic sentence from an echoed one,
+     * so this console -- and the audit fact and logs around it -- never carry
+     * what the provider actually said, only a fixed sentence keyed off the
+     * machine-readable code every outcome already carries beside its prose.
+     * The raw text stays only in {@code integration.pos_order_exports.last_error}
+     * and {@code pos_export_attempts.detail}, which are integration diagnostics
+     * for engineering, not this tenant console.
+     */
+    private static @Nullable String safeErrorMessage(@Nullable String errorCode) {
+        if (errorCode == null) {
+            return null;
+        }
+        return switch (errorCode) {
+            case "CLOPOS_INTEGRATOR_INVALID" ->
+                "HorecaOS's own registration with the till provider was refused. This affects "
+                        + "every branch, not just this one -- contact support.";
+            case "CLOPOS_CLIENT_DISABLED" -> "The branch has disabled the Open API module in its own till back office.";
+            case "CLOPOS_TOKEN_EXPIRED" -> "The till session expired; retrying will request a new one.";
+            case "CLOPOS_REFUSED" -> "The till refused the order.";
+            case "CIRCUIT_OPEN" -> "The till has been unreachable too many times recently and is temporarily paused.";
+            case "LINE_UNMAPPED", "MODIFIER_UNMAPPED" -> "An item on this order has no till mapping yet.";
+            case "ORDER_EMPTY" -> "The order has no lines to send.";
+            case "ORDER_UNKNOWN" -> "The order behind this export could not be read.";
+            case "BINDING_CHANGED" -> "The till this order was sent through no longer accepts exports.";
+            case "NO_ADAPTER" -> "No till integration is registered for this branch's provider.";
+            case "EXPORT_NOT_SENDABLE", "EXPORT_UNKNOWN", "EXPORT_CLAIMED_ELSEWHERE", "EXPORT_NOT_UNCERTAIN" ->
+                "The export is not in a state this action can act on.";
+            default -> "The till reported a problem exporting this order.";
+        };
     }
 
     private boolean posCapable(UUID tenantId, OrderDirectory.OrderSummary order) {
@@ -190,12 +243,15 @@ public class OrderPosExportController {
     /**
      * One order's export picture, as the console sees it.
      *
-     * @param posCapable whether the location's own POS binding declares
-     *                   {@code ORDER_EXPORT} at all (ADR 0011). False
-     *                   suppresses the whole affordance -- there is nothing
-     *                   for the console to show or push
-     * @param export     null when {@code posCapable} is false, or when no
-     *                   export row has opened yet for this order
+     * @param posCapable whether the location's own POS binding currently
+     *                   declares {@code ORDER_EXPORT} at all (ADR 0011).
+     *                   Gates only the push/retry affordance -- {@code export}
+     *                   is read and returned regardless, so a real, unsettled
+     *                   export never silently disappears (and the &sect;3.11
+     *                   AMEND interlock never silently disarms) just because
+     *                   the binding changed
+     * @param export     null only when no export row has opened yet for this
+     *                   order
      */
     public record OrderPosExportResponse(
             boolean posCapable, @Nullable ExportView export) {}
@@ -213,6 +269,11 @@ public class OrderPosExportController {
      *                         ADR 0012 mapping gap) -- never a reason to say
      *                         "order failed": the order is real, its kitchen
      *                         copy is what did not arrive
+     * @param lastError        a platform-authored sentence keyed off {@code
+     *                         lastErrorCode} (ADR 0029) -- never the
+     *                         provider's own text, which has been observed to
+     *                         echo request content, including a customer's
+     *                         address, back at the caller
      */
     public record ExportView(
             UUID exportId,
@@ -240,7 +301,7 @@ public class OrderPosExportController {
                     detail.firstSentAt(),
                     detail.settledAt(),
                     detail.lastErrorCode(),
-                    detail.lastError(),
+                    safeErrorMessage(detail.lastErrorCode()),
                     detail.resolutionKind(),
                     detail.resolutionReason(),
                     detail.resolvedAt());
@@ -256,6 +317,9 @@ public class OrderPosExportController {
      * @param status the {@code ProviderOutcome.Status} name: {@code SUCCESS},
      *               {@code REJECTED}, {@code RETRYABLE} or {@code UNCERTAIN}
      * @param state  the export's {@link ExportState} after this call
+     * @param detail a platform-authored sentence keyed off {@code errorCode}
+     *               (ADR 0029) -- never the provider's own text; see {@link
+     *               ExportView#lastError} for why
      */
     public record PushResultResponse(
             String status,

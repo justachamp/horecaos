@@ -45438,7 +45438,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/pos-export" : {
       "get" : {
-        "description" : "`posCapable` is false when the location's primary POS binding does not declare ORDER_EXPORT (ADR 0011) -- the console suppresses the whole affordance in that case, and `export` is always null alongside it. `export` is otherwise null for an order that has not yet opened an export row (not yet confirmed, or confirmed too recently for the trigger to have run) -- not an error.",
+        "description" : "`export` is read independently of `posCapable`: a location's binding can stop declaring ORDER_EXPORT (ADR 0011) after an order already has a real, unsettled export row, and the &sect;3.11 AMEND interlock has to keep seeing that row -- and its `permitsAmendment` signal -- regardless. `posCapable` gates only the push/retry affordance; `export` is null for an order that has not yet opened an export row at all (not yet confirmed, or confirmed too recently for the trigger to have run) -- not an error.",
         "operationId" : "forOrder_2",
         "parameters" : [ {
           "in" : "path",

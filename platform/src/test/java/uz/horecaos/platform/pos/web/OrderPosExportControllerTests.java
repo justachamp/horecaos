@@ -22,8 +22,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
@@ -79,6 +82,8 @@ class OrderPosExportControllerTests {
     private FakePosAdapter adapter;
     private StubProviderInstallationLookup installations;
     private OrderPosExportController controller;
+    private PosOrderExportService exportService;
+    private JdbcPosExportStore exportStore;
 
     @BeforeAll
     static void startDatabase() {
@@ -107,9 +112,10 @@ class OrderPosExportControllerTests {
         installations = new StubProviderInstallationLookup();
         insertFixture();
 
-        JdbcPosExportStore exportStore = new JdbcPosExportStore(jdbc);
+        exportStore = new JdbcPosExportStore(jdbc);
         var json = JsonMapper.builder().build();
-        PosOrderExportService exportService = new PosOrderExportService(
+        TransactionTemplate unitOfWork = new TransactionTemplate(new DataSourceTransactionManager(db.dataSource()));
+        exportService = new PosOrderExportService(
                 new PosAdapterRegistry(List.of(adapter)),
                 installations,
                 new StubProviderEntityMappingLookup(),
@@ -119,7 +125,8 @@ class OrderPosExportControllerTests {
                 new StubPosOrderSource(),
                 (tenantId, brandId, priceableIds) -> Map.of(),
                 event -> {},
-                clock);
+                clock,
+                unitOfWork);
 
         controller = new OrderPosExportController(
                 new StubOrderDirectory(),
@@ -186,6 +193,68 @@ class OrderPosExportControllerTests {
         assertThat(export.permitsAmendment())
                 .as("REJECTED is one of the states ExportState#permitsAmendment names as settled")
                 .isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "a real, unsettled export survives the binding losing ORDER_EXPORT -- the §3.11 AMEND interlock cannot silently disarm")
+    void aRealExportSurvivesTheBindingLosingOrderExportCapability() {
+        UUID orderId = insertConfirmedOrder("A-3010");
+        // A real ticket reached the till while the binding still declared
+        // ORDER_EXPORT.
+        controller.push(TENANT, orderId, new OrderPosExportController.PushRequest("first push"));
+
+        // A tenant admin reconfigures or removes the location's POS binding --
+        // an ordinary, unrelated admin action that has nothing to do with
+        // whether this specific order's own export is settled.
+        installations.declaresOrderExport = false;
+
+        var response =
+                Objects.requireNonNull(controller.forOrder(TENANT, orderId).getBody());
+
+        assertThat(response.posCapable())
+                .as("the push/retry affordance is correctly suppressed")
+                .isFalse();
+        var export = Objects.requireNonNull(response.export());
+        assertThat(export.state()).isEqualTo("ACCEPTED");
+        assertThat(export.permitsAmendment())
+                .as("ACCEPTED does not permit amendment -- the interlock must keep seeing this real "
+                        + "export rather than silently disappearing because posCapable went false")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("neither the read nor the push response ever carries the provider's raw error text (ADR 0029)")
+    void neitherResponseCarriesTheProvidersRawText() {
+        UUID orderId = insertConfirmedOrder("A-3011");
+        // A Clopos error body has been observed to echo request content back,
+        // including a customer's address (CloposEnvelope#trim's own comment).
+        // "CLOPOS_REFUSED" is not one of the codes this controller maps to a
+        // fixed sentence via a more specific case, so it also proves the
+        // default branch never leaks the raw text.
+        String piiShapedDetail = "customer 90 Chilonzor tumani, 12-uy, Tashkent refused delivery";
+        adapter.failNextExportWith(ProviderOutcome.rejected("CLOPOS_REFUSED", piiShapedDetail));
+
+        var pushResult = Objects.requireNonNull(controller
+                .push(TENANT, orderId, new OrderPosExportController.PushRequest("Operator retry"))
+                .getBody());
+        assertThat(pushResult.detail())
+                .as("the push response carries a platform-authored message, not the provider's text")
+                .isNotNull()
+                .doesNotContain("Chilonzor")
+                .doesNotContain(piiShapedDetail);
+
+        var readResult =
+                Objects.requireNonNull(controller.forOrder(TENANT, orderId).getBody());
+        var export = Objects.requireNonNull(readResult.export());
+        assertThat(export.lastError())
+                .as("the read response carries a platform-authored message, not the provider's text")
+                .isNotNull()
+                .doesNotContain("Chilonzor")
+                .doesNotContain(piiShapedDetail);
+        // The diagnostic code itself is not PII and is still exactly what the
+        // provider (via CloposEnvelope) returned.
+        assertThat(export.lastErrorCode()).isEqualTo("CLOPOS_REFUSED");
     }
 
     // ------------------------------------------------------------------ push
@@ -291,6 +360,57 @@ class OrderPosExportControllerTests {
                     assertThat(apiException.properties()).containsEntry("reason", "POS_NOT_CAPABLE");
                 });
         assertThat(adapter.sideEffectCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("the export's settled state and its pos.export_push_requested audit fact commit or roll back "
+            + "together (ADR 0027)")
+    void aFailedAuditWriteRollsBackTheSettledStateWithIt() {
+        UUID orderId = insertConfirmedOrder("A-3012");
+
+        AuditRecorder failingAudit = fact -> {
+            throw new IllegalStateException("audit sink is unavailable");
+        };
+        OrderPosExportController withFailingAudit = new OrderPosExportController(
+                new StubOrderDirectory(),
+                installations,
+                exportService,
+                exportStore,
+                failingAudit,
+                () -> new AuthenticatedActor("operator-1", Set.of(), Map.of()),
+                clock);
+
+        assertThatThrownBy(() ->
+                        withFailingAudit.push(TENANT, orderId, new OrderPosExportController.PushRequest("first push")))
+                .isInstanceOf(IllegalStateException.class);
+        UUID exportId = exportIdOf(orderId);
+
+        // recordAttempt/settle ran inside the same PosOrderExportService
+        // transaction as the audit write that then threw, so both rolled
+        // back: the export must still show the claim (SENT, attempt 1) that
+        // committed on its own before the provider call, but nothing the
+        // post-call write would have added -- proving the state change and
+        // its audit fact are not two independent writes.
+        var row = jdbc.sql("""
+                SELECT state, attempt_count, external_order_id
+                  FROM integration.pos_order_exports
+                 WHERE id = :id
+                """).param("id", exportId).query().singleRow();
+        assertThat(row.get("state"))
+                .as("settle() rolled back with the audit write -- the export never reached ACCEPTED")
+                .isEqualTo("SENT");
+        assertThat(row.get("external_order_id")).isNull();
+        assertThat(jdbc.sql("SELECT count(*) FROM integration.pos_export_attempts WHERE export_id = :id")
+                        .param("id", exportId)
+                        .query(Integer.class)
+                        .single())
+                .as("recordAttempt() rolled back too")
+                .isZero();
+        assertThat(jdbc.sql("""
+                        SELECT count(*) FROM audit.audit_events
+                         WHERE action_code = 'pos.export_push_requested' AND target_id = :id
+                        """).param("id", exportId).query(Integer.class).single())
+                .isZero();
     }
 
     // ------------------------------------------------------------------ fixture
