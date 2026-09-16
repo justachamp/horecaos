@@ -598,17 +598,16 @@ SMS gateway bound, so its env file additionally sets
 `production` profile stays too) and populates
 `HORECAOS_VERIFICATION_PRESET_PHONE`/`HORECAOS_VERIFICATION_PRESET_CODE`, so
 that one storefront test number gets a fixed six-digit code and every other
-number still needs a real transport. This is a second, non-`local` path that
-intentionally creates a functioning preset-OTP customer, gated by
-`HORECAOS_ENVIRONMENT` rather than by the Spring profile alone:
-`PresetVerificationCodeSource` refuses to even construct its bean when
-`HORECAOS_ENVIRONMENT` reads `production`, so this host must also set
-`HORECAOS_ENVIRONMENT` to a non-`production` segment (for example `preprod`)
-before any of it works. See
+number still needs a real transport. `HORECAOS_ENVIRONMENT` stays at its
+`production` default on this host too — pre-production's OpenBao and
+data-encryption keys were provisioned under that same segment, not one of its
+own, so it is not a variable this feature touches. The `preprod` Spring
+profile is the only switch: `PresetVerificationCodeSource` refuses to even
+construct its bean under any profile set that lacks it. See
 [`deploy/README.md`](../../../deploy/README.md)'s pre-production paragraph and
 [`deploy/env.template`](../../../deploy/env.template)'s "Pre-production only"
-section for the exact variables, the full four-lock explanation, and why the
-Spring profile alone is never trusted to prove a host is not real production.
+section for the exact variables, the full three-lock explanation, and why
+`HORECAOS_ENVIRONMENT` is deliberately not one of them.
 
 **Check:**
 
@@ -632,8 +631,8 @@ be wrong is `production,preprod` on a host meant to be real production, or
 bare `production` on the pre-production host (the storefront test customer
 would then get no preset and the end-to-end check in section 7 would have no
 way to sign in without a real SMS gateway). If the output does not match the
-host you are on, check `HORECAOS_SPRING_PROFILES` and `HORECAOS_ENVIRONMENT`
-in this host's env file before assuming the deploy itself is broken.
+host you are on, check `HORECAOS_SPRING_PROFILES` in this host's env file
+before assuming the deploy itself is broken.
 
 ---
 

@@ -34,12 +34,16 @@ import org.springframework.stereotype.Component;
  * by design (its own SMS gateway is unbound, and the preset is how its storefront
  * customer journey is proven end to end), so a profile set that contains
  * {@code preprod} is permitted regardless of what else is active — including
- * {@code production} beside it. That is not a gap: {@link PresetVerificationCodeSource}'s
- * own constructor carries the guard that matters for exactly this combination,
- * refusing to build the bean at all when {@code horecaos.environment} says the
- * real production environment. This class only ever sees Spring profiles, which
- * is a coarser signal a deploy-time typo can satisfy by accident; that is why the
- * finer one lives on the bean itself rather than here.
+ * {@code production} beside it. That is not a gap: {@code preprod} is an
+ * operator-set, per-host Spring profile that the real production deployment never
+ * carries — nothing in {@code deploy/compose.production.yml} adds it by default,
+ * and putting it in {@code SPRING_PROFILES_ACTIVE} is a deliberate action on one
+ * host's own env file, not a value that travels with the image. This class
+ * deliberately does not also check {@code horecaos.environment}: that property is
+ * the OpenBao/data-encryption-key secret namespace, and the pre-production host
+ * legitimately shares the real production segment there (see
+ * {@link PresetVerificationCodeSource}'s class doc), so it cannot tell the two
+ * hosts apart and is not a signal this guard — or the bean it guards — relies on.
  */
 @Component
 public class PresetVerificationCodeGuard implements ApplicationRunner {

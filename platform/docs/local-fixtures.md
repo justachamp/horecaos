@@ -101,10 +101,13 @@ and [ADR 0051](adr/built/0051-customer-session-authentication.md).
 local profile or the pre-production host's `preprod` profile, and
 `PresetVerificationCodeGuard` refuses to *start* any other profile that has
 either property set. Pre-production is a deliberate, narrower exception, not a
-gap: `PresetVerificationCodeSource`'s own constructor also refuses to build the
-bean when `HORECAOS_ENVIRONMENT` says the real `production` segment, so a
-`preprod` Spring profile alone can never turn this on for the actual
-production deployment. See the "Profiles" section of
+gap: `preprod` is an operator-set, per-host Spring profile that the real
+production deployment never carries by default, so a deploy-time typo cannot
+turn this on for the actual production deployment by accident. `HORECAOS_ENVIRONMENT`
+plays no part in that check — it names the OpenBao/data-encryption-key
+namespace, not a deployment label, and pre-production legitimately shares
+real production's segment there (see `PresetVerificationCodeSource`'s class
+doc for why). See the "Profiles" section of
 [the production runbook](runbooks/production-setup.md) for exactly which host
 sets what. A fixed one-time code reaching real production would be a complete
 authentication bypass, so the failure mode there is a container that will not

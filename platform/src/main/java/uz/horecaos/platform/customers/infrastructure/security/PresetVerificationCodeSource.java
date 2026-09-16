@@ -19,7 +19,7 @@ import uz.horecaos.platform.customers.domain.VerificationCode;
  * the whole customer journey exercisable end to end without either lying about
  * delivery or writing a live credential somewhere it must not be.
  *
- * <p><strong>Four locks, because one is not enough for what this is.</strong> A
+ * <p><strong>Three locks, because one is not enough for what this is.</strong> A
  * fixed one-time code reaching a deployment is not a weakened control — it is a
  * complete authentication bypass for every customer of every tenant, available to
  * anybody who can type a phone number into a form.
@@ -32,7 +32,10 @@ import uz.horecaos.platform.customers.domain.VerificationCode;
  *       profile this class admits, added so the pre-production host — which has
  *       no SMS gateway bound — can still exercise the storefront customer
  *       journey end to end. {@code production} alone is never in this list, on
- *       purpose: nothing about the real production deployment ever adds it.</li>
+ *       purpose: nothing about the real production deployment ever adds it, and
+ *       adding {@code preprod} to a host's {@code SPRING_PROFILES_ACTIVE} is a
+ *       deliberate, per-host operator action in that host's own env file, never
+ *       a value that travels with the image.</li>
  *   <li>It exists only when a number is configured — see
  *       {@link PresetVerificationCodePhoneConfiguredCondition} for why a plain
  *       {@code @ConditionalOnProperty} is not enough — and the only things that
@@ -45,16 +48,27 @@ import uz.horecaos.platform.customers.domain.VerificationCode;
  *       into a real deployment is a container that will not come up, naming the
  *       variable, rather than a platform that quietly accepts one code from
  *       everybody.</li>
- *   <li>This constructor itself refuses to build the bean when
- *       {@value #ENVIRONMENT_PROPERTY} says {@code production} — the OpenBao
- *       path segment and data-encryption salt for the real Sarkor deployment,
- *       a completely different signal from the Spring profile above. The
- *       {@code preprod} Spring profile alone cannot catch the one deploy-time
- *       mistake that matters most: the same image, with {@code preprod} added
- *       to {@code SPRING_PROFILES_ACTIVE} by hand, started against the real
- *       production environment. This lock is what turns that into a startup
- *       failure naming the property instead of a live bypass.</li>
  * </ol>
+ *
+ * <p><strong>{@code horecaos.environment} is deliberately not one of the locks,
+ * even though it names a real production/pre-production distinction elsewhere in
+ * this codebase.</strong> It is not a deployment label; it is the segment every
+ * secret reference, derived key, and Keycloak configuration is namespaced under —
+ * {@code horecaos:${horecaos.environment}:...} secret references (see
+ * {@code application.yml}, {@code SecretsConfiguration}), the data-encryption-key
+ * derivation salt (see {@code DataEncryptionKeyProvider}), and the Keycloak realm
+ * and client configuration (see {@code KeycloakConfiguration},
+ * {@code StaffLoginKeycloakConfiguration}). The pre-production host's OpenBao and
+ * keys were provisioned under the same {@code production} segment as the real
+ * deployment — it has no namespace of its own — so {@code horecaos.environment}
+ * legitimately reads {@code production} there too, and a constructor refusal keyed
+ * on that value would either break every secret lookup on pre-production (if the
+ * segment were renamed to satisfy this class) or never distinguish the two hosts
+ * at all (since both legitimately read {@code production}). The environment name
+ * answers "which secrets does this process read", never "is a fixed one-time code
+ * allowed here"; the {@code preprod} Spring profile above is the only opt-in for
+ * that question, precisely because it is a value the real production deployment
+ * never carries and pre-production sets nowhere else.
  *
  * <p>Every other number on an admitted profile still goes to the random source
  * and still needs a transport, so the preset cannot hide a broken SMS path:
@@ -85,16 +99,6 @@ public class PresetVerificationCodeSource implements VerificationCodeSource {
      */
     private static final String DEFAULT_CODE = "000000";
 
-    /**
-     * The fourth lock's own property. Same spelling every other
-     * {@code @Value("${horecaos.environment:local}")} injection point in this
-     * codebase uses, named here as a constant only because this class's
-     * refusal message needs to quote it.
-     */
-    public static final String ENVIRONMENT_PROPERTY = "horecaos.environment";
-
-    private static final String REAL_PRODUCTION = "production";
-
     private final String presetDestination;
     private final String presetCode;
     private final RandomVerificationCodeSource everybodyElse;
@@ -102,24 +106,11 @@ public class PresetVerificationCodeSource implements VerificationCodeSource {
     public PresetVerificationCodeSource(
             @Value("${" + PHONE_PROPERTY + "}") String presetPhone,
             @Value("${" + CODE_PROPERTY + ":" + DEFAULT_CODE + "}") String presetCode,
-            @Value("${" + ENVIRONMENT_PROPERTY + ":local}") String environment,
             RandomVerificationCodeSource everybodyElse) {
 
-        // The fourth lock, checked before anything else: a preprod Spring
-        // profile does not by itself prove this is not the real production
-        // environment, and this is the one bean where that distinction is
-        // everything.
-        if (REAL_PRODUCTION.equalsIgnoreCase(environment)) {
-            throw new IllegalStateException(ENVIRONMENT_PROPERTY + " is " + REAL_PRODUCTION + ", so " + PHONE_PROPERTY
-                    + " must not be configured here. A fixed one-time code on the real production "
-                    + "environment is a complete authentication bypass for every customer of every "
-                    + "tenant (ADR 0051). Unset " + PHONE_PROPERTY + ", or set " + ENVIRONMENT_PROPERTY
-                    + " to the pre-production segment this host actually is.");
-        }
-
-        // Both refusals below happen at construction too, so a mistyped number
-        // or code is a startup failure naming the property rather than a
-        // sign-in that silently never works.
+        // Both refusals below happen at construction, so a mistyped number or
+        // code is a startup failure naming the property rather than a sign-in
+        // that silently never works.
         this.presetDestination = PhoneNumber.requireDeliverableMobile(presetPhone);
 
         // Blank, not just absent, falls back to the default. @Value's own

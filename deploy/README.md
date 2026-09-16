@@ -71,13 +71,17 @@ adds the `preprod` Spring profile beside the default `production` one, and
 the storefront's one test customer number a fixed one-time code so it can sign
 in with no SMS gateway bound — every other number still needs a real
 transport and gets a real random code. All three are empty by default, which
-is what every real deployment leaves them; `PresetVerificationCodeSource`
-also refuses to even construct itself when `HORECAOS_ENVIRONMENT` says the
-real `production` segment, so a pre-production host must set that variable to
-something else (for example `preprod`) before this works at all — see
-`env.template`'s "Pre-production only" section for the exact variables and
-why the Spring profile alone is not trusted to prove a host is not real
-production.
+is what every real deployment leaves them; the `preprod` Spring profile is the
+only switch that matters here. `HORECAOS_ENVIRONMENT` stays exactly what it is
+everywhere else — the OpenBao/data-encryption-key segment this host's secrets
+were actually provisioned under. On the pre-production host that is
+`production`, the same as the real deployment, because pre-production shares
+real production's secret namespace rather than having one of its own.
+`PresetVerificationCodeSource` deliberately does not consult
+`HORECAOS_ENVIRONMENT`: that property cannot tell the two hosts apart, so it is
+not the signal — see `env.template`'s "Pre-production only" section for the
+exact variables and `PresetVerificationCodeSource`'s class doc for why the
+Spring profile is the only opt-in.
 
 ## Relationship to `platform/compose.production.yaml` (read this before deploying)
 

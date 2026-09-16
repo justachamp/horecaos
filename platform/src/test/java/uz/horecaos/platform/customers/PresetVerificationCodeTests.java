@@ -93,7 +93,7 @@ class PresetVerificationCodeTests {
         // own "${...:000000}" annotation default only fires on absent, so this
         // constructor has to treat blank the same way itself, or the default the
         // owner was promised would instead be a startup failure.
-        Code code = new PresetVerificationCodeSource(PRESET, "", "local", random).codeFor(PRESET);
+        Code code = new PresetVerificationCodeSource(PRESET, "", random).codeFor(PRESET);
 
         assertThat(code.value()).isEqualTo("000000");
         assertThat(code.requiresDelivery()).isFalse();
@@ -106,36 +106,13 @@ class PresetVerificationCodeTests {
     }
 
     @Test
-    @DisplayName("the fourth lock: construction itself refuses when horecaos.environment is the real production")
-    void constructionRefusesTheRealProductionEnvironment() {
-        assertThatThrownBy(() -> new PresetVerificationCodeSource(PRESET, "424242", "production", random))
-                .as("a preprod Spring profile is not, by itself, proof this is not the real "
-                        + "production environment — this is the lock for exactly that gap")
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining(PresetVerificationCodeSource.PHONE_PROPERTY)
-                .hasMessageContaining(PresetVerificationCodeSource.ENVIRONMENT_PROPERTY)
-                .hasMessageContaining("production");
-    }
-
-    @Test
-    @DisplayName("any environment other than the real production is fine")
-    void constructionAllowsEveryOtherEnvironment() {
-        for (String environment : new String[] {"local", "preprod", "staging", "test"}) {
-            assertThat(new PresetVerificationCodeSource(PRESET, "424242", environment, random)
-                            .codeFor(PRESET)
-                            .value())
-                    .isEqualTo("424242");
-        }
-    }
-
-    @Test
     @DisplayName("the preset source cannot exist outside a local or preprod profile")
     void theSourceIsProfileBound() {
         org.springframework.context.annotation.Profile profile =
                 PresetVerificationCodeSource.class.getAnnotation(org.springframework.context.annotation.Profile.class);
 
         assertThat(profile)
-                .as("the first of the four locks. Without it the guard is the only one, "
+                .as("the first of the three locks. Without it the guard is the only one, "
                         + "and a guard can be disabled by removing a bean")
                 .isNotNull();
         assertThat(profile.value()).containsExactlyInAnyOrder("local", "test", "default", "preprod");
@@ -244,9 +221,11 @@ class PresetVerificationCodeTests {
         // deploy/compose.production.yml sets SPRING_PROFILES_ACTIVE to exactly
         // this on the pre-production host: production plus preprod, never
         // preprod alone. This is the guard's whole reason to know about preprod
-        // at all — PresetVerificationCodeSource's own constructor carries the
-        // finer check (horecaos.environment) that still refuses the one deploy
-        // this profile combination cannot rule out on its own.
+        // at all — and it is also the real pre-production shape even though
+        // horecaos.environment reads "production" there too (that property is
+        // the secret namespace, not a deployment label — see
+        // PresetVerificationCodeSource's class doc), which is exactly why this
+        // guard's profile check, not that property, is what has to admit it.
         MockEnvironment preprod = new MockEnvironment();
         preprod.setActiveProfiles("production", "preprod");
         preprod.setProperty(PresetVerificationCodeSource.PHONE_PROPERTY, PRESET);
@@ -257,7 +236,7 @@ class PresetVerificationCodeTests {
     // ------------------------------------------------------------------ helpers
 
     private PresetVerificationCodeSource source(String phone, String code) {
-        return new PresetVerificationCodeSource(phone, code, "local", random);
+        return new PresetVerificationCodeSource(phone, code, random);
     }
 
     private static void verify(org.springframework.core.env.Environment environment) {
