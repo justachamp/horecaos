@@ -22,11 +22,16 @@ jobs:
         id: filter
         with:
           filters: |
+            # A change to this workflow re-runs every gate: on 2026-09-16 a
+            # workflow-only commit skipped Build and test yet still published
+            # images, so an untested tree reached the registry under a fresh tag.
             platform:
               - 'platform/**'
+              - '.github/workflows/**'
             frontend:
               - 'frontend/**'
               - 'mobile/**'
+              - '.github/workflows/**'
 
   # Deterministic repository rules. No JVM, no containers — this fails in under a
   # minute, so a policy violation never waits behind a full Maven build.
