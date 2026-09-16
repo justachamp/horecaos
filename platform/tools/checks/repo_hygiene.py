@@ -534,10 +534,65 @@ def check_deploy_environment_segment() -> None:
            "Use @ENVIRONMENT@ in a policy, ${ENVIRONMENT} in a script, (env \"HORECAOS_ENVIRONMENT\") in the agent.")
 
 
+def check_runbook_documents_preprod_profile() -> None:
+    """Docs: the production runbook's Profiles section matches compose.production.yml.
+
+    2026-09-16: `PresetVerificationCodeSource` started admitting a `preprod`
+    Spring profile so the pre-production host
+    (`HORECAOS_SPRING_PROFILES=production,preprod`) can exercise the storefront
+    login journey with no SMS gateway bound, and `deploy/compose.production.yml`
+    stopped hardcoding `SPRING_PROFILES_ACTIVE: production` to make that
+    possible. `docs/runbooks/production-setup.md`'s "Profiles" section was not
+    part of that change and kept asserting a single literal value "and nothing
+    else" with a check command whose documented expected output never mentions
+    `preprod` -- exactly the state that lets an operator on the pre-production
+    host "fix" a correctly configured deploy by stripping the profile that
+    makes the preset OTP path work at all. This ties the runbook's claim to the
+    compose file's actual `SPRING_PROFILES_ACTIVE` expression so the two cannot
+    drift apart silently again.
+    """
+    compose = ROOT.parent / "deploy" / "compose.production.yml"
+    runbook = ROOT / "docs" / "runbooks" / "production-setup.md"
+    problems: list[str] = []
+
+    match = re.search(r"SPRING_PROFILES_ACTIVE:\s*(\S+)", compose.read_text())
+    if match is None:
+        problems.append(f"{compose.relative_to(ROOT.parent)} has no SPRING_PROFILES_ACTIVE line "
+                         "to check the runbook against")
+    else:
+        value_expr = match.group(1)
+        parameterized = "HORECAOS_SPRING_PROFILES" in value_expr
+        runbook_text = runbook.read_text()
+        if parameterized:
+            required = ["HORECAOS_SPRING_PROFILES", "preprod", "production,preprod"]
+            missing = [t for t in required if t not in runbook_text]
+            if missing:
+                problems.append(
+                    f"{compose.relative_to(ROOT.parent)} reads SPRING_PROFILES_ACTIVE from "
+                    f"HORECAOS_SPRING_PROFILES ({value_expr}), but {rel(runbook)} never mentions: "
+                    f"{', '.join(missing)}")
+            if "and nothing else" in runbook_text:
+                problems.append(
+                    f"{rel(runbook)} still claims SPRING_PROFILES_ACTIVE is fixed 'and nothing "
+                    f"else', which {compose.relative_to(ROOT.parent)} no longer guarantees")
+        elif "HORECAOS_SPRING_PROFILES" in runbook_text:
+            problems.append(
+                f"{rel(runbook)} documents HORECAOS_SPRING_PROFILES, but "
+                f"{compose.relative_to(ROOT.parent)} no longer reads SPRING_PROFILES_ACTIVE from "
+                f"it (now: {value_expr})")
+
+    result("docs: production runbook's Profiles section matches "
+           "compose.production.yml's SPRING_PROFILES_ACTIVE", problems,
+           "Keep docs/runbooks/production-setup.md's 'Profiles' section in step with "
+           "deploy/compose.production.yml, deploy/README.md, and deploy/env.template's "
+           "'Pre-production only' section.")
+
+
 CHECKS = [
     check_storefront_api_routing,
     check_deploy_copies_match,
     check_deploy_environment_segment,
+    check_runbook_documents_preprod_profile,
     check_unique_versions,
     check_grants,
     check_timestamptz,
