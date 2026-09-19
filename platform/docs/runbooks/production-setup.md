@@ -288,6 +288,22 @@ docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/product
     secret_id_ttl=720h secret_id_num_uses=0 bind_secret_id=true
 ```
 
+**Reloading a policy.** A policy is loaded once here and then only when the
+repository's copy changes (2026-09-16: `horecaos-platform` gained
+`create`/`update` on the tenant-writable `provider_*` categories so the
+write-only secret door of ADR 0065 could store a provider credential; a host
+still running the earlier read-only policy fails every "Connect provider" with
+`SecretWriteFailedException`). Re-run just the `for policy …` loop above with
+the current `deploy/infra/openbao/policies/` copy on the host and the root
+token; OpenBao evaluates a token's policies by name on every request, so the
+running application picks the change up immediately and nothing restarts. To
+see what is loaded before and after:
+
+```bash
+docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
+  exec -e BAO_TOKEN openbao bao policy read horecaos-platform
+```
+
 Generate the four startup credentials inside OpenBao's own container, so no
 human ever sees them and none can be reused, weak, or leaked in a shell
 history:

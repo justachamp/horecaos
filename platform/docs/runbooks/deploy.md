@@ -273,6 +273,16 @@ If `Sealed: true`, that is your answer — go to section 5. If the agent logs
 `permission denied`, the AppRole policy no longer covers the secret path; compare
 `infra/openbao/policies/horecaos-platform.hcl` against what is loaded.
 
+**Settings > Integrations > Connect provider shows "Something went wrong", and
+`platform-app` logs `SecretWriteFailedException: Could not write a secret for
+horecaos:<env>:provider_…`.** The application's AppRole policy that is *loaded*
+in OpenBao lacks `create`/`update` on that provider category — the write-only
+secret door (ADR 0065) writes there, and a policy loaded before the door
+existed, or before a category was added, is read-only. Nothing is wrong with the
+container: reload the policy from the repository with the root token, rendered
+for this host, exactly as in production-setup.md's "Reloading a policy" note.
+The running token picks the new policy up on its next request; no restart.
+
 **`Connection to platform-db:5432 refused` or authentication failure.**
 
 ```bash

@@ -499,8 +499,44 @@ def check_deploy_copies_match() -> None:
             problems.append(f"{init.relative_to(ROOT.parent)} does not grant horecaos_platform_bypass to "
                             "horecaos_app WITH INHERIT FALSE -- TenantRlsSession.bindPlatform "
                             "fails on every fresh volume without it")
-    result("deploy: verbatim copies match, and the bypass grant is in both", problems,
-           f"Copy from {src}/ into deploy/infra/, never the other way round.")
+    # The application's OpenBao policy exists twice as well: deploy/ carries the
+    # @ENVIRONMENT@-rendered copy the runbook and local-smoke.sh load, platform/
+    # infra the literal-production copy bootstrap.sh loads byte-for-byte. Their
+    # comments may differ; their grants may not. Compared as sets of (path,
+    # capabilities) after rendering, because on 2026-09-16 pre-production's
+    # "Connect provider" failed on a policy that had never been given the
+    # `create` the write-only secret door (ADR 0065) needs -- a drift between
+    # the two copies would repeat that on the next host.
+    rendered = ROOT.parent / "deploy" / "infra" / "openbao" / "policies" / "horecaos-platform.hcl"
+    literal = ROOT / "infra" / "openbao" / "policies" / "horecaos-platform.hcl"
+    grants = {}
+    for copy, text in ((rendered, rendered.read_text().replace("@ENVIRONMENT@", "production")),
+                       (literal, literal.read_text())):
+        grants[copy] = {
+            (path, tuple(sorted(re.findall(r'"(\w+)"', caps))))
+            for path, caps in re.findall(r'path\s+"([^"]+)"\s*\{[^}]*?capabilities\s*=\s*\[([^\]]*)\]', text)
+        }
+    if grants[rendered] != grants[literal]:
+        problems.append(f"{literal.relative_to(ROOT.parent)} grants differ from "
+                        f"{rendered.relative_to(ROOT.parent)} rendered for production: "
+                        + "; ".join(sorted(f"{p} {list(c)}" for p, c in grants[rendered] ^ grants[literal])))
+    door = {f"horecaos/data/production/{category}/*" for category in (
+        "provider_pos", "provider_payment", "provider_delivery",
+        "provider_notification", "provider_voice", "provider_marketplace")}
+    for path in sorted(door):
+        caps = {c for p, c in grants[rendered] if p == path}
+        if not any({"create", "update", "read"} <= set(c) for c in caps):
+            problems.append(f"{rendered.relative_to(ROOT.parent)} does not grant create+update+read on {path} "
+                            "-- ADR 0065's secret door cannot store that provider category")
+    for path, caps in grants[rendered]:
+        if {"delete", "list", "sudo", "patch"} & set(caps):
+            problems.append(f"{rendered.relative_to(ROOT.parent)} grants {sorted(caps)} on {path} -- "
+                            "the application's role is create/update/read at most")
+        if path.startswith("horecaos/") and "create" in caps and "/provider_" not in path:
+            problems.append(f"{rendered.relative_to(ROOT.parent)} grants create on {path} -- "
+                            "only the tenant-writable provider categories may be written by the application")
+    result("deploy: verbatim copies match, the bypass grant is in both, and the OpenBao policy twins agree",
+           problems, f"Copy from {src}/ into deploy/infra/, never the other way round.")
 
 
 def check_deploy_environment_segment() -> None:
