@@ -281,6 +281,70 @@ class OperationsProviderIntegrationsEndpointTests {
 
     // ------------------------------------------------------------------ fixtures
 
+    /**
+     * The connect flow's second call, against the catalogue a deployed host really
+     * has. Every other test here installs nothing and seeds its own environment row
+     * pointed at the fake bot, which is how the Telegram endpoint went unapproved
+     * from V0099 to V0374: on pre-production (2026-09-19) the secret door stored the
+     * bot token and this call answered 400 for any code an operator could type.
+     * {@link #setUp()} truncates the catalogue, so the migration's own statement is
+     * replayed from the classpath — the row under test is byte-for-byte the one
+     * Flyway applies, not a copy of it written here.
+     */
+    @Test
+    void aTenantOwnerInstallsATelegramBotAgainstTheEnvironmentTheMigrationApproves() throws Exception {
+        String migration = new String(
+                new org.springframework.core.io.ClassPathResource(
+                                "db/migration/V0374__approve_the_telegram_bot_api_endpoint.sql")
+                        .getInputStream()
+                        .readAllBytes(),
+                UTF_8);
+        jdbc.sql(migration).update();
+
+        assertThat(jdbc.sql("""
+                        SELECT provider_category || '|' || provider_type || '|' || base_url || '|' || egress_allowlist
+                          FROM integration.provider_environments WHERE code = 'telegram-prod'
+                        """).query(String.class).single())
+                .as("TelegramBotApiClient appends /bot<token>/<method>, so the base URL carries neither")
+                .isEqualTo("NOTIFICATION|TELEGRAM_BOT_API|https://api.telegram.org|api.telegram.org");
+
+        MvcResult installed = mvc.perform(post(NEW_INTEGRATIONS)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "operations-install-telegram-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(installRequest("telegram-prod")))
+                .andReturn();
+
+        assertThat(installed.getResponse().getStatus())
+                .as(installed.getResponse().getContentAsString())
+                .isBetween(200, 201);
+        assertThat(jdbc.sql("""
+                        SELECT status || '|' || environment_code FROM integration.installations
+                         WHERE tenant_id = :tenantId AND display_name = 'Storefront sign-in bot'
+                        """).param("tenantId", TENANT).query(String.class).single())
+                .isEqualTo("DRAFT|telegram-prod");
+
+        MvcResult refused = mvc.perform(post(NEW_INTEGRATIONS)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "operations-install-telegram-2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(installRequest("telegram-production")))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus())
+                .as("a code outside the catalogue is still refused: the seed widened the catalogue, not the check")
+                .isEqualTo(400);
+        assertThat(refused.getResponse().getContentAsString()).contains("telegram-production");
+    }
+
+    private static String installRequest(String environmentCode) {
+        return """
+                {"category":"NOTIFICATION","providerType":"TELEGRAM_BOT_API","environmentCode":"%s",
+                 "displayName":"Storefront sign-in bot",
+                 "secretReference":"horecaos:local:provider_notification:tenant-%s:install-test"}
+                """.formatted(environmentCode, TENANT);
+    }
+
     private static String writeRequest(String category, String providerType, String value) {
         return "{\"category\":\"%s\",\"providerType\":\"%s\",\"value\":\"%s\"}"
                 .formatted(category, providerType, value);
