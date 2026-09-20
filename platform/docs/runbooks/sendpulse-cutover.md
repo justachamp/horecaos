@@ -39,8 +39,9 @@ The tenant's `integration.installations` row for this bot already exists,
 the bot token itself — ADR 0058, "the webhook `secret_token` mechanism...
 `setWebhook` registers it, and the adapter verifies the
 `X-Telegram-Bot-Api-Secret-Token` header"). If neither exists yet, this is a
-new bot, not a cutover — provision it the way any other Telegram installation
-is provisioned first.
+new bot, not a cutover — provision it first, following
+[`connect-telegram-bot.md`](connect-telegram-bot.md) end to end (that runbook's
+own step 6 is what writes `webhook_secret_reference` for the first time).
 
 ```bash
 read -rsp 'access token: ' TOKEN; echo
@@ -207,6 +208,19 @@ platform, decides where the next update for this bot goes, and it decides
 based on whichever `setWebhook` call it received most recently — SendPulse's
 or this one. Nothing about this call touches SendPulse's own webhook
 registration; it is simply overwritten.
+
+**The product path exists now** (`connect-telegram-bot.md`'s own step 6,
+**Register webhook**/`POST .../webhook-registration`), and it is simpler than
+the raw `curl` above for ordinary registration — but it also *mints a fresh
+secret token and writes it over `webhook_secret_reference`* on every call.
+This step deliberately avoids that: reusing the secret already on file keeps
+the blast radius of a live cutover to exactly one thing (where Telegram sends
+updates), with nothing else about the row changing, and — as the precondition
+above establishes — a rotated secret is exactly what this bot does not need
+right now. Reach for the console button instead once the cutover itself is
+done and this is an ordinary re-registration (a leaked or mismatched secret,
+a moved deployment); reach for this raw call only inside a cutover like this
+one, where holding the secret fixed is the point.
 
 **Check:**
 

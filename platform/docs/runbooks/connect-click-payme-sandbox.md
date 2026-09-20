@@ -90,13 +90,26 @@ before touching Click or Payme:
 4. **Connect.** The screen writes the token through the door, then calls
    `POST .../integrations` with the reference the door returned. A new row
    appears in "Provider installations", status `DRAFT`.
-5. This is as far as the screen takes an installation on its own — binding it
-   to a brand/location and running the capability-reconciliation preflight
-   still need the underlying API directly (see "What this iteration does not
-   do" below). For a smoke test that the credential itself is good, use the
-   **Rotate credential** button on the new row with the same token again:
-   a `200` with a `botUsername` in the response is Telegram confirming the
-   token live, right there in the UI.
+5. The drawer continues straight into its own second step, **Bind the
+   connected provider**: pick a brand (and, narrower, one of its locations),
+   then **Bind**. Binding no longer needs the underlying API directly — that
+   was true before wave 66's connect-drawer bind step shipped, not now.
+6. Close the drawer, open the new row in "Provider installations", and run
+   **Connection check → Check now** (the installation detail panel's own
+   capability-reconciliation preflight), then, once it reads `SUCCEEDED`,
+   **Bindings → Activate**. These also used to need the underlying API
+   directly; the installation detail panel (ADR 0106 gap-map row `10.8a`)
+   does both from the screen now.
+7. For a smoke test that the credential itself is good before any of that,
+   use the **Rotate credential** button on the new row with the same token
+   again: a `200` with a `botUsername` in the response is Telegram
+   confirming the token live, right there in the UI.
+
+**Provisioning a Telegram bot from scratch has its own full walkthrough.**
+`connect-telegram-bot.md` picks up exactly where this section leaves off —
+Bind → Reconcile → Activate → Register webhook → verify a real storefront
+sign-in — with the endpoint under every step and its own troubleshooting
+section; read it instead of improvising past step 7 above.
 
 ## Connecting a Click sandbox merchant account
 
