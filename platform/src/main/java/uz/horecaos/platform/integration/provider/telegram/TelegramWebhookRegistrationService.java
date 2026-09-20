@@ -187,7 +187,7 @@ public class TelegramWebhookRegistrationService {
         SecretReference webhookReference =
                 door.write(SecretCategory.PROVIDER_NOTIFICATION, "tenant-" + tenantId, SecretValue.of(secretToken));
 
-        String webhookUrl = publicApiOrigin + "/providers/telegram/" + installationId + "/webhook";
+        String webhookUrl = trimTrailingSlash(publicApiOrigin) + "/providers/telegram/" + installationId + "/webhook";
         TelegramCallResult result = bots.setWebhook(
                 new ProviderCall(installation.baseUrl(), botToken.reveal(), null, Duration.ofSeconds(15)),
                 webhookUrl,
@@ -329,6 +329,18 @@ public class TelegramWebhookRegistrationService {
                 ErrorCode.UNPROCESSABLE_STATE,
                 "Telegram requires an https webhook origin; horecaos.public-api-origin is not https and "
                         + "the active profile (" + active + ") is not local/test");
+    }
+
+    /**
+     * Matches the same guard {@code PasswordResetRelay}, {@code
+     * StaffInvitationService}, {@code OwnerInvitationRelay} and {@code
+     * PaymeCheckoutLink} each apply to an injected origin/host before
+     * concatenating a path onto it: an operator-set {@code
+     * horecaos.public-api-origin} with a trailing slash must not become a
+     * double slash in the URL registered with Telegram.
+     */
+    private static String trimTrailingSlash(String origin) {
+        return origin.endsWith("/") ? origin.substring(0, origin.length() - 1) : origin;
     }
 
     private String generateSecretToken() {

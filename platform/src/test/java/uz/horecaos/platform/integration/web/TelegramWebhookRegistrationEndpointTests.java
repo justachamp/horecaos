@@ -101,6 +101,12 @@ class TelegramWebhookRegistrationEndpointTests {
 
         registry.add("horecaos.messaging.outbox.enabled", () -> "false");
         registry.add("spring.kafka.bootstrap-servers", () -> "localhost:59092");
+        // Deliberately carries a trailing slash: an ops typo this class must
+        // not turn into a double-slash webhook URL. Every assertion in this
+        // class that checks the built webhookUrl (below, and in the happy
+        // path test) already expects a single slash, so this doubles as the
+        // regression guard for that guard.
+        registry.add("horecaos.public-api-origin", () -> "http://localhost:8080/");
     }
 
     @Autowired
