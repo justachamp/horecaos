@@ -45,6 +45,8 @@ const CLICK_INSTALLATION: InstallationView = {
   lastSecretRotatedAt: null,
   secretLastUsedAt: null,
   nonSensitiveConfig: null,
+  webhookRegistered: false,
+  webhookRegisteredAt: null,
 };
 
 const CLICK_INSTALLATION_TWO: InstallationView = {
