@@ -5427,6 +5427,16 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.detail.manage': 'Boshqarish',
   'settings.integrations.detail.title': 'Ulanish tafsilotlari',
   'settings.integrations.detail.credential': 'Kirish maʻlumoti',
+  // ADR 0058: Telegram vebhukini roʻyxatdan oʻtkazish — faqat TELEGRAM_BOT_API + ACTIVE.
+  'settings.integrations.detail.webhook.title': 'Telegram vebhuki',
+  'settings.integrations.detail.webhook.registeredAt': '{at} da roʻyxatdan oʻtkazilgan',
+  'settings.integrations.detail.webhook.notRegistered': 'Roʻyxatdan oʻtkazilmagan',
+  'settings.integrations.detail.webhook.notRegisteredWarning':
+    'Vebhuk roʻyxatdan oʻtkazilmaguncha bot xabarlarni va mijozlar kirishini qabul qila olmaydi.',
+  'settings.integrations.detail.webhook.register': 'Vebhukni roʻyxatdan oʻtkazish',
+  'settings.integrations.detail.webhook.reregister': 'Vebhukni qayta roʻyxatdan oʻtkazish',
+  'settings.integrations.detail.webhook.registering': 'Roʻyxatdan oʻtkazilmoqda…',
+  'settings.integrations.detail.webhook.success': 'Vebhuk roʻyxatdan oʻtkazildi.',
   'settings.integrations.detail.reconcile.title': 'Ulanishni tekshirish',
   'settings.integrations.detail.reconcile.action': 'Hozir tekshirish',
   'settings.integrations.detail.reconcile.running': 'Tekshirilmoqda…',

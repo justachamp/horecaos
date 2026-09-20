@@ -5390,6 +5390,16 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.detail.manage': 'Управлять',
   'settings.integrations.detail.title': 'Подключение: подробности',
   'settings.integrations.detail.credential': 'Учётные данные',
+  // ADR 0058: регистрация Telegram-вебхука — только TELEGRAM_BOT_API + ACTIVE.
+  'settings.integrations.detail.webhook.title': 'Вебхук Telegram',
+  'settings.integrations.detail.webhook.registeredAt': 'Зарегистрирован {at}',
+  'settings.integrations.detail.webhook.notRegistered': 'Не зарегистрирован',
+  'settings.integrations.detail.webhook.notRegisteredWarning':
+    'Пока вебхук не зарегистрирован, бот не может получать сообщения и входы клиентов.',
+  'settings.integrations.detail.webhook.register': 'Зарегистрировать вебхук',
+  'settings.integrations.detail.webhook.reregister': 'Перерегистрировать вебхук',
+  'settings.integrations.detail.webhook.registering': 'Регистрация…',
+  'settings.integrations.detail.webhook.success': 'Вебхук зарегистрирован.',
   'settings.integrations.detail.reconcile.title': 'Проверка соединения',
   'settings.integrations.detail.reconcile.action': 'Проверить сейчас',
   'settings.integrations.detail.reconcile.running': 'Проверка…',
