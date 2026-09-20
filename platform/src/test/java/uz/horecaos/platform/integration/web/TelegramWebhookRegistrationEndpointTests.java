@@ -296,6 +296,68 @@ class TelegramWebhookRegistrationEndpointTests {
     }
 
     /**
+     * Telegram has already accepted the new secret and URL by the time the
+     * database write runs; only the local write can still fail (a transient
+     * connection loss, a pool blip). {@code GlobalApiErrorHandler} only
+     * special-cases {@code OptimisticLockingFailureException} and {@code
+     * DataIntegrityViolationException} -- a bare {@code DataAccessException}
+     * (what a real connection failure surfaces as) must still be reported
+     * clearly and logged, not fall through to a silent, unexplained 500. A
+     * trigger stands in for that connection failure: it is scoped to this
+     * test's own private database and dropped again in the {@code finally}.
+     */
+    @Test
+    void aDatabaseWriteFailureAfterTelegramAcceptsIsLoggedAndReportedClearly() throws Exception {
+        jdbc.sql("""
+                CREATE OR REPLACE FUNCTION test_force_webhook_update_failure() RETURNS trigger AS $$
+                BEGIN
+                    RAISE EXCEPTION 'simulated persistence failure for a test';
+                END;
+                $$ LANGUAGE plpgsql
+                """).update();
+        jdbc.sql("""
+                CREATE TRIGGER test_force_webhook_update_failure_trigger
+                BEFORE UPDATE OF webhook_secret_reference ON integration.installations
+                FOR EACH ROW EXECUTE FUNCTION test_force_webhook_update_failure()
+                """).update();
+        try {
+            ListAppender<ILoggingEvent> lines = captureAllLogs();
+            try {
+                MvcResult result = mvc.perform(
+                                post(INTEGRATIONS + "/" + TELEGRAM_INSTALLATION + "/webhook-registration")
+                                        .with(tokenFor(OWNER))
+                                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "register-db-fail-1"))
+                        .andReturn();
+
+                String body = result.getResponse().getContentAsString();
+                assertThat(result.getResponse().getStatus()).as(body).isBetween(400, 599);
+                assertThat(result.getResponse().getContentType())
+                        .as("an ADR 0031 Problem Details response, not a bare unexplained 500")
+                        .isEqualTo("application/problem+json");
+                assertThat(body)
+                        .as("tells the operator Telegram already accepted the new secret")
+                        .containsIgnoringCase("retry");
+
+                assertThat(lines.list)
+                        .as("the desync (Telegram accepted, the platform did not record it) is logged for on-call")
+                        .anyMatch(event -> event.getLevel() == ch.qos.logback.classic.Level.ERROR
+                                && event.getFormattedMessage().contains(TELEGRAM_INSTALLATION.toString()));
+                assertThat(bot.setWebhookCallCount())
+                        .as("Telegram really was called and really did accept before the write failed")
+                        .isEqualTo(1);
+            } finally {
+                releaseAllLogs(lines);
+            }
+        } finally {
+            jdbc.sql("DROP TRIGGER IF EXISTS test_force_webhook_update_failure_trigger "
+                            + "ON integration.installations")
+                    .update();
+            jdbc.sql("DROP FUNCTION IF EXISTS test_force_webhook_update_failure()")
+                    .update();
+        }
+    }
+
+    /**
      * {@code TelegramCallResult.Uncertain} means Telegram's own answer could
      * not be read -- it may or may not have already applied the new secret
      * and URL. Reporting that identically to a confirmed refusal ("Telegram

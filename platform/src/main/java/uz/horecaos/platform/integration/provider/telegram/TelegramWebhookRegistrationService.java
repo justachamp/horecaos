@@ -11,8 +11,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -65,6 +68,8 @@ import uz.horecaos.platform.web.api.ErrorCode;
  */
 @Service
 public class TelegramWebhookRegistrationService {
+
+    private static final Logger log = LoggerFactory.getLogger(TelegramWebhookRegistrationService.class);
 
     /** Duplicated rather than imported, the same reason {@code ProviderInstallationController} does. */
     private static final String TELEGRAM_BOT_API = "TELEGRAM_BOT_API";
@@ -214,48 +219,73 @@ public class TelegramWebhookRegistrationService {
         }
 
         OffsetDateTime registeredAt = OffsetDateTime.now(clock);
-        unitOfWork.executeWithoutResult(ignored -> {
-            int changed = jdbc.sql("""
-                    UPDATE integration.installations
-                       SET webhook_secret_reference = :reference,
-                           version = version + 1,
-                           updated_at = :now,
-                           non_sensitive_config = jsonb_set(
-                               jsonb_set(non_sensitive_config, '{webhookRegisteredAt}',
-                                         to_jsonb(:registeredAt::text), true),
-                               '{webhookUrl}', to_jsonb(:webhookUrl::text), true)
-                     WHERE id = :id AND tenant_id = :tenantId
-                    """)
-                    .param("reference", webhookReference.toString())
-                    .param("now", registeredAt)
-                    .param("registeredAt", registeredAt.toString())
-                    .param("webhookUrl", webhookUrl)
-                    .param("id", installationId)
-                    .param("tenantId", tenantId)
-                    .update();
+        try {
+            unitOfWork.executeWithoutResult(ignored -> {
+                int changed = jdbc.sql("""
+                        UPDATE integration.installations
+                           SET webhook_secret_reference = :reference,
+                               version = version + 1,
+                               updated_at = :now,
+                               non_sensitive_config = jsonb_set(
+                                   jsonb_set(non_sensitive_config, '{webhookRegisteredAt}',
+                                             to_jsonb(:registeredAt::text), true),
+                                   '{webhookUrl}', to_jsonb(:webhookUrl::text), true)
+                         WHERE id = :id AND tenant_id = :tenantId
+                        """)
+                        .param("reference", webhookReference.toString())
+                        .param("now", registeredAt)
+                        .param("registeredAt", registeredAt.toString())
+                        .param("webhookUrl", webhookUrl)
+                        .param("id", installationId)
+                        .param("tenantId", tenantId)
+                        .update();
 
-            if (changed == 0) {
-                // The row this method's own read above just found is gone by
-                // the time of the write -- a retirement racing this call, the
-                // same posture ProviderInstallationController#updateSettings
-                // takes on its own identical race.
-                throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Installation is not available");
-            }
+                if (changed == 0) {
+                    // The row this method's own read above just found is gone by
+                    // the time of the write -- a retirement racing this call, the
+                    // same posture ProviderInstallationController#updateSettings
+                    // takes on its own identical race.
+                    throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Installation is not available");
+                }
 
-            audit.record(AuditFact.of("integration.webhook_registered", AuditClass.SECURITY)
-                    .by(actor)
-                    .at(ResourceScope.tenant(tenantId))
-                    .target("Integration", installationId)
-                    .because("Telegram webhook registered")
-                    // Reference NAME only, per ADR 0028 -- the token itself
-                    // never reaches this class beyond the one door.write()
-                    // and setWebhook() calls above.
-                    .changed(Map.of("webhookSecretReference", webhookReference.toString(), "webhookUrl", webhookUrl))
-                    .usingCapability(Capability.INTEGRATION_INSTALLATION_MANAGE.code())
-                    .correlatedBy(installationId.toString())
-                    .occurredAt(registeredAt.toInstant())
-                    .build());
-        });
+                audit.record(AuditFact.of("integration.webhook_registered", AuditClass.SECURITY)
+                        .by(actor)
+                        .at(ResourceScope.tenant(tenantId))
+                        .target("Integration", installationId)
+                        .because("Telegram webhook registered")
+                        // Reference NAME only, per ADR 0028 -- the token itself
+                        // never reaches this class beyond the one door.write()
+                        // and setWebhook() calls above.
+                        .changed(
+                                Map.of("webhookSecretReference", webhookReference.toString(), "webhookUrl", webhookUrl))
+                        .usingCapability(Capability.INTEGRATION_INSTALLATION_MANAGE.code())
+                        .correlatedBy(installationId.toString())
+                        .occurredAt(registeredAt.toInstant())
+                        .build());
+            });
+        } catch (DataAccessException persistFailure) {
+            // Telegram has already accepted webhookReference by this point
+            // (result is a Success): only the local write failed. Silence
+            // here is exactly the split-brain this class exists to avoid --
+            // the installation now expects a secret the platform never
+            // recorded, and TelegramWebhookController will 403 every real
+            // delivery until someone notices. Logged with the installation
+            // id and the reference NAME only (ADR 0028: never the token
+            // itself), and re-thrown as a clear, ADR-0031-shaped failure
+            // that tells the operator to retry, instead of falling through
+            // to GlobalApiErrorHandler's unhandled-exception default.
+            log.error(
+                    "Telegram accepted the webhook registration for installation {} (reference {}) but "
+                            + "recording it failed; the stored secret is now out of sync with Telegram until "
+                            + "this is retried",
+                    installationId,
+                    webhookReference,
+                    persistFailure);
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "Telegram accepted the new webhook but the platform failed to record it. Retry "
+                            + "registration to resynchronize the stored secret with Telegram's.");
+        }
 
         return new Registration(installationId, webhookUrl, registeredAt.toInstant(), installation.botUsername());
     }
