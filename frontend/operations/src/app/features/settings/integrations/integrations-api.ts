@@ -301,6 +301,25 @@ export class IntegrationsApi {
   }
 
   /**
+   * ADR 0058: (re)registers a TELEGRAM_BOT_API installation's webhook with
+   * Telegram. No request body — the server mints a fresh webhook secret,
+   * writes it through the ADR 0065 door, and calls Telegram's `setWebhook`
+   * itself. Re-running rotates the webhook secret, which is the supported
+   * recovery from a mismatched or leaked one.
+   */
+  async registerWebhook(
+    scope: LocationScope,
+    installationId: string,
+  ): Promise<WebhookRegistrationView> {
+    return firstValueFrom(
+      this.api.post<null, WebhookRegistrationView>(
+        settingsPaths.integrationInstallationWebhookRegistration(scope, installationId),
+        command(null),
+      ),
+    );
+  }
+
+  /**
    * Binds a just-connected installation to a brand or, narrower, one of its
    * locations (ADR 0026). Wired into the connect drawer's own second step in
    * wave 66 — the only caller of this endpoint anywhere in this app, because
@@ -388,6 +407,15 @@ export interface InstallationView {
   readonly secretLastUsedAt: string | null;
   /** ADR 0106: raw jsonb text, e.g. `{"gtmContainerId":"GTM-ABC1234"}`. Never a secret. */
   readonly nonSensitiveConfig: string | null;
+  /**
+   * ADR 0058: `webhook_secret_reference IS NOT NULL` — whether {@link
+   * IntegrationsApi.registerWebhook} has ever succeeded for this
+   * installation. Additive: every provider other than `TELEGRAM_BOT_API`
+   * simply reads `false`.
+   */
+  readonly webhookRegistered: boolean;
+  /** When the webhook was last (re)registered, or null if it never has been. */
+  readonly webhookRegisteredAt: string | null;
 }
 
 /** Mirrors uz.horecaos.platform.payments.web.MerchantBindingController.MerchantBindingView. */
@@ -460,6 +488,19 @@ export interface RotateSecretResponse {
   readonly installationId: string;
   readonly oldSecretReference: string;
   readonly newSecretReference: string;
+  readonly botUsername: string | null;
+}
+
+/**
+ * Mirrors ...ProviderInstallationController.WebhookRegistrationResponse. Never
+ * a secret — `botUsername` is null when this installation has never resolved
+ * one; a webhook can register successfully before anything has ever called
+ * Telegram's `getMe`.
+ */
+export interface WebhookRegistrationView {
+  readonly installationId: string;
+  readonly webhookUrl: string;
+  readonly registeredAt: string;
   readonly botUsername: string | null;
 }
 
