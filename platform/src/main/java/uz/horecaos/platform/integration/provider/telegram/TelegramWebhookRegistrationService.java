@@ -185,6 +185,25 @@ public class TelegramWebhookRegistrationService {
                 secretToken,
                 ALLOWED_UPDATES);
 
+        if (result instanceof TelegramCallResult.Uncertain uncertain) {
+            // Not a confirmed refusal: Telegram's own answer could not be
+            // read (per TelegramCallResult.Uncertain's own doc), so Telegram
+            // may already have applied the new secret and URL even though
+            // this call never saw an "ok" answer. The UPDATE below never
+            // runs either way, so the database stays exactly as it was --
+            // but saying "rejected" here would send an operator chasing the
+            // wrong cause (a bad bot token or URL) instead of the right one.
+            // setWebhook is unconditionally idempotent per bot (ADR 0059),
+            // so retrying resolves the ambiguity regardless of what Telegram
+            // actually did with this call.
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "Telegram's answer to setWebhook could not be confirmed (" + describe(uncertain) + "). "
+                            + "Telegram may have already applied the new webhook secret even though this call "
+                            + "did not confirm it -- retry registration to resynchronize; this is not a "
+                            + "rejection of the bot token or URL.");
+        }
+
         if (!(result instanceof TelegramCallResult.Success)) {
             // Nothing in the database changes: the UPDATE below never runs.
             // The freshly-written secret above stays an orphaned, unreferenced

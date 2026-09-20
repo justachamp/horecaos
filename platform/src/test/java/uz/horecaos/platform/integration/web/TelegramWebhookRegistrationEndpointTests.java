@@ -295,6 +295,49 @@ class TelegramWebhookRegistrationEndpointTests {
                 .isZero();
     }
 
+    /**
+     * {@code TelegramCallResult.Uncertain} means Telegram's own answer could
+     * not be read -- it may or may not have already applied the new secret
+     * and URL. Reporting that identically to a confirmed refusal ("Telegram
+     * rejected...") sends an operator chasing the wrong cause (a bad bot
+     * token or URL) instead of the right one: retry, because Telegram's own
+     * setWebhook is unconditionally idempotent per bot and a retry
+     * resynchronizes whichever state it is actually in.
+     */
+    @Test
+    void aTelegramUncertainOutcomeIsNotReportedAsARejectionAndLeavesTheDatabaseUnwritten() throws Exception {
+        bot.nextSetWebhookAnswersUnreadably();
+
+        MvcResult result = mvc.perform(post(INTEGRATIONS + "/" + TELEGRAM_INSTALLATION + "/webhook-registration")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "register-uncertain-1"))
+                .andReturn();
+
+        String body = result.getResponse().getContentAsString();
+        assertThat(result.getResponse().getStatus()).as(body).isBetween(400, 599);
+        assertThat(body)
+                .as("an unreadable Telegram answer is not a confirmed rejection")
+                .doesNotContain("rejected");
+        assertThat(body)
+                .as("the operator is told the right remediation: retry, not fix the bot token/URL")
+                .containsIgnoringCase("retry");
+
+        // Telegram genuinely received this request (the fake recorded it,
+        // exactly like a real acceptance would) even though its answer could
+        // not be read -- so the database must stay exactly as it was rather
+        // than committing to a reference no one confirmed Telegram accepted.
+        assertThat(bot.lastWebhookSecretToken()).isNotNull();
+        String storedReference = jdbc.sql(
+                        "SELECT webhook_secret_reference FROM integration.installations WHERE id = :id")
+                .param("id", TELEGRAM_INSTALLATION)
+                .query(String.class)
+                .optional()
+                .orElse(null);
+        assertThat(storedReference)
+                .as("nothing in the row changes while the outcome is unconfirmed")
+                .isNull();
+    }
+
     // ------------------------------------------------------------------ (d) re-register rotates
 
     @Test
