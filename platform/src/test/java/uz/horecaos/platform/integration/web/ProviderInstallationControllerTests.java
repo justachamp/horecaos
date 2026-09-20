@@ -78,6 +78,17 @@ class ProviderInstallationControllerTests {
         throw new UnsupportedOperationException("not exercised by these tests");
     };
 
+    /**
+     * Neither test in this class reaches the webhook-registration endpoint. A
+     * concrete class, not an interface like the collaborators above, so there
+     * is no throwing stand-in to build — null is safe here because {@link
+     * ProviderInstallationController} never dereferences it outside {@code
+     * registerWebhook}.
+     */
+    @SuppressWarnings("NullAway")
+    private static final uz.horecaos.platform.integration.provider.telegram.TelegramWebhookRegistrationService
+            UNUSED_WEBHOOK_REGISTRATION = null;
+
     private static TestDatabase.Handle db;
 
     private JdbcClient jdbc;
@@ -124,7 +135,9 @@ class ProviderInstallationControllerTests {
                 UNUSED_INSTALLATIONS,
                 UNUSED_SECRETS,
                 new TelegramBotApiClient(new ObjectMapper()),
-                new SecretIngressGateway(UNUSED_WRITER, "test"));
+                new SecretIngressGateway(UNUSED_WRITER, "test"),
+                // Neither test here calls the webhook-registration endpoint.
+                UNUSED_WEBHOOK_REGISTRATION);
     }
 
     @Test

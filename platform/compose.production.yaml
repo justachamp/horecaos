@@ -219,6 +219,12 @@ services:
       HORECAOS_KEYCLOAK_BASE_URL: http://keycloak:8080
       HORECAOS_KEYCLOAK_REALM: horecaos
 
+      # ADR 0058: what TelegramWebhookRegistrationService builds a webhook URL
+      # from. The edge service above already requires this variable set; the
+      # application needs the same public value to hand Telegram a URL that
+      # actually resolves back to this host, over https.
+      HORECAOS_API_ORIGIN: ${HORECAOS_API_ORIGIN:?set the public API origin, for example https://api.horecaos.uz}
+
       HORECAOS_SECRETS_PROVIDER: openbao
       HORECAOS_OPENBAO_URL: http://openbao:8200
       HORECAOS_OPENBAO_MOUNT: horecaos

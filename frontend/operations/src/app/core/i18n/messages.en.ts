@@ -5427,6 +5427,16 @@ export const messagesEn = {
   'settings.integrations.detail.manage': 'Manage',
   'settings.integrations.detail.title': 'Installation details',
   'settings.integrations.detail.credential': 'Credential',
+  // ADR 0058: the Telegram webhook registration action, TELEGRAM_BOT_API + ACTIVE only.
+  'settings.integrations.detail.webhook.title': 'Telegram webhook',
+  'settings.integrations.detail.webhook.registeredAt': 'Registered at {at}',
+  'settings.integrations.detail.webhook.notRegistered': 'Not registered',
+  'settings.integrations.detail.webhook.notRegisteredWarning':
+    'The bot cannot receive messages or customer sign-ins until the webhook is registered.',
+  'settings.integrations.detail.webhook.register': 'Register webhook',
+  'settings.integrations.detail.webhook.reregister': 'Re-register webhook',
+  'settings.integrations.detail.webhook.registering': 'Registering…',
+  'settings.integrations.detail.webhook.success': 'Webhook registered.',
   'settings.integrations.detail.reconcile.title': 'Connection check',
   'settings.integrations.detail.reconcile.action': 'Check now',
   'settings.integrations.detail.reconcile.running': 'Checking…',

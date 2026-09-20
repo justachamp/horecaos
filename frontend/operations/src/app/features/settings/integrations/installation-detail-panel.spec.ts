@@ -4,6 +4,7 @@ import { Observable, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
+import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
 import {
@@ -43,6 +44,8 @@ const TELEGRAM_INSTALLATION: InstallationView = {
   lastSecretRotatedAt: null,
   secretLastUsedAt: null,
   nonSensitiveConfig: null,
+  webhookRegistered: false,
+  webhookRegisteredAt: null,
 };
 
 const CLOPOS_INSTALLATION: InstallationView = {
@@ -105,6 +108,12 @@ class FakeIntegrationsApi {
   readonly revokePartnerApiClient = vi
     .fn()
     .mockResolvedValue({ changed: true, outcome: 'revoked' });
+  readonly registerWebhook = vi.fn().mockResolvedValue({
+    installationId: 'inst-1',
+    webhookUrl: 'https://api.horecaos.uz/providers/telegram/inst-1/webhook',
+    registeredAt: '2026-09-20T10:00:00Z',
+    botUsername: 'horecaos_pilot_bot',
+  });
 }
 
 const EMPTY_UNMAPPED: UnmappedExternalResponse = {
@@ -298,6 +307,103 @@ describe('InstallationDetailPanel', () => {
       'binding-2',
       'Aggregator asked us to pause it',
     );
+  });
+
+  // ---------------------------------------------------------------- Telegram webhook (ADR 0058)
+
+  it('shows the webhook section for an ACTIVE TELEGRAM_BOT_API installation', async () => {
+    await create(TELEGRAM_INSTALLATION);
+
+    expect(host().textContent).toContain('Telegram webhook');
+    expect(host().textContent).toContain('Not registered');
+    expect(buttonWithText('Register webhook')).toBeTruthy();
+  });
+
+  it('hides the webhook section for a non-Telegram installation', async () => {
+    await create(CLOPOS_INSTALLATION);
+
+    expect(host().textContent).not.toContain('Telegram webhook');
+  });
+
+  it('hides the webhook section for a Telegram installation that is not yet ACTIVE', async () => {
+    await create({ ...TELEGRAM_INSTALLATION, id: 'inst-draft', status: 'DRAFT' });
+
+    expect(host().textContent).not.toContain('Telegram webhook');
+  });
+
+  it('warns that the bot cannot receive messages or sign-ins while unregistered', async () => {
+    await create(TELEGRAM_INSTALLATION);
+
+    expect(host().textContent).toContain(
+      'The bot cannot receive messages or customer sign-ins until the webhook is registered.',
+    );
+  });
+
+  it('labels the action "Re-register webhook" and drops the warning once registered', async () => {
+    await create({
+      ...TELEGRAM_INSTALLATION,
+      webhookRegistered: true,
+      webhookRegisteredAt: '2026-09-20T08:00:00Z',
+    });
+
+    expect(buttonWithText('Re-register webhook')).toBeTruthy();
+    expect(host().textContent).toContain('Registered at');
+    expect(host().textContent).not.toContain(
+      'The bot cannot receive messages or customer sign-ins until the webhook is registered.',
+    );
+  });
+
+  it('registers the webhook once when the action is clicked, and shows success', async () => {
+    await create(TELEGRAM_INSTALLATION);
+
+    buttonWithText('Register webhook').click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.registerWebhook).toHaveBeenCalledWith(SCOPE, 'inst-1');
+    expect(api.registerWebhook).toHaveBeenCalledTimes(1);
+    expect(host().textContent).toContain('Webhook registered.');
+  });
+
+  it('tells the parent the installation may be stale once registration succeeds', async () => {
+    await create(TELEGRAM_INSTALLATION);
+    const changed = vi.fn();
+    fixture.componentInstance.changed.subscribe(changed);
+
+    buttonWithText('Register webhook').click();
+    await flushMicrotasks();
+
+    expect(changed).toHaveBeenCalled();
+  });
+
+  it('shows the server-reported problem, not a generic message, when registration fails', async () => {
+    api = new FakeIntegrationsApi();
+    mappingApi = new FakePosMappingApi();
+    api.registerWebhook.mockRejectedValue(
+      new ApiError(ApiErrorCode.RESOURCE_NOT_FOUND, 404, null, null),
+    );
+    await TestBed.configureTestingModule({
+      imports: [InstallationDetailPanel],
+      providers: [
+        { provide: IntegrationsApi, useValue: api },
+        { provide: PosMappingApi, useValue: mappingApi },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(InstallationDetailPanel);
+    fixture.componentRef.setInput('installation', TELEGRAM_INSTALLATION);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    buttonWithText('Register webhook').click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host().textContent).toContain('That no longer exists.');
+    expect(host().textContent).not.toContain('Webhook registered.');
+    expect(host().querySelector('[role="alert"]')).toBeTruthy();
   });
 
   // ---------------------------------------------------------------- capability-reconciliation

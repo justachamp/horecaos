@@ -294,6 +294,13 @@ horecaos:
       security: ${HORECAOS_MAIL_SMTP_SECURITY:STARTTLS}
       username: ${HORECAOS_MAIL_SMTP_USERNAME:}
       password-reference: ${HORECAOS_MAIL_SMTP_PASSWORD_REF:}
+  # ADR 0058: this platform's own public origin, from Telegram's point of view
+  # — what TelegramWebhookRegistrationService builds a bot's webhook URL from
+  # (this origin + /providers/telegram/{installationId}/webhook). Telegram
+  # requires https for a webhook URL, so the service itself refuses to
+  # register anything else unless the active profile is local/test — see
+  # that class's own requireHttpsOriginUnlessLocal.
+  public-api-origin: ${HORECAOS_API_ORIGIN:http://localhost:8080}
   # Where the staff apps are served, for links the platform writes into email.
   # A password reset (ADR 0098) comes back to whichever console asked for it,
   # so both origins are needed, not only operations'.

@@ -141,6 +141,51 @@ const MAPPING_ENTITY_TYPES: readonly MappingEntityType[] = [
               (rotate)="rotateCredential.emit()"
             />
 
+            @if (telegramWebhookApplicable()) {
+              <section class="block">
+                <div class="block-header">
+                  <h3 class="q-body-sm strong">
+                    {{ i18n.t('settings.integrations.detail.webhook.title') }}
+                  </h3>
+                  <button
+                    type="button"
+                    class="q-body-sm secondary"
+                    (click)="onRegisterWebhook()"
+                    [disabled]="registeringWebhook()"
+                  >
+                    {{
+                      registeringWebhook()
+                        ? i18n.t('settings.integrations.detail.webhook.registering')
+                        : installation().webhookRegistered
+                          ? i18n.t('settings.integrations.detail.webhook.reregister')
+                          : i18n.t('settings.integrations.detail.webhook.register')
+                    }}
+                  </button>
+                </div>
+                <p class="q-body-sm">
+                  {{
+                    installation().webhookRegistered
+                      ? i18n.t('settings.integrations.detail.webhook.registeredAt', {
+                          at: webhookRegisteredAtLabel(),
+                        })
+                      : i18n.t('settings.integrations.detail.webhook.notRegistered')
+                  }}
+                </p>
+                @if (!installation().webhookRegistered) {
+                  <p class="q-body-sm warning" role="alert">
+                    {{ i18n.t('settings.integrations.detail.webhook.notRegisteredWarning') }}
+                  </p>
+                }
+                @if (webhookActionError(); as message) {
+                  <p class="q-body-sm error" role="alert">{{ message }}</p>
+                } @else if (webhookActionSuccess()) {
+                  <p class="q-body-sm success" role="status">
+                    {{ i18n.t('settings.integrations.detail.webhook.success') }}
+                  </p>
+                }
+              </section>
+            }
+
             <section class="block">
               <div class="block-header">
                 <h3 class="q-body-sm strong">
@@ -616,6 +661,20 @@ const MAPPING_ENTITY_TYPES: readonly MappingEntityType[] = [
       padding: 8px 12px;
       border-radius: var(--q-radius);
     }
+
+    .warning {
+      color: var(--q-warning-text);
+      background: var(--q-warning-tint);
+      padding: 8px 12px;
+      border-radius: var(--q-radius);
+    }
+
+    .success {
+      color: var(--q-success-text);
+      background: var(--q-success-tint);
+      padding: 8px 12px;
+      border-radius: var(--q-radius);
+    }
   `,
 })
 export class InstallationDetailPanel {
@@ -636,6 +695,21 @@ export class InstallationDetailPanel {
   protected readonly reconciling = signal(false);
   protected readonly reconciliation = signal<ReconciliationView | null>(null);
   protected readonly reconcileError = signal<string | null>(null);
+
+  /**
+   * ADR 0058: only a TELEGRAM_BOT_API installation ever has a webhook to
+   * register, and only once ACTIVE — the same gate
+   * `TelegramWebhookRegistrationService` enforces server-side. Every other
+   * provider type or status shows nothing here.
+   */
+  protected readonly telegramWebhookApplicable = computed(
+    () =>
+      this.installation().providerType === 'TELEGRAM_BOT_API' &&
+      this.installation().status === 'ACTIVE',
+  );
+  protected readonly registeringWebhook = signal(false);
+  protected readonly webhookActionError = signal<string | null>(null);
+  protected readonly webhookActionSuccess = signal(false);
 
   protected readonly bindings = signal<readonly BindingView[]>([]);
   protected readonly bindingsLoading = signal(true);
@@ -724,6 +798,11 @@ export class InstallationDetailPanel {
       : new Date(value).toLocaleString(this.i18n.locale());
   }
 
+  protected webhookRegisteredAtLabel(): string {
+    const value = this.installation().webhookRegisteredAt;
+    return value === null ? '' : new Date(value).toLocaleString(this.i18n.locale());
+  }
+
   protected capabilityEntries(result: ReconciliationView): readonly (readonly [string, string])[] {
     return Object.entries(result.capabilities);
   }
@@ -792,6 +871,34 @@ export class InstallationDetailPanel {
       this.reconcileError.set(this.describeError(failure));
     } finally {
       this.reconciling.set(false);
+    }
+  }
+
+  /**
+   * ADR 0058: registers (or, if {@link InstallationView.webhookRegistered} is
+   * already true, re-registers and rotates) this installation's Telegram
+   * webhook. Success updates only local UI state directly — the persistent
+   * `webhookRegistered`/`webhookRegisteredAt` fields come back through {@link
+   * changed}, the same "the table/panel can be stale, reload it" contract
+   * {@link onReconcile} already uses, so this drawer never has to reach into
+   * `IntegrationsPage`'s own installations list to patch it by hand.
+   */
+  protected async onRegisterWebhook(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    this.registeringWebhook.set(true);
+    this.webhookActionError.set(null);
+    this.webhookActionSuccess.set(false);
+    try {
+      await this.api.registerWebhook(scope, this.installation().id);
+      this.webhookActionSuccess.set(true);
+      this.changed.emit();
+    } catch (failure) {
+      this.webhookActionError.set(this.describeError(failure));
+    } finally {
+      this.registeringWebhook.set(false);
     }
   }
 

@@ -4191,6 +4191,13 @@
           },
           "status" : {
             "type" : "string"
+          },
+          "webhookRegistered" : {
+            "type" : "boolean"
+          },
+          "webhookRegisteredAt" : {
+            "format" : "date-time",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -9620,6 +9627,25 @@
             "type" : "string"
           },
           "tenantName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "WebhookRegistrationResponse" : {
+        "properties" : {
+          "botUsername" : {
+            "type" : "string"
+          },
+          "installationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "registeredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "webhookUrl" : {
             "type" : "string"
           }
         },
@@ -17718,6 +17744,43 @@
           }
         },
         "summary" : "Set whether Clopos still needs a clerk's acceptance",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/webhook-registration" : {
+      "post" : {
+        "description" : "ADR 0058: mints a fresh webhook secret token, writes it through the ADR 0065 door, calls Telegram's setWebhook, and only on that success points the installation at the new reference — nothing in the database changes on a Telegram refusal. TELEGRAM_BOT_API installations only, ACTIVE only. Re-running rotates the webhook secret: the previous token stops working the instant Telegram accepts the new one, which is the supported recovery from a mismatched or leaked secret.",
+        "operationId" : "registerWebhook",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/WebhookRegistrationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register (or re-register) this installation's Telegram webhook",
         "tags" : [ "Provider integrations" ]
       }
     },

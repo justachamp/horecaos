@@ -10,7 +10,19 @@
   full Bot API error taxonomy (429/403/`migrate_to_chat_id`/topic-gone —
   `TelegramBotApiClient`), and an edit-vs-send lifecycle
   (`integration.telegram_tracked_messages`); a platform-wide circuit breaker alerts over
-  the existing ADR 0023 metric mechanism, never Telegram itself.
+  the existing ADR 0023 metric mechanism, never Telegram itself. Webhook
+  *registration* is built too, closing a gap this webhook ingress used to leave
+  open (a deployed, `ACTIVE` installation could accept updates once one had been
+  pointed at it, but nothing in the product itself ever called `setWebhook`):
+  `TelegramWebhookRegistrationService`/`POST .../webhook-registration` mints a
+  fresh webhook secret, writes it through the ADR 0065 door, calls Telegram's
+  own `setWebhook`, and only on that success points
+  `integration.installations.webhook_secret_reference` at the new reference —
+  re-running rotates. `docs/runbooks/connect-telegram-bot.md` walks the console
+  path (Connect → Bind → Reconcile → Activate → Register webhook) end to end;
+  `docs/runbooks/sendpulse-cutover.md`'s own manual `setWebhook` curl is now the
+  deliberate fallback for a cutover that must not rotate the secret already on
+  file, not the only way to register one.
   `OrderNotificationTrigger` fans order-confirmed/rejected out to every subscribed chat
   and `ApprovalDeadlineWarningSweeper` adds the flagship approval-deadline warning at
   the board's own two-minute severity threshold. `FakeTelegramBotApi` exercises the
@@ -255,6 +267,7 @@ Rollback per audience is unsubscribing bindings; the pipeline beneath is unchang
 - [x] Channel migration: `TELEGRAM` across the four preference/template/notification/attempt constraints; binding-shaped endpoint reference
 - [x] Adapter on the Camel notification route: per-chat FIFO with durable claims, error taxonomy, `migrate_to_chat_id`, edit-window lifecycle, platform-wide breaker with non-Telegram alerting
 - [x] Webhook ingress with `secret_token` verification; long-polling profile for local dev
+- [x] Webhook registration/rotation: `POST .../webhook-registration` (`TelegramWebhookRegistrationService`) mints and door-writes a webhook secret, calls Telegram's own `setWebhook`, and swaps `webhook_secret_reference` only on success; `docs/runbooks/connect-telegram-bot.md` walks the console path end to end
 - [ ] Trigger listeners per event class outside ordering (payments, fulfillment, fiscal, inventory, integration, onboarding, bands) — each a named small build in its owning module
 - [ ] Operations event subscriptions and group/topic routing
 - [x] Customer 1:1 linking via Mini App / deep-link code + pending-link table; consent sync on 403

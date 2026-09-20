@@ -392,6 +392,11 @@ services:
       # somewhere they may have no access to at all.
       HORECAOS_OPERATIONS_ORIGIN: ${HORECAOS_OPERATIONS_ORIGIN}
       HORECAOS_CONTROL_PLANE_ORIGIN: ${HORECAOS_CONTROL_PLANE_ORIGIN}
+      # ADR 0058: what TelegramWebhookRegistrationService builds a webhook URL
+      # from. The edge service above already requires this variable set; the
+      # application needs the same public value to hand Telegram a URL that
+      # actually resolves back to this host, over https.
+      HORECAOS_API_ORIGIN: ${HORECAOS_API_ORIGIN}
 
       HORECAOS_SECRETS_PROVIDER: openbao
       HORECAOS_OPENBAO_URL: http://openbao:8200

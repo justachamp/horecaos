@@ -20,7 +20,13 @@
   inside the connect drawer (`connect-provider-panel.ts`), and the recorded
   tension itself — `OperationsProviderInstallationController` now
   re-publishes every wave-25 endpoint under the `operations` surface, so the
-  screen and its API agree. Not built: an installation archive action (the
+  screen and its API agree. The door now has a second, Telegram-specific
+  writer beside installation/binding secret rotation:
+  `TelegramWebhookRegistrationService`/`POST .../webhook-registration` mints
+  a webhook secret token, writes it through this same door, and only swaps
+  `integration.installations.webhook_secret_reference` once Telegram's own
+  `setWebhook` accepts it (ADR 0058) — `docs/runbooks/connect-telegram-bot.md`
+  walks the console path end to end, including this step. Not built: an installation archive action (the
   status enum's `RETIRED` has no transition anywhere); a general
   tenant-facing installation-config write path — `POST
   .../{installationId}/settings` writes one Clopos-specific key
@@ -129,6 +135,7 @@ or the platform accepts the value once, in a door built for nothing else.
 - [ ] Control-plane app "Integrations" section: list, connect, rotate, archive; masked display; i18n
 - [ ] Rotation generalized from the wave-13 endpoint's pattern to value-rotation through the door
 - [ ] Sandbox runbook (`connect-click-payme-sandbox.md`) rewritten to use the screens once they exist
+- [x] Telegram webhook registration as a second door write: `POST .../webhook-registration` mints and writes a webhook secret through the same door, verified by Telegram's own `setWebhook` before the reference swaps; `docs/runbooks/connect-telegram-bot.md` walks it end to end
 
 ## Exit criteria
 

@@ -358,6 +358,18 @@ export const settingsPaths = {
   },
 
   /**
+   * `OperationsProviderInstallationController.registerWebhook` (delegate:
+   * `ProviderInstallationController.registerWebhook`) — ADR 0058: (re)registers
+   * a `TELEGRAM_BOT_API` installation's Telegram webhook. Refused server-side
+   * for any other provider type or a non-`ACTIVE` installation; re-running
+   * rotates the webhook secret, the supported recovery from a mismatched or
+   * leaked one.
+   */
+  integrationInstallationWebhookRegistration(scope: LocationScope, installationId: string): string {
+    return `${this.integrationInstallations(scope)}/${enc(installationId)}/webhook-registration`;
+  },
+
+  /**
    * `OperationsProviderInstallationController.bind` (delegate:
    * `ProviderInstallationController.bind`) — ADR 0026's binding step, wired
    * into the connect drawer for the first time in wave 66. Before this wave

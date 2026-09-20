@@ -59,6 +59,16 @@ public final class FakeTelegramBotApi implements AutoCloseable {
     private final AtomicLong getMeCalls = new AtomicLong();
     private volatile boolean tokenRevoked;
 
+    // ---------------------------------------------------------- webhook registration
+    private volatile @Nullable String lastWebhookUrl;
+    private volatile @Nullable String lastWebhookSecretToken;
+    private volatile List<String> lastWebhookAllowedUpdates = List.of();
+    private final AtomicLong setWebhookCalls = new AtomicLong();
+    private volatile boolean setWebhookFails;
+    private volatile String setWebhookFailureDescription = "Bad Request: webhook registration refused";
+    private volatile boolean setWebhookAnswersUnreadable;
+    private volatile @Nullable Runnable nextSetWebhookHook;
+
     private FakeTelegramBotApi(HttpServer server) {
         this.server = server;
     }
@@ -185,6 +195,61 @@ public final class FakeTelegramBotApi implements AutoCloseable {
         return answeredCallbackQueryText.get(callbackQueryId);
     }
 
+    /** The {@code url} the most recent {@code setWebhook} call carried, or null if none arrived yet. */
+    public @Nullable String lastWebhookUrl() {
+        return lastWebhookUrl;
+    }
+
+    /**
+     * The {@code secret_token} the most recent {@code setWebhook} call carried — what a
+     * registration test resolves the stored reference against, and never logs.
+     */
+    public @Nullable String lastWebhookSecretToken() {
+        return lastWebhookSecretToken;
+    }
+
+    /** The {@code allowed_updates} list the most recent {@code setWebhook} call carried. */
+    public List<String> lastWebhookAllowedUpdates() {
+        return lastWebhookAllowedUpdates;
+    }
+
+    /** How many times {@code setWebhook} has actually been called — a re-registration/rotation test's own count. */
+    public long setWebhookCallCount() {
+        return setWebhookCalls.get();
+    }
+
+    /** Every {@code setWebhook} call from now on answers Telegram's own {@code 400 Bad Request} refusal. */
+    public void failNextSetWebhook(String description) {
+        this.setWebhookFailureDescription = description;
+        this.setWebhookFails = true;
+    }
+
+    /**
+     * The next {@code setWebhook} call answers {@code 200} with a body that is
+     * not valid JSON — the same shape {@code TelegramBotApiClient#classify}
+     * turns into {@code TelegramCallResult.Uncertain("RESPONSE_UNREADABLE", ...)}.
+     * Telegram itself never sends malformed JSON on a real {@code 2xx}, but
+     * this is the cheapest reproduction of the outcome that matters here: the
+     * request genuinely reached Telegram (this fake recorded the call and the
+     * webhook/secret it carried, exactly like a real acceptance would) and the
+     * caller still cannot tell success from failure from the answer alone.
+     */
+    public void nextSetWebhookAnswersUnreadably() {
+        this.setWebhookAnswersUnreadable = true;
+    }
+
+    /**
+     * Runs {@code hook} synchronously, on the fake's own HTTP handler thread,
+     * the instant the next {@code setWebhook} call arrives and before this
+     * fake answers it — the window a real Telegram round trip leaves open. A
+     * concurrency test uses this to land a second writer's database change
+     * while the first call's outbound HTTP request is still "in flight",
+     * without needing real threads or timing.
+     */
+    public void onNextSetWebhook(Runnable hook) {
+        this.nextSetWebhookHook = hook;
+    }
+
     private void handle(HttpExchange exchange) throws IOException {
         String path = exchange.getRequestURI().getPath();
         String method = path.substring(path.lastIndexOf('/') + 1);
@@ -215,6 +280,8 @@ public final class FakeTelegramBotApi implements AutoCloseable {
             case "getChatMember" ->
                 respondOk(exchange, Map.of("status", chatMemberStatus, "can_manage_topics", canManageTopics.get()));
             case "getUpdates" -> respondOk(exchange, List.of());
+            case "setWebhook" -> handleSetWebhook(exchange, body);
+            case "getWebhookInfo" -> handleGetWebhookInfo(exchange);
             default -> respond(exchange, 404, errorBody(404, "Not Found: unknown method"));
         }
     }
@@ -301,6 +368,50 @@ public final class FakeTelegramBotApi implements AutoCloseable {
             answeredCallbackQueryText.put(callbackQueryId, String.valueOf(text));
         }
         respondOk(exchange, Boolean.TRUE);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleSetWebhook(HttpExchange exchange, Map<String, Object> body) throws IOException {
+        setWebhookCalls.incrementAndGet();
+
+        Runnable hook = nextSetWebhookHook;
+        if (hook != null) {
+            nextSetWebhookHook = null;
+            hook.run();
+        }
+
+        if (setWebhookFails) {
+            setWebhookFails = false;
+            respond(exchange, 400, errorBody(400, setWebhookFailureDescription));
+            return;
+        }
+
+        // Recorded before the (possibly unreadable) response is sent: a real
+        // Telegram that received and applied this request would have done the
+        // same before its own response left the wire, which is exactly the
+        // ambiguity TelegramCallResult.Uncertain exists to name.
+        lastWebhookUrl = String.valueOf(body.get("url"));
+        lastWebhookSecretToken = String.valueOf(body.get("secret_token"));
+        Object allowedUpdates = body.get("allowed_updates");
+        lastWebhookAllowedUpdates =
+                allowedUpdates instanceof List<?> list ? List.copyOf((List<String>) list) : List.of();
+
+        if (setWebhookAnswersUnreadable) {
+            setWebhookAnswersUnreadable = false;
+            respond(exchange, 200, "not valid json {{{");
+            return;
+        }
+
+        respondOk(exchange, Boolean.TRUE);
+    }
+
+    private void handleGetWebhookInfo(HttpExchange exchange) throws IOException {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("url", lastWebhookUrl == null ? "" : lastWebhookUrl);
+        result.put("has_custom_certificate", false);
+        result.put("pending_update_count", 0);
+        result.put("allowed_updates", lastWebhookAllowedUpdates);
+        respondOk(exchange, result);
     }
 
     @SuppressWarnings("unchecked")

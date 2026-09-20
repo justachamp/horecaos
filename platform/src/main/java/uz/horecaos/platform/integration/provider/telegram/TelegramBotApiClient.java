@@ -169,6 +169,51 @@ public class TelegramBotApiClient {
     }
 
     /**
+     * Registers (or re-registers) this bot's webhook (ADR 0058 stage 1's
+     * unfinished half: the header check in {@code TelegramWebhookController}
+     * had no caller that ever told Telegram where to send updates).
+     *
+     * <p>{@code secretToken} is carried in the request body exactly like every
+     * other field {@link #call} already ships — never as a header, never
+     * interpolated into a log line or exception message, the same discipline
+     * {@link uz.horecaos.platform.iam.api.secrets.SecretValue}'s own {@code
+     * toString} enforces for a resolved credential. {@link #call}'s own log
+     * lines (success/failure classification) never print a request body, so
+     * this reuses that guarantee rather than re-implementing it.
+     *
+     * @param url the platform's own webhook URL, built by the caller from the
+     *            configured public origin and this installation's id
+     * @param secretToken freshly minted per registration (ADR 0028: a platform
+     *                    secret, not the bot token), checked back on every
+     *                    inbound call against {@code
+     *                    X-Telegram-Bot-Api-Secret-Token}
+     * @param allowedUpdates the update types the caller has verified {@code
+     *                       TelegramUpdateHandler} actually acts on — Telegram
+     *                       drops every other update type at its own edge
+     *                       rather than queuing work nothing will read
+     */
+    public TelegramCallResult setWebhook(
+            ProviderCall call, String url, String secretToken, List<String> allowedUpdates) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("url", url);
+        body.put("secret_token", secretToken);
+        body.put("allowed_updates", allowedUpdates);
+        return call("setWebhook", call, body);
+    }
+
+    /**
+     * The webhook Telegram currently has on file for this bot — the
+     * operator-facing equivalent of {@code getMe}/{@code getChatMember} for
+     * webhook state, not called anywhere in the registration path itself
+     * (registration trusts {@link #setWebhook}'s own {@code ok} answer),
+     * but the shape a future console "verify" action or a troubleshooting
+     * runbook step reaches for.
+     */
+    public TelegramCallResult getWebhookInfo(ProviderCall call) {
+        return call("getWebhookInfo", call, Map.of());
+    }
+
+    /**
      * {@code local}-profile long polling only (ADR 0058: "no public URL exists in
      * the dev loop"). Not routed through {@link #classify}, whose success path
      * assumes {@code result} is a JSON object — {@code getUpdates} answers a JSON

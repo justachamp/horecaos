@@ -30,6 +30,8 @@ const INSTALLATION: InstallationView = {
   lastSecretRotatedAt: null,
   secretLastUsedAt: null,
   nonSensitiveConfig: null,
+  webhookRegistered: false,
+  webhookRegisteredAt: null,
 };
 
 const BINDING: BindingView = {

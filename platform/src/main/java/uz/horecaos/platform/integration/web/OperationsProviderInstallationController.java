@@ -155,6 +155,18 @@ public class OperationsProviderInstallationController {
         return delegate.rotateSecretByValue(tenantId, installationId, request);
     }
 
+    @PostMapping("/{installationId}/webhook-registration")
+    @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, mutating = true)
+    @Operation(
+            summary = "Register (or re-register) this installation's Telegram webhook",
+            description = "Identical to the control-plane-prefixed path's own operation; see "
+                    + "ProviderInstallationController.registerWebhook. Re-running rotates the webhook "
+                    + "secret, which is the supported recovery from a mismatched or leaked one.")
+    ResponseEntity<ProviderInstallationController.WebhookRegistrationResponse> registerWebhook(
+            @PathVariable UUID tenantId, @PathVariable UUID installationId) {
+        return delegate.registerWebhook(tenantId, installationId);
+    }
+
     @PostMapping("/{installationId}/bindings/{bindingId}/activate")
     @RequiresCapability(value = Capability.INTEGRATION_BINDING_ACTIVATE, mutating = true)
     @Operation(

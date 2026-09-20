@@ -6481,6 +6481,13 @@
           },
           "status" : {
             "type" : "string"
+          },
+          "webhookRegistered" : {
+            "type" : "boolean"
+          },
+          "webhookRegisteredAt" : {
+            "format" : "date-time",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -15572,6 +15579,25 @@
         "required" : [ "method", "reason", "registrationIdentifier", "validUntil" ],
         "type" : "object"
       },
+      "WebhookRegistrationResponse" : {
+        "properties" : {
+          "botUsername" : {
+            "type" : "string"
+          },
+          "installationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "registeredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "webhookUrl" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "WordingRequest" : {
         "properties" : {
           "body" : {
@@ -23942,6 +23968,43 @@
           }
         },
         "summary" : "Set whether Clopos still needs a clerk's acceptance",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/webhook-registration" : {
+      "post" : {
+        "description" : "Identical to the control-plane-prefixed path's own operation; see ProviderInstallationController.registerWebhook. Re-running rotates the webhook secret, which is the supported recovery from a mismatched or leaked one.",
+        "operationId" : "registerWebhook",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/WebhookRegistrationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register (or re-register) this installation's Telegram webhook",
         "tags" : [ "Provider integrations" ]
       }
     },

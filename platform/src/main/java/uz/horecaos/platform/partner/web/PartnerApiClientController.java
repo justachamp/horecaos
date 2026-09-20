@@ -155,11 +155,36 @@ public class PartnerApiClientController {
             String clientId,
             String secretValue,
             @Nullable Instant secretExpiresAt,
-            int version) {}
+            int version) {
+
+        /**
+         * Redacted on purpose (ADR 0028). A record's generated {@code toString}
+         * prints every component, and Spring's message converters log the
+         * deserialized body at TRACE — so the default would put a live
+         * credential into a log line the moment someone turned tracing on.
+         */
+        @Override
+        public String toString() {
+            return "IssuedClientResponse[id=" + id + ", clientId=" + clientId + ", secretValue=REDACTED, version="
+                    + version + "]";
+        }
+    }
 
     /** Carries the plaintext secret. Returned exactly once, from {@code rotate} alone. */
     public record RotatedClientResponse(
-            UUID id, String secretValue, @Nullable Instant secretExpiresAt, int version) {}
+            UUID id, String secretValue, @Nullable Instant secretExpiresAt, int version) {
+
+        /**
+         * Redacted on purpose (ADR 0028). A record's generated {@code toString}
+         * prints every component, and Spring's message converters log the
+         * deserialized body at TRACE — so the default would put a live
+         * credential into a log line the moment someone turned tracing on.
+         */
+        @Override
+        public String toString() {
+            return "RotatedClientResponse[id=" + id + ", secretValue=REDACTED, version=" + version + "]";
+        }
+    }
 
     /** Never the secret value or the ADR 0028 reference to it — see the class doc comment. */
     public record PartnerClientResponse(
