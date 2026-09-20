@@ -239,6 +239,20 @@ public class SecurityConfiguration {
                         // manual investigation.
                         .requestMatchers(HttpMethod.POST, "/providers/click/*/prepare", "/providers/click/*/complete")
                         .permitAll()
+                        // ADR 0058: the Telegram Bot API webhook. Telegram sends no
+                        // OAuth bearer of any kind — it carries the
+                        // X-Telegram-Bot-Api-Secret-Token header instead, checked
+                        // with a constant-time comparison inside
+                        // TelegramWebhookController before the request body is
+                        // even parsed, the same "authenticated inside the
+                        // endpoint, not at this chain" shape Click's own SHOP API
+                        // uses above. Without this line the webhook was reachable
+                        // in name only: anyRequest().authenticated() below would
+                        // answer every real Telegram delivery with a bodyless 401
+                        // before TelegramWebhookRegistrationService's own
+                        // registration ever had anything to prove.
+                        .requestMatchers(HttpMethod.POST, "/providers/telegram/*/webhook")
+                        .permitAll()
                         // ADR 0062: staff sign in on a first-party page instead of a
                         // Keycloak redirect, and the backend takes the credentials to
                         // Keycloak on the caller's behalf. Sign-in is unavoidably

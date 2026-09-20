@@ -41,6 +41,7 @@ import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup.
 import uz.horecaos.platform.integration.provider.ProviderCapabilityReconciliationService;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBotApiClient;
 import uz.horecaos.platform.integration.provider.telegram.TelegramCallResult;
+import uz.horecaos.platform.integration.provider.telegram.TelegramWebhookRegistrationService;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.api.Page;
@@ -101,6 +102,7 @@ public class ProviderInstallationController {
     private final SecretResolver secrets;
     private final TelegramBotApiClient telegramBotApi;
     private final SecretIngressGateway door;
+    private final TelegramWebhookRegistrationService webhookRegistration;
 
     public ProviderInstallationController(
             JdbcClient jdbc,
@@ -111,7 +113,8 @@ public class ProviderInstallationController {
             ProviderInstallationLookup installations,
             SecretResolver secrets,
             TelegramBotApiClient telegramBotApi,
-            SecretIngressGateway door) {
+            SecretIngressGateway door,
+            TelegramWebhookRegistrationService webhookRegistration) {
         this.jdbc = jdbc;
         this.audit = audit;
         this.currentActor = currentActor;
@@ -121,6 +124,7 @@ public class ProviderInstallationController {
         this.secrets = secrets;
         this.telegramBotApi = telegramBotApi;
         this.door = door;
+        this.webhookRegistration = webhookRegistration;
     }
 
     @GetMapping("/connect-fields")
@@ -143,7 +147,8 @@ public class ProviderInstallationController {
                 SELECT i.id, i.provider_category, i.provider_type, i.environment_code,
                        i.display_name, i.status, i.secret_reference, i.last_connection_status,
                        i.adapter_version, i.last_secret_rotated_at, i.secret_last_used_at,
-                       i.non_sensitive_config
+                       i.non_sensitive_config, i.webhook_secret_reference IS NOT NULL AS webhook_registered,
+                       i.non_sensitive_config ->> 'webhookRegisteredAt' AS webhook_registered_at
                   FROM integration.installations i
                  WHERE i.tenant_id = :tenantId
                  ORDER BY i.created_at DESC
@@ -161,8 +166,15 @@ public class ProviderInstallationController {
                         rs.getString("adapter_version"),
                         rs.getObject("last_secret_rotated_at", OffsetDateTime.class),
                         rs.getObject("secret_last_used_at", OffsetDateTime.class),
-                        rs.getString("non_sensitive_config")))
+                        rs.getString("non_sensitive_config"),
+                        rs.getBoolean("webhook_registered"),
+                        parseInstantText(rs.getString("webhook_registered_at"))))
                 .list());
+    }
+
+    /** {@code non_sensitive_config->>'webhookRegisteredAt'} is an {@link OffsetDateTime#toString()}-shaped value, or absent. */
+    private static @Nullable OffsetDateTime parseInstantText(@Nullable String value) {
+        return value == null ? null : OffsetDateTime.parse(value);
     }
 
     @PostMapping
@@ -503,6 +515,29 @@ public class ProviderInstallationController {
 
         return ResponseEntity.ok(
                 new RotateSecretResponse(installationId, oldReference, reference.toString(), botUsername));
+    }
+
+    @PostMapping("/{installationId}/webhook-registration")
+    @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, mutating = true)
+    @Operation(
+            summary = "Register (or re-register) this installation's Telegram webhook",
+            description = "ADR 0058: mints a fresh webhook secret token, writes it through the ADR 0065 "
+                    + "door, calls Telegram's setWebhook, and only on that success points the installation "
+                    + "at the new reference — nothing in the database changes on a Telegram refusal. "
+                    + "TELEGRAM_BOT_API installations only, ACTIVE only. Re-running rotates the webhook "
+                    + "secret: the previous token stops working the instant Telegram accepts the new one, "
+                    + "which is the supported recovery from a mismatched or leaked secret.")
+    public ResponseEntity<WebhookRegistrationResponse> registerWebhook(
+            @PathVariable UUID tenantId, @PathVariable UUID installationId) {
+
+        TelegramWebhookRegistrationService.Registration registration = webhookRegistration.register(
+                tenantId, installationId, ActorRef.user(currentActor.get().subject(), null));
+
+        return ResponseEntity.ok(new WebhookRegistrationResponse(
+                registration.installationId(),
+                registration.webhookUrl(),
+                registration.registeredAt().atOffset(ZoneOffset.UTC),
+                registration.botUsername()));
     }
 
     /** ownerScope is platform-derived, never a caller-supplied string. */
@@ -989,5 +1024,25 @@ public class ProviderInstallationController {
              * field this column carries was declared {@code secret: false} in
              * {@link ConnectFieldCatalog}.
              */
-            String nonSensitiveConfig) {}
+            String nonSensitiveConfig,
+            /**
+             * {@code webhook_secret_reference IS NOT NULL} — whether {@link
+             * #registerWebhook} has ever succeeded for this installation. Additive:
+             * every other provider category simply reads false, since only a
+             * two-directional NOTIFICATION installation ever has one.
+             */
+            boolean webhookRegistered,
+            /** When {@link #registerWebhook} last succeeded, or null if it never has. */
+            @Nullable OffsetDateTime webhookRegisteredAt) {}
+
+    /**
+     * Never a secret. {@code botUsername} is null when this installation has
+     * never resolved one (see {@code TelegramBotIdentityResolver}) — a webhook
+     * can register successfully before anything has ever called {@code getMe}.
+     */
+    public record WebhookRegistrationResponse(
+            UUID installationId,
+            String webhookUrl,
+            OffsetDateTime registeredAt,
+            @Nullable String botUsername) {}
 }

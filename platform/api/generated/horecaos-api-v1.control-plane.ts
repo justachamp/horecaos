@@ -1329,6 +1329,8 @@ export interface InstallationView {
   secretLastUsedAt?: string;
   secretReference?: string;
   status?: string;
+  webhookRegistered?: boolean;
+  webhookRegisteredAt?: string;
 }
 
 export interface ItemSaleScheduleRequest {
@@ -3124,6 +3126,13 @@ export interface WebhookDelivery {
   tenantName?: string;
 }
 
+export interface WebhookRegistrationResponse {
+  botUsername?: string;
+  installationId?: string;
+  registeredAt?: string;
+  webhookUrl?: string;
+}
+
 export interface ZoneDetailResponse {
   boundLocationIds?: Array<string>;
   zone?: ZoneSummaryResponse;
@@ -3343,6 +3352,7 @@ export interface Operations {
   "rotateSecretByValue": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/secret-rotations/value"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: RotateSecretValueRequest }; responses: { "200": RotateSecretResponse } };
   "settings": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/settings"; request: { parameters: { path: { installationId: string; tenantId: string } } }; responses: { "200": CloposSettingsView } };
   "updateSettings": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/settings"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: UpdateCloposSettingsRequest }; responses: { "200": CloposSettingsView } };
+  "registerWebhook": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/webhook-registration"; request: { parameters: { path: { installationId: string; tenantId: string } } }; responses: { "200": WebhookRegistrationResponse } };
   "list_4": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<LegalEntityView> } };
   "register": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities"; request: { parameters: { path: { tenantId: string } }; body: RegisterLegalEntityRequest }; responses: { "200": LegalEntityView } };
   "assignmentHistory": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities/brands/{brandId}/locations/{locationId}/assignments"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<LocationFiscalAssignmentView> } };
