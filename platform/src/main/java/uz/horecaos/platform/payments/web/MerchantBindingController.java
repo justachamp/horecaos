@@ -312,5 +312,17 @@ public class MerchantBindingController {
      */
     record RotateMerchantBindingSecretRequest(
             @NotBlank @Size(max = 4096) String value,
-            @NotBlank @Size(max = 1000) String reason) {}
+            @NotBlank @Size(max = 1000) String reason) {
+
+        /**
+         * Redacted on purpose (ADR 0028). A record's generated {@code toString}
+         * prints every component, and Spring's message converters log the
+         * deserialized body at TRACE — so the default would put a live
+         * credential into a log line the moment someone turned tracing on.
+         */
+        @Override
+        public String toString() {
+            return "RotateMerchantBindingSecretRequest[value=REDACTED, reason=" + reason + "]";
+        }
+    }
 }

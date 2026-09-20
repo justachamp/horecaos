@@ -203,7 +203,19 @@ public class SecretIngressController {
     public record SecretIngressRequest(
             @NotNull SecretCategory category,
             @NotBlank @Size(max = 64) String providerType,
-            @NotBlank @Size(max = 4096) String value) {}
+            @NotBlank @Size(max = 4096) String value) {
+
+        /**
+         * Redacted on purpose (ADR 0028). A record's generated {@code toString}
+         * prints every component, and Spring's message converters log the
+         * deserialized body at TRACE — so the default would put a live
+         * credential into a log line the moment someone turned tracing on.
+         */
+        @Override
+        public String toString() {
+            return "SecretIngressRequest[category=" + category + ", providerType=" + providerType + ", value=REDACTED]";
+        }
+    }
 
     /** The only thing this door ever returns. There is no field a value could occupy. */
     public record SecretIngressResponse(String reference) {}

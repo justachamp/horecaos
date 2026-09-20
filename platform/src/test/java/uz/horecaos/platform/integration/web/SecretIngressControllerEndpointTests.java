@@ -321,15 +321,30 @@ class SecretIngressControllerEndpointTests {
                 builder.subject(subject).claim("resource_access", Map.of("horecaos-api", Map.of("roles", List.of()))));
     }
 
+    private static ch.qos.logback.classic.@org.jspecify.annotations.Nullable Level previousRootLevel;
+
+    /**
+     * At {@code Level.ALL}, not the configured level. "The value never reaches a
+     * log line" asserted at INFO is a claim about INFO: Spring's message
+     * converters log the deserialized request body at TRACE, and until
+     * 2026-09-20 {@code SecretIngressRequest}'s generated {@code toString}
+     * printed the raw value there. The capture has to see what an operator
+     * chasing a bug with tracing turned on would see.
+     */
     private static ListAppender<ILoggingEvent> captureAllLogs() {
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
-        rootLogger().addAppender(appender);
+        Logger root = rootLogger();
+        previousRootLevel = root.getLevel();
+        root.setLevel(ch.qos.logback.classic.Level.ALL);
+        root.addAppender(appender);
         return appender;
     }
 
     private static void releaseAllLogs(ListAppender<ILoggingEvent> appender) {
-        rootLogger().detachAppender(appender);
+        Logger root = rootLogger();
+        root.detachAppender(appender);
+        root.setLevel(previousRootLevel);
         appender.stop();
     }
 
