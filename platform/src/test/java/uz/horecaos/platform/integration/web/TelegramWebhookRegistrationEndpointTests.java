@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
@@ -13,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -658,15 +660,30 @@ class TelegramWebhookRegistrationEndpointTests {
                 builder.subject(subject).claim("resource_access", Map.of("horecaos-api", Map.of("roles", List.of()))));
     }
 
+    /**
+     * Restored by {@link #releaseAllLogs}. Spring Boot's unconfigured default
+     * root level is INFO, so without raising it here a future {@code
+     * log.debug(...)} that happened to interpolate a secret would be filtered
+     * before it ever reached the appender below -- the assertion that no
+     * captured line carries the secret would keep passing while the secret
+     * was, in fact, logged.
+     */
+    private static @Nullable Level previousRootLevel;
+
     private static ListAppender<ILoggingEvent> captureAllLogs() {
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
-        rootLogger().addAppender(appender);
+        Logger root = rootLogger();
+        previousRootLevel = root.getLevel();
+        root.setLevel(Level.ALL);
+        root.addAppender(appender);
         return appender;
     }
 
     private static void releaseAllLogs(ListAppender<ILoggingEvent> appender) {
-        rootLogger().detachAppender(appender);
+        Logger root = rootLogger();
+        root.detachAppender(appender);
+        root.setLevel(previousRootLevel);
         appender.stop();
     }
 
