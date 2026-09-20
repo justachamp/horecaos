@@ -141,7 +141,11 @@ public class TelegramWebhookRegistrationService {
      *                       the two answer identically); UNPROCESSABLE_STATE
      *                       for a non-Telegram or non-ACTIVE installation, an
      *                       unresolvable bot token, a non-https public origin
-     *                       outside local/test, or a Telegram refusal
+     *                       outside local/test, or a Telegram refusal;
+     *                       RESOURCE_CONFLICT when the row this call read has
+     *                       moved on by the time of the write -- retired, or
+     *                       raced by another overlapping registration call --
+     *                       so retry rather than silently overwrite it
      */
     public Registration register(UUID tenantId, UUID installationId, ActorRef actor) {
         requireHttpsOriginUnlessLocal();
@@ -231,6 +235,7 @@ public class TelegramWebhookRegistrationService {
                                              to_jsonb(:registeredAt::text), true),
                                    '{webhookUrl}', to_jsonb(:webhookUrl::text), true)
                          WHERE id = :id AND tenant_id = :tenantId
+                           AND webhook_secret_reference IS NOT DISTINCT FROM :oldReference
                         """)
                         .param("reference", webhookReference.toString())
                         .param("now", registeredAt)
@@ -238,14 +243,27 @@ public class TelegramWebhookRegistrationService {
                         .param("webhookUrl", webhookUrl)
                         .param("id", installationId)
                         .param("tenantId", tenantId)
+                        .param("oldReference", installation.webhookSecretReference())
                         .update();
 
                 if (changed == 0) {
-                    // The row this method's own read above just found is gone by
-                    // the time of the write -- a retirement racing this call, the
-                    // same posture ProviderInstallationController#updateSettings
-                    // takes on its own identical race.
-                    throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Installation is not available");
+                    // Mirrors ProviderInstallationController#rotateSecretByValue's
+                    // own CAS: with the predicate above, "no rows changed" now
+                    // means either the row this method's own read found is gone
+                    // (a retirement racing this call) or another registration
+                    // call already moved webhook_secret_reference off the value
+                    // this call verified against -- two overlapping registrations
+                    // whose Telegram calls and database commits interleaved.
+                    // Either way there is nothing safe to overwrite with a
+                    // reference verified against a row that has moved on, so
+                    // this is answered the same way that sibling method answers
+                    // its own identical race: a conflict, not a silent
+                    // overwrite that would leave the database pointing at a
+                    // secret Telegram no longer honors.
+                    throw new ApiException(
+                            ErrorCode.RESOURCE_CONFLICT,
+                            "This installation's webhook registration changed while this call was in flight; "
+                                    + "retry registration");
                 }
 
                 audit.record(AuditFact.of("integration.webhook_registered", AuditClass.SECURITY)
@@ -323,7 +341,8 @@ public class TelegramWebhookRegistrationService {
 
     private Optional<Installation> findInstallation(UUID tenantId, UUID installationId) {
         return jdbc.sql("""
-                SELECT i.id, i.provider_type, i.status, i.secret_reference, e.base_url,
+                SELECT i.id, i.provider_type, i.status, i.secret_reference,
+                       i.webhook_secret_reference, e.base_url,
                        i.non_sensitive_config ->> 'botUsername' AS bot_username
                   FROM integration.installations i
                   JOIN integration.provider_environments e ON e.code = i.environment_code
@@ -336,6 +355,7 @@ public class TelegramWebhookRegistrationService {
                         row.getString("provider_type"),
                         row.getString("status"),
                         row.getString("secret_reference"),
+                        row.getString("webhook_secret_reference"),
                         row.getString("base_url"),
                         row.getString("bot_username")))
                 .optional();
@@ -357,6 +377,7 @@ public class TelegramWebhookRegistrationService {
             String providerType,
             String status,
             String secretReference,
+            @Nullable String webhookSecretReference,
             String baseUrl,
             @Nullable String botUsername) {}
 

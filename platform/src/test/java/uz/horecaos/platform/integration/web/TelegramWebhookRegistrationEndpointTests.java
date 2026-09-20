@@ -400,6 +400,59 @@ class TelegramWebhookRegistrationEndpointTests {
                 .isNull();
     }
 
+    /**
+     * Two overlapping {@code register()} calls each mint their own secret and
+     * call Telegram; whichever call reaches Telegram last is what Telegram
+     * actually keeps. Without a compare-and-swap on the final UPDATE, a
+     * caller whose own database write lands last can silently overwrite a
+     * row that a second, concurrent registration already moved on -- leaving
+     * the stored reference pointing at a secret Telegram no longer honors,
+     * with both calls answering 200. {@code FakeTelegramBotApi#onNextSetWebhook}
+     * lands a second writer's raw UPDATE exactly inside the first call's
+     * outbound HTTP window, standing in for the real race without needing
+     * threads or timing.
+     */
+    @Test
+    void aConcurrentWriterThatMovesTheReferenceMidFlightWinsOverAStaleUpdate() throws Exception {
+        String concurrentWriterReference = "horecaos:test:provider_notification:concurrent-writer:1";
+        bot.onNextSetWebhook(() -> jdbc.sql("UPDATE integration.installations "
+                        + "SET webhook_secret_reference = :reference, version = version + 1 "
+                        + "WHERE id = :id")
+                .param("reference", concurrentWriterReference)
+                .param("id", TELEGRAM_INSTALLATION)
+                .update());
+
+        MvcResult result = mvc.perform(post(INTEGRATIONS + "/" + TELEGRAM_INSTALLATION + "/webhook-registration")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "register-race-1"))
+                .andReturn();
+
+        String body = result.getResponse().getContentAsString();
+        assertThat(result.getResponse().getStatus())
+                .as("a stale write is refused as a conflict, not silently accepted: " + body)
+                .isEqualTo(409);
+
+        String storedReference = jdbc.sql(
+                        "SELECT webhook_secret_reference FROM integration.installations WHERE id = :id")
+                .param("id", TELEGRAM_INSTALLATION)
+                .query(String.class)
+                .single();
+        assertThat(storedReference)
+                .as("the concurrent writer's value survives; this call's own (now-stale) reference never lands")
+                .isEqualTo(concurrentWriterReference);
+
+        long successAudits = jdbc.sql("""
+                SELECT count(*) FROM audit.audit_events
+                WHERE action_code = 'integration.webhook_registered' AND target_id = :id
+                """)
+                .param("id", TELEGRAM_INSTALLATION)
+                .query(Long.class)
+                .single();
+        assertThat(successAudits)
+                .as("no audit row claiming this call's write actually happened")
+                .isZero();
+    }
+
     // ------------------------------------------------------------------ (d) re-register rotates
 
     @Test
