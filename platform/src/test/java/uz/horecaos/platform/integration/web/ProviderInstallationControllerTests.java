@@ -226,6 +226,49 @@ class ProviderInstallationControllerTests {
                 .isEqualTo("{\"serviceId\": \"service-9\"}");
     }
 
+    /**
+     * A request that names an approved provider in a different case than the
+     * seeded {@code provider_environments} row still installs (the existence
+     * check is deliberately case-insensitive — see {@code install()}'s own
+     * comment), but everything the install persists or looks up must use the
+     * row's own canonical casing, never the request's. Otherwise the install
+     * both silently drops every non-secret field the operator supplied (the
+     * declaration is case-sensitive matched and finds nothing for
+     * {@code "Click"}) and leaves behind a {@code provider_type} that can
+     * never again match this class's own exact-case gates
+     * ({@code TELEGRAM_BOT_API.equals(...)}, {@code CLOPOS_PROVIDER_TYPE.equals(...)}).
+     */
+    @Test
+    void installNormalizesACaseMismatchedProviderTypeToTheApprovedEnvironmentsCanonicalCasing() {
+        environment("click-test", "PAYMENT", "CLICK");
+
+        controller.install(
+                TENANT,
+                new ProviderInstallationController.InstallRequest(
+                        uz.horecaos.platform.integration.api.provider.ProviderCategory.PAYMENT,
+                        "Click",
+                        "click-test",
+                        "Click prod",
+                        null,
+                        "merchant-1/service-9"));
+
+        Map<String, Object> row =
+                jdbc.sql("""
+                SELECT provider_type, non_sensitive_config::text AS config
+                  FROM integration.installations
+                 WHERE tenant_id = :tenantId
+                """).param("tenantId", TENANT).query().singleRow();
+        assertThat(row)
+                .as("persisted casing must be the seeded row's canonical form, not the request's")
+                .containsEntry("provider_type", "CLICK");
+        assertThat(row.get("config"))
+                // jsonb key order is by key length then value, not insertion order —
+                // "serviceId" (9 chars) sorts before "merchantId" (10), same as
+                // installKeepsABlankNonSecretFieldsPositionRatherThanShiftingTheNextOneLeft above.
+                .as("the non-secret fields must still be captured under the canonical provider type")
+                .isEqualTo("{\"serviceId\": \"service-9\", \"merchantId\": \"merchant-1\"}");
+    }
+
     private void environment(String code, String category, String providerType) {
         jdbc.sql("""
                 INSERT INTO integration.provider_environments

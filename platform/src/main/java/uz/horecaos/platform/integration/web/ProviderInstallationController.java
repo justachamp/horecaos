@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -251,22 +252,34 @@ public class ProviderInstallationController {
         // approvedEnvironmentsByDeclaration() above is: a seeded row's casing
         // (Clopos's is lowercase 'clopos') is not guaranteed to match the
         // request's exactly even when it names the same provider.
-        boolean environmentExists = jdbc.sql("""
-                SELECT EXISTS (SELECT 1 FROM integration.provider_environments
-                                WHERE code = :code AND provider_category = :category
-                                  AND upper(provider_type) = upper(:type))
+        //
+        // The match yields the row's own provider_type — its canonical casing
+        // — and everything below persists and looks up by that, never by
+        // request.providerType() directly. ConnectFieldCatalog.forProviderType()
+        // and the TELEGRAM_BOT_API/CLOPOS_PROVIDER_TYPE literals elsewhere in
+        // this class compare case-sensitively, so a request that named the
+        // right provider in the wrong case would otherwise install with a
+        // non_sensitive_config silently dropped to "{}" and a provider_type
+        // that never again matches those exact-case gates (rotateSecret,
+        // rotateSecretByValue, installationOf).
+        Optional<String> canonicalProviderType = jdbc.sql("""
+                SELECT provider_type FROM integration.provider_environments
+                 WHERE code = :code AND provider_category = :category
+                   AND upper(provider_type) = upper(:type)
+                 LIMIT 1
                 """)
                 .param("code", request.environmentCode())
                 .param("category", request.category().name())
                 .param("type", request.providerType())
-                .query(Boolean.class)
-                .single();
+                .query(String.class)
+                .optional();
 
-        if (!environmentExists) {
+        if (canonicalProviderType.isEmpty()) {
             throw new ApiException(
                     ErrorCode.INVALID_REQUEST,
                     "Unknown provider environment for this category: " + request.environmentCode());
         }
+        String providerType = canonicalProviderType.get();
 
         UUID id = UUID.randomUUID();
         jdbc.sql("""
@@ -280,12 +293,12 @@ public class ProviderInstallationController {
                 .param("id", id)
                 .param("tenantId", tenantId)
                 .param("category", request.category().name())
-                .param("type", request.providerType())
+                .param("type", providerType)
                 .param("environment", request.environmentCode())
                 .param("name", request.displayName())
                 .param("secret", request.secretReference())
                 .param("account", request.externalAccountReference())
-                .param("config", nonSensitiveConfigOf(request.providerType(), request.externalAccountReference()))
+                .param("config", nonSensitiveConfigOf(providerType, request.externalAccountReference()))
                 .update();
 
         record(
@@ -295,7 +308,7 @@ public class ProviderInstallationController {
                 "Provider installed",
                 Map.of(
                         "category", request.category().name(),
-                        "providerType", request.providerType(),
+                        "providerType", providerType,
                         "environment", request.environmentCode()),
                 Capability.INTEGRATION_INSTALLATION_MANAGE);
 
