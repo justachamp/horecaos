@@ -73,6 +73,14 @@ describe('StaffReportPage', () => {
   let callCentreApi: { callStats: ReturnType<typeof vi.fn> };
 
   async function render(scope: LocationScope | null = SCOPE): Promise<void> {
+    // ReportsFilterState restores its period and range from the URL on
+    // construction, and the test worker's window.location outlives a spec
+    // file: a sibling reports spec that left a ten-day custom range in the
+    // query string made this page fan out to ten callStats calls instead of
+    // one on the CI runner (2026-09-21), while passing wherever the files
+    // happened to be scheduled apart. Every sibling reports spec already
+    // resets the URL for this reason; this one never did.
+    history.replaceState(null, '', '/statistics/staff');
     reportingApi = {
       operatorLeaderboard: vi
         .fn()
