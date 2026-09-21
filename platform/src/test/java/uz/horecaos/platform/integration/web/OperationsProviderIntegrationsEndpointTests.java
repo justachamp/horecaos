@@ -345,6 +345,56 @@ class OperationsProviderIntegrationsEndpointTests {
                 """.formatted(environmentCode, TENANT);
     }
 
+    /**
+     * The connect flow's third call, with the body the console really sends. No
+     * test had ever put a bind request through HTTP — the controller was called
+     * as a Java object, where a missing {@code priority} cannot be expressed —
+     * so nothing noticed that this JSON stack refuses an absent primitive: every
+     * console bind answered 400 MALFORMED_BODY (pre-production, 2026-09-21).
+     */
+    @Test
+    void theConsolesBindRequestWithNoPriorityBindsAtTheColumnDefault() throws Exception {
+        UUID brand = UUID.fromString("018f9b20-7000-7000-8000-0000000000f9");
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'BIND', 'bind-brand', 'Bind Brand', 'ACTIVE', 0)
+                """).param("id", brand).param("tenantId", TENANT).update();
+        String bindings = NEW_INTEGRATIONS + "/" + TELEGRAM_INSTALLATION + "/bindings";
+
+        MvcResult omitted = mvc.perform(post(bindings)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "operations-bind-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                                "{\"brandId\":\"%s\",\"locationId\":null,\"capabilities\":[],\"primaryCapabilities\":[]}"
+                                        .formatted(brand)))
+                .andReturn();
+        assertThat(omitted.getResponse().getStatus())
+                .as(omitted.getResponse().getContentAsString())
+                .isEqualTo(200);
+
+        MvcResult explicit = mvc.perform(post(bindings)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "operations-bind-2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                                "{\"brandId\":\"%s\",\"locationId\":null,\"priority\":7,\"capabilities\":[],\"primaryCapabilities\":[]}"
+                                        .formatted(brand)))
+                .andReturn();
+        assertThat(explicit.getResponse().getStatus()).isEqualTo(200);
+
+        assertThat(jdbc.sql("""
+                        SELECT priority FROM integration.bindings
+                         WHERE tenant_id = :tenantId AND installation_id = :installationId ORDER BY priority
+                        """)
+                        .param("tenantId", TENANT)
+                        .param("installationId", TELEGRAM_INSTALLATION)
+                        .query(Integer.class)
+                        .list())
+                .as("an explicit priority is kept; an absent one is the column default, not zero")
+                .containsExactly(7, 100);
+    }
+
     private static String writeRequest(String category, String providerType, String value) {
         return "{\"category\":\"%s\",\"providerType\":\"%s\",\"value\":\"%s\"}"
                 .formatted(category, providerType, value);
