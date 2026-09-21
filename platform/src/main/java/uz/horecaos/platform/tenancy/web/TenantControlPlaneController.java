@@ -350,7 +350,7 @@ public class TenantControlPlaneController {
                         request.latitude(),
                         request.longitude(),
                         request.coordinateSource(),
-                        request.clearLandmark()));
+                        Boolean.TRUE.equals(request.clearLandmark())));
     }
 
     @PostMapping("/{tenantId}/brands/{brandId}/locations/{locationId}/activate")
@@ -421,10 +421,15 @@ public class TenantControlPlaneController {
      * @param coordinateSource omit to let the platform infer it: a supplied point
      *                         becomes a merchant pin, and no point stays
      *                         {@code NOT_GEOCODED} and on the backfill's work list
-     * @param clearLandmark true to remove a previously-set landmark. An omitted
-     *                       JSON key deserializes to {@code false}, which is
-     *                       exactly "leave the landmark as it is" — the default
-     *                       every write silent about this field already needs
+     * @param clearLandmark true to remove a previously-set landmark. Absent
+     *                       means {@code false}: "leave the landmark as it is",
+     *                       the default every write silent about this field
+     *                       already needs. Boxed on purpose — the console omits
+     *                       the key unless it is true, and this JSON stack
+     *                       refuses a missing value for a primitive (Jackson 3
+     *                       turned {@code FAIL_ON_NULL_FOR_PRIMITIVES} on), so as
+     *                       {@code boolean} every ordinary address or phone edit
+     *                       answered 400 MALFORMED_BODY
      */
     record DescribeLocationRequest(
             @Size(max = 200) String addressLine,
@@ -443,7 +448,7 @@ public class TenantControlPlaneController {
 
             CoordinateSource coordinateSource,
 
-            boolean clearLandmark) {}
+            @Nullable Boolean clearLandmark) {}
 
     record CreateTenantRequest(
             @NotBlank @Size(max = 63) @Pattern(regexp = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")

@@ -138,6 +138,47 @@ class ServiceScheduleControllerEndpointTests {
 
     // ------------------------------------------------------------------ fixtures
 
+    /**
+     * Housed here because this class already stands up a tenant, a brand, its
+     * branches and a BRAND-scope grant; the subject is the neighbouring
+     * {@code PUT .../locations/{id}/place}. The operations console sends
+     * {@code clearLandmark} only when it is true, so the ordinary address edit
+     * omits the key — and until 2026-09-21 that body answered 400 MALFORMED_BODY
+     * because the component was a primitive {@code boolean}. No test had ever
+     * sent this request over HTTP.
+     */
+    @Test
+    void anOrdinaryAddressEditThatOmitsClearLandmarkIsAcceptedAndKeepsTheLandmark() throws Exception {
+        jdbc.sql("UPDATE tenant.locations SET landmark = 'Opposite the bazaar gate' WHERE id = :id")
+                .param("id", LOCATION_1)
+                .update();
+        // LOCATION_WRITE belongs to the tenant's owner and admin only, not to the
+        // BRAND_MANAGER this class's other tests act as.
+        String admin = "service-schedule-tenant-admin";
+        grant(admin, PlatformRole.TENANT_ADMIN, "TENANT", TENANT);
+        String place =
+                "/api/v1/control-plane/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION_1 + "/place";
+
+        MvcResult edited = mvc.perform(
+                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(place)
+                                .with(tokenFor(admin))
+                                .header("Idempotency-Key", "place-edit-without-clear-landmark")
+                                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"addressLine\":\"Chilonzor 5, 12-uy\",\"city\":\"Toshkent\",\"contactPhone\":\"+998712000000\"}"))
+                .andReturn();
+
+        assertThat(edited.getResponse().getStatus())
+                .as(edited.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(jdbc.sql("SELECT address_line || '|' || landmark FROM tenant.locations WHERE id = :id")
+                        .param("id", LOCATION_1)
+                        .query(String.class)
+                        .single())
+                .as("the edit lands and a landmark the request was silent about survives it")
+                .isEqualTo("Chilonzor 5, 12-uy|Opposite the bazaar gate");
+    }
+
     private void insertFixtures() {
         jdbc.sql("""
                 INSERT INTO tenant.tenants
