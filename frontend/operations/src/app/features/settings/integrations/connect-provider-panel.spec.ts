@@ -289,6 +289,38 @@ describe('ConnectProviderPanel', () => {
       expect(submitButton().disabled).toBe(true);
     });
 
+    /**
+     * Isolates the exact scenario this whole change exists to prevent: every
+     * other required field filled in, several approved environments offered,
+     * none chosen. Every other submit-related assertion above is confounded
+     * by a still-blank displayName or secret field, so a regression that
+     * drops or reorders the `environmentCode` blank-check inside
+     * `canSubmit()` would ship with the rest of this suite fully green — and
+     * reopen the orphaned-secret defect (2026-09-19/09-21) this select
+     * exists to close, since `writeSecret()` fires before `install()` has
+     * any environment code to validate against.
+     */
+    it('keeps submit disabled and never emits connect when every other field is filled but the environment is still unchosen', async () => {
+      await render();
+      const connect = vi.fn();
+      fixture.componentRef.instance.connect.subscribe(connect);
+
+      const providerSelect = host().querySelector('#connect-provider') as HTMLSelectElement;
+      selectOption(providerSelect, 'CLICK');
+
+      type(displayNameInput(), 'Click prod');
+      type(host().querySelector('#connect-field-merchantId') as HTMLInputElement, 'merchant-42');
+      type(host().querySelector('#connect-field-serviceId') as HTMLInputElement, 'service-9');
+      type(host().querySelector('#connect-field-secretKey') as HTMLInputElement, 'super-secret');
+
+      // Every field but the environment is now filled; CLICK still offers two.
+      expect(environmentSelect()?.value).toBe('');
+      expect(submitButton().disabled).toBe(true);
+
+      submitButton().click();
+      expect(connect).not.toHaveBeenCalled();
+    });
+
     it('resets the chosen environment when the provider selection changes', async () => {
       await render();
       expect(environmentSelect()?.value).toBe('telegram-prod');
