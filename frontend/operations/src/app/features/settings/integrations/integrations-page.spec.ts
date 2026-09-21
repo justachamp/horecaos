@@ -379,7 +379,8 @@ describe('IntegrationsPage', () => {
     // trigger button above the table shares the same `.primary` class as
     // the drawer's own submit button, and a page-wide query would silently
     // grab the always-enabled trigger instead.
-    const panel = fixture.debugElement.query(By.directive(ConnectProviderPanel)).nativeElement as HTMLElement;
+    const panel = fixture.debugElement.query(By.directive(ConnectProviderPanel))
+      .nativeElement as HTMLElement;
     expect(panel.querySelector('#connect-environment')).toBeNull();
     expect(panel.querySelector('#connect-environment-none')).not.toBeNull();
 

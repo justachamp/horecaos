@@ -324,7 +324,10 @@ describe('ConnectProviderPanel', () => {
       );
 
       type(displayNameInput(), 'GTM container');
-      type(host().querySelector('#connect-field-gtmContainerId') as HTMLInputElement, 'GTM-ABC1234');
+      type(
+        host().querySelector('#connect-field-gtmContainerId') as HTMLInputElement,
+        'GTM-ABC1234',
+      );
       expect(submitButton().disabled).toBe(true);
 
       submitButton().click();
