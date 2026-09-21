@@ -42,6 +42,16 @@ import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.application.CustomerBlacklistService;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalTerminalStore;
+import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
+import uz.horecaos.platform.fulfillment.application.DeliveryTariffService;
+import uz.horecaos.platform.fulfillment.application.ServiceZoneService;
+import uz.horecaos.platform.fulfillment.domain.VersionStatus;
+import uz.horecaos.platform.fulfillment.domain.tariff.DeliveryTariff;
+import uz.horecaos.platform.fulfillment.domain.tariff.DistanceMode;
+import uz.horecaos.platform.fulfillment.domain.tariff.FeeSource;
+import uz.horecaos.platform.fulfillment.domain.tariff.TariffBand;
+import uz.horecaos.platform.fulfillment.domain.zone.ZoneRole;
+import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryTariffStore;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
@@ -202,6 +212,25 @@ class CartCheckoutAndOrderTests {
     private uz.horecaos.platform.loyalty.application.LoyaltyQueryService loyaltyBalances;
     private uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore loyaltyStore;
 
+    /** ADR 0037 authoring, real classes over the real schema — see {@code seedDefaultDeliveryZone}. */
+    private ServiceZoneService zoneAuthoring;
+
+    private DeliveryTariffService tariffAuthoring;
+    private static final UUID DELIVERY_ACTOR = UUID.randomUUID();
+    private static final uz.horecaos.platform.iam.api.CurrentActor DELIVERY_TEST_ACTOR =
+            () -> new uz.horecaos.platform.iam.api.AuthenticatedActor(
+                    "delivery-fee-wiring-test", java.util.Set.of(), Map.of());
+
+    /**
+     * The branch's own point for every delivery test in this suite — exactly the
+     * "Home" address {@link #insertAddress} already seeds at 41.311081, 69.240562,
+     * so the zero-fee catch-all zone below covers it at distance zero regardless
+     * of whether a test later moves the branch with {@link #placeBranchOnTheMap()}.
+     */
+    private static final double BRANCH_LAT = 41.311081;
+
+    private static final double BRANCH_LON = 69.240562;
+
     /**
      * What ADR 0037's fee resolution would say this order's delivery fee was.
      *
@@ -336,19 +365,22 @@ class CartCheckoutAndOrderTests {
         var serviceabilityStore = new JdbcServiceabilityStore(jdbc);
 
         inventory = new InventoryService(inventoryStore, event -> {}, clock);
-        // ADR 0037. The real resolver, so a cart travels the production path rather
-        // than a stand-in that could not refuse anything. It is not reached by the
-        // carts below even where they are deliveries: CartPricingPort still carries
-        // no destination to pricing, so a cart priced through it is priced as a
-        // collection and never enters fee resolution. That is the remaining gap
-        // between a delivery order and a delivery order with a fee on it.
+        // ADR 0037. The real resolver, over the real zone/tariff schema, so a
+        // delivery cart travels the exact path production does: CartService now
+        // supplies the destination on the pricing command, and this is what
+        // resolves a fee from it (or refuses one) rather than a stand-in that
+        // could not.
+        var zoneStore = new uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore(jdbc);
+        var tariffStore = new JdbcDeliveryTariffStore(jdbc);
         var deliveryFees = new uz.horecaos.platform.fulfillment.application.DeliveryFeeResolver(
-                new uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore(jdbc),
-                new uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryTariffStore(jdbc),
+                zoneStore,
+                tariffStore,
                 new uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryFeeResolutionStore(
                         jdbc, objectMapper),
                 (origin, destination, installationId) -> java.util.Optional.empty(),
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+        zoneAuthoring = new ServiceZoneService(zoneStore, objectMapper, clock, fact -> {}, DELIVERY_TEST_ACTOR);
+        tariffAuthoring = new DeliveryTariffService(tariffStore, clock, fact -> {}, DELIVERY_TEST_ACTOR);
 
         var promoCodeStore = new JdbcPromoCodeStore(jdbc, objectMapper);
         quotes = new QuoteService(
@@ -541,6 +573,7 @@ class CartCheckoutAndOrderTests {
         seedPublication("STOREFRONT");
         seedPublishedModifierRules();
         seedPricingAndStock();
+        seedDefaultDeliveryZone();
     }
 
     // ------------------------------------------------------------------- cart
@@ -2857,6 +2890,236 @@ class CartCheckoutAndOrderTests {
                 .isEmpty();
     }
 
+    // -------------------------------------------------------- ADR 0037 delivery fee
+
+    /** About 1.8 km from the branch — inside every 3 km zone this section draws. */
+    private static final double NEARBY_LAT = 41.326500;
+
+    private static final double NEARBY_LON = 69.234100;
+
+    /** About 6 km from the branch — inside a 15 km zone, outside a 3 km one. */
+    private static final double FARTHER_LAT = 41.365000;
+
+    private static final double FARTHER_LON = 69.240562;
+
+    /** Samarkand. Inside nothing this brand has drawn. */
+    private static final double OUTSIDE_EVERY_ZONE_LAT = 39.654000;
+
+    private static final double OUTSIDE_EVERY_ZONE_LON = 66.959700;
+
+    /**
+     * The defect this section closes: order 0921-003 on pre-production
+     * (2026-09-21) totalled the same as the identical basket collected, because
+     * {@code QuoteService.priceCart} built its {@code QuoteRequest} with a
+     * literal {@code null} delivery block. A DELIVERY cart with a located
+     * address inside an active zone must carry the tariff's fee, and the total
+     * must be goods + tax + fee.
+     */
+    @Test
+    @DisplayName("a delivery cart with a located address inside an active zone is priced with the tariff fee")
+    void aDeliveryCartInAnActiveZoneIsPricedWithTheTariffFee() {
+        UUID tariff = seedFlatTariff("HEADLINE", 3_000, 10_000L);
+        activateOverridingZone("HEADLINE", tariff, 3_000, null, null);
+        UUID address = insertAddress(CUSTOMER, "Home", NEARBY_LAT, NEARBY_LON);
+        UUID cart = openDeliveryCart();
+        putLine(cart, "a", burgerVariant, 2);
+        tx(() -> carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), destinationCommand(address)));
+
+        var priced = tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        assertThat(priced.quote().feeMinor()).isEqualTo(10_000L);
+        assertThat(priced.quote().deliveryOutcome()).isEqualTo(DeliveryFeeOutcome.RESOLVED);
+        assertThat(priced.quote().isDeliveryFeeUsable()).isTrue();
+        assertThat(priced.quote().totalMinor())
+                .as("total = subtotal + tax + fee - discount")
+                .isEqualTo(priced.quote().subtotalMinor()
+                        + priced.quote().taxMinor()
+                        + priced.quote().feeMinor()
+                        - priced.quote().discountMinor());
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "headline-fee", "CASH")));
+        assertThat(result.created()).isTrue();
+    }
+
+    @Test
+    @DisplayName("the same basket as PICKUP has no fee")
+    void theSameBasketAsPickupHasNoFee() {
+        UUID tariff = seedFlatTariff("PICKUP-CONTROL", 3_000, 10_000L);
+        activateOverridingZone("PICKUP-CONTROL", tariff, 3_000, null, null);
+        UUID cart = openCart();
+        putLine(cart, "a", burgerVariant, 2);
+
+        var priced = tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        assertThat(priced.quote().feeMinor()).isZero();
+        assertThat(priced.quote().deliveryOutcome())
+                .as("delivery resolution is never attempted for a collected cart")
+                .isNull();
+        assertThat(priced.quote().totalMinor())
+                .isEqualTo(priced.quote().subtotalMinor() + priced.quote().taxMinor());
+    }
+
+    @Test
+    @DisplayName(
+            "changing the destination changes the fee and the context hash, and checkout with the old quote is refused")
+    void changingTheDestinationChangesTheFeeAndInvalidatesTheOldQuote() {
+        UUID tariff = seedTwoBandTariff("CHANGING");
+        activateOverridingZone("CHANGING", tariff, 15_000, null, null);
+        UUID nearAddress = insertAddress(CUSTOMER, "Near", NEARBY_LAT, NEARBY_LON);
+        UUID farAddress = insertAddress(CUSTOMER, "Far", FARTHER_LAT, FARTHER_LON);
+        UUID cart = openDeliveryCart();
+        putLine(cart, "a", burgerVariant, 2);
+        tx(() -> carts.setDestination(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), destinationCommand(nearAddress)));
+        var pricedNear = tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID oldQuoteId = pricedNear.quote().quoteId();
+        String oldContextHash = pricedNear.quote().contextHash();
+
+        tx(() ->
+                carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), destinationCommand(farAddress)));
+        var pricedFar = tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        assertThat(pricedFar.quote().feeMinor())
+                .as("a farther address in the second band prices differently")
+                .isNotEqualTo(pricedNear.quote().feeMinor());
+        assertThat(pricedFar.quote().contextHash())
+                .as("the destination is part of what the context hash covers, through the resolved charge")
+                .isNotEqualTo(oldContextHash);
+
+        // The current cart version, with the quote priced for the door the
+        // customer has since moved away from — exactly what a client that cached
+        // the first PricedCartResponse would present.
+        var staleCommand = new CheckoutService.CheckoutCommand(
+                TENANT,
+                BRAND,
+                cart,
+                readCart(cart).version(),
+                oldQuoteId,
+                oldContextHash,
+                "stale-destination",
+                "CASH",
+                0L,
+                "CUSTOMER",
+                CUSTOMER.toString(),
+                null);
+        var result = tx(() -> checkout.checkout(staleCommand));
+
+        assertThat(result.created())
+                .as("a fee priced for one address must not be accepted at checkout for another")
+                .isFalse();
+        assertThat(result.rejectionCode()).isEqualTo("QUOTE_NOT_BOUND_TO_CART");
+    }
+
+    @Test
+    @DisplayName("an address outside every zone surfaces the outcome, and checkout is refused")
+    void anAddressOutsideEveryZoneSurfacesTheOutcomeAndIsRefused() {
+        UUID address = insertAddress(CUSTOMER, "Samarkand", OUTSIDE_EVERY_ZONE_LAT, OUTSIDE_EVERY_ZONE_LON);
+        UUID cart = openDeliveryCart();
+        putLine(cart, "a", burgerVariant, 2);
+        tx(() -> carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), destinationCommand(address)));
+
+        var priced = tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        assertThat(priced.quote().feeMinor()).isZero();
+        assertThat(priced.quote().deliveryOutcome()).isEqualTo(DeliveryFeeOutcome.OUT_OF_ZONE);
+        assertThat(priced.quote().isDeliveryFeeUsable())
+                .as("a refusal outcome's zero fee must never be mistaken for a waiver")
+                .isFalse();
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "outside-zone", "CASH")));
+        assertThat(result.created()).isFalse();
+        assertThat(result.rejectionCode()).isEqualTo("DELIVERY_FEE_UNRESOLVED");
+    }
+
+    @Test
+    @DisplayName("below the zone's minimum basket, the outcome is surfaced and checkout is refused")
+    void belowTheZonesMinimumBasketSurfacesTheOutcomeAndIsRefused() {
+        UUID tariff = seedFlatTariff("MIN-BASKET", 3_000, 5_000L);
+        activateOverridingZone("MIN-BASKET", tariff, 3_000, 5_000_000L, null);
+        UUID address = insertAddress(CUSTOMER, "Home", NEARBY_LAT, NEARBY_LON);
+        UUID cart = openDeliveryCart();
+        putLine(cart, "a", burgerVariant, 1);
+        tx(() -> carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), destinationCommand(address)));
+
+        var priced = tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        assertThat(priced.quote().deliveryOutcome())
+                .as("the zone and tariff resolved fine; the basket is what falls short")
+                .isEqualTo(DeliveryFeeOutcome.RESOLVED);
+        assertThat(priced.quote().deliveryShortfallMinor()).isNotNull().isPositive();
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "below-minimum", "CASH")));
+        assertThat(result.created()).isFalse();
+        assertThat(result.rejectionCode()).isEqualTo("DELIVERY_MINIMUM_BASKET_NOT_MET");
+    }
+
+    @Test
+    @DisplayName("a basket past the free-delivery threshold prices at zero, resolved, and checkout succeeds")
+    void freeDeliveryThresholdWaivesTheFeeAndCheckoutSucceeds() {
+        UUID tariff = seedFlatTariff("FREE-FROM", 3_000, 8_000L);
+        activateOverridingZone("FREE-FROM", tariff, 3_000, null, 1_000L);
+        UUID address = insertAddress(CUSTOMER, "Home", NEARBY_LAT, NEARBY_LON);
+        UUID cart = openDeliveryCart();
+        putLine(cart, "a", burgerVariant, 2);
+        tx(() -> carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), destinationCommand(address)));
+
+        var priced = tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        assertThat(priced.quote().feeMinor()).isZero();
+        assertThat(priced.quote().deliveryOutcome())
+                .as("a waiver is a resolved zone whose fee the threshold cleared, never a refusal")
+                .isEqualTo(DeliveryFeeOutcome.RESOLVED);
+        assertThat(priced.quote().isDeliveryFeeUsable()).isTrue();
+        assertThat(priced.quote().deliveryShortfallMinor()).isNull();
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "free-from", "CASH")));
+        assertThat(result.created()).isTrue();
+    }
+
+    @Test
+    @DisplayName("the order row carries the delivery fee, and the order total agrees with the accepted quote")
+    void theOrderRowCarriesTheDeliveryFee() {
+        UUID tariff = seedFlatTariff("ORDER-FEE", 3_000, 10_000L);
+        activateOverridingZone("ORDER-FEE", tariff, 3_000, null, null);
+        UUID address = insertAddress(CUSTOMER, "Home", NEARBY_LAT, NEARBY_LON);
+        UUID cart = openDeliveryCart();
+        putLine(cart, "a", burgerVariant, 2);
+        tx(() -> carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), destinationCommand(address)));
+        var priced = tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "order-carries-fee", "CASH")));
+        assertThat(result.created()).isTrue();
+
+        var order = orderStore.find(TENANT, orderIdOf(result)).orElseThrow();
+        assertThat(order.feeMinor()).isEqualTo(10_000L);
+        assertThat(order.totalMinor()).isEqualTo(priced.quote().totalMinor());
+    }
+
+    /** ADR 0037's illustrative tariff: 10 000 up to 3 km, then 2 000/km. */
+    private UUID seedTwoBandTariff(String code) {
+        UUID tariffId = tariffAuthoring.createTariff(TENANT, BRAND, code, code, false);
+        var drafted = tariffAuthoring.draftVersion(
+                TENANT,
+                BRAND,
+                new DeliveryTariff(
+                        tariffId,
+                        0,
+                        VersionStatus.DRAFT,
+                        "UZS",
+                        FeeSource.TARIFF,
+                        DistanceMode.RADIUS,
+                        13_000,
+                        null,
+                        15_000,
+                        0L,
+                        null,
+                        List.of(new TariffBand(0, 0, 3_000, 10_000L, 0L), new TariffBand(1, 3_000, 15_000, 0L, 2_000L)),
+                        List.of()),
+                DELIVERY_ACTOR);
+        tariffAuthoring.activate(TENANT, BRAND, tariffId, drafted.version(), DELIVERY_ACTOR);
+        return tariffId;
+    }
+
     @Test
     @DisplayName("the port hands sourcing the order, the fee and the doorstep")
     void aConfirmedDeliveryOrderIsSourceable() {
@@ -3391,6 +3654,20 @@ class CartCheckoutAndOrderTests {
     void anUnplacedBranchPlansNothing() {
         var placed = placeDeliveryOrder("unplaced-branch");
         var order = orderStore.find(TENANT, orderIdOf(placed)).orElseThrow();
+
+        // seedDefaultDeliveryZone() gives the branch a pin so every other
+        // delivery test in this suite resolves a fee; this test is about
+        // planning's own refusal once that pin is gone again, taken away here
+        // rather than never given, so the fee this order was actually charged
+        // stays the one seedDefaultDeliveryZone's zero-fee zone resolved.
+        jdbc.sql("""
+                UPDATE tenant.locations
+                SET latitude = NULL, longitude = NULL, coordinate_source = 'NOT_GEOCODED'
+                WHERE tenant_id = :tenantId AND id = :locationId
+                """)
+                .param("tenantId", TENANT)
+                .param("locationId", LOCATION)
+                .update();
 
         assertThat(deliveryPlanning()
                         .open(
@@ -4674,6 +4951,112 @@ class CartCheckoutAndOrderTests {
                 SET latitude = 41.2995, longitude = 69.2401, coordinate_source = 'MERCHANT_PIN'
                 WHERE tenant_id = :tenantId AND id = :locationId
                 """).param("tenantId", TENANT).param("locationId", LOCATION).update();
+    }
+
+    /**
+     * ADR 0037, seeded once per test so every existing delivery-order test in
+     * this suite keeps pricing exactly as it did before CartService started
+     * supplying a destination: a huge, zero-fee, no-minimum, no-threshold zone
+     * around the branch's own point (the same 41.311081, 69.240562 every
+     * "Home" address in this suite already uses), so {@code RESOLVED} with a
+     * fee of zero is the default rather than a fee this fixture invents or a
+     * refusal nothing here expects.
+     *
+     * <p>Individual delivery-fee tests below draw their own, higher-priority
+     * zone over this one — ADR 0037's own tiebreak (priority, then area) is
+     * what lets a tighter, dearer zone win over this catch-all without
+     * disturbing it.
+     */
+    private void seedDefaultDeliveryZone() {
+        jdbc.sql("""
+                UPDATE tenant.locations
+                SET latitude = :lat, longitude = :lon, coordinate_source = 'MERCHANT_PIN'
+                WHERE tenant_id = :tenantId AND id = :locationId
+                """)
+                .param("tenantId", TENANT)
+                .param("locationId", LOCATION)
+                .param("lat", BRANCH_LAT)
+                .param("lon", BRANCH_LON)
+                .update();
+
+        // 10 km stays comfortably under ServiceZoneService's 2000 km² activation
+        // ceiling (r=10 km is ~314 km²) while covering every fixed test address
+        // in this suite by a wide margin.
+        UUID tariffId = seedFlatTariff("DEFAULT-ZERO", 10_000, 0L);
+        UUID zoneId =
+                zoneAuthoring.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "DEFAULT", "Default", "Default", "Default");
+        var drafted = zoneAuthoring.draftCircleVersion(
+                new ServiceZoneService.NewVersion(
+                        TENANT, BRAND, zoneId, ZoneRole.DELIVERY, null, 0, "UZS", tariffId, null, null, DELIVERY_ACTOR),
+                LOCATION,
+                10_000);
+        zoneAuthoring.activate(TENANT, BRAND, zoneId, drafted.version(), DELIVERY_ACTOR);
+        zoneAuthoring.bindLocation(TENANT, BRAND, zoneId, LOCATION);
+    }
+
+    /**
+     * A single-band, single-fee tariff — the shape a fee that must not disturb
+     * an existing total needs, and the shape the "up to 3 km" headline scenario
+     * needs when {@code feeMinor} is non-zero.
+     */
+    private UUID seedFlatTariff(String code, int maxDistanceMeters, long feeMinor) {
+        UUID tariffId = tariffAuthoring.createTariff(TENANT, BRAND, code, code, false);
+        var drafted = tariffAuthoring.draftVersion(
+                TENANT,
+                BRAND,
+                new DeliveryTariff(
+                        tariffId,
+                        0,
+                        VersionStatus.DRAFT,
+                        "UZS",
+                        FeeSource.TARIFF,
+                        DistanceMode.RADIUS,
+                        13_000,
+                        null,
+                        maxDistanceMeters,
+                        0L,
+                        null,
+                        List.of(new TariffBand(0, 0, maxDistanceMeters, feeMinor, 0L)),
+                        List.of()),
+                DELIVERY_ACTOR);
+        tariffAuthoring.activate(TENANT, BRAND, tariffId, drafted.version(), DELIVERY_ACTOR);
+        return tariffId;
+    }
+
+    /**
+     * A zone that outranks {@link #seedDefaultDeliveryZone}'s catch-all —
+     * priority 1 beats priority 0 regardless of area — bound to {@code
+     * LOCATION} and covering everything the tariff's own {@code
+     * maxDistanceMeters} reaches.
+     *
+     * @param minBasketMinor        the zone's minimum basket, or null for none
+     * @param freeDeliveryFromMinor the zone's free-delivery threshold, or null
+     */
+    private UUID activateOverridingZone(
+            String code,
+            UUID tariffId,
+            int radiusMeters,
+            @Nullable Long minBasketMinor,
+            @Nullable Long freeDeliveryFromMinor) {
+        UUID zoneId = zoneAuthoring.createZone(TENANT, BRAND, ZoneRole.DELIVERY, code, code, code, code);
+        var drafted = zoneAuthoring.draftCircleVersion(
+                new ServiceZoneService.NewVersion(
+                        TENANT,
+                        BRAND,
+                        zoneId,
+                        ZoneRole.DELIVERY,
+                        null,
+                        1,
+                        "UZS",
+                        tariffId,
+                        freeDeliveryFromMinor,
+                        minBasketMinor,
+                        DELIVERY_ACTOR),
+                LOCATION,
+                radiusMeters);
+        zoneAuthoring.activate(TENANT, BRAND, zoneId, drafted.version(), DELIVERY_ACTOR);
+        zoneAuthoring.bindLocation(TENANT, BRAND, zoneId, LOCATION);
+        return zoneId;
     }
 
     private UUID openDeliveryCart() {
