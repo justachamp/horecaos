@@ -3,6 +3,7 @@ package uz.horecaos.platform.integration.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -255,7 +256,7 @@ public class ProviderInstallationController {
                 .param("installationId", installationId)
                 .param("brandId", request.brandId())
                 .param("locationId", request.locationId())
-                .param("priority", request.priority() == 0 ? 100 : request.priority())
+                .param("priority", request.priority() == null || request.priority() == 0 ? 100 : request.priority())
                 .update();
 
         for (String capability : request.capabilities()) {
@@ -943,10 +944,18 @@ public class ProviderInstallationController {
             @Nullable @Size(max = 512) String secretReference,
             @Nullable @Size(max = 255) String externalAccountReference) {}
 
+    /**
+     * @param priority optional; absent or {@code 0} means the column's own default
+     *                 of 100. Boxed on purpose: the operations console has always
+     *                 omitted it, and this JSON stack refuses a missing value for a
+     *                 primitive ({@code FAIL_ON_NULL_FOR_PRIMITIVES} is on by
+     *                 default in Jackson 3), so as {@code int} every console bind
+     *                 answered 400 MALFORMED_BODY — pre-production, 2026-09-21
+     */
     public record BindRequest(
             UUID brandId,
             UUID locationId,
-            int priority,
+            @Nullable @Min(0) Integer priority,
             @NotNull List<String> capabilities,
             @NotNull List<String> primaryCapabilities) {}
 
