@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.iam.api.Capability;
-import uz.horecaos.platform.integration.api.provider.ConnectFieldCatalog;
 import uz.horecaos.platform.integration.provider.ProviderCapabilityReconciliationService;
 import uz.horecaos.platform.web.api.Page;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -70,7 +69,7 @@ public class OperationsProviderInstallationController {
             description = "Identical to the control-plane-prefixed path's own operation; see "
                     + "ProviderInstallationController.connectFields for the full description. Published "
                     + "here too so the operations app's generated client covers what it actually calls.")
-    List<ConnectFieldCatalog.ProviderConnectDeclaration> connectFields(@PathVariable UUID tenantId) {
+    List<ProviderInstallationController.ConnectFieldDeclarationView> connectFields(@PathVariable UUID tenantId) {
         return delegate.connectFields(tenantId);
     }
 

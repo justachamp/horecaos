@@ -9,9 +9,12 @@ import jakarta.validation.constraints.Size;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -134,9 +137,63 @@ public class ProviderInstallationController {
             description = "Static, code-owned catalogue: which fields a Click, Payme, or Telegram "
                     + "connect flow needs, and which of those must travel through the write-only secret "
                     + "door rather than as plain configuration. The control-plane app renders its connect "
-                    + "form from this, so a new provider adapter costs a catalogue entry, not a new screen.")
-    List<ConnectFieldCatalog.ProviderConnectDeclaration> connectFields(@PathVariable UUID tenantId) {
-        return ConnectFieldCatalog.all();
+                    + "form from this, so a new provider adapter costs a catalogue entry, not a new screen. "
+                    + "Each declaration also carries the environments a tenant may actually choose for it "
+                    + "(integration.provider_environments, platform-owned): the approved-catalogue join a "
+                    + "connect form needs to offer a picker instead of a free-text field an operator has no "
+                    + "way to guess.")
+    List<ConnectFieldDeclarationView> connectFields(@PathVariable UUID tenantId) {
+        Map<String, List<ConnectFieldEnvironment>> environmentsByDeclaration = approvedEnvironmentsByDeclaration();
+        return ConnectFieldCatalog.all().stream()
+                .map(declaration -> new ConnectFieldDeclarationView(
+                        declaration.providerType(),
+                        declaration.category(),
+                        declaration.fields(),
+                        environmentsByDeclaration.getOrDefault(
+                                declarationKey(declaration.category().name(), declaration.providerType()), List.of())))
+                .toList();
+    }
+
+    /**
+     * Every approved environment, grouped by (category, upper(provider_type)).
+     *
+     * <p>{@link ConnectFieldCatalog} is a static declaration (ADR 0065's own
+     * doc comment) and stays that way — this join belongs in the web layer
+     * that already owns the tenant-facing {@code install()} check below, not
+     * inside the catalogue class. Grouped in Java from one query rather than
+     * one query per declaration: {@link ConnectFieldCatalog#all()} is small,
+     * but a per-declaration query would still be N+1 for no reason.
+     *
+     * <p>The provider type comparison is case-insensitive on purpose: {@code
+     * integration.provider_environments} rows are seeded independently across
+     * a dozen migrations (V0036 seeds Clopos's row as lowercase {@code
+     * 'clopos'} while every {@link ConnectFieldCatalog} declaration is upper
+     * snake case) and a byte-for-byte join would silently show an approved
+     * provider as having no environments the moment a seed's casing diverged
+     * from the catalogue's, which is exactly the defect this endpoint exists
+     * to close for Telegram.
+     */
+    private Map<String, List<ConnectFieldEnvironment>> approvedEnvironmentsByDeclaration() {
+        record Row(String key, ConnectFieldEnvironment environment) {}
+
+        return jdbc
+                .sql("""
+                        SELECT provider_category, provider_type, code, is_production
+                          FROM integration.provider_environments
+                         ORDER BY is_production DESC, code
+                        """)
+                .query((rs, rowNumber) -> new Row(
+                        declarationKey(rs.getString("provider_category"), rs.getString("provider_type")),
+                        new ConnectFieldEnvironment(rs.getString("code"), rs.getBoolean("is_production"))))
+                .list()
+                .stream()
+                .collect(Collectors.groupingBy(
+                        Row::key, LinkedHashMap::new, Collectors.mapping(Row::environment, Collectors.toList())));
+    }
+
+    /** Case-sensitive on category (a closed, code-defined enum), case-insensitive on provider type. */
+    private static String declarationKey(String category, String providerType) {
+        return category + "|" + providerType.toUpperCase(Locale.ROOT);
     }
 
     @GetMapping
@@ -186,12 +243,22 @@ public class ProviderInstallationController {
     ResponseEntity<Map<String, Object>> install(
             @PathVariable UUID tenantId, @Valid @RequestBody InstallRequest request) {
 
+        // Category alone used to be the whole check, so a request could name any
+        // environment approved for the category regardless of which provider it
+        // actually belonged to — a Telegram install naming the SMS gateway's own
+        // NOTIFICATION-category row would have gotten that row's base_url. The
+        // provider type comparison is case-insensitive for the same reason
+        // approvedEnvironmentsByDeclaration() above is: a seeded row's casing
+        // (Clopos's is lowercase 'clopos') is not guaranteed to match the
+        // request's exactly even when it names the same provider.
         boolean environmentExists = jdbc.sql("""
                 SELECT EXISTS (SELECT 1 FROM integration.provider_environments
-                                WHERE code = :code AND provider_category = :category)
+                                WHERE code = :code AND provider_category = :category
+                                  AND upper(provider_type) = upper(:type))
                 """)
                 .param("code", request.environmentCode())
                 .param("category", request.category().name())
+                .param("type", request.providerType())
                 .query(Boolean.class)
                 .single();
 
@@ -1000,6 +1067,31 @@ public class ProviderInstallationController {
 
     private record InstallationActivationGate(
             String status, String connectionStatus, boolean hasUnverifiedCapability) {}
+
+    /**
+     * One {@code integration.provider_environments} row a tenant may actually
+     * choose for a declaration's provider — never the host: choosing an
+     * environment needs its name and whether it is live, not where it points
+     * (the same posture {@code PlatformIntegrationAdminController.ProviderEnvironmentView}
+     * already takes for the platform-scope read of the same table).
+     */
+    public record ConnectFieldEnvironment(String code, boolean production) {}
+
+    /**
+     * {@link ConnectFieldCatalog.ProviderConnectDeclaration} plus the
+     * environments approved for it — additive over the static declaration,
+     * assembled here rather than on the catalogue itself (see {@link
+     * #approvedEnvironmentsByDeclaration()}). An empty {@code environments}
+     * list is a real, renderable state: the platform has not approved any
+     * environment for this provider yet, so a connect form must refuse to
+     * submit rather than let an operator type a code that can only ever be
+     * rejected.
+     */
+    public record ConnectFieldDeclarationView(
+            String providerType,
+            ProviderCategory category,
+            List<ConnectFieldCatalog.ConnectField> fields,
+            List<ConnectFieldEnvironment> environments) {}
 
     /** Where an installation applies: a brand, or one location of it. */
     public record BindingView(

@@ -954,6 +954,18 @@ export interface ConnectField {
   secret?: boolean;
 }
 
+export interface ConnectFieldDeclarationView {
+  category?: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "OTHER";
+  environments?: Array<ConnectFieldEnvironment>;
+  fields?: Array<ConnectField>;
+  providerType?: string;
+}
+
+export interface ConnectFieldEnvironment {
+  code?: string;
+  production?: boolean;
+}
+
 export interface ConsentRequest {
   brandId?: string;
   channel?: string;
@@ -3382,12 +3394,6 @@ export interface ProvenanceResponse {
   timezone?: string;
 }
 
-export interface ProviderConnectDeclaration {
-  category?: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "OTHER";
-  fields?: Array<ConnectField>;
-  providerType?: string;
-}
-
 export interface ProviderInstallationControllerReasonRequest {
   reason: string;
 }
@@ -5160,7 +5166,7 @@ export interface Operations {
   "forTenant": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/feature-flags"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": { [key: string]: boolean } } };
   "list_12": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/integrations"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": PageInstallationView } };
   "install": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/integrations"; request: { parameters: { path: { tenantId: string } }; body: InstallRequest }; responses: { "200": {  } } };
-  "connectFields": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/integrations/connect-fields"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<ProviderConnectDeclaration> } };
+  "connectFields": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/integrations/connect-fields"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<ConnectFieldDeclarationView> } };
   "inboxFailures": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/integrations/failures/inbox"; request: { parameters: { path: { tenantId: string }; query: { limit?: number; status?: string } } }; responses: { "200": PageInboxFailureSummary } };
   "replay": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/integrations/failures/inbox/{consumerName}/{eventId}/replay"; request: { parameters: { path: { consumerName: string; eventId: string; tenantId: string } }; body: ReplayRequest }; responses: { "200": {  } } };
   "taxonomy": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/integrations/failures/taxonomy"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<TenantCategoryCount> } };

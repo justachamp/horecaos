@@ -3032,6 +3032,41 @@
         },
         "type" : "object"
       },
+      "ConnectFieldDeclarationView" : {
+        "properties" : {
+          "category" : {
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "OTHER" ],
+            "type" : "string"
+          },
+          "environments" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ConnectFieldEnvironment"
+            },
+            "type" : "array"
+          },
+          "fields" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ConnectField"
+            },
+            "type" : "array"
+          },
+          "providerType" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ConnectFieldEnvironment" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "production" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "ConsentRequest" : {
         "properties" : {
           "brandId" : {
@@ -10711,24 +10746,6 @@
             "type" : "array"
           },
           "timezone" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
-      "ProviderConnectDeclaration" : {
-        "properties" : {
-          "category" : {
-            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "OTHER" ],
-            "type" : "string"
-          },
-          "fields" : {
-            "items" : {
-              "$ref" : "#/components/schemas/ConnectField"
-            },
-            "type" : "array"
-          },
-          "providerType" : {
             "type" : "string"
           }
         },
@@ -23165,7 +23182,7 @@
               "*/*" : {
                 "schema" : {
                   "items" : {
-                    "$ref" : "#/components/schemas/ProviderConnectDeclaration"
+                    "$ref" : "#/components/schemas/ConnectFieldDeclarationView"
                   },
                   "type" : "array"
                 }
