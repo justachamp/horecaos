@@ -800,7 +800,12 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.connect.displayName': 'Название',
   'settings.integrations.connect.environmentCode': 'Окружение',
   'settings.integrations.connect.environmentCode.hint':
-    'Код разрешённого окружения для этого провайдера (например, код песочницы из инструкции подключения). Платформа никогда не принимает URL напрямую.',
+    'Здесь показаны только окружения, разрешённые платформой для этого провайдера.',
+  'settings.integrations.connect.environmentCode.placeholder': 'Выберите окружение',
+  'settings.integrations.connect.environmentCode.live': 'боевое',
+  'settings.integrations.connect.environmentCode.test': 'тестовое',
+  'settings.integrations.connect.environmentCode.none':
+    'Для этого провайдера пока не разрешено ни одно окружение. Обратитесь в поддержку платформы, прежде чем подключать его.',
   'settings.integrations.connect.reference': 'Ссылка (необязательно)',
   'settings.integrations.connect.reference.hint':
     'Несекретная метка, например id мерчанта или сервиса, для ваших собственных записей.',
@@ -1722,6 +1727,8 @@ export const messagesRu: MessageCatalogue = {
     'Для входа в эту учётную запись нужен ещё один шаг. Обратитесь к администратору платформы.',
   'error.unknown': 'Что-то пошло не так. Ссылка {correlationId}.',
   'error.unknown.noReference': 'Что-то пошло не так.',
+  'error.detailed': '{detail} Ссылка {correlationId}.',
+  'error.detailed.noReference': '{detail}',
 
   'catalog.nav.label': 'Разделы каталога',
   'catalog.nav.products': 'Товары',

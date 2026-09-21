@@ -62,8 +62,18 @@ export interface BindSubmission {
  * describes: no single endpoint returns every location in the tenant.
  *
  * <p>Ported from `frontend/control-plane/src/app/features/integrations/` in
- * wave 26 (ADR 0065's placement move); the connect step's own behaviour is
- * unchanged from that port. The bind step is new in wave 66.
+ * wave 26 (ADR 0065's placement move). The bind step is new in wave 66.
+ *
+ * <p>The environment field was a free-text input until this wave: the server
+ * accepts only a code that is a row of `integration.provider_environments`,
+ * which an operator had no way to know (two pre-production failures,
+ * 2026-09-19 and 2026-09-21, each writing a secret through the door before
+ * `install()` rejected the typed code and orphaning it). It is now a
+ * `<select>` built from {@link ProviderConnectDeclaration.environments} —
+ * see {@link environmentsForSelected} and the constructor's own effect for
+ * how a single approved environment gets preselected, several are left for
+ * the operator to choose, and {@link canSubmit} already refuses a blank
+ * choice, which keeps `writeSecret` from ever running without one.
  */
 @Component({
   selector: 'app-connect-provider-panel',
@@ -138,17 +148,40 @@ export interface BindSubmission {
             <label class="q-caption field-label" for="connect-environment">{{
               i18n.t('settings.integrations.connect.environmentCode')
             }}</label>
-            <input
-              id="connect-environment"
-              class="q-body field"
-              type="text"
-              [value]="environmentCode()"
-              (input)="environmentCode.set(inputValue($event))"
-              [disabled]="submitting()"
-            />
-            <p class="q-caption hint">
-              {{ i18n.t('settings.integrations.connect.environmentCode.hint') }}
-            </p>
+            @if (environmentsForSelected().length > 0) {
+              <select
+                id="connect-environment"
+                class="q-body field"
+                [value]="environmentCode()"
+                (change)="onEnvironmentChange($event)"
+                [disabled]="submitting()"
+              >
+                @if (environmentsForSelected().length > 1) {
+                  <option value="">
+                    {{ i18n.t('settings.integrations.connect.environmentCode.placeholder') }}
+                  </option>
+                }
+                @for (environment of environmentsForSelected(); track environment.code) {
+                  <option [value]="environment.code">
+                    {{ environment.code }} ·
+                    {{
+                      i18n.t(
+                        environment.production
+                          ? 'settings.integrations.connect.environmentCode.live'
+                          : 'settings.integrations.connect.environmentCode.test'
+                      )
+                    }}
+                  </option>
+                }
+              </select>
+              <p class="q-caption hint">
+                {{ i18n.t('settings.integrations.connect.environmentCode.hint') }}
+              </p>
+            } @else {
+              <p class="q-body-sm error" role="alert" id="connect-environment-none">
+                {{ i18n.t('settings.integrations.connect.environmentCode.none') }}
+              </p>
+            }
 
             @for (field of selectedDeclaration()?.fields ?? []; track field.key) {
               @if (field.secret) {
@@ -440,6 +473,11 @@ export class ConnectProviderPanel {
     this.providers().find((declaration) => declaration.providerType === this.providerType()),
   );
 
+  /** The chosen provider's approved environments — production first (the server's own ordering). */
+  protected readonly environmentsForSelected = computed(
+    () => this.selectedDeclaration()?.environments ?? [],
+  );
+
   /** `q-steps`'s own shape, row `X.33` — this drawer's first consumer. */
   protected readonly steps = computed<readonly StepItem[]>(() => [
     {
@@ -483,6 +521,24 @@ export class ConnectProviderPanel {
       },
       { allowSignalWrites: true },
     );
+
+    // The environment picker, driven entirely by the selected declaration's
+    // own approved list — never typed. Exactly one approved environment is
+    // preselected (still a visible, real choice, not a hidden default); zero
+    // or several are left unchosen, because guessing among several is
+    // exactly the defect this drawer exists to close, and {@link canSubmit}
+    // already refuses to submit on a blank one. This single effect also
+    // covers the provider default above (it tracks `providerType`, which
+    // that `queueMicrotask` sets) and an operator's own manual switch via
+    // {@link onProviderChange} — one place resets the choice either way, per
+    // this wave's own requirement that switching provider always resets it.
+    effect(
+      () => {
+        const environments = this.environmentsForSelected();
+        this.environmentCode.set(environments.length === 1 ? environments[0].code : '');
+      },
+      { allowSignalWrites: true },
+    );
   }
 
   protected readonly canSubmit = () => {
@@ -500,6 +556,16 @@ export class ConnectProviderPanel {
   protected onProviderChange(event: Event): void {
     this.providerType.set((event.target as HTMLSelectElement).value);
     this.fieldValues.set({});
+    // The environment-reset effect above reacts to `providerType`, but only
+    // once change detection runs the effect queue — clearing it here too
+    // means a synchronous read of `environmentCode()` right after this call
+    // (as `canSubmit` gets on every keystroke elsewhere) never sees the old
+    // provider's stale choice in between.
+    this.environmentCode.set('');
+  }
+
+  protected onEnvironmentChange(event: Event): void {
+    this.environmentCode.set(this.inputValue(event));
   }
 
   /**

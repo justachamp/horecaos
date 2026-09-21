@@ -11,6 +11,10 @@ const TELEGRAM: ProviderConnectDeclaration = {
   providerType: 'TELEGRAM_BOT_API',
   category: 'NOTIFICATION',
   fields: [{ key: 'botToken', secret: true }],
+  // Telegram has exactly one approved environment in production (the real
+  // gap-map defect this drawer closes) — the fixture every "exactly one is
+  // preselected" test below relies on.
+  environments: [{ code: 'telegram-prod', production: true }],
 };
 
 const CLICK: ProviderConnectDeclaration = {
@@ -25,6 +29,23 @@ const CLICK: ProviderConnectDeclaration = {
     { key: 'serviceId', secret: false },
     { key: 'secretKey', secret: true },
   ],
+  // Two approved environments, production listed first (the server's own
+  // ordering) — the fixture every "several approved, none preselected" test
+  // below relies on.
+  environments: [
+    { code: 'click-prod', production: true },
+    { code: 'click-sandbox', production: false },
+  ],
+};
+
+const NO_ENVIRONMENTS: ProviderConnectDeclaration = {
+  providerType: 'ANALYTICS_GTM',
+  category: 'ANALYTICS',
+  fields: [{ key: 'gtmContainerId', secret: false }],
+  // The platform has not approved anything for this provider yet — a real,
+  // renderable state (`ProviderInstallationController.ConnectFieldDeclarationView`'s
+  // own doc comment), never a reason to fall back to a free-text field.
+  environments: [],
 };
 
 const BRAND_ONE: BrandView = {
@@ -119,8 +140,12 @@ describe('ConnectProviderPanel', () => {
     return host().querySelector('#connect-display-name') as HTMLInputElement;
   }
 
-  function environmentInput(): HTMLInputElement {
-    return host().querySelector('#connect-environment') as HTMLInputElement;
+  function environmentSelect(): HTMLSelectElement | null {
+    return host().querySelector('#connect-environment');
+  }
+
+  function environmentNoneMessage(): HTMLElement | null {
+    return host().querySelector('#connect-environment-none');
   }
 
   function submitButton(): HTMLButtonElement {
@@ -133,10 +158,16 @@ describe('ConnectProviderPanel', () => {
     fixture.detectChanges();
   }
 
+  function selectOption(el: HTMLSelectElement, value: string): void {
+    el.value = value;
+    el.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+  }
+
   it('pre-selects the first declared provider once the microtask queue settles, and renders its own field set', async () => {
     await render();
-    const select = host().querySelector('#connect-provider') as HTMLSelectElement;
-    expect(select.value).toBe('TELEGRAM_BOT_API');
+    const providerSelect = host().querySelector('#connect-provider') as HTMLSelectElement;
+    expect(providerSelect.value).toBe('TELEGRAM_BOT_API');
     expect(host().querySelector('#connect-field-botToken')).not.toBeNull();
   });
 
@@ -150,20 +181,8 @@ describe('ConnectProviderPanel', () => {
     const connect = vi.fn();
     fixture.componentRef.instance.connect.subscribe(connect);
 
-    type(environmentInput(), 'telegram-prod');
-    type(host().querySelector('#connect-field-botToken') as HTMLInputElement, 'a-real-token');
-    expect(submitButton().disabled).toBe(true);
-
-    submitButton().click();
-    expect(connect).not.toHaveBeenCalled();
-  });
-
-  it('never emits connect while the environment code is blank', async () => {
-    await render();
-    const connect = vi.fn();
-    fixture.componentRef.instance.connect.subscribe(connect);
-
-    type(displayNameInput(), 'Pilot bot');
+    // Telegram's own environment (exactly one) is already preselected — see
+    // "preselects the sole approved environment" below.
     type(host().querySelector('#connect-field-botToken') as HTMLInputElement, 'a-real-token');
     expect(submitButton().disabled).toBe(true);
 
@@ -177,7 +196,6 @@ describe('ConnectProviderPanel', () => {
     fixture.componentRef.instance.connect.subscribe(connect);
 
     type(displayNameInput(), 'Pilot bot');
-    type(environmentInput(), 'telegram-prod');
     // The one field this provider declares (`botToken`) is left empty.
     expect(submitButton().disabled).toBe(true);
 
@@ -191,7 +209,6 @@ describe('ConnectProviderPanel', () => {
     fixture.componentRef.instance.connect.subscribe(connect);
 
     type(displayNameInput(), 'Pilot bot');
-    type(environmentInput(), 'telegram-prod');
     type(host().querySelector('#connect-field-botToken') as HTMLInputElement, 'a-real-bot-token');
 
     expect(submitButton().disabled).toBe(false);
@@ -212,13 +229,11 @@ describe('ConnectProviderPanel', () => {
     const connect = vi.fn();
     fixture.componentRef.instance.connect.subscribe(connect);
 
-    const select = host().querySelector('#connect-provider') as HTMLSelectElement;
-    select.value = 'CLICK';
-    select.dispatchEvent(new Event('change'));
-    fixture.detectChanges();
+    const providerSelect = host().querySelector('#connect-provider') as HTMLSelectElement;
+    selectOption(providerSelect, 'CLICK');
 
     type(displayNameInput(), 'Click prod');
-    type(environmentInput(), 'click-prod');
+    selectOption(environmentSelect() as HTMLSelectElement, 'click-prod');
     type(host().querySelector('#connect-field-merchantId') as HTMLInputElement, 'merchant-42');
     type(host().querySelector('#connect-field-secretKey') as HTMLInputElement, 'super-secret');
 
@@ -236,6 +251,85 @@ describe('ConnectProviderPanel', () => {
       reference: 'merchant-42/',
       secretValue: 'super-secret',
     } satisfies ConnectSubmission);
+  });
+
+  /**
+   * The environment picker: fixes the two pre-production "Unknown provider
+   * environment" failures (2026-09-19 and 2026-09-21) by replacing the free
+   * text this field used to be with a `<select>` built from the
+   * declaration's own `environments` — an operator cannot type a code the
+   * server will refuse.
+   */
+  describe('the environment picker', () => {
+    it('renders a select of the chosen declaration’s approved environments, production labelled and first', async () => {
+      await render();
+      const providerSelect = host().querySelector('#connect-provider') as HTMLSelectElement;
+      selectOption(providerSelect, 'CLICK');
+
+      const options = Array.from(environmentSelect()?.options ?? []).map((option) => option.value);
+      expect(options).toEqual(['', 'click-prod', 'click-sandbox']);
+      expect(environmentSelect()?.options[1].textContent).toContain('live');
+      expect(environmentSelect()?.options[2].textContent).toContain('test');
+    });
+
+    it('preselects the sole approved environment, still a visible, real choice', async () => {
+      await render();
+      // TELEGRAM (the default provider) declares exactly one environment.
+      const options = Array.from(environmentSelect()?.options ?? []).map((option) => option.value);
+      expect(options).toEqual(['telegram-prod']);
+      expect(environmentSelect()?.value).toBe('telegram-prod');
+    });
+
+    it('leaves several approved environments unchosen until the operator picks one', async () => {
+      await render();
+      const providerSelect = host().querySelector('#connect-provider') as HTMLSelectElement;
+      selectOption(providerSelect, 'CLICK');
+
+      expect(environmentSelect()?.value).toBe('');
+      expect(submitButton().disabled).toBe(true);
+    });
+
+    it('resets the chosen environment when the provider selection changes', async () => {
+      await render();
+      expect(environmentSelect()?.value).toBe('telegram-prod');
+
+      const providerSelect = host().querySelector('#connect-provider') as HTMLSelectElement;
+      selectOption(providerSelect, 'CLICK');
+      expect(environmentSelect()?.value).toBe('');
+
+      selectOption(environmentSelect() as HTMLSelectElement, 'click-sandbox');
+      expect(environmentSelect()?.value).toBe('click-sandbox');
+
+      // Switching back to Telegram must not carry Click's sandbox choice
+      // along, and must re-preselect Telegram's own sole environment.
+      selectOption(providerSelect, 'TELEGRAM_BOT_API');
+      expect(environmentSelect()?.value).toBe('telegram-prod');
+    });
+
+    /**
+     * The platform-side half of the defect this drawer closes: a free-text
+     * field let an operator submit a guess the server could only refuse,
+     * writing a secret through the door first every time (the orphaned-secret
+     * failure mode both pre-production incidents shared). With the
+     * declaration approving none, there must be nothing to guess into.
+     */
+    it('shows a clear message and disables submit when the provider has no approved environment, never emitting connect', async () => {
+      await render([NO_ENVIRONMENTS]);
+      const connect = vi.fn();
+      fixture.componentRef.instance.connect.subscribe(connect);
+
+      expect(environmentSelect()).toBeNull();
+      expect(environmentNoneMessage()?.textContent).toContain(
+        'No environment is approved for this provider yet',
+      );
+
+      type(displayNameInput(), 'GTM container');
+      type(host().querySelector('#connect-field-gtmContainerId') as HTMLInputElement, 'GTM-ABC1234');
+      expect(submitButton().disabled).toBe(true);
+
+      submitButton().click();
+      expect(connect).not.toHaveBeenCalled();
+    });
   });
 
   it('resets the field values when the provider selection changes, so a stale secret cannot ride along', async () => {

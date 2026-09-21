@@ -29,12 +29,13 @@ value is never written to the row it would have replaced (see "What
   platform-owned reference data (ADR 0026: "Tenants choose an environment;
   they never supply a URL") — there is deliberately no tenant-facing endpoint
   that writes it, so a platform operator seeds it once, the same way
-  `tools/seed-payments` seeds the local fake's row. If
-  `GET /api/v1/control-plane/tenants/<tenantId>/integrations/connect-fields`
-  is reachable but connecting later fails with `INVALID_REQUEST: Unknown
-  provider environment`, this step was skipped. Seed it (adjust the sandbox
-  base URL to whatever Click's or Payme's own onboarding actually issued —
-  never guess one):
+  `tools/seed-payments` seeds the local fake's row. The Environment field on
+  **Connect a provider** is a dropdown built from exactly this table (via
+  `GET .../integrations/connect-fields`), never free text — if it offers no
+  option for Click or Payme (the form instead reads "No environment is
+  approved for this provider yet" and Connect stays disabled), this step was
+  skipped. Seed it (adjust the sandbox base URL to whatever Click's or
+  Payme's own onboarding actually issued — never guess one):
 
   ```bash
   docker compose exec -T -e PGPASSWORD=horecaos_migrator platform-db \
@@ -83,9 +84,10 @@ before touching Click or Payme:
 
 1. **Integrations → Connect a provider.**
 2. Provider: `TELEGRAM_BOT_API`. Display name: anything recognisable
-   ("Ops bot"). Environment: the code seeded for it (`telegram-prod` in a
-   real deployment, or whatever `docs/local-fixtures.md`/your own seeding
-   used locally).
+   ("Ops bot"). Environment: a dropdown, not a text field — choose the one
+   option it offers (`telegram-prod` in a real deployment, or whatever
+   `docs/local-fixtures.md`/your own seeding used locally; the console never
+   lets you type a code instead).
 3. Bot token (**secret**): the BotFather token.
 4. **Connect.** The screen writes the token through the door, then calls
    `POST .../integrations` with the reference the door returned. A new row
@@ -120,8 +122,10 @@ merchant binding needs a legal entity, and an installation is what it binds
 to.
 
 1. **Integrations → Connect a provider.** Provider `CLICK`. Display name
-   ("Click — sandbox"). Environment: `click-sandbox` (the row seeded above).
-   Merchant id / Service id: Click's own sandbox identifiers, exactly as
+   ("Click — sandbox"). Environment: choose `click-sandbox` from the dropdown
+   (the row seeded above — if the row above was skipped, the dropdown shows
+   nothing to choose and Connect stays disabled rather than letting you guess
+   a code). Merchant id / Service id: Click's own sandbox identifiers, exactly as
    Click's onboarding gave them to you — non-secret, they identify the
    account rather than authenticate it. Secret key (**secret**): Click's
    sandbox secret key.
@@ -174,8 +178,8 @@ The same shape as Click, one field narrower — Payme has a cashbox id and a
 key, not a merchant/service id pair:
 
 1. **Integrations → Connect a provider.** Provider `PAYME`. Environment:
-   `payme-sandbox`. Cashbox id: non-secret. Key (**secret**): Payme's test
-   cashbox key.
+   choose `payme-sandbox` from the dropdown. Cashbox id: non-secret. Key
+   (**secret**): Payme's test cashbox key.
 2. Create the ADR 0026 binding (same `curl` shape as Click step 3, this
    installation's id).
 3. **Integrations → Register a merchant binding.** Provider `PAYME`, same

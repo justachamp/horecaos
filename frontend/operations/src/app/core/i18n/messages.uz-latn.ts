@@ -809,7 +809,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.connect.displayName': 'Nomi',
   'settings.integrations.connect.environmentCode': 'Muhit',
   'settings.integrations.connect.environmentCode.hint':
-    'Ushbu provayder uchun tasdiqlangan muhit kodi (masalan, ulash qoʻllanmasidagi sandbox kodi). Platforma hech qachon URL manzilni toʻgʻridan-toʻgʻri qabul qilmaydi.',
+    'Bu yerda faqat platforma ushbu provayder uchun tasdiqlagan muhitlar koʻrsatiladi.',
+  'settings.integrations.connect.environmentCode.placeholder': 'Muhitni tanlang',
+  'settings.integrations.connect.environmentCode.live': 'ishlab chiqarish',
+  'settings.integrations.connect.environmentCode.test': 'sinov',
+  'settings.integrations.connect.environmentCode.none':
+    'Bu provayder uchun hali tasdiqlangan muhit yoʻq. Ulashdan oldin platforma qoʻllab-quvvatlash xizmatiga murojaat qiling.',
   'settings.integrations.connect.reference': 'Havola (ixtiyoriy)',
   'settings.integrations.connect.reference.hint':
     'Maxfiy boʻlmagan belgi, masalan merchant yoki servis id, oʻz yozuvlaringiz uchun.',
@@ -1737,6 +1742,8 @@ export const messagesUzLatn: MessageCatalogue = {
     'Bu hisobga kirishdan oldin yana bir qadam kerak. Platforma administratoriga murojaat qiling.',
   'error.unknown': 'Nimadir notoʻgʻri ketdi. Havola {correlationId}.',
   'error.unknown.noReference': 'Nimadir notoʻgʻri ketdi.',
+  'error.detailed': '{detail} Havola {correlationId}.',
+  'error.detailed.noReference': '{detail}',
 
   'catalog.nav.label': 'Katalog boʻlimlari',
   'catalog.nav.products': 'Mahsulotlar',

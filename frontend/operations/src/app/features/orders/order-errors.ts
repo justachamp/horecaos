@@ -21,7 +21,25 @@ export const ERROR_MESSAGE_KEYS: Readonly<Partial<Record<string, MessageKey>>> =
   [ApiErrorCode.RATE_LIMIT_EXCEEDED]: 'error.RATE_LIMIT_EXCEEDED',
 };
 
-/** The operator-facing sentence for a failed call, never `problem.detail` (that is English, for a developer). */
+/**
+ * The operator-facing sentence for a failed call.
+ *
+ * A code in {@link ERROR_MESSAGE_KEYS} always wins with its own translated
+ * sentence. Failing that, a *client* error (400–499 — invalid request,
+ * failed validation, a conflict, an unprocessable state, and the like) shows
+ * the server's own `problem.detail` plus the reference, because that is the
+ * one thing standing between an operator and a guess: this is what sent two
+ * pre-production Telegram connects into "Unknown provider environment" with
+ * nothing on screen but "Something went wrong" (2026-09-19, 2026-09-21).
+ * `detail` is English and untranslated (see that field's own doc comment),
+ * which is still better than nothing for a code this function does not
+ * recognise.
+ *
+ * <p>A *server* error (500 and up) never takes this branch: `detail` there
+ * describes an internal failure an operator did not cause and cannot act on,
+ * so it stays the flat, translated "something went wrong" it always was —
+ * the two-message split this function's own tests prove.
+ */
 export function describeApiError(
   error: ApiError,
   translate: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string,
@@ -30,9 +48,20 @@ export function describeApiError(
   if (key) {
     return translate(key);
   }
+  const detail = error.problem?.detail;
+  if (detail !== undefined && detail.trim().length > 0 && isClientError(error.status)) {
+    return error.correlationId
+      ? translate('error.detailed', { detail, correlationId: error.correlationId })
+      : translate('error.detailed.noReference', { detail });
+  }
   return error.correlationId
     ? translate('error.unknown', { correlationId: error.correlationId })
     : translate('error.unknown.noReference');
+}
+
+/** 400–499: the request itself, not the platform, is what needs to change. */
+function isClientError(status: number): boolean {
+  return status >= 400 && status < 500;
 }
 
 /** ADR 0031's errorCode and correlation id, for support. */

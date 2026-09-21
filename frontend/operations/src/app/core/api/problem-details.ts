@@ -12,8 +12,14 @@ export interface ProblemDetails {
   readonly title?: string;
   readonly status: number;
   /**
-   * Developer-facing explanation. Never rendered to an operator: it is English,
-   * untranslated, and written for whoever reads the response.
+   * A developer-written explanation, English and untranslated — never
+   * localized, and never guaranteed to be one an operator would choose. It is
+   * still the one place a refused request says *why*, so
+   * {@link order-errors.ts!describeApiError} renders it, verbatim, for a
+   * client-error code it has no friendlier mapping for (a 5xx never shows it:
+   * see that function's own doc comment). ADR 0029/0028 hold regardless of
+   * who reads it — a throw site may name a code or a field, never a secret
+   * value or PII.
    */
   readonly detail?: string;
   readonly instance?: string;
