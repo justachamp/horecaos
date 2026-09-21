@@ -220,6 +220,55 @@ describe('TermsPage', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Published as version 3');
   });
 
+  /**
+   * `describeApiError` (`order-errors.ts`) now uniformly renders `detail`
+   * plus the correlation id for any unmapped 4xx — the fix for the two
+   * pre-production "Unknown provider environment" incidents where an
+   * operator saw only a bare "Something went wrong. Reference …" with the
+   * server's own detail nowhere on screen. This screen's own `describe()`
+   * special-cases `VALIDATION_FAILED` ahead of that shared helper; it must
+   * still carry the reference along, not drop it, so a VALIDATION_FAILED
+   * publish failure renders exactly as every other screen's does.
+   */
+  it('shows the server detail and the correlation id when publishing fails validation', async () => {
+    const publish = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError(
+          ApiErrorCode.VALIDATION_FAILED,
+          400,
+          { status: 400, detail: 'At least one locale is required.' },
+          'corr-42',
+        ),
+      );
+    const fixture = await render(
+      { list: vi.fn().mockResolvedValue([BRAND]) },
+      {
+        current: vi.fn().mockResolvedValue(NEVER_PUBLISHED),
+        list: vi.fn().mockResolvedValue([]),
+        publish,
+      },
+    );
+
+    const ruEditor = fixture.nativeElement.querySelectorAll(
+      '[data-testid="q-rich-text-textarea"]',
+    )[0] as HTMLTextAreaElement;
+    ruEditor.value = 'Новые правила';
+    ruEditor.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const submit = fixture.nativeElement.querySelector(
+      '.form__actions button',
+    ) as HTMLButtonElement;
+    submit.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const message = fixture.nativeElement.querySelector('.error')?.textContent ?? '';
+    expect(message).toContain('At least one locale is required.');
+    expect(message).toContain('corr-42');
+  });
+
   it('shows the denied state on a 403 rather than an empty page', async () => {
     const fixture = await render(
       {

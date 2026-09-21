@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
-import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
+import { ApiError } from '../../../core/api/problem-details';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
@@ -253,19 +253,19 @@ export class TermsPage {
   }
 
   /**
-   * `describeApiError`'s own mapping has no entry for VALIDATION_FAILED — by
-   * design, per that helper's doc, since most callers should never render
-   * `problem.detail` verbatim (it is English, developer-facing prose). This
-   * screen is the deliberate exception: the server's own validation message
-   * for a publish with no non-blank locale ("at least one locale is
-   * required") is short, accurate, and not worth re-authoring as a bespoke
-   * translated copy that could drift from the server's actual rule.
+   * `describeApiError`'s own mapping has no dedicated entry for
+   * VALIDATION_FAILED, so it falls through to that helper's shared
+   * unmapped-4xx branch: the server's own validation message for a publish
+   * with no non-blank locale ("at least one locale is required") plus the
+   * correlation id, exactly as every other unmapped 400 in the console
+   * renders (`order-errors.ts`). This used to short-circuit before reaching
+   * that branch and return `problem.detail` alone, which quietly dropped the
+   * reference an operator would otherwise have to hand to support — the one
+   * screen in the console whose validation failures rendered differently
+   * from the rest.
    */
   private describe(error: unknown): string {
     if (error instanceof ApiError) {
-      if (error.code === ApiErrorCode.VALIDATION_FAILED && error.problem?.detail) {
-        return error.problem.detail;
-      }
       return describeApiError(error, (key, values) => this.i18n.t(key, values));
     }
     return this.i18n.t('error.unknown.noReference');

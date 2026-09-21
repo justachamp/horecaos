@@ -4725,6 +4725,41 @@
         },
         "type" : "object"
       },
+      "ConnectFieldDeclarationView" : {
+        "properties" : {
+          "category" : {
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "OTHER" ],
+            "type" : "string"
+          },
+          "environments" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ConnectFieldEnvironment"
+            },
+            "type" : "array"
+          },
+          "fields" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ConnectField"
+            },
+            "type" : "array"
+          },
+          "providerType" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ConnectFieldEnvironment" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "production" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "ConsentRequest" : {
         "properties" : {
           "brandId" : {
@@ -32498,7 +32533,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/integrations/connect-fields" : {
       "get" : {
-        "description" : "Static, code-owned catalogue: which fields a Click, Payme, or Telegram connect flow needs, and which of those must travel through the write-only secret door rather than as plain configuration. The control-plane app renders its connect form from this, so a new provider adapter costs a catalogue entry, not a new screen.",
+        "description" : "Static, code-owned catalogue: which fields a Click, Payme, or Telegram connect flow needs, and which of those must travel through the write-only secret door rather than as plain configuration. The control-plane app renders its connect form from this, so a new provider adapter costs a catalogue entry, not a new screen. Each declaration also carries the environments a tenant may actually choose for it (integration.provider_environments, platform-owned): the approved-catalogue join a connect form needs to offer a picker instead of a free-text field an operator has no way to guess.",
         "operationId" : "connectFields_1",
         "parameters" : [ {
           "in" : "path",
@@ -32515,7 +32550,7 @@
               "*/*" : {
                 "schema" : {
                   "items" : {
-                    "$ref" : "#/components/schemas/ProviderConnectDeclaration"
+                    "$ref" : "#/components/schemas/ConnectFieldDeclarationView"
                   },
                   "type" : "array"
                 }
@@ -43444,7 +43479,7 @@
               "*/*" : {
                 "schema" : {
                   "items" : {
-                    "$ref" : "#/components/schemas/ProviderConnectDeclaration"
+                    "$ref" : "#/components/schemas/ConnectFieldDeclarationView"
                   },
                   "type" : "array"
                 }

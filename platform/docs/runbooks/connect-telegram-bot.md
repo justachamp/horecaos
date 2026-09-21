@@ -37,9 +37,11 @@ call is a rotation (see step 6), and Telegram always obeys whichever
   (`OperationsProviderInstallationController`'s own doc comment).
 - **The `telegram-prod` provider-environment row.** Unlike Click's and Payme's
   sandbox rows, this one does not need seeding by hand: `V0374` ships it as a
-  migration, already applied on `main`. If **Connect a provider** answers `400
-  Unknown provider environment for this category: telegram-prod`, that
-  migration was never applied to this database — see Troubleshooting.
+  migration, already applied on `main`. The console reads it from the
+  connect-fields endpoint and offers it as the Environment field's one
+  option — nothing to type. If that field instead shows "No environment is
+  approved for this provider yet" with Connect disabled, that migration was
+  never applied to this database — see Troubleshooting.
 - **`HORECAOS_API_ORIGIN` set to this deployment's real, `https`, publicly
   reachable origin on the `platform-app` container.**
   `TelegramWebhookRegistrationService` builds the URL it hands Telegram from
@@ -61,8 +63,10 @@ endpoint anywhere that reads it back (ADR 0065).
 **Settings → Integrations → Connect a provider.**
 
 - Provider: `TELEGRAM_BOT_API`. Display name: anything recognisable
-  ("Front desk bot"). Environment: `telegram-prod` (seeded by V0374). Bot
-  token (**secret**): the token from step 1.
+  ("Front desk bot"). Environment: a dropdown, not a text field — choose
+  `telegram-prod`, the only option it offers (seeded by V0374; the console
+  will never let you type or submit anything else). Bot token (**secret**):
+  the token from step 1.
 - **Connect.**
 
 Underneath: writes the token through the door
@@ -190,10 +194,14 @@ re-register rather than trying to reason about which secret is current.
   `production-setup.md`'s "Configure" section, "Reloading a policy": re-run
   its `for policy …` loop with the current `deploy/infra/openbao/policies/`
   copy.
-- **`400 Unknown provider environment for this category: telegram-prod`**
-  (step 2). `V0374` was never applied to this database:
+- **The Environment field on the Connect form shows "No environment is
+  approved for this provider yet" instead of `telegram-prod`, and Connect
+  stays disabled** (step 2). `V0374` was never applied to this database:
   `SELECT 1 FROM integration.provider_environments WHERE code = 'telegram-prod'`
-  — no row means the migration has not run.
+  — no row means the migration has not run. (If you instead see a `400`
+  naming an unknown provider environment, the console build predates the
+  environment picker — the console renders the server's own detail for that
+  failure now, but redeploy the current image rather than working around it.)
 - **Telegram deliveries to `/providers/telegram/<id>/webhook` come back
   `403`.** Either this installation has never registered a webhook
   (`webhook_secret_reference IS NULL`), its status is no longer `ACTIVE`, or

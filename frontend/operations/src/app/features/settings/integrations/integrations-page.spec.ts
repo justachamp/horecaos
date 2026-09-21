@@ -135,6 +135,7 @@ class FakeIntegrationsApi {
       providerType: 'TELEGRAM_BOT_API',
       category: 'NOTIFICATION',
       fields: [{ key: 'botToken', secret: true }],
+      environments: [{ code: 'telegram-prod', production: true }],
     },
   ]);
   readonly writeSecret = vi
@@ -328,6 +329,76 @@ describe('IntegrationsPage', () => {
     const stillOpen = fixture.debugElement.query(By.directive(ConnectProviderPanel));
     expect(stillOpen).toBeTruthy();
     expect((stillOpen.componentInstance as ConnectProviderPanel).phase()).toBe('bind');
+  });
+
+  /**
+   * `connect-provider-panel.spec.ts` proves the picker itself refuses to
+   * submit with no environment chosen; this proves the consequence that
+   * actually matters here — with the declaration approving none, filling in
+   * every other field still never reaches the write-only secret door, let
+   * alone `install()`. Before this fix, a free-text environment field let an
+   * operator submit anyway, writing a secret the server then refused to
+   * attach to any installation (the orphaned-secret defect this whole
+   * change closes).
+   */
+  it('never writes the secret nor installs when the declaration approves no environment for the provider', async () => {
+    api.listConnectFields.mockResolvedValue([
+      {
+        providerType: 'TELEGRAM_BOT_API',
+        category: 'NOTIFICATION',
+        fields: [{ key: 'botToken', secret: true }],
+        environments: [],
+      },
+    ]);
+    await TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [IntegrationsPage],
+      providers: [
+        { provide: IntegrationsApi, useValue: api },
+        { provide: FiscalizationApi, useValue: fiscalizationApi },
+        { provide: BrandProfileApi, useValue: brandsApi },
+        { provide: LocationsApi, useValue: locationsApi },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(IntegrationsPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const connectButton = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).find((candidate) => candidate.textContent?.includes('Connect')) as HTMLButtonElement;
+    connectButton.click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // Scoped to the drawer itself, never the page: the "Connect a provider"
+    // trigger button above the table shares the same `.primary` class as
+    // the drawer's own submit button, and a page-wide query would silently
+    // grab the always-enabled trigger instead.
+    const panel = fixture.debugElement.query(By.directive(ConnectProviderPanel))
+      .nativeElement as HTMLElement;
+    expect(panel.querySelector('#connect-environment')).toBeNull();
+    expect(panel.querySelector('#connect-environment-none')).not.toBeNull();
+
+    const displayNameField = panel.querySelector('#connect-display-name') as HTMLInputElement;
+    displayNameField.value = 'Pilot bot';
+    displayNameField.dispatchEvent(new Event('input'));
+    const tokenField = panel.querySelector('#connect-field-botToken') as HTMLInputElement;
+    tokenField.value = 'a-real-bot-token';
+    tokenField.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const submitButton = panel.querySelector('.primary') as HTMLButtonElement;
+    expect(submitButton.disabled).toBe(true);
+    submitButton.click();
+    await flushMicrotasks();
+
+    expect(api.writeSecret).not.toHaveBeenCalled();
+    expect(api.install).not.toHaveBeenCalled();
   });
 
   it('continues the connect drawer into binding, then closes only once the bind step submits', async () => {

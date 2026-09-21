@@ -829,7 +829,12 @@ export const messagesEn = {
   'settings.integrations.connect.displayName': 'Display name',
   'settings.integrations.connect.environmentCode': 'Environment',
   'settings.integrations.connect.environmentCode.hint':
-    'The approved environment code for this provider (for example a sandbox code from the connect runbook). The platform never accepts a URL directly.',
+    'Only environments the platform has approved for this provider appear here.',
+  'settings.integrations.connect.environmentCode.placeholder': 'Select an environment',
+  'settings.integrations.connect.environmentCode.live': 'live',
+  'settings.integrations.connect.environmentCode.test': 'test',
+  'settings.integrations.connect.environmentCode.none':
+    'No environment is approved for this provider yet. Contact platform support before connecting it.',
   'settings.integrations.connect.reference': 'Reference (optional)',
   'settings.integrations.connect.reference.hint':
     'A non-secret label such as a merchant or service id, for your own records.',
@@ -1748,6 +1753,8 @@ export const messagesEn = {
     'This account needs one more step before it can sign in. Contact a platform administrator.',
   'error.unknown': 'Something went wrong. Reference {correlationId}.',
   'error.unknown.noReference': 'Something went wrong.',
+  'error.detailed': '{detail} Reference {correlationId}.',
+  'error.detailed.noReference': '{detail}',
 
   'catalog.nav.label': 'Catalog sections',
   'catalog.nav.products': 'Products',

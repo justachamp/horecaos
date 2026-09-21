@@ -439,17 +439,34 @@ export interface MerchantBindingView {
   readonly lastSecretRotatedAt: string | null;
 }
 
-/** Mirrors uz.horecaos.platform.integration.api.provider.ConnectFieldCatalog.ProviderConnectDeclaration. */
+/**
+ * Mirrors uz.horecaos.platform.integration.web.ProviderInstallationController.ConnectFieldDeclarationView
+ * — {@link ConnectFieldCatalog}'s static per-provider field list, joined
+ * server-side against `integration.provider_environments` (see that
+ * controller's own doc comment). `environments` is the approved-catalogue an
+ * operator picks from; an empty list is a real, renderable state — the
+ * platform has approved none for this provider yet — never a signal to fall
+ * back to a free-text field, which is the defect this type change exists to
+ * close (two pre-production "Unknown provider environment" failures,
+ * 2026-09-19 and 2026-09-21, each orphaning a written secret).
+ */
 export interface ProviderConnectDeclaration {
   readonly providerType: string;
   readonly category: string;
   readonly fields: readonly ConnectField[];
+  readonly environments: readonly ConnectFieldEnvironment[];
 }
 
 /** Mirrors uz.horecaos.platform.integration.api.provider.ConnectFieldCatalog.ConnectField. */
 export interface ConnectField {
   readonly key: string;
   readonly secret: boolean;
+}
+
+/** Mirrors ...ProviderInstallationController.ConnectFieldEnvironment. Never the host — see that record's own doc comment. */
+export interface ConnectFieldEnvironment {
+  readonly code: string;
+  readonly production: boolean;
 }
 
 /**

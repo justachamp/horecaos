@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -335,6 +337,126 @@ class OperationsProviderIntegrationsEndpointTests {
                 .as("a code outside the catalogue is still refused: the seed widened the catalogue, not the check")
                 .isEqualTo(400);
         assertThat(refused.getResponse().getContentAsString()).contains("telegram-production");
+    }
+
+    /**
+     * The connect-fields response's new {@code environments} field (ADR 0106 gap
+     * map row X.19): a tenant picks from this list rather than typing a code it
+     * has no way to know, and the join proving it out must not leak an
+     * environment seeded for a different provider of the same category into a
+     * declaration that never approved it.
+     */
+    @Test
+    void connectFieldsListsExactlyTheSeededEnvironmentsPerProviderAndNoneFromAnother() throws Exception {
+        // Two providers sharing PAYMENT, each with its own environment, plus a
+        // second Telegram-category row that must not appear anywhere but
+        // TELEGRAM_BOT_API. Click's non-production code sorts after its
+        // production one alphabetically, proving "production first" is a real
+        // ordering rule rather than incidental code order.
+        environment("click-sandbox-env", "PAYMENT", "CLICK", false);
+        environment("click-prod-env", "PAYMENT", "CLICK", true);
+        environment("payme-sandbox-env", "PAYMENT", "PAYME", false);
+
+        MvcResult result = mvc.perform(get(NEW_INTEGRATIONS + "/connect-fields").with(tokenFor(OWNER)))
+                .andReturn();
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        JsonNode declarations = JSON.readTree(result.getResponse().getContentAsString());
+
+        JsonNode click = declarationFor(declarations, "CLICK");
+        assertThat(codesOf(click.path("environments")))
+                .as("production-first, then code — never the sibling PAYME environment")
+                .containsExactly("click-prod-env", "click-sandbox-env");
+
+        JsonNode payme = declarationFor(declarations, "PAYME");
+        assertThat(codesOf(payme.path("environments")))
+                .as("PAYME sees only its own row, never CLICK's")
+                .containsExactly("payme-sandbox-env");
+
+        JsonNode telegram = declarationFor(declarations, "TELEGRAM_BOT_API");
+        assertThat(codesOf(telegram.path("environments")))
+                .as("only the fixture's own Telegram row, never a PAYMENT-category one")
+                .containsExactly("operations-surface-telegram-env");
+
+        JsonNode hostedPbx = declarationFor(declarations, "HOSTED_PBX");
+        assertThat(codesOf(hostedPbx.path("environments")))
+                .as("no row seeded for this provider: an empty list, not an absent field or an error")
+                .isEmpty();
+    }
+
+    @Test
+    void installRefusesAnEnvironmentSeededForAnotherProviderOfTheSameCategory() throws Exception {
+        environment("cross-provider-click-env", "PAYMENT", "CLICK", false);
+        environment("cross-provider-payme-env", "PAYMENT", "PAYME", false);
+
+        MvcResult refused = mvc.perform(post(NEW_INTEGRATIONS)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "cross-provider-refusal-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(installRequest("PAYMENT", "CLICK", "cross-provider-payme-env", "Click via Payme env")))
+                .andReturn();
+        assertThat(refused.getResponse().getStatus())
+                .as("PAYME's environment is a PAYMENT row too, but not CLICK's")
+                .isEqualTo(400);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INVALID_REQUEST")
+                .contains("cross-provider-payme-env");
+        assertThat(jdbc.sql("""
+                        SELECT count(*) FROM integration.installations
+                         WHERE tenant_id = :tenantId AND display_name = 'Click via Payme env'
+                        """).param("tenantId", TENANT).query(Integer.class).single())
+                .as("the refused install must not have written a row")
+                .isZero();
+
+        MvcResult installed = mvc.perform(post(NEW_INTEGRATIONS)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "cross-provider-success-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(installRequest(
+                                "PAYMENT", "CLICK", "cross-provider-click-env", "Click via its own env")))
+                .andReturn();
+        assertThat(installed.getResponse().getStatus())
+                .as(installed.getResponse().getContentAsString())
+                .isBetween(200, 201);
+    }
+
+    private static JsonNode declarationFor(JsonNode declarations, String providerType) {
+        for (JsonNode declaration : declarations) {
+            if (providerType.equals(declaration.path("providerType").asText())) {
+                return declaration;
+            }
+        }
+        throw new AssertionError("No connect-fields declaration for " + providerType + " in " + declarations);
+    }
+
+    private static List<String> codesOf(JsonNode environments) {
+        List<String> codes = new java.util.ArrayList<>();
+        for (JsonNode environment : environments) {
+            codes.add(environment.path("code").asText());
+        }
+        return codes;
+    }
+
+    private void environment(String code, String category, String providerType, boolean production) {
+        jdbc.sql("""
+                INSERT INTO integration.provider_environments
+                    (code, provider_category, provider_type, base_url, is_production, egress_allowlist)
+                VALUES (:code, :category, :providerType, 'https://example.test', :production, '')
+                ON CONFLICT (code) DO NOTHING
+                """)
+                .param("code", code)
+                .param("category", category)
+                .param("providerType", providerType)
+                .param("production", production)
+                .update();
+    }
+
+    private static final ObjectMapper JSON = new ObjectMapper();
+
+    private static String installRequest(
+            String category, String providerType, String environmentCode, String displayName) {
+        return """
+                {"category":"%s","providerType":"%s","environmentCode":"%s","displayName":"%s"}
+                """.formatted(category, providerType, environmentCode, displayName);
     }
 
     private static String installRequest(String environmentCode) {
