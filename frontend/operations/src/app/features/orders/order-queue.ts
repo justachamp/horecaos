@@ -40,6 +40,7 @@ import {
   actionLabel,
   advanceReasonCode,
   decisionOutcomeLabel,
+  requiresCancellationReason,
   splitInlineOverflow,
 } from './order-actions';
 import { DecisionResponse, OrderActionsApi } from './order-actions-api';
@@ -137,10 +138,16 @@ interface OrderRow {
   readonly severity: OrderSeverity;
 }
 
-/** Which row opened the reason dialog, for which action, at which version. */
+/**
+ * Which row opened the reason dialog, for which action, at which version.
+ *
+ * `'cancel'` is the free-text reasonless dialog (before `CONFIRMED`);
+ * `'cancel-reason'` is the registry-reasoned picker H2 adds for `CONFIRMED`
+ * onward — see {@link requiresCancellationReason}.
+ */
 interface RowDialogState {
   readonly orderId: string;
-  readonly kind: 'reject' | 'cancel';
+  readonly kind: 'reject' | 'cancel' | 'cancel-reason';
   readonly version: number;
 }
 
@@ -266,6 +273,13 @@ export class OrderQueue implements OnInit {
   protected readonly dialog = signal<RowDialogState | null>(null);
   /** Fetched before the reject dialog opens — see {@link onActionClick}'s REJECT case. */
   protected readonly rejectReasons = signal<readonly RejectReasonOption[]>([]);
+  /**
+   * Fetched before the row's own reasoned cancel dialog opens (H2) — see
+   * {@link openCancelReasonDialog}. Kept apart from {@link bulkCancelReasons}:
+   * the two dialogs can be open at different times for different reasons and
+   * neither should clobber the other's already-fetched list.
+   */
+  protected readonly cancelReasons = signal<readonly ReasonResponse[]>([]);
   private readonly decisionIds = new DecisionIdRegistry();
 
   /**
@@ -970,7 +984,11 @@ export class OrderQueue implements OnInit {
         void this.openRejectDialog(order.orderId, version, scope);
         return;
       case 'CANCEL':
-        this.dialog.set({ orderId: order.orderId, kind: 'cancel', version });
+        if (requiresCancellationReason(order.status)) {
+          void this.openCancelReasonDialog(order.orderId, version, scope);
+        } else {
+          this.dialog.set({ orderId: order.orderId, kind: 'cancel', version });
+        }
         return;
       case 'ADVANCE':
         if (action.targetStatus) {
@@ -1013,6 +1031,31 @@ export class OrderQueue implements OnInit {
     }
   }
 
+  /**
+   * H2, fetch-before-open — the same rule {@link openRejectDialog} follows:
+   * the tenant's active `CANCELLATION` reasons need to be on hand before the
+   * picker has anything to show. Only reached for `CONFIRMED` and later
+   * (see {@link onActionClick}'s CANCEL case) — `OrderActionsPolicy.
+   * canCancelWithoutReason` refuses the free-text path from here on, so the
+   * reasonless dialog is never offered for these statuses at all.
+   */
+  private async openCancelReasonDialog(
+    orderId: string,
+    version: number,
+    scope: LocationScope,
+  ): Promise<void> {
+    try {
+      this.cancelReasons.set(await this.referenceDataApi.list(scope, 'CANCELLATION'));
+      this.dialog.set({ orderId, kind: 'cancel-reason', version });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.actionNotice.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
+      } else {
+        throw error;
+      }
+    }
+  }
+
   protected dialogBusy(): boolean {
     const state = this.dialog();
     return state !== null && this.isRowBusy(state.orderId);
@@ -1035,6 +1078,27 @@ export class OrderQueue implements OnInit {
         scope,
         state.orderId,
         state.version,
+        submission.reasonCode,
+        submission.note,
+      ),
+    ).finally(() => this.dialog.set(null));
+  }
+
+  /** H2: `CONFIRMED` onward — the registry-reasoned counterpart of {@link onCancelDialogConfirm}. */
+  protected onCancelReasonDialogConfirm(submission: OutcomeReasonSubmission): void {
+    const state = this.dialog();
+    const scope = this.location.scope();
+    if (!state || !scope) {
+      return;
+    }
+
+    void this.submitStateMutation(
+      state.orderId,
+      this.actionsApi.cancelWithReason(
+        scope,
+        state.orderId,
+        state.version,
+        submission.reasonId,
         submission.reasonCode,
         submission.note,
       ),

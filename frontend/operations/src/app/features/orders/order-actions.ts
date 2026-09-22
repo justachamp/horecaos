@@ -156,6 +156,28 @@ export function advanceReasonCode(targetStatus: string): string {
 }
 
 /**
+ * Mirrors `OrderActionsPolicy.canCancelWithoutReason` (server): false for
+ * `CONFIRMED`, `PREPARING`, `READY` and `FULFILLING`, the four statuses wave
+ * P09 gave a `CANCELLED` edge without also allowing the old reasonless path
+ * (H2, orders.md §4.5) — every earlier status (`RECEIVED`,
+ * `AWAITING_APPROVAL`, `PAYMENT_AUTHORIZING`, …) still accepts the reasonless
+ * `Отменить`. A client that guesses wrong here does not get a second chance
+ * to guess again: the reasonless call is refused outright with
+ * `CancellationNotPermittedException` (409), so the caller must ask this
+ * *before* choosing which dialog to open, not after the request fails.
+ */
+const STATUSES_REQUIRING_CANCELLATION_REASON: ReadonlySet<string> = new Set([
+  'CONFIRMED',
+  'PREPARING',
+  'READY',
+  'FULFILLING',
+]);
+
+export function requiresCancellationReason(status: string): boolean {
+  return STATUSES_REQUIRING_CANCELLATION_REASON.has(status);
+}
+
+/**
  * Mints and remembers one `decisionId` per order (orders.md §4.3): "client-supplied
  * and stable across retries of one human decision, so the same click arriving
  * twice is one decision." A second, unrelated decision on the same order (a

@@ -526,6 +526,9 @@ function configureWithActions(
   orders: readonly OrderSummaryResponse[],
   actionsApi: Partial<OrderActionsApi>,
   rejectReasonsApi: Partial<RejectReasonsApi> = stubRejectReasons(),
+  referenceDataApi: Partial<ReferenceDataApi> = {
+    list: () => Promise.resolve(FAKE_CANCEL_REASONS),
+  },
 ): void {
   TestBed.configureTestingModule({
     providers: [
@@ -542,6 +545,7 @@ function configureWithActions(
       { provide: OrderCounts, useValue: { forOrders: () => Promise.resolve(zeroTabCounts()) } },
       { provide: OrderActionsApi, useValue: actionsApi },
       { provide: RejectReasonsApi, useValue: rejectReasonsApi },
+      { provide: ReferenceDataApi, useValue: referenceDataApi },
       {
         provide: LatenessPolicyApi,
         useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
@@ -826,6 +830,105 @@ describe('OrderQueue: row actions render exactly from actions[] (§2.9, §4.2)',
       expect.any(String),
       'OTHER',
       'клиент оскорблял оператора',
+    );
+  });
+});
+
+/**
+ * H2: `OrderActionsPolicy.canCancelWithoutReason` refuses the reasonless
+ * `Отменить` from `CONFIRMED` onward (`CancellationNotPermittedException`,
+ * 409) — but the server still offers `CANCEL` in `actions[]` for
+ * `CONFIRMED`/`PREPARING`/`READY`/`FULFILLING` too, because those statuses
+ * gained a `CANCELLED` edge in wave P09. Before this fix the row's own quick
+ * Cancel action always opened the free-text reasonless dialog and always
+ * called `OrderActionsApi.cancel` — a guaranteed 409 for any order at or
+ * past `CONFIRMED`. `order-detail-pane.ts` already migrated to the
+ * registry-reasoned `cancelWithReason` path; this is the same fix for the
+ * row's own quick action.
+ */
+describe('OrderQueue: reasoned cancel from CONFIRMED onward (H2)', () => {
+  it('keeps the reasonless free-text dialog for a not-yet-confirmed order', async () => {
+    const cancel = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'CANCELLED',
+        version: 2,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+        deliveryCancellation: null,
+      }),
+    );
+    configureWithActions(
+      [order({ orderId: 'order-1', status: 'RECEIVED', actions: [{ action: 'CANCEL' }] })],
+      { cancel },
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=new');
+    await flushMicrotasks();
+
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="order-row-action-CANCEL"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="order-reason-dialog"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="order-outcome-reason-dialog"]')).toBeNull();
+  });
+
+  it('requires a registry reason and calls cancelWithReason for a CONFIRMED order, never the reasonless cancel', async () => {
+    const cancel = vi.fn();
+    const cancelWithReason = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'CANCELLED',
+        version: 3,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+        deliveryCancellation: null,
+      }),
+    );
+    configureWithActions(
+      [
+        order({
+          orderId: 'order-1',
+          status: 'CONFIRMED',
+          version: 2,
+          actions: [{ action: 'CANCEL' }],
+        }),
+      ],
+      { cancel, cancelWithReason },
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="order-row-action-CANCEL"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    // The old free-text reasonless dialog never opens past CONFIRMED — the
+    // registry-reason picker does, the same one order-detail-pane.ts uses.
+    expect(host.querySelector('[data-testid="order-reason-dialog"]')).toBeNull();
+    expect(host.querySelector('[data-testid="order-outcome-reason-dialog"]')).not.toBeNull();
+    expect(
+      host.querySelector('[data-testid="order-outcome-reason-option-reason-1"]'),
+    ).not.toBeNull();
+
+    (
+      host.querySelector('[data-testid="order-outcome-reason-option-reason-1"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="order-outcome-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(cancel).not.toHaveBeenCalled();
+    expect(cancelWithReason).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'order-1',
+      2,
+      'reason-1',
+      'CUSTOMER_CHANGED_MIND',
+      undefined,
     );
   });
 });
