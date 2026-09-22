@@ -175,4 +175,95 @@ describe('OrderActionsApi', () => {
     first.flush({});
     second.flush({});
   });
+
+  // -------------------------------------------------- STALE_VERSION retry (H1)
+  //
+  // A 409 STALE_VERSION is stored by the platform's idempotency store as a
+  // COMPLETED, replayable record keyed on the request body only — headers,
+  // including If-Match, are never part of that key. So when the operator
+  // corrects `expectedVersion` (after re-reading the row) and resubmits an
+  // otherwise-unchanged reason/note, the tracked body the registry compares
+  // must change too, or the same Idempotency-Key goes out again and the
+  // platform replays the stale 409 forever instead of ever reaching the
+  // controller with the corrected version.
+
+  it('mints a fresh Idempotency-Key for cancelWithReason() once expectedVersion is corrected after a STALE_VERSION 409, even though the reason is unchanged', () => {
+    api.cancelWithReason(SCOPE, 'o1', 4, 'reason-1', 'CUSTOMER_CHANGED_MIND').subscribe({
+      error: () => {
+        /* expected: the row was stale */
+      },
+    });
+    const first = http.expectOne(`${BASE}/cancellations`);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+    expect(first.request.headers.get('If-Match')).toBe('W/"4"');
+    first.flush(
+      { status: 409, code: 'STALE_VERSION', title: 'Stale version' },
+      { status: 409, statusText: 'Conflict' },
+    );
+
+    // Same reason, same note — only the corrected version differs.
+    api.cancelWithReason(SCOPE, 'o1', 5, 'reason-1', 'CUSTOMER_CHANGED_MIND').subscribe();
+    const second = http.expectOne(`${BASE}/cancellations`);
+    expect(second.request.headers.get('If-Match')).toBe('W/"5"');
+    expect(second.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+    second.flush({});
+  });
+
+  it('mints a fresh Idempotency-Key for cancel() once expectedVersion is corrected after a STALE_VERSION 409', () => {
+    api.cancel(SCOPE, 'o1', 4, 'CUSTOMER_CHANGED_MIND', 'Called back to cancel').subscribe({
+      error: () => {
+        /* expected: the row was stale */
+      },
+    });
+    const first = http.expectOne(`${BASE}/cancellations`);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+    first.flush(
+      { status: 409, code: 'STALE_VERSION', title: 'Stale version' },
+      { status: 409, statusText: 'Conflict' },
+    );
+
+    api.cancel(SCOPE, 'o1', 5, 'CUSTOMER_CHANGED_MIND', 'Called back to cancel').subscribe();
+    const second = http.expectOne(`${BASE}/cancellations`);
+    expect(second.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+    second.flush({});
+  });
+
+  it('mints a fresh Idempotency-Key for advance() once expectedVersion is corrected after a STALE_VERSION 409', () => {
+    api.advance(SCOPE, 'o1', 'PREPARING', 4).subscribe({
+      error: () => {
+        /* expected: the row was stale */
+      },
+    });
+    const first = http.expectOne(`${BASE}/state-actions`);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+    first.flush(
+      { status: 409, code: 'STALE_VERSION', title: 'Stale version' },
+      { status: 409, statusText: 'Conflict' },
+    );
+
+    // Same target status — only the corrected version differs.
+    api.advance(SCOPE, 'o1', 'PREPARING', 5).subscribe();
+    const second = http.expectOne(`${BASE}/state-actions`);
+    expect(second.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+    second.flush({});
+  });
+
+  it('mints a fresh Idempotency-Key for complete() once expectedVersion is corrected after a STALE_VERSION 409', () => {
+    api.complete(SCOPE, 'o1', 4, 'reason-1').subscribe({
+      error: () => {
+        /* expected: the row was stale */
+      },
+    });
+    const first = http.expectOne(`${BASE}/completion`);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+    first.flush(
+      { status: 409, code: 'STALE_VERSION', title: 'Stale version' },
+      { status: 409, statusText: 'Conflict' },
+    );
+
+    api.complete(SCOPE, 'o1', 5, 'reason-1').subscribe();
+    const second = http.expectOne(`${BASE}/completion`);
+    expect(second.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+    second.flush({});
+  });
 });

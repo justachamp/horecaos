@@ -157,7 +157,8 @@ export class OrderActionsApi {
     targetStatus: string,
     expectedVersion: number,
   ): Observable<DecisionResponse> {
-    const intent = this.advanceIntents.next(orderId, {
+    const intentId = versionedIntentId(orderId, expectedVersion);
+    const intent = this.advanceIntents.next(intentId, {
       targetStatus,
       reasonCode: advanceReasonCode(targetStatus),
     });
@@ -167,7 +168,7 @@ export class OrderActionsApi {
         intent,
         { expectedVersion },
       )
-      .pipe(tap(() => this.advanceIntents.forget(orderId)));
+      .pipe(tap(() => this.advanceIntents.forget(intentId)));
   }
 
   /**
@@ -183,7 +184,8 @@ export class OrderActionsApi {
     reasonCode: string,
     note?: string,
   ): Observable<OrderCancellationResponse> {
-    const intent = this.cancelIntents.next(orderId, {
+    const intentId = versionedIntentId(orderId, expectedVersion);
+    const intent = this.cancelIntents.next(intentId, {
       reasonCode,
       note: note ? note : undefined,
     });
@@ -193,7 +195,7 @@ export class OrderActionsApi {
         intent,
         { expectedVersion },
       )
-      .pipe(tap(() => this.cancelIntents.forget(orderId)));
+      .pipe(tap(() => this.cancelIntents.forget(intentId)));
   }
 
   /**
@@ -213,7 +215,8 @@ export class OrderActionsApi {
     reasonCode: string,
     note?: string,
   ): Observable<OrderCancellationResponse> {
-    const intent = this.cancelIntents.next(orderId, {
+    const intentId = versionedIntentId(orderId, expectedVersion);
+    const intent = this.cancelIntents.next(intentId, {
       reasonCode,
       reasonId,
       note: note ? note : undefined,
@@ -224,7 +227,7 @@ export class OrderActionsApi {
         intent,
         { expectedVersion },
       )
-      .pipe(tap(() => this.cancelIntents.forget(orderId)));
+      .pipe(tap(() => this.cancelIntents.forget(intentId)));
   }
 
   /**
@@ -242,7 +245,8 @@ export class OrderActionsApi {
     expectedVersion: number,
     reasonId?: string,
   ): Observable<DecisionResponse> {
-    const intent = this.completeIntents.next(orderId, {
+    const intentId = versionedIntentId(orderId, expectedVersion);
+    const intent = this.completeIntents.next(intentId, {
       reasonId: reasonId ? reasonId : undefined,
     });
     return this.api
@@ -251,6 +255,26 @@ export class OrderActionsApi {
         intent,
         { expectedVersion },
       )
-      .pipe(tap(() => this.completeIntents.forget(orderId)));
+      .pipe(tap(() => this.completeIntents.forget(intentId)));
   }
+}
+
+/**
+ * `IntentCommandRegistry` compares only the tracked body it is given
+ * (`sameBody`, `idempotency.ts`) — `expectedVersion` travels to the server
+ * as the separate `If-Match` header and is invisible to that comparison. The
+ * platform's own idempotency store hashes only the raw request body
+ * (`IdempotencyInterceptor.bodyOf`), so a retry that changes only `If-Match`
+ * — an operator resubmitting after a `409 STALE_VERSION` correction, with an
+ * otherwise-unchanged reason/note — is indistinguishable from the original
+ * request and would replay its stored 409 forever (bug-hunt H1).
+ *
+ * Folding `expectedVersion` into the registry's *id* (rather than into the
+ * tracked body, which must stay exactly the wire body) means a version change
+ * always misses the held command for the old id and mints a fresh key, while
+ * an identical retry at the same version still hits the same id and is
+ * compared by body as before.
+ */
+function versionedIntentId(orderId: string, expectedVersion: number): string {
+  return `${orderId}:${expectedVersion}`;
 }
