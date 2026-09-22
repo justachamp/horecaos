@@ -230,6 +230,7 @@ public final class DayAggregator {
         private long discountSom;
         private long netSom;
         private long refundedSom;
+        private long deliveryFeeSom;
         private long closedSecondsSum;
         private int closedOrders;
         private int promisedCount;
@@ -243,6 +244,10 @@ public final class DayAggregator {
                 grossSom += order.grossRevenueSom();
                 discountSom += order.discountSom();
                 netSom += order.netRevenueSom();
+                // Wave 8 w7-reports (7.2c): same COMPLETED_ONLY inclusion as
+                // grossSom, of which this is already a component — never a
+                // separate inclusion rule from the figure it is carved out of.
+                deliveryFeeSom += order.deliveryFeeSom();
             }
             if (order.cancelled()) {
                 cancelledCount++;
@@ -286,7 +291,8 @@ public final class DayAggregator {
                     promisedCount,
                     lateCount,
                     customers.size(),
-                    newCustomers.size());
+                    newCustomers.size(),
+                    deliveryFeeSom);
         }
     }
 

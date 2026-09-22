@@ -443,7 +443,8 @@ class BranchLeaderboardReportingTests {
                 promisedCount,
                 lateCount,
                 0,
-                0));
+                0,
+                0L));
     }
 
     /** One {@code agg_branch_day} row for the on-time-denominator test — the fulfilment/channel axes are irrelevant to it. */
@@ -462,7 +463,8 @@ class BranchLeaderboardReportingTests {
                 promisedCount,
                 lateCount,
                 0,
-                0));
+                0,
+                0L));
     }
 
     /** One {@code fact_order} row that reached READY {@code secondsTotal} seconds after creation. */
