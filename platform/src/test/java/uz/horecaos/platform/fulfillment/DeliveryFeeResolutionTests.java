@@ -838,8 +838,15 @@ class DeliveryFeeResolutionTests {
         Quote quote = quotes.quote(deliveredCart(1));
 
         // Refusing here would destroy the number that makes the message useful:
-        // "add 30,000 more" is actionable, "something is wrong" is not.
-        assertThat(quote.total().minor()).isEqualTo(60_000L);
+        // "add 30,000 more" is actionable, "something is wrong" is not. The fee
+        // itself is not charged until the basket clears the minimum: checkout is
+        // refused below it (DELIVERY_MINIMUM_BASKET_NOT_MET), the storefront
+        // shows a dash for the delivery line, and a total that quietly carried a
+        // fee no line accounted for was the "lines never sum" defect of
+        // 2026-09-21 -- so the total is the goods alone, and the shortfall is
+        // still reported beside it.
+        assertThat(quote.fees().minor()).isZero();
+        assertThat(quote.total().minor()).isEqualTo(50_000L);
         assertThat(jdbc.sql("SELECT calculation_document ->> 'deliveryShortfallMinor' "
                                 + "FROM pricing.quotes WHERE id = :id")
                         .param("id", quote.quoteId())
