@@ -8,9 +8,11 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.customers.api.CustomerBlacklistPort;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.api.MigrationOwnershipPort;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
+import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 import uz.horecaos.platform.ordering.application.CheckoutService.CheckoutCommand;
 import uz.horecaos.platform.ordering.domain.CartStatus;
@@ -19,6 +21,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.Ca
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.CartRow;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
@@ -48,6 +51,7 @@ class CheckoutEligibilityGuard {
     private final QuoteAcceptancePort quotes;
     private final OrderCatalogSnapshot catalog;
     private final CustomerBlacklistPort blacklist;
+    private final ConfigurationResolver configuration;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     CheckoutEligibilityGuard(
@@ -60,7 +64,8 @@ class CheckoutEligibilityGuard {
             OrderSettlementPort settlements,
             QuoteAcceptancePort quotes,
             OrderCatalogSnapshot catalog,
-            CustomerBlacklistPort blacklist) {
+            CustomerBlacklistPort blacklist,
+            ConfigurationResolver configuration) {
         this.carts = carts;
         this.cartService = cartService;
         this.channels = channels;
@@ -71,6 +76,7 @@ class CheckoutEligibilityGuard {
         this.quotes = quotes;
         this.catalog = catalog;
         this.blacklist = blacklist;
+        this.configuration = configuration;
     }
 
     /** Every fact a validated checkout needs downstream, gathered in one read-only pass. */
@@ -330,6 +336,26 @@ class CheckoutEligibilityGuard {
                 return Result.rejected(
                         "DELIVERY_MINIMUM_BASKET_NOT_MET",
                         "The basket is below this zone's minimum by " + quote.deliveryShortfallMinor()
+                                + " minor units");
+            }
+        }
+
+        // ordering.minimum_order_amount_minor (settings.md §10.3 card 2):
+        // pickup and dine-in's own floor. Delivery has its own minimum, the
+        // zone's min_basket_minor, refused just above -- this key explicitly
+        // does not apply to it (OrderingConfigurationKeys.MINIMUM_ORDER_AMOUNT_MINOR's
+        // own javadoc). Checked against the accepted quote's goods subtotal,
+        // not its total, so tax and any delivery fee never count toward a
+        // floor about what was actually ordered.
+        if (cart.fulfillmentMode() == FulfillmentMode.PICKUP || cart.fulfillmentMode() == FulfillmentMode.DINE_IN) {
+            Long minimumOrderAmountMinor = configuration.value(
+                    OrderingConfigurationKeys.MINIMUM_ORDER_AMOUNT_MINOR,
+                    ResourceScope.location(command.tenantId(), command.brandId(), cart.locationId()));
+            long floor = minimumOrderAmountMinor == null ? 0L : minimumOrderAmountMinor;
+            if (floor > 0 && quote.subtotalMinor() < floor) {
+                return Result.rejected(
+                        "BELOW_MINIMUM_ORDER",
+                        "The order is below this location's minimum order amount by " + (floor - quote.subtotalMinor())
                                 + " minor units");
             }
         }

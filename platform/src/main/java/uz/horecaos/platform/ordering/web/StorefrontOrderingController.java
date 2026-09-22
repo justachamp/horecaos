@@ -651,6 +651,11 @@ public class StorefrontOrderingController {
             // DELIVERY_DESTINATION_REQUIRED: nothing in the body is wrong, a fact
             // about the order changed.
             case "DELIVERY_FEE_UNRESOLVED", "DELIVERY_MINIMUM_BASKET_NOT_MET" -> ErrorCode.RESOURCE_CONFLICT;
+            // ordering.minimum_order_amount_minor: pickup/dine-in's own floor,
+            // the same shape as the zone minimum above -- a fact about the
+            // order (its subtotal against the tenant's configured floor)
+            // rather than anything wrong with the request body.
+            case "BELOW_MINIMUM_ORDER" -> ErrorCode.RESOURCE_CONFLICT;
             // A well-formed request against an account this checkout will never
             // accept. A conflict for the same reason GUEST_ORDERS_NOT_ALLOWED and
             // NOT_SERVICEABLE are (below, by way of the default): nothing in the

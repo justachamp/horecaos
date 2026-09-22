@@ -66,6 +66,7 @@ import uz.horecaos.platform.migration.infrastructure.persistence.JdbcMigrationSc
 import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderReceived;
+import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
 import uz.horecaos.platform.ordering.api.PaymentCaptured;
 import uz.horecaos.platform.ordering.api.PaymentFailed;
@@ -179,6 +180,18 @@ class CartCheckoutAndOrderTests {
     private RecordingEventPublisher published;
 
     private CartService carts;
+
+    /**
+     * The one collaborator in this suite's checkout wiring a test can still
+     * change after {@code setUp()} has already built {@link #checkout} — every
+     * other port here is a real implementation over the real schema. A test
+     * that needs {@code ordering.minimum_order_amount_minor} configured calls
+     * {@link MutableConfigurationResolver#override} before checking out;
+     * every other test sees plain code defaults, unchanged from a plain
+     * {@link FakeConfigurationResolver}.
+     */
+    private MutableConfigurationResolver orderingConfig;
+
     private CheckoutService checkout;
     private OrderStateService orderState;
     private PosApprovalDecisionPortAdapter posDecisions;
@@ -426,6 +439,7 @@ class CartCheckoutAndOrderTests {
                         clock,
                         (keyCode, scope) -> {}));
 
+        orderingConfig = new MutableConfigurationResolver();
         carts = new CartService(
                 cartStore,
                 channelStore,
@@ -541,7 +555,8 @@ class CartCheckoutAndOrderTests {
                 objectMapper,
                 published,
                 clock,
-                customerBlacklist);
+                customerBlacklist,
+                orderingConfig);
 
         checkout = checkoutWith.apply(UNWIRED_PAYMENTS);
         // ADR 0075's port over the same services, so a bot repeat and a
@@ -3079,6 +3094,34 @@ class CartCheckoutAndOrderTests {
         var result = tx(() -> checkout.checkout(checkoutCommand(cart, "below-minimum", "CASH")));
         assertThat(result.created()).isFalse();
         assertThat(result.rejectionCode()).isEqualTo("DELIVERY_MINIMUM_BASKET_NOT_MET");
+    }
+
+    @Test
+    @DisplayName("below the tenant's configured minimum order amount, pickup checkout is refused")
+    void belowTheConfiguredMinimumOrderAmountPickupCheckoutIsRefused() {
+        // ordering.minimum_order_amount_minor -- never enforced before this
+        // fix. A far-above-any-plausible-subtotal floor makes the assertion
+        // hold regardless of exactly how tax-inclusive pricing nets out.
+        orderingConfig.override(OrderingConfigurationKeys.MINIMUM_ORDER_AMOUNT_MINOR_CODE, 500_000L);
+        UUID cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+        var priced = tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        assertThat(priced.quote().subtotalMinor()).isLessThan(500_000L);
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "below-min-order", "CASH")));
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.rejectionCode()).isEqualTo("BELOW_MINIMUM_ORDER");
+    }
+
+    @Test
+    @DisplayName("a zero configured minimum order amount (the code default) never refuses a pickup checkout")
+    void zeroConfiguredMinimumOrderAmountNeverRefuses() {
+        // Nothing set: OrderingConfigurationKeys.MINIMUM_ORDER_AMOUNT_MINOR's
+        // own code default is 0, meaning no minimum -- proves the new gate
+        // does not regress every tenant that has never touched the setting.
+        var result = placeOrder("no-minimum-configured");
+        assertThat(result.created()).isTrue();
     }
 
     @Test
@@ -6214,6 +6257,38 @@ class CartCheckoutAndOrderTests {
                     return 0;
                 }
             };
+
+    /**
+     * Lets one test override a configuration key after {@code setUp()} has
+     * already built every collaborator that resolves through it, by swapping
+     * the {@link FakeConfigurationResolver} it delegates to. Every test that
+     * never calls {@link #override} sees a plain {@code new
+     * FakeConfigurationResolver()} -- every key's own code default.
+     */
+    private static final class MutableConfigurationResolver
+            implements uz.horecaos.platform.tenancy.api.ConfigurationResolver {
+
+        private volatile uz.horecaos.platform.tenancy.api.ConfigurationResolver delegate =
+                new FakeConfigurationResolver();
+
+        void override(String keyCode, Object value) {
+            delegate = new FakeConfigurationResolver(Map.of(keyCode, value));
+        }
+
+        @Override
+        public <T> uz.horecaos.platform.tenancy.api.Resolved<T> resolve(
+                uz.horecaos.platform.tenancy.api.ConfigurationKey<T> key,
+                uz.horecaos.platform.iam.api.ResourceScope scope) {
+            return delegate.resolve(key, scope);
+        }
+
+        @Override
+        public uz.horecaos.platform.tenancy.api.ResolutionTrace explain(
+                uz.horecaos.platform.tenancy.api.ConfigurationKey<?> key,
+                uz.horecaos.platform.iam.api.ResourceScope scope) {
+            return delegate.explain(key, scope);
+        }
+    }
 
     /** Lets a test move time forward without sleeping. */
     private static final class MutableClock extends java.time.Clock {

@@ -363,7 +363,8 @@ class OrderAmendmentAndOutcomeTests {
                 objectMapper,
                 published,
                 clock,
-                customerBlacklist);
+                customerBlacklist,
+                new FakeConfigurationResolver());
 
         seedTenancyAndCatalog();
         seedPricingAndStock();
