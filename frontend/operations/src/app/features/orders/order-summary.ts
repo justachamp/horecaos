@@ -60,7 +60,9 @@ export interface OrderSummaryResponse {
    * from the applied promotions. §1.3's five-row money-panel rule
    * (`subtotal + tax + fee − discount = total`) needs both; see
    * `order-money.ts` and `order-detail-pane.html`'s Деньги section for where
-   * they render.
+   * they render. Also §2.5's "behind the picker" Доставка/Скидка columns on
+   * the board (`order-queue.ts`'s `formatFee`) — `0` for a pickup/dine-in
+   * order or nothing discounted, never negative, never omitted.
    */
   readonly feeMinor: number;
   readonly discountMinor: number;
@@ -89,10 +91,6 @@ export interface OrderSummaryResponse {
   readonly customerAccountId?: string | null;
   /** Set for a guest order in place of {@link customerAccountId}. An opaque hash, never the raw phone (ADR 0029). */
   readonly guestReferenceHash?: string | null;
-  /** §2.5's "behind the picker" Доставка column — `customer_delivery_fee_minor`. `0` for a pickup/dine-in order, never negative. */
-  readonly feeMinor?: number;
-  /** §2.5's "behind the picker" Скидка column. `0` when nothing was discounted. */
-  readonly discountMinor?: number;
   /** §2.5's "behind the picker" Создал column — who took the order. */
   readonly createdByActorType?: string | null;
   readonly createdByActorId?: string | null;

@@ -145,8 +145,12 @@ class LocalFixtureStorefrontTests {
      */
     @Test
     void deliveryFeeNoLongerAcceptsTheOldGetWithACoordinateInTheQueryString() throws Exception {
+        // SecurityConfiguration permits this path unauthenticated regardless of
+        // method, so the request reaches the dispatcher -- which now maps only
+        // POST here (batch 8's audit follow-up (b)) and answers 405, not 401.
+        // Either way the old GET-with-coordinate form no longer works.
         mvc.perform(get(LOCATION_PATH + "/delivery-fee?lat=41.3120&lon=69.2410&currency=UZS"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isMethodNotAllowed());
     }
 
     /**
@@ -171,10 +175,12 @@ class LocalFixtureStorefrontTests {
      */
     @Test
     void profileNamesTheBranchACustomerAlreadyKnowsTheIdOf() throws Exception {
+        // Served by StorefrontLocationProfileController -- the location id is
+        // already in the URL, so LocationProfile echoes no id of its own, only
+        // the displayName/address fields (batch 8 integration note).
         mvc.perform(get(LOCATION_PATH + "/profile"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.locationId").value("10000000-0000-0000-0000-000000000003"))
-                .andExpect(jsonPath("$.locationName").value("Central kitchen"))
+                .andExpect(jsonPath("$.displayName").value("Central kitchen"))
                 .andExpect(jsonPath("$.addressLine").value("1 Demo Street"))
                 .andExpect(jsonPath("$.district").value("Shaykhontohur"))
                 .andExpect(jsonPath("$.city").value("Tashkent"))

@@ -5221,7 +5221,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.order.deliveryFeeCalculating': 'Hisoblanmoqda…',
   'orders.newOrder.order.deliveryFeeUnavailable': 'Bu manzil uchun mavjud emas',
   'orders.newOrder.order.preOrder.toggle': 'Keyinroqqa buyurtma',
-  'orders.newOrder.order.preOrder.time': 'Vaʼda qilingan vaqt',
+  'orders.newOrder.order.preOrder.time': 'Vaʻda qilingan vaqt',
   'orders.newOrder.order.preOrder.mustBeFuture': 'Hali oʻtmagan vaqtni tanlang',
   'orders.newOrder.order.preOrder.confirmOutOfHours':
     'Filial soʻralgan vaqtda yopiq. Baribir buyurtma qilinsinmi?',

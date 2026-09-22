@@ -1096,15 +1096,16 @@ describe('OrderQueue: no dead completion button (H3)', () => {
     await flushMicrotasks();
 
     const host = harness.routeNativeElement!;
-    // The redundant COMPLETE entry never renders — ADVANCE is the one this
-    // component knows how to invoke.
-    expect(host.querySelector('[data-testid="order-row-action-COMPLETE"]')).toBeNull();
-    expect(host.querySelector('[data-testid="order-row-action-ADVANCE"]')).not.toBeNull();
+    // batch 8: COMPLETE is now wired (startCompletion), so this row prefers
+    // it over the redundant ADVANCE(COMPLETED) entry — the same direction
+    // order-detail-pane.ts's own visibleActions already filters.
+    expect(host.querySelector('[data-testid="order-row-action-ADVANCE"]')).toBeNull();
+    expect(host.querySelector('[data-testid="order-row-action-COMPLETE"]')).not.toBeNull();
     expect(host.querySelectorAll('.row-actions__inline')).toHaveLength(1);
   });
 
-  it('clicking the single completion control calls the wired advance(), never leaves a second dead click', async () => {
-    const advance = vi.fn().mockReturnValue(
+  it('clicking the single completion control calls the wired complete(), never leaves a second dead click', async () => {
+    const complete = vi.fn().mockReturnValue(
       of({
         orderId: 'order-1',
         status: 'COMPLETED',
@@ -1123,16 +1124,19 @@ describe('OrderQueue: no dead completion button (H3)', () => {
           actions: [{ action: 'ADVANCE', targetStatus: 'COMPLETED' }, { action: 'COMPLETE' }],
         }),
       ],
-      { advance },
+      { complete },
     );
     const harness = await RouterTestingHarness.create('/orders?tab=preparing');
     await flushMicrotasks();
 
     const host = harness.routeNativeElement!;
-    (host.querySelector('[data-testid="order-row-action-ADVANCE"]') as HTMLButtonElement).click();
+    (host.querySelector('[data-testid="order-row-action-COMPLETE"]') as HTMLButtonElement).click();
     await flushMicrotasks();
 
-    expect(advance).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'COMPLETED', 1);
+    // The default referenceDataApi stub (FAKE_CANCEL_REASONS) hands back
+    // exactly one reason with no fulfilment-mode restriction, so
+    // startCompletion submits it automatically rather than opening a picker.
+    expect(complete).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 1, 'reason-1');
   });
 });
 
