@@ -190,8 +190,17 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.column.time': 'Vaqt',
   'orders.column.type': 'Turi / kanal',
   'orders.column.total': 'Summa',
+  'orders.column.fee': 'Yetkazib berish',
+  'orders.column.payment': 'Toʻlov',
   'orders.column.status': 'Holat',
   'orders.column.actions': 'Amallar',
+
+  'orders.paymentStatus.PENDING': 'Toʻlov kutilmoqda',
+  'orders.paymentStatus.AUTHORIZED': 'Avtorizatsiya qilingan',
+  'orders.paymentStatus.CAPTURED': 'Toʻlandi',
+  'orders.paymentStatus.FAILED': 'Toʻlov oʻtmadi',
+  'orders.paymentStatus.VOIDED': 'Bekor qilindi',
+  'orders.paymentStatus.REFUNDED': 'Qaytarildi',
 
   'orders.action.approve': 'Qabul qilish',
   'orders.action.reject': 'Rad etish',

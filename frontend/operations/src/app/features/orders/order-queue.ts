@@ -12,7 +12,7 @@ import { Observable, firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
-import { Page } from '../../core/api/page';
+import { CursorState, Page, firstPage, nextPage, pageParams } from '../../core/api/page';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { CurrentTenant } from '../../core/auth/current-tenant';
@@ -53,6 +53,7 @@ import {
 import { CountableOrder, OrderCounts, TabCounts, zeroTabCounts } from './order-counts';
 import { describeApiError, errorReference, mutationErrorNotice } from './order-errors';
 import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outcome-reason-dialog';
+import { paymentStatusProjectionLabel } from './order-payment-status';
 import {
   OrderQueueFilters,
   OrderQueueFilterState,
@@ -102,13 +103,17 @@ import {
 const POLL_INTERVAL_MS = 10_000;
 
 /**
- * The ceiling on one fetch. The board endpoint's own maximum is 500
- * (`horecaos-api.json`); 200 is a first-render compromise between a complete
- * picture for the client-derived tab counts (`order-counts.ts`) and payload
- * size. A busier location than that needs the real `GET .../orders/counts`
- * endpoint, which is exactly the gap that endpoint exists to close — and,
- * unchanged by this wave's filter toolbar, `attention` is still counted over
- * this one capped page, so it still undercounts above it (§11's own trap).
+ * The page size for one cursor request, first page and every `loadMore` page
+ * alike. The board endpoint's own maximum is 500 (`horecaos-api.json`); 200
+ * is a first-render compromise between a complete picture for the
+ * client-derived tab counts (`order-counts.ts`) and payload size — the same
+ * reasoning that picked it before this wave turned the single capped fetch
+ * into real cursor paging (X.18's `rows`/`hasMore`/`loadMore` contract,
+ * `shared/ui/data-table`). `tabCounts` is still computed only over whatever
+ * is loaded so far (the first page, until `loadMore` is clicked), so a
+ * location busier than one page still undercounts `attention` until the real
+ * `GET .../orders/counts` endpoint replaces this client-side tally (§11's own
+ * trap, unchanged by this wave).
  */
 const FETCH_LIMIT = 200;
 
@@ -143,11 +148,13 @@ interface OrderRow {
  *
  * `'cancel'` is the free-text reasonless dialog (before `CONFIRMED`);
  * `'cancel-reason'` is the registry-reasoned picker H2 adds for `CONFIRMED`
- * onward — see {@link requiresCancellationReason}.
+ * onward — see {@link requiresCancellationReason}. `'complete'` is the
+ * completion-reason picker {@link startCompletion} opens when more than one
+ * `COMPLETION` reason is eligible for the order's fulfilment mode.
  */
 interface RowDialogState {
   readonly orderId: string;
-  readonly kind: 'reject' | 'cancel' | 'cancel-reason';
+  readonly kind: 'reject' | 'cancel' | 'cancel-reason' | 'complete';
   readonly version: number;
 }
 
@@ -244,6 +251,23 @@ export class OrderQueue implements OnInit {
   protected readonly lastError = signal<ApiError | null>(null);
   protected readonly denied = signal(false);
 
+  /**
+   * §1.1/X.18: cursor paging over `GET .../orders/board`, mirroring
+   * `products-page.ts`'s own `page`/`hasMore`/`loadMore` loop — the same
+   * `rows`/`hasMore`/`loadMore` contract `shared/ui/data-table` documents,
+   * driven here by this page's own hand-rolled table rather than that
+   * component (the row-action menu, selection column and severity rail this
+   * table already renders are not yet what `q-data-table` hosts). `pageState`
+   * is always reset to {@link FETCH_LIMIT}'s first page inside {@link
+   * refresh} — a filter change, a tab switch, the 10s poll and every realtime
+   * frame all call `refresh`, so every one of them starts the board over from
+   * its own first page rather than trying to carry a cursor across a filter
+   * it was not minted under (`page.ts`'s own `resetOnFilterChange` doc).
+   */
+  protected readonly pageState = signal<CursorState>(firstPage(FETCH_LIMIT));
+  protected readonly hasMore = signal(false);
+  protected readonly loadingMore = signal(false);
+
   /** §2.4: the toolbar's own filters for the active tab. */
   protected readonly filters: Signal<OrderQueueFilters> = this.filterState.current;
   protected readonly paymentMethodCodes = PAYMENT_METHOD_CODES;
@@ -280,6 +304,8 @@ export class OrderQueue implements OnInit {
    * neither should clobber the other's already-fetched list.
    */
   protected readonly cancelReasons = signal<readonly ReasonResponse[]>([]);
+  /** Fetched before the completion dialog opens, only when more than one reason is eligible — see {@link startCompletion}. */
+  protected readonly completionReasons = signal<readonly ReasonResponse[]>([]);
   private readonly decisionIds = new DecisionIdRegistry();
 
   /**
@@ -375,6 +401,21 @@ export class OrderQueue implements OnInit {
     void this.refresh();
   }
 
+  /** One page of `GET .../orders/board` under the toolbar's current filters, cursor-`state`'s own window. */
+  private async fetchBoardPage(
+    scope: LocationScope,
+    state: CursorState,
+  ): Promise<Page<OrderSummaryResponse>> {
+    const params = boardQueryParams(this.filters(), this.tenant.subject());
+    const result = await firstValueFrom(
+      this.api.get<Page<OrderSummaryResponse>>(operationsPaths.orderBoard(scope), {
+        params: { ...params, ...pageParams(state) },
+      }),
+    );
+    return result.value ?? { items: [], nextCursor: null };
+  }
+
+  /** The full reload path: tab switch, filter change, manual refresh, the 10s poll and every realtime frame. Always starts from the board's own first page. */
   private async refresh(): Promise<void> {
     const scope = this.location.scope();
     if (!scope) {
@@ -385,16 +426,14 @@ export class OrderQueue implements OnInit {
 
     this.refreshing.set(true);
     try {
-      const params = boardQueryParams(this.filters(), this.tenant.subject());
-      const result = await firstValueFrom(
-        this.api.get<Page<OrderSummaryResponse>>(operationsPaths.orderBoard(scope), {
-          params: { ...params, limit: FETCH_LIMIT },
-        }),
-      );
-      const orders = result.value?.items ?? [];
+      const startState = firstPage(FETCH_LIMIT);
+      const page = await this.fetchBoardPage(scope, startState);
+      const orders = page.items;
       const now = new Date();
 
       this.rows.set(orders.map((order) => decorate(order, now, this.latenessPolicy)));
+      this.pageState.set(nextPage(startState, page) ?? startState);
+      this.hasMore.set(page.nextCursor !== null);
       this.tabCounts.set(
         await this.counts.forOrders(scope, orders.map(toCountable), now, this.latenessPolicy),
       );
@@ -420,6 +459,45 @@ export class OrderQueue implements OnInit {
     } finally {
       this.refreshing.set(false);
       this.firstLoadComplete.set(true);
+    }
+  }
+
+  /**
+   * X.18's `loadMore` half of the `rows`/`hasMore`/`loadMore` contract:
+   * appends the next cursor page to what is already loaded, under the same
+   * filters {@link refresh} last fetched with — never resets the table, the
+   * selection or the scroll position the way a full {@link refresh} does.
+   *
+   * Not re-derived here: `tabCounts` and `ServiceStatus` stay exactly what
+   * the last {@link refresh} computed over its own first page — extending
+   * them to every loaded page on every click would make a busy tab's numbers
+   * jump as an operator scrolls, which is a worse surprise than the
+   * documented "still undercounts above the first page" limitation {@link
+   * FETCH_LIMIT} already names.
+   */
+  protected async loadMore(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope || !this.hasMore() || this.loadingMore()) {
+      return;
+    }
+    this.loadingMore.set(true);
+    try {
+      const state = this.pageState();
+      const page = await this.fetchBoardPage(scope, state);
+      const now = new Date();
+      const appended = page.items.map((order) => decorate(order, now, this.latenessPolicy));
+      this.rows.set([...this.rows(), ...appended]);
+      this.pageState.set(nextPage(state, page) ?? state);
+      this.hasMore.set(page.nextCursor !== null);
+      this.observeChannelCodes(page.items);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.actionNotice.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
+      } else {
+        throw error;
+      }
+    } finally {
+      this.loadingMore.set(false);
     }
   }
 
@@ -499,6 +577,19 @@ export class OrderQueue implements OnInit {
       { amountMinor: order.totalMinor, currency: order.currency },
       this.i18n.locale(),
     );
+  }
+
+  /** §2.5's "behind the picker" Доставка column — `0` (a pickup/dine-in order, or a delivery one with no fee) renders as a dash, never `0 сум`. */
+  protected formatFee(order: OrderSummaryResponse): string {
+    const feeMinor = order.feeMinor ?? 0;
+    return feeMinor > 0
+      ? formatMoney({ amountMinor: feeMinor, currency: order.currency }, this.i18n.locale())
+      : '—';
+  }
+
+  /** §2.5 column 10 (Оплата). */
+  protected paymentStatusLabel(order: OrderSummaryResponse): string {
+    return paymentStatusProjectionLabel(order.paymentStatusProjection, (key) => this.i18n.t(key));
   }
 
   protected formatUpdatedAt(): string | null {
@@ -919,24 +1010,25 @@ export class OrderQueue implements OnInit {
   }
 
   /**
-   * H3: the server always pairs `ADVANCE`→`COMPLETED` with `COMPLETE`
-   * whenever completion is legal (`OrderActionsPolicy`'s own doc: a client
-   * built before wave P09 still works against the generic entry) — both
-   * render under the identical translated label (`order-actions.ts`'s
-   * `actionLabel`). `onActionClick` below has no case for `COMPLETE`; only
-   * `order-detail-pane.ts` wires the fulfilment-mode-aware completion-reason
-   * flow that action needs. Drop the redundant `COMPLETE` entry here rather
-   * than rendering a second, identically-labelled button that silently does
-   * nothing when clicked — `ADVANCE` is the one this component knows how to
-   * invoke, and stays.
+   * H3 (batch 8 integration note): the server always pairs `ADVANCE`→
+   * `COMPLETED` with `COMPLETE` whenever completion is legal
+   * (`OrderActionsPolicy`'s own doc: a client built before wave P09 still
+   * works against the generic entry) — both render under the identical
+   * translated label (`order-actions.ts`'s `actionLabel`). H3 originally
+   * dropped `COMPLETE` here because `onActionClick` had no case for it; wave
+   * 8's w1 wired `COMPLETE` to the same fulfilment-mode-aware
+   * completion-reason flow `order-detail-pane.ts`'s `startCompletion` uses
+   * (see {@link startCompletion} below), so this now filters the *other*
+   * direction — the same one `order-detail-pane.ts`'s `visibleActions`
+   * already uses — preferring `COMPLETE` (it can name the right reason) and
+   * dropping the redundant `ADVANCE`→`COMPLETED` entry, rather than
+   * rendering two identically-labelled buttons for the same transition.
    */
   private rowActions(order: OrderSummaryResponse): readonly OrderActionResponse[] {
     const actions = order.actions ?? [];
-    const hasAdvanceToCompleted = actions.some(
-      (action) => action.action === 'ADVANCE' && action.targetStatus === 'COMPLETED',
-    );
-    return hasAdvanceToCompleted
-      ? actions.filter((action) => action.action !== 'COMPLETE')
+    const hasComplete = actions.some((action) => action.action === 'COMPLETE');
+    return hasComplete
+      ? actions.filter((action) => !(action.action === 'ADVANCE' && action.targetStatus === 'COMPLETED'))
       : actions;
   }
 
@@ -1038,6 +1130,15 @@ export class OrderQueue implements OnInit {
           );
         }
         return;
+      case 'COMPLETE':
+        // §4.6/1.1e: built (wave P09) and, until this wave, only wired on the
+        // order detail pane — this row menu fell to the `default` case below
+        // and silently did nothing. `startCompletion` is the same
+        // reason-resolution `order-detail-pane.ts`'s own `startCompletion`
+        // uses: skip the dialog when zero or one reason is eligible, ask only
+        // when a real choice exists.
+        void this.startCompletion(order.orderId, version, order.fulfillmentMode ?? null, scope);
+        return;
       case 'AMEND':
         // The amendment submenu's five dialogs live on the order detail pane
         // (wave P10), not the row — the same reason `order-detail-pane.ts`
@@ -1124,6 +1225,68 @@ export class OrderQueue implements OnInit {
         throw error;
       }
     }
+  }
+
+  /**
+   * §4.6: resolves how many `COMPLETION` reasons the tenant's registry has
+   * active for this order's fulfilment mode, and only asks when there is a
+   * real choice — mirrors `order-detail-pane.ts`'s own `startCompletion`
+   * exactly, so the two surfaces cannot silently diverge on when a
+   * completion dialog is warranted.
+   */
+  private async startCompletion(
+    orderId: string,
+    version: number,
+    fulfillmentMode: string | null,
+    scope: LocationScope,
+  ): Promise<void> {
+    try {
+      const reasons = await this.referenceDataApi.list(scope, 'COMPLETION');
+      const eligible = reasons.filter(
+        (reason) =>
+          !reason.allowedFulfillmentModes ||
+          reason.allowedFulfillmentModes.includes(fulfillmentMode ?? ''),
+      );
+      if (eligible.length === 0) {
+        void this.submitCompletion(orderId, version);
+      } else if (eligible.length === 1) {
+        void this.submitCompletion(orderId, version, eligible[0].id);
+      } else {
+        this.completionReasons.set(eligible);
+        this.dialog.set({ orderId, kind: 'complete', version });
+      }
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.actionNotice.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  private async submitCompletion(
+    orderId: string,
+    version: number,
+    reasonId?: string,
+  ): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    await this.submitStateMutation(
+      orderId,
+      this.actionsApi.complete(scope, orderId, version, reasonId),
+    );
+  }
+
+  protected onCompletionDialogConfirm(submission: OutcomeReasonSubmission): void {
+    const state = this.dialog();
+    if (!state) {
+      return;
+    }
+    void this.submitCompletion(state.orderId, state.version, submission.reasonId).finally(() =>
+      this.dialog.set(null),
+    );
   }
 
   protected dialogBusy(): boolean {

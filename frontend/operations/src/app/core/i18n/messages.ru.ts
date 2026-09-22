@@ -188,8 +188,17 @@ export const messagesRu: MessageCatalogue = {
   'orders.column.time': 'Время',
   'orders.column.type': 'Тип / канал',
   'orders.column.total': 'Сумма',
+  'orders.column.fee': 'Доставка',
+  'orders.column.payment': 'Оплата',
   'orders.column.status': 'Статус',
   'orders.column.actions': 'Действия',
+
+  'orders.paymentStatus.PENDING': 'Ожидает оплаты',
+  'orders.paymentStatus.AUTHORIZED': 'Авторизован',
+  'orders.paymentStatus.CAPTURED': 'Оплачен',
+  'orders.paymentStatus.FAILED': 'Оплата не прошла',
+  'orders.paymentStatus.VOIDED': 'Отменён',
+  'orders.paymentStatus.REFUNDED': 'Возврат',
 
   'orders.action.approve': 'Принять',
   'orders.action.reject': 'Отклонить',

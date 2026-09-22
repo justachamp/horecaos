@@ -1636,3 +1636,282 @@ describe('OrderQueue: selection and bulk actions (orders.md §2.10, wave P07)', 
     expect(host.querySelector('[data-testid="order-queue-bulk-retry"]')).toBeNull();
   });
 });
+
+/**
+ * §2.5's Оплата and Доставка columns (row `1.1`, wave P04) — data the board
+ * endpoint has carried since `OrderSummaryResponse` widened to 23 fields, not
+ * rendered anywhere on this table until this wave.
+ */
+describe('OrderQueue: Оплата and Доставка columns (orders.md §2.5, row 1.1)', () => {
+  it('renders a known payment projection through its i18n label', async () => {
+    configure(ordersResponse([order({ paymentStatusProjection: 'CAPTURED' })]));
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="order-row-payment-status"]')
+        ?.textContent,
+    ).toBe('Paid');
+  });
+
+  it('renders NOT_REQUIRED, and a response minted before this field existed, as a dash rather than a fabricated method', async () => {
+    configure(
+      ordersResponse([
+        order({ orderId: 'a', paymentStatusProjection: 'NOT_REQUIRED' }),
+        order({ orderId: 'b', paymentStatusProjection: undefined }),
+      ]),
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+
+    const cells = [
+      ...harness.routeNativeElement!.querySelectorAll('[data-testid="order-row-payment-status"]'),
+    ].map((cell) => cell.textContent?.trim());
+    expect(cells).toEqual(['—', '—']);
+  });
+
+  it('renders the delivery fee as money when set, and a dash for a pickup order with none', async () => {
+    configure(
+      ordersResponse([
+        order({ orderId: 'a', feeMinor: 1_500_000, currency: 'UZS' }),
+        order({ orderId: 'b', feeMinor: 0 }),
+      ]),
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+
+    const cells = [
+      ...harness.routeNativeElement!.querySelectorAll('[data-testid="order-row-fee"]'),
+    ].map((cell) => cell.textContent?.trim());
+    // UZS has no minor unit this platform stores (`money.ts`'s own doc) —
+    // 1 500 000 renders exactly, not divided by 100. `money.ts` groups with
+    // U+00A0 (NBSP), not a plain space.
+    expect(cells[0]).toContain('1 500 000');
+    expect(cells[1]).toBe('—');
+  });
+});
+
+/**
+ * X.18: cursor paging over `GET .../orders/board`, mirroring
+ * `products-page.spec.ts`'s identical proof for the same `page`/`nextCursor`
+ * contract — the queue's own `pageState`/`hasMore`/`loadMore` loop.
+ */
+describe('OrderQueue: cursor paging and Load more (row 1.1, X.18)', () => {
+  function pageOf(
+    orders: readonly OrderSummaryResponse[],
+    nextCursor: string | null,
+  ): ReturnType<typeof vi.fn> {
+    return vi.fn().mockReturnValue(of({ value: { items: orders, nextCursor }, version: null }));
+  }
+
+  it('offers no Load more control when the first page is the whole collection', async () => {
+    configure(pageOf([order({ orderId: 'a' })], null));
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="order-queue-load-more"]'),
+    ).toBeNull();
+  });
+
+  it('appends the next cursor page to what is already loaded, and hides the control once the collection ends', async () => {
+    const getOrders = vi
+      .fn()
+      .mockReturnValueOnce(
+        of({
+          value: { items: [order({ orderId: 'a', publicOrderNumber: '0001' })], nextCursor: 'c1' },
+          version: null,
+        }),
+      )
+      .mockReturnValueOnce(
+        of({
+          value: { items: [order({ orderId: 'b', publicOrderNumber: '0002' })], nextCursor: null },
+          version: null,
+        }),
+      );
+    configure(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    expect(rowNumbers(host)).toEqual(['0001']);
+    const loadMore = host.querySelector(
+      '[data-testid="order-queue-load-more"]',
+    ) as HTMLButtonElement;
+    expect(loadMore).toBeTruthy();
+
+    loadMore.click();
+    await flushMicrotasks();
+
+    expect(getOrders).toHaveBeenCalledTimes(2);
+    // The second call's cursor is the first page's own nextCursor, not a
+    // fresh first page — the one thing distinguishing "load more" from
+    // "refetch from the top".
+    expect(getOrders.mock.calls[1][1].params.cursor).toBe('c1');
+    expect(rowNumbers(host)).toEqual(['0001', '0002']);
+    expect(host.querySelector('[data-testid="order-queue-load-more"]')).toBeNull();
+  });
+
+  it('a full refresh (tab switch) starts over from the first page rather than carrying the cursor forward', async () => {
+    const getOrders = pageOf([order({ orderId: 'a', publicOrderNumber: '0001' })], 'c1');
+    configure(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+
+    harness.routeNativeElement!.querySelector<HTMLButtonElement>(
+      '[data-testid="order-queue-filter-bar"]',
+    );
+    // The manual refresh control is always on screen — the same "full
+    // reload" path a tab switch or a filter change takes.
+    const refreshButton = harness.routeNativeElement!.querySelector(
+      '.order-queue__refresh',
+    ) as HTMLButtonElement;
+    refreshButton.click();
+    await flushMicrotasks();
+
+    const lastCall = getOrders.mock.calls.at(-1)!;
+    expect(lastCall[1].params.cursor).toBeUndefined();
+  });
+});
+
+/**
+ * §4.6/row 1.1e: `COMPLETE` is emitted by `OrderActionsPolicy` (wave P09) and
+ * already has a translated label (`order-actions.ts`) — until this wave the
+ * row menu's `onActionClick` had no case for it, so a real operator's click
+ * silently did nothing. `order-detail-pane.spec.ts` proves the identical
+ * reason-resolution rule on the detail pane; these prove the queue's row menu
+ * now reaches the same endpoint.
+ */
+describe('OrderQueue: COMPLETE row action (orders.md §4.6, row 1.1e)', () => {
+  const completedOrder = order({
+    orderId: 'order-1',
+    status: 'FULFILLING',
+    fulfillmentMode: 'PICKUP',
+    version: 2,
+    actions: [{ action: 'COMPLETE' }],
+  });
+
+  function decisionResponse() {
+    return vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'COMPLETED',
+        version: 2,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+  }
+
+  it('submits completion with no reasonId when the registry has no eligible reason — no dialog', async () => {
+    const complete = decisionResponse();
+    configureWithActions([completedOrder], { complete }, undefined, {
+      list: () => Promise.resolve([]),
+    });
+    const harness = await RouterTestingHarness.create('/orders?tab=delivering');
+    await flushMicrotasks();
+
+    (
+      harness.routeNativeElement!.querySelector(
+        '[data-testid="order-row-action-COMPLETE"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(complete).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 2, undefined);
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="order-queue-complete-dialog"]'),
+    ).toBeNull();
+  });
+
+  it('submits the one eligible reason automatically when the registry has exactly one — no dialog', async () => {
+    const complete = decisionResponse();
+    configureWithActions([completedOrder], { complete }, undefined, {
+      list: () =>
+        Promise.resolve([
+          {
+            id: 'reason-pickup',
+            kind: 'COMPLETION',
+            systemCategory: 'COLLECTED_BY_CUSTOMER',
+            internalName: 'Collected by the customer',
+            stockDisposition: null,
+            liabilityParty: null,
+            customerRefund: null,
+            allowedFulfillmentModes: ['PICKUP'],
+            customerTexts: {},
+            status: 'ACTIVE',
+            version: 1,
+            updatedAt: new Date().toISOString(),
+          },
+        ]),
+    });
+    const harness = await RouterTestingHarness.create('/orders?tab=delivering');
+    await flushMicrotasks();
+
+    (
+      harness.routeNativeElement!.querySelector(
+        '[data-testid="order-row-action-COMPLETE"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(complete).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 2, 'reason-pickup');
+  });
+
+  it('opens a picker and submits the chosen reason when more than one is eligible', async () => {
+    const complete = decisionResponse();
+    configureWithActions([completedOrder], { complete }, undefined, {
+      list: () =>
+        Promise.resolve([
+          {
+            id: 'reason-a',
+            kind: 'COMPLETION',
+            systemCategory: 'COLLECTED_BY_CUSTOMER',
+            internalName: 'Collected by the customer',
+            stockDisposition: null,
+            liabilityParty: null,
+            customerRefund: null,
+            allowedFulfillmentModes: null,
+            customerTexts: {},
+            status: 'ACTIVE',
+            version: 1,
+            updatedAt: new Date().toISOString(),
+          },
+          {
+            id: 'reason-b',
+            kind: 'COMPLETION',
+            systemCategory: 'LEFT_AT_DOOR',
+            internalName: 'Left at the door',
+            stockDisposition: null,
+            liabilityParty: null,
+            customerRefund: null,
+            allowedFulfillmentModes: null,
+            customerTexts: {},
+            status: 'ACTIVE',
+            version: 1,
+            updatedAt: new Date().toISOString(),
+          },
+        ]),
+    });
+    const harness = await RouterTestingHarness.create('/orders?tab=delivering');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="order-row-action-COMPLETE"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(complete).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="order-queue-complete-dialog"]')).not.toBeNull();
+
+    (
+      host.querySelector('[data-testid="order-outcome-reason-option-reason-b"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="order-outcome-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(complete).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 2, 'reason-b');
+  });
+});
