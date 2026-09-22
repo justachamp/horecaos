@@ -13,6 +13,7 @@ import { TranslateService } from '../../services/translate.service';
 import { TranslatePipe } from '../translate/translate.pipe';
 import { NavigationHistoryService } from '../../services/navigation-history.service';
 import { UiCartService } from '../../services/ui-cart.service';
+import { LocationProfileService, type LocationProfile } from '../../services/location-profile.service';
 
 /**
  * A single order's detail, plus (ADR 0074) whether it can be ordered again.
@@ -79,8 +80,18 @@ export class OrderDetailComponent implements OnInit {
     return plan !== null && current !== null && plan.verdict === 'READY' && plan.orderId === current.id;
   });
 
+  /**
+   * The pickup branch's public name and address (2026-09-21 audit follow-up
+   * (d)), once resolved. Stays null for a delivery or dine-in order -- {@link
+   * loadPickupBranch} never asks for one -- and while a pickup order's own
+   * read is still in flight or could not be resolved, the same "say nothing
+   * rather than guess" choice {@link reorderPlan} already makes.
+   */
+  pickupBranch = signal<LocationProfile | null>(null);
+
   private readonly translate = inject(TranslateService);
   private readonly cart = inject(UiCartService);
+  private readonly locationProfile = inject(LocationProfileService);
 
   constructor(
     private route: ActivatedRoute,
@@ -100,7 +111,9 @@ export class OrderDetailComponent implements OnInit {
       next: (res) => {
         this.loading.set(false);
         const api = this.unwrapResponse(res);
-        this.order.set(this.mapToOrderDetail(api));
+        const detail = this.mapToOrderDetail(api);
+        this.order.set(detail);
+        this.loadPickupBranch(detail);
       },
       error: (err) => {
         this.loading.set(false);
@@ -108,6 +121,27 @@ export class OrderDetailComponent implements OnInit {
       },
     });
     this.loadReorderPlan(id);
+  }
+
+  /**
+   * Resolves the branch name and address for a pickup order, so the customer
+   * sees where they are collecting from rather than a generic hint.
+   *
+   * A delivery or dine-in order never asks -- there is no branch to show, only
+   * a doorstep or a table, neither of which this read serves. A failed or
+   * not-found read leaves {@link pickupBranch} null, which the template reads
+   * as "show nothing extra" rather than an error: the order itself already
+   * rendered, and a branch name is a nicety on top of it, not load-bearing.
+   */
+  private loadPickupBranch(detail: OrderDetail): void {
+    this.pickupBranch.set(null);
+    if (detail.fulfillmentMode !== 'PICKUP' || !detail.locationId) {
+      return;
+    }
+    this.locationProfile
+      .profile(detail.locationId)
+      .then((profile) => this.pickupBranch.set(profile))
+      .catch(() => this.pickupBranch.set(null));
   }
 
   /**
@@ -160,6 +194,8 @@ export class OrderDetailComponent implements OnInit {
     return {
       id: String(api.id),
       orderNumber: Number(api.order_number ?? api.id),
+      locationId: api.locationId,
+      fulfillmentMode: api.fulfillmentMode,
       lineItems,
       subtotal: format(subtotalVal),
       // The platform's order response has no delivery-fee field (see

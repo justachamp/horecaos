@@ -54,6 +54,8 @@ function orderResponse(orderId: string, version: number, status = 'RECEIVED'): O
   return {
     orderId,
     publicOrderNumber: `PN-${orderId}`,
+    locationId: 'loc-1',
+    fulfillmentMode: 'DELIVERY',
     status,
     currency: 'UZS',
     subtotalMinor: 1000,
@@ -166,6 +168,24 @@ describe('OrdersService: never fabricates an item count or distance', () => {
     const detail = await firstValueFrom(service.getOrderDetail('o1'));
 
     expect(detail.items_count).toBe(1);
+  });
+
+  // 2026-09-21 audit follow-up (d): a pickup order's detail could not name its
+  // branch because nothing on the response carried a location id or a
+  // fulfillment mode. Both are additive on OrderResponse and must survive
+  // into the display shape the order-detail screen reads.
+  it('carries locationId and fulfillmentMode from the order response into the display shape', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      ...orderResponse('o1', 1),
+      locationId: 'loc-central-kitchen',
+      fulfillmentMode: 'PICKUP',
+    });
+
+    const detail = await firstValueFrom(service.getOrderDetail('o1'));
+
+    expect(detail.locationId).toBe('loc-central-kitchen');
+    expect(detail.fulfillmentMode).toBe('PICKUP');
   });
 });
 

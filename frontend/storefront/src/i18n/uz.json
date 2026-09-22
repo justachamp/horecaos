@@ -153,6 +153,7 @@
     "rateDelivery": "Yetkazib berish sifatini baholang, bu bizga xizmatimizni yaxshilashga yordam beradi.",
     "supportNote": "Agar sizda biron bir muammo bo'lsa, har doim yagona mijozlarni qo'llab-quvvatlash markazimizga murojaat qilishingiz mumkin",
     "orderDetails": "Buyurtma tafsilotlari",
+    "pickupBranch": "Olib ketish filiali",
     "delivered": "Yetkazildi",
     "cancelledStatus": "Bekor qilindi",
     "loadError": "Buyurtmalar yuklanmadi.",

@@ -100,6 +100,10 @@ export interface OrderLineItem {
 export interface OrderDetail {
   id: string;
   orderNumber: number;
+  /** 2026-09-21 audit follow-up (d): the branch this order was placed at, when the API sent one. */
+  locationId?: string;
+  /** `DELIVERY`, `PICKUP` or `DINE_IN`, when the API sent one. */
+  fulfillmentMode?: string;
   lineItems: OrderLineItem[];
   subtotal: string;
   /**

@@ -32,6 +32,23 @@
     </button>
   </header>
 
+  <!-- Pickup branch (2026-09-21 audit follow-up (d)): shown only once the
+       branch's public profile has resolved, for a PICKUP order -- see
+       loadPickupBranch's own doc for why a failed or not-yet-loaded read
+       renders nothing here rather than a placeholder. -->
+  @if (order()!.fulfillmentMode === 'PICKUP' && pickupBranch(); as branch) {
+    <div class="mx-4 mb-2 flex items-start gap-2 rounded-lg bg-surface-raised px-3 py-2.5">
+      <svg class="mt-0.5 h-4 w-4 shrink-0 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+      <div class="min-w-0">
+        <p class="text-sm font-semibold text-text-primary">{{ 'orders.pickupBranch' | t }}: {{ branch.locationName }}</p>
+        <p class="text-sm text-zinc-400">{{ branch.addressLine }}, {{ branch.district }}, {{ branch.city }}</p>
+      </div>
+    </div>
+  }
+
   <!-- Ordered items list -->
   <div class="divide-y divide-zinc-700 px-4">
     @for (item of order()!.lineItems; track item.variantId ?? item.name) {
