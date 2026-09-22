@@ -3303,6 +3303,90 @@ class CartCheckoutAndOrderTests {
     }
 
     @Test
+    @DisplayName("VAT alone must not separate a passing total from a failing subtotal at the configured floor")
+    void aTaxInclusiveOrderClearingTheFloorIsNeverRejectedOnItsSubtotal() {
+        // 2026-09-21 audit (major): the gate used to compare quote.subtotalMinor()
+        // -- gross of tax, since PricingEngine's INCLUSIVE mode subtracts VAT
+        // to derive it -- against a floor OrderingConfigurationKeys.MINIMUM_
+        // ORDER_AMOUNT_MINOR's own javadoc twice calls "the order total": what
+        // the customer actually pays. A single 50,000 burger, 12% INCLUSIVE
+        // VAT, no discount: subtotal is 50,000 minus the ~5,357 extracted as
+        // tax (44,643), while total stays the full 50,000. A floor of 45,000
+        // sits strictly between the two -- clearing the real total the
+        // customer is charged, but not the tax-excluded subtotal.
+        orderingConfig.override(OrderingConfigurationKeys.MINIMUM_ORDER_AMOUNT_MINOR_CODE, 45_000L);
+        UUID cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+        var priced = tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        assertThat(priced.quote().subtotalMinor())
+                .as("tax-excluded subtotal sits below the floor")
+                .isLessThan(45_000L);
+        assertThat(priced.quote().totalMinor())
+                .as("but the order total the customer actually pays clears it")
+                .isGreaterThanOrEqualTo(45_000L);
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "vat-boundary-clears-total")));
+
+        assertThat(result.created())
+                .as("an ordinary order whose real total clears the configured floor must not be refused")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "an order-level discount cannot push a checkout under the floor while its pre-discount subtotal hides it")
+    void anOrderLevelDiscountBelowTheFloorIsStillRefused() {
+        // 2026-09-21 audit (major): subtotalMinor() is derived from
+        // preDiscountGrossTotal, so it is blind to any item- or order-level
+        // promotion discount -- while totalMinor() is not. That reopened the
+        // exact bypass H5 was meant to close: a heavily discounted pickup
+        // order could check out for a fraction of the configured floor
+        // because the gate never looked at what the customer actually paid.
+        orderingConfig.override(OrderingConfigurationKeys.MINIMUM_ORDER_AMOUNT_MINOR_CODE, 40_000L);
+
+        var promoCodeStore =
+                new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore(jdbc, objectMapper);
+        var authoring = new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService(promoCodeStore, clock);
+        var drafted = authoring.draft(
+                TENANT,
+                BRAND,
+                new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.PromoCodeDraft(
+                        "Promo BYPASS90",
+                        "BYPASS90",
+                        uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.DiscountShape
+                                .PERCENTAGE_OFF_ORDER,
+                        9_000,
+                        null,
+                        "UZS",
+                        0,
+                        List.of(),
+                        List.of(),
+                        null,
+                        100,
+                        null,
+                        null));
+        authoring.activate(TENANT, BRAND, drafted.couponId());
+
+        UUID cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+        tx(() -> carts.applyPromoCode(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "bypass90"));
+        var priced = tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        assertThat(priced.quote().subtotalMinor())
+                .as("the pre-discount subtotal alone still clears the floor")
+                .isGreaterThanOrEqualTo(40_000L);
+        assertThat(priced.quote().totalMinor())
+                .as("but the discounted total the customer actually pays does not")
+                .isLessThan(40_000L);
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "discount-bypass-below-floor")));
+
+        assertThat(result.created())
+                .as("a 90%-off order must not check out under the tenant's configured minimum order amount")
+                .isFalse();
+        assertThat(result.rejectionCode()).isEqualTo("BELOW_MINIMUM_ORDER");
+    }
+
+    @Test
     @DisplayName("a zero configured minimum order amount (the code default) never refuses a pickup checkout")
     void zeroConfiguredMinimumOrderAmountNeverRefuses() {
         // Nothing set: OrderingConfigurationKeys.MINIMUM_ORDER_AMOUNT_MINOR's

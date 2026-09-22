@@ -344,18 +344,26 @@ class CheckoutEligibilityGuard {
         // pickup and dine-in's own floor. Delivery has its own minimum, the
         // zone's min_basket_minor, refused just above -- this key explicitly
         // does not apply to it (OrderingConfigurationKeys.MINIMUM_ORDER_AMOUNT_MINOR's
-        // own javadoc). Checked against the accepted quote's goods subtotal,
-        // not its total, so tax and any delivery fee never count toward a
-        // floor about what was actually ordered.
+        // own javadoc). Checked against the accepted quote's total -- what the
+        // customer is actually charged, post-discount and tax-inclusive -- to
+        // match that javadoc's own words twice over: "the smallest order
+        // total accepted". The subtotal was tried first and was wrong in both
+        // directions: it is tax-excluded, so an ordinary order can fail a
+        // floor its real total clears, and it is derived from the
+        // pre-discount gross, so it is blind to the exact order-level
+        // discount this gate exists to stop from bypassing it (2026-09-21
+        // audit; see CartCheckoutAndOrderTests's aTaxInclusiveOrderClearing...
+        // and anOrderLevelDiscountBelowTheFloor... for the two failure
+        // shapes).
         if (cart.fulfillmentMode() == FulfillmentMode.PICKUP || cart.fulfillmentMode() == FulfillmentMode.DINE_IN) {
             Long minimumOrderAmountMinor = configuration.value(
                     OrderingConfigurationKeys.MINIMUM_ORDER_AMOUNT_MINOR,
                     ResourceScope.location(command.tenantId(), command.brandId(), cart.locationId()));
             long floor = minimumOrderAmountMinor == null ? 0L : minimumOrderAmountMinor;
-            if (floor > 0 && quote.subtotalMinor() < floor) {
+            if (floor > 0 && quote.totalMinor() < floor) {
                 return Result.rejected(
                         "BELOW_MINIMUM_ORDER",
-                        "The order is below this location's minimum order amount by " + (floor - quote.subtotalMinor())
+                        "The order is below this location's minimum order amount by " + (floor - quote.totalMinor())
                                 + " minor units");
             }
         }
