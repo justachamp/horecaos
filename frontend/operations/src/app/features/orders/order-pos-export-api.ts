@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, tap } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
-import { command } from '../../core/api/idempotency';
+import { IntentCommandRegistry } from '../../core/api/idempotency';
 import { TenantScope, posPaths } from '../../core/api/pos-paths';
 
 /** Mirrors `ExportState` (Java, `pos.domain`) — every state one export can be in (ADR 0011). */
@@ -66,6 +66,17 @@ export interface PosExportPushResult {
 export class OrderPosExportApi {
   private readonly api = inject(ApiClient);
 
+  /**
+   * No `If-Match` on {@link push} — the export attempt is not the order's own
+   * aggregate version, so nothing else guards a double click (2026-09-21
+   * audit follow-up (a)). Keyed by orderId: an unchanged retry (the operator
+   * clicking "Push" again before the panel shows busy) reuses the key so the
+   * platform replays the first attempt instead of sending the same line to
+   * the POS a second time; an intentional retry of a settled failure reads
+   * as a new intent once the previous push's response forgot the held one.
+   */
+  private readonly pushIntents = new IntentCommandRegistry<{ reason: string }>();
+
   async forOrder(scope: TenantScope, orderId: string): Promise<OrderPosExportView> {
     const result = await firstValueFrom(
       this.api.get<OrderPosExportView>(posPaths.orderPosExport(scope, orderId)),
@@ -75,11 +86,11 @@ export class OrderPosExportApi {
 
   /** Push a pending export, or retry one the state machine still permits sending. `reason` is required and audited (ADR 0027). */
   async push(scope: TenantScope, orderId: string, reason: string): Promise<PosExportPushResult> {
+    const intent = this.pushIntents.next(orderId, { reason });
     return firstValueFrom(
-      this.api.post<{ reason: string }, PosExportPushResult>(
-        posPaths.orderPosExportPush(scope, orderId),
-        command({ reason }),
-      ),
+      this.api
+        .post<{ reason: string }, PosExportPushResult>(posPaths.orderPosExportPush(scope, orderId), intent)
+        .pipe(tap(() => this.pushIntents.forget(orderId))),
     );
   }
 }
