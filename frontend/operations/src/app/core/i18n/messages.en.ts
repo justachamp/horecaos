@@ -200,8 +200,17 @@ export const messagesEn = {
   'orders.column.time': 'Time',
   'orders.column.type': 'Type / channel',
   'orders.column.total': 'Total',
+  'orders.column.fee': 'Delivery fee',
+  'orders.column.payment': 'Payment',
   'orders.column.status': 'Status',
   'orders.column.actions': 'Actions',
+
+  'orders.paymentStatus.PENDING': 'Pending',
+  'orders.paymentStatus.AUTHORIZED': 'Authorized',
+  'orders.paymentStatus.CAPTURED': 'Paid',
+  'orders.paymentStatus.FAILED': 'Payment failed',
+  'orders.paymentStatus.VOIDED': 'Voided',
+  'orders.paymentStatus.REFUNDED': 'Refunded',
 
   'orders.action.approve': 'Accept',
   'orders.action.reject': 'Reject',
