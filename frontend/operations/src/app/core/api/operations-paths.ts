@@ -447,6 +447,16 @@ export const operationsPaths = {
   },
 
   /**
+   * One routing rule, by id — `PUT` changes its role (brand layer) or its
+   * station (location layer), row 4.2g's other half: before this, a product
+   * already routed could only be re-`POST`ed into a 409, never actually
+   * changed.
+   */
+  kitchenRoutingRule(scope: LocationScope, ruleId: string): string {
+    return `${this.kitchenRoutingRules(scope)}/${encodeURIComponent(ruleId)}`;
+  },
+
+  /**
    * The branch's kitchen display devices (ADR 0079, `KitchenDeviceController`,
    * row `2/X.2`, wave P17) — active and revoked alike, with who enrolled or
    * revoked each one. `POST`s land on {@link kitchenDeviceApprove} and

@@ -267,6 +267,15 @@ export class ProductEditorPage implements OnInit {
   protected readonly kitchenRoleSelection = signal('');
   protected readonly kitchenSaving = signal(false);
   protected readonly kitchenNotice = signal<string | null>(null);
+  /**
+   * The brand rule's own id and version once one exists, so `saveKitchenDepartment`
+   * can tell "nothing routed yet" (create) from "already routed, change it"
+   * (the optimistic-locked update) — the residual half of row 4.2g:
+   * `KitchenStationController` had no `GET`, so this always read blank before.
+   */
+  protected readonly kitchenRuleId = signal<string | null>(null);
+  protected readonly kitchenRuleVersion = signal<number | null>(null);
+  protected readonly kitchenRuleLoading = signal(false);
 
   /** Row 4.2g's per-item sale schedule — the product's default variant, at the current location. */
   protected readonly scheduleLoading = signal(false);
@@ -311,6 +320,7 @@ export class ProductEditorPage implements OnInit {
       );
       void this.loadReadiness(product);
       void this.loadPrices(product);
+      void this.loadKitchenRouting(product);
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) {
         this.notFound.set(true);
@@ -1145,15 +1155,52 @@ export class ProductEditorPage implements OnInit {
   // ------------------------------------------------------------ Row 4.2g — Kitchen department (Tab 1)
 
   /**
-   * Pure wiring over `KitchenStationController.route` — the endpoint already
-   * existed, and the only thing missing was a caller. Writes the brand layer
-   * (a station role, never a specific station: the location resolves that
-   * role to its own station at every branch), matching ADR 0041's own
-   * two-layer design. `CurrentLocation`'s scope supplies the URL's
-   * `locationId` even though the rule this writes is brand-wide — the
+   * `KitchenStationController.routingRuleFor` — the read this picker never
+   * had: before it, the select always opened blank and a second save 409d,
+   * because nothing ever told the editor a product was already routed.
+   * Reads the brand layer only, matching {@link saveKitchenDepartment}'s own
+   * scope: this picker never writes a location-specific station.
+   */
+  private async loadKitchenRouting(product: ProductDetail): Promise<void> {
+    await this.location.ensureLoaded();
+    const locationScope = this.location.scope();
+    if (!locationScope) {
+      return;
+    }
+    this.kitchenRuleLoading.set(true);
+    try {
+      const detail = await this.kitchenApi.findRouting(locationScope, {
+        productId: product.productId,
+      });
+      const brandRule = detail.brandRule;
+      this.kitchenRuleId.set(brandRule?.ruleId ?? null);
+      this.kitchenRuleVersion.set(brandRule?.version ?? null);
+      this.kitchenRoleSelection.set(brandRule?.stationRole ?? '');
+    } catch {
+      // The picker degrades to "nothing known yet" — the same blank state it
+      // always showed before this read existed — rather than blocking the
+      // rest of the BASIC tab on one rail.
+      this.kitchenRuleId.set(null);
+      this.kitchenRuleVersion.set(null);
+    } finally {
+      this.kitchenRuleLoading.set(false);
+    }
+  }
+
+  /**
+   * Wiring over `KitchenStationController.route`/`updateRoute`. Writes the
+   * brand layer (a station role, never a specific station: the location
+   * resolves that role to its own station at every branch), matching ADR
+   * 0041's own two-layer design. `CurrentLocation`'s scope supplies the
+   * URL's `locationId` even though the rule this writes is brand-wide — the
    * controller's own doc names this as the safe direction, since a
    * location-scoped grant satisfies a brand-scoped requirement's downward
    * cover.
+   *
+   * <p>Creates when {@link loadKitchenRouting} found nothing, and otherwise
+   * changes the existing rule with the version it was read at — the "second
+   * save 409s" residue {@link loadKitchenRouting}'s own doc names, closed
+   * here rather than left as a picker that can only ever be set once.
    */
   protected async saveKitchenDepartment(role: string): Promise<void> {
     const brandScope = this.brand.scope();
@@ -1166,9 +1213,24 @@ export class ProductEditorPage implements OnInit {
     this.kitchenSaving.set(true);
     this.kitchenNotice.set(null);
     try {
-      await firstValueFrom(
-        this.kitchenApi.route(locationScope, { productId: product.productId, stationRole: role }),
-      );
+      const ruleId = this.kitchenRuleId();
+      const expectedVersion = this.kitchenRuleVersion();
+      const result =
+        ruleId !== null && expectedVersion !== null
+          ? await firstValueFrom(
+              this.kitchenApi.updateRoute(locationScope, ruleId, {
+                stationRole: role,
+                expectedVersion,
+              }),
+            )
+          : await firstValueFrom(
+              this.kitchenApi.route(locationScope, {
+                productId: product.productId,
+                stationRole: role,
+              }),
+            );
+      this.kitchenRuleId.set(result.ruleId);
+      this.kitchenRuleVersion.set(result.version);
       this.kitchenNotice.set(this.i18n.t('catalog.editor.saved'));
     } catch (error) {
       this.kitchenNotice.set(

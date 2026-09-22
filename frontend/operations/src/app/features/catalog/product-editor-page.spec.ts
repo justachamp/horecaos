@@ -110,7 +110,8 @@ function configure(
       {
         provide: CapacityApi,
         useValue: {
-          route: () => of({ ruleId: 'rule-1', layer: 'BRAND' }),
+          route: () => of({ ruleId: 'rule-1', layer: 'BRAND', version: 1 }),
+          findRouting: () => Promise.resolve({ brandRule: null, locationRule: null }),
           ...capacityApi,
         },
       },
@@ -649,7 +650,7 @@ describe('ProductEditorPage', () => {
   });
 
   it('writes a brand-layer kitchen routing rule for this product — pure wiring over the existing endpoint', async () => {
-    const route = vi.fn().mockReturnValue(of({ ruleId: 'rule-1', layer: 'BRAND' }));
+    const route = vi.fn().mockReturnValue(of({ ruleId: 'rule-1', layer: 'BRAND', version: 1 }));
     configure({ productDetail: () => of(productDetail()) }, {}, {}, { route });
 
     const harness = await RouterTestingHarness.create('/catalog/products/product-1');
@@ -670,6 +671,69 @@ describe('ProductEditorPage', () => {
       stationRole: 'GRILL',
     });
   });
+
+  it('gap map row 4.2g: shows a product’s already-routed department instead of an always-blank picker', async () => {
+    const findRouting = vi.fn().mockResolvedValue({
+      brandRule: { ruleId: 'rule-1', layer: 'BRAND', stationRole: 'GRILL', version: 3 },
+      locationRule: null,
+    });
+    configure({ productDetail: () => of(productDetail()) }, {}, {}, { findRouting });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    harness.detectChanges();
+
+    expect(findRouting).toHaveBeenCalledWith(LOCATION_SCOPE, { productId: 'product-1' });
+    // The picker's own bound signal, not the native <select>'s DOM `.value` —
+    // this is the unit under test (loadKitchenRouting prefilling the picker
+    // from the read this row adds), independent of whether a bare `[value]`
+    // binding on a plain <select> happens to repaint in this test runner's
+    // DOM implementation once the option list already exists.
+    const instance = harness.routeDebugElement!.componentInstance as unknown as {
+      kitchenRoleSelection: () => string;
+    };
+    expect(instance.kitchenRoleSelection()).toBe('GRILL');
+  });
+
+  it(
+    'gap map row 4.2g: changing an already-routed product’s department calls the update, not ' +
+      'the create that used to 409 on a second save',
+    async () => {
+      const findRouting = vi.fn().mockResolvedValue({
+        brandRule: { ruleId: 'rule-1', layer: 'BRAND', stationRole: 'GRILL', version: 3 },
+        locationRule: null,
+      });
+      const route = vi.fn();
+      const updateRoute = vi
+        .fn()
+        .mockReturnValue(of({ ruleId: 'rule-1', layer: 'BRAND', version: 4 }));
+      configure(
+        { productDetail: () => of(productDetail()) },
+        {},
+        {},
+        { findRouting, route, updateRoute },
+      );
+
+      const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+      await flushMicrotasks();
+      const host = harness.routeNativeElement!;
+
+      const select = host.querySelector(
+        '[data-testid="editor-kitchen-role-select"]',
+      ) as HTMLSelectElement;
+      select.value = 'COLD';
+      select.dispatchEvent(new Event('change'));
+      harness.detectChanges();
+      (host.querySelector('[data-testid="editor-save-kitchen-role"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+
+      expect(updateRoute).toHaveBeenCalledWith(LOCATION_SCOPE, 'rule-1', {
+        stationRole: 'COLD',
+        expectedVersion: 3,
+      });
+      expect(route).not.toHaveBeenCalled();
+    },
+  );
 
   it('no longer shows the stale "not built" caption over the kitchen department picker', async () => {
     configure({ productDetail: () => of(productDetail()) });

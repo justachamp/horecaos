@@ -178,6 +178,7 @@
                     <select
                       #kitchenRoleSelect
                       [value]="kitchenRoleSelection()"
+                      [disabled]="kitchenRuleLoading()"
                       (change)="kitchenRoleSelection.set($any($event.target).value)"
                       data-testid="editor-kitchen-role-select"
                     >
@@ -188,7 +189,9 @@
                     </select>
                     <button
                       type="button"
-                      [disabled]="kitchenSaving() || !kitchenRoleSelection()"
+                      [disabled]="
+                        kitchenSaving() || kitchenRuleLoading() || !kitchenRoleSelection()
+                      "
                       (click)="saveKitchenDepartment(kitchenRoleSelection())"
                       data-testid="editor-save-kitchen-role"
                     >
