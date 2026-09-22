@@ -1,0 +1,120 @@
+.comment-presets {
+  padding: 16px 20px;
+  max-width: 960px;
+}
+
+.lead {
+  color: var(--q-ink-subtle);
+  margin: 0 0 8px;
+}
+
+.tenant-wide-note {
+  color: var(--q-ink-subtle);
+  margin: 0 0 16px;
+}
+
+.denied,
+.error {
+  padding: 32px;
+  text-align: center;
+  color: var(--q-ink-subtle);
+}
+
+.card {
+  margin-top: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.card h2 {
+  margin: 0 0 8px;
+}
+
+.comment-presets__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.comment-presets__table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: var(--q-type-caption);
+  color: var(--q-ink-subtle);
+  background: var(--q-surface-1);
+}
+
+.comment-presets__table td {
+  padding: 8px 12px;
+  border-top: 1px solid var(--q-hairline);
+}
+
+.comment-presets__table input,
+.comment-presets__table select {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font: inherit;
+}
+
+.comment-presets__row--archived {
+  color: var(--q-ink-subtle);
+}
+
+.comment-presets__row-actions {
+  display: flex;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.comment-presets__row-actions button {
+  padding: 4px 10px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-caption);
+}
+
+.comment-presets__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.comment-presets__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.comment-presets__field input {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font: inherit;
+}
+
+.comment-presets__error {
+  color: var(--q-error-text);
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.primary {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

@@ -711,6 +711,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.nav.integrations': 'Integratsiyalar',
   'settings.nav.referenceData': 'Maʻlumotnoma maʻlumotlari',
   'settings.nav.catalogBaseSettings': 'Katalogning bazaviy sozlamalari',
+  'settings.nav.commentPresets': 'Taomga izoh presetlari',
   'settings.nav.deliveryPolicy': 'Yetkazib berish siyosati',
 
   'settings.home.title': 'Sozlamalar',
@@ -755,6 +756,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.home.description.orderPolicy': 'Har bir buyurtma solishtiriladigan qoidalar toʻplami.',
   'settings.home.description.catalogBaseSettings':
     'Butun kompaniya uchun qoldiq logikasi va QR/kiosk narxlash almashtirgichlari.',
+  'settings.home.description.commentPresets':
+    'Mahsulot erkin matn oʻrniga qatorda taklif qiladigan, oshxona uchun kodlangan koʻrsatmalar.',
   'settings.home.description.deliveryPolicy':
     'Zonadan tashqaridagi manzillar, kuryer nimani koʻradi va qila oladi, GPS boʻyicha tekshiruvlar.',
   'settings.home.description.paymentMethods': 'Tenantning oʻz toʻlov usullari roʻyxati.',
@@ -1060,6 +1063,40 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.catalog.qrKioskPricePlane.body':
     'QR va kiosk kanallarini qoʻlda tuzilgan alohida narx rejasi oʻrniga avtomatik ravishda zal narx rejasiga yoʻnaltiradi.',
   'settings.catalog.qrKioskPricePlane.field': 'QR va kiosk zal narxlarida sotadi',
+
+  // Qator 2.1b: taomga izoh presetlari
+  'settings.commentPresets.title': 'Taomga izoh presetlari',
+  'settings.commentPresets.lead':
+    'Erkin matn oʻrniga qator olib yuradigan, oshxona uchun kodlangan koʻrsatma ("piyozsiz", "yaxshi qovurish").',
+  'settings.commentPresets.tenantWideNote': 'Ushbu tenantning barcha brendlari uchun umumiy.',
+  'settings.commentPresets.empty': 'Hali presetlar roʻyxatdan oʻtkazilmagan.',
+  'settings.commentPresets.status.active': 'Faol',
+  'settings.commentPresets.status.archived': 'Arxivlangan',
+  'settings.commentPresets.table.code': 'Kod',
+  'settings.commentPresets.table.labelRu': 'Yorliq (ru)',
+  'settings.commentPresets.table.labelUz': 'Yorliq (uz)',
+  'settings.commentPresets.table.labelEn': 'Yorliq (en)',
+  'settings.commentPresets.table.posModifierCode': 'Kassa modifikatori',
+  'settings.commentPresets.table.sortOrder': 'Tartib',
+  'settings.commentPresets.table.status': 'Holat',
+  'settings.commentPresets.edit': 'Tahrirlash',
+  'settings.commentPresets.edit.submit': 'Saqlash',
+  'settings.commentPresets.edit.submitting': 'Saqlanmoqda…',
+  'settings.commentPresets.cancel': 'Bekor qilish',
+  'settings.commentPresets.create.title': 'Presetni roʻyxatdan oʻtkazish',
+  'settings.commentPresets.create.code': 'Kod',
+  'settings.commentPresets.create.codeHint':
+    'Faqat bosh harflar, raqamlar, "_" va "-". Mijozga hech qachon koʻrsatilmaydi.',
+  'settings.commentPresets.create.labelRu': 'Yorliq (ru)',
+  'settings.commentPresets.create.labelUz': 'Yorliq (uz)',
+  'settings.commentPresets.create.labelEn': 'Yorliq (en)',
+  'settings.commentPresets.create.posModifierCode': 'Kassa modifikatori kodi',
+  'settings.commentPresets.create.posModifierCodeHint':
+    'Ixtiyoriy. Kassaga eksport modifikator kutgan joyda bu presetni aylantiradigan kodlangan qiymat.',
+  'settings.commentPresets.create.sortOrder': 'Tartib',
+  'settings.commentPresets.create.submit': 'Roʻyxatdan oʻtkazish',
+  'settings.commentPresets.create.submitting': 'Roʻyxatdan oʻtkazilmoqda…',
+  'settings.commentPresets.create.incomplete': 'Kod va barcha uchta yorliq talab qilinadi.',
 
   // 10.7 Fiskalizatsiya
   'settings.fiscalization.title': 'Fiskalizatsiya',

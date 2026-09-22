@@ -335,6 +335,16 @@ export const routes: Routes = [
               ),
           },
           {
+            // Row 2.1b: the tenant-wide coded kitchen-instruction vocabulary.
+            // TENANT-only, like its `catalog` sibling above — see
+            // `comment-presets-page.ts`'s own doc.
+            path: 'comment-presets',
+            loadComponent: () =>
+              import('./features/settings/comment-presets/comment-presets-page').then(
+                (m) => m.CommentPresetsPage,
+              ),
+          },
+          {
             path: 'payment-methods',
             loadComponent: () =>
               import('./features/settings/payment-methods/payment-methods-page').then(
