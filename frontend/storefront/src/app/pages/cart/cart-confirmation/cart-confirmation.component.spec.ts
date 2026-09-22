@@ -8,9 +8,11 @@ import { PaymentSessionService } from '../../../services/payment-session.service
 import { NotificationService } from '../../../services/notification.service';
 import { TranslateService } from '../../../services/translate.service';
 import { DeliverySelectionService } from '../../../services/delivery-selection.service';
+import { LocationProfileService, type LocationProfile } from '../../../services/location-profile.service';
 import type { CheckoutResult, PricedCart } from '../../../services/cart.service';
 import type { CartResponse } from '../../../types/cart.types';
 import { HorecaOSApiError } from '../../../core/api/problem-details';
+import { APP_CONFIG, type AppConfig } from '../../../core/config/app-config';
 
 class FakeUiCartService {
   fulfillmentMode = vi.fn(() => 'DELIVERY' as const);
@@ -47,6 +49,20 @@ class FakePaymentSessionService {
 class FakeNotificationService {
   show = vi.fn();
 }
+
+class FakeLocationProfileService {
+  profile = vi.fn<() => Promise<LocationProfile | null>>(() => Promise.resolve(null));
+}
+
+const CONFIG: AppConfig = {
+  apiBaseUrl: '/api/v1',
+  tenantId: 'tenant-1',
+  brandId: 'brand-1',
+  defaultLocationId: 'loc-1',
+  channel: 'STOREFRONT',
+  yandexMapsApiKey: '',
+  brand: { displayName: 'Test Brand', theme: { accent: '#000000', accentDeep: '#000000' } },
+};
 
 class FakeTranslateService {
   get(key: string): string {
@@ -118,6 +134,7 @@ async function setUp(
   paymentCodes: readonly string[] = ['CASH'],
   configureCart?: (cart: FakeUiCartService) => void,
   configureDelivery?: (delivery: FakeDeliverySelectionService) => void,
+  configureLocations?: (locations: FakeLocationProfileService) => void,
 ) {
   const cart = new FakeUiCartService();
   const delivery = new FakeDeliverySelectionService();
@@ -126,6 +143,8 @@ async function setUp(
   configureDelivery?.(delivery);
   const paymentSessions = new FakePaymentSessionService();
   const notification = new FakeNotificationService();
+  const locations = new FakeLocationProfileService();
+  configureLocations?.(locations);
 
   TestBed.configureTestingModule({
     imports: [CartConfirmationComponent],
@@ -137,6 +156,8 @@ async function setUp(
       { provide: NotificationService, useValue: notification },
       { provide: TranslateService, useClass: FakeTranslateService },
       { provide: DeliverySelectionService, useValue: delivery },
+      { provide: LocationProfileService, useValue: locations },
+      { provide: APP_CONFIG, useValue: CONFIG },
     ],
   });
   const router = TestBed.inject(Router);
@@ -151,6 +172,7 @@ async function setUp(
   // pending microtask) is what actually guarantees `paymentMethodsLoaded`
   // has been set before a test reads it.
   await new Promise((resolve) => setTimeout(resolve, 0));
+  fixture.detectChanges();
 
   return {
     fixture,
@@ -159,6 +181,7 @@ async function setUp(
     delivery,
     paymentSessions,
     notification,
+    locations,
     navigateSpy,
   };
 }
@@ -189,6 +212,54 @@ describe('CartConfirmationComponent: no payment methods blocks submit', () => {
     const { comp } = await setUp(['CASH', 'MARKETPLACE']);
 
     expect(comp.paymentOptions().map((o) => o.id)).toEqual(['CASH']);
+  });
+});
+
+describe('CartConfirmationComponent: the pickup screen names the actual branch', () => {
+  function pickupProfile(overrides: Partial<LocationProfile> = {}): LocationProfile {
+    return {
+      displayName: 'Chilonzor filiali',
+      addressLine: "Bunyodkor ko'chasi 12",
+      district: 'Chilonzor',
+      city: 'Toshkent',
+      ...overrides,
+    };
+  }
+
+  it('shows the branch\'s own name and address once the profile read resolves, for the configured location', async () => {
+    const { comp, fixture, locations } = await setUp(
+      ['CASH'],
+      (cart) => {
+        cart.fulfillmentMode.mockReturnValue('PICKUP' as never);
+      },
+      undefined,
+      (locations) => {
+        locations.profile.mockResolvedValue(pickupProfile());
+      },
+    );
+
+    expect(locations.profile).toHaveBeenCalledWith('loc-1');
+    expect(comp.pickupLocationName).toBe('Chilonzor filiali');
+    expect(comp.pickupLocationAddress).toContain("Bunyodkor ko'chasi 12");
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Chilonzor filiali');
+    expect(text).toContain("Bunyodkor ko'chasi 12");
+  });
+
+  it('falls back to the generic label and hint while the profile has not loaded (or is unavailable)', async () => {
+    const { comp } = await setUp(['CASH'], (cart) => {
+      cart.fulfillmentMode.mockReturnValue('PICKUP' as never);
+    });
+    // locations.profile resolves to null by default (FakeLocationProfileService).
+
+    expect(comp.pickupLocationName).toBe('cart.pickupLocation');
+    expect(comp.pickupLocationAddress).toBe('cart.pickupLocationHint');
+  });
+
+  it('never asks for a branch profile on a DELIVERY cart', async () => {
+    const { locations } = await setUp(['CASH']);
+
+    expect(locations.profile).not.toHaveBeenCalled();
   });
 });
 

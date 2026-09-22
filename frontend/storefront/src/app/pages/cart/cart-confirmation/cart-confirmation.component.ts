@@ -11,6 +11,8 @@ import { NotificationService } from '../../../services/notification.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { TranslateService } from '../../../services/translate.service';
 import { HorecaOSApiError, messageKeyFor } from '../../../core/api/problem-details';
+import { LocationProfileService, type LocationProfile } from '../../../services/location-profile.service';
+import { APP_CONFIG } from '../../../core/config/app-config';
 
 export interface PaymentOption {
   id: string;
@@ -125,6 +127,24 @@ export class CartConfirmationComponent implements OnInit {
   }
 
   private readonly delivery = inject(DeliverySelectionService);
+  private readonly locations = inject(LocationProfileService);
+  private readonly appConfig = inject(APP_CONFIG);
+
+  /**
+   * The pickup branch's own published name and address, once loaded.
+   *
+   * `null` before that -- not a pickup cart, the read has not settled yet,
+   * or the location was not found -- and read only through
+   * {@link pickupLocationName} / {@link pickupLocationAddress} below, which
+   * fall back to the generic label this screen showed before this existed.
+   */
+  readonly pickupLocationProfile = signal<LocationProfile | null>(null);
+
+  /** Guards the effect below against asking again on every recomputation
+   * once a request for this screen visit is already under way --
+   * `LocationProfileService` itself caches per location, but there is no
+   * reason to even re-enter the `.then()` chain a second time. */
+  private pickupProfileRequested = false;
 
   constructor(
     public cart: UiCartService,
@@ -168,6 +188,26 @@ export class CartConfirmationComponent implements OnInit {
         this.resolvingDestination = false;
       });
     });
+
+    // Names the branch once this is known to be a pickup cart. Nothing on
+    // `CartResponse` carries a location id today (see UiCartService's own
+    // doc on what the platform's cart carries), and a storefront deployment
+    // serves exactly one branch (`AppConfig.defaultLocationId`), so that
+    // configured id -- not a per-cart field -- is what this asks about.
+    effect(() => {
+      if (this.cart.fulfillmentMode() !== 'PICKUP' || this.pickupProfileRequested) {
+        return;
+      }
+      const locationId = this.appConfig.defaultLocationId;
+      if (!locationId) {
+        return;
+      }
+      this.pickupProfileRequested = true;
+      this.locations
+        .profile(locationId)
+        .then((profile) => this.pickupLocationProfile.set(profile))
+        .catch(() => this.pickupLocationProfile.set(null));
+    });
   }
 
   /** Set once the customer edits either recipient field, so a late-arriving
@@ -200,6 +240,25 @@ export class CartConfirmationComponent implements OnInit {
 
   get pickingUp(): boolean {
     return this.cart.fulfillmentMode() === 'PICKUP';
+  }
+
+  /** The branch's own name once known, or the generic "pickup branch" label
+   * while the read has not settled or the branch could not be found. */
+  get pickupLocationName(): string {
+    return this.pickupLocationProfile()?.displayName ?? this.translate.get('cart.pickupLocation');
+  }
+
+  /** The branch's own address once known, or the generic collection hint
+   * this screen showed before the profile read existed. `district`/`city`
+   * are appended only when present -- `StorefrontLocationProfileController`
+   * documents both as optional -- so a branch missing one is not shown with
+   * a trailing ", ". */
+  get pickupLocationAddress(): string {
+    const profile = this.pickupLocationProfile();
+    const line = [profile?.addressLine, profile?.district, profile?.city]
+      .filter((part): part is string => !!part)
+      .join(', ');
+    return line || this.translate.get('cart.pickupLocationHint');
   }
 
   /** Why the delivery fee is not final yet, or `null` when it is (or this is
