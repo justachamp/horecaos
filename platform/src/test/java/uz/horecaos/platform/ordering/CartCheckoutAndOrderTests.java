@@ -2376,7 +2376,8 @@ class CartCheckoutAndOrderTests {
         var order = orderIdOf(placeOrder("idem-timeout"));
 
         clock.advance(Duration.ofMinutes(6));
-        var due = tx(() -> orderStore.claimDueTimers(clock.instant(), 10));
+        var due = tx(
+                () -> orderStore.claimDueTimers(clock.instant(), clock.instant().minus(Duration.ofMinutes(2)), 10));
         assertThat(due).hasSize(1);
 
         tx(() -> orderState.approvalDeadlineReached(TENANT, order));
@@ -2388,6 +2389,77 @@ class CartCheckoutAndOrderTests {
 
         tx(() -> inventoryProcess.runOnce(10));
         assertThat(reservationStatus()).isEqualTo("RELEASED");
+    }
+
+    @Test
+    @DisplayName(
+            "claimDueTimers reclaims a failed-retryable timer once its backoff elapses, and carries the attempt count")
+    void claimDueTimersReclaimsAFailedRetryableTimer() {
+        // H9: JdbcOrderStore.markTimerFailed + claimDueTimers's second source
+        // of rows (FAILED_RETRYABLE, next_retry_at <= now) is the SQL half of
+        // the retry path OrderProcessWorkerTimerRetryTests proves in Java.
+        requireApproval();
+        orderIdOf(placeOrder("idem-timer-retry"));
+
+        clock.advance(Duration.ofMinutes(6));
+        var firstClaim = tx(
+                () -> orderStore.claimDueTimers(clock.instant(), clock.instant().minus(Duration.ofMinutes(2)), 10));
+        assertThat(firstClaim).hasSize(1);
+        var timer = firstClaim.getFirst();
+        assertThat(timer.attemptCount()).isZero();
+
+        // Simulate a thrown failure applying it: quarantined with a backoff,
+        // and no longer claimable by the PENDING/due_at source (it moved off
+        // FIRED) nor by the FAILED_RETRYABLE source until its own backoff
+        // elapses.
+        Instant nextRetryAt = clock.instant().plus(Duration.ofSeconds(30));
+        tx(() -> orderStore.markTimerFailed(TENANT, timer.timerId(), 1, nextRetryAt));
+        assertThat(tx(() -> orderStore.claimDueTimers(
+                        clock.instant(), clock.instant().minus(Duration.ofMinutes(2)), 10)))
+                .as("the backoff has not elapsed yet")
+                .isEmpty();
+
+        clock.advance(Duration.ofSeconds(31));
+        var secondClaim = tx(
+                () -> orderStore.claimDueTimers(clock.instant(), clock.instant().minus(Duration.ofMinutes(2)), 10));
+
+        assertThat(secondClaim).hasSize(1);
+        assertThat(secondClaim.getFirst().timerId()).isEqualTo(timer.timerId());
+        assertThat(secondClaim.getFirst().attemptCount())
+                .as("the attempt count markTimerFailed recorded must survive the reclaim")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("claimDueTimers reclaims a timer stranded FIRED by a node that never applied it")
+    void claimDueTimersReclaimsAStaleFiredTimer() {
+        // H9's second failure mode: not a thrown exception, but the node dying
+        // between claiming the timer and applying it. Nothing marks the row
+        // FAILED_RETRYABLE in that case, so claimDueTimers itself has to notice
+        // a FIRED row whose order never left AWAITING_APPROVAL.
+        requireApproval();
+        var order = orderIdOf(placeOrder("idem-timer-stale"));
+
+        clock.advance(Duration.ofMinutes(6));
+        var firstClaim = tx(
+                () -> orderStore.claimDueTimers(clock.instant(), clock.instant().minus(Duration.ofMinutes(2)), 10));
+        assertThat(firstClaim).hasSize(1);
+        // Deliberately not applied and not marked failed -- the crash this test
+        // is standing in for.
+        assertThat(orderStore.find(TENANT, order).orElseThrow().status()).isEqualTo(OrderStatus.AWAITING_APPROVAL);
+
+        assertThat(tx(() -> orderStore.claimDueTimers(
+                        clock.instant(), clock.instant().minus(Duration.ofMinutes(2)), 10)))
+                .as("still well inside the staleness window")
+                .isEmpty();
+
+        clock.advance(Duration.ofMinutes(3));
+        var reclaimed = tx(
+                () -> orderStore.claimDueTimers(clock.instant(), clock.instant().minus(Duration.ofMinutes(2)), 10));
+
+        assertThat(reclaimed).hasSize(1);
+        assertThat(reclaimed.getFirst().timerId())
+                .isEqualTo(firstClaim.getFirst().timerId());
     }
 
     @Test
