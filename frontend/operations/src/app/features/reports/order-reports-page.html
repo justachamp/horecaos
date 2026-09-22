@@ -167,6 +167,51 @@
           <p class="order-reports__note q-caption">{{ 'reports.orders.daily.notBuiltNote' | t }}</p>
         }
         @case ('summary') {
+          <h2 class="q-subhead">{{ 'reports.orders.summary.report1.title' | t }}</h2>
+          <table class="report1-table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'reports.orders.summary.orderType' | t }}</th>
+                <th class="q-caption report1-table__num">
+                  {{ 'reports.orders.summary.count' | t }}
+                </th>
+                <th class="q-caption report1-table__num">{{ 'reports.orders.summary.sum' | t }}</th>
+                <th class="q-caption report1-table__num">
+                  {{ 'reports.orders.summary.sumWithDelivery' | t }}
+                </th>
+                <th class="q-caption report1-table__num">
+                  {{ 'reports.orders.summary.total' | t }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of report1Rows(); track row.key) {
+                <tr [class.report1-table__total-row]="row.key === 'TOTAL'">
+                  <td class="q-body-sm">
+                    {{
+                      row.key === 'TOTAL'
+                        ? ('reports.orders.summary.total' | t)
+                        : fulfilmentLabel(row.key)
+                    }}
+                  </td>
+                  <td class="q-body-sm q-tnum report1-table__num">{{ count(row.orderCount) }}</td>
+                  <td class="q-body-sm q-tnum report1-table__num">{{ money(row.sumSom) }}</td>
+                  <td class="q-body-sm q-tnum report1-table__num">
+                    {{ money(row.sumWithDeliverySom) }}
+                  </td>
+                  <td class="q-body-sm q-tnum report1-table__num">{{ money(row.totalSom) }}</td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td class="daily-table__empty q-body-sm" colspan="5">
+                    {{ 'reports.empty.period' | t }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+
+          <h2 class="q-subhead">{{ 'reports.orders.summary.report2.title' | t }}</h2>
           <div class="pivot-controls">
             <div
               class="pivot-controls__group"
@@ -238,22 +283,32 @@
             </div>
           </div>
 
-          <table class="pivot-table">
+          <table class="pivot-table" data-testid="summary-grid">
             <thead>
               <tr>
                 <th class="q-caption">{{ 'reports.orders.summary.branch' | t }}</th>
-                <th class="q-caption">{{ 'reports.orders.summary.channel' | t }}</th>
-                <th class="q-caption pivot-table__num">{{ 'reports.orders.summary.value' | t }}</th>
+                @for (column of summaryGrid().columns; track column.key) {
+                  <th class="q-caption pivot-table__num">{{ column.label }}</th>
+                }
+                @if (summaryGrid().columns.length > 1) {
+                  <th class="q-caption pivot-table__num pivot-table__total-col">
+                    {{ 'reports.orders.summary.total' | t }}
+                  </th>
+                }
               </tr>
             </thead>
             <tbody>
-              @for (row of pivotRows(); track row.locationName + '|' + row.channelName) {
+              @for (row of summaryGrid().rows; track row.key) {
                 <tr>
-                  <td class="q-body-sm">{{ row.locationName }}</td>
-                  <td class="q-body-sm">{{ row.channelName }}</td>
-                  <td class="q-body-sm q-tnum pivot-table__num">
-                    {{ formatPivotValue(row.value) }}
-                  </td>
+                  <td class="q-body-sm">{{ row.label }}</td>
+                  @for (cell of row.cells; track $index) {
+                    <td class="q-body-sm q-tnum pivot-table__num">{{ formatPivotValue(cell) }}</td>
+                  }
+                  @if (summaryGrid().columns.length > 1) {
+                    <td class="q-body-sm q-tnum pivot-table__num pivot-table__total-col">
+                      {{ formatPivotValue(row.rowTotal) }}
+                    </td>
+                  }
                 </tr>
               } @empty {
                 <tr>
@@ -263,6 +318,21 @@
                 </tr>
               }
             </tbody>
+            @if (summaryGrid().rows.length > 0) {
+              <tfoot>
+                <tr class="pivot-table__total-row">
+                  <td class="q-body-sm">{{ 'reports.orders.summary.total' | t }}</td>
+                  @for (total of summaryGrid().columnTotals; track $index) {
+                    <td class="q-body-sm q-tnum pivot-table__num">{{ formatPivotValue(total) }}</td>
+                  }
+                  @if (summaryGrid().columns.length > 1) {
+                    <td class="q-body-sm q-tnum pivot-table__num pivot-table__total-col">
+                      {{ formatPivotValue(summaryGrid().grandTotal) }}
+                    </td>
+                  }
+                </tr>
+              </tfoot>
+            }
           </table>
         }
       }

@@ -18,6 +18,15 @@ import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { LocationView, LocationsApi } from '../settings/locations/locations-api';
 import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
+import {
+  Report1Row,
+  SummaryBucket,
+  SummaryGrid,
+  SummaryMeasure,
+  SummarySplit,
+  buildReport1Rows,
+  buildSummaryGrid,
+} from './order-summary-grid';
 import { OrderRowsTable, OrderTableColumn } from './order-rows-table';
 import { ProvenanceBanner } from './provenance-banner';
 import { ddmm, formatCount, formatShare, formatSignedMinutes, median } from './report-formatting';
@@ -26,8 +35,6 @@ import { DateRange, ReportsFilterState } from './reports-filter-state';
 import { OrderRowResponse, ProvenanceResponse, ReportingApi } from './reporting-api';
 
 type OrderReportTab = 'stages' | 'commercial' | 'daily' | 'summary' | 'late';
-type FulfilmentFilter = 'ALL' | 'DELIVERY' | 'PICKUP' | 'DINE_IN';
-type PivotMeasure = 'count' | 'sum' | 'avgCheck';
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
 
 const TAB_DEFINITIONS: readonly { readonly id: OrderReportTab; readonly labelKey: MessageKey }[] = [
@@ -100,20 +107,6 @@ interface AggregatorChannel {
   readonly displayName: string;
 }
 
-interface PivotBucket {
-  readonly locationId: string;
-  readonly channelCode: string;
-  readonly fulfilmentType: string;
-  readonly grossSom: number;
-  readonly orderCount: number;
-}
-
-interface PivotRow {
-  readonly locationName: string;
-  readonly channelName: string;
-  readonly value: number | null;
-}
-
 /**
  * 7.2 Order reports (`frontend-information-architecture.md` PART 2 §7, tier
  * P) — statistics.md §2.2. "The per-order evidence behind every number on the
@@ -153,13 +146,19 @@ interface PivotRow {
  * (`groupBy: ['CHANNEL']`, no new endpoint) for every channel whose
  * `systemType` marks it an aggregator.
  *
- * **«Сводка» is a flat branch×channel table for this wave, not the 2D pivot
- * grid statistics.md §2.2 draws** (rows = branch, columns = channel). The
- * measure and split selectors are real and reactive over one already-fetched,
- * correctly-summed dataset — no additional fetch on either control — only the
- * layout is simplified; a true grid is a template change over the same
- * `pivotRows()` data, not a new data model. Saved views and a column chooser
- * are out of this wave's scope — noted rather than silently missing.
+ * **Wave 8 w7-reports (7.2c).** «Сводка» is now both roll-ups statistics.md
+ * §2.2 actually names, not the single flat table the prior wave shipped.
+ * «Сводка 1» is the by-`Тип заказа` table (`Кол-во заказов`, `Сумма`,
+ * `Сумма с учётом доставки`, `Итого`), and «Сводка 2» is the true
+ * branch×channel pivot (rows = branch, columns = channel) with a row and a
+ * column total. Both are pure functions (`order-summary-grid.ts`) over one
+ * already-fetched, already-legal-entity-folded dataset — `Сумма с учётом
+ * доставки` is `revenue.gross.v1` itself (already delivery-fee-inclusive by
+ * definition) and `Сумма` is that figure less `delivery_fee.v1`, the new
+ * registry metric (V0383) this wave adds so the fee has a total of its own
+ * to subtract. The measure and split selectors reuse the same fetch. Saved
+ * views and a column chooser are out of this wave's scope — noted rather
+ * than silently missing.
  */
 @Component({
   selector: 'q-order-reports-page',
@@ -210,10 +209,24 @@ export class OrderReportsPage {
   protected readonly dailyRows = signal<readonly DailyRow[]>([]);
   protected readonly aggregatorChannels = signal<readonly AggregatorChannel[]>([]);
 
-  private readonly pivotBuckets = signal<readonly PivotBucket[]>([]);
-  protected readonly pivotMeasure = signal<PivotMeasure>('sum');
-  protected readonly pivotSplit = signal<FulfilmentFilter>('ALL');
-  protected readonly pivotRows = computed(() => this.buildPivotRows());
+  private readonly summaryBuckets = signal<readonly SummaryBucket[]>([]);
+  protected readonly pivotMeasure = signal<SummaryMeasure>('sum');
+  protected readonly pivotSplit = signal<SummarySplit>('ALL');
+  /** «Сводка 1» — statistics.md §2.2's by-`Тип заказа` table; never re-fetched by either control below. */
+  protected readonly report1Rows = computed<readonly Report1Row[]>(() =>
+    buildReport1Rows(this.summaryBuckets()),
+  );
+  /** «Сводка 2» — the true branch×channel pivot. */
+  protected readonly summaryGrid = computed<SummaryGrid>(() =>
+    buildSummaryGrid(
+      this.summaryBuckets(),
+      this.pivotMeasure(),
+      this.pivotSplit(),
+      (locationId) => this.locations.find((l) => l.id === locationId)?.displayName ?? locationId,
+      (channelCode) =>
+        this.channels.find((c) => c.code === channelCode)?.displayName ?? channelCode,
+    ),
+  );
 
   private locations: readonly LocationView[] = [];
   private channels: readonly ChannelView[] = [];
@@ -298,11 +311,11 @@ export class OrderReportsPage {
     return type === 'ALL' ? undefined : [type];
   }
 
-  protected selectPivotMeasure(measure: PivotMeasure): void {
+  protected selectPivotMeasure(measure: SummaryMeasure): void {
     this.pivotMeasure.set(measure);
   }
 
-  protected selectPivotSplit(split: FulfilmentFilter): void {
+  protected selectPivotSplit(split: SummarySplit): void {
     this.pivotSplit.set(split);
   }
 
@@ -329,6 +342,20 @@ export class OrderReportsPage {
 
   protected cancelledShare(row: DailyRow): string {
     return formatShare(row.cancelledCount, row.orderCount + row.cancelledCount);
+  }
+
+  /** «Сводка 1»'s row label — the same `orders.fulfillmentMode.*` registry `order-rows-table.ts` reads. */
+  protected fulfilmentLabel(type: string): string {
+    switch (type) {
+      case 'DELIVERY':
+        return this.i18n.t('orders.fulfillmentMode.DELIVERY');
+      case 'PICKUP':
+        return this.i18n.t('orders.fulfillmentMode.PICKUP');
+      case 'DINE_IN':
+        return this.i18n.t('orders.fulfillmentMode.DINE_IN');
+      default:
+        return type;
+    }
   }
 
   private async loadTab(tab: OrderReportTab, range: DateRange): Promise<void> {
@@ -531,11 +558,18 @@ export class OrderReportsPage {
     );
   }
 
+  /**
+   * Wave 8 w7-reports (7.2c): both «Сводка» roll-ups off one read.
+   * `delivery_fee.v1` (V0383) joins `revenue.gross.v1`/`revenue.net.v1` so
+   * «Сводка 1»'s fee-exclusive column can subtract it — no second fetch for
+   * that column, the same "one already-fetched dataset" property the prior
+   * wave's pivot already had.
+   */
   private async loadSummary(scope: LocationScope, range: DateRange): Promise<void> {
     const result = await this.api.query(scope.tenantId, {
       from: range.from,
       to: range.to,
-      metric: ['revenue.gross.v1', 'orders.count.v1'],
+      metric: ['revenue.gross.v1', 'revenue.net.v1', 'delivery_fee.v1', 'orders.count.v1'],
       // LEGAL_ENTITY joins the other three axes for the same ADR 0038 reason
       // every money query on this page names it now; sumAcrossDays below
       // folds it back out since «Сводка» does not split by entity.
@@ -547,9 +581,9 @@ export class OrderReportsPage {
     const buckets = sumAcrossDays(
       result.rows,
       (row) => `${row.locationId}|${row.channelCode}|${row.fulfilmentType}`,
-      ['revenue.gross.v1', 'orders.count.v1'],
+      ['revenue.gross.v1', 'revenue.net.v1', 'delivery_fee.v1', 'orders.count.v1'],
     );
-    this.pivotBuckets.set(
+    this.summaryBuckets.set(
       [...buckets.entries()].map(([key, values]) => {
         const [locationId, channelCode, fulfilmentType] = key.split('|');
         return {
@@ -557,51 +591,12 @@ export class OrderReportsPage {
           channelCode,
           fulfilmentType,
           grossSom: values['revenue.gross.v1'],
+          deliveryFeeSom: values['delivery_fee.v1'],
+          netSom: values['revenue.net.v1'],
           orderCount: values['orders.count.v1'],
         };
       }),
     );
-  }
-
-  private buildPivotRows(): readonly PivotRow[] {
-    const split = this.pivotSplit();
-    const measure = this.pivotMeasure();
-    const nameOfLocation = new Map(this.locations.map((l) => [l.id, l.displayName]));
-    const nameOfChannel = new Map(this.channels.map((c) => [c.code, c.displayName]));
-
-    const matching = this.pivotBuckets().filter(
-      (b) => split === 'ALL' || b.fulfilmentType === split,
-    );
-    const rolled = new Map<string, { grossSom: number; orderCount: number }>();
-    for (const bucket of matching) {
-      const key = `${bucket.locationId}|${bucket.channelCode}`;
-      const existing = rolled.get(key) ?? { grossSom: 0, orderCount: 0 };
-      rolled.set(key, {
-        grossSom: existing.grossSom + bucket.grossSom,
-        orderCount: existing.orderCount + bucket.orderCount,
-      });
-    }
-
-    return [...rolled.entries()]
-      .map(([key, values]) => {
-        const [locationId, channelCode] = key.split('|');
-        const value =
-          measure === 'count'
-            ? values.orderCount
-            : measure === 'sum'
-              ? values.grossSom
-              : deriveAverageCheck(values.grossSom, values.orderCount);
-        return {
-          locationName: nameOfLocation.get(locationId) ?? locationId,
-          channelName: nameOfChannel.get(channelCode) ?? channelCode,
-          value,
-        };
-      })
-      .sort(
-        (a, b) =>
-          a.locationName.localeCompare(b.locationName) ||
-          a.channelName.localeCompare(b.channelName),
-      );
   }
 }
 

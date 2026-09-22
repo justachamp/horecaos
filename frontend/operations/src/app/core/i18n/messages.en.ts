@@ -3717,6 +3717,13 @@ export const messagesEn = {
   'reports.orders.summary.branch': 'Branch',
   'reports.orders.summary.channel': 'Channel',
   'reports.orders.summary.value': 'Value',
+  'reports.orders.summary.report1.title': 'Summary 1',
+  'reports.orders.summary.report2.title': 'Summary 2',
+  'reports.orders.summary.orderType': 'Order type',
+  'reports.orders.summary.count': 'Order count',
+  'reports.orders.summary.sum': 'Sum',
+  'reports.orders.summary.sumWithDelivery': 'Sum incl. delivery',
+  'reports.orders.summary.total': 'Total',
 
   // ------------------------------------------------------- Marketing (§6)
 

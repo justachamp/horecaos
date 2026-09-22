@@ -3689,6 +3689,13 @@ export const messagesRu: MessageCatalogue = {
   'reports.orders.summary.branch': 'Филиал',
   'reports.orders.summary.channel': 'Канал',
   'reports.orders.summary.value': 'Значение',
+  'reports.orders.summary.report1.title': 'Сводка 1',
+  'reports.orders.summary.report2.title': 'Сводка 2',
+  'reports.orders.summary.orderType': 'Тип заказа',
+  'reports.orders.summary.count': 'Кол-во заказов',
+  'reports.orders.summary.sum': 'Сумма',
+  'reports.orders.summary.sumWithDelivery': 'Сумма с учётом доставки',
+  'reports.orders.summary.total': 'Итого',
 
   // ------------------------------------------------------- Маркетинг (§6)
 
