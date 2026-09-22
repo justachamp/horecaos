@@ -3403,7 +3403,9 @@ class CartCheckoutAndOrderTests {
                 0L,
                 "CUSTOMER",
                 CUSTOMER.toString(),
-                null);
+                null,
+                null,
+                false);
         var result = tx(() -> checkout.checkout(staleCommand));
 
         assertThat(result.created())
