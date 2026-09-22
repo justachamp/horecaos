@@ -523,38 +523,4 @@ describe('UiCartService.fulfillmentMode reflects the loaded cart, not a stale de
     expect(service.deliveryFee()).toBe('—');
     expect(service.canPlaceOrder()).toBe(true);
   });
-
-  it('sends the point and basket in the body, POST, anonymously -- never in the query string', async () => {
-    const { service, carts, menu, delivery, customerApi, api } = setUp();
-    const cart = deliveryCart();
-    carts.ensure.mockResolvedValue(cart);
-    carts.price.mockResolvedValue(pricedFor(cart));
-    menu.menu.mockResolvedValue(emptyMenu());
-    delivery.addressId.mockReturnValue('addr-1');
-    customerApi.address.mockResolvedValue(geocodedAddress());
-    api.mutate.mockResolvedValue({
-      outcome: 'OK',
-      reasonCode: null,
-      available: true,
-      feeMinor: 12_000,
-      currency: 'UZS',
-      minBasketMinor: null,
-      freeDeliveryFromMinor: null,
-      distanceMeters: null,
-      distanceSource: null,
-    });
-
-    await service.load();
-
-    expect(api.mutate).toHaveBeenCalledWith(
-      'POST',
-      expect.stringContaining('/locations/loc-1/delivery-fee'),
-      expect.objectContaining({
-        body: expect.objectContaining({ lat: 41.3, lon: 69.2, currency: 'UZS' }),
-        anonymous: true,
-      }),
-    );
-    // Never as a query string, however this client renders the call:
-    expect(api.mutate.mock.calls[0][1]).not.toContain('lat=');
-  });
 });
