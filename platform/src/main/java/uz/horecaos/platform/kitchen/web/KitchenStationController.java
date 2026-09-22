@@ -120,7 +120,7 @@ public class KitchenStationController {
                 body.stationRole() == null ? null : StationRole.require(body.stationRole()),
                 body.stationId()));
 
-        return ResponseEntity.ok(new RoutingRuleResponse(id, body.stationId() == null ? "BRAND" : "LOCATION"));
+        return ResponseEntity.ok(new RoutingRuleResponse(id, body.stationId() == null ? "BRAND" : "LOCATION", 1));
     }
 
     @GetMapping("/routing-rules")
@@ -167,7 +167,7 @@ public class KitchenStationController {
                         body.stationRole() == null ? null : StationRole.require(body.stationRole()),
                         body.stationId(),
                         body.expectedVersion()));
-        return ResponseEntity.ok(new RoutingRuleResponse(updated.ruleId(), updated.layer()));
+        return ResponseEntity.ok(new RoutingRuleResponse(updated.ruleId(), updated.layer(), updated.version()));
     }
 
     @GetMapping("/station-capacity")
@@ -299,7 +299,7 @@ public class KitchenStationController {
             @Size(max = 16) String stationRole,
             UUID stationId) {}
 
-    record RoutingRuleResponse(UUID ruleId, String layer) {}
+    record RoutingRuleResponse(UUID ruleId, String layer, int version) {}
 
     record UpdateRoutingRuleRequest(
             @Size(max = 16) String stationRole,
