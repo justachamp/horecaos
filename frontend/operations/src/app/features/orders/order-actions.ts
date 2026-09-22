@@ -11,9 +11,13 @@ import { MessageKey } from '../../core/i18n/messages.en';
  * `COMPLETE` (wave P09, gap map `1.2j`) is offered alongside — never instead
  * of — the generic `ADVANCE` entry to a `COMPLETED` target; see
  * `OrderActionsPolicy`'s own Java doc for why both exist. `order-detail-pane.ts`
- * prefers `COMPLETE` and hides the redundant `ADVANCE` entry; `order-queue.ts`
- * does not know about `COMPLETE` yet and keeps using `ADVANCE`, which the
- * server still emits for exactly that reason.
+ * prefers `COMPLETE` and hides the redundant `ADVANCE` entry, because its
+ * `onActionClick` can run the fulfilment-mode-aware completion-reason flow
+ * `COMPLETE` deserves. `order-queue.ts` (H3, orders.md §2.9) has no room in a
+ * dense row for that flow and no handler for `COMPLETE` — it drops the
+ * redundant `COMPLETE` entry instead and keeps using the already-wired
+ * `ADVANCE`, which the server still emits for exactly that reason (a client
+ * built before wave P09 still works against the generic entry).
  *
  * `AMEND` (ADR 0039/0105/0113, wave P10, gap map `1.2h`/`1.1e`) opens the
  * amendment submenu (orders.md §4.4). `OrderActionsPolicy.AMEND_EMISSION_ENABLED`

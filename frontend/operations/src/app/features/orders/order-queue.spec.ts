@@ -934,6 +934,72 @@ describe('OrderQueue: reasoned cancel from CONFIRMED onward (H2)', () => {
 });
 
 /**
+ * H3: `OrderActionsPolicy.availableFor` always pairs `ADVANCE`→`COMPLETED`
+ * with `COMPLETE` whenever completion is legal, and both render under the
+ * identical translated label (§2.9/§4.11's "Выдан"/"Доставлен" rule,
+ * `order-actions.ts`'s `actionLabel`). `onActionClick`'s switch has no case
+ * for `COMPLETE` — only `order-detail-pane.ts` wires the fulfilment-mode-aware
+ * completion-reason flow — so a row rendered from the raw, unfiltered
+ * `actions[]` showed two visually identical buttons, one of them a silent
+ * no-op.
+ */
+describe('OrderQueue: no dead completion button (H3)', () => {
+  it('renders exactly one completion control when the server pairs ADVANCE(COMPLETED) with COMPLETE', async () => {
+    configureWithActions(
+      [
+        order({
+          orderId: 'order-1',
+          status: 'READY',
+          actions: [{ action: 'ADVANCE', targetStatus: 'COMPLETED' }, { action: 'COMPLETE' }],
+        }),
+      ],
+      {},
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+
+    const host = harness.routeNativeElement!;
+    // The redundant COMPLETE entry never renders — ADVANCE is the one this
+    // component knows how to invoke.
+    expect(host.querySelector('[data-testid="order-row-action-COMPLETE"]')).toBeNull();
+    expect(host.querySelector('[data-testid="order-row-action-ADVANCE"]')).not.toBeNull();
+    expect(host.querySelectorAll('.row-actions__inline')).toHaveLength(1);
+  });
+
+  it('clicking the single completion control calls the wired advance(), never leaves a second dead click', async () => {
+    const advance = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'COMPLETED',
+        version: 2,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+    configureWithActions(
+      [
+        order({
+          orderId: 'order-1',
+          status: 'READY',
+          version: 1,
+          actions: [{ action: 'ADVANCE', targetStatus: 'COMPLETED' }, { action: 'COMPLETE' }],
+        }),
+      ],
+      { advance },
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="order-row-action-ADVANCE"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(advance).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'COMPLETED', 1);
+  });
+});
+
+/**
  * The order board is the second caller of the `Toasts` service (ADR 0101, row
  * `X.17`); `customers-page.spec.ts` is the first, and `shell.spec.ts` proves
  * the single host that renders what both of them raise.

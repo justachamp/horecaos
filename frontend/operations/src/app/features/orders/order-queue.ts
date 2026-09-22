@@ -897,11 +897,33 @@ export class OrderQueue implements OnInit {
 
   /** At most two inline affordances (§2.9); the rest go in the row's overflow menu. */
   protected inlineActions(order: OrderSummaryResponse): readonly OrderActionResponse[] {
-    return splitInlineOverflow(order.actions).inline;
+    return splitInlineOverflow(this.rowActions(order)).inline;
   }
 
   protected overflowActions(order: OrderSummaryResponse): readonly OrderActionResponse[] {
-    return splitInlineOverflow(order.actions).overflow;
+    return splitInlineOverflow(this.rowActions(order)).overflow;
+  }
+
+  /**
+   * H3: the server always pairs `ADVANCE`→`COMPLETED` with `COMPLETE`
+   * whenever completion is legal (`OrderActionsPolicy`'s own doc: a client
+   * built before wave P09 still works against the generic entry) — both
+   * render under the identical translated label (`order-actions.ts`'s
+   * `actionLabel`). `onActionClick` below has no case for `COMPLETE`; only
+   * `order-detail-pane.ts` wires the fulfilment-mode-aware completion-reason
+   * flow that action needs. Drop the redundant `COMPLETE` entry here rather
+   * than rendering a second, identically-labelled button that silently does
+   * nothing when clicked — `ADVANCE` is the one this component knows how to
+   * invoke, and stays.
+   */
+  private rowActions(order: OrderSummaryResponse): readonly OrderActionResponse[] {
+    const actions = order.actions ?? [];
+    const hasAdvanceToCompleted = actions.some(
+      (action) => action.action === 'ADVANCE' && action.targetStatus === 'COMPLETED',
+    );
+    return hasAdvanceToCompleted
+      ? actions.filter((action) => action.action !== 'COMPLETE')
+      : actions;
   }
 
   protected actionLabel(order: OrderSummaryResponse, action: OrderActionResponse): string {
