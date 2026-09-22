@@ -5091,11 +5091,10 @@ export const messagesEn = {
   'orders.newOrder.basket.unavailable': 'No longer available — remove it to continue',
   'orders.newOrder.order.title': 'Order',
   'orders.newOrder.order.fulfillmentMode': 'Type',
-  'orders.newOrder.order.deliveryComingLater': 'Delivery needs an address — coming in a later wave',
   'orders.newOrder.order.payment': 'Payment',
-  'orders.newOrder.order.paymentCashOnly': 'Cash only, this release (ADR 0039)',
   'orders.newOrder.order.total': 'Total',
   'orders.newOrder.order.totalPending': 'Priced once every item has a price on file',
+  'orders.newOrder.order.totalWithDelivery': 'Total incl. delivery',
   'orders.newOrder.order.submit': 'Create',
   'orders.newOrder.order.submitting': 'Creating…',
   'orders.newOrder.order.cancel': 'Cancel',
@@ -5106,6 +5105,17 @@ export const messagesEn = {
   'orders.newOrder.order.promoCode': 'Promo code',
   'orders.newOrder.order.cashTendered': 'Cash tendered',
   'orders.newOrder.order.changeDue': 'Change due',
+  'orders.newOrder.order.deliveryFee': 'Delivery fee',
+  'orders.newOrder.order.deliveryFeeCalculating': 'Calculating…',
+  'orders.newOrder.order.deliveryFeeUnavailable': 'Not available for this address',
+  'orders.newOrder.order.preOrder.toggle': 'For later',
+  'orders.newOrder.order.preOrder.time': 'Promised time',
+  'orders.newOrder.order.preOrder.mustBeFuture': 'Pick a time that has not passed yet',
+  'orders.newOrder.order.preOrder.confirmOutOfHours':
+    'This branch is closed at the requested time. Place the order anyway?',
+  'orders.newOrder.order.preOrder.confirmSubmit': 'Place anyway',
+  'orders.newOrder.order.preOrder.closedNoOverride':
+    'This branch does not take pre-orders into a closed slot. Pick a different time.',
 
   // wave P14: §5.4 the address pane (row 1.3b)
   'orders.newOrder.address.title': 'Address',

@@ -5074,12 +5074,10 @@ export const messagesRu: MessageCatalogue = {
   'orders.newOrder.basket.unavailable': 'Больше не доступно — удалите, чтобы продолжить',
   'orders.newOrder.order.title': 'Заказ',
   'orders.newOrder.order.fulfillmentMode': 'Тип',
-  'orders.newOrder.order.deliveryComingLater':
-    'Для доставки нужен адрес — появится в следующей волне',
   'orders.newOrder.order.payment': 'Оплата',
-  'orders.newOrder.order.paymentCashOnly': 'Только наличные в этом релизе (ADR 0039)',
   'orders.newOrder.order.total': 'Итого',
   'orders.newOrder.order.totalPending': 'Итог посчитается, когда у каждой позиции будет цена',
+  'orders.newOrder.order.totalWithDelivery': 'Итого с доставкой',
   'orders.newOrder.order.submit': 'Создать',
   'orders.newOrder.order.submitting': 'Создание…',
   'orders.newOrder.order.cancel': 'Отмена',
@@ -5090,6 +5088,17 @@ export const messagesRu: MessageCatalogue = {
   'orders.newOrder.order.promoCode': 'Промокод',
   'orders.newOrder.order.cashTendered': 'Сдача с',
   'orders.newOrder.order.changeDue': 'Сдача',
+  'orders.newOrder.order.deliveryFee': 'Стоимость доставки',
+  'orders.newOrder.order.deliveryFeeCalculating': 'Считаем…',
+  'orders.newOrder.order.deliveryFeeUnavailable': 'Недоступно для этого адреса',
+  'orders.newOrder.order.preOrder.toggle': 'Заказ на потом',
+  'orders.newOrder.order.preOrder.time': 'Время выполнения',
+  'orders.newOrder.order.preOrder.mustBeFuture': 'Выберите время, которое ещё не наступило',
+  'orders.newOrder.order.preOrder.confirmOutOfHours':
+    'В это время филиал закрыт. Всё равно оформить заказ?',
+  'orders.newOrder.order.preOrder.confirmSubmit': 'Оформить всё равно',
+  'orders.newOrder.order.preOrder.closedNoOverride':
+    'Этот филиал не принимает заказы на закрытое время. Выберите другое время.',
 
   // wave P14: §5.4 адресная панель (строка 1.3b)
   'orders.newOrder.address.title': 'Адрес',

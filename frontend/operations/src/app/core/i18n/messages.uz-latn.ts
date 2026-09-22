@@ -5107,12 +5107,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.basket.unavailable': 'Endi mavjud emas — davom etish uchun olib tashlang',
   'orders.newOrder.order.title': 'Buyurtma',
   'orders.newOrder.order.fulfillmentMode': 'Turi',
-  'orders.newOrder.order.deliveryComingLater':
-    'Yetkazib berish uchun manzil kerak — keyingi toʻlqinda',
   'orders.newOrder.order.payment': 'Toʻlov',
-  'orders.newOrder.order.paymentCashOnly': 'Hozircha faqat naqd (ADR 0039)',
   'orders.newOrder.order.total': 'Jami',
   'orders.newOrder.order.totalPending': 'Har bir taom narxi aniqlangach hisoblanadi',
+  'orders.newOrder.order.totalWithDelivery': 'Yetkazib berish bilan jami',
   'orders.newOrder.order.submit': 'Yaratish',
   'orders.newOrder.order.submitting': 'Yaratilmoqda…',
   'orders.newOrder.order.cancel': 'Bekor qilish',
@@ -5123,6 +5121,17 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.order.promoCode': 'Promokod',
   'orders.newOrder.order.cashTendered': 'Berilgan pul',
   'orders.newOrder.order.changeDue': 'Qaytim',
+  'orders.newOrder.order.deliveryFee': 'Yetkazib berish narxi',
+  'orders.newOrder.order.deliveryFeeCalculating': 'Hisoblanmoqda…',
+  'orders.newOrder.order.deliveryFeeUnavailable': 'Bu manzil uchun mavjud emas',
+  'orders.newOrder.order.preOrder.toggle': 'Keyinroqqa buyurtma',
+  'orders.newOrder.order.preOrder.time': 'Vaʼda qilingan vaqt',
+  'orders.newOrder.order.preOrder.mustBeFuture': 'Hali oʻtmagan vaqtni tanlang',
+  'orders.newOrder.order.preOrder.confirmOutOfHours':
+    'Filial soʻralgan vaqtda yopiq. Baribir buyurtma qilinsinmi?',
+  'orders.newOrder.order.preOrder.confirmSubmit': 'Baribir yaratish',
+  'orders.newOrder.order.preOrder.closedNoOverride':
+    'Bu filial yopiq vaqtga buyurtma qabul qilmaydi. Boshqa vaqt tanlang.',
 
   // wave P14: §5.4 manzil paneli (1.3b qatori)
   'orders.newOrder.address.title': 'Manzil',
