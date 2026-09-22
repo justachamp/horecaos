@@ -1,6 +1,7 @@
 package uz.horecaos.platform.web.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import java.util.Map;
 import java.util.Objects;
@@ -15,6 +16,7 @@ import org.springframework.http.converter.HttpMessageNotWritableException;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.context.request.ServletWebRequest;
+import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
  * Direct unit tests for the two overrides that MockMvc cannot realistically
@@ -88,6 +90,38 @@ class GlobalApiErrorHandlerTests {
                 .containsEntry("code", "SECOND_APPROVER_REQUIRED")
                 .as("and which request a checker has to decide")
                 .containsEntry("approvalRequestId", approvalRequestId.toString());
+    }
+
+    /**
+     * ADR 0029: a {@link GeoPoint} rejected in its compact constructor names the
+     * raw coordinate in its own message ("Latitude out of range: 91.4"), which
+     * used to reach the caller verbatim through {@link
+     * GlobalApiErrorHandler#invalidArgument}. Constructed the same way the
+     * storefront delivery-fee preview's {@code GET}-param binding does: the
+     * controller builds the {@code GeoPoint} itself, so its own frame is the
+     * top of the stack, exactly what {@code thrownByGeoPoint} keys on.
+     */
+    @Test
+    void invalidArgumentRedactsTheRawCoordinateFromAGeoPointRangeFailure() {
+        IllegalArgumentException exception =
+                catchThrowableOfType(() -> new GeoPoint(91.4, 0), IllegalArgumentException.class);
+
+        ProblemDetail problem = handler.invalidArgument(exception);
+
+        assertThat(problem.getProperties()).containsEntry("code", "INVALID_REQUEST");
+        assertThat(problem.getDetail())
+                .as("the caller's coordinate must never be echoed back")
+                .doesNotContain("91.4");
+    }
+
+    /** Every other {@code IllegalArgumentException} keeps its own message, unredacted. */
+    @Test
+    void invalidArgumentKeepsItsOwnMessageWhenNotAGeoPointFailure() {
+        IllegalArgumentException exception = new IllegalArgumentException("Quantity must be positive: -3");
+
+        ProblemDetail problem = handler.invalidArgument(exception);
+
+        assertThat(problem.getDetail()).isEqualTo("Quantity must be positive: -3");
     }
 
     @Test
