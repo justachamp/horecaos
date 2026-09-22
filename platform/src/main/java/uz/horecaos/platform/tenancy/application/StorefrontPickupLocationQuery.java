@@ -3,6 +3,7 @@ package uz.horecaos.platform.tenancy.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -53,6 +54,30 @@ public class StorefrontPickupLocationQuery {
                 .toList();
         return new PickupLocations(result);
     }
+
+    /**
+     * One branch's public name and address, by id (2026-09-21 audit follow-up
+     * (d)). Empty when the location does not exist for this tenant and brand,
+     * or either has since gone inactive — the caller (an order detail screen)
+     * treats that as "no profile to show" rather than an error, the same way
+     * it already treats a menu that has been withdrawn.
+     */
+    @Transactional(readOnly = true)
+    public Optional<LocationProfile> profile(UUID tenantId, UUID brandId, UUID locationId) {
+        return locations
+                .profile(tenantId, brandId, locationId)
+                .map(row -> new LocationProfile(
+                        locationId,
+                        row.brandName(),
+                        row.locationName(),
+                        row.addressLine(),
+                        row.district(),
+                        row.city()));
+    }
+
+    /** A branch's public profile: enough to show a customer where they are collecting from. */
+    public record LocationProfile(
+            UUID locationId, String brandName, String locationName, String addressLine, String district, String city) {}
 
     private PickupLocation viewOf(PickupLocationCandidate candidate, Instant now) {
         Serviceability answer = serviceability.resolve(

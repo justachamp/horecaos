@@ -106,6 +106,33 @@ class LocalFixtureStorefrontTests {
                 .andExpect(jsonPath("$.currency").value("UZS"));
     }
 
+    /**
+     * 2026-09-21 audit follow-up (d): a pickup order's detail names {@code
+     * locationId} but the storefront had nothing to turn it into a branch name
+     * and address. Carries no coordinate — see the endpoint's own doc.
+     */
+    @Test
+    void profileNamesTheBranchACustomerAlreadyKnowsTheIdOf() throws Exception {
+        mvc.perform(get(LOCATION_PATH + "/profile"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.locationId").value("10000000-0000-0000-0000-000000000003"))
+                .andExpect(jsonPath("$.locationName").value("Central kitchen"))
+                .andExpect(jsonPath("$.addressLine").value("1 Demo Street"))
+                .andExpect(jsonPath("$.district").value("Shaykhontohur"))
+                .andExpect(jsonPath("$.city").value("Tashkent"))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("41."))));
+    }
+
+    @Test
+    void profileAnswersNotFoundForALocationThatDoesNotExist() throws Exception {
+        String path = "/api/v1/storefront/tenants/10000000-0000-0000-0000-000000000001/brands/"
+                + "10000000-0000-0000-0000-000000000002/locations/" + UUID.randomUUID() + "/profile";
+
+        mvc.perform(get(path))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+    }
+
     @Test
     void anonymousErrorsKeepTheirRealStatus() throws Exception {
         // A public request that errors — the menu without its required channel —

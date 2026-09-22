@@ -136,6 +136,13 @@ public class SecurityConfiguration {
                                 // published state the menu is, and neither writes.
                                 "/api/v1/storefront/tenants/*/brands/*/locations/*/serviceability",
                                 "/api/v1/storefront/tenants/*/brands/*/locations/*/delivery-fee",
+                                // 2026-09-21 audit follow-up (d): a branch's public name
+                                // and address, by id, so a customer's own order detail
+                                // can name the branch a pickup order came from. Same
+                                // standing as the branch discovery route above -- no
+                                // coordinate, no personal data, and reading it needs no
+                                // more account than reading the order id already didn't.
+                                "/api/v1/storefront/tenants/*/brands/*/locations/*/profile",
                                 // ADR 0106: a GTM container id, a GA4 measurement id, and
                                 // a Search Console verification token — public identifiers
                                 // a browser's view-source already reveals once the

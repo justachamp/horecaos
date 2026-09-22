@@ -1,6 +1,7 @@
 package uz.horecaos.platform.tenancy.infrastructure.persistence;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -106,4 +107,54 @@ public class JdbcStorefrontPickupLocationStore {
             String district,
             String city,
             double distanceMeters) {}
+
+    /**
+     * A named branch's public profile, by id rather than by distance — for a
+     * screen that already knows which location an order belongs to (2026-09-21
+     * audit follow-up (d): a pickup order's own detail) and needs its name and
+     * address, not a search. No coordinate: a caller that already knows the
+     * location id has no need to be handed the point back, and ADR 0029 keeps
+     * it out of a response nobody asked for it in.
+     *
+     * <p>Same standing as {@link #nearestTo}: the tenant, brand and location
+     * must all be active. Unlike {@link #nearestTo} this does not require a
+     * published storefront menu or pickup support — an order already placed at
+     * this branch is proof enough that it could be ordered from, and a branch
+     * that has since stopped taking pickup orders is still the one that
+     * fulfilled this one.
+     */
+    public Optional<LocationProfileRow> profile(UUID tenantId, UUID brandId, UUID locationId) {
+        return jdbc.sql("""
+                SELECT b.display_name AS brand_name,
+                       l.display_name AS location_name,
+                       l.address_line,
+                       l.district,
+                       l.city
+                FROM tenant.locations l
+                JOIN tenant.brands b
+                  ON b.tenant_id = l.tenant_id AND b.id = l.brand_id
+                JOIN tenant.tenants t
+                  ON t.id = l.tenant_id
+                WHERE l.tenant_id = :tenantId
+                  AND l.brand_id = :brandId
+                  AND l.id = :locationId
+                  AND t.status = 'ACTIVE'
+                  AND b.status = 'ACTIVE'
+                  AND l.status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .query((row, number) -> new LocationProfileRow(
+                        row.getString("brand_name"),
+                        row.getString("location_name"),
+                        row.getString("address_line"),
+                        row.getString("district"),
+                        row.getString("city")))
+                .optional();
+    }
+
+    /** Internal row identity for {@link #profile}. */
+    public record LocationProfileRow(
+            String brandName, String locationName, String addressLine, String district, String city) {}
 }
