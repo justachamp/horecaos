@@ -9,6 +9,8 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.loyalty.api.PointsRedemptionPort;
+import uz.horecaos.platform.payments.api.CashDueLookupPort;
+import uz.horecaos.platform.payments.domain.PaymentMethod;
 import uz.horecaos.platform.payments.settlement.JdbcSettlementStore.MethodRow;
 import uz.horecaos.platform.payments.settlement.JdbcSettlementStore.SettlementRow;
 import uz.horecaos.platform.payments.settlement.JdbcSettlementStore.TenderRow;
@@ -51,7 +53,7 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * later inherits all of them.
  */
 @Service
-public class OrderSettlementService {
+public class OrderSettlementService implements CashDueLookupPort {
 
     private final JdbcSettlementStore store;
     private final PointsRedemptionPort points;
@@ -383,6 +385,25 @@ public class OrderSettlementService {
     @Transactional(readOnly = true)
     public long cashDueMinor(UUID tenantId, UUID orderId, String cashMethodCode) {
         return store.cashDueMinor(tenantId, require(tenantId, orderId).id(), cashMethodCode);
+    }
+
+    /**
+     * {@link CashDueLookupPort}'s cross-module read: the same figure {@link
+     * #cashDueMinor(UUID, UUID, String)} gives the courier app, with the
+     * method code fixed to {@link PaymentMethod#CASH} — a caller outside this
+     * module has no reason to know payment method codes — and zero rather
+     * than a thrown {@link ApiException} for an order this module has no
+     * settlement for, so a courier-side caller never has to know this
+     * module's exception shape to stay safe.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public long cashDueMinor(UUID tenantId, UUID orderId) {
+        try {
+            return cashDueMinor(tenantId, orderId, PaymentMethod.CASH.code());
+        } catch (ApiException noSettlement) {
+            return 0L;
+        }
     }
 
     private SettlementRow require(UUID tenantId, UUID orderId) {

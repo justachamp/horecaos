@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -50,6 +51,7 @@ import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostS
 import uz.horecaos.platform.fulfillment.infrastructure.sourcing.JdbcDeliveryCompletionAdapter;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.api.OrderCompleted;
+import uz.horecaos.platform.payments.api.CashDueLookupPort;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.support.TestProtection;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
@@ -85,6 +87,7 @@ class DeliveryAccrualOrderCompletionTriggerTests {
     private JdbcCourierStore courierStore;
     private JdbcCourierLedgerStore ledgerStore;
     private DeliveryAccrualOrderCompletionTrigger trigger;
+    private FakeCashDueLookupPort cashDue;
 
     private UUID branch;
     private UUID channelId;
@@ -199,8 +202,9 @@ class DeliveryAccrualOrderCompletionTriggerTests {
                 (tenantId, at) -> at.atZone(ZoneId.of("Asia/Tashkent")).toLocalDate());
         var rateCards = new CourierRateCardService(rateCardStore, audit, clock);
         var deliveryCompletion = new JdbcDeliveryCompletionAdapter(jdbc);
+        cashDue = new FakeCashDueLookupPort();
 
-        trigger = new DeliveryAccrualOrderCompletionTrigger(deliveryCompletion, accruals, shifts);
+        trigger = new DeliveryAccrualOrderCompletionTrigger(deliveryCompletion, accruals, shifts, cashDue);
 
         seedTenancy();
         seedCourier(engagements);
@@ -228,6 +232,27 @@ class DeliveryAccrualOrderCompletionTriggerTests {
         assertThat(cashEntries).hasSize(1);
         // A CASH_COLLECTED entry is a liability the ledger owes back, hence negative.
         assertThat(cashEntries.getFirst().amountMinor()).isEqualTo(-45_000L);
+    }
+
+    @Test
+    @DisplayName("a CASH order part-settled from the loyalty balance collects only the cash actually due")
+    void aCashAndBalanceSplitCollectsOnlyTheCashLeg() {
+        // H11: DeliveryAccrualOrderCompletionTrigger used to compute
+        // cashToCollectMinor from the order's whole total, ignoring that a
+        // split-tender order settles part of itself from the customer's
+        // loyalty balance. A 94,000 order with 12,000 redeemed from points
+        // leaves the courier owed only 82,000 in cash.
+        Fixture fixture = seedAssignedShipment("NOT_REQUIRED");
+        OrderCompleted event = orderCompleted(fixture.orderId(), 94_000);
+        cashDue.set(fixture.orderId(), 82_000L);
+
+        trigger.onOrderingEvent(event);
+
+        List<LedgerEntryRow> cashEntries = entriesOfType(LedgerEntryType.CASH_COLLECTED);
+        assertThat(cashEntries).hasSize(1);
+        assertThat(cashEntries.getFirst().amountMinor())
+                .as("the ledger must record the settlement's actual cash tender, not the order total")
+                .isEqualTo(-82_000L);
     }
 
     @Test
@@ -520,9 +545,43 @@ class DeliveryAccrualOrderCompletionTriggerTests {
         return orderId;
     }
 
+    /**
+     * The default {@link #cashDue} figure for this order is the same total
+     * that used to flow straight into {@code cashToCollectMinor} before this
+     * fix -- correct for every test here that carries no balance tender, and
+     * a test with one overrides it afterward with {@link
+     * FakeCashDueLookupPort#set}.
+     */
     private OrderCompleted orderCompleted(UUID orderId, long totalMinor) {
+        cashDue.set(orderId, totalMinor);
         return new OrderCompleted(
                 UUID.randomUUID(), new TenantId(TENANT), orderId, NOW, BRAND, branch, NOW, UZS, totalMinor, 1);
+    }
+
+    /**
+     * A settlement-free {@link CashDueLookupPort} test double: this suite
+     * drives {@link DeliveryAccrualOrderCompletionTrigger} directly against a
+     * constructed {@link OrderCompleted} (see the class javadoc) rather than
+     * through a real checkout, so there is no real {@code
+     * payments.order_settlements} row for {@link
+     * uz.horecaos.platform.payments.settlement.OrderSettlementService}'s own
+     * implementation to read. A test names what a given order is actually
+     * still owed in cash directly, the same way it already names the order's
+     * total.
+     */
+    private static final class FakeCashDueLookupPort implements CashDueLookupPort {
+
+        private final Map<UUID, Long> dueByOrder = new HashMap<>();
+
+        void set(UUID orderId, long cashDueMinor) {
+            dueByOrder.put(orderId, cashDueMinor);
+        }
+
+        @Override
+        public long cashDueMinor(UUID tenantId, UUID orderId) {
+            Long due = dueByOrder.get(orderId);
+            return due == null ? 0L : due;
+        }
     }
 
     private Map<String, Object> shipmentRow(UUID shipmentId) {
