@@ -1,11 +1,13 @@
 package uz.horecaos.platform.integration.camel.notification;
 
+import java.time.Clock;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.integration.api.provider.ProviderActivityRecorder;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.notifications.api.DispatchOutcome;
 import uz.horecaos.platform.notifications.api.NotificationDispatch;
@@ -23,21 +25,85 @@ import uz.horecaos.platform.notifications.api.NotificationTransport;
  * an uncertain outcome, and the module reconciles it — the distinction between
  * "not sent" and "possibly sent" is the decision this module makes next, and an
  * exception would erase it.
+ *
+ * <p>Also where gap map row {@code 10.8c}'s watermark is written for a
+ * notification provider's own OUTBOUND leg — here rather than in {@code
+ * notifications.application.NotificationDispatchService}, which cannot import
+ * {@link ProviderActivityRecorder} without {@code notifications} depending on
+ * {@code integration}, the reverse of the one-way edge this module already
+ * has on that one ({@code notifications.application}'s own trigger classes
+ * document the identical constraint in the other direction). This class
+ * already resolves the binding id {@link #translate} reads off the outcome,
+ * so it is the one place both the identifier and the classification exist
+ * together.
  */
 @Component
 public class CamelNotificationTransport implements NotificationTransport {
 
+    /**
+     * The same stated-not-considered default {@code PosOrderExportService}
+     * and {@code PaymentFiscalService} use for their own watermark: nothing
+     * here evidences one binding's actual message volume.
+     */
+    private static final int NOTIFICATION_STALE_AFTER_SECONDS = 4 * 60 * 60;
+
     private final ProducerTemplate producer;
     private final NotificationGateway gateway;
+    private final ProviderActivityRecorder activity;
+    private final Clock clock;
 
-    public CamelNotificationTransport(ProducerTemplate producer, NotificationGateway gateway) {
+    public CamelNotificationTransport(
+            ProducerTemplate producer, NotificationGateway gateway, ProviderActivityRecorder activity, Clock clock) {
         this.producer = producer;
         this.gateway = gateway;
+        this.activity = activity;
+        this.clock = clock;
     }
 
     @Override
     public DispatchOutcome dispatch(NotificationDispatch dispatch) {
-        return translate(send(NotificationRouteBuilder.SEND_ENDPOINT, NotificationSendOperation.send(dispatch)));
+        ProviderOutcome outcome =
+                send(NotificationRouteBuilder.SEND_ENDPOINT, NotificationSendOperation.send(dispatch));
+        recordActivity(dispatch.tenantId(), dispatch.locationId(), outcome);
+        return translate(outcome);
+    }
+
+    /**
+     * Gap map row {@code 10.8c}: the binding id {@link #translate} already
+     * reads off {@code outcome.normalized()} is the same one the liveness
+     * watermark is keyed on. SUCCESS/REJECTED only — RETRYABLE and UNCERTAIN
+     * are not evidence this binding is unhealthy, the identical restraint
+     * {@code PaymentFiscalService.submit} documents for its own submission.
+     */
+    private void recordActivity(UUID tenantId, @Nullable UUID locationId, ProviderOutcome outcome) {
+        String bindingIdText = text(outcome.normalized(), NotificationGateway.BINDING_ID_KEY);
+        if (bindingIdText == null) {
+            return;
+        }
+        UUID bindingId = UUID.fromString(bindingIdText);
+        switch (outcome.status()) {
+            case SUCCESS ->
+                activity.recordSuccess(
+                        tenantId,
+                        bindingId,
+                        locationId,
+                        "OUTBOUND",
+                        outcome.externalReference() != null ? outcome.externalReference() : "SENT",
+                        NOTIFICATION_STALE_AFTER_SECONDS,
+                        clock.instant());
+            case REJECTED ->
+                activity.recordFailure(
+                        tenantId,
+                        bindingId,
+                        locationId,
+                        "OUTBOUND",
+                        outcome.errorCode() != null ? outcome.errorCode() : "REJECTED",
+                        NOTIFICATION_STALE_AFTER_SECONDS,
+                        clock.instant());
+            case RETRYABLE, UNCERTAIN -> {
+                // No watermark write: see the method doc.
+            }
+        }
     }
 
     @Override

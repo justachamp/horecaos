@@ -80,6 +80,7 @@ import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotific
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationResolver;
@@ -257,7 +258,8 @@ class TelegramOperationsNotificationIntegrationTest {
         camel = new DefaultCamelContext();
         camel.addRoutes(new NotificationRouteBuilder(new NotificationProcessor(gateway, new SimpleMeterRegistry())));
         camel.start();
-        CamelNotificationTransport transport = new CamelNotificationTransport(camel.createProducerTemplate(), gateway);
+        CamelNotificationTransport transport = new CamelNotificationTransport(
+                camel.createProducerTemplate(), gateway, new RecordingProviderActivityRecorder(), clock);
 
         orderOne = UUID.randomUUID();
         orderTwo = UUID.randomUUID();

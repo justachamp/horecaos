@@ -287,7 +287,8 @@ class TelegramInteractiveBotIntegrationTest {
         CamelContext camel = new DefaultCamelContext();
         camel.addRoutes(new NotificationRouteBuilder(new NotificationProcessor(gateway, new SimpleMeterRegistry())));
         camel.start();
-        CamelNotificationTransport transport = new CamelNotificationTransport(camel.createProducerTemplate(), gateway);
+        CamelNotificationTransport transport = new CamelNotificationTransport(
+                camel.createProducerTemplate(), gateway, new RecordingProviderActivityRecorder(), clock);
 
         JdbcNotificationStore notifications = new JdbcNotificationStore(jdbc);
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
@@ -439,7 +440,8 @@ class TelegramInteractiveBotIntegrationTest {
         CamelContext camel = new DefaultCamelContext();
         camel.addRoutes(new NotificationRouteBuilder(new NotificationProcessor(gateway, new SimpleMeterRegistry())));
         camel.start();
-        CamelNotificationTransport transport = new CamelNotificationTransport(camel.createProducerTemplate(), gateway);
+        CamelNotificationTransport transport = new CamelNotificationTransport(
+                camel.createProducerTemplate(), gateway, new RecordingProviderActivityRecorder(), clock);
 
         JdbcNotificationStore notifications = new JdbcNotificationStore(jdbc);
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
@@ -687,7 +689,8 @@ class TelegramInteractiveBotIntegrationTest {
         CamelContext camel = new DefaultCamelContext();
         camel.addRoutes(new NotificationRouteBuilder(new NotificationProcessor(gateway, new SimpleMeterRegistry())));
         camel.start();
-        CamelNotificationTransport transport = new CamelNotificationTransport(camel.createProducerTemplate(), gateway);
+        CamelNotificationTransport transport = new CamelNotificationTransport(
+                camel.createProducerTemplate(), gateway, new RecordingProviderActivityRecorder(), clock);
 
         JdbcNotificationStore notifications = new JdbcNotificationStore(jdbc);
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
