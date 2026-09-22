@@ -115,6 +115,7 @@ import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcFiscalDocumentStore;
 import uz.horecaos.platform.payments.notifications.FiscalCustomerReceiptTrigger;
 import uz.horecaos.platform.support.CommercialDefaults;
+import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationResolver;
@@ -749,8 +750,8 @@ class TelegramInteractiveBotIntegrationTest {
         // FiscalCustomerReceiptTrigger#onDocumentIssued can look the document
         // back up without this fixture needing to route a real Spring
         // ApplicationEvent back into the object that published it.
-        PaymentFiscalService fiscalReader =
-                new PaymentFiscalService(new JdbcFiscalDocumentStore(jdbc), List.of(), event -> {});
+        PaymentFiscalService fiscalReader = new PaymentFiscalService(
+                new JdbcFiscalDocumentStore(jdbc), List.of(), event -> {}, new RecordingProviderActivityRecorder());
         FiscalCustomerReceiptTrigger fiscalTrigger =
                 new FiscalCustomerReceiptTrigger(customerAlerts, fiscalReader, Duration.ofDays(3));
         ApplicationEventPublisher events = event -> {
@@ -758,8 +759,8 @@ class TelegramInteractiveBotIntegrationTest {
                 fiscalTrigger.onDocumentIssued(issued);
             }
         };
-        PaymentFiscalService fiscalService =
-                new PaymentFiscalService(new JdbcFiscalDocumentStore(jdbc), List.of(), events);
+        PaymentFiscalService fiscalService = new PaymentFiscalService(
+                new JdbcFiscalDocumentStore(jdbc), List.of(), events, new RecordingProviderActivityRecorder());
 
         // The customer mints a deep-link code under their own storefront
         // session and opens it — /start arrives unprompted, exactly the way

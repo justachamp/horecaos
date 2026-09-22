@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.integration.api.provider.ProviderActivityRecorder;
 import uz.horecaos.platform.payments.api.FiscalDocumentIssued;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalReason;
@@ -41,16 +42,31 @@ public class PaymentFiscalService {
 
     private static final Logger log = LoggerFactory.getLogger(PaymentFiscalService.class);
 
+    /**
+     * How long a legal entity's own fiscal submission path may go quiet
+     * before the Integrations health panel (gap map row {@code 10.8c})
+     * alerts on it. There is no per-binding tuning here, the same stated
+     * (not considered) default {@code PosOrderExportService}'s own constant
+     * documents, for the identical reason: nothing this class reads
+     * evidences a legal entity's actual submission volume.
+     */
+    private static final int FISCAL_SUBMISSION_STALE_AFTER_SECONDS = 4 * 60 * 60;
+
     private final JdbcFiscalDocumentStore documents;
     private final Map<PaymentProviderType, FiscalReceiptPort> receiptPorts;
     private final ApplicationEventPublisher events;
+    private final ProviderActivityRecorder activity;
 
     public PaymentFiscalService(
-            JdbcFiscalDocumentStore documents, List<FiscalReceiptPort> ports, ApplicationEventPublisher events) {
+            JdbcFiscalDocumentStore documents,
+            List<FiscalReceiptPort> ports,
+            ApplicationEventPublisher events,
+            ProviderActivityRecorder activity) {
         this.documents = documents;
         this.receiptPorts = ports.stream()
                 .collect(java.util.stream.Collectors.toMap(FiscalReceiptPort::providerType, port -> port));
         this.events = events;
+        this.activity = activity;
     }
 
     /**
@@ -157,8 +173,22 @@ public class PaymentFiscalService {
                             null,
                             submission.submittedAt());
                 }
+                // Gap map row 10.8c: fiscalisation is a capability of a PAYMENT
+                // installation (ADR 0013's own class doc, there is no dedicated
+                // FISCAL category), so this binding's watermark is the same
+                // integration.bindings row payments already fiscalises
+                // through — read by the Integrations health panel alongside
+                // POS and marketplace, with no new table.
+                activity.recordSuccess(
+                        document.tenantId(),
+                        binding.integrationBindingId(),
+                        null,
+                        "OUTBOUND",
+                        fiscalReference(submission, document),
+                        FISCAL_SUBMISSION_STALE_AFTER_SECONDS,
+                        submission.submittedAt());
             }
-            case REJECTED ->
+            case REJECTED -> {
                 documents.recordEvidence(
                         document.tenantId(),
                         document.id(),
@@ -175,10 +205,22 @@ public class PaymentFiscalService {
                                 submission.providerMessage()),
                         null,
                         now);
+                activity.recordFailure(
+                        document.tenantId(),
+                        binding.integrationBindingId(),
+                        null,
+                        "OUTBOUND",
+                        submission.providerStatusCode() != null ? submission.providerStatusCode() : "REJECTED",
+                        FISCAL_SUBMISSION_STALE_AFTER_SECONDS,
+                        submission.submittedAt());
+            }
             // A non-answer leaves the document exactly where it was, in SUBMITTED,
             // and the read-back is what settles it. Recording it as FAILED would
             // invite a resubmission, which is the one action that could create a
-            // second document with a tax authority.
+            // second document with a tax authority — and for the identical
+            // reason, no watermark either: RETRYABLE/UNCERTAIN is not evidence
+            // that the binding is unhealthy, only that this one call did not
+            // get a definite answer.
             case RETRYABLE, UNCERTAIN ->
                 documents.recordSubmission(
                         document.tenantId(),
@@ -234,6 +276,22 @@ public class PaymentFiscalService {
      */
     private void publishIssued(UUID tenantId, UUID orderId, UUID documentId, Instant now) {
         events.publishEvent(new FiscalDocumentIssued(UUID.randomUUID(), tenantId, orderId, documentId, now));
+    }
+
+    /**
+     * What the liveness watermark names as evidence of a successful fiscal
+     * submission: the provider's own receipt id when it answered with one
+     * (Click's read-back, an immediate Payme accept carries none), the
+     * document's own id otherwise — never nothing, {@code
+     * ck_watermark_success_pair} requires a reference alongside every
+     * success timestamp.
+     */
+    private static String fiscalReference(FiscalSubmission submission, FiscalDocument document) {
+        return submission
+                .fiscalEvidence()
+                .map(FiscalDocument.FiscalEvidence::externalReceiptId)
+                .filter(receiptId -> !receiptId.isBlank())
+                .orElseGet(() -> document.id().toString());
     }
 
     /** Every fiscal document for an order. Plural, deliberately: see the store. */

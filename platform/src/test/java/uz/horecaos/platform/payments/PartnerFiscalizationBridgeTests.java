@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
@@ -20,13 +21,16 @@ import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort.Outcome;
 import uz.horecaos.platform.integration.api.payment.MerchantApiCall;
 import uz.horecaos.platform.integration.api.payment.MerchantApiTransport;
+import uz.horecaos.platform.integration.provider.JdbcProviderActivityRecorder;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.payments.application.FiscalReceiptPort;
 import uz.horecaos.platform.payments.application.PartnerFiscalizationBridge;
 import uz.horecaos.platform.payments.application.PaymentBindingResolver;
 import uz.horecaos.platform.payments.application.PaymentFiscalService;
 import uz.horecaos.platform.payments.domain.CaptureTiming;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalStatus;
+import uz.horecaos.platform.payments.domain.FiscalSubmission;
 import uz.horecaos.platform.payments.domain.PaymentIntent;
 import uz.horecaos.platform.payments.domain.PaymentIntentStatus;
 import uz.horecaos.platform.payments.domain.PaymentMethod;
@@ -40,6 +44,7 @@ import uz.horecaos.platform.payments.infrastructure.persistence.JdbcFiscalDocume
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentAttemptStore;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentBindingResolver;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentIntentStore;
+import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.LegalEntityDirectory;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcLegalEntityStore;
@@ -124,7 +129,8 @@ class PartnerFiscalizationBridgeTests {
         ClickFiscalAdapter click = new ClickFiscalAdapter(
                 new ClickMerchantApi(refusingTransport(), CLOCK), new JdbcPaymentAttemptStore(jdbc), CLOCK);
         PaymeFiscalAdapter payme = new PaymeFiscalAdapter(intents, CLOCK);
-        fiscalService = new PaymentFiscalService(documents, List.of(click, payme), event -> {});
+        fiscalService = new PaymentFiscalService(
+                documents, List.of(click, payme), event -> {}, new RecordingProviderActivityRecorder());
     }
 
     // -----------------------------------------------------------------------
@@ -200,6 +206,110 @@ class PartnerFiscalizationBridgeTests {
         Outcome outcome = bridge.retry(TENANT, documentId, "idem-2");
 
         assertThat(outcome).isEqualTo(Outcome.ALREADY_ISSUED);
+    }
+
+    // -----------------------------------------------------------------------
+    // Gap map row 10.8c: the fiscal leg's own liveness watermark
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("a successful submission writes the binding's own OUTBOUND watermark (gap map 10.8c)")
+    void aSuccessfulSubmissionRecordsTheBindingsOwnActivityWatermark() {
+        seedClickBinding();
+        UUID intentId = seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY);
+        UUID documentId = seedPendingDocument(intentId);
+        FiscalDocument document = fiscalService.find(TENANT, documentId).orElseThrow();
+
+        JdbcProviderActivityRecorder activity = new JdbcProviderActivityRecorder(jdbc);
+        PaymentFiscalService serviceUnderTest = new PaymentFiscalService(
+                documents,
+                List.of(scriptedClickReceiptPort(FiscalSubmission.issued(
+                        new FiscalDocument.FiscalEvidence(
+                                "R-9",
+                                "SIGN-9",
+                                "TERM-9",
+                                "R-9",
+                                CLOCK.instant(),
+                                "https://ofd.soliq.uz/r/9",
+                                null,
+                                null),
+                        CLOCK.instant()))),
+                event -> {},
+                activity);
+        uz.horecaos.platform.payments.domain.ProviderBinding binding = bindings.resolve(
+                        TENANT,
+                        CLICK_ENTITY,
+                        PaymentProviderType.CLICK,
+                        CLOCK.instant().atZone(java.time.ZoneOffset.UTC).toLocalDate())
+                .orElseThrow();
+
+        serviceUnderTest.submit(document, binding, CLOCK.instant());
+
+        assertThat(jdbc.sql("""
+                        SELECT direction, alert_state, last_success_reference
+                        FROM integration.provider_activity_watermarks
+                        WHERE tenant_id = :tenantId AND binding_id = :bindingId
+                        """)
+                        .param("tenantId", TENANT)
+                        .param("bindingId", INTEGRATION_BINDING)
+                        .query((row, number) -> row.getString("direction") + ":" + row.getString("alert_state") + ":"
+                                + row.getString("last_success_reference"))
+                        .list())
+                .containsExactly("OUTBOUND:HEALTHY:R-9");
+    }
+
+    @Test
+    @DisplayName("a rejected submission writes a failure watermark, not a success")
+    void aRejectedSubmissionRecordsAFailureWatermark() {
+        seedClickBinding();
+        UUID intentId = seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY);
+        UUID documentId = seedPendingDocument(intentId);
+        FiscalDocument document = fiscalService.find(TENANT, documentId).orElseThrow();
+
+        JdbcProviderActivityRecorder activity = new JdbcProviderActivityRecorder(jdbc);
+        PaymentFiscalService serviceUnderTest = new PaymentFiscalService(
+                documents,
+                List.of(scriptedClickReceiptPort(FiscalSubmission.rejected(
+                        "FISCAL-RULE-7", "the till rejected this document", CLOCK.instant()))),
+                event -> {},
+                activity);
+        uz.horecaos.platform.payments.domain.ProviderBinding binding = bindings.resolve(
+                        TENANT,
+                        CLICK_ENTITY,
+                        PaymentProviderType.CLICK,
+                        CLOCK.instant().atZone(java.time.ZoneOffset.UTC).toLocalDate())
+                .orElseThrow();
+
+        serviceUnderTest.submit(document, binding, CLOCK.instant());
+
+        assertThat(jdbc.sql("""
+                        SELECT direction, last_failure_code, last_success_at IS NOT NULL AS has_success
+                        FROM integration.provider_activity_watermarks
+                        WHERE tenant_id = :tenantId AND binding_id = :bindingId
+                        """)
+                        .param("tenantId", TENANT)
+                        .param("bindingId", INTEGRATION_BINDING)
+                        .query((row, number) -> Map.of(
+                                "direction", row.getString("direction"),
+                                "failureCode", row.getString("last_failure_code"),
+                                "hasSuccess", row.getBoolean("has_success")))
+                        .list())
+                .containsExactly(Map.of("direction", "OUTBOUND", "failureCode", "FISCAL-RULE-7", "hasSuccess", false));
+    }
+
+    private static FiscalReceiptPort scriptedClickReceiptPort(FiscalSubmission answer) {
+        return new FiscalReceiptPort() {
+            @Override
+            public FiscalSubmission submit(
+                    FiscalDocument document, uz.horecaos.platform.payments.domain.ProviderBinding binding) {
+                return answer;
+            }
+
+            @Override
+            public PaymentProviderType providerType() {
+                return PaymentProviderType.CLICK;
+            }
+        };
     }
 
     // -----------------------------------------------------------------------

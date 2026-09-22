@@ -133,7 +133,13 @@ class PaymentLinkAutoSendTriggerTests {
                 CLOCK);
 
         checkout = new PaymentCheckoutService(
-                intents, attempts, attemptService, bindings, new JdbcPaymentBusinessCalendar(jdbc), new SeededOrders(), CLOCK);
+                intents,
+                attempts,
+                attemptService,
+                bindings,
+                new JdbcPaymentBusinessCalendar(jdbc),
+                new SeededOrders(),
+                CLOCK);
 
         customerAlerts = new RecordingCustomerAlertPort();
     }
@@ -244,8 +250,17 @@ class PaymentLinkAutoSendTriggerTests {
                 return Optional.empty();
             }
             return Optional.of(new OrderSummary(
-                    orderId, tenantId, BRAND, LOCATION, "31", ACCOUNT, "guest-hash", "PAYMENT_AUTHORIZING", UZS,
-                    AMOUNT_SOM, 1));
+                    orderId,
+                    tenantId,
+                    BRAND,
+                    LOCATION,
+                    "31",
+                    ACCOUNT,
+                    "guest-hash",
+                    "PAYMENT_AUTHORIZING",
+                    UZS,
+                    AMOUNT_SOM,
+                    1));
         }
     }
 
@@ -282,10 +297,7 @@ class PaymentLinkAutoSendTriggerTests {
         jdbc.sql("""
                 INSERT INTO tenant.legal_entities (id, tenant_id, code, legal_name, tin, status)
                 VALUES (:id, :tenantId, 'LE-1', 'LE-1 MCHJ', '123456789', 'ACTIVE')
-                """)
-                .param("id", LEGAL_ENTITY)
-                .param("tenantId", TENANT)
-                .update();
+                """).param("id", LEGAL_ENTITY).param("tenantId", TENANT).update();
 
         jdbc.sql("""
                 INSERT INTO integration.provider_environments (code, provider_category, provider_type,
@@ -299,10 +311,7 @@ class PaymentLinkAutoSendTriggerTests {
                     environment_code, display_name, status, secret_reference)
                 VALUES (:id, :tenantId, 'PAYMENT', 'CLICK', 'click-sandbox', 'Click', 'ACTIVE',
                     'horecaos:test:provider_payment:tenant:click')
-                """)
-                .param("id", CLICK_INSTALLATION)
-                .param("tenantId", TENANT)
-                .update();
+                """).param("id", CLICK_INSTALLATION).param("tenantId", TENANT).update();
 
         jdbc.sql("""
                 INSERT INTO integration.bindings (id, tenant_id, installation_id, brand_id, status)

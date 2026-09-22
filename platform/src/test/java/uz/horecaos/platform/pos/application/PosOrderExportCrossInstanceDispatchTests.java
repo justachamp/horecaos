@@ -259,12 +259,18 @@ class PosOrderExportCrossInstanceDispatchTests {
                 .as("one watermark row: this binding's own OUTBOUND export leg, healthy, with a "
                         + "success reference recorded")
                 .containsExactly(Map.of(
-                        "bindingId", BINDING,
-                        "locationId", LOCATION,
-                        "direction", "OUTBOUND",
-                        "alertState", "HEALTHY",
-                        "hasSuccess", true,
-                        "hasReference", true));
+                        "bindingId",
+                        BINDING,
+                        "locationId",
+                        LOCATION,
+                        "direction",
+                        "OUTBOUND",
+                        "alertState",
+                        "HEALTHY",
+                        "hasSuccess",
+                        true,
+                        "hasReference",
+                        true));
     }
 
     @Test
