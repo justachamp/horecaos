@@ -372,6 +372,119 @@ public class JdbcKitchenStore {
     }
 
     /**
+     * The brand-layer rule already routing one catalogue node, if any (gap map
+     * row 4.2g): what the product editor's station picker needs before it can
+     * show a product's current department rather than an always-blank picker.
+     *
+     * <p>Exactly one of {@code variantId}/{@code productId}/{@code categoryId}
+     * is non-null, the same contract {@link #insertRoutingRule} enforces on the
+     * write side.
+     */
+    public Optional<BrandRoutingRuleRow> findBrandRoutingRule(
+            UUID tenantId,
+            UUID brandId,
+            @Nullable UUID variantId,
+            @Nullable UUID productId,
+            @Nullable UUID categoryId) {
+        return jdbc.sql(SELECT_BRAND_ROUTING_RULE + """
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId
+                   AND variant_id IS NOT DISTINCT FROM CAST(:variantId AS uuid)
+                   AND product_id IS NOT DISTINCT FROM CAST(:productId AS uuid)
+                   AND category_id IS NOT DISTINCT FROM CAST(:categoryId AS uuid)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("variantId", variantId)
+                .param("productId", productId)
+                .param("categoryId", categoryId)
+                .query(JdbcKitchenStore::mapBrandRoutingRule)
+                .optional();
+    }
+
+    /** The location-layer override for one node, if a branch set one (gap map row 4.2g). */
+    public Optional<LocationRoutingRuleRow> findLocationRoutingRule(
+            UUID tenantId,
+            UUID locationId,
+            @Nullable UUID variantId,
+            @Nullable UUID productId,
+            @Nullable UUID categoryId) {
+        return jdbc.sql(SELECT_LOCATION_ROUTING_RULE + """
+                 WHERE tenant_id = :tenantId AND location_id = :locationId
+                   AND variant_id IS NOT DISTINCT FROM CAST(:variantId AS uuid)
+                   AND product_id IS NOT DISTINCT FROM CAST(:productId AS uuid)
+                   AND category_id IS NOT DISTINCT FROM CAST(:categoryId AS uuid)
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("variantId", variantId)
+                .param("productId", productId)
+                .param("categoryId", categoryId)
+                .query(JdbcKitchenStore::mapLocationRoutingRule)
+                .optional();
+    }
+
+    /** One brand rule by its own id, for the edit path rather than the node lookup above. */
+    public Optional<BrandRoutingRuleRow> findBrandRoutingRuleById(UUID tenantId, UUID ruleId) {
+        return jdbc.sql(SELECT_BRAND_ROUTING_RULE + " WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("id", ruleId)
+                .query(JdbcKitchenStore::mapBrandRoutingRule)
+                .optional();
+    }
+
+    /** One location rule by its own id, for the edit path rather than the node lookup above. */
+    public Optional<LocationRoutingRuleRow> findLocationRoutingRuleById(UUID tenantId, UUID ruleId) {
+        return jdbc.sql(SELECT_LOCATION_ROUTING_RULE + " WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("id", ruleId)
+                .query(JdbcKitchenStore::mapLocationRoutingRule)
+                .optional();
+    }
+
+    /**
+     * Changes a brand rule's station role, conditional on the version the
+     * caller last saw — the other half of gap map row 4.2g: before this, a
+     * second {@code route()} for an already-routed product could only 409,
+     * never actually change the department.
+     *
+     * @return the new version, or empty when the rule moved since it was read
+     */
+    public Optional<Integer> updateBrandRoutingRule(
+            UUID tenantId, UUID ruleId, StationRole stationRole, int expectedVersion, Instant now) {
+        return jdbc.sql("""
+                UPDATE kitchen.brand_routing_rules
+                SET station_role = :role, version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
+                RETURNING version
+                """)
+                .param("tenantId", tenantId)
+                .param("id", ruleId)
+                .param("role", stationRole.name())
+                .param("expectedVersion", expectedVersion)
+                .param("now", utc(now))
+                .query(Integer.class)
+                .optional();
+    }
+
+    /** The location rule's own equivalent of {@link #updateBrandRoutingRule}. */
+    public Optional<Integer> updateLocationRoutingRule(
+            UUID tenantId, UUID ruleId, UUID stationId, int expectedVersion, Instant now) {
+        return jdbc.sql("""
+                UPDATE kitchen.location_routing_rules
+                SET station_id = :stationId, version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
+                RETURNING version
+                """)
+                .param("tenantId", tenantId)
+                .param("id", ruleId)
+                .param("stationId", stationId)
+                .param("expectedVersion", expectedVersion)
+                .param("now", utc(now))
+                .query(Integer.class)
+                .optional();
+    }
+
+    /**
      * ADR 0041's five resolution levels, first match wins, in one statement.
      *
      * <p>One statement rather than five round trips, and one statement rather than
@@ -874,6 +987,18 @@ public class JdbcKitchenStore {
             FROM kitchen.station_capacity
             """;
 
+    private static final String SELECT_BRAND_ROUTING_RULE = """
+            SELECT id, tenant_id, brand_id, variant_id, product_id, category_id,
+                   station_role, version
+            FROM kitchen.brand_routing_rules
+            """;
+
+    private static final String SELECT_LOCATION_ROUTING_RULE = """
+            SELECT id, tenant_id, brand_id, location_id, variant_id, product_id, category_id,
+                   station_id, version
+            FROM kitchen.location_routing_rules
+            """;
+
     private static final String SELECT_TICKET = """
             SELECT id, tenant_id, brand_id, location_id, order_id, sequence_label,
                    fulfilment_mode, channel_code, status, release_mode, release_at,
@@ -951,6 +1076,31 @@ public class JdbcKitchenStore {
                 row.getObject("created_at", OffsetDateTime.class).toInstant());
     }
 
+    private static BrandRoutingRuleRow mapBrandRoutingRule(ResultSet row, int number) throws SQLException {
+        return new BrandRoutingRuleRow(
+                row.getObject("id", UUID.class),
+                row.getObject("tenant_id", UUID.class),
+                row.getObject("brand_id", UUID.class),
+                row.getObject("variant_id", UUID.class),
+                row.getObject("product_id", UUID.class),
+                row.getObject("category_id", UUID.class),
+                StationRole.require(row.getString("station_role")),
+                row.getInt("version"));
+    }
+
+    private static LocationRoutingRuleRow mapLocationRoutingRule(ResultSet row, int number) throws SQLException {
+        return new LocationRoutingRuleRow(
+                row.getObject("id", UUID.class),
+                row.getObject("tenant_id", UUID.class),
+                row.getObject("brand_id", UUID.class),
+                row.getObject("location_id", UUID.class),
+                row.getObject("variant_id", UUID.class),
+                row.getObject("product_id", UUID.class),
+                row.getObject("category_id", UUID.class),
+                row.getObject("station_id", UUID.class),
+                row.getInt("version"));
+    }
+
     private static StationCapacityRow mapStationCapacity(ResultSet row, int number) throws SQLException {
         return new StationCapacityRow(
                 row.getObject("id", UUID.class),
@@ -1010,6 +1160,34 @@ public class JdbcKitchenStore {
             int portionsPerHour,
             int version,
             Instant createdAt) {}
+
+    /**
+     * A brand-layer routing rule — gap map row 4.2g's kitchen department, the
+     * product editor's own read. {@code variantId}/{@code productId}/{@code
+     * categoryId} has exactly one non-null, per {@link #insertRoutingRule}'s
+     * own contract.
+     */
+    public record BrandRoutingRuleRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            @Nullable UUID variantId,
+            @Nullable UUID productId,
+            @Nullable UUID categoryId,
+            StationRole stationRole,
+            int version) {}
+
+    /** The location-layer override of {@link BrandRoutingRuleRow}, naming a station directly. */
+    public record LocationRoutingRuleRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            @Nullable UUID variantId,
+            @Nullable UUID productId,
+            @Nullable UUID categoryId,
+            UUID stationId,
+            int version) {}
 
     public record TicketRow(
             UUID id,

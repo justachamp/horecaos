@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,11 +20,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.kitchen.application.KitchenStationService;
 import uz.horecaos.platform.kitchen.domain.StationRole;
+import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.StationCapacityRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.StationRow;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -118,6 +121,53 @@ public class KitchenStationController {
                 body.stationId()));
 
         return ResponseEntity.ok(new RoutingRuleResponse(id, body.stationId() == null ? "BRAND" : "LOCATION"));
+    }
+
+    @GetMapping("/routing-rules")
+    @RequiresCapability(value = Capability.KITCHEN_TICKET_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "The rule(s) already routing one catalogue node (gap map row 4.2g)",
+            description = "Both layers' answer for the node, so the product editor's station "
+                    + "picker can show a product's current department instead of an always-blank "
+                    + "picker that only finds out it was already routed when the save 409s.")
+    public ResponseEntity<RoutingRuleDetailResponse> routingRuleFor(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestParam(required = false) UUID variantId,
+            @RequestParam(required = false) UUID productId,
+            @RequestParam(required = false) UUID categoryId) {
+
+        KitchenStationService.RoutingRuleDetail detail = stations.findRoutingRule(
+                tenantId, brandId, locationId, new KitchenStationService.NodeAddress(variantId, productId, categoryId));
+        return ResponseEntity.ok(RoutingRuleDetailResponse.of(detail));
+    }
+
+    @PutMapping("/routing-rules/{ruleId}")
+    @RequiresCapability(value = Capability.KITCHEN_STATION_MANAGE, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Change an already-routed node's department",
+            description = "Names a station role to change the brand layer or a station to change "
+                    + "the location layer, never both — the same rule `POST routing-rules` "
+                    + "enforces. Refused (409, stale version) when the rule changed since it was "
+                    + "read.")
+    public ResponseEntity<RoutingRuleResponse> updateRoute(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID ruleId,
+            @Valid @RequestBody UpdateRoutingRuleRequest body) {
+
+        KitchenStationService.UpdatedRoutingRule updated =
+                stations.updateRoutingRule(new KitchenStationService.RoutingRuleEdit(
+                        tenantId,
+                        brandId,
+                        locationId,
+                        ruleId,
+                        body.stationRole() == null ? null : StationRole.require(body.stationRole()),
+                        body.stationId(),
+                        body.expectedVersion()));
+        return ResponseEntity.ok(new RoutingRuleResponse(updated.ruleId(), updated.layer()));
     }
 
     @GetMapping("/station-capacity")
@@ -250,6 +300,38 @@ public class KitchenStationController {
             UUID stationId) {}
 
     record RoutingRuleResponse(UUID ruleId, String layer) {}
+
+    record UpdateRoutingRuleRequest(
+            @Size(max = 16) String stationRole,
+            UUID stationId,
+            @NotNull Integer expectedVersion) {}
+
+    /** One layer's current rule for a node, or {@code null} when that layer has none. */
+    record RoutingRuleView(
+            UUID ruleId,
+            String layer,
+            @Nullable String stationRole,
+            @Nullable UUID stationId,
+            int version) {
+
+        static RoutingRuleView brand(JdbcKitchenStore.BrandRoutingRuleRow row) {
+            return new RoutingRuleView(row.id(), "BRAND", row.stationRole().name(), null, row.version());
+        }
+
+        static RoutingRuleView location(JdbcKitchenStore.LocationRoutingRuleRow row) {
+            return new RoutingRuleView(row.id(), "LOCATION", null, row.stationId(), row.version());
+        }
+    }
+
+    record RoutingRuleDetailResponse(
+            @Nullable RoutingRuleView brandRule, @Nullable RoutingRuleView locationRule) {
+
+        static RoutingRuleDetailResponse of(KitchenStationService.RoutingRuleDetail detail) {
+            return new RoutingRuleDetailResponse(
+                    detail.brandRule().map(RoutingRuleView::brand).orElse(null),
+                    detail.locationRule().map(RoutingRuleView::location).orElse(null));
+        }
+    }
 
     record StationCapacityRequest(
             @NotNull UUID stationId,
