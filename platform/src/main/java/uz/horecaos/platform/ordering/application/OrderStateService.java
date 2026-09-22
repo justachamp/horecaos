@@ -38,6 +38,7 @@ import uz.horecaos.platform.ordering.domain.TransitionTrigger;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.ApprovalDecisionRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderRow;
+import uz.horecaos.platform.pricing.api.PromoCodeRedemptionPort;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort.CapacityOutcome;
 import uz.horecaos.platform.tenancy.api.TenantId;
@@ -73,7 +74,9 @@ public class OrderStateService {
     private final AuditRecorder audit;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final PromoCodeRedemptionPort promoCodes;
 
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderStateService(
             JdbcOrderStore orders,
             LocationCapacityPort capacity,
@@ -83,7 +86,8 @@ public class OrderStateService {
             OrderSettlementPort settlements,
             AuditRecorder audit,
             ApplicationEventPublisher events,
-            Clock clock) {
+            Clock clock,
+            PromoCodeRedemptionPort promoCodes) {
         this.orders = orders;
         this.capacity = capacity;
         this.inventoryProcess = inventoryProcess;
@@ -93,6 +97,7 @@ public class OrderStateService {
         this.audit = audit;
         this.events = events;
         this.clock = clock;
+        this.promoCodes = promoCodes;
     }
 
     /**
@@ -1248,6 +1253,15 @@ public class OrderStateService {
         // an open item on ADR 0039's checklist rather than a silent no-op.
         if (target.releasesInventory()) {
             inventoryProcess.enqueueRelease(order.orderId(), order.tenantId(), order.pricingQuoteId(), now);
+            // ADR 0072: an order that ends REJECTED, EXPIRED, CANCELLED or
+            // PAYMENT_FAILED never completed, so any coupon redemption its
+            // checkout took must go back the same way the inventory hold and
+            // the kitchen slot already do -- a customer whose order never
+            // happened must not permanently lose a limited-use code. False
+            // (nothing was reserved for this quote) is not an error: a
+            // guest promo-free order, or a replayed terminal transition,
+            // makes this call idempotently.
+            promoCodes.release(order.tenantId(), order.pricingQuoteId());
         } else if (target == OrderStatus.CONFIRMED) {
             inventoryProcess.enqueueCommit(order.orderId(), order.tenantId(), order.pricingQuoteId(), now);
         }

@@ -466,7 +466,8 @@ class CartCheckoutAndOrderTests {
                 settlementPlanner,
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 published,
-                clock);
+                clock,
+                new PromoCodeRedemptionService(promoCodeStore, clock));
         // The ordering.api face a POS integration reaches OrderStateService.decide
         // through (ADR 0002, ADR 0011 §6.4) — a translation layer only, so it is
         // built directly over the same orderState this suite already wires by
@@ -929,6 +930,68 @@ class CartCheckoutAndOrderTests {
         assertThat(order.subtotalMinor() + order.taxMinor() + order.feeMinor() - order.discountMinor())
                 .as("total = subtotal + tax + fee - discount")
                 .isEqualTo(order.totalMinor());
+    }
+
+    @Test
+    @DisplayName("cancelling an order that never completed gives its promo-code redemption back")
+    void cancellingAnUncompletedOrderReleasesItsPromoCodeRedemption() {
+        // H6: PromoCodeRedemptionPort.release() used to be called only from
+        // CheckoutReservationStep's own in-transaction compensation, reachable
+        // only while checkout itself was still refusing before the order was
+        // written. Once the order existed, REJECTED/EXPIRED/CANCELLED never
+        // released it, unlike the inventory hold and the kitchen slot.
+        requireApproval();
+
+        var promoCodeStore =
+                new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore(jdbc, objectMapper);
+        var authoring = new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService(promoCodeStore, clock);
+        var drafted = authoring.draft(
+                TENANT,
+                BRAND,
+                new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.PromoCodeDraft(
+                        "Promo CUSTOMER10",
+                        "CUSTOMER10",
+                        uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.DiscountShape
+                                .PERCENTAGE_OFF_ORDER,
+                        1_000,
+                        null,
+                        "UZS",
+                        0,
+                        List.of(),
+                        List.of(),
+                        null,
+                        100,
+                        null,
+                        null));
+        authoring.activate(TENANT, BRAND, drafted.couponId());
+
+        UUID cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+        tx(() -> carts.applyPromoCode(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "customer10"));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-promo-cancel")));
+        assertThat(result.created()).isTrue();
+        UUID order = orderIdOf(result);
+
+        assertThat(redeemedCount(drafted.couponId()))
+                .as("checkout took the redemption")
+                .isEqualTo(1L);
+
+        int version = orderStore.find(TENANT, order).orElseThrow().version();
+        tx(() -> orderState.cancel(
+                TENANT, order, version, "CUSTOMER_CHANGED_MIND", "CUSTOMER", CUSTOMER.toString(), null));
+
+        assertThat(redeemedCount(drafted.couponId()))
+                .as("an order that never completed must not permanently burn the customer's redemption")
+                .isEqualTo(0L);
+    }
+
+    private long redeemedCount(UUID couponId) {
+        return jdbc.sql("SELECT count(*) FROM pricing.coupon_redemptions WHERE coupon_id = :id AND status = 'REDEEMED'")
+                .param("id", couponId)
+                .query(Long.class)
+                .single();
     }
 
     /**
