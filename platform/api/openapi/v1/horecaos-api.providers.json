@@ -107,6 +107,38 @@
         },
         "type" : "object"
       },
+      "ShiftEventRequest" : {
+        "properties" : {
+          "event" : {
+            "type" : "string"
+          },
+          "occurredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "venueReference" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "event", "venueReference" ],
+        "type" : "object"
+      },
+      "ShiftEventResponse" : {
+        "properties" : {
+          "notified" : {
+            "type" : "boolean"
+          },
+          "rejectionCode" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "Totals" : {
         "properties" : {
           "currency" : {
@@ -155,6 +187,45 @@
   },
   "openapi" : "3.1.0",
   "paths" : {
+    "/api/v1/partner/tenants/{tenantId}/marketplace/shift-events" : {
+      "post" : {
+        "description" : "Acknowledged whether or not the tenant's own notifications.aggregator_shift_notifications_enabled switch is on; the response says whether an alert was actually raised.",
+        "operationId" : "push_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ShiftEventRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ShiftEventResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Report that this aggregator's own shift opened or closed for a venue",
+        "tags" : [ "Partner API" ]
+      }
+    },
     "/api/v1/partner/tenants/{tenantId}/orders" : {
       "post" : {
         "description" : "Idempotent on (venue, externalOrderId). A repeat returns the order the first push created, with 200 rather than 201, and never creates a second.",
@@ -381,6 +452,9 @@
   } ],
   "tags" : [ {
     "description" : "Inbound aggregator orders (ADR 0040)",
+    "name" : "Partner API"
+  }, {
+    "description" : "Inbound aggregator shift events (ADR 0040)",
     "name" : "Partner API"
   } ]
 }
