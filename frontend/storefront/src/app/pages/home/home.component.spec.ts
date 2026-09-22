@@ -9,6 +9,10 @@ import { LangService } from '../../services/lang.service';
 import { UiCartService } from '../../services/ui-cart.service';
 import { CustomerProfileService } from '../../services/customer-profile.service';
 import { DeliverySelectionService } from '../../services/delivery-selection.service';
+import {
+  FulfillmentModeService,
+  type FulfillmentModeAvailability,
+} from '../../services/fulfillment-mode.service';
 import { APP_CONFIG, type AppConfig } from '../../core/config/app-config';
 import { TranslateService } from '../../services/translate.service';
 import { Session } from '../../core/auth/session';
@@ -65,6 +69,17 @@ class FakeCustomerProfileService {
   readonly load = vi.fn(async () => null);
 }
 
+function bothSold(): FulfillmentModeAvailability[] {
+  return [
+    { mode: 'DELIVERY', sold: true, serviceable: true, reason: null },
+    { mode: 'PICKUP', sold: true, serviceable: true, reason: null },
+  ];
+}
+
+class FakeFulfillmentModeService {
+  readonly modes = vi.fn(async (): Promise<FulfillmentModeAvailability[]> => bothSold());
+}
+
 class FakeTranslateService {
   get(key: string): string {
     return key;
@@ -93,6 +108,7 @@ function setUp() {
   const favourites = new FakeFavouritesService();
   const cart = new FakeUiCartService();
   const profile = new FakeCustomerProfileService();
+  const fulfillmentModes = new FakeFulfillmentModeService();
 
   const delivery = new FakeDeliverySelectionService();
   TestBed.configureTestingModule({
@@ -106,6 +122,7 @@ function setUp() {
       { provide: CustomerProfileService, useValue: profile },
       { provide: TranslateService, useClass: FakeTranslateService },
       { provide: DeliverySelectionService, useValue: delivery },
+      { provide: FulfillmentModeService, useValue: fulfillmentModes },
       { provide: APP_CONFIG, useValue: TEST_APP_CONFIG },
     ],
   });
@@ -121,6 +138,7 @@ function setUp() {
     cart,
     profile,
     delivery,
+    fulfillmentModes,
     session,
   };
 }
@@ -191,5 +209,125 @@ describe('HomeComponent: signed in', () => {
     // The top bar names the chosen address, so the row behind the stored id is
     // read back for a signed-in customer and only for them.
     expect(delivery.ensureAddressResolved).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('HomeComponent: fulfilment-mode filtering (GET .../fulfillment-modes)', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('offers only DELIVERY when the channel does not sell PICKUP at this location', async () => {
+    const { fixture, comp, fulfillmentModes } = setUp();
+    fulfillmentModes.modes.mockResolvedValue([
+      { mode: 'DELIVERY', sold: true, serviceable: true, reason: null },
+      { mode: 'PICKUP', sold: false, serviceable: false, reason: 'CHANNEL_NOT_ENABLED' },
+    ]);
+
+    await mount(fixture);
+
+    expect(comp.deliverySold()).toBe(true);
+    expect(comp.pickupSold()).toBe(false);
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('home.delivery');
+    expect(text).not.toContain('home.pickup');
+  });
+
+  it('offers only PICKUP when the channel sells no delivery, and defaults the mode to it', async () => {
+    const { fixture, comp, fulfillmentModes } = setUp();
+    fulfillmentModes.modes.mockResolvedValue([
+      { mode: 'DELIVERY', sold: false, serviceable: false, reason: 'FULFILMENT_MODE_UNAVAILABLE' },
+      { mode: 'PICKUP', sold: true, serviceable: true, reason: null },
+    ]);
+
+    await mount(fixture);
+
+    expect(comp.deliverySold()).toBe(false);
+    expect(comp.pickupSold()).toBe(true);
+    // The component opened on 'delivery' by default; a channel that never
+    // sells it must not be left showing an unorderable menu with no tab to
+    // switch away from.
+    expect(comp.deliveryMode()).toBe('pickup');
+  });
+
+  it('shows the specific reason, not a generic placeholder, for a mode that is sold but not orderable right now', async () => {
+    const { fixture, comp, fulfillmentModes } = setUp();
+    fulfillmentModes.modes.mockResolvedValue([
+      { mode: 'DELIVERY', sold: true, serviceable: false, reason: 'OUTSIDE_SERVICE_HOURS' },
+      { mode: 'PICKUP', sold: true, serviceable: true, reason: null },
+    ]);
+
+    await mount(fixture);
+
+    expect(comp.currentModeUnavailableMessage()).toBe('errors.reason.outsideHours');
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).not.toContain('home.pickupComingSoon');
+  });
+
+  it('shows both tabs, and no unavailable banner, while the read has not answered yet', async () => {
+    const { fixture, comp, fulfillmentModes } = setUp();
+    fulfillmentModes.modes.mockReturnValue(new Promise(() => {})); // never resolves
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(comp.deliverySold()).toBe(true);
+    expect(comp.pickupSold()).toBe(true);
+    expect(comp.currentModeUnavailableMessage()).toBeNull();
+  });
+
+  it('still renders the menu for PICKUP -- it is a real orderable mode, not a placeholder', async () => {
+    const { fixture, comp, fulfillmentModes, menu } = setUp();
+    fulfillmentModes.modes.mockResolvedValue(bothSold());
+    menu.home.mockResolvedValue({
+      category: null,
+      offer: null,
+      populars: [],
+      populars_count: 0,
+      menu: {
+        categories: [{ id: 'cat-1', name: 'Taomlar' }],
+        category_items: [{ id: 'cat-1', name: 'Taomlar', items: [], items_count: 0 }],
+        category_items_count: 1,
+      },
+    });
+
+    await mount(fixture);
+    comp.setDeliveryMode('pickup');
+    fixture.detectChanges();
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('home.menu');
+    expect(text).toContain('Taomlar');
+  });
+
+  it('prefers the persisted mode when it is still sold, over the fresh-session default', async () => {
+    localStorage.setItem('horecaos_home_fulfillment_mode', 'pickup');
+    const { fixture, comp, fulfillmentModes } = setUp();
+    fulfillmentModes.modes.mockResolvedValue(bothSold());
+
+    await mount(fixture);
+
+    expect(comp.deliveryMode()).toBe('pickup');
+  });
+
+  it('ignores the persisted mode once the channel stops selling it', async () => {
+    localStorage.setItem('horecaos_home_fulfillment_mode', 'pickup');
+    const { fixture, comp, fulfillmentModes } = setUp();
+    fulfillmentModes.modes.mockResolvedValue([
+      { mode: 'DELIVERY', sold: true, serviceable: true, reason: null },
+      { mode: 'PICKUP', sold: false, serviceable: false, reason: 'CHANNEL_NOT_ENABLED' },
+    ]);
+
+    await mount(fixture);
+
+    expect(comp.deliveryMode()).toBe('delivery');
+  });
+
+  it('persists the choice when the customer switches mode', async () => {
+    const { fixture, comp, fulfillmentModes } = setUp();
+    fulfillmentModes.modes.mockResolvedValue(bothSold());
+    await mount(fixture);
+
+    comp.setDeliveryMode('pickup');
+
+    expect(localStorage.getItem('horecaos_home_fulfillment_mode')).toBe('pickup');
   });
 });

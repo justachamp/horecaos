@@ -31,6 +31,37 @@ import type { CustomerUiResponse, MenuItem, PopularCategory } from '../../types/
 import { FEATURES } from '../../core/config/features';
 import { APP_CONFIG } from '../../core/config/app-config';
 import { Session } from '../../core/auth/session';
+import {
+  FulfillmentModeService,
+  type FulfillmentModeAvailability,
+} from '../../services/fulfillment-mode.service';
+import { reasonMessageKey } from '../../core/api/problem-details';
+import type { FulfillmentMode } from '../../services/cart.service';
+
+const FULFILLMENT_MODE_KEY = 'horecaos_home_fulfillment_mode';
+
+type UiMode = 'delivery' | 'pickup';
+
+function toBackendMode(mode: UiMode): FulfillmentMode {
+  return mode === 'pickup' ? 'PICKUP' : 'DELIVERY';
+}
+
+function readPersistedMode(): UiMode | null {
+  try {
+    const stored = localStorage.getItem(FULFILLMENT_MODE_KEY);
+    return stored === 'delivery' || stored === 'pickup' ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistMode(mode: UiMode): void {
+  try {
+    localStorage.setItem(FULFILLMENT_MODE_KEY, mode);
+  } catch {
+    // The choice lasts for this page only.
+  }
+}
 
 @Component({
   selector: 'app-home',
@@ -54,6 +85,7 @@ export class HomeComponent implements OnInit {
   private readonly profile = inject(CustomerProfileService);
   private readonly session = inject(Session);
   private readonly injector = inject(Injector);
+  private readonly fulfillmentModes = inject(FulfillmentModeService);
 
   private readonly menuSection = viewChild<ElementRef<HTMLElement>>('menuSection');
 
@@ -72,7 +104,47 @@ export class HomeComponent implements OnInit {
   readonly selectedCategoryId = signal<string | null>(null);
 
   /** 'delivery' | 'pickup' - which mode is selected */
-  readonly deliveryMode = signal<'delivery' | 'pickup'>('delivery');
+  readonly deliveryMode = signal<UiMode>('delivery');
+
+  /**
+   * Which modes this channel sells at this location, and which of those can
+   * be ordered right now (`GET .../fulfillment-modes`).
+   *
+   * `null` until the read answers -- a screen with no answer yet shows both
+   * tabs rather than hiding one that will turn out to be sold, since hiding
+   * a tab that is in fact offered is worse than showing one for a moment
+   * that a still-loading answer will filter out.
+   */
+  readonly modes = signal<readonly FulfillmentModeAvailability[] | null>(null);
+
+  private soldSet(): ReadonlySet<FulfillmentMode> {
+    const modes = this.modes();
+    return new Set((modes ?? []).filter((m) => m.sold).map((m) => m.mode));
+  }
+
+  /** True while the read has not answered yet, or the mode is genuinely sold. */
+  readonly deliverySold = computed(() => this.modes() === null || this.soldSet().has('DELIVERY'));
+  readonly pickupSold = computed(() => this.modes() === null || this.soldSet().has('PICKUP'));
+
+  /**
+   * Why the currently selected mode cannot be ordered right now, in the
+   * customer's language, or `null` when it can (or the read has not
+   * answered yet). Closed, outside hours, at capacity and no-live-menu all
+   * land here -- the mode is sold, just not orderable this moment.
+   */
+  readonly currentModeUnavailableMessage = computed(() => {
+    this.translate.current();
+    const modes = this.modes();
+    if (!modes) {
+      return null;
+    }
+    const entry = modes.find((m) => m.mode === toBackendMode(this.deliveryMode()));
+    if (!entry || entry.serviceable) {
+      return null;
+    }
+    const key = reasonMessageKey(entry.reason) ?? 'home.modeUnavailableToday';
+    return this.translate.get(key);
+  });
 
   /** Popular items carousel (from API populars or first category items) */
   popularItems: MenuItem[] = [];
@@ -117,6 +189,18 @@ export class HomeComponent implements OnInit {
       })
       .catch(() => this.error.set(this.translate.get('errors.generic')))
       .finally(() => this.loading.set(false));
+
+    // Public, like the menu -- choosing a mode to browse in must not require
+    // an account. Best effort: a failed read leaves `modes()` null, which
+    // reads as "show every tab" rather than as an error that blocks the
+    // whole page.
+    this.fulfillmentModes
+      .modes()
+      .then((modes) => {
+        this.modes.set(modes);
+        this.applyDefaultMode(modes);
+      })
+      .catch(() => this.modes.set(null));
 
     // Everything below this line is the customer's own state -- a basket, a
     // favourites list, an account -- and the platform has no anonymous form
@@ -190,13 +274,41 @@ export class HomeComponent implements OnInit {
     this.selectedCategoryId.set(id);
   }
 
-  setDeliveryMode(mode: 'delivery' | 'pickup'): void {
+  /**
+   * Picks the mode to open on, once the channel's real answer is in.
+   *
+   * The persisted choice wins when it is still sold -- a customer who always
+   * picks up should not be defaulted back to delivery on every visit. Failing
+   * that, whichever sold mode the current selection already is stands;
+   * failing *that* (the default `'delivery'` was never actually offered),
+   * this falls to the other sold mode instead of opening on a tab that turns
+   * out to be hidden.
+   */
+  private applyDefaultMode(modes: readonly FulfillmentModeAvailability[]): void {
+    const sold = new Set(modes.filter((m) => m.sold).map((m) => m.mode));
+    if (sold.size === 0) {
+      // Nothing sold at all -- leave the current selection; every tab will
+      // read as unavailable and the screens downstream explain why.
+      return;
+    }
+    const persisted = readPersistedMode();
+    if (persisted && sold.has(toBackendMode(persisted))) {
+      this.deliveryMode.set(persisted);
+      return;
+    }
+    if (!sold.has(toBackendMode(this.deliveryMode()))) {
+      this.deliveryMode.set(sold.has('DELIVERY') ? 'delivery' : 'pickup');
+    }
+  }
+
+  setDeliveryMode(mode: UiMode): void {
     this.deliveryMode.set(mode);
+    persistMode(mode);
     // The cart carries the mode and the platform fixes it at creation, so this
     // rebuilds the basket when it has to. Without it a customer could choose
     // collection and still be checked out for delivery -- and then be asked for
     // a delivery address they never wanted to give.
-    void this.cartService.switchFulfillmentMode(mode === 'pickup' ? 'PICKUP' : 'DELIVERY');
+    void this.cartService.switchFulfillmentMode(toBackendMode(mode));
   }
 
   goToSearch(): void {

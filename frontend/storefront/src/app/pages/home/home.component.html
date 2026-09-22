@@ -19,38 +19,50 @@
       </p>
     }
 
-    <div class="flex rounded-2xl bg-surface-raised p-1">
-      <button
-        type="button"
-        (click)="setDeliveryMode('delivery')"
-        class="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-colors"
-        [class.bg-surface-raised-2]="deliveryMode() === 'delivery'"
-        [class.text-text-primary]="deliveryMode() === 'delivery'"
-        [class.text-zinc-400]="deliveryMode() !== 'delivery'"
-      >
-        <span class="text-brand-accent">⚡</span>
-        {{ 'home.delivery' | t }}
-      </button>
-      <button
-        type="button"
-        (click)="setDeliveryMode('pickup')"
-        class="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-colors"
-        [class.bg-surface-raised-2]="deliveryMode() === 'pickup'"
-        [class.text-text-primary]="deliveryMode() === 'pickup'"
-        [class.text-zinc-400]="deliveryMode() !== 'pickup'"
-      >
-        <span class="text-brand-accent">🏪</span>
-        {{ 'home.pickup' | t }}
-      </button> 
-    </div>
+    @if (deliverySold() || pickupSold()) {
+      <div class="flex rounded-2xl bg-surface-raised p-1">
+        @if (deliverySold()) {
+          <button
+            type="button"
+            (click)="setDeliveryMode('delivery')"
+            class="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-colors"
+            [class.bg-surface-raised-2]="deliveryMode() === 'delivery'"
+            [class.text-text-primary]="deliveryMode() === 'delivery'"
+            [class.text-zinc-400]="deliveryMode() !== 'delivery'"
+          >
+            <span class="text-brand-accent">⚡</span>
+            {{ 'home.delivery' | t }}
+          </button>
+        }
+        @if (pickupSold()) {
+          <button
+            type="button"
+            (click)="setDeliveryMode('pickup')"
+            class="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-colors"
+            [class.bg-surface-raised-2]="deliveryMode() === 'pickup'"
+            [class.text-text-primary]="deliveryMode() === 'pickup'"
+            [class.text-zinc-400]="deliveryMode() !== 'pickup'"
+          >
+            <span class="text-brand-accent">🏪</span>
+            {{ 'home.pickup' | t }}
+          </button>
+        }
+      </div>
+    }
 
-    @if (deliveryMode() === 'pickup') {
-      <p class="rounded-2xl bg-surface-raised px-4 py-3 text-center text-sm text-zinc-400">
-        {{ 'home.pickupComingSoon' | t }}
+    <!-- The mode is sold but not orderable this moment (closed, outside
+         hours, at capacity, no live menu) -- named specifically, never a
+         generic "coming soon" placeholder. -->
+    @if (currentModeUnavailableMessage(); as reason) {
+      <p class="rounded-2xl bg-amber-500/15 px-4 py-3 text-center text-sm text-amber-300">
+        {{ reason }}
       </p>
     }
-    @if (deliveryMode() === 'delivery') {
-      @if (offerData(); as offer) {
+
+    <!-- Menu browsing, and everything around it, is common to every sold
+         mode: PICKUP is a real, orderable mode and must not hide the menu
+         the way a "coming soon" placeholder used to. -->
+    @if (offerData(); as offer) {
         <section class="grid grid-cols-[3fr_2fr] gap-3">
           @if (offer.items.length > 0) {
             <a
@@ -143,11 +155,9 @@
           <app-food-card [item]="item"></app-food-card>
         }
       </div> -->
-    }
   </div>
 
-  @if (deliveryMode() === 'delivery') {
-    <div class="mt-6">
+  <div class="mt-6">
       <div #menuSection class="sticky top-0 z-20 bg-surface-base shadow-[0_12px_16px_var(--surface-base)]">
         <div class="mx-auto max-w-[420px] space-y-3 px-4 pb-3 pt-2">
           <app-section-header [title]="'home.menu' | t" actionLabel=""></app-section-header>
@@ -200,8 +210,7 @@
           </section>
         }
       </div>
-    </div>
-  }
+  </div>
   @if (hasCartItems()) {
     <div class="position-relative">
       <app-cart-hint-badge></app-cart-hint-badge>
