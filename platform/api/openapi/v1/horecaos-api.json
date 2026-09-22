@@ -7354,6 +7354,29 @@
         },
         "type" : "object"
       },
+      "DeliveryChargeResponse" : {
+        "properties" : {
+          "feeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "freeDeliveryFromMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "minBasketMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "outcome" : {
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "DeliveryExceptionResponse" : {
         "properties" : {
           "detail" : {
@@ -9508,6 +9531,35 @@
           }
         },
         "required" : [ "reason", "reasonCode" ],
+        "type" : "object"
+      },
+      "FulfillmentModeAvailability" : {
+        "properties" : {
+          "mode" : {
+            "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "serviceable" : {
+            "type" : "boolean"
+          },
+          "sold" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "FulfillmentModesResponse" : {
+        "properties" : {
+          "modes" : {
+            "items" : {
+              "$ref" : "#/components/schemas/FulfillmentModeAvailability"
+            },
+            "type" : "array"
+          }
+        },
         "type" : "object"
       },
       "FutureDiscountRequest" : {
@@ -14197,6 +14249,10 @@
           "currency" : {
             "type" : "string"
           },
+          "feeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "lines" : {
             "items" : {
               "$ref" : "#/components/schemas/OrderLineResponse"
@@ -16609,6 +16665,9 @@
           "currency" : {
             "type" : "string"
           },
+          "delivery" : {
+            "$ref" : "#/components/schemas/DeliveryChargeResponse"
+          },
           "discountMinor" : {
             "format" : "int64",
             "type" : "integer"
@@ -16616,6 +16675,10 @@
           "expiresAt" : {
             "format" : "date-time",
             "type" : "string"
+          },
+          "feeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
           },
           "quoteId" : {
             "format" : "uuid",
@@ -22261,6 +22324,10 @@
         "properties" : {
           "currency" : {
             "type" : "string"
+          },
+          "feeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
           },
           "fulfillmentMode" : {
             "type" : "string"
@@ -50310,6 +50377,58 @@
         },
         "summary" : "Resolve the delivery fee for one point",
         "tags" : [ "Delivery fee" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/fulfillment-modes" : {
+      "get" : {
+        "description" : "One row per uz.horecaos.platform.tenancy.api.FulfillmentMode value. \"sold\" is whether the channel carries the mode at all, structurally, independent of the clock; \"serviceable\" is whether an order may be placed for it right now. A mode can be sold and not serviceable (outside hours, manually closed, at capacity, ...); it is never serviceable without being sold. \"reason\" is absent exactly when serviceable is true.",
+        "operationId" : "fulfillmentModes",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FulfillmentModesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Which fulfilment modes a channel sells at a location, and which are usable now",
+        "tags" : [ "Serviceability" ]
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/menu" : {

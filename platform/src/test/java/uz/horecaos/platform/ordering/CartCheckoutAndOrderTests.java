@@ -3664,10 +3664,7 @@ class CartCheckoutAndOrderTests {
                 UPDATE tenant.locations
                 SET latitude = NULL, longitude = NULL, coordinate_source = 'NOT_GEOCODED'
                 WHERE tenant_id = :tenantId AND id = :locationId
-                """)
-                .param("tenantId", TENANT)
-                .param("locationId", LOCATION)
-                .update();
+                """).param("tenantId", TENANT).param("locationId", LOCATION).update();
 
         assertThat(deliveryPlanning()
                         .open(
