@@ -48,6 +48,7 @@ import uz.horecaos.platform.integration.camel.notification.NotificationGateway;
 import uz.horecaos.platform.integration.camel.notification.NotificationProcessor;
 import uz.horecaos.platform.integration.camel.notification.NotificationRouteBuilder;
 import uz.horecaos.platform.integration.camel.notification.SmsGatewayAdapter;
+import uz.horecaos.platform.integration.provider.JdbcProviderActivityRecorder;
 import uz.horecaos.platform.integration.provider.JdbcProviderEnvironmentLookup;
 import uz.horecaos.platform.integration.provider.JdbcProviderInstallationLookup;
 import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory;
@@ -121,6 +122,7 @@ class NotificationDeliveryTests {
     private StubOrderDirectory orders;
 
     private UUID accountId;
+    private UUID smsBindingId;
     private UUID orderId;
 
     @BeforeAll
@@ -183,8 +185,8 @@ class NotificationDeliveryTests {
                 new NotificationRouteBuilder(new NotificationProcessor(providerGateway, new SimpleMeterRegistry())));
         camel.start();
 
-        CamelNotificationTransport transport =
-                new CamelNotificationTransport(camel.createProducerTemplate(), providerGateway);
+        CamelNotificationTransport transport = new CamelNotificationTransport(
+                camel.createProducerTemplate(), providerGateway, new JdbcProviderActivityRecorder(jdbc), clock);
 
         orders = new StubOrderDirectory();
         orderId = UUID.randomUUID();
@@ -309,6 +311,28 @@ class NotificationDeliveryTests {
 
         assertThat(notificationCount()).isEqualTo(1);
         assertThat(templateKeyOf(orderId)).isEqualTo(OrderNotificationTrigger.ORDER_EXPIRED);
+    }
+
+    @Test
+    @DisplayName("a delivered SMS writes the SMS binding's own liveness watermark (gap map 10.8c)")
+    void aDeliveredMessageRecordsTheBindingsOwnActivityWatermark() {
+        trigger.onOrderingEvent(orderConfirmed());
+        worker.drain();
+
+        assertThat(statusOf(onlyNotification())).isEqualTo("DELIVERED");
+        assertThat(jdbc.sql("""
+                        SELECT direction, alert_state, last_success_at IS NOT NULL AS has_success
+                        FROM integration.provider_activity_watermarks
+                        WHERE tenant_id = :tenantId AND binding_id = :bindingId
+                        """)
+                        .param("tenantId", TENANT)
+                        .param("bindingId", smsBindingId)
+                        .query((row, number) -> row.getString("direction") + ":" + row.getString("alert_state") + ":"
+                                + row.getBoolean("has_success"))
+                        .list())
+                .as("the Integrations health panel (gap map 10.8c) reads this row back through the "
+                        + "same query ADR 0040's own marketplace liveness already uses")
+                .containsExactly("OUTBOUND:HEALTHY:true");
     }
 
     // ----------------------------------------------------------- consent gate
@@ -885,6 +909,7 @@ class NotificationDeliveryTests {
     private void seedProviderInstallation() {
         UUID installationId = UUID.randomUUID();
         UUID bindingId = UUID.randomUUID();
+        smsBindingId = bindingId;
 
         jdbc.sql("""
                 INSERT INTO integration.provider_environments (

@@ -88,6 +88,7 @@ import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcCampaig
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -229,7 +230,8 @@ class CampaignBroadcastIntegrationTest {
         camel = new DefaultCamelContext();
         camel.addRoutes(new NotificationRouteBuilder(new NotificationProcessor(gateway, meters)));
         camel.start();
-        CamelNotificationTransport transport = new CamelNotificationTransport(camel.createProducerTemplate(), gateway);
+        CamelNotificationTransport transport = new CamelNotificationTransport(
+                camel.createProducerTemplate(), gateway, new RecordingProviderActivityRecorder(), clock);
 
         // ADR 0059 stage 4: the pacer and the port implementation this whole
         // stage is about. A real pacer against a real cursor table, not a fake —

@@ -130,7 +130,7 @@ class TenancyLegalEntityResolverTests {
     @SuppressWarnings("NullAway")
     private static PaymentIntentService serviceUnderTest(
             PaymentLegalEntityResolver resolver, PaymentBindingResolver bindings) {
-        return new PaymentIntentService(null, null, resolver, bindings, null, null, null);
+        return new PaymentIntentService(null, null, resolver, bindings, null, null, null, null);
     }
 
     private static FiscalSeller fiscalSeller(UUID legalEntityId) {

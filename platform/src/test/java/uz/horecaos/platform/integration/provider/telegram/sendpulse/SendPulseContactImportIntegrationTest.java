@@ -77,6 +77,7 @@ import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotific
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.NewNotification;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -195,7 +196,8 @@ class SendPulseContactImportIntegrationTest {
         CamelContext camel = new DefaultCamelContext();
         camel.addRoutes(new NotificationRouteBuilder(new NotificationProcessor(gateway, new SimpleMeterRegistry())));
         camel.start();
-        CamelNotificationTransport transport = new CamelNotificationTransport(camel.createProducerTemplate(), gateway);
+        CamelNotificationTransport transport = new CamelNotificationTransport(
+                camel.createProducerTemplate(), gateway, new RecordingProviderActivityRecorder(), clock);
 
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
         templates = new NotificationTemplateService(templateStore, objectMapper, clock);

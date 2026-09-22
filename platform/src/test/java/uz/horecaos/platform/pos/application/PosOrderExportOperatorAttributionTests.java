@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.catalog.api.PackageCodeLookup;
+import uz.horecaos.platform.integration.api.provider.ProviderActivityRecorder;
 import uz.horecaos.platform.integration.api.provider.ProviderEntityMappingLookup;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 import uz.horecaos.platform.pos.application.port.PosOrderSource;
@@ -55,6 +56,7 @@ class PosOrderExportOperatorAttributionTests {
                 mock(PosOrderSource.class),
                 mock(PackageCodeLookup.class),
                 mock(ApplicationEventPublisher.class),
+                mock(ProviderActivityRecorder.class),
                 Clock.systemUTC(),
                 mock(TransactionTemplate.class));
     }

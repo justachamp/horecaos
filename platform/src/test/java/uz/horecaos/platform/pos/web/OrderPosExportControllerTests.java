@@ -43,6 +43,7 @@ import uz.horecaos.platform.pos.application.port.PosOrderSource;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosBindingConfiguration;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosCapabilityStore;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosExportStore;
+import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -125,6 +126,7 @@ class OrderPosExportControllerTests {
                 new StubPosOrderSource(),
                 (tenantId, brandId, priceableIds) -> Map.of(),
                 event -> {},
+                new RecordingProviderActivityRecorder(),
                 clock,
                 unitOfWork);
 

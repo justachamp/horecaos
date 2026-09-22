@@ -135,6 +135,7 @@ import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingCon
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.support.FakeConfigurationResolver;
+import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.application.ServiceabilityService;
@@ -2221,7 +2222,8 @@ class CartCheckoutAndOrderTests {
                 sellers,
                 bindings,
                 calendar,
-                new PaymentFiscalService(fiscalStore, List.of(), event -> {}),
+                new PaymentFiscalService(fiscalStore, List.of(), event -> {}, new RecordingProviderActivityRecorder()),
+                published,
                 clock);
     }
 
