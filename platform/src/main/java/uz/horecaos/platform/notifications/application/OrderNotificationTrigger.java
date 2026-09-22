@@ -21,9 +21,11 @@ import uz.horecaos.platform.notifications.domain.NotificationClass;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.NewNotification;
 import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
+import uz.horecaos.platform.ordering.api.OrderCancelled;
 import uz.horecaos.platform.ordering.api.OrderCompleted;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.ordering.api.OrderExpired;
 import uz.horecaos.platform.ordering.api.OrderRejected;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
 
@@ -66,6 +68,20 @@ public class OrderNotificationTrigger {
     public static final String ORDER_CONFIRMED = "ORDER_CONFIRMED";
 
     public static final String ORDER_REJECTED = "ORDER_REJECTED";
+
+    /**
+     * ADR 0020's own design names "cancellation messages" alongside payment
+     * and rejection as favoring correctness over aggressive multi-channel
+     * fallback (docs/adr/partial/0020-notification-preferences-templates-and-delivery.md:224)
+     * — a category this key was missing from entirely. Fired for every
+     * {@code OrderCancelled}, confirmed or not yet: the customer paid or was
+     * about to, and is owed the same "your order will not be coming" message
+     * rejection already sends.
+     */
+    public static final String ORDER_CANCELLED = "ORDER_CANCELLED";
+
+    /** The restaurant never answered in time (ADR 0002). Distinct wording from a rejection — see {@link OrderExpired}. */
+    public static final String ORDER_EXPIRED = "ORDER_EXPIRED";
 
     /**
      * ADR 0075: the order is finished, and this is the message a rating prompt
@@ -147,6 +163,20 @@ public class OrderNotificationTrigger {
                 createOperationsOnly(awaiting, ORDER_AWAITING_APPROVAL, awaiting.brandId(), awaiting.locationId());
             case OrderCompleted completed ->
                 create(completed, ORDER_COMPLETED, completed.brandId(), completed.locationId(), Map.of());
+            case OrderCancelled cancelled ->
+                create(
+                        cancelled,
+                        ORDER_CANCELLED,
+                        cancelled.brandId(),
+                        cancelled.locationId(),
+                        // The same stable-code-only shape rejection already uses.
+                        // cancelled.reasonCode() is a registry code (ADR 0039), never
+                        // an operator's free text -- that stays behind
+                        // OrderOutcomeService's own encrypted note and never reaches
+                        // this event at all.
+                        reasonVariables(cancelled.reasonCode()));
+            case OrderExpired expired ->
+                create(expired, ORDER_EXPIRED, expired.brandId(), expired.locationId(), Map.of());
             // Every other ordering fact is deliberately silent. Adding a case here
             // is adding a message a customer receives, which is a product decision
             // and should look like one in a diff.
