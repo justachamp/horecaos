@@ -285,6 +285,8 @@ export const messagesEn = {
   'orders.detail.lines.note.empty': 'no note',
 
   'orders.detail.money.subtotal': 'Items subtotal',
+  'orders.detail.money.discount': 'Discount',
+  'orders.detail.money.fee': 'Fees',
   'orders.detail.money.tax': 'VAT (included)',
   'orders.detail.money.total': 'Total',
   'orders.detail.money.error': 'The money does not add up — contact support.',

@@ -64,6 +64,8 @@ function detail(overrides: Partial<OrderDetailResponse> = {}): OrderDetailRespon
       createdAt: '2026-08-30T09:00:00Z',
       totalMinor: 146_000,
       currency: 'UZS',
+      feeMinor: 0,
+      discountMinor: 0,
       version: 3,
       fulfillmentMode: 'DELIVERY',
       actions: [{ action: 'APPROVE' }, { action: 'REJECT' }],
@@ -597,6 +599,45 @@ describe('OrderDetailPane: money reconciliation (§1.3)', () => {
     expect(error).not.toBeNull();
     expect(error?.textContent).toContain('100 000');
     expect(error?.textContent).toContain('146 000');
+  });
+});
+
+/**
+ * H4: `OperationsOrderController.OrderSummaryResponse` has carried
+ * `feeMinor`/`discountMinor` since 2026-09-11 (checkout's fee, applied
+ * promotions), but the Money panel only ever rendered subtotal, tax and
+ * total -- silently dropping the two figures the five-row rule requires,
+ * even once the backend started sending them on every read.
+ */
+describe('OrderDetailPane: fee and discount render in the money panel (H4)', () => {
+  it('renders the fee and discount rows the backend sends, not just subtotal/tax/total', async () => {
+    const withFeeAndDiscount = detail({
+      summary: { ...detail().summary, feeMinor: 5_000, discountMinor: 3_000 },
+    });
+    configure({ get: apiGet({ value: withFeeAndDiscount, version: 3 }) });
+    const fixture = await render();
+
+    const fee = fixture.nativeElement.querySelector('[data-testid="order-detail-money-fee"]');
+    const discount = fixture.nativeElement.querySelector(
+      '[data-testid="order-detail-money-discount"]',
+    );
+    expect(fee?.textContent).toContain('5 000');
+    expect(discount?.textContent).toContain('3 000');
+    // A discount reduces the total -- rendered with a minus, not a bare positive figure.
+    expect(discount?.textContent).toContain('−');
+  });
+
+  it('still renders the fee/discount rows at zero -- the five-row rule always shows all five', async () => {
+    // The base `detail()` fixture carries feeMinor: 0, discountMinor: 0.
+    configure({ get: apiGet({ value: detail(), version: 3 }) });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-money-fee"]'),
+    ).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-money-discount"]'),
+    ).not.toBeNull();
   });
 });
 

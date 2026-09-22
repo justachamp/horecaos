@@ -274,6 +274,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.lines.note.empty': 'izoh yoʻq',
 
   'orders.detail.money.subtotal': 'Pozitsiyalar summasi',
+  'orders.detail.money.discount': 'Chegirma',
+  'orders.detail.money.fee': 'Yigʻimlar',
   'orders.detail.money.tax': 'QQS (summa ichida)',
   'orders.detail.money.total': 'Jami',
   'orders.detail.money.error':

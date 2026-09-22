@@ -272,6 +272,8 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.lines.note.empty': 'нет комментария',
 
   'orders.detail.money.subtotal': 'Сумма позиций',
+  'orders.detail.money.discount': 'Скидка',
+  'orders.detail.money.fee': 'Сборы',
   'orders.detail.money.tax': 'НДС (в сумме)',
   'orders.detail.money.total': 'Итого',
   'orders.detail.money.error': 'Сумма не сходится — обратитесь в поддержку.',
