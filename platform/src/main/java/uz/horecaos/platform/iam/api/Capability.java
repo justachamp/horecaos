@@ -660,6 +660,23 @@ public enum Capability {
     MARKETPLACE_ORDER_RECEIVE("marketplace.order.receive", "marketplace", "order.receive"),
 
     /**
+     * ADR 0040, gap map row {@code 10.9d}: an aggregator reporting that its
+     * own shift opened or closed for a branch it is bound to.
+     *
+     * <p>Held by the identical machine principal {@link #MARKETPLACE_ORDER_RECEIVE}
+     * is, and for the same reason — a shift ping is inbound from the
+     * aggregator, not a HorecaOS decision, so the principal that may report
+     * it is the installation's own confidential client, scoped to the
+     * bindings that installation holds. Deliberately its own capability
+     * rather than folded into order receipt: a partner whose order-push
+     * credential leaks says nothing about whether it may also toggle a
+     * branch's shift-notification state, and the two blast radii should
+     * stay separable even though today's rollout binds them to the same
+     * client.
+     */
+    MARKETPLACE_SHIFT_RECEIVE("marketplace.shift.receive", "marketplace", "shift.receive"),
+
+    /**
      * ADR 0040: HorecaOS pushing a menu or an availability change out to a partner
      * that will not pull one.
      *

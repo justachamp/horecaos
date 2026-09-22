@@ -32,12 +32,15 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
+import uz.horecaos.platform.notifications.api.NotificationConfigurationKeys;
 import uz.horecaos.platform.partner.api.PartnerPrincipal;
 import uz.horecaos.platform.partner.application.HandoverVerificationService;
 import uz.horecaos.platform.partner.application.MarketplaceIngestionService;
 import uz.horecaos.platform.partner.application.MarketplaceIngestionService.PartnerOrderPush;
 import uz.horecaos.platform.partner.application.MarketplaceIngestionService.PushLine;
 import uz.horecaos.platform.partner.application.MarketplaceLivenessService;
+import uz.horecaos.platform.partner.application.MarketplaceShiftNotificationService;
+import uz.horecaos.platform.partner.application.MarketplaceShiftNotificationService.ShiftEventPush;
 import uz.horecaos.platform.partner.application.PartnerAuthenticationService;
 import uz.horecaos.platform.partner.domain.DiscountFunding;
 import uz.horecaos.platform.partner.domain.ExternalReference;
@@ -45,9 +48,12 @@ import uz.horecaos.platform.partner.domain.ExternalTotals;
 import uz.horecaos.platform.partner.domain.HandoverChallengeStatus;
 import uz.horecaos.platform.partner.domain.HandoverCodeHasher;
 import uz.horecaos.platform.partner.domain.MarketplaceOrderLifecycle;
+import uz.horecaos.platform.partner.domain.MarketplaceShiftEventType;
 import uz.horecaos.platform.partner.domain.RejectionCode;
 import uz.horecaos.platform.partner.infrastructure.ordering.JdbcMarketplaceOrderIntake;
 import uz.horecaos.platform.partner.infrastructure.persistence.JdbcPartnerStore;
+import uz.horecaos.platform.support.FakeConfigurationResolver;
+import uz.horecaos.platform.support.RecordingOperationsAlertPort;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.api.ApiException;
 
@@ -100,6 +106,8 @@ class MarketplaceChannelTests {
     private PartnerAuthenticationService authentication;
     private HandoverCodeHasher hasher;
     private RecordingAuditRecorder audit;
+    private RecordingOperationsAlertPort operationsAlerts;
+    private Clock clock;
     private uz.horecaos.platform.payments.settlement.JdbcSettlementStore settlementStore;
     private uz.horecaos.platform.payments.settlement.OrderSettlementService settlementService;
     private uz.horecaos.platform.payments.settlement.CheckoutSettlementPlanner settlementPlanner;
@@ -179,7 +187,7 @@ class MarketplaceChannelTests {
                 .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
-        Clock clock = Clock.fixed(NOON, ZoneOffset.UTC);
+        clock = Clock.fixed(NOON, ZoneOffset.UTC);
         store = new JdbcPartnerStore(jdbc);
         intake = new JdbcMarketplaceOrderIntake(jdbc);
         hasher = new HandoverCodeHasher("a-pepper-long-enough-for-a-test".getBytes(StandardCharsets.UTF_8));
@@ -205,6 +213,7 @@ class MarketplaceChannelTests {
         handovers = new HandoverVerificationService(store, hasher, audit, clock);
         liveness = new MarketplaceLivenessService(store, clock);
         authentication = new PartnerAuthenticationService(store, clock);
+        operationsAlerts = new RecordingOperationsAlertPort();
 
         seed();
     }
@@ -1189,6 +1198,91 @@ class MarketplaceChannelTests {
         });
     }
 
+    // ---------------------------------------------------------- shift notifications
+
+    /**
+     * Gap map row {@code 10.9d}, second half:
+     * {@code notifications.aggregator_shift_notifications_enabled} finally
+     * has a reader. The switch is off by the key's own registered default, so
+     * a tenant that never touched the settings screen gets exactly today's
+     * behaviour — the push is acknowledged and nothing fires.
+     */
+    @Test
+    @DisplayName("a shift ping is acknowledged but raises nothing while the tenant's switch is off")
+    void aShiftPingIsSilentWithTheSwitchOff() {
+        MarketplaceShiftNotificationService.Outcome outcome =
+                shifts(false).receive(principal(), shiftPush(MarketplaceShiftEventType.OPENED));
+
+        assertThat(outcome.accepted()).isTrue();
+        assertThat(outcome.notified())
+                .as("the switch being off is the tenant's own configured choice, not an error")
+                .isFalse();
+        assertThat(operationsAlerts.calls()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a shift-opened ping raises the operations alert once the switch is on")
+    void aShiftOpenedPingRaisesTheAlertWithTheSwitchOn() {
+        MarketplaceShiftNotificationService.Outcome outcome =
+                shifts(true).receive(principal(), shiftPush(MarketplaceShiftEventType.OPENED));
+
+        assertThat(outcome.accepted()).isTrue();
+        assertThat(outcome.notified()).isTrue();
+
+        assertThat(operationsAlerts.calls()).singleElement().satisfies(call -> {
+            assertThat(call.tenantId()).isEqualTo(TENANT);
+            assertThat(call.brandId()).isEqualTo(BRAND);
+            assertThat(call.locationId()).isEqualTo(branch);
+            assertThat(call.templateKey()).isEqualTo(MarketplaceShiftNotificationService.MARKETPLACE_SHIFT_OPENED);
+            assertThat(call.subjectType())
+                    .as("MarketplaceShiftNotificationService.SUBJECT_TYPE, package-private to its own class")
+                    .isEqualTo("MarketplaceBinding");
+            assertThat(call.subjectId()).isEqualTo(binding);
+            assertThat(call.idempotencyKeyBase())
+                    .as("one alert per binding per business day, so a retried webhook does not " + "double-send")
+                    .contains(binding.toString())
+                    .contains("2026-08-25");
+            assertThat(call.variables()).containsKeys("localTime", "timezone");
+            assertThat(call.variables().get("timezone")).isEqualTo("Asia/Tashkent");
+        });
+    }
+
+    @Test
+    @DisplayName("a shift-closed ping uses the closed template, not the opened one")
+    void aShiftClosedPingUsesItsOwnTemplate() {
+        shifts(true).receive(principal(), shiftPush(MarketplaceShiftEventType.CLOSED));
+
+        assertThat(operationsAlerts.calls())
+                .singleElement()
+                .extracting(RecordingOperationsAlertPort.Call::templateKey)
+                .isEqualTo(MarketplaceShiftNotificationService.MARKETPLACE_SHIFT_CLOSED);
+    }
+
+    @Test
+    @DisplayName("a shift ping for a venue nobody bound is refused before any alert is raised")
+    void aShiftPingForAnUnknownVenueIsRefused() {
+        MarketplaceShiftNotificationService.Outcome outcome = shifts(true)
+                .receive(principal(), new ShiftEventPush("no-such-venue", MarketplaceShiftEventType.OPENED, NOON));
+
+        assertThat(outcome.accepted()).isFalse();
+        assertThat(outcome.rejectionCode()).isEqualTo(RejectionCode.UNKNOWN_VENUE);
+        assertThat(operationsAlerts.calls()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a shift ping outside a partner's own bindings is refused")
+    void aShiftPingOutsideThePartnersOwnBindingsIsRefused() {
+        PartnerPrincipal stranger = new PartnerPrincipal(
+                UUID.randomUUID(), "partner-other", TENANT, UUID.randomUUID(), Set.of(UUID.randomUUID()));
+
+        MarketplaceShiftNotificationService.Outcome outcome =
+                shifts(true).receive(stranger, shiftPush(MarketplaceShiftEventType.OPENED));
+
+        assertThat(outcome.accepted()).isFalse();
+        assertThat(outcome.rejectionCode()).isEqualTo(RejectionCode.VENUE_NOT_PERMITTED);
+        assertThat(operationsAlerts.calls()).isEmpty();
+    }
+
     // ----------------------------------------------------------------- lifecycle
 
     @Test
@@ -1240,6 +1334,20 @@ class MarketplaceChannelTests {
 
     private PartnerPrincipal principal() {
         return authentication.authenticate(CLIENT_ID, TENANT);
+    }
+
+    private MarketplaceShiftNotificationService shifts(boolean switchEnabled) {
+        return new MarketplaceShiftNotificationService(
+                store,
+                new FakeConfigurationResolver(Map.of(
+                        NotificationConfigurationKeys.AGGREGATOR_SHIFT_NOTIFICATIONS_ENABLED_CODE, switchEnabled)),
+                operationsAlerts,
+                clock,
+                Duration.ofDays(1));
+    }
+
+    private ShiftEventPush shiftPush(MarketplaceShiftEventType event) {
+        return new ShiftEventPush(VENUE, event, NOON);
     }
 
     /**
