@@ -3047,6 +3047,20 @@ class CartCheckoutAndOrderTests {
                 .as("the zone and tariff resolved fine; the basket is what falls short")
                 .isEqualTo(DeliveryFeeOutcome.RESOLVED);
         assertThat(priced.quote().deliveryShortfallMinor()).isNotNull().isPositive();
+        // The storefront's DeliveryChargeResponse forces this same case's
+        // *outcome* to UNRESOLVED (a resolved zone below its minimum reads
+        // identically to any other not-yet-usable fee) so it renders a dash,
+        // not the amount below. The amount actually charged into the quote
+        // has to agree with that dash: a non-zero feeMinor folded into
+        // totalMinor here left the storefront showing a total with no
+        // visible line accounting for it, even though checkout refuses this
+        // cart regardless and nothing is ever mischarged.
+        assertThat(priced.quote().feeMinor())
+                .as("not charged until the basket actually clears the minimum")
+                .isZero();
+        assertThat(priced.quote().totalMinor())
+                .as("total reconciles to subtotal + tax with no delivery fee folded in")
+                .isEqualTo(priced.quote().subtotalMinor() + priced.quote().taxMinor());
 
         var result = tx(() -> checkout.checkout(checkoutCommand(cart, "below-minimum", "CASH")));
         assertThat(result.created()).isFalse();

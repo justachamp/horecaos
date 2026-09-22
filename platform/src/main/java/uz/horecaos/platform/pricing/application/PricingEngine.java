@@ -354,6 +354,26 @@ public class PricingEngine {
             return new Delivery(0L, lines, null);
         }
 
+        // Stage 7, moved ahead of the rest: a basket below the zone's minimum
+        // is not charged the fee at all, not charged and then hidden.
+        // StorefrontOrderingController.DeliveryChargeResponse.of already forces
+        // this same case's *outcome* to UNRESOLVED -- a resolved zone below its
+        // minimum reads to the storefront exactly like any other not-yet-usable
+        // fee, and renders a dash, never the amount. The amount actually
+        // charged into the quote has to agree with that dash, or `totalMinor`
+        // included a fee no line on the priced cart ever showed. Checkout
+        // refuses this cart regardless (`CheckoutEligibilityGuard`,
+        // DELIVERY_MINIMUM_BASKET_NOT_MET), so nothing is ever collected
+        // against the uncharged fee; it becomes real again, at its real
+        // amount, only once pricing re-runs against a basket that clears it.
+        // The shortfall itself is still reported and not thrown -- ADR 0037
+        // says checkout is refused below the minimum and the quote still
+        // returns the shortfall, so the storefront can say how much more is
+        // needed rather than only that something is wrong.
+        if (charge.minBasketMinor() != null && goodsSubtotal < charge.minBasketMinor()) {
+            return new Delivery(0L, lines, charge.minBasketMinor() - goodsSubtotal);
+        }
+
         // The line carries the gross charge and every reduction is its own
         // adjustment beside it. A line written net cannot be told apart from a
         // cheaper tariff, and the receipt this market requires shows the delivery
@@ -442,16 +462,10 @@ public class PricingEngine {
             withDelivery.set(withDelivery.size() - 1, deliveryLine(currency, gross, fee));
         }
 
-        // Stage 7. The shortfall is reported and not thrown. ADR 0037 says checkout
-        // is refused below the minimum and that the quote still returns the
-        // shortfall, so the storefront can say how much more is needed rather than
-        // only that something is wrong. Refusing here would destroy the number that
-        // makes the message useful.
-        Long shortfall = null;
-        if (charge.minBasketMinor() != null && goodsSubtotal < charge.minBasketMinor()) {
-            shortfall = charge.minBasketMinor() - goodsSubtotal;
-        }
-        return new Delivery(fee, List.copyOf(withDelivery), shortfall);
+        // Stage 7 (the below-minimum case) already returned above -- reaching
+        // here means the basket clears the minimum, so there is no shortfall
+        // left to report.
+        return new Delivery(fee, List.copyOf(withDelivery), null);
     }
 
     /**
