@@ -1952,4 +1952,128 @@ describe('OrderQueue: COMPLETE row action (orders.md §4.6, row 1.1e)', () => {
 
     expect(complete).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 2, 'reason-b');
   });
+
+  /**
+   * H2 fetch-before-open race, the COMPLETE-row twin of the CANCEL-row test
+   * above (`binds the reasoned cancel dialog to the row most recently
+   * clicked...`): `startCompletion` awaits `referenceDataApi.list` and then
+   * writes the shared `dialog`/`completionReasons` signals (or auto-submits).
+   * Two COMPLETE clicks on two different rows race their independent,
+   * uncached reference-data fetches — whichever resolves last must not
+   * silently steal the dialog from (or auto-submit) the row the operator
+   * most recently clicked.
+   */
+  it('binds the completion dialog to the row most recently clicked, not whichever reference-data fetch resolves last', async () => {
+    let resolveOrderA: ((reasons: readonly ReasonResponse[]) => void) | undefined;
+    let resolveOrderB: ((reasons: readonly ReasonResponse[]) => void) | undefined;
+    const list = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<readonly ReasonResponse[]>((resolve) => {
+            resolveOrderA = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<readonly ReasonResponse[]>((resolve) => {
+            resolveOrderB = resolve;
+          }),
+      );
+
+    const complete = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-B',
+        status: 'COMPLETED',
+        version: 6,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+    const twoReasons: readonly ReasonResponse[] = [
+      {
+        id: 'reason-a',
+        kind: 'COMPLETION',
+        systemCategory: 'COLLECTED_BY_CUSTOMER',
+        internalName: 'Collected by the customer',
+        stockDisposition: null,
+        liabilityParty: null,
+        customerRefund: null,
+        allowedFulfillmentModes: null,
+        customerTexts: {},
+        status: 'ACTIVE',
+        version: 1,
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: 'reason-b',
+        kind: 'COMPLETION',
+        systemCategory: 'LEFT_AT_DOOR',
+        internalName: 'Left at the door',
+        stockDisposition: null,
+        liabilityParty: null,
+        customerRefund: null,
+        allowedFulfillmentModes: null,
+        customerTexts: {},
+        status: 'ACTIVE',
+        version: 1,
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+    configureWithActions(
+      [
+        order({
+          orderId: 'order-A',
+          status: 'FULFILLING',
+          version: 2,
+          actions: [{ action: 'COMPLETE' }],
+        }),
+        order({
+          orderId: 'order-B',
+          status: 'FULFILLING',
+          version: 6,
+          actions: [{ action: 'COMPLETE' }],
+        }),
+      ],
+      { complete },
+      undefined,
+      { list },
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=delivering');
+    await flushMicrotasks();
+
+    const host = harness.routeNativeElement!;
+    const completeButtons = host.querySelectorAll('[data-testid="order-row-action-COMPLETE"]');
+    expect(completeButtons).toHaveLength(2);
+
+    // Operator clicks order-A's Complete, then — before that round trip
+    // returns — order-B's.
+    (completeButtons[0] as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (completeButtons[1] as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    // Ordinary network jitter: the FIRST-clicked row's fetch (order-A)
+    // resolves LAST, after the second-clicked row's (order-B) already did.
+    expect(resolveOrderB).toBeDefined();
+    resolveOrderB!(twoReasons);
+    await flushMicrotasks();
+    expect(resolveOrderA).toBeDefined();
+    resolveOrderA!(twoReasons);
+    await flushMicrotasks();
+
+    (
+      host.querySelector('[data-testid="order-outcome-reason-option-reason-b"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="order-outcome-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    // The dialog must still target order-B — the row the operator most
+    // recently clicked — not order-A, whose superseded fetch merely
+    // resolved later.
+    expect(complete).toHaveBeenCalledWith(FAKE_SCOPE, 'order-B', 6, 'reason-b');
+  });
 });

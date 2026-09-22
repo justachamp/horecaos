@@ -1233,6 +1233,16 @@ export class OrderQueue implements OnInit {
    * real choice — mirrors `order-detail-pane.ts`'s own `startCompletion`
    * exactly, so the two surfaces cannot silently diverge on when a
    * completion dialog is warranted.
+   *
+   * Guarded by {@link dialogRequestId} against the same fetch-before-open
+   * race {@link openRejectDialog}/{@link openCancelReasonDialog} guard:
+   * two COMPLETE clicks on two different rows fire two independent,
+   * uncached `GET .../reference-data` round trips, and ordinary network
+   * jitter can resolve the first-clicked row's fetch *after* the
+   * second-clicked row's. Without the guard, whichever resolves last wins
+   * the shared `dialog`/`completionReasons` signals — or auto-submits —
+   * silently rebinding the dialog to (or completing) a row the operator
+   * did not just click.
    */
   private async startCompletion(
     orderId: string,
@@ -1240,8 +1250,12 @@ export class OrderQueue implements OnInit {
     fulfillmentMode: string | null,
     scope: LocationScope,
   ): Promise<void> {
+    const requestId = (this.dialogRequestId += 1);
     try {
       const reasons = await this.referenceDataApi.list(scope, 'COMPLETION');
+      if (requestId !== this.dialogRequestId) {
+        return; // superseded by a newer dialog-open click (H2)
+      }
       const eligible = reasons.filter(
         (reason) =>
           !reason.allowedFulfillmentModes ||
@@ -1256,6 +1270,9 @@ export class OrderQueue implements OnInit {
         this.dialog.set({ orderId, kind: 'complete', version });
       }
     } catch (error) {
+      if (requestId !== this.dialogRequestId) {
+        return;
+      }
       if (error instanceof ApiError) {
         this.actionNotice.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
       } else {
