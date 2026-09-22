@@ -848,6 +848,11 @@ public class OperationsOrderController {
                     orderId, result.status().name(), result.orderVersion(), result.applied(), null, null));
         } catch (OrderStateService.StaleOrderException stale) {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
+        } catch (OrderStateService.AdvanceTargetRefusedException refused) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    refused.getMessage(),
+                    java.util.Map.of("target", refused.target().name()));
         } catch (OrderStateMachine.IllegalTransitionException illegal) {
             throw new ApiException(
                     ErrorCode.RESOURCE_CONFLICT,

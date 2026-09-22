@@ -2658,6 +2658,34 @@ class CartCheckoutAndOrderTests {
                 .isInstanceOf(OrderStateService.CancellationNotPermittedException.class);
     }
 
+    @Test
+    @DisplayName("state-actions cannot drive CANCELLED; advance() refuses it even though the raw table permits it")
+    void advanceRefusesTheCancellationFamily() {
+        var order = orderIdOf(placeOrder("idem-advance-no-cancel"));
+        int version = orderStore.find(TENANT, order).orElseThrow().version();
+
+        // The bare transition table has no opinion here -- OrderStateMachine
+        // permits CONFIRMED -> CANCELLED, because cancel() itself relies on that
+        // same table. advance() has to refuse the target itself, or the generic
+        // state-actions endpoint (gated only on Capability.ORDER_ADVANCE) becomes
+        // a side door around cancel()'s capability gate and ADR-0039 outcome.
+        assertThat(OrderStateMachine.permits(OrderStatus.CONFIRMED, OrderStatus.CANCELLED))
+                .as("the raw table permits it; advance() must refuse it on its own")
+                .isTrue();
+
+        assertThat(catchThrowable(() -> tx(() -> orderState.advance(
+                        TENANT, order, OrderStatus.CANCELLED, version, "ANYTHING", "USER", "someone", null))))
+                .isInstanceOf(OrderStateService.AdvanceTargetRefusedException.class);
+
+        assertThat(orderStore.find(TENANT, order).orElseThrow().status()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.order_outcomes WHERE order_id = :id")
+                        .param("id", order)
+                        .query(Long.class)
+                        .single())
+                .as("a refused advance() must not have written an outcome row")
+                .isZero();
+    }
+
     // -------------------------------------------------------- state machine
 
     @Test
@@ -3664,10 +3692,7 @@ class CartCheckoutAndOrderTests {
                 UPDATE tenant.locations
                 SET latitude = NULL, longitude = NULL, coordinate_source = 'NOT_GEOCODED'
                 WHERE tenant_id = :tenantId AND id = :locationId
-                """)
-                .param("tenantId", TENANT)
-                .param("locationId", LOCATION)
-                .update();
+                """).param("tenantId", TENANT).param("locationId", LOCATION).update();
 
         assertThat(deliveryPlanning()
                         .open(

@@ -602,6 +602,9 @@ public class OrderStateService {
         Instant now = clock.instant();
         OrderRow order = orders.find(tenantId, orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
 
+        if (isGuardedAdvanceTarget(target)) {
+            throw new AdvanceTargetRefusedException(target);
+        }
         if (order.version() != expectedVersion) {
             throw new StaleOrderException(expectedVersion, order.version());
         }
@@ -659,6 +662,63 @@ public class OrderStateService {
                 correlationId,
                 now);
         return new DecisionResult(true, target, version, null);
+    }
+
+    /**
+     * Whether {@code target} has its own guarded endpoint that {@link #advance}
+     * must never reach around.
+     *
+     * <p>{@link OrderStateMachine#permits} alone would let {@code advance} —
+     * gated only on {@code Capability.ORDER_ADVANCE}, which roles such as
+     * {@code LOCATION_STAFF} hold without {@code Capability.ORDER_CANCEL} —
+     * drive every one of these four the same way {@link #cancel}, {@link
+     * #decide} and {@link #approvalDeadlineReached} do, but without their
+     * registry reason, their capability gate, or their ADR-0039 {@link
+     * OrderOutcome} recording: {@code applyConsequences} only builds an
+     * outcome for {@code target == COMPLETED}, so a cancellation driven
+     * through here would write no {@code order_outcomes} row at all.
+     */
+    private static boolean isGuardedAdvanceTarget(OrderStatus target) {
+        return target == OrderStatus.CANCELLED
+                || target == OrderStatus.REJECTED
+                || target == OrderStatus.EXPIRED
+                || target == OrderStatus.PAYMENT_FAILED;
+    }
+
+    private static String guardedAdvanceRemedyFor(OrderStatus target) {
+        return switch (target) {
+            case CANCELLED ->
+                "POST .../cancellations (OrderStateService.cancel), which requires "
+                        + "Capability.ORDER_CANCEL and a registry reason";
+            case REJECTED -> "POST .../approval-decisions (OrderStateService.decide)";
+            case EXPIRED ->
+                "the approval-deadline timer (OrderStateService.approvalDeadlineReached); "
+                        + "an order does not expire on command";
+            case PAYMENT_FAILED -> "the payment path that records a failed authorization";
+            default -> throw new IllegalArgumentException("not a guarded advance target: " + target);
+        };
+    }
+
+    /**
+     * {@code state-actions} tried to drive an order to a status that has its
+     * own guarded endpoint (ADR 0039). Mapped by the caller to a stable client
+     * error — never treated as a state-machine conflict, because the raw
+     * transition table may well permit it; the problem is which door was used.
+     */
+    public static class AdvanceTargetRefusedException extends IllegalArgumentException {
+        private final OrderStatus target;
+
+        public AdvanceTargetRefusedException(OrderStatus target) {
+            super(("state-actions cannot move an order to %s; use %s. Reaching it through the "
+                            + "generic advance affordance would skip that endpoint's capability gate and "
+                            + "its ADR-0039 outcome recording.")
+                    .formatted(target, guardedAdvanceRemedyFor(target)));
+            this.target = target;
+        }
+
+        public OrderStatus target() {
+            return target;
+        }
     }
 
     /**
