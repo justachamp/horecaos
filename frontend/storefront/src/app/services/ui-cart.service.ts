@@ -93,8 +93,35 @@ export class UiCartService {
   /** The last pricing answer, or null when the cart has not been priced. */
   readonly priced = signal<PricedCart | null>(null);
 
-  /** How the cart is being fulfilled. Bound at creation and owned by the server. */
-  readonly fulfillmentMode = signal<FulfillmentMode>('DELIVERY');
+  /**
+   * The mode to build or read a cart in before any cart exists for this
+   * location -- what `switchFulfillmentMode` sets, and what a not-yet-created
+   * basket reads. Once a cart exists, {@link fulfillmentMode} ignores this
+   * entirely and reports the cart's own fact instead.
+   */
+  private readonly fulfillmentModeDefault = signal<FulfillmentMode>('DELIVERY');
+
+  /**
+   * How the cart is being fulfilled.
+   *
+   * The server's own fact (`carts.cart().fulfillmentMode`) whenever a cart
+   * exists -- **never** a client guess -- because the platform binds the mode
+   * at creation and this client has no way to change it after the fact (see
+   * {@link switchFulfillmentMode}). Before this was derived from the cart, a
+   * page opened by a fresh load of `/cart` or `/cart/confirmation` -- rather
+   * than reached by an in-app navigation that had already called
+   * `switchFulfillmentMode` -- read whatever this signal's stale default
+   * still was, which was always `'DELIVERY'`: a PICKUP cart's own
+   * confirmation screen showed the delivery address block, an unresolvable
+   * "choose an address" message, and a button disabled on a fee that was
+   * never going to resolve because there was nothing to deliver.
+   *
+   * Falls back to {@link fulfillmentModeDefault} only when there is no cart
+   * yet to have an opinion.
+   */
+  readonly fulfillmentMode = computed<FulfillmentMode>(
+    () => this.carts.cart()?.fulfillmentMode ?? this.fulfillmentModeDefault(),
+  );
 
   orderComment = '';
 
@@ -286,7 +313,7 @@ export class UiCartService {
         modifierOptionIds: modifierOptionIdsFromLineKey(line.lineKey, line.variantId),
       })) ?? [];
 
-    this.fulfillmentMode.set(mode);
+    this.fulfillmentModeDefault.set(mode);
     if (!existing) {
       return;
     }
@@ -439,6 +466,30 @@ export class UiCartService {
   }
 
   /**
+   * The exact destination this client last wrote to *this* cart -- compared
+   * before writing again so an unchanged retry (the same address, recipient,
+   * phone and note, against the cart that already has them) skips the PUT
+   * entirely.
+   *
+   * Setting a destination always bumps the cart's version and clears its
+   * quote (ADR 0037; see {@link applyDestination}'s own doc). Before this,
+   * `submitOrder()` re-ran `applyDestination()` on every retry regardless --
+   * so a checkout rejected for an unrelated reason (a stale quote, a moved
+   * cart version, an expired cart, ...) still spent that bump on a
+   * destination that had not actually changed, and the retry's own re-price
+   * then diverged from the one the rejected attempt sent under the same
+   * idempotency key. See `CartConfirmationComponent`'s key-rotation doc for
+   * the other half of that fix.
+   */
+  private lastAppliedDestination: {
+    readonly cartId: string;
+    readonly addressId: string;
+    readonly recipientName: string;
+    readonly recipientPhone: string;
+    readonly deliveryNote: string | undefined;
+  } | null = null;
+
+  /**
    * Says where a delivery cart is going, if it is one and a choice has been made.
    *
    * Called before pricing rather than after, because setting a destination
@@ -457,12 +508,25 @@ export class UiCartService {
     if (!addressId || !this.delivery.isComplete()) {
       return false;
     }
-    const cart = await this.carts.setDestination({
-      addressId,
-      recipientName: this.delivery.recipientName(),
-      recipientPhone: this.delivery.recipientPhone(),
-      deliveryNote: this.orderComment || undefined,
-    });
+    const recipientName = this.delivery.recipientName();
+    const recipientPhone = this.delivery.recipientPhone();
+    const deliveryNote = this.orderComment || undefined;
+
+    const cartId = this.carts.cart()?.cartId;
+    const last = this.lastAppliedDestination;
+    if (
+      cartId &&
+      last?.cartId === cartId &&
+      last.addressId === addressId &&
+      last.recipientName === recipientName &&
+      last.recipientPhone === recipientPhone &&
+      last.deliveryNote === deliveryNote
+    ) {
+      return true;
+    }
+
+    const cart = await this.carts.setDestination({ addressId, recipientName, recipientPhone, deliveryNote });
+    this.lastAppliedDestination = { cartId: cart.cartId, addressId, recipientName, recipientPhone, deliveryNote };
     await this.project(cart);
     return true;
   }
@@ -493,6 +557,7 @@ export class UiCartService {
     this.carts.discard(this.locationId());
     this.cartData.set(null);
     this.priced.set(null);
+    this.lastAppliedDestination = null;
   }
 
   private locationId(): string {

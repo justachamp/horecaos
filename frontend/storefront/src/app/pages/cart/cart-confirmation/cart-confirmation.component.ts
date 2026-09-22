@@ -11,6 +11,8 @@ import { NotificationService } from '../../../services/notification.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { TranslateService } from '../../../services/translate.service';
 import { HorecaOSApiError, messageKeyFor } from '../../../core/api/problem-details';
+import { LocationProfileService, type LocationProfile } from '../../../services/location-profile.service';
+import { APP_CONFIG } from '../../../core/config/app-config';
 
 export interface PaymentOption {
   id: string;
@@ -83,7 +85,14 @@ export class CartConfirmationComponent implements OnInit {
     const opt = this.paymentOptions().find((o) => o.id === this.selectedPaymentId);
     if (!opt) return '';
     const label = this.translate.get(opt.labelKey);
-    const secondary = opt.secondaryKey ? this.translate.get(opt.secondaryKey) : null;
+    // CASH's secondary line describes *how* it is paid, and that genuinely
+    // differs by fulfillment mode: a delivery order is paid to the courier
+    // on receipt, a pickup order is paid at the branch on collection -- there
+    // is no courier to hand cash to. Every other rendered method (CLICK,
+    // PAYME) is an online charge with no such distinction.
+    const secondaryKey =
+      this.pickingUp && opt.id === 'CASH' ? 'cart.cashSecondaryPickup' : opt.secondaryKey;
+    const secondary = secondaryKey ? this.translate.get(secondaryKey) : null;
     return secondary ? `${label} / ${secondary}` : label;
   }
 
@@ -118,6 +127,24 @@ export class CartConfirmationComponent implements OnInit {
   }
 
   private readonly delivery = inject(DeliverySelectionService);
+  private readonly locations = inject(LocationProfileService);
+  private readonly appConfig = inject(APP_CONFIG);
+
+  /**
+   * The pickup branch's own published name and address, once loaded.
+   *
+   * `null` before that -- not a pickup cart, the read has not settled yet,
+   * or the location was not found -- and read only through
+   * {@link pickupLocationName} / {@link pickupLocationAddress} below, which
+   * fall back to the generic label this screen showed before this existed.
+   */
+  readonly pickupLocationProfile = signal<LocationProfile | null>(null);
+
+  /** Guards the effect below against asking again on every recomputation
+   * once a request for this screen visit is already under way --
+   * `LocationProfileService` itself caches per location, but there is no
+   * reason to even re-enter the `.then()` chain a second time. */
+  private pickupProfileRequested = false;
 
   constructor(
     public cart: UiCartService,
@@ -161,6 +188,26 @@ export class CartConfirmationComponent implements OnInit {
         this.resolvingDestination = false;
       });
     });
+
+    // Names the branch once this is known to be a pickup cart. Nothing on
+    // `CartResponse` carries a location id today (see UiCartService's own
+    // doc on what the platform's cart carries), and a storefront deployment
+    // serves exactly one branch (`AppConfig.defaultLocationId`), so that
+    // configured id -- not a per-cart field -- is what this asks about.
+    effect(() => {
+      if (this.cart.fulfillmentMode() !== 'PICKUP' || this.pickupProfileRequested) {
+        return;
+      }
+      const locationId = this.appConfig.defaultLocationId;
+      if (!locationId) {
+        return;
+      }
+      this.pickupProfileRequested = true;
+      this.locations
+        .profile(locationId)
+        .then((profile) => this.pickupLocationProfile.set(profile))
+        .catch(() => this.pickupLocationProfile.set(null));
+    });
   }
 
   /** Set once the customer edits either recipient field, so a late-arriving
@@ -193,6 +240,25 @@ export class CartConfirmationComponent implements OnInit {
 
   get pickingUp(): boolean {
     return this.cart.fulfillmentMode() === 'PICKUP';
+  }
+
+  /** The branch's own name once known, or the generic "pickup branch" label
+   * while the read has not settled or the branch could not be found. */
+  get pickupLocationName(): string {
+    return this.pickupLocationProfile()?.displayName ?? this.translate.get('cart.pickupLocation');
+  }
+
+  /** The branch's own address once known, or the generic collection hint
+   * this screen showed before the profile read existed. `district`/`city`
+   * are appended only when present -- `StorefrontLocationProfileController`
+   * documents both as optional -- so a branch missing one is not shown with
+   * a trailing ", ". */
+  get pickupLocationAddress(): string {
+    const profile = this.pickupLocationProfile();
+    const line = [profile?.addressLine, profile?.district, profile?.city]
+      .filter((part): part is string => !!part)
+      .join(', ');
+    return line || this.translate.get('cart.pickupLocationHint');
   }
 
   /** Why the delivery fee is not final yet, or `null` when it is (or this is
@@ -328,6 +394,14 @@ export class CartConfirmationComponent implements OnInit {
       });
       if (result.outcome === 'REJECTED') {
         this.orderError.set(this.translate.get('cart.orderRejected'));
+        // No order exists to retry against, and the very next submitOrder()
+        // re-runs applyDestination() and priceCart() regardless -- a retry
+        // under this same key would present a different body and the
+        // platform's idempotency store would refuse it as
+        // IDEMPOTENCY_KEY_REUSED forever, on a basket the customer may still
+        // legitimately want to order. A fresh key is what lets that retry
+        // through.
+        this.pendingCheckoutKey = null;
         return;
       }
       // The basket became an order. Forgetting the cart id is what stops the
@@ -361,6 +435,22 @@ export class CartConfirmationComponent implements OnInit {
       // sentence for every reason checkout could have said no.
       const key = failure instanceof HorecaOSApiError ? messageKeyFor(failure) : 'cart.orderError';
       this.orderError.set(this.translate.get(key));
+      // A definite refusal (a stale quote, a moved cart version, an expired
+      // cart, ...) means no order was created here either, and the retry's
+      // own applyDestination()/priceCart() calls will send a different body
+      // regardless -- so this key must rotate for the same reason REJECTED's
+      // does, above. The one exception is a failure that never reached the
+      // platform at all: `NETWORK_UNREACHABLE` is ApiClient's own
+      // normalisation of a dropped connection or a client-side timeout with
+      // no HTTP response (see toHorecaOSApiError). There the original
+      // request may in fact have been received, and presenting the *same*
+      // key on an *unchanged* retry is what lets a genuine replay answer
+      // REPLAYED with the order that already exists, instead of a second
+      // one -- rotating here would only turn one silent success into a
+      // second, unwanted order.
+      if (!(failure instanceof HorecaOSApiError) || failure.code !== 'NETWORK_UNREACHABLE') {
+        this.pendingCheckoutKey = null;
+      }
     } finally {
       this.submitting.set(false);
     }

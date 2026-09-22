@@ -3,6 +3,7 @@ package uz.horecaos.platform.configuration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -72,12 +73,32 @@ class LocalFixtureStorefrontTests {
 
     @Test
     void localProfileMakesTheDocumentedPublicRequestsUseful() throws Exception {
-        mvc.perform(get("/api/v1/storefront/pickup-locations?lat=41.311341&lon=69.282722"))
+        // POST, coordinate in the body -- ADR 0033's own privacy rule keeps a
+        // customer's live position out of the URL, so this is no longer a GET.
+        mvc.perform(post("/api/v1/storefront/pickup-locations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"point": {"latitude": 41.311341, "longitude": 69.282722}}
+                                """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.locations.length()").value(1))
                 .andExpect(jsonPath("$.locations[0].locationId").value("10000000-0000-0000-0000-000000000003"))
                 .andExpect(jsonPath("$.locations[0].available").value(true))
                 .andExpect(jsonPath("$.locations[0].distanceMeters").isNumber());
+
+        // The branch's own published name and address, the same fields the
+        // search above already returns for it, now readable one branch at a
+        // time for the pickup confirmation and order-detail screens.
+        mvc.perform(get(LOCATION_PATH + "/profile"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayName").value("Central kitchen"))
+                .andExpect(jsonPath("$.addressLine").value("1 Demo Street"))
+                .andExpect(jsonPath("$.district").value("Shaykhontohur"))
+                .andExpect(jsonPath("$.city").value("Tashkent"))
+                .andExpect(jsonPath("$.landmark").value("Local fixture only"))
+                .andExpect(jsonPath("$.contactPhone").value("+998712000000"))
+                .andExpect(jsonPath("$.latitude").value(41.3111))
+                .andExpect(jsonPath("$.longitude").value(69.2401));
 
         // The channel is required, like the serviceability call below it: ADR 0036
         // makes it supply both the publication and the price plane, and a menu
@@ -253,8 +274,12 @@ class LocalFixtureStorefrontTests {
         // Every response this API returns is JSON (ADR 0031). A caller asking
         // for anything else finds out from Problem Details rather than the base
         // class's about:blank shape.
-        mvc.perform(get("/api/v1/storefront/pickup-locations?lat=41.311341&lon=69.282722")
-                        .accept(MediaType.APPLICATION_XML))
+        mvc.perform(post("/api/v1/storefront/pickup-locations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.APPLICATION_XML)
+                        .content("""
+                                {"point": {"latitude": 41.311341, "longitude": 69.282722}}
+                                """))
                 .andExpect(status().isNotAcceptable())
                 .andExpect(jsonPath("$.type").value("https://docs.horecaos.uz/problems/not-acceptable"))
                 .andExpect(jsonPath("$.status").value(406))

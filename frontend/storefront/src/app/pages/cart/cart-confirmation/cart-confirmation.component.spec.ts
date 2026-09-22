@@ -8,9 +8,11 @@ import { PaymentSessionService } from '../../../services/payment-session.service
 import { NotificationService } from '../../../services/notification.service';
 import { TranslateService } from '../../../services/translate.service';
 import { DeliverySelectionService } from '../../../services/delivery-selection.service';
+import { LocationProfileService, type LocationProfile } from '../../../services/location-profile.service';
 import type { CheckoutResult, PricedCart } from '../../../services/cart.service';
 import type { CartResponse } from '../../../types/cart.types';
 import { HorecaOSApiError } from '../../../core/api/problem-details';
+import { APP_CONFIG, type AppConfig } from '../../../core/config/app-config';
 
 class FakeUiCartService {
   fulfillmentMode = vi.fn(() => 'DELIVERY' as const);
@@ -47,6 +49,20 @@ class FakePaymentSessionService {
 class FakeNotificationService {
   show = vi.fn();
 }
+
+class FakeLocationProfileService {
+  profile = vi.fn<() => Promise<LocationProfile | null>>(() => Promise.resolve(null));
+}
+
+const CONFIG: AppConfig = {
+  apiBaseUrl: '/api/v1',
+  tenantId: 'tenant-1',
+  brandId: 'brand-1',
+  defaultLocationId: 'loc-1',
+  channel: 'STOREFRONT',
+  yandexMapsApiKey: '',
+  brand: { displayName: 'Test Brand', theme: { accent: '#000000', accentDeep: '#000000' } },
+};
 
 class FakeTranslateService {
   get(key: string): string {
@@ -118,6 +134,7 @@ async function setUp(
   paymentCodes: readonly string[] = ['CASH'],
   configureCart?: (cart: FakeUiCartService) => void,
   configureDelivery?: (delivery: FakeDeliverySelectionService) => void,
+  configureLocations?: (locations: FakeLocationProfileService) => void,
 ) {
   const cart = new FakeUiCartService();
   const delivery = new FakeDeliverySelectionService();
@@ -126,6 +143,8 @@ async function setUp(
   configureDelivery?.(delivery);
   const paymentSessions = new FakePaymentSessionService();
   const notification = new FakeNotificationService();
+  const locations = new FakeLocationProfileService();
+  configureLocations?.(locations);
 
   TestBed.configureTestingModule({
     imports: [CartConfirmationComponent],
@@ -137,6 +156,8 @@ async function setUp(
       { provide: NotificationService, useValue: notification },
       { provide: TranslateService, useClass: FakeTranslateService },
       { provide: DeliverySelectionService, useValue: delivery },
+      { provide: LocationProfileService, useValue: locations },
+      { provide: APP_CONFIG, useValue: CONFIG },
     ],
   });
   const router = TestBed.inject(Router);
@@ -151,6 +172,7 @@ async function setUp(
   // pending microtask) is what actually guarantees `paymentMethodsLoaded`
   // has been set before a test reads it.
   await new Promise((resolve) => setTimeout(resolve, 0));
+  fixture.detectChanges();
 
   return {
     fixture,
@@ -159,6 +181,7 @@ async function setUp(
     delivery,
     paymentSessions,
     notification,
+    locations,
     navigateSpy,
   };
 }
@@ -189,6 +212,73 @@ describe('CartConfirmationComponent: no payment methods blocks submit', () => {
     const { comp } = await setUp(['CASH', 'MARKETPLACE']);
 
     expect(comp.paymentOptions().map((o) => o.id)).toEqual(['CASH']);
+  });
+});
+
+describe('CartConfirmationComponent: the pickup screen names the actual branch', () => {
+  function pickupProfile(overrides: Partial<LocationProfile> = {}): LocationProfile {
+    return {
+      displayName: 'Chilonzor filiali',
+      addressLine: "Bunyodkor ko'chasi 12",
+      district: 'Chilonzor',
+      city: 'Toshkent',
+      ...overrides,
+    };
+  }
+
+  it('shows the branch\'s own name and address once the profile read resolves, for the configured location', async () => {
+    const { comp, fixture, locations } = await setUp(
+      ['CASH'],
+      (cart) => {
+        cart.fulfillmentMode.mockReturnValue('PICKUP' as never);
+      },
+      undefined,
+      (locations) => {
+        locations.profile.mockResolvedValue(pickupProfile());
+      },
+    );
+
+    expect(locations.profile).toHaveBeenCalledWith('loc-1');
+    expect(comp.pickupLocationName).toBe('Chilonzor filiali');
+    expect(comp.pickupLocationAddress).toContain("Bunyodkor ko'chasi 12");
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Chilonzor filiali');
+    expect(text).toContain("Bunyodkor ko'chasi 12");
+  });
+
+  it('falls back to the generic label and hint while the profile has not loaded (or is unavailable)', async () => {
+    const { comp } = await setUp(['CASH'], (cart) => {
+      cart.fulfillmentMode.mockReturnValue('PICKUP' as never);
+    });
+    // locations.profile resolves to null by default (FakeLocationProfileService).
+
+    expect(comp.pickupLocationName).toBe('cart.pickupLocation');
+    expect(comp.pickupLocationAddress).toBe('cart.pickupLocationHint');
+  });
+
+  it('never asks for a branch profile on a DELIVERY cart', async () => {
+    const { locations } = await setUp(['CASH']);
+
+    expect(locations.profile).not.toHaveBeenCalled();
+  });
+});
+
+describe('CartConfirmationComponent: CASH wording matches how it is actually paid, by mode', () => {
+  it('a DELIVERY cart describes CASH as paid to the courier on receipt', async () => {
+    const { comp } = await setUp(['CASH']);
+
+    expect(comp.paymentMethod).toBe('cart.cash / cart.cashSecondary');
+  });
+
+  it('a PICKUP cart describes CASH as paid at the branch on collection, not "pay the courier"', async () => {
+    // There is no courier on a pickup order -- the pre-fix wording
+    // ("Olish paytida kuryerga to'lash" / "pay the courier on receipt") was
+    // simply wrong for this mode.
+    const { comp } = await setUp(['CASH'], (cart) => {
+      cart.fulfillmentMode.mockReturnValue('PICKUP' as never);
+    });
+
+    expect(comp.paymentMethod).toBe('cart.cash / cart.cashSecondaryPickup');
   });
 });
 
@@ -424,11 +514,19 @@ describe('CartConfirmationComponent.submitOrder: a thrown refusal is reported wi
 });
 
 describe('CartConfirmationComponent: idempotency key stability across repeated clicks', () => {
-  it('reuses the same idempotency key across two failed attempts at the same basket', async () => {
+  it('reuses the same idempotency key after a failure that never reached the platform (no response at all)', async () => {
+    // ApiClient/toHorecaOSApiError normalises a dropped connection or a
+    // client-side timeout with no HTTP response to NETWORK_UNREACHABLE at
+    // status 0 -- the one case where the original request may in fact have
+    // been received, so an *unchanged* retry under the *same* key is what
+    // lets a genuine replay answer REPLAYED with the order that already
+    // exists, instead of minting a second one.
     const { comp, cart } = await setUp(['CASH']);
     cart.applyDestination.mockResolvedValue(true);
     cart.priceCart.mockResolvedValue(pricedFixture());
-    cart.checkout.mockRejectedValue(new Error('timed out'));
+    cart.checkout.mockRejectedValue(
+      new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'x' }),
+    );
 
     await comp.submitOrder();
     await comp.submitOrder();
@@ -454,6 +552,50 @@ describe('CartConfirmationComponent: idempotency key stability across repeated c
     const secondKey = cart.checkout.mock.calls[1][0].idempotencyKey;
 
     expect(secondKey).not.toBe(firstKey);
+  });
+
+  it('mints a fresh key after a REJECTED outcome, so a retry is not refused as a key reuse', async () => {
+    // No order was created, and applyDestination/priceCart run again on the
+    // very next submitOrder() -- a retry under the same key would present a
+    // different body and the platform's idempotency store would refuse it
+    // as IDEMPOTENCY_KEY_REUSED forever, on a basket the customer may still
+    // legitimately want to order.
+    const { comp, cart } = await setUp(['CASH']);
+    cart.applyDestination.mockResolvedValue(true);
+    cart.priceCart.mockResolvedValue(pricedFixture());
+    cart.checkout.mockResolvedValueOnce(checkoutResult({ outcome: 'REJECTED' }));
+
+    await comp.submitOrder();
+    const key1 = cart.checkout.mock.calls[0][0].idempotencyKey;
+
+    cart.checkout.mockResolvedValueOnce(checkoutResult());
+    await comp.submitOrder();
+    const key2 = cart.checkout.mock.calls[1][0].idempotencyKey;
+
+    expect(key2).not.toBe(key1);
+  });
+
+  it('mints a fresh key after a definite platform refusal thrown from checkout (e.g. PRICE_CHANGED), not just after REJECTED', async () => {
+    const { comp, cart } = await setUp(['CASH']);
+    cart.applyDestination.mockResolvedValue(true);
+    cart.priceCart.mockResolvedValue(pricedFixture());
+    cart.checkout.mockRejectedValueOnce(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'PRICE_CHANGED',
+        detail: 'x',
+        problem: { status: 409, reason: 'PRICE_CHANGED' },
+      }),
+    );
+
+    await comp.submitOrder();
+    const key1 = cart.checkout.mock.calls[0][0].idempotencyKey;
+
+    cart.checkout.mockResolvedValueOnce(checkoutResult());
+    await comp.submitOrder();
+    const key2 = cart.checkout.mock.calls[1][0].idempotencyKey;
+
+    expect(key2).not.toBe(key1);
   });
 });
 

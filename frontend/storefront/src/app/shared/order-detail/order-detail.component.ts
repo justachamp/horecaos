@@ -160,7 +160,13 @@ export class OrderDetailComponent implements OnInit {
     const packagingVal = this.extractPrice(api.packaging);
     return {
       id: String(api.id),
-      orderNumber: Number(api.order_number ?? api.id),
+      // `order_number` carries `OrderResponse.publicOrderNumber` -- a string
+      // like "0922-001" -- force-cast to `number` by
+      // OrdersService.toApiOrderDetail (see ApiOrderDetail's own note).
+      // `Number(...)` on that is NaN; passed through as-is, exactly like the
+      // orders list already does, it interpolates as the customer's own
+      // order number.
+      orderNumber: api.order_number ?? api.id,
       lineItems,
       subtotal: format(subtotalVal),
       // `OrdersService.toApiOrderDetail` now carries the real

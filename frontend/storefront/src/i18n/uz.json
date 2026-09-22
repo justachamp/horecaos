@@ -109,6 +109,7 @@
     "orderError": "Buyurtma yuborilmadi. Qaytadan urinib ko'ring.",
     "cash": "Naqd pul orqali",
     "cashSecondary": "Olish paytida kuryerga to'lash",
+    "cashSecondaryPickup": "Olib ketishda filialga to'lash",
     "click": "Click",
     "payme": "Payme",
     "minutes": "30 minut",

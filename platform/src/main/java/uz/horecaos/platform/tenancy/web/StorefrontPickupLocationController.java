@@ -2,12 +2,13 @@ package uz.horecaos.platform.tenancy.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.time.Duration;
-import org.springframework.http.CacheControl;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.application.StorefrontPickupLocationQuery;
@@ -19,6 +20,15 @@ import uz.horecaos.platform.tenancy.application.StorefrontPickupLocationQuery;
  * browse must not demand a customer account. Coordinates are used only for
  * this calculation; the response exposes branch addresses and distances, not
  * the caller's point.
+ *
+ * <p>{@code POST} carrying the point in the body, not {@code GET} with it in
+ * the query string. A customer's live position is personal data, and a query
+ * string is logged by every proxy and access log between here and the edge —
+ * exactly the same reasoning that keeps a saved address's coordinate out of
+ * every URL this platform serves. There is no write here and nothing is
+ * created: {@code EndpointCapabilityDeclarationTests} exempts this path by
+ * name for that reason, the same way it exempts the other unauthenticated
+ * pre-account reads that cannot hold a capability.
  */
 @RestController
 @RequestMapping("/api/v1/storefront")
@@ -31,17 +41,26 @@ public class StorefrontPickupLocationController {
         this.locations = locations;
     }
 
-    @GetMapping("/pickup-locations")
+    @PostMapping("/pickup-locations")
     @Operation(
             summary = "Find the nearest pickup locations with a published storefront menu",
-            description = "Returns at most twenty active pickup branches, nearest first. "
-                    + "Each result carries the same current serviceability answer the checkout "
-                    + "path will later re-resolve authoritatively.")
+            description = "Returns at most twenty active pickup branches, nearest first. Each "
+                    + "result carries the same current serviceability answer the checkout path "
+                    + "will later re-resolve authoritatively. POST so the caller's coordinate "
+                    + "travels in the body rather than the query string; nothing is written and "
+                    + "no resource is created.")
     public ResponseEntity<StorefrontPickupLocationQuery.PickupLocations> nearbyPickupLocations(
-            @RequestParam double lat, @RequestParam double lon, @RequestParam(defaultValue = "10") int limit) {
+            @Valid @RequestBody PickupLocationSearchRequest body) {
 
-        return ResponseEntity.ok()
-                .cacheControl(CacheControl.maxAge(Duration.ofSeconds(30)).cachePublic())
-                .body(locations.nearby(new GeoPoint(lat, lon), limit));
+        int limit = body.limit() == null ? 10 : body.limit();
+        return ResponseEntity.ok(locations.nearby(body.point(), limit));
     }
+
+    /**
+     * @param point the caller's own position, WGS 84 degrees
+     * @param limit at most this many branches; defaults to 10 and is capped by
+     *              {@link StorefrontPickupLocationQuery#MAXIMUM_LIMIT}
+     */
+    public record PickupLocationSearchRequest(
+            @NotNull @Valid GeoPoint point, @Nullable Integer limit) {}
 }

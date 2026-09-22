@@ -18,7 +18,7 @@
   <header class="flex items-start justify-between gap-4 px-4 py-4">
     <div class="space-y-0.5">
       <h1 class="text-lg font-bold text-text-primary">{{ 'orders.order' | t }}</h1>
-      <p class="text-sm text-zinc-400">Order N: {{ order()!.orderNumber }}</p>
+      <p class="text-sm text-zinc-400">{{ 'orders.orderNumberLabel' | t: { number: order()!.orderNumber } }}</p>
     </div>
     <button
       type="button"

@@ -109,6 +109,7 @@
     "orderError": "Order not sent. Please try again.",
     "cash": "Cash",
     "cashSecondary": "Pay courier on delivery",
+    "cashSecondaryPickup": "Pay at the branch on collection",
     "click": "Click",
     "payme": "Payme",
     "minutes": "30 minutes",

@@ -222,7 +222,9 @@ export class HomeComponent implements OnInit {
       return;
     }
 
-    void modesReady.then(() => this.cartService.load());
+    void modesReady
+      .then(() => this.cartService.load())
+      .then(() => this.syncDeliveryModeFromCart());
     // Only the address id survives a reload, so the top bar would report "no
     // address" over a choice the customer already made until the row is read
     // back. Authenticated-only for the same reason as the reads around it: the
@@ -316,6 +318,36 @@ export class HomeComponent implements OnInit {
     // selected. `switchFulfillmentMode` itself no-ops once the mode already
     // matches, so this is safe to call every time the read settles.
     void this.cartService.switchFulfillmentMode(toBackendMode(mode));
+  }
+
+  /**
+   * Pulls the tab back onto an existing cart's own mode, once `load()` has
+   * had a chance to fetch it.
+   *
+   * `applyDefaultMode` picks `deliveryMode` from the persisted preference and
+   * the sold set alone, before any cart is known. `cartService.load()` then
+   * reads the customer's cart by its locally stored id -- and
+   * `CartService.ensure()` returns whatever mode *that* cart actually has,
+   * ignoring the mode `load()` was called under when a cart already exists.
+   * So a channel that stops selling a customer's persisted mode (or any
+   * other mismatch between the default and an already-open basket) can leave
+   * the tab on one mode while `UiCartService.fulfillmentMode()` -- which
+   * trusts the cart over this component's own signal -- reports the other.
+   * `/cart` and `/cart/confirmation` already read the cart's own fact; this
+   * keeps Home's tab from disagreeing with the screens it links to.
+   *
+   * A no-op whenever there is no cart yet (or its mode already matches): the
+   * cart service then reports back exactly the default this component just
+   * pushed onto it, so the comparison below simply confirms agreement rather
+   * than overwriting an explicit, unsaved tab click with a stale echo.
+   */
+  private syncDeliveryModeFromCart(): void {
+    const cartMode: UiMode = this.cartService.fulfillmentMode() === 'PICKUP' ? 'pickup' : 'delivery';
+    if (cartMode === this.deliveryMode()) {
+      return;
+    }
+    this.deliveryMode.set(cartMode);
+    persistMode(cartMode);
   }
 
   setDeliveryMode(mode: UiMode): void {

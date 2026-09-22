@@ -63,6 +63,14 @@ class FakeUiCartService {
   readonly totalItemsCount = () => 0;
   readonly load = vi.fn(async () => {});
   readonly switchFulfillmentMode = vi.fn(async () => {});
+  /**
+   * Stands in for `UiCartService.fulfillmentMode`'s computed: the real
+   * service reports the *cart's own* mode once one has loaded, independent
+   * of whatever `switchFulfillmentMode` was last called with. Reassignable
+   * so a test can simulate `load()` pulling in an existing cart whose mode
+   * disagrees with the tab the customer's persisted preference selected.
+   */
+  fulfillmentMode = (): 'DELIVERY' | 'PICKUP' => 'DELIVERY';
 }
 
 class FakeCustomerProfileService {
@@ -337,8 +345,9 @@ describe('HomeComponent: the auto-selected mode reaches the cart service, not ju
   // 'pickup') must not leave `UiCartService.fulfillmentMode` at its DELIVERY
   // default while the Pickup tab renders as selected: `cartService.load()`,
   // and every subsequent `add()`, creates/reads the cart under whatever
-  // `UiCartService.fulfillmentMode` currently holds -- independent of the
-  // home screen's own `deliveryMode` UI signal.
+  // `UiCartService.fulfillmentMode` currently holds. (Once a cart has
+  // actually loaded, the reverse sync -- the tab following the cart's own
+  // mode -- is covered separately below.)
   beforeEach(() => localStorage.clear());
 
   it('switches the cart service to PICKUP when the channel sells only pickup', async () => {
@@ -366,5 +375,55 @@ describe('HomeComponent: the auto-selected mode reaches the cart service, not ju
     const switchOrder = cart.switchFulfillmentMode.mock.invocationCallOrder[0];
     const loadOrder = cart.load.mock.invocationCallOrder[0];
     expect(switchOrder).toBeLessThan(loadOrder);
+  });
+});
+
+describe('HomeComponent: the tab is reconciled with an existing cart, not just the persisted preference', () => {
+  // applyDefaultMode() picks `deliveryMode` from the persisted preference and
+  // the sold set alone, *before* the cart is known -- `cartService.load()`
+  // only runs afterward (`void modesReady.then(() => this.cartService.load())`).
+  // `CartService.ensure()` reads by the locally stored cart id and returns
+  // whatever mode that cart actually has, ignoring the mode `load()` was
+  // called with when a cart already exists. So a channel that stops selling
+  // a customer's persisted mode can default the tab to the other mode while
+  // the customer's still-open cart -- fetched moments later -- disagrees:
+  // `UiCartService.fulfillmentMode()` correctly flips to the cart's own mode
+  // (ui-cart.service.ts:122), but nothing pulled `deliveryMode` back into
+  // step with it.
+  beforeEach(() => localStorage.clear());
+
+  it('pulls the tab onto an existing PICKUP cart even when the persisted/sold-set default picked delivery', async () => {
+    localStorage.setItem('horecaos_home_fulfillment_mode', 'pickup');
+    const { fixture, comp, cart, fulfillmentModes, session } = setUp();
+    signIn(session);
+    // The channel no longer sells PICKUP on this device's persisted path, so
+    // applyDefaultMode() falls back to 'delivery' and the tab opens there.
+    fulfillmentModes.modes.mockResolvedValue([
+      { mode: 'DELIVERY', sold: true, serviceable: true, reason: null },
+      { mode: 'PICKUP', sold: false, serviceable: false, reason: 'CHANNEL_NOT_ENABLED' },
+    ]);
+    // But the customer's own basket, once `load()` fetches it, is still an
+    // open PICKUP cart -- `UiCartService.fulfillmentMode()` reports it.
+    cart.load.mockImplementation(async () => {
+      cart.fulfillmentMode = () => 'PICKUP';
+    });
+
+    await mount(fixture);
+
+    expect(comp.deliveryMode()).toBe('pickup');
+    expect(localStorage.getItem('horecaos_home_fulfillment_mode')).toBe('pickup');
+  });
+
+  it('leaves the tab alone when the loaded cart agrees with the default', async () => {
+    const { fixture, comp, cart, fulfillmentModes, session } = setUp();
+    signIn(session);
+    fulfillmentModes.modes.mockResolvedValue(bothSold());
+    cart.load.mockImplementation(async () => {
+      cart.fulfillmentMode = () => 'DELIVERY';
+    });
+
+    await mount(fixture);
+
+    expect(comp.deliveryMode()).toBe('delivery');
   });
 });

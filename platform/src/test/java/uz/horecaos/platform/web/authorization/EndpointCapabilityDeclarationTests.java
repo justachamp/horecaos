@@ -134,7 +134,8 @@ class EndpointCapabilityDeclarationTests {
                     || isStaffPasswordResetEndpoint(handler)
                     || isPreAccountTelegramSignInEndpoint(handler)
                     || isDeviceEnrolmentBootstrapEndpoint(handler)
-                    || isScopeResolvedCourierPolicyEndpoint(handler)) {
+                    || isScopeResolvedCourierPolicyEndpoint(handler)
+                    || isPreAccountPickupLocationSearchEndpoint(handler)) {
                 continue;
             }
             if (authorizationDeclarationCount(handler) == 0) {
@@ -186,7 +187,8 @@ class EndpointCapabilityDeclarationTests {
                     || isStaffInvitationEndpoint(handler)
                     || isStaffPasswordResetEndpoint(handler)
                     || isPreAccountTelegramSignInEndpoint(handler)
-                    || isDeviceEnrolmentBootstrapEndpoint(handler)) {
+                    || isDeviceEnrolmentBootstrapEndpoint(handler)
+                    || isPreAccountPickupLocationSearchEndpoint(handler)) {
                 continue;
             }
             if (!declaresReplayProtection(handler)) {
@@ -518,6 +520,25 @@ class EndpointCapabilityDeclarationTests {
      */
     private static boolean isScopeResolvedCourierPolicyEndpoint(Method handler) {
         return pathOf(handler).equals("/api/v1/operations/tenants/{tenantId}/courier-policy");
+    }
+
+    /**
+     * The pickup branch search: a {@code POST} carrying the caller's own
+     * coordinate in the body so it never lands in a query string, not a
+     * declaration that this endpoint writes anything.
+     *
+     * <p>The identical reasoning {@link #isGuestBearerEndpoint} states, applied
+     * to a read rather than a guest bearer flow: there is no principal here at
+     * all — a customer chooses a branch before an account exists, the same
+     * pre-account moment the menu and serviceability reads beside it serve —
+     * so none of the four authorization strategies describes it, and nothing
+     * is created for {@code IdempotencyInterceptor} to protect. {@code
+     * SecurityConfiguration} permits exactly this path unauthenticated, with
+     * the same reasoning spelled out there. Matched on the exact path, the
+     * same discipline every other exemption on this list keeps.
+     */
+    private static boolean isPreAccountPickupLocationSearchEndpoint(Method handler) {
+        return pathOf(handler).equals("/api/v1/storefront/pickup-locations");
     }
 
     /**

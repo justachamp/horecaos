@@ -122,7 +122,14 @@ export interface OrderLineItem {
 /** Full order detail for /orders/detail/:id */
 export interface OrderDetail {
   id: string;
-  orderNumber: number;
+  /**
+   * The platform's own public order number (`OrderResponse.publicOrderNumber`,
+   * e.g. "0922-001") -- a string, never coerced to `number`. `orders.data.ts`'s
+   * `OrderItem.orderNumber` carries the same wire value the same way; see its
+   * own note. `Number("0922-001")` is `NaN`, which is what the detail header
+   * used to show before this was fixed to match the list.
+   */
+  orderNumber: number | string;
   lineItems: OrderLineItem[];
   subtotal: string;
   /**

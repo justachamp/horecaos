@@ -3,6 +3,7 @@ package uz.horecaos.platform.web.authorization;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.util.UUID;
 import org.junit.jupiter.api.Assumptions;
@@ -14,6 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -164,7 +166,12 @@ class StorefrontReadAuthenticationTests {
         assertThat(statusOf(locationPath() + "/delivery-fee?lat=41.31&lon=69.24&currency=UZS"))
                 .isNotEqualTo(401);
         assertThat(statusOf(locationPath() + "/fulfillment-modes?channel=web")).isNotEqualTo(401);
-        assertThat(statusOf("/api/v1/storefront/pickup-locations?lat=41.31&lon=69.24"))
+        assertThat(statusOf(locationPath() + "/profile"))
+                .as("a branch's own published name and address is read before an account exists too")
+                .isNotEqualTo(401);
+        assertThat(postStatusOf("/api/v1/storefront/pickup-locations", """
+                        {"point": {"latitude": 41.31, "longitude": 69.24}}
+                        """))
                 .as("a customer has to choose a branch before they can browse its menu")
                 .isNotEqualTo(401);
         assertThat(statusOf("/api/v1/storefront/dine-in/sessions/" + UUID.randomUUID()))
@@ -188,6 +195,13 @@ class StorefrontReadAuthenticationTests {
 
     private int statusOf(String path) throws Exception {
         return mvc.perform(get(path)).andReturn().getResponse().getStatus();
+    }
+
+    private int postStatusOf(String path, String jsonBody) throws Exception {
+        return mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(jsonBody))
+                .andReturn()
+                .getResponse()
+                .getStatus();
     }
 
     /** Avoids contacting a real issuer; this test exercises the MVC chain, not Keycloak. */

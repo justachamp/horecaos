@@ -3038,6 +3038,11 @@ export interface Gateway {
   providerType?: string;
 }
 
+export interface GeoPoint {
+  latitude?: number;
+  longitude?: number;
+}
+
 export interface GrantControllerReasonRequest {
   reason: string;
 }
@@ -3513,6 +3518,17 @@ export interface LocationMedianListResponse {
 export interface LocationMedianResponse {
   locationId?: string;
   medianSeconds?: number;
+}
+
+export interface LocationProfile {
+  addressLine?: string;
+  city?: string;
+  contactPhone?: string;
+  displayName?: string;
+  district?: string;
+  landmark?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface LocationServiceOperationsControllerBandRequest {
@@ -5055,6 +5071,11 @@ export interface PickupLocation {
   preparationMinutes?: number;
   reason?: string;
   tenantId?: string;
+}
+
+export interface PickupLocationSearchRequest {
+  limit?: number;
+  point: GeoPoint;
 }
 
 export interface PickupLocations {
@@ -8318,7 +8339,7 @@ export interface Operations {
   "suspend_5": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals/{terminalId}/suspend"; request: { parameters: { path: { brandId: string; tenantId: string; terminalId: string }; query: { expectedVersion: number } } }; responses: { "200": FiscalTerminalView } };
   "locations": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<LocationView> } };
   "locationServiceStates": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/service-states"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<LocationServiceStateResponse> } };
-  "profile_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LocationView } };
+  "profile_3": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LocationView } };
   "tagsOfLocation": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/branch-tags"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<string> } };
   "setTagsOfLocation": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/branch-tags"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: SetLocationTagsRequest }; responses: { "200": unknown } };
   "setCapacity": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/capacity"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: CapacityRequest }; responses: { "200": unknown } };
@@ -8571,7 +8592,7 @@ export interface Operations {
   "requestBill": { method: "POST"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}/bill-requests"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } } }; responses: { "200": GuestBillResponse } };
   "balance": { method: "GET"; path: "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": BalanceResponse } };
   "entries": { method: "GET"; path: "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}/entries"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": Array<LoyaltyStorefrontControllerEntryResponse> } };
-  "nearbyPickupLocations": { method: "GET"; path: "/api/v1/storefront/pickup-locations"; request: { parameters: { query: { lat: number; limit?: number; lon: number } } }; responses: { "200": PickupLocations } };
+  "nearbyPickupLocations": { method: "POST"; path: "/api/v1/storefront/pickup-locations"; request: { parameters: Record<string, never>; body: PickupLocationSearchRequest }; responses: { "200": PickupLocations } };
   "analyticsConfig": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/analytics"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": AnalyticsConfigResponse } };
   "createCart": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateCartRequest }; responses: { "200": CartResponse } };
   "readCart": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": CartResponse } };
@@ -8593,6 +8614,7 @@ export interface Operations {
   "quote_1": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { currency: string; lat: number; lon: number; subtotalMinor?: number } } }; responses: { "200": DeliveryFeeView } };
   "fulfillmentModes": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/fulfillment-modes"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channel: string } } }; responses: { "200": FulfillmentModesResponse } };
   "menu": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/menu"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channel: string; locale?: string } } }; responses: { "200": StorefrontMenu } };
+  "profile_2": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/profile"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LocationProfile } };
   "resolve_4": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/serviceability"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { at?: string; channel: string; mode: "DELIVERY" | "PICKUP" | "DINE_IN" } } }; responses: { "200": ServiceabilityView } };
   "profile": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": ProfileResponse } };
   "updateProfile_1": { method: "PATCH"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: StorefrontCustomerControllerUpdateProfileRequest }; responses: { "200": ProfileResponse } };
