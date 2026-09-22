@@ -415,6 +415,18 @@
       (dismiss)="onDialogDismiss()"
     />
   }
+  @if (dialog()?.kind === 'cancel-reason') {
+    <q-order-outcome-reason-dialog
+      titleKey="orders.dialog.cancel.title"
+      confirmLabelKey="orders.action.cancel"
+      [reasons]="cancelReasons()"
+      [showConsequences]="true"
+      [noteEnabled]="true"
+      [busy]="dialogBusy()"
+      (confirm)="onCancelReasonDialogConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
   @if (dialog()?.kind === 'reject') {
     <q-order-reject-reason-dialog
       [reasons]="rejectReasons()"

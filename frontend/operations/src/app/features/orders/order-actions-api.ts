@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, tap } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
-import { command } from '../../core/api/idempotency';
+import { Command, IntentCommandRegistry } from '../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { advanceReasonCode } from './order-actions';
 
@@ -65,10 +65,43 @@ export interface OrderCancellationResponse extends DecisionResponse {
  * decision, and `expectedVersion` is the version the caller last read the
  * order at, so a stale write fails loudly (§4.1) instead of silently
  * clobbering another operator's change.
+ *
+ * HK: this service is `providedIn: 'root'` — one instance for the app's
+ * lifetime — so it is exactly the kind of "state" `idempotency.ts` means when
+ * it says a key is minted once per intent and reused on retry. Each mutation
+ * below holds its own {@link IntentCommandRegistry}, keyed by `orderId`, and
+ * builds the `Idempotency-Key` from it instead of minting one inline per
+ * call the way `command(request)` used to: two calls for the same order
+ * carrying an identical body (a manual retry of a lost response, or a second
+ * click before the row re-renders busy) get the SAME key, so the platform
+ * replays the first attempt instead of executing a second one; a body that
+ * differs (the operator picked a different reason, or `DecisionIdRegistry`
+ * rotated `decisionId` after the previous decision settled) gets a fresh
+ * key, because that is honestly a new intent. `tap` forgets the held
+ * command on a successful response — the server has then confirmed the
+ * intent completed, so any further call for that order is a new one, not a
+ * retry of this one.
  */
 @Injectable({ providedIn: 'root' })
 export class OrderActionsApi {
   private readonly api = inject(ApiClient);
+
+  private readonly decisionIntents = new IntentCommandRegistry<{
+    decisionId: string;
+    action: string;
+    reasonCode?: string;
+    note?: string;
+  }>();
+  private readonly advanceIntents = new IntentCommandRegistry<{
+    targetStatus: string;
+    reasonCode: string;
+  }>();
+  private readonly cancelIntents = new IntentCommandRegistry<{
+    reasonCode: string;
+    reasonId?: string;
+    note?: string;
+  }>();
+  private readonly completeIntents = new IntentCommandRegistry<{ reasonId?: string }>();
 
   /**
    * `Принять` (§4.3). No `If-Match`: the decision endpoint is settled by
@@ -77,10 +110,13 @@ export class OrderActionsApi {
    * `AggregateVersion.requireIfMatch`.
    */
   approve(scope: LocationScope, orderId: string, decisionId: string): Observable<DecisionResponse> {
-    return this.api.post<{ decisionId: string; action: string }, DecisionResponse>(
-      operationsPaths.orderApprovalDecisions(scope, orderId),
-      command({ decisionId, action: 'APPROVE' }),
-    );
+    const intent = this.decisionIntents.next(orderId, { decisionId, action: 'APPROVE' });
+    return this.api
+      .post<{ decisionId: string; action: string }, DecisionResponse>(
+        operationsPaths.orderApprovalDecisions(scope, orderId),
+        intent,
+      )
+      .pipe(tap(() => this.decisionIntents.forget(orderId)));
   }
 
   /**
@@ -96,13 +132,18 @@ export class OrderActionsApi {
     reasonCode: string,
     note?: string,
   ): Observable<DecisionResponse> {
-    return this.api.post<
-      { decisionId: string; action: string; reasonCode: string; note?: string },
-      DecisionResponse
-    >(
-      operationsPaths.orderApprovalDecisions(scope, orderId),
-      command({ decisionId, action: 'REJECT', reasonCode, note: note ? note : undefined }),
-    );
+    const intent = this.decisionIntents.next(orderId, {
+      decisionId,
+      action: 'REJECT',
+      reasonCode,
+      note: note ? note : undefined,
+    }) as Command<{ decisionId: string; action: string; reasonCode: string; note?: string }>;
+    return this.api
+      .post<
+        { decisionId: string; action: string; reasonCode: string; note?: string },
+        DecisionResponse
+      >(operationsPaths.orderApprovalDecisions(scope, orderId), intent)
+      .pipe(tap(() => this.decisionIntents.forget(orderId)));
   }
 
   /**
@@ -116,11 +157,18 @@ export class OrderActionsApi {
     targetStatus: string,
     expectedVersion: number,
   ): Observable<DecisionResponse> {
-    return this.api.post<{ targetStatus: string; reasonCode: string }, DecisionResponse>(
-      operationsPaths.orderStateActions(scope, orderId),
-      command({ targetStatus, reasonCode: advanceReasonCode(targetStatus) }),
-      { expectedVersion },
-    );
+    const intentId = versionedIntentId(orderId, expectedVersion);
+    const intent = this.advanceIntents.next(intentId, {
+      targetStatus,
+      reasonCode: advanceReasonCode(targetStatus),
+    });
+    return this.api
+      .post<{ targetStatus: string; reasonCode: string }, DecisionResponse>(
+        operationsPaths.orderStateActions(scope, orderId),
+        intent,
+        { expectedVersion },
+      )
+      .pipe(tap(() => this.advanceIntents.forget(intentId)));
   }
 
   /**
@@ -136,11 +184,18 @@ export class OrderActionsApi {
     reasonCode: string,
     note?: string,
   ): Observable<OrderCancellationResponse> {
-    return this.api.post<{ reasonCode: string; note?: string }, OrderCancellationResponse>(
-      operationsPaths.orderCancellations(scope, orderId),
-      command({ reasonCode, note: note ? note : undefined }),
-      { expectedVersion },
-    );
+    const intentId = versionedIntentId(orderId, expectedVersion);
+    const intent = this.cancelIntents.next(intentId, {
+      reasonCode,
+      note: note ? note : undefined,
+    });
+    return this.api
+      .post<{ reasonCode: string; note?: string }, OrderCancellationResponse>(
+        operationsPaths.orderCancellations(scope, orderId),
+        intent,
+        { expectedVersion },
+      )
+      .pipe(tap(() => this.cancelIntents.forget(intentId)));
   }
 
   /**
@@ -160,14 +215,19 @@ export class OrderActionsApi {
     reasonCode: string,
     note?: string,
   ): Observable<OrderCancellationResponse> {
-    return this.api.post<
-      { reasonCode: string; reasonId: string; note?: string },
-      OrderCancellationResponse
-    >(
-      operationsPaths.orderCancellations(scope, orderId),
-      command({ reasonCode, reasonId, note: note ? note : undefined }),
-      { expectedVersion },
-    );
+    const intentId = versionedIntentId(orderId, expectedVersion);
+    const intent = this.cancelIntents.next(intentId, {
+      reasonCode,
+      reasonId,
+      note: note ? note : undefined,
+    }) as Command<{ reasonCode: string; reasonId: string; note?: string }>;
+    return this.api
+      .post<{ reasonCode: string; reasonId: string; note?: string }, OrderCancellationResponse>(
+        operationsPaths.orderCancellations(scope, orderId),
+        intent,
+        { expectedVersion },
+      )
+      .pipe(tap(() => this.cancelIntents.forget(intentId)));
   }
 
   /**
@@ -185,10 +245,36 @@ export class OrderActionsApi {
     expectedVersion: number,
     reasonId?: string,
   ): Observable<DecisionResponse> {
-    return this.api.post<{ reasonId?: string }, DecisionResponse>(
-      operationsPaths.orderCompletion(scope, orderId),
-      command({ reasonId: reasonId ? reasonId : undefined }),
-      { expectedVersion },
-    );
+    const intentId = versionedIntentId(orderId, expectedVersion);
+    const intent = this.completeIntents.next(intentId, {
+      reasonId: reasonId ? reasonId : undefined,
+    });
+    return this.api
+      .post<{ reasonId?: string }, DecisionResponse>(
+        operationsPaths.orderCompletion(scope, orderId),
+        intent,
+        { expectedVersion },
+      )
+      .pipe(tap(() => this.completeIntents.forget(intentId)));
   }
+}
+
+/**
+ * `IntentCommandRegistry` compares only the tracked body it is given
+ * (`sameBody`, `idempotency.ts`) — `expectedVersion` travels to the server
+ * as the separate `If-Match` header and is invisible to that comparison. The
+ * platform's own idempotency store hashes only the raw request body
+ * (`IdempotencyInterceptor.bodyOf`), so a retry that changes only `If-Match`
+ * — an operator resubmitting after a `409 STALE_VERSION` correction, with an
+ * otherwise-unchanged reason/note — is indistinguishable from the original
+ * request and would replay its stored 409 forever (bug-hunt H1).
+ *
+ * Folding `expectedVersion` into the registry's *id* (rather than into the
+ * tracked body, which must stay exactly the wire body) means a version change
+ * always misses the held command for the old id and mints a fresh key, while
+ * an identical retry at the same version still hits the same id and is
+ * compared by body as before.
+ */
+function versionedIntentId(orderId: string, expectedVersion: number): string {
+  return `${orderId}:${expectedVersion}`;
 }

@@ -41,6 +41,17 @@ export interface OrderSummaryResponse {
   readonly processAttention?: string | null;
   readonly totalMinor: number;
   readonly currency: string;
+  /**
+   * H4: `OperationsOrderController.OrderSummaryResponse` has carried these
+   * two `long` fields (always sent, never omitted) since 2026-09-11 —
+   * `feeMinor` from `CheckoutOrderWriter`'s checkout-quote fee, `discountMinor`
+   * from the applied promotions. §1.3's five-row money-panel rule
+   * (`subtotal + tax + fee − discount = total`) needs both; see
+   * `order-money.ts` and `order-detail-pane.html`'s Деньги section for where
+   * they render.
+   */
+  readonly feeMinor: number;
+  readonly discountMinor: number;
   readonly version?: number;
   /**
    * The server-supplied `actions[]` array (orders.md §4.2): exactly what

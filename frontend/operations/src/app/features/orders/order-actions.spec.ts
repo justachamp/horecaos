@@ -8,6 +8,7 @@ import {
   actionLabel,
   advanceReasonCode,
   decisionOutcomeLabel,
+  requiresCancellationReason,
   splitInlineOverflow,
 } from './order-actions';
 
@@ -114,6 +115,20 @@ describe('decisionOutcomeLabel', () => {
 describe('advanceReasonCode', () => {
   it('names the target status, so the audit trail says what actually happened', () => {
     expect(advanceReasonCode('PREPARING')).toBe('OPERATIONS_ADVANCE_PREPARING');
+  });
+});
+
+describe('requiresCancellationReason (H2)', () => {
+  it('requires a registry reason for CONFIRMED, PREPARING, READY and FULFILLING', () => {
+    for (const status of ['CONFIRMED', 'PREPARING', 'READY', 'FULFILLING']) {
+      expect(requiresCancellationReason(status)).toBe(true);
+    }
+  });
+
+  it('keeps the reasonless path for every earlier, non-terminal status', () => {
+    for (const status of ['RECEIVED', 'PAYMENT_AUTHORIZING', 'AWAITING_APPROVAL']) {
+      expect(requiresCancellationReason(status)).toBe(false);
+    }
   });
 });
 

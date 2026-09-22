@@ -205,6 +205,24 @@
                 {{ formatMoneyMinor(money.subtotalMinor, detail.value.summary.currency) }}
               </dd>
             </div>
+            <!-- H4, orders.md §3.5 row order: Сумма позиций, Скидка, Сборы, Доставка (below), НДС, Итого. -->
+            <div class="pane__money-row" data-testid="order-detail-money-discount">
+              <dt class="q-body-sm">{{ 'orders.detail.money.discount' | t }}</dt>
+              <dd class="q-mono q-tnum">
+                {{
+                  formatMoneyMinor(
+                    -detail.value.summary.discountMinor,
+                    detail.value.summary.currency
+                  )
+                }}
+              </dd>
+            </div>
+            <div class="pane__money-row" data-testid="order-detail-money-fee">
+              <dt class="q-body-sm">{{ 'orders.detail.money.fee' | t }}</dt>
+              <dd class="q-mono q-tnum">
+                {{ formatMoneyMinor(detail.value.summary.feeMinor, detail.value.summary.currency) }}
+              </dd>
+            </div>
             <div class="pane__money-row">
               <dt class="q-body-sm">{{ 'orders.detail.money.tax' | t }}</dt>
               <dd class="q-mono q-tnum">

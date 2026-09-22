@@ -18,6 +18,8 @@ function order(overrides: Partial<OrderSummaryResponse>): OrderSummaryResponse {
     createdAt: new Date().toISOString(),
     totalMinor: 100_000,
     currency: 'UZS',
+    feeMinor: 0,
+    discountMinor: 0,
     ...overrides,
   };
 }

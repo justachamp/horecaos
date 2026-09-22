@@ -11,9 +11,13 @@ import { MessageKey } from '../../core/i18n/messages.en';
  * `COMPLETE` (wave P09, gap map `1.2j`) is offered alongside — never instead
  * of — the generic `ADVANCE` entry to a `COMPLETED` target; see
  * `OrderActionsPolicy`'s own Java doc for why both exist. `order-detail-pane.ts`
- * prefers `COMPLETE` and hides the redundant `ADVANCE` entry; `order-queue.ts`
- * does not know about `COMPLETE` yet and keeps using `ADVANCE`, which the
- * server still emits for exactly that reason.
+ * prefers `COMPLETE` and hides the redundant `ADVANCE` entry, because its
+ * `onActionClick` can run the fulfilment-mode-aware completion-reason flow
+ * `COMPLETE` deserves. `order-queue.ts` (H3, orders.md §2.9) has no room in a
+ * dense row for that flow and no handler for `COMPLETE` — it drops the
+ * redundant `COMPLETE` entry instead and keeps using the already-wired
+ * `ADVANCE`, which the server still emits for exactly that reason (a client
+ * built before wave P09 still works against the generic entry).
  *
  * `AMEND` (ADR 0039/0105/0113, wave P10, gap map `1.2h`/`1.1e`) opens the
  * amendment submenu (orders.md §4.4). `OrderActionsPolicy.AMEND_EMISSION_ENABLED`
@@ -153,6 +157,28 @@ export function decisionOutcomeLabel(
  */
 export function advanceReasonCode(targetStatus: string): string {
   return `OPERATIONS_ADVANCE_${targetStatus}`;
+}
+
+/**
+ * Mirrors `OrderActionsPolicy.canCancelWithoutReason` (server): false for
+ * `CONFIRMED`, `PREPARING`, `READY` and `FULFILLING`, the four statuses wave
+ * P09 gave a `CANCELLED` edge without also allowing the old reasonless path
+ * (H2, orders.md §4.5) — every earlier status (`RECEIVED`,
+ * `AWAITING_APPROVAL`, `PAYMENT_AUTHORIZING`, …) still accepts the reasonless
+ * `Отменить`. A client that guesses wrong here does not get a second chance
+ * to guess again: the reasonless call is refused outright with
+ * `CancellationNotPermittedException` (409), so the caller must ask this
+ * *before* choosing which dialog to open, not after the request fails.
+ */
+const STATUSES_REQUIRING_CANCELLATION_REASON: ReadonlySet<string> = new Set([
+  'CONFIRMED',
+  'PREPARING',
+  'READY',
+  'FULFILLING',
+]);
+
+export function requiresCancellationReason(status: string): boolean {
+  return STATUSES_REQUIRING_CANCELLATION_REASON.has(status);
 }
 
 /**

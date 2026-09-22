@@ -1,9 +1,9 @@
 import { Injectable, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, tap } from 'rxjs';
 
 import { ApiClient } from '../../../core/api/api-client';
 import { BrandScope, catalogPaths } from '../../../core/api/catalog-paths';
-import { command } from '../../../core/api/idempotency';
+import { IntentCommandRegistry, command } from '../../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../../core/api/operations-paths';
 import { CursorState, Page } from '../../../core/api/page';
 
@@ -155,11 +155,23 @@ export interface PlaceOrderResult {
  * Kept apart from `order-actions-api.ts`: that file mutates an order that
  * already exists, and every call there carries `expectedVersion`/`If-Match`
  * against one. Nothing here does, because {@link placeOrder} creates the
- * first version of an order that does not exist yet.
+ * first version of an order that does not exist yet — which makes this the
+ * critic's named case for HK: with no `expectedVersion` to make a stale
+ * retry fail loudly, a fresh `Idempotency-Key` per call was the only thing
+ * standing between a lost response and a second, independent order for the
+ * same basket. {@link placeOrder} and {@link aggregatorEntry} now hold one
+ * `IntentCommandRegistry` each (this service is `providedIn: 'root'`, so it
+ * outlives the component across the lifetime of one operator's draft): a
+ * retried call with an unchanged request body reuses the held key, a body
+ * that differs (the operator edited the form) mints a fresh one, and a
+ * successful response forgets the held command so the next order — even an
+ * accidental repeat of the same basket — gets its own key.
  */
 @Injectable({ providedIn: 'root' })
 export class NewOrderApi {
   private readonly api = inject(ApiClient);
+  private readonly placeOrderIntents = new IntentCommandRegistry<PlaceOrderRequest>();
+  private readonly aggregatorEntryIntents = new IntentCommandRegistry<AggregatorOrderRequest>();
 
   /** orders.md §5.3: a `POST` with the phone in the body, never a query string. */
   async lookupCustomerByPhone(
@@ -224,11 +236,11 @@ export class NewOrderApi {
    * an `ApiError` naming what changed rather than a silent wrong total.
    */
   placeOrder(scope: LocationScope, request: PlaceOrderRequest): Promise<PlaceOrderResult> {
+    const intent = this.placeOrderIntents.next('draft', request);
     return firstValueFrom(
-      this.api.post<PlaceOrderRequest, PlaceOrderResult>(
-        operationsPaths.orders(scope),
-        command(request),
-      ),
+      this.api
+        .post<PlaceOrderRequest, PlaceOrderResult>(operationsPaths.orders(scope), intent)
+        .pipe(tap(() => this.placeOrderIntents.forget('draft'))),
     );
   }
 
@@ -241,11 +253,14 @@ export class NewOrderApi {
     scope: LocationScope,
     request: AggregatorOrderRequest,
   ): Promise<PlaceOrderResult> {
+    const intent = this.aggregatorEntryIntents.next('draft', request);
     return firstValueFrom(
-      this.api.post<AggregatorOrderRequest, PlaceOrderResult>(
-        operationsPaths.orderAggregatorEntries(scope),
-        command(request),
-      ),
+      this.api
+        .post<AggregatorOrderRequest, PlaceOrderResult>(
+          operationsPaths.orderAggregatorEntries(scope),
+          intent,
+        )
+        .pipe(tap(() => this.aggregatorEntryIntents.forget('draft'))),
     );
   }
 

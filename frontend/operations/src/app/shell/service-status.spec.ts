@@ -47,6 +47,8 @@ function order(overrides: Partial<OrderSummaryResponse> = {}): OrderSummaryRespo
     channelCode: 'WEB',
     currency: 'UZS',
     totalMinor: 45_000,
+    feeMinor: 0,
+    discountMinor: 0,
     ...overrides,
   } as OrderSummaryResponse;
 }
