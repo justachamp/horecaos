@@ -165,7 +165,11 @@ class MediaAssetIngestionServiceTests {
                 new JdbcMediaAssetStore(jdbc),
                 new JdbcDerivativeJobStore(jdbc),
                 storage,
-                new UrlImageFetcher(),
+                // The tests below fetch from this class's own in-process
+                // loopback server standing in for a remote host, so the
+                // private-network refusal that protects production callers
+                // (see UrlImageFetcher's own doc) has to be lifted here.
+                new UrlImageFetcher(true),
                 transactions,
                 events,
                 audit,

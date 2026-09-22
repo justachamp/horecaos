@@ -214,7 +214,11 @@ class CatalogImportRowServiceTests {
                 new JdbcMediaAssetStore(jdbc),
                 new JdbcDerivativeJobStore(jdbc),
                 storage,
-                new UrlImageFetcher(),
+                // Fetches from this class's own in-process loopback server
+                // standing in for a remote host -- see UrlImageFetcher's own
+                // doc for why production callers get the private-network
+                // refusal that this test constructor lifts.
+                new UrlImageFetcher(true),
                 transactions,
                 events,
                 mediaAudit,
