@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -48,6 +49,17 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * collaborators (a PII port and an audit recorder rather than a cart and a
  * checkout transaction), kept apart so that testing one never needs a stand-in
  * for the other.
+ *
+ * <p><strong>A pre-order time is a requested instant, not a second pricing
+ * pipeline</strong> (row 1.3d). {@link PlaceOrderCommand#requestedFor} passes
+ * straight through to {@link CheckoutService.CheckoutCommand#requestedFor()},
+ * where {@code CheckoutEligibilityGuard} validates it against the branch's
+ * own hours before checkout ever commits and {@code CheckoutOrderWriter}
+ * writes it as the order's promise under {@code PromiseBasis.SCHEDULED_SLOT}.
+ * This is deliberately the narrow slice of ADR 0019's still-open scheduled-order
+ * input — an operator-entered time, checked against today's hours — and not the
+ * long-lead reprice/reservation/payment-timing policy that ADR still leaves
+ * for a later decision.
  */
 @Service
 public class OperatorOrderingService {
@@ -79,6 +91,19 @@ public class OperatorOrderingService {
             String recipientPhone,
             @Nullable String deliveryNote) {}
 
+    /**
+     * @param requestedFor       row 1.3d: the caller asked for this order for
+     *                           later rather than now, or null for an ordinary
+     *                           immediate order. Validated against the branch's
+     *                           own hours inside {@code CheckoutService} and
+     *                           written to {@code OrderPromise} as {@code
+     *                           PromiseBasis.SCHEDULED_SLOT} — see that basis's
+     *                           own doc
+     * @param overrideOutOfHours whether the operator has already been warned the
+     *                           branch is closed at {@code requestedFor} and
+     *                           chose to place it anyway. Meaningless when {@code
+     *                           requestedFor} is null
+     */
     public record PlaceOrderCommand(
             UUID tenantId,
             UUID brandId,
@@ -92,7 +117,9 @@ public class OperatorOrderingService {
             @Nullable String promoCode,
             String idempotencyKey,
             String operatorSubject,
-            @Nullable String correlationId) {}
+            @Nullable String correlationId,
+            @Nullable Instant requestedFor,
+            boolean overrideOutOfHours) {}
 
     /**
      * Opens a cart for the resolved customer, fills it exactly as entered,
@@ -192,6 +219,8 @@ public class OperatorOrderingService {
                 0L,
                 "USER",
                 command.operatorSubject(),
-                command.correlationId()));
+                command.correlationId(),
+                command.requestedFor(),
+                command.overrideOutOfHours()));
     }
 }

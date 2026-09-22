@@ -219,6 +219,24 @@ public class CheckoutService {
      *                            whether the brand allows it and what share of an
      *                            order it may cover are the loyalty module's rules,
      *                            checked inside the reserving transaction
+     * @param requestedFor        row 1.3d: a caller-chosen time to promise instead
+     *                            of the one {@link uz.horecaos.platform.ordering.domain.OrderPromise#assemble}
+     *                            would derive, or null for an ordinary order.
+     *                            {@link CheckoutEligibilityGuard} validates it
+     *                            against the branch's own hours before this ever
+     *                            reaches {@link CheckoutOrderWriter}; this class
+     *                            only carries it. Every caller but the operator
+     *                            order-intake endpoint (ADR 0039) passes null —
+     *                            this is not a general storefront feature
+     * @param overrideOutOfHours  whether the caller has already been told the
+     *                            branch is closed at {@code requestedFor} and
+     *                            asked for it anyway. Meaningless when {@code
+     *                            requestedFor} is null; ignored entirely when the
+     *                            branch's own {@code acceptsScheduledOrders}
+     *                            policy refuses a pre-order into a closed slot at
+     *                            all, because that is a tenant configuration fact
+     *                            no single order-taker's override should reach
+     *                            past
      */
     public record CheckoutCommand(
             UUID tenantId,
@@ -232,7 +250,9 @@ public class CheckoutService {
             long redeemFromBalanceMinor,
             String actorType,
             @Nullable String actorId,
-            @Nullable String correlationId) {
+            @Nullable String correlationId,
+            @Nullable Instant requestedFor,
+            boolean overrideOutOfHours) {
 
         /**
          * Everything that makes this request the request it is.

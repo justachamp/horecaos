@@ -4,6 +4,7 @@ import {
   ElementRef,
   OnInit,
   computed,
+  effect,
   inject,
   signal,
   viewChild,
@@ -41,12 +42,14 @@ import { ItemModifierDialog, ModifierDialogConfirmation } from './item-modifier-
 import {
   AggregatorOrderLine,
   CustomerLookupCandidate,
+  DeliveryFeeQuote,
   MenuCategory,
   MenuModifierGroup,
   MenuProduct,
   MenuVariant,
   NewOrderApi,
   PlaceOrderLine,
+  PlaceOrderRequest,
   StorefrontMenu,
 } from './new-order-api';
 import { BasketLine, computeBasketTotal } from './new-order-total';
@@ -173,11 +176,35 @@ interface PendingModifierSelection {
  * customer pane entirely — ADR 0040 is explicit that a marketplace order
  * never matches a customer account.
  *
- * **Still not built, honestly.** No map pin, no address suggest, no
+ * **This wave (rows 1.3a, 1.3d, plus what row 1.3's own gap-map text still
+ * called unbuilt).** Create-on-miss ({@link onCreateSubmit}) now calls {@link
+ * NewOrderApi#createCustomer}, a location-scoped endpoint, instead of {@link
+ * CustomersApi#create}'s tenant-scoped one — the latter 403'd for
+ * LOCATION_STAFF/LOCATION_MANAGER, this screen's own persona, because their
+ * grant is at LOCATION scope and that endpoint is declared at TENANT scope
+ * with nowhere in its own path for a location to come from (see
+ * `OperationsCustomerController`'s own doc for the full account). A «Позже»
+ * toggle asks for a promise time instead of now
+ * (`requestedFor`); the backend validates it against the branch's own hours
+ * and refuses `BRANCH_CLOSED_AT_REQUESTED_TIME_CONFIRM` when it is closed
+ * then, which this screen renders as an inline "place anyway?" confirmation
+ * rather than a hard error, and `BRANCH_CLOSED_AT_REQUESTED_TIME` (no
+ * confirmation offered) when the branch's own policy refuses a pre-order into
+ * that slot at all. A delivery order's running total now previews the
+ * delivery fee itself (`NewOrderApi.deliveryFeeQuote`, the same unauthenticated
+ * preview the storefront's own cart already calls) whenever the chosen address
+ * carries a real coordinate — most operator-entered addresses do not yet (row
+ * 1.3b's pin is deferred behind X.4), so the preview honestly reads "—" for
+ * those rather than a guessed number.
+ *
+ * <p>**Still not built, honestly.** No map pin, no address suggest, no
  * out-of-brand branch resolution (this screen stays scoped to
  * `CurrentLocation`; "Филиал" shows the current branch with a static «по
  * зоне» caption on a delivery order rather than a real cross-branch
- * resolver). No pre-order time. The header's draft timer and quote-expiry
+ * resolver). No lead-time limit, repricing checkpoint or payment-authorization
+ * timing for a long-lead pre-order — ADR 0019 leaves that policy open, and
+ * `requestedFor` only ever asks "is the branch open then", never holds a
+ * price or a slot for the wait. The header's draft timer and quote-expiry
  * states (§5.7) still do not apply to this backend shape at all:
  * `OperatorOrderingService.place` opens the cart, prices it and checks out
  * in one atomic call, so there is no server-side draft cart that can expire
@@ -452,8 +479,11 @@ export class NewOrderPage implements OnInit {
     this.createBusy.set(true);
     this.createError.set(null);
     try {
-      const accountId = await this.customersApi.create(scope, {
-        brandId: scope.brandId,
+      // Row 1.3a: the location-scoped create, not `customersApi.create` —
+      // that one posts to the tenant-scoped `CustomerController`, which
+      // 403s for this screen's own LOCATION_STAFF/LOCATION_MANAGER persona.
+      // See `NewOrderApi.createCustomer`'s own doc.
+      const accountId = await this.api.createCustomer(scope, {
         phone: submission.phone,
         displayName: submission.displayName || null,
       });
@@ -950,6 +980,162 @@ export class NewOrderPage implements OnInit {
     return formatMoney({ amountMinor: Math.max(changeMinor, 0), currency }, this.i18n.locale());
   }
 
+  // ------------------------------------------------------ §5.4/§5.6 delivery fee preview
+
+  /**
+   * Row 1.3: a preview only, best-effort, never sent back to the server —
+   * the fee that actually settles is resolved fresh inside the checkout
+   * transaction from the destination `submit()` sets, the same "preview vs
+   * authority" split `ui-cart.service.ts`'s own `deliveryFeeQuote` doc
+   * describes for the storefront's cart.
+   */
+  protected readonly deliveryFeeQuote = signal<DeliveryFeeQuote | null>(null);
+  protected readonly deliveryFeeLoading = signal(false);
+
+  private deliveryFeeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    // Re-quotes on every fulfilment-mode, address or basket-subtotal change
+    // while a delivery destination with a real coordinate is selected;
+    // debounced the same way `onPhoneInput` already is, so a quantity
+    // stepper click does not fire one request per click. `selectedAddress`
+    // and `total` are declared later in this class — safe to read here
+    // because every field initialiser runs before this constructor body
+    // does, regardless of declaration order.
+    effect(() => {
+      const mode = this.fulfillmentMode();
+      const address = this.selectedAddress();
+      const currency = this.total().currency;
+      const subtotalMinor = this.total().subtotalMinor;
+
+      if (this.deliveryFeeTimer !== null) {
+        clearTimeout(this.deliveryFeeTimer);
+        this.deliveryFeeTimer = null;
+      }
+      if (
+        mode !== 'DELIVERY' ||
+        address === null ||
+        address.latitude === null ||
+        address.longitude === null ||
+        currency === null
+      ) {
+        this.deliveryFeeQuote.set(null);
+        return;
+      }
+      const lat = address.latitude;
+      const lon = address.longitude;
+      this.deliveryFeeTimer = setTimeout(() => {
+        void this.refreshDeliveryFee(lat, lon, currency, subtotalMinor);
+      }, 400);
+    });
+  }
+
+  private async refreshDeliveryFee(
+    lat: number,
+    lon: number,
+    currency: string,
+    subtotalMinor: number,
+  ): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    this.deliveryFeeLoading.set(true);
+    try {
+      const quote = await this.api.deliveryFeeQuote(scope, { lat, lon }, currency, subtotalMinor);
+      this.deliveryFeeQuote.set(quote);
+    } catch {
+      // A preview, not the authority — see this class's own doc. A failed
+      // read leaves the row honestly blank rather than blocking the basket.
+      this.deliveryFeeQuote.set(null);
+    } finally {
+      this.deliveryFeeLoading.set(false);
+    }
+  }
+
+  /** `—` while unlocated or unresolved, a translated refusal when the resolver refuses, the formatted fee otherwise. */
+  protected formattedDeliveryFee(): string {
+    if (this.deliveryFeeLoading()) {
+      return this.i18n.t('orders.newOrder.order.deliveryFeeCalculating');
+    }
+    const quote = this.deliveryFeeQuote();
+    const currency = this.total().currency;
+    if (quote === null || currency === null) {
+      return '—';
+    }
+    if (!quote.available || quote.feeMinor === null) {
+      return this.i18n.t('orders.newOrder.order.deliveryFeeUnavailable');
+    }
+    return formatMoney({ amountMinor: quote.feeMinor, currency }, this.i18n.locale());
+  }
+
+  /** The goods total plus the previewed delivery fee — shown only once both are actually known. */
+  protected formattedTotalWithDelivery(): string | null {
+    const total = this.total();
+    const quote = this.deliveryFeeQuote();
+    if (total.currency === null || quote === null || !quote.available || quote.feeMinor === null) {
+      return null;
+    }
+    return formatMoney(
+      { amountMinor: total.subtotalMinor + quote.feeMinor, currency: total.currency },
+      this.i18n.locale(),
+    );
+  }
+
+  // -------------------------------------------------------- §5.6 pre-order time (1.3d)
+
+  /** «Позже» — off by default, an ordinary order taken for now. */
+  protected readonly preOrderEnabled = signal(false);
+  /**
+   * The `datetime-local` input's own string, read in the operator's browser
+   * timezone. Uzbekistan has kept one offset since 1995 (`AGENTS.md`'s own
+   * note on `ServiceabilityService`), so this is correct for every tenant
+   * today; a tenant outside it would need the branch's own IANA zone threaded
+   * through here instead of the browser's, which this screen does not do.
+   */
+  protected readonly requestedForLocal = signal('');
+  protected readonly requestedForError = signal<string | null>(null);
+  /**
+   * Set once the backend has answered `BRANCH_CLOSED_AT_REQUESTED_TIME_CONFIRM`
+   * — the branch's own policy allows a pre-order into a closed slot, but the
+   * operator has not said yet that they mean this one. The value itself is
+   * never shown; `problem.detail` is English and dev-facing by ADR 0031
+   * convention (`ProblemDetails`'s own doc), so this only tracks that a
+   * confirmation is pending, not what it says. A second {@link submit} call,
+   * with this already set, sends `overrideOutOfHours: true`.
+   */
+  protected readonly outOfHoursConfirmReason = signal<string | null>(null);
+
+  protected togglePreOrder(): void {
+    this.preOrderEnabled.update((current) => !current);
+    if (!this.preOrderEnabled()) {
+      this.requestedForLocal.set('');
+      this.requestedForError.set(null);
+      this.outOfHoursConfirmReason.set(null);
+    }
+  }
+
+  protected setRequestedForLocal(value: string): void {
+    this.requestedForLocal.set(value);
+    this.requestedForError.set(null);
+    this.outOfHoursConfirmReason.set(null);
+  }
+
+  /** `null` when pre-order is off, or the input has nothing parseable yet. */
+  private requestedForDate(): Date | null {
+    if (!this.preOrderEnabled() || this.requestedForLocal().trim() === '') {
+      return null;
+    }
+    const parsed = new Date(this.requestedForLocal());
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  protected outOfHoursConfirmMessage(): string | null {
+    return this.outOfHoursConfirmReason() === null
+      ? null
+      : this.i18n.t('orders.newOrder.order.preOrder.confirmOutOfHours');
+  }
+
   // ------------------------------------------------------------------ §5.6 submit
 
   protected readonly submitting = signal(false);
@@ -963,6 +1149,7 @@ export class NewOrderPage implements OnInit {
       this.selectedCustomer() !== null &&
       this.total().allAvailable &&
       (this.fulfillmentMode() === 'PICKUP' || this.selectedAddressId() !== null) &&
+      (!this.preOrderEnabled() || this.requestedForLocal().trim() !== '') &&
       !this.submitting(),
   );
 
@@ -977,6 +1164,20 @@ export class NewOrderPage implements OnInit {
     if (delivery && addressId === null) {
       return;
     }
+    const requestedForDate = this.requestedForDate();
+    if (this.preOrderEnabled()) {
+      if (requestedForDate === null) {
+        return;
+      }
+      if (requestedForDate.getTime() <= Date.now()) {
+        this.requestedForError.set(this.i18n.t('orders.newOrder.order.preOrder.mustBeFuture'));
+        return;
+      }
+    }
+    // A resubmit while a confirmation is pending is the operator's "yes,
+    // place it anyway" — every other resubmit (a first attempt, or one after
+    // the operator changed the requested time) starts from no override.
+    const confirmingOutOfHours = this.outOfHoursConfirmReason() !== null;
     this.submitting.set(true);
     this.submitError.set(null);
     this.unavailableItemIds.set([]);
@@ -987,7 +1188,7 @@ export class NewOrderPage implements OnInit {
         modifierOptionIds: flattenModifiers(line),
         customerNote: line.customerNote,
       }));
-      const result = await this.api.placeOrder(scope, {
+      const request: PlaceOrderRequest = {
         customerAccountId: customer.accountId,
         channelCode: this.channelCode(),
         fulfillmentMode: this.fulfillmentMode(),
@@ -1003,7 +1204,11 @@ export class NewOrderPage implements OnInit {
             : null,
         paymentMethodCode: this.paymentMethodCode(),
         promoCode: this.promoCode().trim() || null,
-      });
+        requestedFor: requestedForDate ? requestedForDate.toISOString() : null,
+        overrideOutOfHours: confirmingOutOfHours,
+      };
+      const result = await this.api.placeOrder(scope, request);
+      this.outOfHoursConfirmReason.set(null);
       if (this.callEventId) {
         try {
           await this.api.recordCallProvenance(scope, result.orderId, this.callEventId);
@@ -1021,9 +1226,21 @@ export class NewOrderPage implements OnInit {
     } catch (error) {
       if (error instanceof ApiError) {
         const refusal = accessRefusal(error);
+        const reason = error.problem?.['reason'];
         if (refusal?.kind === 'denied') {
           this.submitDenied.set(true);
+        } else if (reason === 'REQUESTED_TIME_IN_PAST') {
+          this.requestedForError.set(this.i18n.t('orders.newOrder.order.preOrder.mustBeFuture'));
+        } else if (reason === 'BRANCH_CLOSED_AT_REQUESTED_TIME_CONFIRM') {
+          // The warn half of "WARN ... while still allowing an explicit
+          // override": not a submitError, a confirmation the operator can
+          // accept by pressing submit again. The sentinel is never rendered —
+          // see this signal's own doc for why.
+          this.outOfHoursConfirmReason.set('PENDING');
         } else {
+          if (reason === 'BRANCH_CLOSED_AT_REQUESTED_TIME') {
+            this.outOfHoursConfirmReason.set(null);
+          }
           const unavailable = error.problem?.['unavailableItems'];
           if (Array.isArray(unavailable)) {
             this.unavailableItemIds.set(
@@ -1046,7 +1263,11 @@ export class NewOrderPage implements OnInit {
    * `NOT_SERVICEABLE`) carry their code in `problem.reason` — see
    * `StorefrontOrderingController.refusal`/`errorCodeFor` — read here rather
    * than falling through to the generic ADR 0031 message map, which knows
-   * nothing about either code.
+   * nothing about either code. `REQUESTED_TIME_IN_PAST` and
+   * `BRANCH_CLOSED_AT_REQUESTED_TIME_CONFIRM` (row 1.3d) are handled earlier,
+   * in {@link submit} itself, because they set a different signal than this
+   * one's plain string — only `BRANCH_CLOSED_AT_REQUESTED_TIME`, the hard
+   * refusal with no confirmation to offer, reaches this method.
    */
   private describeDeliveryRefusal(error: ApiError): string {
     const reason = error.problem?.['reason'];
@@ -1055,6 +1276,9 @@ export class NewOrderPage implements OnInit {
     }
     if (reason === 'NOT_SERVICEABLE') {
       return this.i18n.t('orders.newOrder.address.notServiceable');
+    }
+    if (reason === 'BRANCH_CLOSED_AT_REQUESTED_TIME') {
+      return this.i18n.t('orders.newOrder.order.preOrder.closedNoOverride');
     }
     return describeApiError(error, (key, values) => this.i18n.t(key, values));
   }

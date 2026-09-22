@@ -46,7 +46,9 @@
             {{
               submitting()
                 ? ('orders.newOrder.order.submitting' | t)
-                : ('orders.newOrder.order.submit' | t)
+                : outOfHoursConfirmReason() !== null
+                  ? ('orders.newOrder.order.preOrder.confirmSubmit' | t)
+                  : ('orders.newOrder.order.submit' | t)
             }}
           </button>
         }
@@ -62,6 +64,15 @@
           {{ 'orders.newOrder.order.unavailableCount' | t: { count: unavailableItemIds().length } }}
         </p>
       }
+    }
+    @if (outOfHoursConfirmMessage(); as message) {
+      <p
+        class="q-caption new-order__notice"
+        role="alert"
+        data-testid="new-order-out-of-hours-confirm"
+      >
+        {{ message }}
+      </p>
     }
     @if (aggregatorMode() && aggregatorError(); as message) {
       <p class="q-caption new-order__error" role="alert" data-testid="new-order-aggregator-error">
@@ -616,6 +627,33 @@
             </span>
           </p>
 
+          <label class="new-order__aggregator-toggle q-caption">
+            <input
+              type="checkbox"
+              [checked]="preOrderEnabled()"
+              (change)="togglePreOrder()"
+              data-testid="new-order-pre-order-toggle"
+            />
+            {{ 'orders.newOrder.order.preOrder.toggle' | t }}
+          </label>
+          @if (preOrderEnabled()) {
+            <label class="new-order__field">
+              <span class="q-caption">{{ 'orders.newOrder.order.preOrder.time' | t }}</span>
+              <input
+                type="datetime-local"
+                class="new-order__input q-body-sm"
+                [value]="requestedForLocal()"
+                (input)="setRequestedForLocal($any($event.target).value)"
+                data-testid="new-order-pre-order-time"
+              />
+            </label>
+            @if (requestedForError(); as message) {
+              <p class="q-caption new-order__error" data-testid="new-order-pre-order-error">
+                {{ message }}
+              </p>
+            }
+          }
+
           <label class="new-order__field">
             <span class="q-caption">{{ 'orders.newOrder.order.payment' | t }}</span>
             <select
@@ -658,6 +696,13 @@
               </p>
             }
           }
+
+          @if (fulfillmentMode() === 'DELIVERY' && selectedAddressId()) {
+            <p class="q-caption new-order__order-row" data-testid="new-order-delivery-fee">
+              <span>{{ 'orders.newOrder.order.deliveryFee' | t }}</span>
+              <span>{{ formattedDeliveryFee() }}</span>
+            </p>
+          }
         }
 
         <div class="new-order__total-row">
@@ -666,6 +711,12 @@
             formattedTotal()
           }}</span>
         </div>
+        @if (formattedTotalWithDelivery(); as totalWithDelivery) {
+          <p class="q-caption new-order__order-row" data-testid="new-order-total-with-delivery">
+            <span>{{ 'orders.newOrder.order.totalWithDelivery' | t }}</span>
+            <span>{{ totalWithDelivery }}</span>
+          </p>
+        }
         @if (!total().fullyPriced) {
           <p class="q-caption new-order__hint">{{ 'orders.newOrder.order.totalPending' | t }}</p>
         }

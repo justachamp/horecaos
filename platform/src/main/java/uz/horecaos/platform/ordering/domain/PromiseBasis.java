@@ -45,7 +45,23 @@ public enum PromiseBasis {
      */
     PLATFORM_DEFAULT,
 
-    /** ADR 0047. The customer chose a slot. Not yet written by anything. */
+    /**
+     * ADR 0019's "Scheduled/pre-order semantics" section. The caller chose a
+     * time rather than accepting an assembled one — {@link OrderPromise#scheduled}
+     * is the only place this is produced, from an operator-entered requested time
+     * (row 1.3d) validated against {@code ServiceabilityService} before checkout
+     * accepts it. Never derived from a duration, so {@code prepMinutes} is always
+     * null here (see {@link #isDerivedFromDuration}).
+     *
+     * <p>This is deliberately the narrow slice of ADR 0019's own open input, not
+     * the whole of it: the ADR's still-unchecked box is lead-time limits,
+     * repricing and payment-authorization timing for a <em>long</em>-lead order,
+     * none of which this basis's writer decides. What it does decide — does the
+     * requested instant clear the branch's own hours, and does the branch's own
+     * policy allow a pre-order into a closed slot at all — is exactly the
+     * question {@code Serviceability#acceptsScheduledOrders} was already shaped
+     * to answer.
+     */
     SCHEDULED_SLOT,
 
     /** ADR 0039. A human set it, outranking every derivation. Not yet written. */
