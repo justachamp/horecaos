@@ -92,4 +92,87 @@ describe('OrderActionsApi', () => {
     expect(request.request.body).toEqual({ reasonCode: 'CUSTOMER_CHANGED_MIND' });
     request.flush({});
   });
+
+  // ---------------------------------------------------------- Idempotency-Key stability
+  //
+  // HK: an operator's manual retry of the SAME intent (a lost response to a
+  // click, or a second click before the row shows busy) must reuse the same
+  // Idempotency-Key, not mint a new one — a fresh key on retry makes the
+  // platform treat the retry as an independent action instead of replaying
+  // the first attempt. Every method here used to mint its key inline via
+  // `command(request)` on every call; it now holds one per order through
+  // `IntentCommandRegistry` and only rotates on a body change or a
+  // successful response.
+
+  it('reuses the same Idempotency-Key across two approve() calls for the same order and decisionId', () => {
+    api.approve(SCOPE, 'o1', 'decision-1').subscribe();
+    const first = http.expectOne(`${BASE}/approval-decisions`);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+    expect(firstKey).toBeTruthy();
+
+    // No flush yet: this is a retry of the SAME unresolved intent (a lost
+    // response, or the operator clicking again before the row is busy).
+    api.approve(SCOPE, 'o1', 'decision-1').subscribe();
+    const second = http.expectOne(`${BASE}/approval-decisions`);
+    expect(second.request.headers.get('Idempotency-Key')).toBe(firstKey);
+    first.flush({});
+    second.flush({});
+  });
+
+  it('mints a fresh Idempotency-Key once DecisionIdRegistry rotates the decisionId after the first attempt settled', () => {
+    api.approve(SCOPE, 'o1', 'decision-1').subscribe();
+    const first = http.expectOne(`${BASE}/approval-decisions`);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+    first.flush({
+      orderId: 'o1',
+      status: 'CONFIRMED',
+      version: 2,
+      applied: true,
+      effectiveDecisionId: null,
+      effectiveAction: null,
+    });
+
+    // A later, unrelated decision on the same order gets its own decisionId
+    // (DecisionIdRegistry) — a genuinely new intent, so a new key too.
+    api.approve(SCOPE, 'o1', 'decision-2').subscribe();
+    const second = http.expectOne(`${BASE}/approval-decisions`);
+    expect(second.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+    second.flush({});
+  });
+
+  it('mints a fresh Idempotency-Key for advance() once the server confirms the first advance completed', () => {
+    api.advance(SCOPE, 'o1', 'PREPARING', 4).subscribe();
+    const first = http.expectOne(`${BASE}/state-actions`);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+    first.flush({});
+
+    api.advance(SCOPE, 'o1', 'READY', 5).subscribe();
+    const second = http.expectOne(`${BASE}/state-actions`);
+    expect(second.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+    second.flush({});
+  });
+
+  it('reuses the same Idempotency-Key across a retried cancel() with the same reason and note', () => {
+    api.cancel(SCOPE, 'o1', 4, 'CUSTOMER_CHANGED_MIND', 'Called back to cancel').subscribe();
+    const first = http.expectOne(`${BASE}/cancellations`);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+
+    api.cancel(SCOPE, 'o1', 4, 'CUSTOMER_CHANGED_MIND', 'Called back to cancel').subscribe();
+    const second = http.expectOne(`${BASE}/cancellations`);
+    expect(second.request.headers.get('Idempotency-Key')).toBe(firstKey);
+    first.flush({});
+    second.flush({});
+  });
+
+  it('mints a fresh Idempotency-Key for cancel() once the operator edits the note before retrying', () => {
+    api.cancel(SCOPE, 'o1', 4, 'CUSTOMER_CHANGED_MIND', 'first note').subscribe();
+    const first = http.expectOne(`${BASE}/cancellations`);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+
+    api.cancel(SCOPE, 'o1', 4, 'CUSTOMER_CHANGED_MIND', 'edited note').subscribe();
+    const second = http.expectOne(`${BASE}/cancellations`);
+    expect(second.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+    first.flush({});
+    second.flush({});
+  });
 });
