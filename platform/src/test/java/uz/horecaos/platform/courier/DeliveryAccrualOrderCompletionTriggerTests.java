@@ -52,6 +52,8 @@ import uz.horecaos.platform.fulfillment.infrastructure.sourcing.JdbcDeliveryComp
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.api.OrderCompleted;
 import uz.horecaos.platform.payments.api.CashDueLookupPort;
+import uz.horecaos.platform.payments.settlement.JdbcSettlementStore;
+import uz.horecaos.platform.payments.settlement.OrderSettlementService;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.support.TestProtection;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
@@ -88,6 +90,10 @@ class DeliveryAccrualOrderCompletionTriggerTests {
     private JdbcCourierLedgerStore ledgerStore;
     private DeliveryAccrualOrderCompletionTrigger trigger;
     private FakeCashDueLookupPort cashDue;
+    private JdbcDeliveryCompletionAdapter deliveryCompletion;
+    private CourierAccrualService accruals;
+    private CourierShiftService shifts;
+    private Clock clock;
 
     private UUID branch;
     private UUID channelId;
@@ -135,7 +141,7 @@ class DeliveryAccrualOrderCompletionTriggerTests {
                 """).update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
-        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        clock = Clock.fixed(NOW, ZoneOffset.UTC);
         var protection = TestProtection.envelope();
         AuditRecorder audit = fact -> {};
         LegalEntityResolver legalEntities = (tenantId, locationId, businessDate) -> Optional.empty();
@@ -178,7 +184,7 @@ class DeliveryAccrualOrderCompletionTriggerTests {
         };
         var adjustments = new CourierAdjustmentService(courierStore, ledger, approvals, audit, policyResolver, clock);
         var adjustmentRules = new AdjustmentRuleEvaluator(courierStore, ledgerStore, adjustments);
-        var shifts = new CourierShiftService(
+        shifts = new CourierShiftService(
                 shiftStore,
                 courierStore,
                 ledgerStore,
@@ -189,7 +195,7 @@ class DeliveryAccrualOrderCompletionTriggerTests {
                 audit,
                 adjustmentRules,
                 clock);
-        var accruals = new CourierAccrualService(
+        accruals = new CourierAccrualService(
                 ledgerStore,
                 rateCardStore,
                 shiftStore,
@@ -201,7 +207,7 @@ class DeliveryAccrualOrderCompletionTriggerTests {
                 protection,
                 (tenantId, at) -> at.atZone(ZoneId.of("Asia/Tashkent")).toLocalDate());
         var rateCards = new CourierRateCardService(rateCardStore, audit, clock);
-        var deliveryCompletion = new JdbcDeliveryCompletionAdapter(jdbc);
+        deliveryCompletion = new JdbcDeliveryCompletionAdapter(jdbc);
         cashDue = new FakeCashDueLookupPort();
 
         trigger = new DeliveryAccrualOrderCompletionTrigger(deliveryCompletion, accruals, shifts, cashDue);
@@ -309,6 +315,68 @@ class DeliveryAccrualOrderCompletionTriggerTests {
         assertThat(shipment).containsEntry("status", "DELIVERED");
         assertThat(ledgerStore.findEarningByAttempt(TENANT, fixture.attemptId()))
                 .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a completed order with no settlement row falls back to the order total, not a silent zero")
+    void aMissingSettlementRowFallsBackToTheOrderTotalNotASilentZero() {
+        // 2026-09-21 audit (major): OrderSettlementService.cashDueMinor(UUID,
+        // UUID) -- the CashDueLookupPort implementation -- used to catch its
+        // own "no settlement" ApiException and answer a plain 0L. That meant
+        // this trigger's catch(RuntimeException) fallback to
+        // completed.totalMinor() (see the class javadoc) could never run for
+        // the very case its comment names: "a settlement read this trigger
+        // did not anticipate". Every other test in this suite drives the
+        // trigger with FakeCashDueLookupPort, which never has a settlement
+        // row to miss in the first place (see its own javadoc) -- this test
+        // wires the REAL OrderSettlementService instead, against an order
+        // with no payments.order_settlements row at all, exactly what
+        // CheckoutSettlementPlanner leaves behind when it does not recognise
+        // the checkout's payment method code.
+        var realCashDue = new OrderSettlementService(new JdbcSettlementStore(jdbc), unsupportedPointsPort(), clock);
+        var realTrigger = new DeliveryAccrualOrderCompletionTrigger(deliveryCompletion, accruals, shifts, realCashDue);
+
+        Fixture fixture = seedAssignedShipment("NOT_REQUIRED");
+        // Deliberately no row inserted into payments.order_settlements.
+
+        realTrigger.onOrderingEvent(new OrderCompleted(
+                UUID.randomUUID(), new TenantId(TENANT), fixture.orderId(), NOW, BRAND, branch, NOW, UZS, 45_000L, 1));
+
+        List<LedgerEntryRow> cashEntries = entriesOfType(LedgerEntryType.CASH_COLLECTED);
+        assertThat(cashEntries)
+                .as("the trigger's own documented fallback to the order total must run, never a silent zero")
+                .hasSize(1);
+        assertThat(cashEntries.getFirst().amountMinor()).isEqualTo(-45_000L);
+    }
+
+    /** Every method throws: the no-settlement path under test never reaches points. */
+    private static uz.horecaos.platform.loyalty.api.PointsRedemptionPort unsupportedPointsPort() {
+        return new uz.horecaos.platform.loyalty.api.PointsRedemptionPort() {
+            @Override
+            public RedemptionOffer quote(RedemptionQuery query) {
+                throw new UnsupportedOperationException("not exercised by this suite");
+            }
+
+            @Override
+            public PointsHold reserve(ReserveCommand command) {
+                throw new UnsupportedOperationException("not exercised by this suite");
+            }
+
+            @Override
+            public void settle(UUID tenantId, UUID tenderId) {
+                throw new UnsupportedOperationException("not exercised by this suite");
+            }
+
+            @Override
+            public void release(UUID tenantId, UUID tenderId, String reasonCode, String actor) {
+                throw new UnsupportedOperationException("not exercised by this suite");
+            }
+
+            @Override
+            public void reverse(UUID tenantId, UUID tenderId, long amountMinor, String reasonCode, String actor) {
+                throw new UnsupportedOperationException("not exercised by this suite");
+            }
+        };
     }
 
     // --------------------------------------------------------------- fixtures

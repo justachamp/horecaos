@@ -391,19 +391,22 @@ public class OrderSettlementService implements CashDueLookupPort {
      * {@link CashDueLookupPort}'s cross-module read: the same figure {@link
      * #cashDueMinor(UUID, UUID, String)} gives the courier app, with the
      * method code fixed to {@link PaymentMethod#CASH} — a caller outside this
-     * module has no reason to know payment method codes — and zero rather
-     * than a thrown {@link ApiException} for an order this module has no
-     * settlement for, so a courier-side caller never has to know this
-     * module's exception shape to stay safe.
+     * module has no reason to know payment method codes.
+     *
+     * <p>Lets {@link ApiException} (RESOURCE_NOT_FOUND) propagate rather than
+     * swallowing it into a plain zero. A caller that answers "nothing due"
+     * for "I could not find out" cannot be told apart from a genuinely
+     * settled order, and {@link
+     * uz.horecaos.platform.courier.application.DeliveryAccrualOrderCompletionTrigger},
+     * the one production caller, already wraps this in its own {@code
+     * catch (RuntimeException)} specifically to fall back to the order total
+     * for exactly this case — a fallback that can only run if this method
+     * actually throws.
      */
     @Override
     @Transactional(readOnly = true)
     public long cashDueMinor(UUID tenantId, UUID orderId) {
-        try {
-            return cashDueMinor(tenantId, orderId, PaymentMethod.CASH.code());
-        } catch (ApiException noSettlement) {
-            return 0L;
-        }
+        return cashDueMinor(tenantId, orderId, PaymentMethod.CASH.code());
     }
 
     private SettlementRow require(UUID tenantId, UUID orderId) {

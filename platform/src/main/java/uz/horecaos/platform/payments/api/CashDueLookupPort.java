@@ -18,8 +18,13 @@ public interface CashDueLookupPort {
 
     /**
      * The order total less every tender that is not cash and has already
-     * taken its share (reserved or settled) — zero on an order with no
-     * settlement at all, rather than a fabricated figure.
+     * taken its share (reserved or settled).
+     *
+     * <p>Throws rather than answering zero for an order this port cannot
+     * find a settlement for — a caller must not read "I don't know" as "the
+     * customer owes nothing"; a caller that has a safe fallback for that
+     * case (an order total, most likely) is expected to catch and use it
+     * itself, the way {@code DeliveryAccrualOrderCompletionTrigger} does.
      */
     long cashDueMinor(UUID tenantId, UUID orderId);
 }
