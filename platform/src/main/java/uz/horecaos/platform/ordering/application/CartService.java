@@ -732,7 +732,21 @@ public class CartService {
                         captured.destination().longitude(),
                         now));
 
-        carts.transition(tenantId, cartId, CartStatus.ACTIVE, CartStatus.ABANDONED, null, now);
+        // Contested-finding fix: rebuildAtLocation is the only mutating method
+        // in this class that used to ignore this same boolean -- two racing
+        // calls carrying the same expectedVersion (a client retry after a
+        // timeout) both pass the unlocked version check above and both
+        // create() a brand-new cart before either reaches here; JdbcCartStore
+        // .transition() is a conditional UPDATE gated only on status = ACTIVE
+        // (no version predicate), so exactly one of the two flips this row
+        // and the other affects zero rows. Throwing on that false, exactly
+        // like applyPromoCode/removePromoCode already do above, rolls this
+        // whole @Transactional method back -- so the loser's freshly created
+        // cart and lines are never committed, and only the winner's rebuild
+        // survives.
+        if (!carts.transition(tenantId, cartId, CartStatus.ACTIVE, CartStatus.ABANDONED, null, now)) {
+            throw new StaleCartException(expectedVersion, existing.version());
+        }
         log.info("Rebuilt cart {} as {} at location {}", cartId, rebuilt.cartId(), newLocationId);
 
         return view(tenantId, brandId, callerAccountId, rebuilt.cartId()).orElseThrow();

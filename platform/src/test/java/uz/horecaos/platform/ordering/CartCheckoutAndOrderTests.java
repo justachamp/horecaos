@@ -635,6 +635,59 @@ class CartCheckoutAndOrderTests {
     }
 
     @Test
+    @DisplayName("two concurrent rebuilds of one cart leave exactly one live cart behind")
+    void twoConcurrentRebuildsLeaveExactlyOneLiveCart() throws Exception {
+        // Contested finding: rebuildAtLocation read the source cart's version
+        // unlocked and discarded the boolean from its own closing
+        // carts.transition(...) call, so two racing calls carrying the same
+        // expectedVersion (a client retry after a timeout) could each build a
+        // brand-new ACTIVE cart from the one source cart, instead of the loser
+        // failing the way every sibling mutating method in this class already
+        // does.
+        var cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+        int version = cartVersion(cart);
+
+        CountDownLatch bothReady = new CountDownLatch(2);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<Boolean> first = pool.submit(() -> raceRebuild(cart, version, bothReady));
+            Future<Boolean> second = pool.submit(() -> raceRebuild(cart, version, bothReady));
+
+            boolean firstSucceeded = first.get(20, TimeUnit.SECONDS);
+            boolean secondSucceeded = second.get(20, TimeUnit.SECONDS);
+
+            assertThat(firstSucceeded ^ secondSucceeded)
+                    .as("exactly one of the two racing rebuilds must win")
+                    .isTrue();
+            assertThat(jdbc.sql("""
+                            SELECT count(*) FROM ordering.carts
+                             WHERE tenant_id = :tenantId AND location_id = :location AND status = 'ACTIVE'
+                            """)
+                            .param("tenantId", TENANT)
+                            .param("location", OTHER_LOCATION)
+                            .query(Long.class)
+                            .single())
+                    .as("only the winner's rebuilt cart may still be live at the new location")
+                    .isEqualTo(1L);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** True on success, false on the loser's StaleCartException -- never lets the race's own exception escape as a test error. */
+    private boolean raceRebuild(UUID cart, int version, CountDownLatch bothReady) {
+        bothReady.countDown();
+        awaitQuietly(bothReady);
+        try {
+            tx(() -> carts.rebuildAtLocation(TENANT, BRAND, CUSTOMER, cart, version, OTHER_LOCATION));
+            return true;
+        } catch (CartService.StaleCartException lost) {
+            return false;
+        }
+    }
+
+    @Test
     @DisplayName("the database refuses to move a cart between locations even by hand")
     void aCartCannotBeRepointedBySql() {
         var cart = openCart();
