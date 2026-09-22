@@ -1,7 +1,7 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
@@ -11,6 +11,9 @@ import {
   InstallationView,
   IntegrationsApi,
 } from '../settings/integrations/integrations-api';
+import { CatalogApi } from './catalog-api';
+import { CatalogSummary } from './catalog-domain';
+import { CatalogImportFileApi, CatalogImportStatus } from './catalog-import-file-api';
 import { CatalogImportPage } from './catalog-import-page';
 import { PosMappingApi, UnmappedExternalResponse } from './pos-mapping-api';
 import { PosSyncApi, SyncRunSummary } from './pos-sync-api';
@@ -66,6 +69,28 @@ const EMPTY_UNMAPPED: UnmappedExternalResponse = {
   horecaosCandidates: [],
 };
 
+const CATALOG: CatalogSummary = {
+  catalogId: 'catalog-1',
+  code: 'MAIN',
+  name: 'Main menu',
+  status: 'ACTIVE',
+};
+
+const FILE_RUN_STATUS: CatalogImportStatus = {
+  runId: 'file-run-1',
+  status: 'DRY_RUN_COMPLETE',
+  dryRun: true,
+  catalogId: 'catalog-1',
+  sourceFileName: 'products.csv',
+  rowsTotal: 1,
+  rowsProcessed: 1,
+  rowsCreated: 1,
+  rowsUpdated: 0,
+  rowsSkipped: 0,
+  rowsError: 0,
+  failureReason: null,
+};
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -80,12 +105,16 @@ describe('CatalogImportPage', () => {
     installations?: readonly InstallationView[];
     bindings?: readonly BindingView[];
     runs?: readonly SyncRunSummary[];
+    catalogs?: readonly CatalogSummary[];
     syncApi?: Partial<PosSyncApi>;
     mappingApi?: Partial<PosMappingApi>;
+    catalogApi?: Partial<CatalogApi>;
+    fileApi?: Partial<CatalogImportFileApi>;
   }): Promise<void> {
     const installations = options.installations ?? [INSTALLATION];
     const bindings = options.bindings ?? [BINDING];
     const runs = options.runs ?? [RUN];
+    const catalogs = options.catalogs ?? [CATALOG];
 
     await TestBed.configureTestingModule({
       imports: [CatalogImportPage],
@@ -156,6 +185,25 @@ describe('CatalogImportPage', () => {
             list: () => of({ items: [], nextCursor: null }),
             unmapped: () => of(EMPTY_UNMAPPED),
             ...options.mappingApi,
+          },
+        },
+        {
+          provide: CatalogApi,
+          useValue: {
+            listCatalogs: () => of(catalogs),
+            ...options.catalogApi,
+          },
+        },
+        {
+          provide: CatalogImportFileApi,
+          useValue: {
+            template: () => Promise.resolve('product_code,product_name\n'),
+            export: () => Promise.resolve('product_code,product_name\n'),
+            submit: () => Promise.resolve(FILE_RUN_STATUS.runId),
+            status: () => Promise.resolve(FILE_RUN_STATUS),
+            rows: () => Promise.resolve([]),
+            history: () => Promise.resolve([]),
+            ...options.fileApi,
           },
         },
       ],
@@ -260,5 +308,100 @@ describe('CatalogImportPage', () => {
 
     expect(requestedEntityType).toBe('PRODUCT');
     expect(fixture.nativeElement.querySelector('q-mapping-pane')).toBeTruthy();
+  });
+
+  // ---------------------------------------------------------- row 4.5b: CSV import
+
+  function fileTab(): HTMLElement {
+    return el('q-catalog-import-tab-file') as HTMLElement;
+  }
+
+  async function openFileTab(): Promise<void> {
+    fileTab().click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  it('the CSV import tab is reachable even when the tenant has no POS binding at all', async () => {
+    await render({ installations: [], bindings: [] });
+
+    // The POS-only empty state is what the default "runs" tab shows --
+    // proven by the pre-existing "shows the empty state" test above -- but
+    // it must not be the only thing this page can ever show.
+    expect(text()).toContain('No POS connection yet');
+
+    await openFileTab();
+
+    expect(el('q-catalog-import-file-section')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('q-import-wizard')).toBeTruthy();
+  });
+
+  it('downloading the template fetches it from the file API and triggers a browser download', async () => {
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    URL.createObjectURL = vi.fn(() => 'blob:template');
+    URL.revokeObjectURL = vi.fn();
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    let templateCalls = 0;
+    try {
+      await render({
+        fileApi: {
+          template: () => {
+            templateCalls++;
+            return Promise.resolve('product_code,product_name\nPLOV-001,Osh\n');
+          },
+        },
+      });
+      await openFileTab();
+
+      el('q-catalog-import-download-template')!.click();
+      await flushMicrotasks();
+
+      expect(templateCalls).toBe(1);
+      expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+      clickSpy.mockRestore();
+    }
+  });
+
+  it('checking a chosen file for problems submits a dry run for the selected catalog', async () => {
+    let captured: unknown;
+    await render({
+      fileApi: {
+        submit: (_scope, request, dryRun) => {
+          captured = { catalogId: request.catalogId, fileName: request.fileName, dryRun };
+          return Promise.resolve(FILE_RUN_STATUS.runId);
+        },
+        status: () => Promise.resolve(FILE_RUN_STATUS),
+        rows: () => Promise.resolve([]),
+      },
+    });
+    await openFileTab();
+
+    const input = fixture.nativeElement.querySelector(
+      '[data-testid="import-wizard-file-input"]',
+    ) as HTMLInputElement;
+    const file = new File(['product_code,product_name\nPLOV-001,Osh\n'], 'products.csv', {
+      type: 'text/csv',
+    });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const checkButton = fixture.nativeElement.querySelector(
+      '[data-testid="import-wizard-check"]',
+    ) as HTMLButtonElement;
+    checkButton.click();
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    expect(captured).toEqual({ catalogId: 'catalog-1', fileName: 'products.csv', dryRun: true });
   });
 });

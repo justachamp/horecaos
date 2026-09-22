@@ -1782,6 +1782,37 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.import.detail.applyItems.column.action': 'Amal',
   'catalog.import.detail.applyItems.column.status': 'Holati',
   'catalog.import.detail.applyItems.column.reason': 'Sabab',
+  'catalog.import.tab.file': 'CSV import',
+  'catalog.import.file.title': 'Mahsulotlarni CSV fayldan import qilish',
+  'catalog.import.file.downloadTemplate': 'Shablonni yuklab olish',
+  'catalog.import.file.downloadExport': 'Joriy katalogni eksport qilish',
+  'catalog.import.file.catalog': 'Katalog',
+  'catalog.import.file.noCatalog.title': 'Hali katalog yoʻq',
+  'catalog.import.file.noCatalog':
+    'Bu brendda hali katalog yoʻq. Avval uni Mahsulotlar boʻlimida yarating.',
+  'catalog.import.file.noLocation':
+    'Brend biriktirilmagan. Menejerdan brend biriktirishni soʻrang.',
+  'catalog.import.file.previewColumn.productCode': 'Mahsulot kodi',
+  'catalog.import.file.previewColumn.productName': 'Nomi',
+  'catalog.import.file.previewColumn.categoryCode': 'Kategoriya',
+  'catalog.import.file.previewColumn.sku': 'SKU',
+  'catalog.import.file.previewColumn.price': 'Narx',
+  'catalog.import.file.previewColumn.status': 'Holati',
+  'catalog.import.file.outcome.CREATED': 'Yaratildi',
+  'catalog.import.file.outcome.UPDATED': 'Yangilandi',
+  'catalog.import.file.outcome.SKIPPED': 'Oʻzgarmadi',
+  'catalog.import.file.outcome.ERROR': 'Xatolik',
+  'catalog.import.file.error.MISSING_PRODUCT_CODE': 'Bu qatorda mahsulot kodi yoʻq',
+  'catalog.import.file.error.MISSING_PRODUCT_NAME': 'Bu qatorda mahsulot nomi yoʻq',
+  'catalog.import.file.error.INVALID_STATUS': 'Holati DRAFT, ACTIVE yoki ARCHIVED boʻlishi kerak',
+  'catalog.import.file.error.INVALID_PRICE':
+    'Narx miqdori va valyutasi birga koʻrsatilishi, va miqdor manfiy boʻlmagan butun son boʻlishi kerak',
+  'catalog.import.file.error.PRICE_REFUSED':
+    'Narxlash bu qatorni rad etdi - brendning import narxlar kitobini tekshiring',
+  'catalog.import.file.error.DUPLICATE_SKU':
+    'Bu SKU boshqa mahsulot tomonidan allaqachon ishlatilgan',
+  'catalog.import.file.error.IMAGE_FETCH_FAILED': 'Rasm havolasi orqali rasm yuklab boʻlmadi',
+  'catalog.import.file.error.OTHER': 'Import qilib boʻlmadi',
 
   'catalog.status.DRAFT': 'Qoralama',
   'catalog.status.ACTIVE': 'Faol',
