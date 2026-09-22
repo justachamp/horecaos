@@ -529,7 +529,14 @@ function configureWithActions(
 ): void {
   TestBed.configureTestingModule({
     providers: [
-      provideRouter([{ path: 'orders', component: OrderQueue }]),
+      // `orders/:id` is a stub target — AMEND's own navigation test below
+      // only checks the resulting URL, never renders `OrderDetailPane`
+      // itself (a whole separate dependency graph), the same shortcut
+      // `order-detail-pane.spec.ts` is not needed for here.
+      provideRouter([
+        { path: 'orders', component: OrderQueue },
+        { path: 'orders/:id', component: OrderQueue },
+      ]),
       {
         provide: CurrentLocation,
         useValue: {
@@ -644,6 +651,33 @@ describe('OrderQueue: row actions render exactly from actions[] (§2.9, §4.2)',
     expect(approve).toHaveBeenCalledTimes(1);
     // Still on the board — the row-open navigation never fired.
     expect(TestBed.inject(Location).path()).toBe('/orders?tab=attention');
+  });
+
+  it('AMEND opens the order rather than a menu of its own — the five dialogs live on the detail pane', async () => {
+    configureWithActions(
+      [
+        order({
+          orderId: 'order-1',
+          status: 'CONFIRMED',
+          actions: [{ action: 'AMEND' }],
+        }),
+      ],
+      {},
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+
+    (
+      harness.routeNativeElement!.querySelector(
+        '[data-testid="order-row-action-AMEND"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    // `queryParamsHandling: 'preserve'` (order-queue.ts's own `openOrder`):
+    // the tab the operator was on survives the round trip to the order and
+    // back, the same as every other row-open path.
+    expect(TestBed.inject(Location).path()).toBe('/orders/order-1?tab=preparing');
   });
 
   it('renders the settling decision on a lost approval race, not a generic failure', async () => {
