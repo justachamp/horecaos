@@ -109,6 +109,7 @@
     "orderError": "Заказ не отправлен. Попробуйте снова.",
     "cash": "Наличными",
     "cashSecondary": "Оплата курьеру при получении",
+    "cashSecondaryPickup": "Оплата в филиале при получении",
     "click": "Click",
     "payme": "Payme",
     "minutes": "30 минут",

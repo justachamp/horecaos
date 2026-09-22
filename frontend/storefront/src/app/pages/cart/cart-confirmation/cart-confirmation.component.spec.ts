@@ -192,6 +192,25 @@ describe('CartConfirmationComponent: no payment methods blocks submit', () => {
   });
 });
 
+describe('CartConfirmationComponent: CASH wording matches how it is actually paid, by mode', () => {
+  it('a DELIVERY cart describes CASH as paid to the courier on receipt', async () => {
+    const { comp } = await setUp(['CASH']);
+
+    expect(comp.paymentMethod).toBe('cart.cash / cart.cashSecondary');
+  });
+
+  it('a PICKUP cart describes CASH as paid at the branch on collection, not "pay the courier"', async () => {
+    // There is no courier on a pickup order -- the pre-fix wording
+    // ("Olish paytida kuryerga to'lash" / "pay the courier on receipt") was
+    // simply wrong for this mode.
+    const { comp } = await setUp(['CASH'], (cart) => {
+      cart.fulfillmentMode.mockReturnValue('PICKUP' as never);
+    });
+
+    expect(comp.paymentMethod).toBe('cart.cash / cart.cashSecondaryPickup');
+  });
+});
+
 describe('CartConfirmationComponent.submitOrder sequencing (destination -> price -> checkout)', () => {
   it('calls applyDestination, then priceCart, then checkout, in that order', async () => {
     const { comp, cart, navigateSpy } = await setUp(['CASH']);

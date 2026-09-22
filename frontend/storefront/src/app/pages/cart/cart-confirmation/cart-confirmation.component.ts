@@ -83,7 +83,14 @@ export class CartConfirmationComponent implements OnInit {
     const opt = this.paymentOptions().find((o) => o.id === this.selectedPaymentId);
     if (!opt) return '';
     const label = this.translate.get(opt.labelKey);
-    const secondary = opt.secondaryKey ? this.translate.get(opt.secondaryKey) : null;
+    // CASH's secondary line describes *how* it is paid, and that genuinely
+    // differs by fulfillment mode: a delivery order is paid to the courier
+    // on receipt, a pickup order is paid at the branch on collection -- there
+    // is no courier to hand cash to. Every other rendered method (CLICK,
+    // PAYME) is an online charge with no such distinction.
+    const secondaryKey =
+      this.pickingUp && opt.id === 'CASH' ? 'cart.cashSecondaryPickup' : opt.secondaryKey;
+    const secondary = secondaryKey ? this.translate.get(secondaryKey) : null;
     return secondary ? `${label} / ${secondary}` : label;
   }
 
