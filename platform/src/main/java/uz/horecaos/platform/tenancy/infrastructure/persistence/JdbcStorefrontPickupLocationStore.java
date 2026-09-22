@@ -106,4 +106,11 @@ public class JdbcStorefrontPickupLocationStore {
             String district,
             String city,
             double distanceMeters) {}
+
+    // A named branch's public profile, by id rather than by distance
+    // (2026-09-21 audit follow-up (d)), is served by
+    // `JdbcStorefrontLocationProfileStore` — see
+    // `StorefrontPickupLocationController`'s own note on why the
+    // from-scratch duplicate of that read was removed here during batch 8
+    // integration.
 }

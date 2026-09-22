@@ -63,4 +63,16 @@ public class StorefrontPickupLocationController {
      */
     public record PickupLocationSearchRequest(
             @NotNull @Valid GeoPoint point, @Nullable Integer limit) {}
+
+    // A branch's public name and address by id (2026-09-21 audit follow-up
+    // (d), for a pickup order's own detail) is served by the dedicated
+    // `StorefrontLocationProfileController` at this same path
+    // (`GET .../locations/{locationId}/profile`, built in an earlier wave
+    // for exactly this and the pickup-confirmation screen alike) rather than
+    // a second implementation here — batch 8 integration found both an
+    // already-merged `StorefrontLocationProfileController` and this wave's
+    // own from-scratch route mapped to the identical path; the pre-existing
+    // one is kept as the single source of truth (see its own doc comment,
+    // and `StorefrontLocationProfileQuery.LocationProfile` for the wire
+    // shape the storefront's `LocationProfileService` actually consumes).
 }

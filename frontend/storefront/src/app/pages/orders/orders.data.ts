@@ -130,6 +130,10 @@ export interface OrderDetail {
    * used to show before this was fixed to match the list.
    */
   orderNumber: number | string;
+  /** 2026-09-21 audit follow-up (d): the branch this order was placed at, when the API sent one. */
+  locationId?: string;
+  /** `DELIVERY`, `PICKUP` or `DINE_IN`, when the API sent one. */
+  fulfillmentMode?: string;
   lineItems: OrderLineItem[];
   subtotal: string;
   /**

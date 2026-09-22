@@ -678,14 +678,6 @@ export class UiCartService {
     });
   }
 
-  /**
-   * Refreshes the delivery-fee preview for the chosen destination.
-   *
-   * Best effort, like pricing above: a failed read leaves the preview
-   * unresolved (a dash) rather than surfacing as a basket-blocking error --
-   * this is a preview, not the fee checkout will actually charge, which comes
-   * from `POST /pricing` once the cart's own destination has been set.
-   */
   private getZeroPrice(): string {
     return this.formatPrice(0);
   }

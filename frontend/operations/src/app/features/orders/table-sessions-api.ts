@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, tap } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
-import { command } from '../../core/api/idempotency';
+import { IntentCommandRegistry } from '../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 
 export interface OpenSessionRequest {
@@ -44,10 +44,23 @@ export interface SessionView {
 export class TableSessionsApi {
   private readonly api = inject(ApiClient);
 
+  /**
+   * `open` creates a session — no aggregate exists yet for an `If-Match` to
+   * name — so nothing guarded a double click on "Seat" before this
+   * (2026-09-21 audit follow-up (a)): a lost response used to mint a second
+   * key and could open two sessions for the same booking or the same tables.
+   * Keyed by the reservation being seated when there is one (a booking is
+   * seated exactly once); for a walk-in, by the joined table ids, since two
+   * walk-in opens for the same tables in quick succession are the same risk
+   * a reservation id would otherwise guard.
+   */
+  private readonly openIntents = new IntentCommandRegistry<OpenSessionRequest>();
+
   open(scope: LocationScope, body: OpenSessionRequest): Observable<SessionView> {
-    return this.api.post<OpenSessionRequest, SessionView>(
-      operationsPaths.dineInSessions(scope),
-      command(body),
-    );
+    const id = body.reservationId ?? body.tableIds.join(',');
+    const intent = this.openIntents.next(id, body);
+    return this.api
+      .post<OpenSessionRequest, SessionView>(operationsPaths.dineInSessions(scope), intent)
+      .pipe(tap(() => this.openIntents.forget(id)));
   }
 }

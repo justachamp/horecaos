@@ -28,6 +28,7 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import uz.horecaos.platform.iam.api.AuthorizationService;
+import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
  * One error handler for every API surface (ADR 0031).
@@ -363,9 +364,32 @@ public class GlobalApiErrorHandler extends ResponseEntityExceptionHandler {
                 exception.capability().code(), exception.scope().type().name()));
     }
 
+    /**
+     * A {@link GeoPoint} rejected in its compact constructor is the one {@code
+     * IllegalArgumentException} whose own message names the offending value —
+     * "Latitude out of range: 91.4", or the coordinate a {@code GET}-param
+     * caller (the storefront delivery-fee preview among them, before ADR 0031's
+     * coordinate-in-URL follow-up) sent verbatim in its query string. ADR 0029
+     * bars personal location data from an error response as much as from a log
+     * line, so that message is never returned to a caller: {@link
+     * #thrownByGeoPoint} recognizes it by where it was thrown, not by matching
+     * its wording, and this handler answers with a fixed, valueless detail
+     * instead. Every other {@code IllegalArgumentException} keeps its own
+     * message, which is why this checks the throw site rather than redacting
+     * every failure this handler sees.
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     ProblemDetail invalidArgument(IllegalArgumentException exception) {
+        if (thrownByGeoPoint(exception)) {
+            return ApiProblem.of(
+                    ErrorCode.INVALID_REQUEST, "Latitude and longitude must be finite numbers within range");
+        }
         return ApiProblem.of(ErrorCode.INVALID_REQUEST, detailOrTitle(ErrorCode.INVALID_REQUEST, exception));
+    }
+
+    private static boolean thrownByGeoPoint(IllegalArgumentException exception) {
+        StackTraceElement[] trace = exception.getStackTrace();
+        return trace.length > 0 && GeoPoint.class.getName().equals(trace[0].getClassName());
     }
 
     /**

@@ -192,6 +192,8 @@ export class OrdersService {
       id: order.orderId,
       order_number: order.publicOrderNumber as unknown as number,
       status: { id: order.status, name: order.status },
+      locationId: order.locationId,
+      fulfillmentMode: order.fulfillmentMode,
       created_date: order.createdAt,
       created_time: order.createdAt,
       items_count: order.lines.length,
@@ -349,6 +351,10 @@ export interface ReorderLineResponse {
 export interface OrderResponse {
   readonly orderId: string;
   readonly publicOrderNumber: string;
+  /** 2026-09-21 audit follow-up (d): the branch this order was placed at. */
+  readonly locationId: string;
+  /** `DELIVERY`, `PICKUP` or `DINE_IN`. */
+  readonly fulfillmentMode: string;
   readonly status: string;
   readonly currency: string;
   readonly subtotalMinor: number;
@@ -396,6 +402,10 @@ export interface ApiOrderDetail {
   id: number | string;
   order_number?: number;
   status?: { id: string; name: string };
+  /** 2026-09-21 audit follow-up (d): the branch this order was placed at. */
+  locationId?: string;
+  /** `DELIVERY`, `PICKUP` or `DINE_IN`. */
+  fulfillmentMode?: string;
   created_date?: string;
   created_time?: string;
   items_count?: number;

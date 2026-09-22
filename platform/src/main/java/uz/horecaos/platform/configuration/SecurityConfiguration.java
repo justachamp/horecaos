@@ -141,7 +141,9 @@ public class SecurityConfiguration {
                                 // already returns and a receipt already
                                 // carries, read one branch at a time for the
                                 // pickup confirmation and order-detail
-                                // screens. See
+                                // screens (2026-09-21 audit follow-up (d)
+                                // named the order-detail consumer; no
+                                // coordinate, no personal data). See
                                 // StorefrontLocationProfileController's own doc.
                                 "/api/v1/storefront/tenants/*/brands/*/locations/*/profile",
                                 // ADR 0106: a GTM container id, a GA4 measurement id, and
@@ -156,6 +158,17 @@ public class SecurityConfiguration {
                                 // — see the POST pair below — and authorised by the
                                 // X-Dine-In-Token the handler resolves to a row.
                                 "/api/v1/storefront/dine-in/sessions/*")
+                        .permitAll()
+                        // ADR 0037's delivery-fee companion, moved from GET to POST on
+                        // 2026-09-21 (audit follow-up (b)) so the customer's coordinate
+                        // travels in the body rather than the query string (ADR 0029).
+                        // Same standing as the serviceability read above: no account
+                        // yet, writes nothing. See DeliveryFeeController.quote's own
+                        // javadoc and EndpointCapabilityDeclarationTests.isDeliveryFeePreviewEndpoint
+                        // for why a POST that writes nothing needs neither a capability
+                        // nor an idempotency key.
+                        .requestMatchers(
+                                HttpMethod.POST, "/api/v1/storefront/tenants/*/brands/*/locations/*/delivery-fee")
                         .permitAll()
                         // ADR 0023: the on-box probe evaluates every alert
                         // threshold from this scrape, and it cannot hold a bearer
