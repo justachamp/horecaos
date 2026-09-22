@@ -28,9 +28,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
+import uz.horecaos.platform.integration.api.provider.ProviderActivityRecorder;
 import uz.horecaos.platform.integration.api.provider.ProviderCategory;
 import uz.horecaos.platform.integration.api.provider.ProviderEntityMappingLookup;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
+import uz.horecaos.platform.integration.provider.JdbcProviderActivityRecorder;
 import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.PosApprovalDecisionPort;
@@ -42,6 +44,7 @@ import uz.horecaos.platform.pos.domain.ExportState;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosBindingConfiguration;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosCapabilityStore;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosExportStore;
+import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
@@ -216,6 +219,76 @@ class PosOrderExportCrossInstanceDispatchTests {
         assertThat(exportState(orderId)).isEqualTo(ExportState.ACCEPTED);
     }
 
+    @Test
+    @DisplayName("a successful export writes ADR 0040's own liveness watermark for the POS binding (gap map 10.8c)")
+    void aSuccessfulExportRecordsTheBindingsOwnActivityWatermark() {
+        UUID orderId = insertConfirmedOrder("A-1003");
+
+        // The real JDBC adapter, not the recording fake: the claim under test
+        // is that PosOrderExportService's write actually lands in ADR 0040's
+        // own table — the exact query the Integrations health panel (gap map
+        // row 10.8c) and MarketplaceOperationsController.liveness already
+        // read, with no new endpoint and no new column, because the table
+        // already names no provider category.
+        JdbcProviderActivityRecorder activity = new JdbcProviderActivityRecorder(JdbcClient.create(db.dataSource()));
+        PosOrderExportTrigger instanceA = newTrigger(new FakePosAdapter(), activity);
+
+        TransactionSynchronizationManager.initSynchronization();
+        instanceA.onOrderConfirmed(confirmedEvent(orderId));
+        commit();
+        instanceA.dispatchPending();
+
+        assertThat(exportState(orderId)).isEqualTo(ExportState.ACCEPTED);
+
+        assertThat(jdbc.sql("""
+                        SELECT binding_id, location_id, direction, alert_state,
+                               last_success_at IS NOT NULL AS has_success,
+                               last_success_reference IS NOT NULL AS has_reference
+                        FROM integration.provider_activity_watermarks
+                        WHERE tenant_id = :tenantId
+                        """)
+                        .param("tenantId", TENANT)
+                        .query((row, number) -> Map.of(
+                                "bindingId", row.getObject("binding_id", UUID.class),
+                                "locationId", row.getObject("location_id", UUID.class),
+                                "direction", row.getString("direction"),
+                                "alertState", row.getString("alert_state"),
+                                "hasSuccess", row.getBoolean("has_success"),
+                                "hasReference", row.getBoolean("has_reference")))
+                        .list())
+                .as("one watermark row: this binding's own OUTBOUND export leg, healthy, with a "
+                        + "success reference recorded")
+                .containsExactly(Map.of(
+                        "bindingId", BINDING,
+                        "locationId", LOCATION,
+                        "direction", "OUTBOUND",
+                        "alertState", "HEALTHY",
+                        "hasSuccess", true,
+                        "hasReference", true));
+    }
+
+    @Test
+    @DisplayName("a rejected export writes a failure watermark, not a success")
+    void aRejectedExportRecordsAFailureWatermark() {
+        UUID orderId = insertConfirmedOrder("A-1004");
+
+        RecordingProviderActivityRecorder activity = new RecordingProviderActivityRecorder();
+        FakePosAdapter adapter = new FakePosAdapter()
+                .failNextExportWith(uz.horecaos.platform.integration.api.provider.ProviderOutcome.rejected(
+                        "TILL_REFUSED", "the till refused this order"));
+        PosOrderExportTrigger instanceA = newTrigger(adapter, activity);
+
+        TransactionSynchronizationManager.initSynchronization();
+        instanceA.onOrderConfirmed(confirmedEvent(orderId));
+        commit();
+        instanceA.dispatchPending();
+
+        assertThat(exportState(orderId)).isEqualTo(ExportState.REJECTED);
+        assertThat(activity.successes()).isEmpty();
+        assertThat(activity.failures()).hasSize(1);
+        assertThat(activity.failures().get(0).failureCode()).isEqualTo("TILL_REFUSED");
+    }
+
     // ------------------------------------------------------------------ wiring
 
     // ------------------------------- the approval poll (ADR 0002, ADR 0011 §6.4)
@@ -382,11 +455,19 @@ class PosOrderExportCrossInstanceDispatchTests {
     }
 
     private PosOrderExportTrigger newTrigger(FakePosAdapter adapter) {
-        PosOrderExportService service = newService(adapter);
+        return newTrigger(adapter, new RecordingProviderActivityRecorder());
+    }
+
+    private PosOrderExportTrigger newTrigger(FakePosAdapter adapter, ProviderActivityRecorder activity) {
+        PosOrderExportService service = newService(adapter, activity);
         return new PosOrderExportTrigger(service, clock, 10_000, 50, STALE_AFTER, 50);
     }
 
     private PosOrderExportService newService(FakePosAdapter adapter) {
+        return newService(adapter, new RecordingProviderActivityRecorder());
+    }
+
+    private PosOrderExportService newService(FakePosAdapter adapter, ProviderActivityRecorder activity) {
         JdbcClient serviceJdbc = JdbcClient.create(db.dataSource());
         var json = JsonMapper.builder().build();
         return new PosOrderExportService(
@@ -402,6 +483,7 @@ class PosOrderExportCrossInstanceDispatchTests {
                 // one — nothing in this class exercises that requirement.
                 (tenantId, brandId, priceableIds) -> Map.of(),
                 event -> {},
+                activity,
                 clock,
                 new TransactionTemplate(new DataSourceTransactionManager(db.dataSource())));
     }

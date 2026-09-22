@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.catalog.api.PackageCodeLookup;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
+import uz.horecaos.platform.integration.api.provider.ProviderActivityRecorder;
 import uz.horecaos.platform.integration.api.provider.ProviderEntityMappingLookup;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
@@ -109,6 +110,17 @@ public class PosOrderExportService {
      */
     private static final Duration RECOVERY_WINDOW = Duration.ofMinutes(30);
 
+    /**
+     * How long a POS export binding may go quiet before the Integrations
+     * health panel (gap map row {@code 10.8c}) alerts on it. There is no
+     * per-binding tuning yet, unlike {@code MarketplaceLivenessService}'s own
+     * observed-median precedent — a branch's order volume through its own
+     * till is not evidenced anywhere this class reads — so this is a stated
+     * default rather than a considered one: generous enough that a slow
+     * lunch service is not mistaken for a dead integration.
+     */
+    private static final int POS_EXPORT_STALE_AFTER_SECONDS = 4 * 60 * 60;
+
     private final PosAdapterRegistry adapters;
     private final ProviderInstallationLookup installations;
     private final ProviderEntityMappingLookup mappings;
@@ -118,6 +130,7 @@ public class PosOrderExportService {
     private final PosOrderSource orders;
     private final PackageCodeLookup packageCodes;
     private final ApplicationEventPublisher events;
+    private final ProviderActivityRecorder activity;
     private final Clock clock;
 
     /**
@@ -140,6 +153,7 @@ public class PosOrderExportService {
             PosOrderSource orders,
             PackageCodeLookup packageCodes,
             ApplicationEventPublisher events,
+            ProviderActivityRecorder activity,
             Clock clock,
             TransactionTemplate unitOfWork) {
         this.adapters = adapters;
@@ -151,6 +165,7 @@ public class PosOrderExportService {
         this.orders = orders;
         this.packageCodes = packageCodes;
         this.events = events;
+        this.activity = activity;
         this.clock = clock;
         this.unitOfWork = unitOfWork;
     }
@@ -375,6 +390,35 @@ public class PosOrderExportService {
                     outcome.errorCode(),
                     outcome.detail(),
                     clock.instant());
+
+            // Gap map row 10.8c: the same watermark ADR 0040's marketplace
+            // liveness writes on every inbound order, here for the till's own
+            // outbound leg. export.bindingId() rather than prepared.context()'s
+            // binding id — both name the same binding (prepare() filters the
+            // resolved binding down to export.bindingId() before this method
+            // is ever reached), but the export row is the identifier this
+            // method already trusted before the provider was called.
+            if (outcome.status() == ProviderOutcome.Status.SUCCESS) {
+                activity.recordSuccess(
+                        tenantId,
+                        export.bindingId(),
+                        prepared.locationId(),
+                        "OUTBOUND",
+                        result.externalOrderId() != null ? result.externalOrderId() : exportId.toString(),
+                        POS_EXPORT_STALE_AFTER_SECONDS,
+                        finishedAt);
+            } else {
+                activity.recordFailure(
+                        tenantId,
+                        export.bindingId(),
+                        prepared.locationId(),
+                        "OUTBOUND",
+                        outcome.errorCode() != null
+                                ? outcome.errorCode()
+                                : outcome.status().name(),
+                        POS_EXPORT_STALE_AFTER_SECONDS,
+                        finishedAt);
+            }
 
             if (next == ExportState.ACCEPTED && result.approvalPending()) {
                 // The till is a genuine authority for this order and was asked to
@@ -783,7 +827,7 @@ public class PosOrderExportService {
                 config,
                 export.id().toString());
 
-        return new Prepared(adapter, context, command, List.copyOf(fingerprintLines));
+        return new Prepared(adapter, context, command, List.copyOf(fingerprintLines), order.locationId());
     }
 
     /**
@@ -922,5 +966,9 @@ public class PosOrderExportService {
     }
 
     private record Prepared(
-            PosAdapter adapter, PosContext context, OrderExport order, List<LineFingerprint.Line> fingerprintLines) {}
+            PosAdapter adapter,
+            PosContext context,
+            OrderExport order,
+            List<LineFingerprint.Line> fingerprintLines,
+            UUID locationId) {}
 }
