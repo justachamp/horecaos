@@ -331,3 +331,40 @@ describe('HomeComponent: fulfilment-mode filtering (GET .../fulfillment-modes)',
     expect(localStorage.getItem('horecaos_home_fulfillment_mode')).toBe('pickup');
   });
 });
+
+describe('HomeComponent: the auto-selected mode reaches the cart service, not just the UI tab', () => {
+  // A pickup-only channel (or a returning customer whose persisted mode is
+  // 'pickup') must not leave `UiCartService.fulfillmentMode` at its DELIVERY
+  // default while the Pickup tab renders as selected: `cartService.load()`,
+  // and every subsequent `add()`, creates/reads the cart under whatever
+  // `UiCartService.fulfillmentMode` currently holds -- independent of the
+  // home screen's own `deliveryMode` UI signal.
+  beforeEach(() => localStorage.clear());
+
+  it('switches the cart service to PICKUP when the channel sells only pickup', async () => {
+    const { fixture, cart, fulfillmentModes, session } = setUp();
+    signIn(session);
+    fulfillmentModes.modes.mockResolvedValue([
+      { mode: 'DELIVERY', sold: false, serviceable: false, reason: 'FULFILMENT_MODE_UNAVAILABLE' },
+      { mode: 'PICKUP', sold: true, serviceable: true, reason: null },
+    ]);
+
+    await mount(fixture);
+
+    expect(cart.switchFulfillmentMode).toHaveBeenCalledWith('PICKUP');
+  });
+
+  it('switches the cart service to the persisted mode before the cart loads, not after', async () => {
+    localStorage.setItem('horecaos_home_fulfillment_mode', 'pickup');
+    const { fixture, cart, fulfillmentModes, session } = setUp();
+    signIn(session);
+    fulfillmentModes.modes.mockResolvedValue(bothSold());
+
+    await mount(fixture);
+
+    expect(cart.switchFulfillmentMode).toHaveBeenCalledWith('PICKUP');
+    const switchOrder = cart.switchFulfillmentMode.mock.invocationCallOrder[0];
+    const loadOrder = cart.load.mock.invocationCallOrder[0];
+    expect(switchOrder).toBeLessThan(loadOrder);
+  });
+});

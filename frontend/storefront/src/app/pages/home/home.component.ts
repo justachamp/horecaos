@@ -194,7 +194,16 @@ export class HomeComponent implements OnInit {
     // an account. Best effort: a failed read leaves `modes()` null, which
     // reads as "show every tab" rather than as an error that blocks the
     // whole page.
-    this.fulfillmentModes
+    //
+    // Awaited (not fire-and-forget) below, before the cart is loaded: the
+    // default it resolves to (a persisted preference, or whichever mode the
+    // channel actually sells) is also what `applyDefaultMode` pushes onto
+    // `UiCartService.fulfillmentMode`, which defaults to DELIVERY and
+    // otherwise only ever changes from an explicit tab click. Loading the
+    // cart before that sync landed used to build/read it under whatever the
+    // service's stale default still was -- DELIVERY, on a channel that might
+    // sell only PICKUP -- while the tab already showed Pickup selected.
+    const modesReady = this.fulfillmentModes
       .modes()
       .then((modes) => {
         this.modes.set(modes);
@@ -213,7 +222,7 @@ export class HomeComponent implements OnInit {
       return;
     }
 
-    void this.cartService.load();
+    void modesReady.then(() => this.cartService.load());
     // Only the address id survives a reload, so the top bar would report "no
     // address" over a choice the customer already made until the row is read
     // back. Authenticated-only for the same reason as the reads around it: the
@@ -292,13 +301,21 @@ export class HomeComponent implements OnInit {
       return;
     }
     const persisted = readPersistedMode();
+    let mode = this.deliveryMode();
     if (persisted && sold.has(toBackendMode(persisted))) {
-      this.deliveryMode.set(persisted);
-      return;
+      mode = persisted;
+    } else if (!sold.has(toBackendMode(mode))) {
+      mode = sold.has('DELIVERY') ? 'delivery' : 'pickup';
     }
-    if (!sold.has(toBackendMode(this.deliveryMode()))) {
-      this.deliveryMode.set(sold.has('DELIVERY') ? 'delivery' : 'pickup');
-    }
+    this.deliveryMode.set(mode);
+    // Keeps `UiCartService.fulfillmentMode` -- which defaults to DELIVERY and
+    // otherwise changes only from `setDeliveryMode`'s explicit tab click --
+    // in step with whatever this resolved to. Without it, a pickup-only
+    // channel or a persisted pickup preference left the cart service still
+    // building/reading a DELIVERY cart while the tab already showed Pickup
+    // selected. `switchFulfillmentMode` itself no-ops once the mode already
+    // matches, so this is safe to call every time the read settles.
+    void this.cartService.switchFulfillmentMode(toBackendMode(mode));
   }
 
   setDeliveryMode(mode: UiMode): void {
