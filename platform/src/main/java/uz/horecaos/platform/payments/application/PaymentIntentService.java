@@ -8,12 +8,14 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.migration.api.ExternalEffect;
 import uz.horecaos.platform.migration.api.ImportSuppression;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
+import uz.horecaos.platform.payments.api.PaymentIntentCreated;
 import uz.horecaos.platform.payments.domain.PaymentIntent;
 import uz.horecaos.platform.payments.domain.PaymentIntentStatus;
 import uz.horecaos.platform.payments.domain.PaymentMethod;
@@ -54,6 +56,7 @@ public class PaymentIntentService implements PaymentIntentPort {
     private final PaymentBindingResolver bindings;
     private final PaymentBusinessCalendar calendar;
     private final PaymentFiscalService fiscal;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     public PaymentIntentService(
@@ -63,6 +66,7 @@ public class PaymentIntentService implements PaymentIntentPort {
             PaymentBindingResolver bindings,
             PaymentBusinessCalendar calendar,
             PaymentFiscalService fiscal,
+            ApplicationEventPublisher events,
             Clock clock) {
         this.intents = intents;
         this.orders = orders;
@@ -70,6 +74,7 @@ public class PaymentIntentService implements PaymentIntentPort {
         this.bindings = bindings;
         this.calendar = calendar;
         this.fiscal = fiscal;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -199,6 +204,22 @@ public class PaymentIntentService implements PaymentIntentPort {
 
         if (intent.tender() == PaymentTender.CASH) {
             fiscal.recordCashNotApplicable(intent, now);
+        } else if (intent.providerType() != null) {
+            // Gap map row 10.9d: the one call site PaymentLinkAutoSendTrigger
+            // listens on. MARKETPLACE is PaymentTender.PROVIDER but carries no
+            // PaymentProviderType (see PaymentMethod's own doc), so this branch
+            // is reached only for a method a HorecaOS checkout could actually
+            // present — never for an order an aggregator already collected.
+            events.publishEvent(new PaymentIntentCreated(
+                    UUID.randomUUID(),
+                    tenantId,
+                    order.get().brandId(),
+                    locationId,
+                    orderId,
+                    intent.id(),
+                    intent.providerType(),
+                    order.get().customerAccountId(),
+                    now));
         }
 
         return intent.id();
