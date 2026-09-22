@@ -56,9 +56,23 @@ export class MenuService {
    */
   private cached: { key: string; menu: PublishedMenu } | null = null;
 
+  /**
+   * The in-flight read for the current key, if one is already on the wire.
+   *
+   * Without this, the home screen's own `menuService.home()` and a
+   * signed-in customer's cart re-projecting itself (`UiCartService.project`)
+   * both ask for the same menu on the same page load, and since the cache
+   * above is only populated *after* a read resolves, the second caller does
+   * not see it in time -- two identical `GET .../menu` requests land instead
+   * of one. Sharing the pending promise, the same way `CartService.price`
+   * already shares its own, is what collapses them back to one.
+   */
+  private pending: { key: string; promise: Promise<PublishedMenu> } | null = null;
+
   readonly currency = signal<string | null>(null);
 
-  /** The whole menu for a location, from cache when the key has not moved. */
+  /** The whole menu for a location, from cache when the key has not moved,
+   * or the already-in-flight read for that same key. */
   async menu(locale: string, locationId?: string): Promise<PublishedMenu> {
     const location = locationId ?? this.config.defaultLocationId;
     if (!location) {
@@ -68,20 +82,33 @@ export class MenuService {
     if (this.cached?.key === key) {
       return this.cached.menu;
     }
-    const menu = await this.api.get<PublishedMenu>(
-      `/storefront/tenants/${this.config.tenantId}/brands/${this.config.brandId}` +
-        `/locations/${location}/menu`,
-      {
-        // The channel is required and is this deployment's own: ADR 0036 makes it
-        // supply both the publication and the price plane, so a menu fetched on
-        // another channel is a menu whose prices change at checkout.
-        query: { locale, channel: this.config.channel },
-        anonymous: true,
-      },
-    );
-    this.cached = { key, menu };
-    this.currency.set(menu.currency);
-    return menu;
+    if (this.pending?.key === key) {
+      return this.pending.promise;
+    }
+    const promise = this.api
+      .get<PublishedMenu>(
+        `/storefront/tenants/${this.config.tenantId}/brands/${this.config.brandId}` +
+          `/locations/${location}/menu`,
+        {
+          // The channel is required and is this deployment's own: ADR 0036 makes it
+          // supply both the publication and the price plane, so a menu fetched on
+          // another channel is a menu whose prices change at checkout.
+          query: { locale, channel: this.config.channel },
+          anonymous: true,
+        },
+      )
+      .then((menu) => {
+        this.cached = { key, menu };
+        this.currency.set(menu.currency);
+        return menu;
+      })
+      .finally(() => {
+        if (this.pending?.key === key) {
+          this.pending = null;
+        }
+      });
+    this.pending = { key, promise };
+    return promise;
   }
 
   /** Drops the cache, so the next read re-fetches. */

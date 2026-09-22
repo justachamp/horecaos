@@ -2,9 +2,10 @@ import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { OrderItem, ORDER_STATUS_I18N_KEY, formatPlacedAt } from '../orders.data';
+import { OrderItem, ORDER_STATUS_I18N_KEY, formatPlacedAt, localeTag } from '../orders.data';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { TranslateService } from '../../../services/translate.service';
+import { LangService } from '../../../services/lang.service';
 import { OrdersService, type ApiOrder } from '../../../services/orders.service';
 import { NotificationService } from '../../../services/notification.service';
 
@@ -37,6 +38,7 @@ export class ActiveOrderComponent implements OnInit, OnDestroy {
   readonly lastUpdated = signal<Date | null>(null);
 
   private readonly translate = inject(TranslateService);
+  private readonly lang = inject(LangService);
   private reloadSub?: Subscription;
   private pollSub?: Subscription;
 
@@ -109,7 +111,7 @@ export class ActiveOrderComponent implements OnInit, OnDestroy {
         title: 'Order',
         subtitle: '',
         status: statusId,
-        date: formatPlacedAt(o.created_date),
+        date: formatPlacedAt(o.created_date, localeTag(this.lang.langId())),
         price: priceStr,
         image: o.image_url || '/assets/orders/placeholder-order.png',
         orderNumber: orderNum,
@@ -140,7 +142,11 @@ export class ActiveOrderComponent implements OnInit, OnDestroy {
     this.ordersService.cancelOrder(order.id).subscribe({
       next: () => {
         this.cancellingId.set(null);
-        this.notification.show(`No ${order.orderNumber ?? order.id} order cancelled`);
+        this.notification.show(
+          this.translate.getWithParams('orders.orderCancelledNotification', {
+            number: order.orderNumber ?? order.id,
+          }),
+        );
         this.orders.update((list) => list.filter((o) => o.id !== order.id));
       },
       error: (err) => {

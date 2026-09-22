@@ -163,6 +163,7 @@
     "cancelledStatus": "Отменён",
     "loadError": "Заказы не загрузились.",
     "cancelError": "Заказ не отменён.",
+    "orderCancelledNotification": "Заказ №{{number}} отменён.",
     "statusNew": "НОВЫЙ",
     "statusAccepted": "ПОДТВЕРЖДЁН",
     "statusCooking": "ГОТОВИТСЯ",

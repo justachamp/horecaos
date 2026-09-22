@@ -163,6 +163,7 @@
     "cancelledStatus": "Bekor qilindi",
     "loadError": "Buyurtmalar yuklanmadi.",
     "cancelError": "Buyurtma bekor qilinmadi.",
+    "orderCancelledNotification": "№{{number}} buyurtma bekor qilindi.",
     "statusNew": "YANGI",
     "statusAccepted": "TASDIQLANDI",
     "statusCooking": "TAYYORLANMOQDA",

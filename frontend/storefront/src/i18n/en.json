@@ -163,6 +163,7 @@
     "cancelledStatus": "Cancelled",
     "loadError": "Orders failed to load.",
     "cancelError": "Order was not cancelled.",
+    "orderCancelledNotification": "Order #{{number}} cancelled.",
     "statusNew": "NEW",
     "statusAccepted": "ACCEPTED",
     "statusCooking": "COOKING",
