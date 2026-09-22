@@ -1,4 +1,4 @@
-package uz.horecaos.platform.pricing.application;
+package uz.horecaos.platform.pricing.infrastructure.catalog;
 
 import java.time.Clock;
 import java.util.Locale;
@@ -11,14 +11,20 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
-import uz.horecaos.platform.pricing.api.CatalogImportPricingPort;
+import uz.horecaos.platform.catalog.api.CatalogImportPricingPort;
+import uz.horecaos.platform.pricing.application.PriceAuthoringService;
+import uz.horecaos.platform.pricing.application.PriceableType;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 
 /**
- * The {@code pricing.api} face of the catalog CSV/Excel import (row 4.5b).
+ * The {@code catalog.api} face of {@link CatalogImportPricingPort} — pricing's
+ * own implementation of a port catalog owns, the same shape {@link
+ * PricingMenuPriceLookup} and {@link PricingVariantLookup} already take (see
+ * either's own doc, and {@code CatalogImportPricingPort}'s own for why the
+ * port lives in {@code catalog.api} rather than here).
  *
  * <p>A translation layer over {@link PriceAuthoringService}, the same shape
- * {@link SampleMenuPricing} already takes for onboarding: it calls the
+ * {@code SampleMenuPricing} already takes for onboarding: it calls the
  * service an operator's own console request calls, so a price this import
  * writes carries the same guards — the currency-mismatch refusal, the
  * ties-with-a-live-book refusal, the activation compare-and-set — as one an
@@ -82,13 +88,15 @@ public class CatalogImportPricing implements CatalogImportPricingPort {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<Long> currentPrice(UUID tenantId, UUID brandId, UUID variantId) {
+    public Optional<PricedAmount> currentPrice(UUID tenantId, UUID brandId, UUID variantId) {
         Optional<JdbcPricingStore.PriceBookSummaryRow> existing = book(tenantId, brandId);
         if (existing.isEmpty()) {
             return Optional.empty();
         }
-        return Optional.ofNullable(store.pricesFor(existing.get().id(), "VARIANT", Set.of(variantId), clock.instant())
-                .get(variantId));
+        JdbcPricingStore.PriceBookSummaryRow row = existing.get();
+        return Optional.ofNullable(store.pricesFor(row.id(), "VARIANT", Set.of(variantId), clock.instant())
+                        .get(variantId))
+                .map(amount -> new PricedAmount(amount, row.currency()));
     }
 
     private Optional<JdbcPricingStore.PriceBookSummaryRow> book(UUID tenantId, UUID brandId) {
