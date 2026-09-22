@@ -398,7 +398,7 @@ public class CustomerController {
     }
 
     @PostMapping
-    @RequiresCapability(value = Capability.CUSTOMER_MANAGE, mutating = true)
+    @RequiresCapability(value = Capability.CUSTOMER_CREATE, mutating = true)
     @Operation(
             summary = "Create a customer by hand",
             description = "The staff-initiated counterpart to storefront sign-in: an operator "
@@ -408,7 +408,12 @@ public class CustomerController {
                     + "of a decision is not consent' already handles that (ConsentService's own "
                     + "doc). V0295 now records origin = OPERATOR and the staff subject who typed "
                     + "it, so a marketing export can filter this account out by fact rather than "
-                    + "by the absence of one.")
+                    + "by the absence of one. Declares Capability.CUSTOMER_CREATE, not the wider "
+                    + "CUSTOMER_MANAGE — see that capability's own doc; every role reaching this "
+                    + "endpoint today already held CUSTOMER_MANAGE and now holds both. A "
+                    + "location-scoped caller (row 1.3a) cannot reach this endpoint at all — this "
+                    + "one is tenant-scoped by necessity, since a customer has no location of its "
+                    + "own — and calls OperationsCustomerController's identical write instead.")
     public ResponseEntity<IdResponse> createManually(
             @PathVariable UUID tenantId, @Valid @RequestBody CreateCustomerRequest request) {
         try {

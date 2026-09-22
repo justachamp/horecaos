@@ -290,6 +290,14 @@ public enum PlatformRole {
                     MARKETPLACE_LIVENESS_READ,
                     CUSTOMER_READ,
                     CUSTOMER_MANAGE,
+                    // Row 1.3a: CUSTOMER_MANAGE already covers everything
+                    // CUSTOMER_CREATE grants on its own; held explicitly here
+                    // too only so CustomerController#createManually's
+                    // narrower declared capability (Capability.CUSTOMER_CREATE's
+                    // own doc explains why it is narrower than this bundle's
+                    // CUSTOMER_MANAGE) does not silently stop this role from
+                    // doing what it could already do.
+                    CUSTOMER_CREATE,
                     CUSTOMER_PII_REVEAL,
                     CUSTOMER_ERASURE_EXECUTE,
                     CUSTOMER_ERASURE_RAISE,
@@ -473,6 +481,14 @@ public enum PlatformRole {
                     MARKETPLACE_LIVENESS_READ,
                     CUSTOMER_READ,
                     CUSTOMER_MANAGE,
+                    // Row 1.3a: CUSTOMER_MANAGE already covers everything
+                    // CUSTOMER_CREATE grants on its own; held explicitly here
+                    // too only so CustomerController#createManually's
+                    // narrower declared capability (Capability.CUSTOMER_CREATE's
+                    // own doc explains why it is narrower than this bundle's
+                    // CUSTOMER_MANAGE) does not silently stop this role from
+                    // doing what it could already do.
+                    CUSTOMER_CREATE,
                     CUSTOMER_PII_REVEAL,
                     CUSTOMER_ERASURE_EXECUTE,
                     CUSTOMER_ERASURE_RAISE,
@@ -719,6 +735,13 @@ public enum PlatformRole {
                     COURIER_POSITION_READ,
                     COURIER_DUTY_MANAGE,
                     CUSTOMER_READ,
+                    // Row 1.3a: create-on-miss in the New order screen's
+                    // customer pane 403'd for this role until this grant —
+                    // CUSTOMER_MANAGE stays off deliberately (Capability
+                    // .CUSTOMER_CREATE's own doc), but a branch manager
+                    // taking a phone order still needs to open an account for
+                    // a caller nobody has seen before.
+                    CUSTOMER_CREATE,
                     CUSTOMER_PII_REVEAL,
                     // ADR 0059 stage 2: the operator inbox — see
                     // Capability.CONVERSATION_INBOX_MANAGE's own doc for which roles hold
@@ -757,10 +780,16 @@ public enum PlatformRole {
                     // ADR 0039: taking a phone order starts with finding the caller.
                     // The New order screen's customer pane looks a returning customer
                     // up by phone before ORDER_PLACE ever creates anything, so the same
-                    // bundle needs both. Read only — CUSTOMER_MANAGE and
-                    // CUSTOMER_PII_REVEAL stay off this bundle, so a phone-order operator
-                    // sees a masked lookup card and never a raw contact value.
+                    // bundle needs both. CUSTOMER_MANAGE and CUSTOMER_PII_REVEAL stay
+                    // off this bundle on purpose, so a phone-order operator sees a
+                    // masked lookup card and never a raw contact value.
                     CUSTOMER_READ,
+                    // Row 1.3a: create-on-miss 403'd for this exact role until this
+                    // grant — narrower than CUSTOMER_MANAGE on purpose (Capability
+                    // .CUSTOMER_CREATE's own doc), so opening an account for a
+                    // caller nobody has seen before does not also hand this bundle
+                    // PII reveal, blacklisting or merge.
+                    CUSTOMER_CREATE,
                     // ADR 0041: the line cook's screen. Reading the board and starting
                     // and readying a line is the whole of it — a recall undoes a
                     // readiness the pass may have acted on, and a release decides when
@@ -939,6 +968,8 @@ public enum PlatformRole {
                     NOTIFICATION_RETRY,
                     CUSTOMER_READ,
                     CUSTOMER_MANAGE,
+                    // Row 1.3a: see TENANT_OWNER's identical grant above for why.
+                    CUSTOMER_CREATE,
                     CUSTOMER_PII_REVEAL));
 
     private static final Map<String, PlatformRole> BY_CODE =

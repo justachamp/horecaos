@@ -1451,6 +1451,7 @@ Read from `legacy-archive/qoida-dashboard/src`.
 | `order.state.override` | Compensating transitions — **built**, `Capability.ORDER_STATE_OVERRIDE`, `POST .../state-overrides` (ADR 0110); no console affordance yet, §0.2 |
 | `customer.pii.reveal` | Phone, address and note reveal, with a stated purpose |
 | `customer.read` | The customer panel and the lookup |
+| `customer.create` | Create-on-miss (§5.3) — **built**, `Capability.CUSTOMER_CREATE`, held by `location-staff`/`location-manager` alongside the read-only lookup above; narrower than `customer.manage` on purpose (row 1.3a), so an operator who can open an account for a caller nobody has seen before still cannot reveal PII, blacklist or merge one. `POST .../locations/{locationId}/customers` (`OperationsCustomerController`), not the tenant-scoped `POST /api/v1/tenants/{tenantId}/customers` this role's grant cannot reach at all |
 
 All at `LOCATION` scope: a branch manager approving their own branch's orders
 must not need a grant reaching the whole brand, and the ADR 0025 build gate
