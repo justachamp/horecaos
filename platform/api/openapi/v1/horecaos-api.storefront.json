@@ -419,6 +419,26 @@
         },
         "type" : "object"
       },
+      "DeliveryFeeQuoteRequest" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "lat" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "lon" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "subtotalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "DeliveryFeeView" : {
         "properties" : {
           "available" : {
@@ -568,6 +588,30 @@
           "totalMinor" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "LocationProfileView" : {
+        "properties" : {
+          "addressLine" : {
+            "type" : "string"
+          },
+          "brandName" : {
+            "type" : "string"
+          },
+          "city" : {
+            "type" : "string"
+          },
+          "district" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationName" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -848,11 +892,18 @@
           "currency" : {
             "type" : "string"
           },
+          "fulfillmentMode" : {
+            "type" : "string"
+          },
           "lines" : {
             "items" : {
               "$ref" : "#/components/schemas/OrderLineResponse"
             },
             "type" : "array"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
           },
           "orderId" : {
             "format" : "uuid",
@@ -2844,7 +2895,7 @@
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee" : {
-      "get" : {
+      "post" : {
         "description" : "Returns one fee, or one stable refusal code and no fee. An address outside every zone of this branch is refused here and never re-homed to a branch that does cover it: substituting one changes the menu, the prices, the preparation time and eventually the legal entity on the receipt.",
         "operationId" : "quote",
         "parameters" : [ {
@@ -2871,39 +2922,17 @@
             "format" : "uuid",
             "type" : "string"
           }
-        }, {
-          "in" : "query",
-          "name" : "lat",
-          "required" : true,
-          "schema" : {
-            "format" : "double",
-            "type" : "number"
-          }
-        }, {
-          "in" : "query",
-          "name" : "lon",
-          "required" : true,
-          "schema" : {
-            "format" : "double",
-            "type" : "number"
-          }
-        }, {
-          "in" : "query",
-          "name" : "currency",
-          "required" : true,
-          "schema" : {
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "subtotalMinor",
-          "required" : false,
-          "schema" : {
-            "default" : 0,
-            "format" : "int64",
-            "type" : "integer"
-          }
         } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DeliveryFeeQuoteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
         "responses" : {
           "200" : {
             "content" : {
@@ -2978,6 +3007,51 @@
         },
         "summary" : "The live menu for one location",
         "tags" : [ "Storefront catalog" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/profile" : {
+      "get" : {
+        "description" : "404 when the tenant, brand or location does not exist or is not active. Carries no coordinate.",
+        "operationId" : "profile_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LocationProfileView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A branch's public name and address",
+        "tags" : [ "Storefront pickup locations" ]
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/serviceability" : {

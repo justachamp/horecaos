@@ -149,6 +149,13 @@ export interface CustomerTelegramLinkStatusResponse {
   linked?: boolean;
 }
 
+export interface DeliveryFeeQuoteRequest {
+  currency?: string;
+  lat?: number;
+  lon?: number;
+  subtotalMinor?: number;
+}
+
 export interface DeliveryFeeView {
   available?: boolean;
   currency?: string;
@@ -200,6 +207,15 @@ export interface GuestBillResponse {
   sessionId?: string;
   status?: string;
   totalMinor?: number;
+}
+
+export interface LocationProfileView {
+  addressLine?: string;
+  brandName?: string;
+  city?: string;
+  district?: string;
+  locationId?: string;
+  locationName?: string;
 }
 
 export interface LoyaltyStorefrontControllerEntryResponse {
@@ -289,7 +305,9 @@ export interface OrderResponse {
   confirmedAt?: string;
   createdAt?: string;
   currency?: string;
+  fulfillmentMode?: string;
   lines?: Array<OrderLineResponse>;
+  locationId?: string;
   orderId?: string;
   publicOrderNumber?: string;
   status?: string;
@@ -599,8 +617,9 @@ export interface Operations {
   "signOut": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/sessions/current"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };
   "requestCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/verification-challenges"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RequestCodeRequest }; responses: { "200": ChallengeResponse } };
   "submitCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/verification-challenges/{challengeId}/attempts"; request: { parameters: { path: { brandId: string; challengeId: string; tenantId: string } }; body: SubmitCodeRequest }; responses: { "200": GrantResponse } };
-  "quote": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { currency: string; lat: number; lon: number; subtotalMinor?: number } } }; responses: { "200": DeliveryFeeView } };
+  "quote": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: DeliveryFeeQuoteRequest }; responses: { "200": DeliveryFeeView } };
   "menu": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/menu"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channel: string; locale?: string } } }; responses: { "200": StorefrontMenu } };
+  "profile_1": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/profile"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LocationProfileView } };
   "resolve": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/serviceability"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { at?: string; channel: string; mode: "DELIVERY" | "PICKUP" | "DINE_IN" } } }; responses: { "200": ServiceabilityView } };
   "profile": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": ProfileResponse } };
   "updateProfile": { method: "PATCH"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: StorefrontCustomerControllerUpdateProfileRequest }; responses: { "200": ProfileResponse } };
