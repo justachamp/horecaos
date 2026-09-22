@@ -167,6 +167,32 @@ describe('OrderDetailComponent: the placed order reconciles total against subtot
   });
 });
 
+describe('OrderDetailComponent: the header shows the real order number, not "Order N: NaN"', () => {
+  it('carries the platform\'s own public order number through as-is, and never coerces it to NaN', async () => {
+    // `order_number` is `OrderResponse.publicOrderNumber` -- a string like
+    // "0922-001" -- force-cast to `number` by OrdersService.toApiOrderDetail
+    // (see ApiOrderDetail's own field note, and OrdersComponent's list,
+    // which already reads this the same way). `Number("0922-001")` is NaN;
+    // this fixture uses the real string shape rather than a fixture number
+    // that would hide exactly that.
+    const { fixture, comp } = setUp(
+      'o1',
+      apiOrderDetail({ order_number: '0922-001' as unknown as number }),
+    );
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(comp.order()?.orderNumber).toBe('0922-001');
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).not.toContain('NaN');
+    // The same translated label the orders list already uses -- never the
+    // hardcoded, untranslated "Order N:".
+    expect(text).not.toContain('Order N:');
+  });
+});
+
 describe('OrderDetailComponent: cancel button reflects the real actions the API sent', () => {
   it('shows cancel when the API marked this order cancellable', async () => {
     const { fixture } = setUp('o1', apiOrderDetail({ actions: ['cancel'] }));
@@ -257,7 +283,7 @@ describe("OrderDetailComponent.repeat -- driven by the platform's plan (ADR 0074
   });
 
   it('shows no repeat button when the plan request fails, rather than one that would fail too', async () => {
-    const { fixture } = setUp('o1', apiOrderDetail(), throwError(() => new Error('network')));
+    const { fixture, comp } = setUp('o1', apiOrderDetail(), throwError(() => new Error('network')));
 
     fixture.detectChanges();
     await fixture.whenStable();
@@ -265,8 +291,9 @@ describe("OrderDetailComponent.repeat -- driven by the platform's plan (ADR 0074
 
     expect(fixture.nativeElement.querySelector('.repeat-btn')).toBeNull();
     // A failed plan is not a failed screen: the order detail still renders.
+    expect(comp.order()?.orderNumber).toBe(1001);
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
-    expect(text).toContain('1001');
+    expect(text).toContain('orders.orderNumberLabel');
   });
 
   it('never offers the button from a plan that answers about a different order', async () => {
