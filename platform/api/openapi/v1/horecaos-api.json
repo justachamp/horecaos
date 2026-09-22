@@ -7354,6 +7354,29 @@
         },
         "type" : "object"
       },
+      "DeliveryChargeResponse" : {
+        "properties" : {
+          "feeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "freeDeliveryFromMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "minBasketMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "outcome" : {
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "DeliveryExceptionResponse" : {
         "properties" : {
           "detail" : {
@@ -14197,6 +14220,10 @@
           "currency" : {
             "type" : "string"
           },
+          "feeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "lines" : {
             "items" : {
               "$ref" : "#/components/schemas/OrderLineResponse"
@@ -16609,6 +16636,9 @@
           "currency" : {
             "type" : "string"
           },
+          "delivery" : {
+            "$ref" : "#/components/schemas/DeliveryChargeResponse"
+          },
           "discountMinor" : {
             "format" : "int64",
             "type" : "integer"
@@ -16616,6 +16646,10 @@
           "expiresAt" : {
             "format" : "date-time",
             "type" : "string"
+          },
+          "feeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
           },
           "quoteId" : {
             "format" : "uuid",
@@ -22261,6 +22295,10 @@
         "properties" : {
           "currency" : {
             "type" : "string"
+          },
+          "feeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
           },
           "fulfillmentMode" : {
             "type" : "string"

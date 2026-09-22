@@ -149,6 +149,14 @@ export interface CustomerTelegramLinkStatusResponse {
   linked?: boolean;
 }
 
+export interface DeliveryChargeResponse {
+  feeMinor?: number;
+  freeDeliveryFromMinor?: number;
+  minBasketMinor?: number;
+  outcome?: string;
+  reasonCode?: string;
+}
+
 export interface DeliveryFeeView {
   available?: boolean;
   currency?: string;
@@ -289,6 +297,7 @@ export interface OrderResponse {
   confirmedAt?: string;
   createdAt?: string;
   currency?: string;
+  feeMinor?: number;
   lines?: Array<OrderLineResponse>;
   orderId?: string;
   publicOrderNumber?: string;
@@ -359,8 +368,10 @@ export interface PricedCartResponse {
   cartVersion?: number;
   contextHash?: string;
   currency?: string;
+  delivery?: DeliveryChargeResponse;
   discountMinor?: number;
   expiresAt?: string;
+  feeMinor?: number;
   quoteId?: string;
   subtotalMinor?: number;
   taxMinor?: number;
@@ -523,6 +534,7 @@ export interface StorefrontOrderingControllerDestinationRequest {
 
 export interface StorefrontOrderingControllerOrderSummaryResponse {
   currency?: string;
+  feeMinor?: number;
   fulfillmentMode?: string;
   fulfillmentStatus?: string;
   locationId?: string;
