@@ -115,14 +115,7 @@ class DeliveryFeeMetricReportingTests {
         insertAggregate(ENTITY_B, "TELEGRAM", "DELIVERY", 1, 80_000L, 15_000L);
 
         assertThatThrownBy(() -> queries.run(new ReportQuery(
-                        TENANT,
-                        DAY,
-                        DAY,
-                        List.of("delivery_fee.v1"),
-                        List.of(),
-                        List.of(),
-                        List.of(),
-                        List.of())))
+                        TENANT, DAY, DAY, List.of("delivery_fee.v1"), List.of(), List.of(), List.of(), List.of())))
                 .isInstanceOf(ReportingRefusals.CombinedEntityTotalException.class)
                 .hasMessageContaining("neither tax filing");
     }
@@ -177,8 +170,7 @@ class DeliveryFeeMetricReportingTests {
     /** One {@code agg_branch_day} row — money fields only, matching what the grid/roll-up tabs read. */
     private void insertAggregate(
             UUID legalEntityId, String channelCode, String fulfilmentType, int orderCount, long grossSom, long feeSom) {
-        jdbc.sql(
-                        """
+        jdbc.sql("""
                 INSERT INTO reporting.agg_branch_day (
                     tenant_id, business_date, location_id, legal_entity_id, channel_code,
                     fulfilment_type, boundary_version, metric_calculation_version, order_count,
@@ -202,8 +194,7 @@ class DeliveryFeeMetricReportingTests {
     }
 
     private void seedTenant(UUID tenantId) {
-        jdbc.sql(
-                        """
+        jdbc.sql("""
                 INSERT INTO tenant.tenants (id, slug, legal_name, display_name, default_currency,
                     default_timezone, status, version)
                 VALUES (:id, :slug, 'Legal', 'Osh Markazi', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
