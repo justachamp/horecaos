@@ -424,11 +424,19 @@ describe('CartConfirmationComponent.submitOrder: a thrown refusal is reported wi
 });
 
 describe('CartConfirmationComponent: idempotency key stability across repeated clicks', () => {
-  it('reuses the same idempotency key across two failed attempts at the same basket', async () => {
+  it('reuses the same idempotency key after a failure that never reached the platform (no response at all)', async () => {
+    // ApiClient/toHorecaOSApiError normalises a dropped connection or a
+    // client-side timeout with no HTTP response to NETWORK_UNREACHABLE at
+    // status 0 -- the one case where the original request may in fact have
+    // been received, so an *unchanged* retry under the *same* key is what
+    // lets a genuine replay answer REPLAYED with the order that already
+    // exists, instead of minting a second one.
     const { comp, cart } = await setUp(['CASH']);
     cart.applyDestination.mockResolvedValue(true);
     cart.priceCart.mockResolvedValue(pricedFixture());
-    cart.checkout.mockRejectedValue(new Error('timed out'));
+    cart.checkout.mockRejectedValue(
+      new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'x' }),
+    );
 
     await comp.submitOrder();
     await comp.submitOrder();
@@ -454,6 +462,50 @@ describe('CartConfirmationComponent: idempotency key stability across repeated c
     const secondKey = cart.checkout.mock.calls[1][0].idempotencyKey;
 
     expect(secondKey).not.toBe(firstKey);
+  });
+
+  it('mints a fresh key after a REJECTED outcome, so a retry is not refused as a key reuse', async () => {
+    // No order was created, and applyDestination/priceCart run again on the
+    // very next submitOrder() -- a retry under the same key would present a
+    // different body and the platform's idempotency store would refuse it
+    // as IDEMPOTENCY_KEY_REUSED forever, on a basket the customer may still
+    // legitimately want to order.
+    const { comp, cart } = await setUp(['CASH']);
+    cart.applyDestination.mockResolvedValue(true);
+    cart.priceCart.mockResolvedValue(pricedFixture());
+    cart.checkout.mockResolvedValueOnce(checkoutResult({ outcome: 'REJECTED' }));
+
+    await comp.submitOrder();
+    const key1 = cart.checkout.mock.calls[0][0].idempotencyKey;
+
+    cart.checkout.mockResolvedValueOnce(checkoutResult());
+    await comp.submitOrder();
+    const key2 = cart.checkout.mock.calls[1][0].idempotencyKey;
+
+    expect(key2).not.toBe(key1);
+  });
+
+  it('mints a fresh key after a definite platform refusal thrown from checkout (e.g. PRICE_CHANGED), not just after REJECTED', async () => {
+    const { comp, cart } = await setUp(['CASH']);
+    cart.applyDestination.mockResolvedValue(true);
+    cart.priceCart.mockResolvedValue(pricedFixture());
+    cart.checkout.mockRejectedValueOnce(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'PRICE_CHANGED',
+        detail: 'x',
+        problem: { status: 409, reason: 'PRICE_CHANGED' },
+      }),
+    );
+
+    await comp.submitOrder();
+    const key1 = cart.checkout.mock.calls[0][0].idempotencyKey;
+
+    cart.checkout.mockResolvedValueOnce(checkoutResult());
+    await comp.submitOrder();
+    const key2 = cart.checkout.mock.calls[1][0].idempotencyKey;
+
+    expect(key2).not.toBe(key1);
   });
 });
 

@@ -209,6 +209,46 @@ describe('UiCartService.applyDestination', () => {
       expect.objectContaining({ addressId: 'addr-1', recipientName: 'Aziz', recipientPhone: '+998901234567' }),
     );
   });
+
+  it('does not re-PUT the destination on a retry when nothing about it changed, keeping the cart version and quote intact', async () => {
+    // Setting a destination always bumps the cart's version and clears its
+    // quote (ADR 0037), so a checkout retry that put the identical thing
+    // back would spend that bump for nothing and force a fresh price on a
+    // cart whose destination never actually moved -- see CartConfirmationComponent's
+    // idempotency-key doc for why that divergence matters.
+    const { service, carts, delivery } = setUp();
+    const cart = baseCart();
+    carts.cart.set(cart);
+    delivery.addressId.mockReturnValue('addr-1');
+    delivery.isComplete.mockReturnValue(true);
+    delivery.recipientName.mockReturnValue('Aziz');
+    delivery.recipientPhone.mockReturnValue('+998901234567');
+    carts.setDestination.mockResolvedValue(cart);
+
+    const first = await service.applyDestination();
+    const second = await service.applyDestination();
+
+    expect(first).toBe(true);
+    expect(second).toBe(true);
+    expect(carts.setDestination).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-PUTs the destination when the recipient changes, even against the same cart and address', async () => {
+    const { service, carts, delivery } = setUp();
+    const cart = baseCart();
+    carts.cart.set(cart);
+    delivery.addressId.mockReturnValue('addr-1');
+    delivery.isComplete.mockReturnValue(true);
+    delivery.recipientName.mockReturnValue('Aziz');
+    delivery.recipientPhone.mockReturnValue('+998901234567');
+    carts.setDestination.mockResolvedValue(cart);
+
+    await service.applyDestination();
+    delivery.recipientName.mockReturnValue('Dilnoza');
+    await service.applyDestination();
+
+    expect(carts.setDestination).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('UiCartService project() (via load())', () => {

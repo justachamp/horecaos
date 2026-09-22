@@ -328,6 +328,14 @@ export class CartConfirmationComponent implements OnInit {
       });
       if (result.outcome === 'REJECTED') {
         this.orderError.set(this.translate.get('cart.orderRejected'));
+        // No order exists to retry against, and the very next submitOrder()
+        // re-runs applyDestination() and priceCart() regardless -- a retry
+        // under this same key would present a different body and the
+        // platform's idempotency store would refuse it as
+        // IDEMPOTENCY_KEY_REUSED forever, on a basket the customer may still
+        // legitimately want to order. A fresh key is what lets that retry
+        // through.
+        this.pendingCheckoutKey = null;
         return;
       }
       // The basket became an order. Forgetting the cart id is what stops the
@@ -361,6 +369,22 @@ export class CartConfirmationComponent implements OnInit {
       // sentence for every reason checkout could have said no.
       const key = failure instanceof HorecaOSApiError ? messageKeyFor(failure) : 'cart.orderError';
       this.orderError.set(this.translate.get(key));
+      // A definite refusal (a stale quote, a moved cart version, an expired
+      // cart, ...) means no order was created here either, and the retry's
+      // own applyDestination()/priceCart() calls will send a different body
+      // regardless -- so this key must rotate for the same reason REJECTED's
+      // does, above. The one exception is a failure that never reached the
+      // platform at all: `NETWORK_UNREACHABLE` is ApiClient's own
+      // normalisation of a dropped connection or a client-side timeout with
+      // no HTTP response (see toHorecaOSApiError). There the original
+      // request may in fact have been received, and presenting the *same*
+      // key on an *unchanged* retry is what lets a genuine replay answer
+      // REPLAYED with the order that already exists, instead of a second
+      // one -- rotating here would only turn one silent success into a
+      // second, unwanted order.
+      if (!(failure instanceof HorecaOSApiError) || failure.code !== 'NETWORK_UNREACHABLE') {
+        this.pendingCheckoutKey = null;
+      }
     } finally {
       this.submitting.set(false);
     }
