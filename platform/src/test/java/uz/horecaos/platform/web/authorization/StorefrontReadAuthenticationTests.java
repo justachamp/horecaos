@@ -166,8 +166,7 @@ class StorefrontReadAuthenticationTests {
         // POST since 2026-09-21 (audit follow-up (b)): the point moved from the
         // query string into the body, so this one -- unlike its neighbours here
         // -- has to send one to reach the handler at all.
-        assertThat(postStatusOf(
-                        locationPath() + "/delivery-fee", "{\"lat\":41.31,\"lon\":69.24,\"currency\":\"UZS\"}"))
+        assertThat(postStatusOf(locationPath() + "/delivery-fee", "{\"lat\":41.31,\"lon\":69.24,\"currency\":\"UZS\"}"))
                 .isNotEqualTo(401);
         assertThat(statusOf(locationPath() + "/fulfillment-modes?channel=web")).isNotEqualTo(401);
         assertThat(statusOf(locationPath() + "/profile"))
