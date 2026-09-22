@@ -90,12 +90,6 @@ public class SecurityConfiguration {
                                 // deliberately open. It serves only immutable
                                 // publication rows, never authoring tables, so
                                 // there is no path from here to a draft.
-                                // The branch discovery route has the same
-                                // pre-account purpose. It returns only active,
-                                // published storefront branches and their
-                                // current pickup serviceability — not a tenant's
-                                // general location directory.
-                                "/api/v1/storefront/pickup-locations",
                                 "/api/v1/storefront/tenants/*/brands/*/locations/*/menu",
                                 // ADR 0010, ADR 0016: the pictures on that menu.
                                 // Anonymous for the same reason the menu is -- a
@@ -142,6 +136,14 @@ public class SecurityConfiguration {
                                 // moment as the two lines above it — a customer
                                 // choosing delivery or pickup before an account exists.
                                 "/api/v1/storefront/tenants/*/brands/*/locations/*/fulfillment-modes",
+                                // A branch's own published name and address --
+                                // the same fields the pickup search below
+                                // already returns and a receipt already
+                                // carries, read one branch at a time for the
+                                // pickup confirmation and order-detail
+                                // screens. See
+                                // StorefrontLocationProfileController's own doc.
+                                "/api/v1/storefront/tenants/*/brands/*/locations/*/profile",
                                 // ADR 0106: a GTM container id, a GA4 measurement id, and
                                 // a Search Console verification token — public identifiers
                                 // a browser's view-source already reveals once the
@@ -180,6 +182,20 @@ public class SecurityConfiguration {
                                 HttpMethod.POST,
                                 "/api/v1/storefront/dine-in/qr/token-exchanges",
                                 "/api/v1/storefront/dine-in/sessions/*/bill-requests")
+                        .permitAll()
+                        // The branch discovery route, the same pre-account
+                        // purpose the GET list above documents -- only active,
+                        // published storefront branches and their current
+                        // pickup serviceability, never a tenant's general
+                        // location directory. POST because the caller's own
+                        // coordinate is the request body, not a query
+                        // parameter: personal data does not belong in a URL
+                        // this platform's own proxies and access logs will
+                        // record. Nothing here is created or changed, so
+                        // EndpointCapabilityDeclarationTests exempts it by
+                        // exact path the same way it exempts every other
+                        // unauthenticated pre-account read.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/storefront/pickup-locations")
                         .permitAll()
                         // ADR 0015 and ADR 0051: the three steps by which somebody
                         // with no account gets one, and they are unavoidably

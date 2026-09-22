@@ -582,6 +582,19 @@
         },
         "type" : "object"
       },
+      "GeoPoint" : {
+        "properties" : {
+          "latitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "type" : "number"
+          }
+        },
+        "type" : "object"
+      },
       "GrantResponse" : {
         "properties" : {
           "expiresAt" : {
@@ -620,6 +633,37 @@
           "totalMinor" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "LocationProfile" : {
+        "properties" : {
+          "addressLine" : {
+            "type" : "string"
+          },
+          "city" : {
+            "type" : "string"
+          },
+          "contactPhone" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "district" : {
+            "type" : "string"
+          },
+          "landmark" : {
+            "type" : "string"
+          },
+          "latitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "type" : "number"
           }
         },
         "type" : "object"
@@ -1100,6 +1144,19 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "PickupLocationSearchRequest" : {
+        "properties" : {
+          "limit" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "point" : {
+            "$ref" : "#/components/schemas/GeoPoint"
+          }
+        },
+        "required" : [ "point" ],
         "type" : "object"
       },
       "PickupLocations" : {
@@ -2003,35 +2060,19 @@
       }
     },
     "/api/v1/storefront/pickup-locations" : {
-      "get" : {
-        "description" : "Returns at most twenty active pickup branches, nearest first. Each result carries the same current serviceability answer the checkout path will later re-resolve authoritatively.",
+      "post" : {
+        "description" : "Returns at most twenty active pickup branches, nearest first. Each result carries the same current serviceability answer the checkout path will later re-resolve authoritatively. POST so the caller's coordinate travels in the body rather than the query string; nothing is written and no resource is created.",
         "operationId" : "nearbyPickupLocations",
-        "parameters" : [ {
-          "in" : "query",
-          "name" : "lat",
-          "required" : true,
-          "schema" : {
-            "format" : "double",
-            "type" : "number"
-          }
-        }, {
-          "in" : "query",
-          "name" : "lon",
-          "required" : true,
-          "schema" : {
-            "format" : "double",
-            "type" : "number"
-          }
-        }, {
-          "in" : "query",
-          "name" : "limit",
-          "required" : false,
-          "schema" : {
-            "default" : 10,
-            "format" : "int32",
-            "type" : "integer"
-          }
-        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PickupLocationSearchRequest"
+              }
+            }
+          },
+          "required" : true
+        },
         "responses" : {
           "200" : {
             "content" : {
@@ -3097,6 +3138,51 @@
         },
         "summary" : "The live menu for one location",
         "tags" : [ "Storefront catalog" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/profile" : {
+      "get" : {
+        "description" : "Only fields the tenant already publishes on this branch elsewhere -- the same name and address shown in pickup search and printed on a receipt. Not found for an unknown, inactive, or cross-tenant location id.",
+        "operationId" : "profile_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LocationProfile"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A branch's own published display name and address",
+        "tags" : [ "Storefront location profile" ]
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/serviceability" : {
@@ -4675,17 +4761,20 @@
     "description" : "Scanning a table code, and the bill it leads to",
     "name" : "QR dine-in"
   }, {
+    "description" : "A branch's own published name and address",
+    "name" : "Storefront location profile"
+  }, {
     "description" : "A customer's own referral code, and redeeming a friend's",
     "name" : "Referrals"
   }, {
     "description" : "The tenant's own document, or the platform default (ADR 0068)",
     "name" : "Storefront terms of service"
   }, {
-    "description" : "Pickup branches near a customer",
-    "name" : "Storefront pickup locations"
-  }, {
     "description" : "A customer's own rating of their own completed order",
     "name" : "Reviews"
+  }, {
+    "description" : "Pickup branches near a customer",
+    "name" : "Storefront pickup locations"
   }, {
     "description" : "The published menu a customer sees",
     "name" : "Storefront catalog"

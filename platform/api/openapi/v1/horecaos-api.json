@@ -9638,6 +9638,19 @@
         },
         "type" : "object"
       },
+      "GeoPoint" : {
+        "properties" : {
+          "latitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "type" : "number"
+          }
+        },
+        "type" : "object"
+      },
       "GrantControllerReasonRequest" : {
         "properties" : {
           "reason" : {
@@ -11084,6 +11097,37 @@
           "medianSeconds" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "LocationProfile" : {
+        "properties" : {
+          "addressLine" : {
+            "type" : "string"
+          },
+          "city" : {
+            "type" : "string"
+          },
+          "contactPhone" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "district" : {
+            "type" : "string"
+          },
+          "landmark" : {
+            "type" : "string"
+          },
+          "latitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "type" : "number"
           }
         },
         "type" : "object"
@@ -15891,6 +15935,19 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "PickupLocationSearchRequest" : {
+        "properties" : {
+          "limit" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "point" : {
+            "$ref" : "#/components/schemas/GeoPoint"
+          }
+        },
+        "required" : [ "point" ],
         "type" : "object"
       },
       "PickupLocations" : {
@@ -38415,7 +38472,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}" : {
       "get" : {
-        "operationId" : "profile_2",
+        "operationId" : "profile_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -49395,35 +49452,19 @@
       }
     },
     "/api/v1/storefront/pickup-locations" : {
-      "get" : {
-        "description" : "Returns at most twenty active pickup branches, nearest first. Each result carries the same current serviceability answer the checkout path will later re-resolve authoritatively.",
+      "post" : {
+        "description" : "Returns at most twenty active pickup branches, nearest first. Each result carries the same current serviceability answer the checkout path will later re-resolve authoritatively. POST so the caller's coordinate travels in the body rather than the query string; nothing is written and no resource is created.",
         "operationId" : "nearbyPickupLocations",
-        "parameters" : [ {
-          "in" : "query",
-          "name" : "lat",
-          "required" : true,
-          "schema" : {
-            "format" : "double",
-            "type" : "number"
-          }
-        }, {
-          "in" : "query",
-          "name" : "lon",
-          "required" : true,
-          "schema" : {
-            "format" : "double",
-            "type" : "number"
-          }
-        }, {
-          "in" : "query",
-          "name" : "limit",
-          "required" : false,
-          "schema" : {
-            "default" : 10,
-            "format" : "int32",
-            "type" : "integer"
-          }
-        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PickupLocationSearchRequest"
+              }
+            }
+          },
+          "required" : true
+        },
         "responses" : {
           "200" : {
             "content" : {
@@ -50489,6 +50530,51 @@
         },
         "summary" : "The live menu for one location",
         "tags" : [ "Storefront catalog" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/profile" : {
+      "get" : {
+        "description" : "Only fields the tenant already publishes on this branch elsewhere -- the same name and address shown in pickup search and printed on a receipt. Not found for an unknown, inactive, or cross-tenant location id.",
+        "operationId" : "profile_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LocationProfile"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A branch's own published display name and address",
+        "tags" : [ "Storefront location profile" ]
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/serviceability" : {
@@ -63481,6 +63567,9 @@
     "description" : "ADR 0083: find an identifier across tenants",
     "name" : "Global lookup"
   }, {
+    "description" : "A branch's own published name and address",
+    "name" : "Storefront location profile"
+  }, {
     "description" : "ADR 0058: Telegram chat routing admin (gap map 10.9b)",
     "name" : "Notification routing"
   }, {
@@ -63499,11 +63588,11 @@
     "description" : "Read-only: which templates exist and what they configure (ADR 0008)",
     "name" : "Onboarding templates"
   }, {
-    "description" : "Pickup branches near a customer",
-    "name" : "Storefront pickup locations"
-  }, {
     "description" : "A customer's own rating of their own completed order",
     "name" : "Reviews"
+  }, {
+    "description" : "Pickup branches near a customer",
+    "name" : "Storefront pickup locations"
   }, {
     "description" : "Row 7.9a: per-customer coupon discount totals (ADR 0072)",
     "name" : "Customer discount history"
