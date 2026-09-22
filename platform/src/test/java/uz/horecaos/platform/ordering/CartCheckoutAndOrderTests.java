@@ -675,7 +675,52 @@ class CartCheckoutAndOrderTests {
         }
     }
 
-    /** True on success, false on the loser's StaleCartException -- never lets the race's own exception escape as a test error. */
+    @Test
+    @DisplayName("a retried rebuild that arrives after the first one committed is refused, not honoured twice")
+    void aRebuildRetriedAfterTheWinnerCommittedIsRefused() {
+        // The deterministic half of the race above: the client's first call
+        // succeeded but its response was lost, and the retry carries the same
+        // expectedVersion against a source cart that is already ABANDONED.
+        var cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+        int version = cartVersion(cart);
+
+        tx(() -> carts.rebuildAtLocation(TENANT, BRAND, CUSTOMER, cart, version, OTHER_LOCATION));
+
+        Throwable retried = catchThrowable(
+                () -> tx(() -> carts.rebuildAtLocation(TENANT, BRAND, CUSTOMER, cart, version, OTHER_LOCATION)));
+
+        assertThat(retried)
+                .isInstanceOf(CartService.CartRefusedException.class)
+                .extracting(t -> ((CartService.CartRefusedException) t).code())
+                .isEqualTo("CART_NOT_EDITABLE");
+        assertThat(jdbc.sql("""
+                        SELECT count(*) FROM ordering.carts
+                         WHERE tenant_id = :tenantId AND location_id = :location AND status = 'ACTIVE'
+                        """)
+                        .param("tenantId", TENANT)
+                        .param("location", OTHER_LOCATION)
+                        .query(Long.class)
+                        .single())
+                .as("the retry built nothing: one live cart at the new location")
+                .isEqualTo(1L);
+    }
+
+    /**
+     * True on success, false when this call is the loser -- never lets the race's
+     * own exception escape as a test error.
+     *
+     * <p>The loser loses in one of two places, depending on how far the winner
+     * got first. Both threads still inside the method: the loser passes the
+     * unlocked version check, builds its cart, and then its closing
+     * {@code transition(ACTIVE -> ABANDONED)} affects zero rows, which is the
+     * {@link CartService.StaleCartException} the fix throws. Winner already
+     * committed (CI's slower, two-fork runner, 2026-09-22): the loser's
+     * {@code requireEditable} finds the source cart {@code ABANDONED} and refuses
+     * with {@code CART_NOT_EDITABLE} before building anything. Either way exactly
+     * one live cart survives, which is what the test asserts; any other refusal
+     * code is still a test error.
+     */
     private boolean raceRebuild(UUID cart, int version, CountDownLatch bothReady) {
         bothReady.countDown();
         awaitQuietly(bothReady);
@@ -684,6 +729,11 @@ class CartCheckoutAndOrderTests {
             return true;
         } catch (CartService.StaleCartException lost) {
             return false;
+        } catch (CartService.CartRefusedException refused) {
+            if ("CART_NOT_EDITABLE".equals(refused.code())) {
+                return false;
+            }
+            throw refused;
         }
     }
 
