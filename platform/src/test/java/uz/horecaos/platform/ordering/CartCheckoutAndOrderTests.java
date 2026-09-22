@@ -66,6 +66,7 @@ import uz.horecaos.platform.migration.infrastructure.persistence.JdbcMigrationSc
 import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderReceived;
+import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
 import uz.horecaos.platform.ordering.api.PaymentCaptured;
 import uz.horecaos.platform.ordering.api.PaymentFailed;
@@ -179,6 +180,18 @@ class CartCheckoutAndOrderTests {
     private RecordingEventPublisher published;
 
     private CartService carts;
+
+    /**
+     * The one collaborator in this suite's checkout wiring a test can still
+     * change after {@code setUp()} has already built {@link #checkout} — every
+     * other port here is a real implementation over the real schema. A test
+     * that needs {@code ordering.minimum_order_amount_minor} configured calls
+     * {@link MutableConfigurationResolver#override} before checking out;
+     * every other test sees plain code defaults, unchanged from a plain
+     * {@link FakeConfigurationResolver}.
+     */
+    private MutableConfigurationResolver orderingConfig;
+
     private CheckoutService checkout;
     private OrderStateService orderState;
     private PosApprovalDecisionPortAdapter posDecisions;
@@ -426,6 +439,7 @@ class CartCheckoutAndOrderTests {
                         clock,
                         (keyCode, scope) -> {}));
 
+        orderingConfig = new MutableConfigurationResolver();
         carts = new CartService(
                 cartStore,
                 channelStore,
@@ -452,7 +466,8 @@ class CartCheckoutAndOrderTests {
                 settlementPlanner,
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 published,
-                clock);
+                clock,
+                new PromoCodeRedemptionService(promoCodeStore, clock));
         // The ordering.api face a POS integration reaches OrderStateService.decide
         // through (ADR 0002, ADR 0011 §6.4) — a translation layer only, so it is
         // built directly over the same orderState this suite already wires by
@@ -541,7 +556,8 @@ class CartCheckoutAndOrderTests {
                 objectMapper,
                 published,
                 clock,
-                customerBlacklist);
+                customerBlacklist,
+                orderingConfig);
 
         checkout = checkoutWith.apply(UNWIRED_PAYMENTS);
         // ADR 0075's port over the same services, so a bot repeat and a
@@ -616,6 +632,59 @@ class CartCheckoutAndOrderTests {
                         + "old price cannot come across")
                 .isNull();
         assertThat(readCart(cart).status()).isEqualTo(CartStatus.ABANDONED);
+    }
+
+    @Test
+    @DisplayName("two concurrent rebuilds of one cart leave exactly one live cart behind")
+    void twoConcurrentRebuildsLeaveExactlyOneLiveCart() throws Exception {
+        // Contested finding: rebuildAtLocation read the source cart's version
+        // unlocked and discarded the boolean from its own closing
+        // carts.transition(...) call, so two racing calls carrying the same
+        // expectedVersion (a client retry after a timeout) could each build a
+        // brand-new ACTIVE cart from the one source cart, instead of the loser
+        // failing the way every sibling mutating method in this class already
+        // does.
+        var cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+        int version = cartVersion(cart);
+
+        CountDownLatch bothReady = new CountDownLatch(2);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<Boolean> first = pool.submit(() -> raceRebuild(cart, version, bothReady));
+            Future<Boolean> second = pool.submit(() -> raceRebuild(cart, version, bothReady));
+
+            boolean firstSucceeded = first.get(20, TimeUnit.SECONDS);
+            boolean secondSucceeded = second.get(20, TimeUnit.SECONDS);
+
+            assertThat(firstSucceeded ^ secondSucceeded)
+                    .as("exactly one of the two racing rebuilds must win")
+                    .isTrue();
+            assertThat(jdbc.sql("""
+                            SELECT count(*) FROM ordering.carts
+                             WHERE tenant_id = :tenantId AND location_id = :location AND status = 'ACTIVE'
+                            """)
+                            .param("tenantId", TENANT)
+                            .param("location", OTHER_LOCATION)
+                            .query(Long.class)
+                            .single())
+                    .as("only the winner's rebuilt cart may still be live at the new location")
+                    .isEqualTo(1L);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** True on success, false on the loser's StaleCartException -- never lets the race's own exception escape as a test error. */
+    private boolean raceRebuild(UUID cart, int version, CountDownLatch bothReady) {
+        bothReady.countDown();
+        awaitQuietly(bothReady);
+        try {
+            tx(() -> carts.rebuildAtLocation(TENANT, BRAND, CUSTOMER, cart, version, OTHER_LOCATION));
+            return true;
+        } catch (CartService.StaleCartException lost) {
+            return false;
+        }
     }
 
     @Test
@@ -914,6 +983,68 @@ class CartCheckoutAndOrderTests {
         assertThat(order.subtotalMinor() + order.taxMinor() + order.feeMinor() - order.discountMinor())
                 .as("total = subtotal + tax + fee - discount")
                 .isEqualTo(order.totalMinor());
+    }
+
+    @Test
+    @DisplayName("cancelling an order that never completed gives its promo-code redemption back")
+    void cancellingAnUncompletedOrderReleasesItsPromoCodeRedemption() {
+        // H6: PromoCodeRedemptionPort.release() used to be called only from
+        // CheckoutReservationStep's own in-transaction compensation, reachable
+        // only while checkout itself was still refusing before the order was
+        // written. Once the order existed, REJECTED/EXPIRED/CANCELLED never
+        // released it, unlike the inventory hold and the kitchen slot.
+        requireApproval();
+
+        var promoCodeStore =
+                new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore(jdbc, objectMapper);
+        var authoring = new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService(promoCodeStore, clock);
+        var drafted = authoring.draft(
+                TENANT,
+                BRAND,
+                new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.PromoCodeDraft(
+                        "Promo CUSTOMER10",
+                        "CUSTOMER10",
+                        uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.DiscountShape
+                                .PERCENTAGE_OFF_ORDER,
+                        1_000,
+                        null,
+                        "UZS",
+                        0,
+                        List.of(),
+                        List.of(),
+                        null,
+                        100,
+                        null,
+                        null));
+        authoring.activate(TENANT, BRAND, drafted.couponId());
+
+        UUID cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+        tx(() -> carts.applyPromoCode(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "customer10"));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-promo-cancel")));
+        assertThat(result.created()).isTrue();
+        UUID order = orderIdOf(result);
+
+        assertThat(redeemedCount(drafted.couponId()))
+                .as("checkout took the redemption")
+                .isEqualTo(1L);
+
+        int version = orderStore.find(TENANT, order).orElseThrow().version();
+        tx(() -> orderState.cancel(
+                TENANT, order, version, "CUSTOMER_CHANGED_MIND", "CUSTOMER", CUSTOMER.toString(), null));
+
+        assertThat(redeemedCount(drafted.couponId()))
+                .as("an order that never completed must not permanently burn the customer's redemption")
+                .isEqualTo(0L);
+    }
+
+    private long redeemedCount(UUID couponId) {
+        return jdbc.sql("SELECT count(*) FROM pricing.coupon_redemptions WHERE coupon_id = :id AND status = 'REDEEMED'")
+                .param("id", couponId)
+                .query(Long.class)
+                .single();
     }
 
     /**
@@ -2298,7 +2429,8 @@ class CartCheckoutAndOrderTests {
         var order = orderIdOf(placeOrder("idem-timeout"));
 
         clock.advance(Duration.ofMinutes(6));
-        var due = tx(() -> orderStore.claimDueTimers(clock.instant(), 10));
+        var due = tx(
+                () -> orderStore.claimDueTimers(clock.instant(), clock.instant().minus(Duration.ofMinutes(2)), 10));
         assertThat(due).hasSize(1);
 
         tx(() -> orderState.approvalDeadlineReached(TENANT, order));
@@ -2310,6 +2442,77 @@ class CartCheckoutAndOrderTests {
 
         tx(() -> inventoryProcess.runOnce(10));
         assertThat(reservationStatus()).isEqualTo("RELEASED");
+    }
+
+    @Test
+    @DisplayName(
+            "claimDueTimers reclaims a failed-retryable timer once its backoff elapses, and carries the attempt count")
+    void claimDueTimersReclaimsAFailedRetryableTimer() {
+        // H9: JdbcOrderStore.markTimerFailed + claimDueTimers's second source
+        // of rows (FAILED_RETRYABLE, next_retry_at <= now) is the SQL half of
+        // the retry path OrderProcessWorkerTimerRetryTests proves in Java.
+        requireApproval();
+        orderIdOf(placeOrder("idem-timer-retry"));
+
+        clock.advance(Duration.ofMinutes(6));
+        var firstClaim = tx(
+                () -> orderStore.claimDueTimers(clock.instant(), clock.instant().minus(Duration.ofMinutes(2)), 10));
+        assertThat(firstClaim).hasSize(1);
+        var timer = firstClaim.getFirst();
+        assertThat(timer.attemptCount()).isZero();
+
+        // Simulate a thrown failure applying it: quarantined with a backoff,
+        // and no longer claimable by the PENDING/due_at source (it moved off
+        // FIRED) nor by the FAILED_RETRYABLE source until its own backoff
+        // elapses.
+        Instant nextRetryAt = clock.instant().plus(Duration.ofSeconds(30));
+        tx(() -> orderStore.markTimerFailed(TENANT, timer.timerId(), 1, nextRetryAt));
+        assertThat(tx(() -> orderStore.claimDueTimers(
+                        clock.instant(), clock.instant().minus(Duration.ofMinutes(2)), 10)))
+                .as("the backoff has not elapsed yet")
+                .isEmpty();
+
+        clock.advance(Duration.ofSeconds(31));
+        var secondClaim = tx(
+                () -> orderStore.claimDueTimers(clock.instant(), clock.instant().minus(Duration.ofMinutes(2)), 10));
+
+        assertThat(secondClaim).hasSize(1);
+        assertThat(secondClaim.getFirst().timerId()).isEqualTo(timer.timerId());
+        assertThat(secondClaim.getFirst().attemptCount())
+                .as("the attempt count markTimerFailed recorded must survive the reclaim")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("claimDueTimers reclaims a timer stranded FIRED by a node that never applied it")
+    void claimDueTimersReclaimsAStaleFiredTimer() {
+        // H9's second failure mode: not a thrown exception, but the node dying
+        // between claiming the timer and applying it. Nothing marks the row
+        // FAILED_RETRYABLE in that case, so claimDueTimers itself has to notice
+        // a FIRED row whose order never left AWAITING_APPROVAL.
+        requireApproval();
+        var order = orderIdOf(placeOrder("idem-timer-stale"));
+
+        clock.advance(Duration.ofMinutes(6));
+        var firstClaim = tx(
+                () -> orderStore.claimDueTimers(clock.instant(), clock.instant().minus(Duration.ofMinutes(2)), 10));
+        assertThat(firstClaim).hasSize(1);
+        // Deliberately not applied and not marked failed -- the crash this test
+        // is standing in for.
+        assertThat(orderStore.find(TENANT, order).orElseThrow().status()).isEqualTo(OrderStatus.AWAITING_APPROVAL);
+
+        assertThat(tx(() -> orderStore.claimDueTimers(
+                        clock.instant(), clock.instant().minus(Duration.ofMinutes(2)), 10)))
+                .as("still well inside the staleness window")
+                .isEmpty();
+
+        clock.advance(Duration.ofMinutes(3));
+        var reclaimed = tx(
+                () -> orderStore.claimDueTimers(clock.instant(), clock.instant().minus(Duration.ofMinutes(2)), 10));
+
+        assertThat(reclaimed).hasSize(1);
+        assertThat(reclaimed.getFirst().timerId())
+                .isEqualTo(firstClaim.getFirst().timerId());
     }
 
     @Test
@@ -2656,6 +2859,34 @@ class CartCheckoutAndOrderTests {
         assertThat(catchThrowable(() -> tx(() -> orderState.cancel(
                         TENANT, orderIdOf(result), version, "OPERATOR_ERROR", "USER", "someone", null))))
                 .isInstanceOf(OrderStateService.CancellationNotPermittedException.class);
+    }
+
+    @Test
+    @DisplayName("state-actions cannot drive CANCELLED; advance() refuses it even though the raw table permits it")
+    void advanceRefusesTheCancellationFamily() {
+        var order = orderIdOf(placeOrder("idem-advance-no-cancel"));
+        int version = orderStore.find(TENANT, order).orElseThrow().version();
+
+        // The bare transition table has no opinion here -- OrderStateMachine
+        // permits CONFIRMED -> CANCELLED, because cancel() itself relies on that
+        // same table. advance() has to refuse the target itself, or the generic
+        // state-actions endpoint (gated only on Capability.ORDER_ADVANCE) becomes
+        // a side door around cancel()'s capability gate and ADR-0039 outcome.
+        assertThat(OrderStateMachine.permits(OrderStatus.CONFIRMED, OrderStatus.CANCELLED))
+                .as("the raw table permits it; advance() must refuse it on its own")
+                .isTrue();
+
+        assertThat(catchThrowable(() -> tx(() -> orderState.advance(
+                        TENANT, order, OrderStatus.CANCELLED, version, "ANYTHING", "USER", "someone", null))))
+                .isInstanceOf(OrderStateService.AdvanceTargetRefusedException.class);
+
+        assertThat(orderStore.find(TENANT, order).orElseThrow().status()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.order_outcomes WHERE order_id = :id")
+                        .param("id", order)
+                        .query(Long.class)
+                        .single())
+                .as("a refused advance() must not have written an outcome row")
+                .isZero();
     }
 
     // -------------------------------------------------------- state machine
@@ -3065,6 +3296,118 @@ class CartCheckoutAndOrderTests {
         var result = tx(() -> checkout.checkout(checkoutCommand(cart, "below-minimum", "CASH")));
         assertThat(result.created()).isFalse();
         assertThat(result.rejectionCode()).isEqualTo("DELIVERY_MINIMUM_BASKET_NOT_MET");
+    }
+
+    @Test
+    @DisplayName("below the tenant's configured minimum order amount, pickup checkout is refused")
+    void belowTheConfiguredMinimumOrderAmountPickupCheckoutIsRefused() {
+        // ordering.minimum_order_amount_minor -- never enforced before this
+        // fix. A far-above-any-plausible-subtotal floor makes the assertion
+        // hold regardless of exactly how tax-inclusive pricing nets out.
+        orderingConfig.override(OrderingConfigurationKeys.MINIMUM_ORDER_AMOUNT_MINOR_CODE, 500_000L);
+        UUID cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+        var priced = tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        assertThat(priced.quote().subtotalMinor()).isLessThan(500_000L);
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "below-min-order", "CASH")));
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.rejectionCode()).isEqualTo("BELOW_MINIMUM_ORDER");
+    }
+
+    @Test
+    @DisplayName("VAT alone must not separate a passing total from a failing subtotal at the configured floor")
+    void aTaxInclusiveOrderClearingTheFloorIsNeverRejectedOnItsSubtotal() {
+        // 2026-09-21 audit (major): the gate used to compare quote.subtotalMinor()
+        // -- gross of tax, since PricingEngine's INCLUSIVE mode subtracts VAT
+        // to derive it -- against a floor OrderingConfigurationKeys.MINIMUM_
+        // ORDER_AMOUNT_MINOR's own javadoc twice calls "the order total": what
+        // the customer actually pays. A single 50,000 burger, 12% INCLUSIVE
+        // VAT, no discount: subtotal is 50,000 minus the ~5,357 extracted as
+        // tax (44,643), while total stays the full 50,000. A floor of 45,000
+        // sits strictly between the two -- clearing the real total the
+        // customer is charged, but not the tax-excluded subtotal.
+        orderingConfig.override(OrderingConfigurationKeys.MINIMUM_ORDER_AMOUNT_MINOR_CODE, 45_000L);
+        UUID cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+        var priced = tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        assertThat(priced.quote().subtotalMinor())
+                .as("tax-excluded subtotal sits below the floor")
+                .isLessThan(45_000L);
+        assertThat(priced.quote().totalMinor())
+                .as("but the order total the customer actually pays clears it")
+                .isGreaterThanOrEqualTo(45_000L);
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "vat-boundary-clears-total")));
+
+        assertThat(result.created())
+                .as("an ordinary order whose real total clears the configured floor must not be refused")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "an order-level discount cannot push a checkout under the floor while its pre-discount subtotal hides it")
+    void anOrderLevelDiscountBelowTheFloorIsStillRefused() {
+        // 2026-09-21 audit (major): subtotalMinor() is derived from
+        // preDiscountGrossTotal, so it is blind to any item- or order-level
+        // promotion discount -- while totalMinor() is not. That reopened the
+        // exact bypass H5 was meant to close: a heavily discounted pickup
+        // order could check out for a fraction of the configured floor
+        // because the gate never looked at what the customer actually paid.
+        orderingConfig.override(OrderingConfigurationKeys.MINIMUM_ORDER_AMOUNT_MINOR_CODE, 40_000L);
+
+        var promoCodeStore =
+                new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore(jdbc, objectMapper);
+        var authoring = new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService(promoCodeStore, clock);
+        var drafted = authoring.draft(
+                TENANT,
+                BRAND,
+                new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.PromoCodeDraft(
+                        "Promo BYPASS90",
+                        "BYPASS90",
+                        uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.DiscountShape
+                                .PERCENTAGE_OFF_ORDER,
+                        9_000,
+                        null,
+                        "UZS",
+                        0,
+                        List.of(),
+                        List.of(),
+                        null,
+                        100,
+                        null,
+                        null));
+        authoring.activate(TENANT, BRAND, drafted.couponId());
+
+        UUID cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+        tx(() -> carts.applyPromoCode(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "bypass90"));
+        var priced = tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        assertThat(priced.quote().subtotalMinor())
+                .as("the pre-discount subtotal alone still clears the floor")
+                .isGreaterThanOrEqualTo(40_000L);
+        assertThat(priced.quote().totalMinor())
+                .as("but the discounted total the customer actually pays does not")
+                .isLessThan(40_000L);
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "discount-bypass-below-floor")));
+
+        assertThat(result.created())
+                .as("a 90%-off order must not check out under the tenant's configured minimum order amount")
+                .isFalse();
+        assertThat(result.rejectionCode()).isEqualTo("BELOW_MINIMUM_ORDER");
+    }
+
+    @Test
+    @DisplayName("a zero configured minimum order amount (the code default) never refuses a pickup checkout")
+    void zeroConfiguredMinimumOrderAmountNeverRefuses() {
+        // Nothing set: OrderingConfigurationKeys.MINIMUM_ORDER_AMOUNT_MINOR's
+        // own code default is 0, meaning no minimum -- proves the new gate
+        // does not regress every tenant that has never touched the setting.
+        var result = placeOrder("no-minimum-configured");
+        assertThat(result.created()).isTrue();
     }
 
     @Test
@@ -6200,6 +6543,38 @@ class CartCheckoutAndOrderTests {
                     return 0;
                 }
             };
+
+    /**
+     * Lets one test override a configuration key after {@code setUp()} has
+     * already built every collaborator that resolves through it, by swapping
+     * the {@link FakeConfigurationResolver} it delegates to. Every test that
+     * never calls {@link #override} sees a plain {@code new
+     * FakeConfigurationResolver()} -- every key's own code default.
+     */
+    private static final class MutableConfigurationResolver
+            implements uz.horecaos.platform.tenancy.api.ConfigurationResolver {
+
+        private volatile uz.horecaos.platform.tenancy.api.ConfigurationResolver delegate =
+                new FakeConfigurationResolver();
+
+        void override(String keyCode, Object value) {
+            delegate = new FakeConfigurationResolver(Map.of(keyCode, value));
+        }
+
+        @Override
+        public <T> uz.horecaos.platform.tenancy.api.Resolved<T> resolve(
+                uz.horecaos.platform.tenancy.api.ConfigurationKey<T> key,
+                uz.horecaos.platform.iam.api.ResourceScope scope) {
+            return delegate.resolve(key, scope);
+        }
+
+        @Override
+        public uz.horecaos.platform.tenancy.api.ResolutionTrace explain(
+                uz.horecaos.platform.tenancy.api.ConfigurationKey<?> key,
+                uz.horecaos.platform.iam.api.ResourceScope scope) {
+            return delegate.explain(key, scope);
+        }
+    }
 
     /** Lets a test move time forward without sleeping. */
     private static final class MutableClock extends java.time.Clock {

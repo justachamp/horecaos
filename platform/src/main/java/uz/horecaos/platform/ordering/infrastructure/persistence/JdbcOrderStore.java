@@ -1746,34 +1746,92 @@ public class JdbcOrderStore {
     }
 
     /**
-     * Claims due timers for this worker.
+     * Claims due timers for this worker (H9).
      *
      * <p>{@code FOR UPDATE SKIP LOCKED} so two workers never fire one timer twice,
      * and a slow worker does not stall every other pending deadline behind it.
+     *
+     * <p>Three sources of a claimable row, mirroring {@code
+     * OrderInventoryProcess}'s own retry shape: a fresh {@code PENDING} timer past
+     * its {@code due_at}; a {@code FAILED_RETRYABLE} one whose backoff has
+     * elapsed, after {@link #markTimerFailed} recorded a thrown failure; and a
+     * {@code FIRED} one that has sat {@code staleAfter} past its own claim while
+     * its order is still {@code AWAITING_APPROVAL} — the node that claimed it
+     * never got to apply it (a mid-batch restart or deploy, not an exception this
+     * worker could have caught) and no other sweep would ever notice. The last
+     * clause reads the order's live status rather than trusting a second
+     * timestamp, because a successful apply always moves the order out of {@code
+     * AWAITING_APPROVAL}: nothing legitimately stays {@code FIRED} with the order
+     * still waiting past the staleness window.
      */
-    public List<DueTimerRow> claimDueTimers(Instant now, int batchSize) {
+    public List<DueTimerRow> claimDueTimers(Instant now, Instant staleFiredBefore, int batchSize) {
         return jdbc.sql("""
                 WITH due AS (
-                    SELECT id FROM ordering.order_timers
-                    WHERE status = 'PENDING' AND due_at <= :now
-                    ORDER BY due_at
-                    FOR UPDATE SKIP LOCKED
+                    SELECT t.id FROM ordering.order_timers t
+                    JOIN ordering.orders o ON o.tenant_id = t.tenant_id AND o.id = t.order_id
+                    WHERE (t.status = 'PENDING' AND t.due_at <= :now)
+                       OR (t.status = 'FAILED_RETRYABLE' AND t.next_retry_at <= :now)
+                       OR (t.status = 'FIRED' AND t.settled_at <= :staleFiredBefore
+                           AND o.status = 'AWAITING_APPROVAL')
+                    ORDER BY t.due_at
+                    FOR UPDATE OF t SKIP LOCKED
                     LIMIT :batchSize
                 )
                 UPDATE ordering.order_timers AS timer
                 SET status = 'FIRED', settled_at = :now
                 FROM due
                 WHERE timer.id = due.id
-                RETURNING timer.id, timer.tenant_id, timer.order_id, timer.timer_type
+                RETURNING timer.id, timer.tenant_id, timer.order_id, timer.timer_type, timer.attempt_count
                 """)
                 .param("now", utc(now))
+                .param("staleFiredBefore", utc(staleFiredBefore))
                 .param("batchSize", batchSize)
                 .query((row, number) -> new DueTimerRow(
                         row.getObject("id", UUID.class),
                         row.getObject("tenant_id", UUID.class),
                         row.getObject("order_id", UUID.class),
-                        row.getString("timer_type")))
+                        row.getString("timer_type"),
+                        row.getInt("attempt_count")))
                 .list();
+    }
+
+    /**
+     * Records that a claimed timer's apply attempt failed (H9), quarantining it
+     * away from {@link #claimDueTimers}' {@code PENDING}/{@code FAILED_RETRYABLE}
+     * sources until {@code nextRetryAt} — or, when {@code nextRetryAt} is null,
+     * permanently: the caller has already decided this attempt exhausted the
+     * retry budget, and the row becomes {@code MANUAL_ACTION_REQUIRED}, this
+     * table's dead letter.
+     *
+     * <p>Guarded on {@code status = 'FIRED'} exactly like {@code
+     * OrderInventoryProcess}'s own settle: a row a second worker has already
+     * reclaimed (the stale-{@code FIRED} sweep) or that a human decision already
+     * cancelled out from under this attempt updates nothing here, and this
+     * worker's own record of what happened is not the one that survives.
+     */
+    public void markTimerFailed(UUID tenantId, UUID timerId, int attemptCount, @Nullable Instant nextRetryAt) {
+        if (nextRetryAt == null) {
+            jdbc.sql("""
+                    UPDATE ordering.order_timers
+                    SET status = 'MANUAL_ACTION_REQUIRED', attempt_count = :attemptCount, next_retry_at = NULL
+                    WHERE tenant_id = :tenantId AND id = :id AND status = 'FIRED'
+                    """)
+                    .param("tenantId", tenantId)
+                    .param("id", timerId)
+                    .param("attemptCount", attemptCount)
+                    .update();
+            return;
+        }
+        jdbc.sql("""
+                UPDATE ordering.order_timers
+                SET status = 'FAILED_RETRYABLE', attempt_count = :attemptCount, next_retry_at = :nextRetryAt
+                WHERE tenant_id = :tenantId AND id = :id AND status = 'FIRED'
+                """)
+                .param("tenantId", tenantId)
+                .param("id", timerId)
+                .param("attemptCount", attemptCount)
+                .param("nextRetryAt", utc(nextRetryAt))
+                .update();
     }
 
     /**
@@ -2377,7 +2435,7 @@ public class JdbcOrderStore {
             boolean effective,
             Instant issuedAt) {}
 
-    public record DueTimerRow(UUID timerId, UUID tenantId, UUID orderId, String timerType) {}
+    public record DueTimerRow(UUID timerId, UUID tenantId, UUID orderId, String timerType, int attemptCount) {}
 
     /**
      * A status transition proposed inside one transaction, and its outcome.

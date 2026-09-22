@@ -38,6 +38,7 @@ import uz.horecaos.platform.ordering.domain.TransitionTrigger;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.ApprovalDecisionRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderRow;
+import uz.horecaos.platform.pricing.api.PromoCodeRedemptionPort;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort.CapacityOutcome;
 import uz.horecaos.platform.tenancy.api.TenantId;
@@ -73,7 +74,9 @@ public class OrderStateService {
     private final AuditRecorder audit;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final PromoCodeRedemptionPort promoCodes;
 
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderStateService(
             JdbcOrderStore orders,
             LocationCapacityPort capacity,
@@ -83,7 +86,8 @@ public class OrderStateService {
             OrderSettlementPort settlements,
             AuditRecorder audit,
             ApplicationEventPublisher events,
-            Clock clock) {
+            Clock clock,
+            PromoCodeRedemptionPort promoCodes) {
         this.orders = orders;
         this.capacity = capacity;
         this.inventoryProcess = inventoryProcess;
@@ -93,6 +97,7 @@ public class OrderStateService {
         this.audit = audit;
         this.events = events;
         this.clock = clock;
+        this.promoCodes = promoCodes;
     }
 
     /**
@@ -602,6 +607,9 @@ public class OrderStateService {
         Instant now = clock.instant();
         OrderRow order = orders.find(tenantId, orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
 
+        if (isGuardedAdvanceTarget(target)) {
+            throw new AdvanceTargetRefusedException(target);
+        }
         if (order.version() != expectedVersion) {
             throw new StaleOrderException(expectedVersion, order.version());
         }
@@ -659,6 +667,63 @@ public class OrderStateService {
                 correlationId,
                 now);
         return new DecisionResult(true, target, version, null);
+    }
+
+    /**
+     * Whether {@code target} has its own guarded endpoint that {@link #advance}
+     * must never reach around.
+     *
+     * <p>{@link OrderStateMachine#permits} alone would let {@code advance} —
+     * gated only on {@code Capability.ORDER_ADVANCE}, which roles such as
+     * {@code LOCATION_STAFF} hold without {@code Capability.ORDER_CANCEL} —
+     * drive every one of these four the same way {@link #cancel}, {@link
+     * #decide} and {@link #approvalDeadlineReached} do, but without their
+     * registry reason, their capability gate, or their ADR-0039 {@link
+     * OrderOutcome} recording: {@code applyConsequences} only builds an
+     * outcome for {@code target == COMPLETED}, so a cancellation driven
+     * through here would write no {@code order_outcomes} row at all.
+     */
+    private static boolean isGuardedAdvanceTarget(OrderStatus target) {
+        return target == OrderStatus.CANCELLED
+                || target == OrderStatus.REJECTED
+                || target == OrderStatus.EXPIRED
+                || target == OrderStatus.PAYMENT_FAILED;
+    }
+
+    private static String guardedAdvanceRemedyFor(OrderStatus target) {
+        return switch (target) {
+            case CANCELLED ->
+                "POST .../cancellations (OrderStateService.cancel), which requires "
+                        + "Capability.ORDER_CANCEL and a registry reason";
+            case REJECTED -> "POST .../approval-decisions (OrderStateService.decide)";
+            case EXPIRED ->
+                "the approval-deadline timer (OrderStateService.approvalDeadlineReached); "
+                        + "an order does not expire on command";
+            case PAYMENT_FAILED -> "the payment path that records a failed authorization";
+            default -> throw new IllegalArgumentException("not a guarded advance target: " + target);
+        };
+    }
+
+    /**
+     * {@code state-actions} tried to drive an order to a status that has its
+     * own guarded endpoint (ADR 0039). Mapped by the caller to a stable client
+     * error — never treated as a state-machine conflict, because the raw
+     * transition table may well permit it; the problem is which door was used.
+     */
+    public static class AdvanceTargetRefusedException extends IllegalArgumentException {
+        private final OrderStatus target;
+
+        public AdvanceTargetRefusedException(OrderStatus target) {
+            super(("state-actions cannot move an order to %s; use %s. Reaching it through the "
+                            + "generic advance affordance would skip that endpoint's capability gate and "
+                            + "its ADR-0039 outcome recording.")
+                    .formatted(target, guardedAdvanceRemedyFor(target)));
+            this.target = target;
+        }
+
+        public OrderStatus target() {
+            return target;
+        }
     }
 
     /**
@@ -1188,6 +1253,15 @@ public class OrderStateService {
         // an open item on ADR 0039's checklist rather than a silent no-op.
         if (target.releasesInventory()) {
             inventoryProcess.enqueueRelease(order.orderId(), order.tenantId(), order.pricingQuoteId(), now);
+            // ADR 0072: an order that ends REJECTED, EXPIRED, CANCELLED or
+            // PAYMENT_FAILED never completed, so any coupon redemption its
+            // checkout took must go back the same way the inventory hold and
+            // the kitchen slot already do -- a customer whose order never
+            // happened must not permanently lose a limited-use code. False
+            // (nothing was reserved for this quote) is not an error: a
+            // guest promo-free order, or a replayed terminal transition,
+            // makes this call idempotently.
+            promoCodes.release(order.tenantId(), order.pricingQuoteId());
         } else if (target == OrderStatus.CONFIRMED) {
             inventoryProcess.enqueueCommit(order.orderId(), order.tenantId(), order.pricingQuoteId(), now);
         }

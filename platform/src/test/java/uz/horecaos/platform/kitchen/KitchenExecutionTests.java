@@ -196,7 +196,11 @@ class KitchenExecutionTests {
                 settlements,
                 audit,
                 event -> {},
-                clock);
+                clock,
+                new uz.horecaos.platform.pricing.application.PromoCodeRedemptionService(
+                        new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore(
+                                jdbc, objectMapper),
+                        clock));
         wiredTickets = new KitchenTicketService(
                 store,
                 new JdbcKitchenOrderSource(jdbc),
@@ -1253,7 +1257,11 @@ class KitchenExecutionTests {
                 settlements,
                 audit,
                 event -> {},
-                Clock.fixed(NOON, ZoneOffset.UTC)));
+                Clock.fixed(NOON, ZoneOffset.UTC),
+                new uz.horecaos.platform.pricing.application.PromoCodeRedemptionService(
+                        new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore(
+                                jdbc, JsonMapper.builder().build()),
+                        Clock.fixed(NOON, ZoneOffset.UTC))));
 
         var replay = port.propose(
                 TENANT,
@@ -1312,7 +1320,11 @@ class KitchenExecutionTests {
                 settlements,
                 audit,
                 event -> {},
-                Clock.fixed(NOON, ZoneOffset.UTC)));
+                Clock.fixed(NOON, ZoneOffset.UTC),
+                new uz.horecaos.platform.pricing.application.PromoCodeRedemptionService(
+                        new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore(
+                                jdbc, JsonMapper.builder().build()),
+                        Clock.fixed(NOON, ZoneOffset.UTC))));
 
         var completed = port.propose(
                 TENANT,
@@ -1377,7 +1389,11 @@ class KitchenExecutionTests {
                 settlements,
                 audit,
                 event -> {},
-                Clock.fixed(NOON, ZoneOffset.UTC)));
+                Clock.fixed(NOON, ZoneOffset.UTC),
+                new uz.horecaos.platform.pricing.application.PromoCodeRedemptionService(
+                        new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore(
+                                jdbc, JsonMapper.builder().build()),
+                        Clock.fixed(NOON, ZoneOffset.UTC))));
 
         UUID stranger = UUID.randomUUID();
         var outcome = port.propose(

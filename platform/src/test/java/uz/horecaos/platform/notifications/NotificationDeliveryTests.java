@@ -71,8 +71,10 @@ import uz.horecaos.platform.notifications.domain.NotificationClass;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.NewNotification;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
+import uz.horecaos.platform.ordering.api.OrderCancelled;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.ordering.api.OrderExpired;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
@@ -283,6 +285,30 @@ class NotificationDeliveryTests {
         worker.drain();
 
         assertThat(gateway.messagesSent()).isEqualTo(1);
+    }
+
+    // ------------------------------------------------------ cancel and expire
+
+    @Test
+    @DisplayName("H10: a cancelled order creates a customer notification intent")
+    void aCancelledOrderNotifiesTheCustomer() {
+        // Before this fix, OrderCancelled fell to onOrderingEvent's default
+        // case -- no customer notification intent was ever created, despite
+        // OrderStateService reliably publishing the event for every
+        // cancellation.
+        trigger.onOrderingEvent(orderCancelled());
+
+        assertThat(notificationCount()).isEqualTo(1);
+        assertThat(templateKeyOf(orderId)).isEqualTo(OrderNotificationTrigger.ORDER_CANCELLED);
+    }
+
+    @Test
+    @DisplayName("H10: an expired order creates a customer notification intent")
+    void anExpiredOrderNotifiesTheCustomer() {
+        trigger.onOrderingEvent(orderExpired());
+
+        assertThat(notificationCount()).isEqualTo(1);
+        assertThat(templateKeyOf(orderId)).isEqualTo(OrderNotificationTrigger.ORDER_EXPIRED);
     }
 
     // ----------------------------------------------------------- consent gate
@@ -721,6 +747,33 @@ class NotificationDeliveryTests {
                 12_500_000L,
                 "CONFIRMED",
                 3);
+    }
+
+    private OrderCancelled orderCancelled() {
+        return new OrderCancelled(
+                UUID.randomUUID(),
+                new TenantId(TENANT),
+                orderId,
+                NOW,
+                BRAND,
+                LOCATION,
+                "CUSTOMER",
+                "CUSTOMER_CHANGED_MIND",
+                "CONFIRMED",
+                "CANCELLED",
+                3);
+    }
+
+    private OrderExpired orderExpired() {
+        return new OrderExpired(
+                UUID.randomUUID(), new TenantId(TENANT), orderId, NOW, BRAND, LOCATION, NOW, "EXPIRED", 2);
+    }
+
+    private String templateKeyOf(UUID subject) {
+        return jdbc.sql("SELECT template_key FROM notifications.notifications WHERE subject_id = :subject")
+                .param("subject", subject)
+                .query(String.class)
+                .single();
     }
 
     /**

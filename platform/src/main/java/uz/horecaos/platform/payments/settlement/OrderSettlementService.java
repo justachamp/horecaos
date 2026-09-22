@@ -9,6 +9,8 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.loyalty.api.PointsRedemptionPort;
+import uz.horecaos.platform.payments.api.CashDueLookupPort;
+import uz.horecaos.platform.payments.domain.PaymentMethod;
 import uz.horecaos.platform.payments.settlement.JdbcSettlementStore.MethodRow;
 import uz.horecaos.platform.payments.settlement.JdbcSettlementStore.SettlementRow;
 import uz.horecaos.platform.payments.settlement.JdbcSettlementStore.TenderRow;
@@ -51,7 +53,7 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * later inherits all of them.
  */
 @Service
-public class OrderSettlementService {
+public class OrderSettlementService implements CashDueLookupPort {
 
     private final JdbcSettlementStore store;
     private final PointsRedemptionPort points;
@@ -383,6 +385,28 @@ public class OrderSettlementService {
     @Transactional(readOnly = true)
     public long cashDueMinor(UUID tenantId, UUID orderId, String cashMethodCode) {
         return store.cashDueMinor(tenantId, require(tenantId, orderId).id(), cashMethodCode);
+    }
+
+    /**
+     * {@link CashDueLookupPort}'s cross-module read: the same figure {@link
+     * #cashDueMinor(UUID, UUID, String)} gives the courier app, with the
+     * method code fixed to {@link PaymentMethod#CASH} — a caller outside this
+     * module has no reason to know payment method codes.
+     *
+     * <p>Lets {@link ApiException} (RESOURCE_NOT_FOUND) propagate rather than
+     * swallowing it into a plain zero. A caller that answers "nothing due"
+     * for "I could not find out" cannot be told apart from a genuinely
+     * settled order, and {@link
+     * uz.horecaos.platform.courier.application.DeliveryAccrualOrderCompletionTrigger},
+     * the one production caller, already wraps this in its own {@code
+     * catch (RuntimeException)} specifically to fall back to the order total
+     * for exactly this case — a fallback that can only run if this method
+     * actually throws.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public long cashDueMinor(UUID tenantId, UUID orderId) {
+        return cashDueMinor(tenantId, orderId, PaymentMethod.CASH.code());
     }
 
     private SettlementRow require(UUID tenantId, UUID orderId) {

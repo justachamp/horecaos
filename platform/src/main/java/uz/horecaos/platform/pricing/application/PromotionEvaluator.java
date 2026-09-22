@@ -390,9 +390,9 @@ public class PromotionEvaluator {
 
     private Outcome build(List<Candidate> chosen, Basket basket) {
         Map<String, Long> lineDiscounts = accumulateLineDiscounts(chosen);
-        long orderDiscount =
+        long rawOrderDiscount =
                 chosen.stream().mapToLong(c -> c.benefit().orderMinor()).sum();
-        long deliveryBenefit =
+        long rawDeliveryBenefit =
                 chosen.stream().mapToLong(c -> c.benefit().deliveryMinor()).sum();
 
         // The order discount cannot exceed what is left after item discounts. Two
@@ -400,21 +400,49 @@ public class PromotionEvaluator {
         // together take a basket below zero, which ADR 0018 rejects.
         long afterItems = basket.goodsSubtotalMinor()
                 - lineDiscounts.values().stream().mapToLong(Long::longValue).sum();
-        orderDiscount = Math.min(orderDiscount, Math.max(0, afterItems));
-        deliveryBenefit = Math.min(deliveryBenefit, basket.deliveryFeeMinor());
+        long orderDiscount = Math.min(rawOrderDiscount, Math.max(0, afterItems));
+        long deliveryBenefit = Math.min(rawDeliveryBenefit, basket.deliveryFeeMinor());
 
-        List<AppliedPromotion> applied = chosen.stream()
-                .map(candidate -> new AppliedPromotion(
-                        candidate.promotion().promotionId(),
-                        candidate.promotion().code(),
-                        candidate.promotion().definitionVersion(),
-                        candidate.promotion().scope(),
-                        candidate.benefit().perLineMinor(),
-                        candidate.benefit().orderMinor(),
-                        candidate.benefit().deliveryMinor()))
-                .toList();
+        // Each candidate's own orderMinor/deliveryMinor, scaled down to what the
+        // clamp above actually left -- the same largest-remainder apportionment
+        // capped() already uses for a single promotion's own maximumDiscountMinor
+        // cap, applied here across promotions instead. Unscaled (each candidate's
+        // raw value, verbatim) when nothing was clamped, which is every quote with
+        // one promotion or with several that never approach the basket's own
+        // ceiling. Without this, PricingEngine's per-promotion ORDER_DISCOUNT/
+        // DELIVERY_FEE_BENEFIT adjustment rows sum to the unclamped raw total
+        // rather than to what the order actually charged.
+        long[] orderShares = apportionAcrossCandidates(
+                chosen, candidate -> candidate.benefit().orderMinor(), rawOrderDiscount, orderDiscount);
+        long[] deliveryShares = apportionAcrossCandidates(
+                chosen, candidate -> candidate.benefit().deliveryMinor(), rawDeliveryBenefit, deliveryBenefit);
 
-        return new Outcome(Map.copyOf(lineDiscounts), orderDiscount, deliveryBenefit, applied);
+        List<AppliedPromotion> applied = new ArrayList<>(chosen.size());
+        for (int i = 0; i < chosen.size(); i++) {
+            Candidate candidate = chosen.get(i);
+            applied.add(new AppliedPromotion(
+                    candidate.promotion().promotionId(),
+                    candidate.promotion().code(),
+                    candidate.promotion().definitionVersion(),
+                    candidate.promotion().scope(),
+                    candidate.benefit().perLineMinor(),
+                    orderShares[i],
+                    deliveryShares[i]));
+        }
+
+        return new Outcome(Map.copyOf(lineDiscounts), orderDiscount, deliveryBenefit, List.copyOf(applied));
+    }
+
+    /**
+     * Each candidate's own share of {@code raw}, scaled down to {@code capped}
+     * only when the aggregate clamp actually reduced it — every candidate's raw
+     * value verbatim otherwise, so the ordinary uncapped quote never pays for
+     * {@link TaxCalculation#apportion}'s rounding.
+     */
+    private static long[] apportionAcrossCandidates(
+            List<Candidate> chosen, java.util.function.ToLongFunction<Candidate> extractor, long raw, long capped) {
+        long[] raws = chosen.stream().mapToLong(extractor).toArray();
+        return raw == capped ? raws : TaxCalculation.apportion(capped, raws);
     }
 
     // ------------------------------------------------------------------ values

@@ -310,7 +310,8 @@ class OrderAmendmentAndOutcomeTests {
                 settlementPlanner,
                 auditRecorder,
                 published,
-                clock);
+                clock,
+                new PromoCodeRedemptionService(promoCodeStore, clock));
         orderState = orderStateWith.apply(orderStore);
         orderQuery = new OrderQueryService(
                 orderStore, processStore, UNWIRED_PAYMENTS, protection, objectMapper, auditRecorder, clock);
@@ -363,7 +364,8 @@ class OrderAmendmentAndOutcomeTests {
                 objectMapper,
                 published,
                 clock,
-                customerBlacklist);
+                customerBlacklist,
+                new FakeConfigurationResolver());
 
         seedTenancyAndCatalog();
         seedPricingAndStock();

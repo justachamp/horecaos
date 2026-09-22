@@ -443,11 +443,22 @@ public class PricingEngine {
         // them apart. The enum has carried DELIVERY_FEE_BENEFIT unused since
         // ADR 0037 landed, for exactly this.
         if (promotionBenefitMinor > 0 && fee > 0) {
+            // A shared, shrinking pool rather than a fixed ceiling every
+            // promotion is clamped against independently: two non-exclusive
+            // delivery promotions from different stacking groups (an explicitly
+            // supported combination, PromotionEvaluator's own "different groups
+            // combine") must not each write a full-value adjustment against the
+            // same fee reduction. Decrementing as each promotion's share is
+            // taken is what makes the adjustment rows sum to exactly what
+            // `fee` is actually reduced by, below.
             long granted = Math.min(promotionBenefitMinor, fee);
+            long remaining = granted;
             for (PromotionEvaluator.AppliedPromotion applied : offers.applied()) {
-                if (applied.deliveryMinor() <= 0) {
+                if (applied.deliveryMinor() <= 0 || remaining <= 0) {
                     continue;
                 }
+                long share = Math.min(applied.deliveryMinor(), remaining);
+                remaining -= share;
                 adjustments.add(new Adjustment(
                         ++sequence,
                         DELIVERY_FEE_LINE_ID,
@@ -455,7 +466,7 @@ public class PricingEngine {
                         "PROMOTION",
                         applied.promotionId(),
                         applied.definitionVersion(),
-                        Money.of(-Math.min(applied.deliveryMinor(), granted), currency),
+                        Money.of(-share, currency),
                         applied.code()));
             }
             fee -= granted;

@@ -14,6 +14,7 @@ import uz.horecaos.platform.fulfillment.api.DeliveryCompletionPort;
 import uz.horecaos.platform.fulfillment.api.DeliveryCompletionPort.InternalDelivery;
 import uz.horecaos.platform.ordering.api.OrderCompleted;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
+import uz.horecaos.platform.payments.api.CashDueLookupPort;
 import uz.horecaos.platform.web.api.ApiException;
 
 /**
@@ -69,12 +70,17 @@ public class DeliveryAccrualOrderCompletionTrigger {
     private final DeliveryCompletionPort delivery;
     private final CourierAccrualService accrual;
     private final CourierShiftService shifts;
+    private final CashDueLookupPort cashDue;
 
     public DeliveryAccrualOrderCompletionTrigger(
-            DeliveryCompletionPort delivery, CourierAccrualService accrual, CourierShiftService shifts) {
+            DeliveryCompletionPort delivery,
+            CourierAccrualService accrual,
+            CourierShiftService shifts,
+            CashDueLookupPort cashDue) {
         this.delivery = delivery;
         this.accrual = accrual;
         this.shifts = shifts;
+        this.cashDue = cashDue;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -110,7 +116,31 @@ public class DeliveryAccrualOrderCompletionTrigger {
         }
         InternalDelivery internal = found.get();
 
-        long cashToCollectMinor = internal.prepaid() ? 0L : completed.totalMinor();
+        // The settlement's actual money leg, not the order total: a
+        // split-tender order settles part of itself from the customer's
+        // loyalty balance, and the courier must only be told to collect what
+        // is actually still owed in cash (CourierAccrualService's own
+        // DeliveredAssignment.cashToCollectMinor javadoc: "the order total
+        // less anything already captured and less any loyalty amount").
+        // completed.totalMinor() alone ignores that split entirely, so it is
+        // kept only as the fallback for a settlement read this trigger did
+        // not anticipate -- never propagated, for the same reason
+        // closeInternalShipment's own failure above is not: the order is
+        // already durably completed.
+        long cashToCollectMinor = 0L;
+        if (!internal.prepaid()) {
+            try {
+                cashToCollectMinor = cashDue.cashDueMinor(tenantId, completed.orderId());
+            } catch (RuntimeException failure) {
+                log.warn(
+                        "Could not read the cash due for completed order {} (tenant {}); falling back to the "
+                                + "order total: {}",
+                        completed.orderId(),
+                        tenantId,
+                        failure.getMessage());
+                cashToCollectMinor = completed.totalMinor();
+            }
+        }
 
         Optional<ShiftRow> shift = shifts.liveShiftOf(tenantId, internal.courierId());
 

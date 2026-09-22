@@ -347,6 +347,63 @@ class PromotionEvaluatorTests {
     }
 
     @Test
+    @DisplayName("H13: each promotion's own recorded adjustment scales down with the aggregate cap, not just the total")
+    void combinedOrderDiscountsScaleEachPromotionsOwnAdjustment() {
+        // Same setup as combinedOrderDiscountsAreCappedAtTheBasket:
+        // outcome.orderDiscountMinor() was already correctly clamped to 60 000,
+        // but PricingEngine writes one ORDER_DISCOUNT adjustment row per
+        // AppliedPromotion straight from applied.orderMinor() with no cap of
+        // its own (PricingEngine.java:185-195) -- so those per-promotion
+        // values have to sum to the clamped total themselves, or a report
+        // that sums adjustment rows overstates what the order actually gave
+        // away (66 000 recorded on an order where only 60 000 was foregone,
+        // in the finding's own worked example).
+        Promotion first = orderPercent("HALF1", "GROUP_A", 5_000);
+        Promotion second = orderPercent("HALF2", "GROUP_B", 8_000);
+
+        Outcome outcome = evaluator.evaluate(List.of(first, second), basketWithBoth(), context(), NOW);
+
+        assertThat(outcome.applied()).hasSize(2);
+        long appliedSum = outcome.applied().stream()
+                .mapToLong(PromotionEvaluator.AppliedPromotion::orderMinor)
+                .sum();
+        assertThat(appliedSum)
+                .as("30 000 + 48 000 = 78 000 unclamped; must sum to the same 60 000 the order was "
+                        + "actually discounted by")
+                .isEqualTo(outcome.orderDiscountMinor());
+    }
+
+    @Test
+    @DisplayName(
+            "H12/H13: two non-exclusive free-delivery promotions in different groups do not double the recorded benefit")
+    void stackedFreeDeliveryPromotionsSumToTheActualFeeReduction() {
+        // The same shared-pool defect, on the DELIVERY side: PricingEngine's
+        // applyDelivery loop clamped each promotion's share against a single
+        // un-decremented `granted` pool (PricingEngine.java:425-441), so two
+        // FREE_DELIVERY promotions from different stacking groups each wrote
+        // a full-value DELIVERY_FEE_BENEFIT adjustment. That loop is now
+        // fixed to decrement the pool as each share is taken, and it starts
+        // from AppliedPromotion values this same evaluate() call must not
+        // hand it unfairly large in the first place.
+        Promotion vip = freeDelivery("VIPFREE", "VIP");
+        Promotion threshold = freeDelivery("THRESHOLDFREE", "THRESHOLD");
+
+        Outcome outcome = evaluator.evaluate(List.of(vip, threshold), basketWithBoth(), context(), NOW);
+
+        assertThat(outcome.deliveryBenefitMinor())
+                .as("the 10 000 fee is only reduced once")
+                .isEqualTo(10_000L);
+        assertThat(outcome.applied()).hasSize(2);
+        long appliedSum = outcome.applied().stream()
+                .mapToLong(PromotionEvaluator.AppliedPromotion::deliveryMinor)
+                .sum();
+        assertThat(appliedSum)
+                .as("the two DELIVERY_FEE_BENEFIT rows PricingEngine writes from these values must sum "
+                        + "to the 10 000 the fee was actually reduced by, not double it")
+                .isEqualTo(outcome.deliveryBenefitMinor());
+    }
+
+    @Test
     @DisplayName("a time-of-day window that wraps past midnight includes the small hours")
     void aWrappingWindowIncludesTheSmallHours() {
         Promotion lateNight = new Promotion(
@@ -503,6 +560,26 @@ class PromotionEvaluatorTests {
                 List.of(),
                 List.of(new Action(1, Action.Type.ORDER_PERCENTAGE_DISCOUNT, new Operands(Map.of("basisPoints", (long)
                         basisPoints)))));
+    }
+
+    private Promotion freeDelivery(String code, String group) {
+        return new Promotion(
+                UUID.randomUUID(),
+                TENANT,
+                BRAND,
+                code,
+                Promotion.Scope.DELIVERY,
+                group,
+                false,
+                0,
+                false,
+                null,
+                "UZS",
+                NOW.minusSeconds(60),
+                null,
+                1,
+                List.of(),
+                List.of(new Action(1, Action.Type.FREE_DELIVERY, Operands.empty())));
     }
 
     private Condition productIs(UUID productId) {
