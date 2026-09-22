@@ -301,6 +301,39 @@ class CheckoutEligibilityGuard {
             return Result.rejected("QUOTE_EXPIRED", "This quote has expired or was already accepted");
         }
 
+        // ADR 0037. A delivery order is refused here whenever its accepted quote
+        // carries no delivery charge a checkout may rely on — never priced as a
+        // fake zero. This runs beside, and after, the DELIVERY_DESTINATION_REQUIRED
+        // refusal above: that one catches a cart with no destination at all, this
+        // one catches a destination that was priced and could not be turned into a
+        // usable fee — outside every zone, no tariff, beyond the tariff's reach, or
+        // a located branch with no pin. RESOLVED and EXTERNALLY_PRICED are the only
+        // two outcomes a checkout accepts; every other value, including a plain
+        // zero fee_minor with no outcome at all (a PICKUP cart never has this
+        // problem, and this branch runs only for DELIVERY), is a refusal a
+        // customer must see before paying rather than a silent free delivery.
+        if (cart.fulfillmentMode() == FulfillmentMode.DELIVERY) {
+            if (!quote.isDeliveryFeeUsable()) {
+                return Result.rejected(
+                        "DELIVERY_FEE_UNRESOLVED",
+                        quote.deliveryOutcome() == null
+                                ? "No delivery fee was resolved for this destination"
+                                : "Delivery fee resolution ended in " + quote.deliveryOutcome());
+            }
+            // Stage 7 of ADR 0037's pipeline: the resolver found a zone and a
+            // tariff (RESOLVED), but the goods subtotal sits under the zone's own
+            // minimum basket. The engine still charges the fee it computed — the
+            // minimum is a checkout precondition, not part of whether resolution
+            // succeeded — so this is a second, independent gate rather than folded
+            // into isDeliveryFeeUsable() above.
+            if (quote.deliveryShortfallMinor() != null) {
+                return Result.rejected(
+                        "DELIVERY_MINIMUM_BASKET_NOT_MET",
+                        "The basket is below this zone's minimum by " + quote.deliveryShortfallMinor()
+                                + " minor units");
+            }
+        }
+
         // "Points cannot cover the whole order", refused where refusing is still
         // cheap. ADR 0046 states it structurally — a settlement carries at least one
         // money tender — and the settlement would refuse this too; asking here as

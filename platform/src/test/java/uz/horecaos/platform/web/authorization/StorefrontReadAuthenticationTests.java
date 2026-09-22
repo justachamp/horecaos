@@ -163,6 +163,7 @@ class StorefrontReadAuthenticationTests {
                 .isNotEqualTo(401);
         assertThat(statusOf(locationPath() + "/delivery-fee?lat=41.31&lon=69.24&currency=UZS"))
                 .isNotEqualTo(401);
+        assertThat(statusOf(locationPath() + "/fulfillment-modes?channel=web")).isNotEqualTo(401);
         assertThat(statusOf("/api/v1/storefront/pickup-locations?lat=41.31&lon=69.24"))
                 .as("a customer has to choose a branch before they can browse its menu")
                 .isNotEqualTo(401);

@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.fulfillment.api.PricingAuthority;
+import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
  * Pricing a cart, for the module that owns the cart (ADR 0018, ADR 0019).
@@ -40,6 +42,13 @@ public interface CartPricingPort {
      *                    Re-resolved by pricing on every call — ordering never
      *                    learns whether it is eligible, only what the resulting
      *                    quote's total and adjustments say
+     * @param delivery    ADR 0037: where the order is going, and who prices the
+     *                    delivery leg, or null for a cart being collected. A
+     *                    coordinate rather than an address — pricing has no use
+     *                    for the text and must not depend on ordering's own
+     *                    destination type, so this is pricing's own shape
+     *                    ({@link GeoPoint} plus {@link PricingAuthority}, the
+     *                    same pair {@code QuoteRequest.Delivery} carries)
      */
     record PricingCommand(
             UUID tenantId,
@@ -49,7 +58,8 @@ public interface CartPricingPort {
             String channelCode,
             List<Item> items,
             String idempotencyKey,
-            @Nullable String presentedCouponCode) {
+            @Nullable String presentedCouponCode,
+            @Nullable Delivery delivery) {
 
         public PricingCommand {
             Objects.requireNonNull(tenantId, "A tenant id is required");
@@ -61,7 +71,7 @@ public interface CartPricingPort {
             }
         }
 
-        /** Every call site that predates ADR 0072's promo code. */
+        /** Every call site that predates ADR 0072's promo code and ADR 0037's destination. */
         public PricingCommand(
                 UUID tenantId,
                 UUID brandId,
@@ -70,7 +80,44 @@ public interface CartPricingPort {
                 String channelCode,
                 List<Item> items,
                 String idempotencyKey) {
-            this(tenantId, brandId, locationId, customerAccountId, channelCode, items, idempotencyKey, null);
+            this(tenantId, brandId, locationId, customerAccountId, channelCode, items, idempotencyKey, null, null);
+        }
+
+        /** Every call site that predates ADR 0037's destination. */
+        public PricingCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                @Nullable UUID customerAccountId,
+                String channelCode,
+                List<Item> items,
+                String idempotencyKey,
+                @Nullable String presentedCouponCode) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    items,
+                    idempotencyKey,
+                    presentedCouponCode,
+                    null);
+        }
+
+        /**
+         * Where a delivery cart is going, and who prices it (ADR 0037).
+         *
+         * @param pricingAuthority a null constructor argument defaults to {@link
+         *                         PricingAuthority#HORECAOS}, matching {@code
+         *                         QuoteRequest.Delivery}'s own default
+         */
+        public record Delivery(GeoPoint destination, PricingAuthority pricingAuthority) {
+
+            public Delivery {
+                Objects.requireNonNull(destination, "A delivery needs a destination point");
+                pricingAuthority = pricingAuthority == null ? PricingAuthority.HORECAOS : pricingAuthority;
+            }
         }
 
         /**

@@ -62,6 +62,12 @@
       <span>{{ 'cart.order' | t }}</span>
       <span>{{ order()!.subtotal }}</span>
     </div>
+    @if (order()!.tax) {
+      <div class="mt-1 flex items-center justify-between text-sm text-white">
+        <span>{{ 'cart.tax' | t }}</span>
+        <span>{{ order()!.tax }}</span>
+      </div>
+    }
     @if (order()!.deliveryFee) {
       <div class="mt-1 flex items-center justify-between text-sm text-white">
         <span>{{ 'cart.delivery' | t }}</span>

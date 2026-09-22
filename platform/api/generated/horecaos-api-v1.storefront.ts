@@ -149,6 +149,14 @@ export interface CustomerTelegramLinkStatusResponse {
   linked?: boolean;
 }
 
+export interface DeliveryChargeResponse {
+  feeMinor?: number;
+  freeDeliveryFromMinor?: number;
+  minBasketMinor?: number;
+  outcome?: string;
+  reasonCode?: string;
+}
+
 export interface DeliveryFeeView {
   available?: boolean;
   currency?: string;
@@ -186,6 +194,17 @@ export interface FaqResponse {
 
 export interface FavouritesResponse {
   productIds?: Array<string>;
+}
+
+export interface FulfillmentModeAvailability {
+  mode?: "DELIVERY" | "PICKUP" | "DINE_IN";
+  reason?: string;
+  serviceable?: boolean;
+  sold?: boolean;
+}
+
+export interface FulfillmentModesResponse {
+  modes?: Array<FulfillmentModeAvailability>;
 }
 
 export interface GrantResponse {
@@ -289,6 +308,7 @@ export interface OrderResponse {
   confirmedAt?: string;
   createdAt?: string;
   currency?: string;
+  feeMinor?: number;
   lines?: Array<OrderLineResponse>;
   orderId?: string;
   publicOrderNumber?: string;
@@ -359,8 +379,10 @@ export interface PricedCartResponse {
   cartVersion?: number;
   contextHash?: string;
   currency?: string;
+  delivery?: DeliveryChargeResponse;
   discountMinor?: number;
   expiresAt?: string;
+  feeMinor?: number;
   quoteId?: string;
   subtotalMinor?: number;
   taxMinor?: number;
@@ -523,6 +545,7 @@ export interface StorefrontOrderingControllerDestinationRequest {
 
 export interface StorefrontOrderingControllerOrderSummaryResponse {
   currency?: string;
+  feeMinor?: number;
   fulfillmentMode?: string;
   fulfillmentStatus?: string;
   locationId?: string;
@@ -600,6 +623,7 @@ export interface Operations {
   "requestCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/verification-challenges"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RequestCodeRequest }; responses: { "200": ChallengeResponse } };
   "submitCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/verification-challenges/{challengeId}/attempts"; request: { parameters: { path: { brandId: string; challengeId: string; tenantId: string } }; body: SubmitCodeRequest }; responses: { "200": GrantResponse } };
   "quote": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { currency: string; lat: number; lon: number; subtotalMinor?: number } } }; responses: { "200": DeliveryFeeView } };
+  "fulfillmentModes": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/fulfillment-modes"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channel: string } } }; responses: { "200": FulfillmentModesResponse } };
   "menu": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/menu"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channel: string; locale?: string } } }; responses: { "200": StorefrontMenu } };
   "resolve": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/serviceability"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { at?: string; channel: string; mode: "DELIVERY" | "PICKUP" | "DINE_IN" } } }; responses: { "200": ServiceabilityView } };
   "profile": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": ProfileResponse } };

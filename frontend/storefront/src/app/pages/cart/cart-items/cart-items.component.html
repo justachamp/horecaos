@@ -123,49 +123,55 @@
 
       <!-- Checkout: promo, payment, continue (matches app design) -->
       <div class="mt-4 rounded-t-[1.25rem] bg-surface-raised-2 px-1 pb-1 pt-4">
-        <button
-          type="button"
-          class="mb-3 flex w-full items-start gap-3 rounded-2xl bg-surface-base px-4 py-4 text-left transition-opacity hover:opacity-95"
-          [attr.aria-label]="'cart.delivery' | t"
-        >
-          <span
-            class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-accent text-white"
-            aria-hidden="true"
+        @if (cart.fulfillmentMode() === 'DELIVERY') {
+          <button
+            type="button"
+            class="mb-3 flex w-full items-start gap-3 rounded-2xl bg-surface-base px-4 py-4 text-left transition-opacity hover:opacity-95"
+            [attr.aria-label]="'cart.delivery' | t"
           >
+            <span
+              class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-accent text-white"
+              aria-hidden="true"
+            >
+              <svg
+                class="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m12.75 0h3.375a1.125 1.125 0 001.125-1.125v-4.5a1.125 1.125 0 00-1.125-1.125h-3.75M8.25 18.75a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m0 0h12.75m-12.75 0V9.375c0-.621.504-1.125 1.125-1.125h3.75m0 0h9a1.125 1.125 0 011.125 1.125v4.875m-12.75 0h12.75"
+                />
+              </svg>
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-bold text-text-primary">{{ 'cart.deliveryCost' | t }}</p>
+              <p class="mt-2 text-lg font-bold leading-tight text-text-primary">{{ cart.deliveryFee() }}</p>
+              @if (cart.deliveryUnresolvedMessage(); as reason) {
+                <p class="mt-1 text-xs leading-snug text-amber-400">{{ reason }}</p>
+              } @else {
+                <p class="mt-1 text-xs leading-snug text-zinc-400"> {{ cart.deliveryTime() }}</p>
+              }
+            </div>
             <svg
-              class="h-5 w-5"
+              class="mt-1 h-5 w-5 shrink-0 text-text-muted"
               fill="none"
               stroke="currentColor"
-              stroke-width="1.5"
               viewBox="0 0 24 24"
+              aria-hidden="true"
             >
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m12.75 0h3.375a1.125 1.125 0 001.125-1.125v-4.5a1.125 1.125 0 00-1.125-1.125h-3.75M8.25 18.75a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m0 0h12.75m-12.75 0V9.375c0-.621.504-1.125 1.125-1.125h3.75m0 0h9a1.125 1.125 0 011.125 1.125v4.875m-12.75 0h12.75"
+                stroke-width="2"
+                d="M9 5l7 7-7 7"
               />
             </svg>
-          </span>
-          <div class="min-w-0 flex-1">
-            <p class="text-sm font-bold text-text-primary">{{ 'cart.deliveryCost' | t }}</p>
-            <p class="mt-2 text-lg font-bold leading-tight text-text-primary">{{ cart.deliveryFee() }}</p>
-            <p class="mt-1 text-xs leading-snug text-zinc-400"> {{ cart.deliveryTime() }}</p>
-          </div>
-          <svg
-            class="mt-1 h-5 w-5 shrink-0 text-text-muted"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M9 5l7 7-7 7"
-            />
-          </svg>
-        </button>
+          </button>
+        }
         <button
           type="button"
           class="mb-3 flex w-full items-start gap-3 rounded-2xl bg-surface-base px-4 py-4 text-left transition-opacity hover:opacity-95"

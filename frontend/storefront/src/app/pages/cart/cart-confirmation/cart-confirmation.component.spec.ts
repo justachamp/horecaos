@@ -10,6 +10,7 @@ import { TranslateService } from '../../../services/translate.service';
 import { DeliverySelectionService } from '../../../services/delivery-selection.service';
 import type { CheckoutResult, PricedCart } from '../../../services/cart.service';
 import type { CartResponse } from '../../../types/cart.types';
+import { HorecaOSApiError } from '../../../core/api/problem-details';
 
 class FakeUiCartService {
   fulfillmentMode = vi.fn(() => 'DELIVERY' as const);
@@ -23,7 +24,11 @@ class FakeUiCartService {
   deliveryAddress = vi.fn(() => '');
   subtotalFormatted = vi.fn(() => '10 000 so\'m');
   deliveryFee = vi.fn(() => '5 000 so\'m');
+  taxFormatted = vi.fn<() => string | null>(() => null);
+  discountFormatted = vi.fn<() => string | null>(() => null);
   totalWithDelivery = vi.fn(() => '15 000 so\'m');
+  deliveryUnresolvedMessage = vi.fn<() => string | null>(() => null);
+  canPlaceOrder = vi.fn(() => true);
 }
 
 class FakeDeliverySelectionService {
@@ -32,6 +37,7 @@ class FakeDeliverySelectionService {
   recipientPhone = vi.fn(() => '');
   setRecipient = vi.fn();
   ensureAddressResolved = vi.fn().mockResolvedValue(undefined);
+  isComplete = vi.fn(() => false);
 }
 
 class FakePaymentSessionService {
@@ -82,8 +88,17 @@ function pricedFixture(): PricedCart {
     currency: 'UZS',
     subtotalMinor: 10_000,
     taxMinor: 0,
+    discountMinor: 0,
+    feeMinor: 5_000,
     totalMinor: 15_000,
     expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+    delivery: {
+      feeMinor: 5_000,
+      outcome: 'RESOLVED',
+      reasonCode: 'RESOLVED',
+      minBasketMinor: null,
+      freeDeliveryFromMinor: null,
+    },
   };
 }
 
@@ -99,10 +114,16 @@ function checkoutResult(overrides: Partial<CheckoutResult> = {}): CheckoutResult
   };
 }
 
-async function setUp(paymentCodes: readonly string[] = ['CASH']) {
+async function setUp(
+  paymentCodes: readonly string[] = ['CASH'],
+  configureCart?: (cart: FakeUiCartService) => void,
+  configureDelivery?: (delivery: FakeDeliverySelectionService) => void,
+) {
   const cart = new FakeUiCartService();
   const delivery = new FakeDeliverySelectionService();
   cart.paymentMethods.mockResolvedValue(paymentCodes);
+  configureCart?.(cart);
+  configureDelivery?.(delivery);
   const paymentSessions = new FakePaymentSessionService();
   const notification = new FakeNotificationService();
 
@@ -283,6 +304,122 @@ describe('CartConfirmationComponent: REJECTED vs a thrown error', () => {
     expect(comp.orderError()).toBeNull();
     expect(cart.discard).toHaveBeenCalled();
     expect(navigateSpy).toHaveBeenCalledWith(['/orders', 'active']);
+  });
+});
+
+describe('CartConfirmationComponent: order button disabled while the delivery fee is unresolved', () => {
+  it('is disabled when the delivery fee has not resolved, and the reason is shown', async () => {
+    const { comp, fixture } = await setUp(['CASH'], (cart) => {
+      cart.canPlaceOrder.mockReturnValue(false);
+      cart.deliveryUnresolvedMessage.mockReturnValue('errors.reason.outOfZone');
+    });
+
+    expect(comp.canPlaceOrder).toBe(false);
+    expect(comp.deliveryUnresolvedMessage).toBe('errors.reason.outOfZone');
+    const button = fixture.nativeElement.querySelector(
+      '[data-testid="place-order-button"]',
+    ) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('errors.reason.outOfZone');
+  });
+
+  it('is enabled once the delivery fee resolves', async () => {
+    const { comp, fixture } = await setUp(['CASH'], (cart) => {
+      cart.canPlaceOrder.mockReturnValue(true);
+      cart.deliveryUnresolvedMessage.mockReturnValue(null);
+    });
+
+    expect(comp.canPlaceOrder).toBe(true);
+    const button = fixture.nativeElement.querySelector(
+      '[data-testid="place-order-button"]',
+    ) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+  });
+
+  it('is unaffected by delivery resolution for a PICKUP cart', async () => {
+    const { comp } = await setUp(['CASH'], (cart) => {
+      cart.fulfillmentMode.mockReturnValue('PICKUP' as never);
+      cart.canPlaceOrder.mockReturnValue(true);
+    });
+
+    expect(comp.delivering).toBe(false);
+    expect(comp.canPlaceOrder).toBe(true);
+  });
+});
+
+describe('CartConfirmationComponent: a fresh DELIVERY cart resolves its fee without a click', () => {
+  // A brand-new DELIVERY cart's first price has no destination yet, so
+  // `canPlaceOrder` starts false and the order button starts disabled. A
+  // disabled <button> never fires (click), and `applyDestination()` was only
+  // ever called from inside `submitOrder()` -- so nothing could ever unblock
+  // the button once it was already blocked. See ui-cart.service.ts's
+  // `applyDestination` doc and `DeliveryChargeResponse`'s "no destination
+  // chosen yet" case.
+  it('applies the destination on its own once the address and recipient are already known, with no click at all', async () => {
+    const { cart } = await setUp(
+      ['CASH'],
+      (cart) => {
+        cart.canPlaceOrder.mockReturnValue(false);
+        cart.applyDestination.mockResolvedValue(true);
+      },
+      (delivery) => {
+        delivery.isComplete = vi.fn(() => true);
+      },
+    );
+
+    expect(cart.applyDestination).toHaveBeenCalled();
+  });
+
+  it('never calls applyDestination on its own once the fee is already resolved', async () => {
+    const { cart } = await setUp(
+      ['CASH'],
+      (cart) => {
+        cart.canPlaceOrder.mockReturnValue(true);
+      },
+      (delivery) => {
+        delivery.isComplete = vi.fn(() => true);
+      },
+    );
+
+    expect(cart.applyDestination).not.toHaveBeenCalled();
+  });
+
+  it('never calls applyDestination on its own before an address and recipient are both known', async () => {
+    const { cart } = await setUp(['CASH'], (cart) => {
+      cart.canPlaceOrder.mockReturnValue(false);
+    });
+
+    expect(cart.applyDestination).not.toHaveBeenCalled();
+  });
+});
+
+describe('CartConfirmationComponent.submitOrder: a thrown refusal is reported with its specific reason', () => {
+  it('shows the DELIVERY_FEE_UNRESOLVED wording, not the generic orderError', async () => {
+    const { comp, cart } = await setUp(['CASH']);
+    cart.applyDestination.mockResolvedValue(true);
+    cart.priceCart.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'x',
+        problem: { status: 409, reason: 'DELIVERY_FEE_UNRESOLVED' },
+      }),
+    );
+
+    await comp.submitOrder();
+
+    expect(comp.orderError()).toBe('errors.reason.deliveryFeeUnresolved');
+    expect(comp.orderError()).not.toBe('cart.orderError');
+  });
+
+  it('falls back to the generic message for a non-HorecaOSApiError failure', async () => {
+    const { comp, cart } = await setUp(['CASH']);
+    cart.applyDestination.mockResolvedValue(true);
+    cart.priceCart.mockRejectedValue(new Error('boom'));
+
+    await comp.submitOrder();
+
+    expect(comp.orderError()).toBe('cart.orderError');
   });
 });
 

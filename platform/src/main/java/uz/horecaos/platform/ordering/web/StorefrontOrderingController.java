@@ -38,6 +38,7 @@ import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.application.ReorderPlanService;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
+import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
@@ -322,17 +323,7 @@ public class StorefrontOrderingController {
         try {
             long expected = AggregateVersion.requireIfMatch(request);
             var priced = carts.price(tenantId, brandId, accountId(tenantId, brandId), cartId, (int) expected);
-            return ResponseEntity.ok(new PricedCartResponse(
-                    priced.cartId(),
-                    priced.cartVersion(),
-                    priced.quote().quoteId(),
-                    priced.quote().contextHash(),
-                    priced.quote().currency(),
-                    priced.quote().subtotalMinor(),
-                    priced.quote().taxMinor(),
-                    priced.quote().discountMinor(),
-                    priced.quote().totalMinor(),
-                    priced.quote().expiresAt()));
+            return ResponseEntity.ok(PricedCartResponse.of(priced));
         } catch (CartService.StaleCartException stale) {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
         } catch (CartService.CartRefusedException refused) {
@@ -654,6 +645,12 @@ public class StorefrontOrderingController {
             // is going. A conflict rather than a validation failure: nothing in the
             // body is wrong, a step is missing.
             case "DELIVERY_DESTINATION_REQUIRED" -> ErrorCode.RESOURCE_CONFLICT;
+            // ADR 0037. The destination is known and was priced, and the world
+            // moved underneath it — the zone, the tariff or the basket no longer
+            // supports the fee the accepted quote carried. Same shape as
+            // DELIVERY_DESTINATION_REQUIRED: nothing in the body is wrong, a fact
+            // about the order changed.
+            case "DELIVERY_FEE_UNRESOLVED", "DELIVERY_MINIMUM_BASKET_NOT_MET" -> ErrorCode.RESOURCE_CONFLICT;
             // A well-formed request against an account this checkout will never
             // accept. A conflict for the same reason GUEST_ORDERS_NOT_ALLOWED and
             // NOT_SERVICEABLE are (below, by way of the default): nothing in the
@@ -875,6 +872,15 @@ public class StorefrontOrderingController {
         }
     }
 
+    /**
+     * @param feeMinor total fees — today, always the ADR 0037 delivery charge —
+     *                 already folded into {@code totalMinor}
+     * @param delivery present only for a {@code DELIVERY} cart whose destination
+     *                 has been priced; absent for a {@code PICKUP} cart and for
+     *                 a {@code DELIVERY} cart with no destination chosen yet, in
+     *                 which case the storefront asks for an address rather than
+     *                 rendering a reason it was not given
+     */
     public record PricedCartResponse(
             UUID cartId,
             int cartVersion,
@@ -884,8 +890,85 @@ public class StorefrontOrderingController {
             long subtotalMinor,
             long taxMinor,
             long discountMinor,
+            long feeMinor,
             long totalMinor,
-            Instant expiresAt) {}
+            Instant expiresAt,
+            @Nullable DeliveryChargeResponse delivery) {
+
+        static PricedCartResponse of(CartService.PricedCart priced) {
+            QuoteSnapshot quote = priced.quote();
+            return new PricedCartResponse(
+                    priced.cartId(),
+                    priced.cartVersion(),
+                    quote.quoteId(),
+                    quote.contextHash(),
+                    quote.currency(),
+                    quote.subtotalMinor(),
+                    quote.taxMinor(),
+                    quote.discountMinor(),
+                    quote.feeMinor(),
+                    quote.totalMinor(),
+                    quote.expiresAt(),
+                    DeliveryChargeResponse.of(quote));
+        }
+    }
+
+    /**
+     * The ADR 0037 delivery charge, as far as the resolver got.
+     *
+     * @param outcome    {@code RESOLVED} or {@code EXTERNALLY_PRICED} when
+     *                   {@code feeMinor} is final and checkout will accept it;
+     *                   {@code UNRESOLVED} otherwise, with {@code reasonCode}
+     *                   naming why. The storefront gates the order button on
+     *                   this field alone and never needs to know the granular
+     *                   codes to do it
+     * @param reasonCode the granular machine reason: the {@code
+     *                   fulfillment.api.DeliveryFeeOutcome} name (
+     *                   {@code OUT_OF_ZONE}, {@code NO_TARIFF}, {@code
+     *                   LOCATION_NOT_LOCATED}, {@code OUTSIDE_CATCHMENT}, {@code
+     *                   BEYOND_MAX_DISTANCE}) when {@code outcome} is {@code
+     *                   UNRESOLVED} for a resolution refusal, {@code
+     *                   BELOW_MINIMUM_BASKET} when the zone resolved but the
+     *                   basket has not cleared it, or the same value as {@code
+     *                   outcome} otherwise. The storefront maps this to customer
+     *                   wording and never renders it
+     * @param minBasketMinor        the zone's minimum basket, present only when
+     *                              the zone sets one
+     * @param freeDeliveryFromMinor the zone's free-delivery threshold, present
+     *                              only when the zone sets one
+     */
+    public record DeliveryChargeResponse(
+            long feeMinor,
+            String outcome,
+            String reasonCode,
+            @Nullable Long minBasketMinor,
+            @Nullable Long freeDeliveryFromMinor) {
+
+        private static final String UNRESOLVED = "UNRESOLVED";
+        private static final String BELOW_MINIMUM_BASKET = "BELOW_MINIMUM_BASKET";
+
+        static @Nullable DeliveryChargeResponse of(QuoteSnapshot quote) {
+            if (quote.deliveryOutcome() == null) {
+                // Never attempted: a PICKUP cart, or a DELIVERY cart with no
+                // destination chosen yet. The storefront already knows the cart's
+                // own fulfilmentMode and tells the two apart from that.
+                return null;
+            }
+            boolean belowMinimum = quote.deliveryShortfallMinor() != null;
+            String outcome = quote.isDeliveryFeeUsable() && !belowMinimum
+                    ? quote.deliveryOutcome().name()
+                    : UNRESOLVED;
+            String reasonCode = belowMinimum && quote.isDeliveryFeeUsable()
+                    ? BELOW_MINIMUM_BASKET
+                    : quote.deliveryOutcome().name();
+            return new DeliveryChargeResponse(
+                    quote.feeMinor(),
+                    outcome,
+                    reasonCode,
+                    quote.deliveryMinBasketMinor(),
+                    quote.deliveryFreeFromMinor());
+        }
+    }
 
     /**
      * The result of a checkout attempt.
@@ -907,6 +990,7 @@ public class StorefrontOrderingController {
             String currency,
             long subtotalMinor,
             long taxMinor,
+            long feeMinor,
             long totalMinor,
             int version,
             Instant createdAt,
@@ -923,6 +1007,7 @@ public class StorefrontOrderingController {
                     order.currency(),
                     order.subtotalMinor(),
                     order.taxMinor(),
+                    order.feeMinor(),
                     order.totalMinor(),
                     order.version(),
                     order.createdAt(),
@@ -1069,6 +1154,7 @@ public class StorefrontOrderingController {
             String paymentStatus,
             String fulfillmentStatus,
             String currency,
+            long feeMinor,
             long totalMinor,
             @Nullable Instant promisedAt,
             int version,
@@ -1084,6 +1170,7 @@ public class StorefrontOrderingController {
                     row.paymentStatusProjection(),
                     row.fulfillmentStatusProjection(),
                     row.currency(),
+                    row.feeMinor(),
                     row.totalMinor(),
                     row.promisedAt(),
                     row.version(),

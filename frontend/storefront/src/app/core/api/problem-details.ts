@@ -202,15 +202,86 @@ export function toHorecaOSApiError(response: HttpErrorResponse): HorecaOSApiErro
 }
 
 /**
- * The customer-facing message key for a code.
+ * Maps a business `reason` code to a translation key.
  *
- * Deliberately narrow: most codes are developer errors a customer can do nothing
- * about, and they all collapse to one honest sentence rather than leaking a
- * server `detail` into the interface. The returned value is a dot-notation key
- * for `TranslateService.get`, never a sentence — the wording lives in `i18n/`
- * with every other string a customer reads.
+ * Two vocabularies land here, both stable machine codes a customer must never
+ * read as-is:
+ *
+ * - The cart/checkout refusal codes `CartService.CartRefusedException` and
+ *   `CheckoutService.CheckoutResult` carry (`StorefrontOrderingController`'s
+ *   `refusal`/`errorCodeFor`, including ADR 0037's `DELIVERY_FEE_UNRESOLVED`
+ *   and `DELIVERY_MINIMUM_BASKET_NOT_MET`, and the granular
+ *   `DeliveryChargeResponse.reasonCode` a priced cart's own `delivery` block
+ *   carries -- `OUT_OF_ZONE`, `NO_TARIFF`, `LOCATION_NOT_LOCATED`,
+ *   `OUTSIDE_CATCHMENT`, `BEYOND_MAX_DISTANCE`, `BELOW_MINIMUM_BASKET`).
+ * - `uz.horecaos.platform.tenancy.api.ServiceabilityReason` (`CHANNEL_NOT_ENABLED`,
+ *   `FULFILMENT_MODE_UNAVAILABLE`, `MANUALLY_CLOSED`, `CLOSED_BY_EXCEPTION`,
+ *   `OUTSIDE_SERVICE_HOURS`, `NO_LIVE_MENU`, `AT_CAPACITY`), which the
+ *   fulfilment-modes read reports per mode.
+ *
+ * A code not named here (a future addition, or one this build never expected
+ * to see outside its own screen) resolves to `null` so a caller can fall back
+ * to its own generic wording instead of silently mis-describing it.
+ */
+const REASON_MESSAGE_KEYS: Readonly<Record<string, string>> = {
+  // ADR 0037 delivery-fee resolution, and the checkout-time refusals guarding it.
+  DELIVERY_FEE_UNRESOLVED: 'errors.reason.deliveryFeeUnresolved',
+  DELIVERY_MINIMUM_BASKET_NOT_MET: 'errors.reason.minimumBasketNotMet',
+  BELOW_MINIMUM_BASKET: 'errors.reason.minimumBasketNotMet',
+  DELIVERY_DESTINATION_REQUIRED: 'errors.reason.destinationRequired',
+  OUT_OF_ZONE: 'errors.reason.outOfZone',
+  OUTSIDE_CATCHMENT: 'errors.reason.outOfZone',
+  BEYOND_MAX_DISTANCE: 'errors.reason.outOfZone',
+  NO_TARIFF: 'errors.reason.deliveryFeeUnresolved',
+  LOCATION_NOT_LOCATED: 'errors.reason.deliveryFeeUnresolved',
+  // Cart / checkout refusals.
+  NOT_SERVICEABLE: 'errors.reason.notServiceable',
+  CHANNEL_NOT_SELLABLE: 'errors.reason.notServiceable',
+  GUEST_ORDERS_NOT_ALLOWED: 'errors.reason.signInRequired',
+  CUSTOMER_BLACKLISTED: 'errors.reason.accountBlocked',
+  CART_EXPIRED: 'errors.reason.cartExpired',
+  CART_NOT_EDITABLE: 'errors.reason.cartNotEditable',
+  ADDRESS_NOT_FOUND: 'errors.reason.addressNotFound',
+  CODE_NOT_FOUND: 'errors.reason.codeNotFound',
+  CODE_NOT_ACTIVE: 'errors.reason.codeNotActive',
+  CODE_NOT_YET_ACTIVE: 'errors.reason.codeNotActive',
+  CODE_EXPIRED: 'errors.reason.codeExpired',
+  REDEMPTION_LIMIT_REACHED: 'errors.reason.codeLimitReached',
+  PER_CUSTOMER_LIMIT_REACHED: 'errors.reason.codeLimitReached',
+  // ServiceabilityReason (tenancy.api), from the fulfilment-modes read.
+  CHANNEL_NOT_ENABLED: 'errors.reason.channelNotEnabled',
+  FULFILMENT_MODE_UNAVAILABLE: 'errors.reason.modeUnavailable',
+  MANUALLY_CLOSED: 'errors.reason.closed',
+  CLOSED_BY_EXCEPTION: 'errors.reason.closed',
+  OUTSIDE_SERVICE_HOURS: 'errors.reason.outsideHours',
+  NO_LIVE_MENU: 'errors.reason.noLiveMenu',
+  AT_CAPACITY: 'errors.reason.atCapacity',
+};
+
+/** See {@link REASON_MESSAGE_KEYS}. `null` for an absent or unmapped reason. */
+export function reasonMessageKey(reason: string | null | undefined): string | null {
+  if (!reason) {
+    return null;
+  }
+  return REASON_MESSAGE_KEYS[reason] ?? null;
+}
+
+/**
+ * The customer-facing message key for a failure.
+ *
+ * A specific business `reason` (see {@link reasonMessageKey}) always wins when
+ * one is present -- "outside the delivery area" explains a `RESOURCE_CONFLICT`
+ * far better than the code alone would. Everything else collapses to one
+ * honest sentence per code rather than leaking a server `detail` into the
+ * interface. The returned value is a dot-notation key for
+ * `TranslateService.get`, never a sentence — the wording lives in `i18n/` with
+ * every other string a customer reads.
  */
 export function messageKeyFor(error: HorecaOSApiError): string {
+  const reasonKey = reasonMessageKey(error.problem?.reason);
+  if (reasonKey) {
+    return reasonKey;
+  }
   switch (error.code) {
     case 'STALE_VERSION':
       return 'errors.staleVersion';

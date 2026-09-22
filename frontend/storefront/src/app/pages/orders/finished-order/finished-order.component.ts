@@ -2,9 +2,10 @@ import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { OrderItem, formatPlacedAt } from '../orders.data';
+import { OrderItem, formatPlacedAt, localeTag } from '../orders.data';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { TranslateService } from '../../../services/translate.service';
+import { LangService } from '../../../services/lang.service';
 import { OrdersService, type ApiOrder } from '../../../services/orders.service';
 
 @Component({
@@ -20,6 +21,7 @@ export class FinishedOrderComponent implements OnInit, OnDestroy {
   error = signal<string | null>(null);
 
   private readonly translate = inject(TranslateService);
+  private readonly lang = inject(LangService);
   private reloadSub?: Subscription;
 
   constructor(private ordersService: OrdersService) {}
@@ -72,7 +74,7 @@ export class FinishedOrderComponent implements OnInit, OnDestroy {
         title: 'Order',
         subtitle: '',
         status: statusId,
-        date: formatPlacedAt(o.created_date),
+        date: formatPlacedAt(o.created_date, localeTag(this.lang.langId())),
         price: priceStr,
         image: o.image_url || '/assets/orders/placeholder-order.png',
         orderNumber: orderNum,

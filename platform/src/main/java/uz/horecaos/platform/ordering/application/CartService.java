@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.customers.api.CustomerBlacklistPort;
+import uz.horecaos.platform.fulfillment.api.PricingAuthority;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
@@ -27,10 +28,12 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.CartLineRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.CartRow;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
+import uz.horecaos.platform.pricing.api.CartPricingPort.PricingCommand.Delivery;
 import uz.horecaos.platform.pricing.api.PromoCodeQueryPort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 import uz.horecaos.platform.tenancy.api.Serviceability;
@@ -547,7 +550,8 @@ public class CartService {
                 // pricing itself against live coupon state — this method never
                 // learns whether it is eligible, only what the resulting quote
                 // says.
-                cart.appliedCouponCode()));
+                cart.appliedCouponCode(),
+                deliveryFor(tenantId, cartId, cart, channel)));
 
         if (!carts.attachQuote(
                 tenantId,
@@ -560,6 +564,40 @@ public class CartService {
             throw new StaleCartException(cart.version(), cart.version());
         }
         return new PricedCart(cart.cartId(), cart.version(), quote);
+    }
+
+    /**
+     * What pricing needs to resolve this cart's delivery fee (ADR 0037), or null.
+     *
+     * <p>Null for a collected cart — there is nothing to deliver, so nothing to
+     * resolve. Also null for a {@code DELIVERY} cart that has not named a
+     * destination yet: {@link #setDestination} already refuses one whose address
+     * carries no coordinate, so every {@code cart_fulfillment} row this reads
+     * back is located, and a cart with no row at all is honestly "not priced as
+     * a delivery" rather than a fee this method invents. Checkout, not pricing,
+     * is where a delivery order with no destination is refused ({@code
+     * DELIVERY_DESTINATION_REQUIRED} in {@code CheckoutEligibilityGuard}) — this
+     * method only ever supplies a destination pricing can act on, never refuses
+     * on the absence of one.
+     *
+     * <p>Reads the cart's own clear coordinate pair rather than decrypting the
+     * stored address: fee resolution needs a point to measure from and nothing
+     * else, and every decrypt is a purposed reveal this call has no purpose to
+     * record.
+     */
+    private @Nullable Delivery deliveryFor(UUID tenantId, UUID cartId, CartRow cart, SalesChannel channel) {
+        if (cart.fulfillmentMode() != FulfillmentMode.DELIVERY) {
+            return null;
+        }
+        return carts.findFulfillment(tenantId, cartId)
+                .map(destination -> new Delivery(
+                        new GeoPoint(destination.latitude(), destination.longitude()),
+                        // ADR 0040: a channel the operator marked externally priced
+                        // sends the order through Uzum Tezkor or a like partner,
+                        // whose own totals already carry the delivery fee — HorecaOS
+                        // must not resolve a second one on top of it.
+                        channel.externallyPriced() ? PricingAuthority.EXTERNAL : PricingAuthority.HORECAOS))
+                .orElse(null);
     }
 
     /**

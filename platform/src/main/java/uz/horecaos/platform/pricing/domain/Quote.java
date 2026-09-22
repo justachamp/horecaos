@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
 
 /**
  * A priced cart (ADR 0018).
@@ -16,6 +17,27 @@ import org.jspecify.annotations.Nullable;
  * only on the header-only reconstruction an idempotent replay returns from
  * {@code QuoteService.reload}: the stored row is the authority there, and the
  * three are re-read from it only when a caller asks for the detail.
+ *
+ * @param deliveryOutcome        ADR 0037: how delivery-fee resolution ended, or
+ *                                null when it was never attempted (a collected
+ *                                cart, or a delivery cart with no destination
+ *                                yet). {@code fees} is the amount actually
+ *                                charged; this is whether that amount is one a
+ *                                checkout may rely on — {@link
+ *                                DeliveryFeeOutcome#RESOLVED} or {@link
+ *                                DeliveryFeeOutcome#EXTERNALLY_PRICED} — or a
+ *                                refusal a fee of zero cannot be told apart
+ *                                from
+ * @param deliveryShortfallMinor how far the goods subtotal sits below the
+ *                                zone's minimum basket, or null when it clears
+ *                                it or no minimum applies. Non-null even when
+ *                                {@code deliveryOutcome} is {@code RESOLVED}:
+ *                                the minimum is a checkout precondition, not a
+ *                                resolution outcome, and a resolved zone can
+ *                                still sit under it
+ * @param deliveryMinBasketMinor the zone's minimum basket, or null when it
+ *                                sets none — carried for display, not decision
+ * @param deliveryFreeFromMinor  the zone's free-delivery threshold, or null
  */
 public record Quote(
         UUID quoteId,
@@ -36,7 +58,11 @@ public record Quote(
         List<QuoteLine> lines,
         List<Adjustment> adjustments,
         Instant expiresAt,
-        Instant createdAt) {
+        Instant createdAt,
+        @Nullable DeliveryFeeOutcome deliveryOutcome,
+        @Nullable Long deliveryShortfallMinor,
+        @Nullable Long deliveryMinBasketMinor,
+        @Nullable Long deliveryFreeFromMinor) {
 
     public enum Status {
         ACTIVE,

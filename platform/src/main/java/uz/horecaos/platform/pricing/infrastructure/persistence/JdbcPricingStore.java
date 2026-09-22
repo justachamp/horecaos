@@ -13,6 +13,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
+import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.pricing.domain.Quote;
 
@@ -160,12 +161,15 @@ public class JdbcPricingStore {
                     id, tenant_id, brand_id, location_id, customer_account_id, currency, status,
                     catalog_publication_id, calculation_version, context_hash,
                     subtotal_minor, tax_minor, fee_minor, discount_minor, total_minor,
-                    calculation_document, expires_at, idempotency_key, created_at)
+                    calculation_document, expires_at, idempotency_key, created_at,
+                    delivery_outcome, delivery_shortfall_minor, delivery_min_basket_minor,
+                    delivery_free_from_minor)
                 VALUES (
                     :id, :tenantId, :brandId, :locationId, :customerId, :currency, :status,
                     :publicationId, :calculationVersion, :contextHash,
                     :subtotal, :tax, :fee, :discount, :total,
-                    CAST(:document AS jsonb), :expiresAt, :idempotencyKey, :createdAt)
+                    CAST(:document AS jsonb), :expiresAt, :idempotencyKey, :createdAt,
+                    :deliveryOutcome, :deliveryShortfall, :deliveryMinBasket, :deliveryFreeFrom)
                 """)
                 .param("id", quote.quoteId())
                 .param("tenantId", quote.tenantId())
@@ -186,6 +190,14 @@ public class JdbcPricingStore {
                 .param("expiresAt", OffsetDateTime.ofInstant(quote.expiresAt(), ZoneOffset.UTC))
                 .param("idempotencyKey", idempotencyKey)
                 .param("createdAt", OffsetDateTime.ofInstant(quote.createdAt(), ZoneOffset.UTC))
+                .param(
+                        "deliveryOutcome",
+                        quote.deliveryOutcome() == null
+                                ? null
+                                : quote.deliveryOutcome().name())
+                .param("deliveryShortfall", quote.deliveryShortfallMinor())
+                .param("deliveryMinBasket", quote.deliveryMinBasketMinor())
+                .param("deliveryFreeFrom", quote.deliveryFreeFromMinor())
                 .update();
 
         for (Quote.QuoteLine line : quote.lines()) {
@@ -269,7 +281,8 @@ public class JdbcPricingStore {
         Optional<QuoteSnapshot> header = jdbc.sql("""
                 SELECT id, tenant_id, brand_id, location_id, customer_account_id, currency, status,
                        catalog_publication_id, context_hash, subtotal_minor, tax_minor, fee_minor,
-                       discount_minor, total_minor, expires_at
+                       discount_minor, total_minor, expires_at, delivery_outcome,
+                       delivery_shortfall_minor, delivery_min_basket_minor, delivery_free_from_minor
                 FROM pricing.quotes
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
@@ -292,7 +305,13 @@ public class JdbcPricingStore {
                         row.getLong("total_minor"),
                         row.getObject("expires_at", OffsetDateTime.class).toInstant(),
                         List.of(),
-                        List.of()))
+                        List.of(),
+                        row.getString("delivery_outcome") == null
+                                ? null
+                                : DeliveryFeeOutcome.valueOf(row.getString("delivery_outcome")),
+                        row.getObject("delivery_shortfall_minor", Long.class),
+                        row.getObject("delivery_min_basket_minor", Long.class),
+                        row.getObject("delivery_free_from_minor", Long.class)))
                 .optional();
 
         if (header.isEmpty()) {
@@ -371,7 +390,11 @@ public class JdbcPricingStore {
                 found.totalMinor(),
                 found.expiresAt(),
                 lines,
-                adjustments));
+                adjustments,
+                found.deliveryOutcome(),
+                found.deliveryShortfallMinor(),
+                found.deliveryMinBasketMinor(),
+                found.deliveryFreeFromMinor()));
     }
 
     public Optional<UUID> findByIdempotencyKey(UUID tenantId, String idempotencyKey) {

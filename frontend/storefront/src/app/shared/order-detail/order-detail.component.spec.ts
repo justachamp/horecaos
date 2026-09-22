@@ -110,10 +110,11 @@ function setUp(
 }
 
 describe('OrderDetailComponent: delivery fee is never shown as a fabricated zero', () => {
-  it('omits the delivery row entirely -- the platform sends no delivery-fee breakdown', async () => {
-    // api.delivery is always {price: 0, discount: 0} coming out of
-    // OrdersService.toApiOrderDetail, because OrderResponse has no such
-    // field. Showing "0 so'm" would tell the customer delivery was free.
+  it('omits the delivery row entirely when the order genuinely had no fee', async () => {
+    // OrderResponse.feeMinor is 0 for a PICKUP/DINE_IN order (nothing to
+    // deliver) or a DELIVERY order with a waived/free fee. Showing "0 so'm"
+    // in either case would claim delivery was priced at zero rather than not
+    // charged at all, so the row stays hidden exactly like `packaging` below.
     const { fixture, comp } = setUp('o1', apiOrderDetail());
 
     fixture.detectChanges();
@@ -123,6 +124,46 @@ describe('OrderDetailComponent: delivery fee is never shown as a fabricated zero
     expect(comp.order()?.deliveryFee).toBeUndefined();
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).not.toContain('cart.delivery');
+  });
+});
+
+describe('OrderDetailComponent: the placed order reconciles total against subtotal + tax + delivery', () => {
+  // OrderResponse (StorefrontOrderingController) now carries feeMinor
+  // alongside subtotalMinor/taxMinor/totalMinor -- see JdbcOrderStore's doc
+  // comment on the field. Before this, a DELIVERY order's own detail screen
+  // showed "To'lov summasi <total>" directly above "Buyurtma <subtotal>"
+  // with no line bridging the gap, reproducing on this screen the exact
+  // "lines never sum" defect the cart/confirmation pages were fixed for.
+  it('shows the delivery-fee and tax lines the backend now sends, so the total is explained', async () => {
+    const { fixture, comp } = setUp(
+      'o1',
+      apiOrderDetail({
+        subtotal: { price: 40_179, discount: 0 },
+        tax: { price: 4_821, discount: 0 },
+        delivery: { price: 25_000, discount: 0 },
+        total: { price: 70_000, discount: 0 },
+      }),
+    );
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(comp.order()?.deliveryFee).toBeDefined();
+    expect(comp.order()?.tax).toBeDefined();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('cart.delivery');
+    expect(text).toContain('cart.tax');
+  });
+
+  it('still omits the tax row when the order reports none', async () => {
+    const { fixture, comp } = setUp('o1', apiOrderDetail({ tax: { price: 0, discount: 0 } }));
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(comp.order()?.tax).toBeUndefined();
   });
 });
 

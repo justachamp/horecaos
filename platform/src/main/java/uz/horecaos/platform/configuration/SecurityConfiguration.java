@@ -136,6 +136,12 @@ public class SecurityConfiguration {
                                 // published state the menu is, and neither writes.
                                 "/api/v1/storefront/tenants/*/brands/*/locations/*/serviceability",
                                 "/api/v1/storefront/tenants/*/brands/*/locations/*/delivery-fee",
+                                // The same read, aggregated over every fulfilment mode
+                                // in one call: which modes this channel sells here at
+                                // all, and which are usable this instant. Same public
+                                // moment as the two lines above it — a customer
+                                // choosing delivery or pickup before an account exists.
+                                "/api/v1/storefront/tenants/*/brands/*/locations/*/fulfillment-modes",
                                 // ADR 0106: a GTM container id, a GA4 measurement id, and
                                 // a Search Console verification token — public identifiers
                                 // a browser's view-source already reveals once the

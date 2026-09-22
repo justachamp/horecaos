@@ -73,17 +73,40 @@ export const ORDER_STATUS_I18N_KEY: Readonly<Record<string, string>> = {
 };
 
 /**
+ * `LangService.langId` (`'uz' | 'ru' | 'en'`) to the BCP 47 tag
+ * `toLocaleString` actually needs. `'uz'` is the fallback for the same
+ * reason it is `LangService.langId`'s own default: this storefront opens in
+ * Uzbek until a customer changes it.
+ */
+export function localeTag(langId: string | undefined | null): string {
+  switch (langId) {
+    case 'ru':
+      return 'ru-RU';
+    case 'en':
+      return 'en-US';
+    default:
+      return 'uz-UZ';
+  }
+}
+
+/**
  * The order's placed-at timestamp as the platform sent it, formatted for
  * display -- never guessed. Used as the order card's subtitle line: the list
  * response (`OrderSummaryResponse`) carries no item count or distance (see
  * `OrderItem.itemCount`/`distanceKm` above), so this is the one genuinely
  * available fact about an order a list card can show besides its number,
  * status and price.
+ *
+ * @param locale a BCP 47 tag (see {@link localeTag}) -- defaults to Uzbek
+ *        rather than to `toLocaleString`'s own runtime-default locale, which
+ *        is whatever the browser or CI environment happens to be set to
+ *        (typically `en-US`) and not the language the rest of the screen is
+ *        actually rendered in.
  */
-export function formatPlacedAt(value: string | undefined | null): string {
+export function formatPlacedAt(value: string | undefined | null, locale = 'uz-UZ'): string {
   if (!value) return '';
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleString();
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleString(locale);
 }
 
 /** Line item for order detail view */
@@ -103,13 +126,18 @@ export interface OrderDetail {
   lineItems: OrderLineItem[];
   subtotal: string;
   /**
-   * Absent when the platform's order response does not break out a delivery
-   * fee (it never does today -- `OrderResponse` has no such field, and the
-   * amount is folded into `total` with no breakdown). Showing "0 so'm" here
-   * used to claim delivery was free when it may not have been; omitting the
-   * row is the honest answer, matching how `packaging` below is already
-   * handled and how `cart-order-status.component` shows no delivery line at
-   * all.
+   * `OrderResponse.taxMinor` (StorefrontOrderingController), when it is
+   * actually non-zero. Shown as its own row rather than folded into
+   * `subtotal` -- under an INCLUSIVE tax profile `subtotalMinor` is net of
+   * tax, and subtotal + delivery alone never summed to `total`.
+   */
+  tax?: string;
+  /**
+   * `OrderResponse.feeMinor` (StorefrontOrderingController), when it is
+   * actually non-zero. Absent for a PICKUP/DINE_IN order or a waived
+   * delivery fee -- showing "0 so'm" there would claim delivery was priced
+   * at zero rather than not charged at all, matching how `packaging` below
+   * is already handled.
    */
   deliveryFee?: string;
   total: string;

@@ -161,8 +161,11 @@ describe('CartService.checkout', () => {
     currency: 'UZS',
     subtotalMinor: 1000,
     taxMinor: 0,
+    discountMinor: 0,
+    feeMinor: 0,
     totalMinor: 1000,
     expiresAt: new Date().toISOString(),
+    delivery: null,
   };
 
   it('sends the given paymentMethodCode through to the checkout body', async () => {

@@ -1233,7 +1233,7 @@ public class JdbcOrderStore {
         return jdbc.sql("""
                 SELECT id, public_order_number, location_id, fulfillment_mode, status,
                        payment_status_projection, fulfillment_status_projection, currency,
-                       total_minor, promised_at, version, created_at
+                       fee_minor, total_minor, promised_at, version, created_at
                 FROM ordering.orders
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                   AND customer_account_id = :accountId
@@ -1264,6 +1264,7 @@ public class JdbcOrderStore {
                         row.getString("payment_status_projection"),
                         row.getString("fulfillment_status_projection"),
                         row.getString("currency"),
+                        row.getLong("fee_minor"),
                         row.getLong("total_minor"),
                         instantOrNull(row, "promised_at"),
                         row.getInt("version"),
@@ -2290,11 +2291,16 @@ public class JdbcOrderStore {
     }
 
     /**
-     * The twelve columns a customer's own order list needs, and no others.
+     * The thirteen columns a customer's own order list needs, and no others.
      *
      * <p>Deliberately not a subset view of {@link OrderRow}: a record that could be
      * widened to the full row is one that will be, and the fields left out here are
      * left out for a reason rather than for brevity.
+     *
+     * @param feeMinor the ADR 0037 delivery charge already folded into {@code
+     *                 totalMinor} — carried separately so a customer's order
+     *                 list can show it as its own line, the way the priced cart
+     *                 already does
      */
     public record CustomerOrderRow(
             UUID orderId,
@@ -2305,6 +2311,7 @@ public class JdbcOrderStore {
             String paymentStatusProjection,
             String fulfillmentStatusProjection,
             String currency,
+            long feeMinor,
             long totalMinor,
             @Nullable Instant promisedAt,
             int version,

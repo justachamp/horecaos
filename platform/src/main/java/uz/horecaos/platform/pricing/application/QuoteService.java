@@ -214,7 +214,11 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 result.lines(),
                 result.adjustments(),
                 now.plus(ttl),
-                now);
+                now,
+                inputs.deliveryCharge() == null ? null : inputs.deliveryCharge().outcome(),
+                result.deliveryShortfallMinor(),
+                inputs.deliveryCharge() == null ? null : inputs.deliveryCharge().minBasketMinor(),
+                inputs.deliveryCharge() == null ? null : inputs.deliveryCharge().freeDeliveryFromMinor());
 
         store.insertQuote(quote, request.idempotencyKey(), evidence(request, inputs, result));
         return quote;
@@ -399,10 +403,14 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                                 item.lineKey(), item.variantId(), item.quantity(), item.modifierOptionIds()))
                         .toList(),
                 command.idempotencyKey(),
-                // Null until ordering supplies a destination on the command. Until
-                // then a cart priced through this port is priced as a collection,
-                // which is the honest reading of a command that names no address.
-                null,
+                // Null for a cart being collected, or a delivery cart that has not
+                // named a destination yet — both are honestly "not priced as a
+                // delivery" rather than a fee this call invents.
+                command.delivery() == null
+                        ? null
+                        : new QuoteRequest.Delivery(
+                                command.delivery().destination(),
+                                command.delivery().pricingAuthority()),
                 command.presentedCouponCode());
 
         try {
@@ -505,7 +513,18 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                         java.util.List.of(),
                         java.util.List.of(),
                         row.expiresAt(),
-                        row.expiresAt()));
+                        row.expiresAt(),
+                        // Not on QuoteRow: this reconstruction only ever backs an
+                        // idempotent-replay return, and priceCart re-reads the real
+                        // header — including these fields — from findQuoteSnapshot
+                        // rather than trusting this value. A direct QuoteService.quote()
+                        // caller replaying under an idempotency key sees no delivery
+                        // detail here, which is the same "header-only" gap this
+                        // reconstruction already has for every other amount.
+                        null,
+                        null,
+                        null,
+                        null));
     }
 
     /** The calculation inputs, stored as evidence beside the normalized columns. */

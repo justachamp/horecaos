@@ -70,7 +70,6 @@
   "home": {
     "delivery": "Yetkazib berish",
     "pickup": "Olib ketish",
-    "pickupComingSoon": "Olib ketish tez orada yo'lga qo'yiladi",
     "welcome": "Xush kelibsiz!",
     "welcomeSubtitle": "{{brand}}'ning onlayn olamiga xush kelibsiz!",
     "search": "Qidirish...",
@@ -78,7 +77,8 @@
     "all": "Hammasi",
     "goHome": "Bosh sahifaga qaytish",
     "noResults": "Hech narsa topilmadi",
-    "recentSearches": "Oxirgi qidiruvlar"
+    "recentSearches": "Oxirgi qidiruvlar",
+    "modeUnavailableToday": "Hozircha mavjud emas"
   },
   "cart": {
     "title": "Savat",
@@ -103,6 +103,8 @@
     "order": "Buyurtma",
     "delivery": "Yetkazib berish",
     "packaging": "Qadoqlash",
+    "tax": "Soliq",
+    "discount": "Chegirma",
     "placeOrder": "Buyurtma berish",
     "orderError": "Buyurtma yuborilmadi. Qaytadan urinib ko'ring.",
     "cash": "Naqd pul orqali",
@@ -120,7 +122,10 @@
     "recipient": "Qabul qiluvchi",
     "recipientName": "Qabul qiluvchi ismi",
     "recipientPhone": "Qabul qiluvchi telefoni",
-    "recipientRequired": "Yetkazib berish uchun qabul qiluvchining ismi va telefonini kiriting."
+    "recipientRequired": "Yetkazib berish uchun qabul qiluvchining ismi va telefonini kiriting.",
+    "deliveryChooseAddress": "Yetkazib berish narxini hisoblash uchun manzil tanlang.",
+    "pickupLocation": "Olib ketish filiali",
+    "pickupLocationHint": "Buyurtmangizni ushbu filialdan olib ketasiz."
   },
   "orders": {
     "title": "Buyurtmalar",
@@ -140,6 +145,7 @@
     "cancel": "Bekor qilish",
     "cancelConfirm": "Ushbu buyurtmani bekor qilishga ishonchingiz komilmi?",
     "order": "Buyurtma",
+    "orderNumberLabel": "Buyurtma №{{number}}",
     "backToList": "Buyurtmalar ro'yxatiga qaytish",
     "orderNotFound": "Buyurtma topilmadi.",
     "statusReviewing": "Buyurtmangiz ko'rib chiqilmoqda",
@@ -157,6 +163,7 @@
     "cancelledStatus": "Bekor qilindi",
     "loadError": "Buyurtmalar yuklanmadi.",
     "cancelError": "Buyurtma bekor qilinmadi.",
+    "orderCancelledNotification": "№{{number}} buyurtma bekor qilindi.",
     "statusNew": "YANGI",
     "statusAccepted": "TASDIQLANDI",
     "statusCooking": "TAYYORLANMOQDA",
@@ -295,7 +302,30 @@
     "insufficientCapability": "Buni bajarishga ruxsatingiz yo'q.",
     "entitlementRequired": "Bu sizning tarifingizda mavjud emas.",
     "notFound": "Topa olmadik.",
-    "rateLimited": "Juda ko'p urinish. Biroz kuting."
+    "rateLimited": "Juda ko'p urinish. Biroz kuting.",
+    "reason": {
+      "deliveryFeeUnresolved": "Yetkazib berish narxini hisoblab bo'lmadi. Boshqa manzil tanlang yoki keyinroq urinib ko'ring.",
+      "minimumBasketNotMet": "Yetkazib berish uchun buyurtma summasi yetarli emas.",
+      "minimumBasketAmount": "Yetkazib berish uchun eng kamida {{amount}}lik buyurtma bering.",
+      "destinationRequired": "Avval yetkazib berish manzilini tanlang.",
+      "outOfZone": "Bu manzil yetkazib berish zonasidan tashqarida.",
+      "notServiceable": "Hozir bu filialdan xizmat ko'rsatib bo'lmaydi.",
+      "signInRequired": "Buyurtma berish uchun tizimga kiring.",
+      "accountBlocked": "Hisobingiz buyurtma berishga cheklangan. Qo'llab-quvvatlash xizmatiga murojaat qiling.",
+      "cartExpired": "Savat muddati tugadi. Iltimos, qaytadan boshlang.",
+      "cartNotEditable": "Bu savatni endi o'zgartirib bo'lmaydi.",
+      "addressNotFound": "Bu manzil topilmadi. Boshqa manzil tanlang.",
+      "codeNotFound": "Bunday promokod topilmadi.",
+      "codeNotActive": "Bu promokod hali faol emas.",
+      "codeExpired": "Promokod muddati tugagan.",
+      "codeLimitReached": "Bu promokoddan foydalanish chegarasiga yetdingiz.",
+      "channelNotEnabled": "Bu xizmat hozircha ushbu kanalda mavjud emas.",
+      "modeUnavailable": "Bu usul hozircha mavjud emas.",
+      "closed": "Filial hozir yopiq.",
+      "outsideHours": "Filial ish vaqtidan tashqarida.",
+      "noLiveMenu": "Hozircha menyu mavjud emas.",
+      "atCapacity": "Oshxona hozir band. Birozdan so'ng qayta urinib ko'ring."
+    }
   },
   "money": {
     "unit": {

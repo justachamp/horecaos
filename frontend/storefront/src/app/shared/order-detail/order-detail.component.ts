@@ -155,6 +155,7 @@ export class OrderDetailComponent implements OnInit {
     });
     const totalVal = this.extractPrice(api.total);
     const subtotalVal = api.subtotal != null ? this.extractPrice(api.subtotal) : totalVal;
+    const taxVal = this.extractPrice(api.tax);
     const deliveryVal = this.extractPrice(api.delivery);
     const packagingVal = this.extractPrice(api.packaging);
     return {
@@ -162,13 +163,12 @@ export class OrderDetailComponent implements OnInit {
       orderNumber: Number(api.order_number ?? api.id),
       lineItems,
       subtotal: format(subtotalVal),
-      // The platform's order response has no delivery-fee field (see
-      // OrderResponse in StorefrontOrderingController): the amount is folded
-      // into `total` with no breakdown. `deliveryVal` is therefore always 0
-      // here, and showing "0 so'm" would tell the customer delivery was free
-      // when it may not have been -- the row is hidden rather than guessed,
-      // the same choice already made for `packaging` below and for
-      // cart-order-status.component, which shows no delivery line at all.
+      // `OrdersService.toApiOrderDetail` now carries the real
+      // OrderResponse.taxMinor/feeMinor -- zero for PICKUP/DINE_IN or a
+      // waived fee, never absent. Hidden only when actually zero, so "0
+      // so'm" never claims delivery was free (or taxed) when it was not,
+      // the same choice already made for `packaging` below.
+      tax: taxVal > 0 ? format(taxVal) : undefined,
       deliveryFee: deliveryVal > 0 ? format(deliveryVal) : undefined,
       total: format(totalVal),
       packaging: packagingVal > 0 ? format(packagingVal) : undefined,

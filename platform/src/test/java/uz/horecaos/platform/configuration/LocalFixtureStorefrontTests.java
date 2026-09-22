@@ -107,6 +107,40 @@ class LocalFixtureStorefrontTests {
     }
 
     @Test
+    void fulfillmentModesReportsWhatTheChannelSellsAndWhatIsServiceableNow() throws Exception {
+        // The fixture's STOREFRONT channel sells PICKUP and DELIVERY (both bound
+        // to a 24/7 schedule and a live publication) and never DINE_IN — a
+        // storefront choosing a default mode tab, or deciding whether to show one
+        // at all, needs exactly this distinction and needs it for every mode in
+        // one call rather than by guessing which modes exist and calling
+        // /serviceability once per guess.
+        mvc.perform(get(LOCATION_PATH + "/fulfillment-modes?channel=STOREFRONT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.modes.length()").value(3))
+                .andExpect(jsonPath("$.modes[?(@.mode=='PICKUP')].sold").value(true))
+                .andExpect(jsonPath("$.modes[?(@.mode=='PICKUP')].serviceable").value(true))
+                .andExpect(jsonPath("$.modes[?(@.mode=='PICKUP')].reason")
+                        .value(org.hamcrest.Matchers.contains(org.hamcrest.Matchers.nullValue())))
+                .andExpect(jsonPath("$.modes[?(@.mode=='DELIVERY')].sold").value(true))
+                .andExpect(
+                        jsonPath("$.modes[?(@.mode=='DELIVERY')].serviceable").value(true))
+                .andExpect(jsonPath("$.modes[?(@.mode=='DINE_IN')].sold").value(false))
+                .andExpect(jsonPath("$.modes[?(@.mode=='DINE_IN')].serviceable").value(false))
+                .andExpect(jsonPath("$.modes[?(@.mode=='DINE_IN')].reason").value("FULFILMENT_MODE_UNAVAILABLE"));
+
+        // An unknown channel code sells nothing anywhere — every mode comes back
+        // not sold, not serviceable, same reading ServiceabilityController gives
+        // a stale link.
+        mvc.perform(get(LOCATION_PATH + "/fulfillment-modes?channel=NO-SUCH-CHANNEL"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.modes.length()").value(3))
+                .andExpect(jsonPath("$.modes[?(@.mode=='DELIVERY')].sold").value(false))
+                .andExpect(
+                        jsonPath("$.modes[?(@.mode=='DELIVERY')].serviceable").value(false))
+                .andExpect(jsonPath("$.modes[?(@.mode=='DELIVERY')].reason").value("CHANNEL_NOT_ENABLED"));
+    }
+
+    @Test
     void anonymousErrorsKeepTheirRealStatus() throws Exception {
         // A public request that errors — the menu without its required channel —
         // must answer with its own status. In a servlet container the error body

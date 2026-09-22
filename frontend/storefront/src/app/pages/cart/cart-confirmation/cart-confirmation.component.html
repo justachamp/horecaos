@@ -4,6 +4,7 @@
 
     <!-- Yetkazib berish manzili -->
     <a
+      *ngIf="delivering"
       class="flex w-full items-center gap-3 border-b border-zinc-700/80 py-4 text-left"
       [attr.aria-label]="'cart.changeAddress' | t"
     >
@@ -31,6 +32,24 @@
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
       </svg> -->
     </a>
+
+    <!-- Olib ketish: no address step, the branch itself is the destination -->
+    <div *ngIf="pickingUp" class="flex w-full items-center gap-3 border-b border-zinc-700/80 py-4">
+      <span class="flex h-9 w-9 shrink-0 items-center justify-center text-brand-accent" aria-hidden="true">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M3 9.5L12 3l9 6.5M4.5 10v10a1 1 0 001 1h13a1 1 0 001-1V10"
+          />
+        </svg>
+      </span>
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-medium text-text-primary">{{ 'cart.pickupLocation' | t }}</p>
+        <p class="mt-0.5 text-xs text-zinc-400">{{ 'cart.pickupLocationHint' | t }}</p>
+      </div>
+    </div>
 
     <!-- Kimga yetkaziladi -->
     <div *ngIf="delivering" class="border-b border-zinc-700/80 pb-4">
@@ -150,7 +169,7 @@
       }
     </div>
 
-    <!-- To'lov summasi -->
+    <!-- To'lov summasi: goods, tax, delivery and total, so the lines add up -->
     <div class="mt-6 rounded-xl bg-brand-accent px-4 py-4 text-white">
       <div class="flex items-center justify-between border-b border-white/20 pb-3">
         <span class="text-sm font-bold text-white">{{ 'cart.paymentAmount' | t }}</span>
@@ -160,10 +179,24 @@
         <span>{{ 'cart.order' | t }}</span>
         <span>{{ orderSubtotal }}</span>
       </div>
-      <div class="flex items-center justify-between pt-1 text-sm text-white">
-        <span>{{ 'cart.delivery' | t }}</span>
-        <span>{{ deliveryFee }}</span>
-      </div>
+      @if (taxAmount) {
+        <div class="flex items-center justify-between pt-1 text-sm text-white">
+          <span>{{ 'cart.tax' | t }}</span>
+          <span>{{ taxAmount }}</span>
+        </div>
+      }
+      @if (delivering) {
+        <div class="flex items-center justify-between pt-1 text-sm text-white">
+          <span>{{ 'cart.delivery' | t }}</span>
+          <span>{{ deliveryFee }}</span>
+        </div>
+      }
+      @if (discountAmount) {
+        <div class="flex items-center justify-between pt-1 text-sm text-white">
+          <span>{{ 'cart.discount' | t }}</span>
+          <span>-{{ discountAmount }}</span>
+        </div>
+      }
       @if (cart.cartData()?.packaging?.price) {
         <div class="flex items-center justify-between pt-1 text-sm text-white">
           <span>{{ 'cart.packaging' | t }}</span>
@@ -171,6 +204,15 @@
         </div>
       }
     </div>
+
+    <!-- Why the delivery fee is not final yet: outside the delivery area,
+         minimum basket not met, or no address chosen -- named specifically,
+         in the customer's own language, never a generic error. -->
+    @if (delivering && deliveryUnresolvedMessage) {
+      <p class="mt-2 rounded-xl bg-amber-500/15 px-4 py-3 text-center text-sm text-amber-300">
+        {{ deliveryUnresolvedMessage }}
+      </p>
+    }
   </div>
   @if (orderError()) {
     <p class="mt-2 text-center text-sm text-red-400">{{ orderError() }}</p>
@@ -182,8 +224,9 @@
   >
     <button
       type="button"
+      data-testid="place-order-button"
       (click)="submitOrder()"
-      [disabled]="submitting() || !cart.cartData() || !selectedPaymentId || noPaymentMethods()"
+      [disabled]="submitting() || !cart.cartData() || !selectedPaymentId || noPaymentMethods() || !canPlaceOrder"
       class="flex w-full items-center justify-center rounded-xl bg-brand-accent py-3.5 text-base font-bold text-white transition-opacity hover:opacity-95 disabled:opacity-50"
     >
       @if (submitting()) {
@@ -192,6 +235,6 @@
         {{ 'cart.placeOrder' | t }}
       }
     </button>
-   
+
   </div>
 </div>
