@@ -75,6 +75,16 @@ export const SETTINGS_NAVIGATION: readonly SettingsNavGroup[] = [
         builtRoute: true,
       },
       {
+        // Row 2.1b: the tenant-wide coded kitchen-instruction vocabulary —
+        // `comment-presets-page.ts`'s own doc explains why it lives here
+        // rather than under `reference-data` (4.7's own bundle is blocked
+        // on an unrelated ADR 0016 question).
+        path: 'comment-presets',
+        label: 'settings.nav.commentPresets',
+        description: 'settings.home.description.commentPresets',
+        builtRoute: true,
+      },
+      {
         // 10.13 Delivery policy (wave P38). Points at `/delivery/courier-policy`
         // (an absolute `routerLink`, resolved outside `/settings/**`) rather
         // than a route mounted under this shell: the screen already has its

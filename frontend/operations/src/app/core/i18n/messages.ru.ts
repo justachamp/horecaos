@@ -715,6 +715,7 @@ export const messagesRu: MessageCatalogue = {
   'settings.nav.integrations': 'Интеграции',
   'settings.nav.referenceData': 'Справочные данные',
   'settings.nav.catalogBaseSettings': 'Базовые настройки каталога',
+  'settings.nav.commentPresets': 'Пресеты комментариев к блюду',
   'settings.nav.deliveryPolicy': 'Политика доставки',
 
   'settings.home.title': 'Настройки',
@@ -758,6 +759,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.home.description.orderPolicy': 'Свод правил, по которым оценивается каждый заказ.',
   'settings.home.description.catalogBaseSettings':
     'Переключатели логики остатков и цен QR/киоска — общие для всей компании.',
+  'settings.home.description.commentPresets':
+    'Кодовые инструкции для кухни, которые товар может предложить на строке вместо свободного текста.',
   'settings.home.description.deliveryPolicy':
     'Адреса вне зоны, что видит и может курьер, проверка действий по GPS.',
   'settings.home.description.paymentMethods': 'Собственный список способов оплаты тенанта.',
@@ -1064,6 +1067,40 @@ export const messagesRu: MessageCatalogue = {
   'settings.catalog.qrKioskPricePlane.body':
     'Автоматически направляет каналы QR и киоск на ценовой план зала вместо отдельного плана, составленного вручную.',
   'settings.catalog.qrKioskPricePlane.field': 'QR и киоск продают по ценам зала',
+
+  // Пункт 2.1b: пресеты комментариев к блюду
+  'settings.commentPresets.title': 'Пресеты комментариев к блюду',
+  'settings.commentPresets.lead':
+    'Кодовая инструкция для кухни («без лука», «хорошо прожарить»), которую строка заказа несёт вместо свободного текста.',
+  'settings.commentPresets.tenantWideNote': 'Общий для всех брендов этого тенанта.',
+  'settings.commentPresets.empty': 'Пресеты ещё не зарегистрированы.',
+  'settings.commentPresets.status.active': 'Активен',
+  'settings.commentPresets.status.archived': 'В архиве',
+  'settings.commentPresets.table.code': 'Код',
+  'settings.commentPresets.table.labelRu': 'Метка (ru)',
+  'settings.commentPresets.table.labelUz': 'Метка (uz)',
+  'settings.commentPresets.table.labelEn': 'Метка (en)',
+  'settings.commentPresets.table.posModifierCode': 'Модификатор кассы',
+  'settings.commentPresets.table.sortOrder': 'Порядок',
+  'settings.commentPresets.table.status': 'Статус',
+  'settings.commentPresets.edit': 'Изменить',
+  'settings.commentPresets.edit.submit': 'Сохранить',
+  'settings.commentPresets.edit.submitting': 'Сохранение…',
+  'settings.commentPresets.cancel': 'Отмена',
+  'settings.commentPresets.create.title': 'Зарегистрировать пресет',
+  'settings.commentPresets.create.code': 'Код',
+  'settings.commentPresets.create.codeHint':
+    'Только заглавные буквы, цифры, «_» и «-». Клиенту никогда не показывается.',
+  'settings.commentPresets.create.labelRu': 'Метка (ru)',
+  'settings.commentPresets.create.labelUz': 'Метка (uz)',
+  'settings.commentPresets.create.labelEn': 'Метка (en)',
+  'settings.commentPresets.create.posModifierCode': 'Код модификатора кассы',
+  'settings.commentPresets.create.posModifierCodeHint':
+    'Необязательно. Кодовое значение, в которое экспорт на кассу превращает этот пресет там, где ожидается модификатор.',
+  'settings.commentPresets.create.sortOrder': 'Порядок',
+  'settings.commentPresets.create.submit': 'Зарегистрировать',
+  'settings.commentPresets.create.submitting': 'Регистрация…',
+  'settings.commentPresets.create.incomplete': 'Нужны код и все три метки.',
 
   // 10.7 Фискализация
   'settings.fiscalization.title': 'Фискализация',

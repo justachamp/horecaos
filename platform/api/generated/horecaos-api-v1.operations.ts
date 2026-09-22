@@ -4080,6 +4080,11 @@ export interface RoundResponse {
   sessionId?: string;
 }
 
+export interface RoutingRuleDetailResponse {
+  brandRule?: RoutingRuleView;
+  locationRule?: RoutingRuleView;
+}
+
 export interface RoutingRuleRequest {
   categoryId?: string;
   productId?: string;
@@ -4091,6 +4096,15 @@ export interface RoutingRuleRequest {
 export interface RoutingRuleResponse {
   layer?: string;
   ruleId?: string;
+  version?: number;
+}
+
+export interface RoutingRuleView {
+  layer?: string;
+  ruleId?: string;
+  stationId?: string;
+  stationRole?: string;
+  version?: number;
 }
 
 export interface RoutingSubscriptionRequest {
@@ -4868,6 +4882,12 @@ export interface UpdatePaymentMethodRequest {
   sortOrder?: number;
 }
 
+export interface UpdateRoutingRuleRequest {
+  expectedVersion: number;
+  stationId?: string;
+  stationRole?: string;
+}
+
 export interface UpdateStationCapacityRequest {
   expectedVersion: number;
   portionsPerHour?: number;
@@ -5285,7 +5305,9 @@ export interface Operations {
   "approve_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices/enrolments/{userCode}/approve"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; userCode: string } }; body: ApproveRequest }; responses: { "200": DeviceResponse } };
   "revoke": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices/{deviceId}/revoke"; request: { parameters: { path: { brandId: string; deviceId: string; locationId: string; tenantId: string } }; body: RevokeRequest }; responses: { "200": RevokeResponse } };
   "eventsForOrder": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/orders/{orderId}/events"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": KitchenEventsResponse } };
+  "routingRuleFor": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/routing-rules"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { categoryId?: string; productId?: string; variantId?: string } } }; responses: { "200": RoutingRuleDetailResponse } };
   "route": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/routing-rules"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: RoutingRuleRequest }; responses: { "200": RoutingRuleResponse } };
+  "updateRoute": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/routing-rules/{ruleId}"; request: { parameters: { path: { brandId: string; locationId: string; ruleId: string; tenantId: string } }; body: UpdateRoutingRuleRequest }; responses: { "200": RoutingRuleResponse } };
   "capacity": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/station-capacity"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<StationCapacityResponse> } };
   "addCapacity": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/station-capacity"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: StationCapacityRequest }; responses: { "200": StationCapacityResponse } };
   "deleteCapacity": { method: "DELETE"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/station-capacity/{capacityWindowId}"; request: { parameters: { path: { brandId: string; capacityWindowId: string; locationId: string; tenantId: string } }; body: DeleteStationCapacityRequest }; responses: { "200": unknown } };

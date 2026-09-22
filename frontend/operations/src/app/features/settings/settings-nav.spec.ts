@@ -14,4 +14,8 @@ describe('settings navigation behind a feature flag (ADR 0082)', () => {
   it('shows it once the flag is on for the tenant', () => {
     expect(paths((flag) => flag === 'feature.support_visits')).toContain('support-visits');
   });
+
+  it('lists the preset-product-comments screen (row 2.1b) unconditionally, next to the catalog settings', () => {
+    expect(paths(() => false)).toContain('comment-presets');
+  });
 });

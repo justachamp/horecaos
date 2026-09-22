@@ -4,6 +4,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 import java.time.Duration;
@@ -12,6 +13,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,10 +39,10 @@ import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchro
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
- * {@link KitchenStationController}'s station-capacity PUT/DELETE endpoints,
- * exercised through the real HTTP stack — mirroring {@code
- * ReservationControllerLocationIsolationHttpTests}' own style for the
- * analogous gap.
+ * {@link KitchenStationController}'s station-capacity and routing-rule
+ * PUT/DELETE/GET endpoints, exercised through the real HTTP stack —
+ * mirroring {@code ReservationControllerLocationIsolationHttpTests}' own
+ * style for the analogous gap.
  *
  * <p><b>wave139-integration adversarial review, batch 5, T02/medium.</b> Every
  * assertion for {@code updateCapacityWindow}/{@code deleteCapacityWindow} in
@@ -52,6 +54,12 @@ import uz.horecaos.platform.support.TestDatabase;
  * accepts) is refused, a body missing {@code expectedVersion} is refused, and
  * a caller who actually holds {@code kitchen.station.manage} reaches the
  * service and gets the ordinary 200/204.
+ *
+ * <p><b>Gap map row 4.2g.</b> The routing-rules {@code GET} and {@code PUT}
+ * added alongside {@code KitchenExecutionTests}'s direct-service coverage get
+ * the same HTTP-layer proof: {@code KITCHEN_TICKET_READ} reaches the read,
+ * {@code KITCHEN_STATION_MANAGE} is required for the edit, and the edit
+ * actually changes the department rather than the second {@code POST}'s 409.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -105,7 +113,13 @@ class KitchenStationControllerTests {
         // kitchen.stations/station_capacity and iam.grants all chain back to
         // tenant.tenants by foreign key, the same TRUNCATE ... CASCADE
         // KitchenDeviceServiceTests and the reservation isolation test use.
+        // catalog.catalogs/categories carry tenant_id/brand_id as plain columns
+        // with no foreign key back to tenant.* (V0016's own comment: everything
+        // is "brand-owned" by convention, not by constraint), so the row-4.2g
+        // fixtures below need their own explicit truncate rather than riding
+        // the tenant cascade.
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
+        jdbc.sql("TRUNCATE TABLE catalog.categories, catalog.catalogs CASCADE").update();
 
         seedTenancyAndStation();
         roleRegistry.synchronize();
@@ -223,6 +237,99 @@ class KitchenStationControllerTests {
         assertThat(capacityWindowExists(windowId)).isFalse();
     }
 
+    // ---------------------------------------------------------- routing rules (row 4.2g)
+
+    @Test
+    @DisplayName("GET .../routing-rules answers the brand rule route() wrote, for a caller "
+            + "holding only kitchen.ticket.read")
+    void getRoutingRuleSucceedsForReadOnlyStaff() throws Exception {
+        UUID categoryId = seedCategory();
+        UUID ruleId = seedBrandRule(categoryId, "GRILL");
+
+        MvcResult result = mvc.perform(get(routingRulesPath())
+                        .queryParam("categoryId", categoryId.toString())
+                        .with(tokenFor(READ_ONLY_STAFF)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        String body = result.getResponse().getContentAsString();
+        assertThat(body).contains(ruleId.toString()).contains("GRILL").contains("\"layer\":\"BRAND\"");
+        assertThat(body).as("no location override was written").contains("\"locationRule\":null");
+    }
+
+    @Test
+    @DisplayName("GET .../routing-rules answers empty for a node nothing routes yet")
+    void getRoutingRuleAnswersEmptyForAnUnroutedNode() throws Exception {
+        UUID categoryId = seedCategory();
+
+        MvcResult result = mvc.perform(get(routingRulesPath())
+                        .queryParam("categoryId", categoryId.toString())
+                        .with(tokenFor(READ_ONLY_STAFF)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getContentAsString())
+                .contains("\"brandRule\":null")
+                .contains("\"locationRule\":null");
+    }
+
+    @Test
+    @DisplayName("PUT .../routing-rules/{id} refuses a caller holding only kitchen.ticket.read")
+    void updateRoutingRuleRefusesACallerWithoutStationManage() throws Exception {
+        UUID categoryId = seedCategory();
+        UUID ruleId = seedBrandRule(categoryId, "GRILL");
+
+        MvcResult attempt = mvc.perform(put(routingRulePath(ruleId))
+                        .with(tokenFor(READ_ONLY_STAFF))
+                        .header("Idempotency-Key", "routing-rule-update-403-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateRoutingRuleBody("COLD", null, 1)))
+                .andReturn();
+
+        assertThat(attempt.getResponse().getStatus())
+                .as("READ_ONLY_STAFF holds kitchen.ticket.read, not kitchen.station.manage")
+                .isEqualTo(403);
+        assertThat(brandRuleRole(ruleId)).isEqualTo("GRILL");
+    }
+
+    @Test
+    @DisplayName("PUT .../routing-rules/{id} changes the department for a caller holding "
+            + "kitchen.station.manage, instead of the second POST's 409")
+    void updateRoutingRuleSucceedsForAManager() throws Exception {
+        UUID categoryId = seedCategory();
+        UUID ruleId = seedBrandRule(categoryId, "GRILL");
+
+        MvcResult result = mvc.perform(put(routingRulePath(ruleId))
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "routing-rule-update-200-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateRoutingRuleBody("COLD", null, 1)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(brandRuleRole(ruleId)).isEqualTo("COLD");
+    }
+
+    @Test
+    @DisplayName("PUT .../routing-rules/{id} refuses a body with no expectedVersion")
+    void updateRoutingRuleRefusesABodyMissingExpectedVersion() throws Exception {
+        UUID categoryId = seedCategory();
+        UUID ruleId = seedBrandRule(categoryId, "GRILL");
+
+        MvcResult attempt = mvc.perform(put(routingRulePath(ruleId))
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "routing-rule-update-400-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"stationRole":"COLD"}
+                                """))
+                .andReturn();
+
+        assertThat(attempt.getResponse().getStatus())
+                .as("expectedVersion is @NotNull on UpdateRoutingRuleRequest")
+                .isEqualTo(400);
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private static String updateBody(String start, String end, int portionsPerHour, int expectedVersion) {
@@ -237,6 +344,69 @@ class KitchenStationControllerTests {
     private static String capacityPath(UUID windowId) {
         return "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION
                 + "/kitchen/station-capacity/" + windowId;
+    }
+
+    private static String routingRulesPath() {
+        return "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION + "/kitchen/routing-rules";
+    }
+
+    private static String routingRulePath(UUID ruleId) {
+        return routingRulesPath() + "/" + ruleId;
+    }
+
+    private static String updateRoutingRuleBody(
+            @Nullable String stationRole, @Nullable UUID stationId, int expectedVersion) {
+        String role = stationRole == null ? "null" : "\"" + stationRole + "\"";
+        String station = stationId == null ? "null" : "\"" + stationId + "\"";
+        return "{\"stationRole\":%s,\"stationId\":%s,\"expectedVersion\":%d}".formatted(role, station, expectedVersion);
+    }
+
+    private UUID seedCategory() {
+        UUID catalogId = UUID.randomUUID();
+        jdbc.sql("""
+                        INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status, version)
+                        VALUES (:id, :t, :b, 'MAIN', 'Main', 'ACTIVE', 1)
+                        """)
+                .param("id", catalogId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .update();
+        UUID categoryId = UUID.randomUUID();
+        jdbc.sql("""
+                        INSERT INTO catalog.categories
+                            (id, tenant_id, brand_id, catalog_id, code, sort_order, status, version)
+                        VALUES (:id, :t, :b, :c, 'MAINS', 1, 'ACTIVE', 1)
+                        """)
+                .param("id", categoryId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("c", catalogId)
+                .update();
+        return categoryId;
+    }
+
+    /** A brand-layer rule for one category, exactly what {@code route()} writes. */
+    private UUID seedBrandRule(UUID categoryId, String role) {
+        UUID ruleId = UUID.randomUUID();
+        jdbc.sql("""
+                        INSERT INTO kitchen.brand_routing_rules
+                            (id, tenant_id, brand_id, category_id, station_role, version)
+                        VALUES (:id, :t, :b, :c, :role, 1)
+                        """)
+                .param("id", ruleId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("c", categoryId)
+                .param("role", role)
+                .update();
+        return ruleId;
+    }
+
+    private String brandRuleRole(UUID ruleId) {
+        return jdbc.sql("SELECT station_role FROM kitchen.brand_routing_rules WHERE id = :id")
+                .param("id", ruleId)
+                .query(String.class)
+                .single();
     }
 
     private Map<String, Object> capacityWindowRow(UUID windowId) {

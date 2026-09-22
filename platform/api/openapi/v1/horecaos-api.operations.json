@@ -12949,6 +12949,17 @@
         },
         "type" : "object"
       },
+      "RoutingRuleDetailResponse" : {
+        "properties" : {
+          "brandRule" : {
+            "$ref" : "#/components/schemas/RoutingRuleView"
+          },
+          "locationRule" : {
+            "$ref" : "#/components/schemas/RoutingRuleView"
+          }
+        },
+        "type" : "object"
+      },
       "RoutingRuleRequest" : {
         "properties" : {
           "categoryId" : {
@@ -12983,6 +12994,33 @@
           "ruleId" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "RoutingRuleView" : {
+        "properties" : {
+          "layer" : {
+            "type" : "string"
+          },
+          "ruleId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "stationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "stationRole" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -15393,6 +15431,25 @@
           }
         },
         "required" : [ "displayName" ],
+        "type" : "object"
+      },
+      "UpdateRoutingRuleRequest" : {
+        "properties" : {
+          "expectedVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "stationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "stationRole" : {
+            "maxLength" : 16,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "expectedVersion" ],
         "type" : "object"
       },
       "UpdateStationCapacityRequest" : {
@@ -28604,6 +28661,73 @@
       }
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/routing-rules" : {
+      "get" : {
+        "description" : "Both layers' answer for the node, so the product editor's station picker can show a product's current department instead of an always-blank picker that only finds out it was already routed when the save 409s.",
+        "operationId" : "routingRuleFor",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "variantId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "productId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "categoryId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RoutingRuleDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The rule(s) already routing one catalogue node (gap map row 4.2g)",
+        "tags" : [ "Kitchen configuration" ]
+      },
       "post" : {
         "description" : "Naming a station writes the location layer; naming a role writes the brand layer. A rule addresses exactly one of a variant, a product, or a category.",
         "operationId" : "route",
@@ -28655,6 +28779,69 @@
           }
         },
         "summary" : "Route a catalogue node to a station role, or to a station",
+        "tags" : [ "Kitchen configuration" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/routing-rules/{ruleId}" : {
+      "put" : {
+        "description" : "Names a station role to change the brand layer or a station to change the location layer, never both — the same rule `POST routing-rules` enforces. Refused (409, stale version) when the rule changed since it was read.",
+        "operationId" : "updateRoute",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "ruleId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateRoutingRuleRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RoutingRuleResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change an already-routed node's department",
         "tags" : [ "Kitchen configuration" ]
       }
     },

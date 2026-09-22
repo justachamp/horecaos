@@ -742,6 +742,7 @@ export const messagesEn = {
   'settings.nav.integrations': 'Integrations',
   'settings.nav.referenceData': 'Reference data',
   'settings.nav.catalogBaseSettings': 'Catalog base settings',
+  'settings.nav.commentPresets': 'Preset product comments',
   'settings.nav.deliveryPolicy': 'Delivery policy',
 
   'settings.home.title': 'Settings',
@@ -786,6 +787,8 @@ export const messagesEn = {
   'settings.home.description.orderPolicy': 'The rulebook every order is measured against.',
   'settings.home.description.catalogBaseSettings':
     'Company-wide stock logic and QR/kiosk pricing switches.',
+  'settings.home.description.commentPresets':
+    'Coded kitchen instructions a product can offer on a line, instead of free text.',
   'settings.home.description.deliveryPolicy':
     'Out-of-zone addresses, what the courier sees and may do, and GPS action checks.',
   'settings.home.description.paymentMethods': "The tenant's own list of ways a customer can pay.",
@@ -1092,6 +1095,40 @@ export const messagesEn = {
   'settings.catalog.qrKioskPricePlane.body':
     'Points the QR and kiosk channels at the hall price plane automatically instead of requiring one authored by hand.',
   'settings.catalog.qrKioskPricePlane.field': 'QR and kiosk take hall prices',
+
+  // Row 2.1b: preset product comments
+  'settings.commentPresets.title': 'Preset product comments',
+  'settings.commentPresets.lead':
+    'A coded kitchen instruction ("no onions", "well done") a kitchen line can carry instead of free text.',
+  'settings.commentPresets.tenantWideNote': 'Shared by every brand this tenant runs.',
+  'settings.commentPresets.empty': 'No presets registered yet.',
+  'settings.commentPresets.status.active': 'Active',
+  'settings.commentPresets.status.archived': 'Archived',
+  'settings.commentPresets.table.code': 'Code',
+  'settings.commentPresets.table.labelRu': 'Label (ru)',
+  'settings.commentPresets.table.labelUz': 'Label (uz)',
+  'settings.commentPresets.table.labelEn': 'Label (en)',
+  'settings.commentPresets.table.posModifierCode': 'POS modifier',
+  'settings.commentPresets.table.sortOrder': 'Order',
+  'settings.commentPresets.table.status': 'Status',
+  'settings.commentPresets.edit': 'Edit',
+  'settings.commentPresets.edit.submit': 'Save',
+  'settings.commentPresets.edit.submitting': 'Saving…',
+  'settings.commentPresets.cancel': 'Cancel',
+  'settings.commentPresets.create.title': 'Register a preset',
+  'settings.commentPresets.create.code': 'Code',
+  'settings.commentPresets.create.codeHint':
+    'Uppercase letters, digits, "_" and "-" only. Never shown to a customer.',
+  'settings.commentPresets.create.labelRu': 'Label (ru)',
+  'settings.commentPresets.create.labelUz': 'Label (uz)',
+  'settings.commentPresets.create.labelEn': 'Label (en)',
+  'settings.commentPresets.create.posModifierCode': 'POS modifier code',
+  'settings.commentPresets.create.posModifierCodeHint':
+    'Optional. The coded value a POS export maps this preset to where it expects a modifier.',
+  'settings.commentPresets.create.sortOrder': 'Order',
+  'settings.commentPresets.create.submit': 'Register',
+  'settings.commentPresets.create.submitting': 'Registering…',
+  'settings.commentPresets.create.incomplete': 'A code and all three labels are required.',
 
   // 10.7 Fiscalization
   'settings.fiscalization.title': 'Fiscalization',
