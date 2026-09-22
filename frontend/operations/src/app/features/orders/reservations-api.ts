@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, firstValueFrom } from 'rxjs';
+import { Observable, firstValueFrom, tap } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
-import { command } from '../../core/api/idempotency';
+import { IntentCommandRegistry, command } from '../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 
 /** Mirrors `ReservationController.AvailabilityResponse`. */
@@ -76,6 +76,22 @@ export interface ReservationAmendment {
 export class ReservationsApi {
   private readonly api = inject(ApiClient);
 
+  /**
+   * {@link create} creates a booking — no aggregate exists yet for an
+   * `If-Match` to name — so nothing guarded a double click on "Book" before
+   * this (2026-09-21 audit follow-up (a)): a lost response used to mint a
+   * second key and could double-book the same table and window. {@link
+   * stateAction} and {@link amend} both already carry `expectedVersion`,
+   * which a blind retry with the same (now stale) version fails loudly
+   * against rather than double-applying — left as they are.
+   *
+   * One host stand, one active booking form at a time is the real shape of
+   * this screen, so a fixed id is enough: a second, genuinely different
+   * booking started right after still mints its own key, since its body
+   * differs.
+   */
+  private readonly createIntents = new IntentCommandRegistry<NewReservation>();
+
   /** Advisory, per `ReservationController`'s own doc: a race is settled by the database, not by this read. */
   async availability(
     scope: LocationScope,
@@ -130,10 +146,10 @@ export class ReservationsApi {
   }
 
   create(scope: LocationScope, body: NewReservation): Observable<ReservationResponse> {
-    return this.api.post<NewReservation, ReservationResponse>(
-      operationsPaths.reservations(scope),
-      command(body),
-    );
+    const intent = this.createIntents.next('create', body);
+    return this.api
+      .post<NewReservation, ReservationResponse>(operationsPaths.reservations(scope), intent)
+      .pipe(tap(() => this.createIntents.forget('create')));
   }
 
   /** `targetStatus` one of `CONFIRMED` | `REJECTED` | `CANCELLED` | `NO_SHOW` | `COMPLETED` — never `SEATED`, which the server refuses (open a session instead — see {@link TableSessionsApi.open}). */
