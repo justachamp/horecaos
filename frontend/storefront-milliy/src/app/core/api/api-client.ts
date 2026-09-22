@@ -60,6 +60,15 @@ export interface MutateOptions<B> {
    * one is generated, which is correct for a first attempt and wrong for a retry.
    */
   readonly idempotencyKey?: string;
+  /**
+   * True for a write-shaped call that still has no principal -- the storefront
+   * delivery-fee preview (`POST .../delivery-fee`) is the one today: it is
+   * `POST` only to keep the point it takes out of a URL (ADR 0029), performs
+   * no write, and is unauthenticated by design like the menu beside it.
+   * Default false, matching every genuine mutation, which must never look
+   * anonymous in the platform's audit trail.
+   */
+  readonly anonymous?: boolean;
 }
 
 /**
@@ -131,7 +140,9 @@ export class ApiClient {
       this.http.request<T>(method, this.url(path), {
         body: options.body,
         headers,
-        context: new HttpContext().set(PLATFORM_API_REQUEST, true).set(ANONYMOUS, false),
+        context: new HttpContext()
+          .set(PLATFORM_API_REQUEST, true)
+          .set(ANONYMOUS, options.anonymous ?? false),
       }),
     );
   }

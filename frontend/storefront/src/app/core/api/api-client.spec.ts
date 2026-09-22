@@ -122,7 +122,7 @@ describe('ApiClient.mutate', () => {
     await promise;
   });
 
-  it('marks the request as a platform request and never anonymous', async () => {
+  it('marks the request as a platform request and anonymous only when asked', async () => {
     const { client, httpMock } = setUp();
 
     const promise = client.mutate('DELETE', '/carts/c1/lines/x', { expectedVersion: 1 });
@@ -130,6 +130,20 @@ describe('ApiClient.mutate', () => {
 
     expect(req.request.context.get(PLATFORM_API_REQUEST)).toBe(true);
     expect(req.request.context.get(ANONYMOUS)).toBe(false);
+    req.flush({});
+    await promise;
+  });
+
+  // 2026-09-21 audit follow-up (b): the delivery-fee preview is POST but has
+  // no principal, and must not start looking like a signed-in customer's
+  // request just because it reuses this method.
+  it('marks the request anonymous when the caller asks for it', async () => {
+    const { client, httpMock } = setUp();
+
+    const promise = client.mutate('POST', '/delivery-fee', { body: {}, anonymous: true });
+    const req = httpMock.expectOne('/api/v1/delivery-fee');
+
+    expect(req.request.context.get(ANONYMOUS)).toBe(true);
     req.flush({});
     await promise;
   });
