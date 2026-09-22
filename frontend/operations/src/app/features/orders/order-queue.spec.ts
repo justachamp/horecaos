@@ -933,6 +933,107 @@ describe('OrderQueue: reasoned cancel from CONFIRMED onward (H2)', () => {
       undefined,
     );
   });
+
+  /**
+   * H2 fetch-before-open race: `openCancelReasonDialog` awaits
+   * `referenceDataApi.list` and then unconditionally sets `dialog`/
+   * `cancelReasons` with no check that it is still the most recent call, and
+   * no busy-state on the row while the fetch is in flight. Two Cancel clicks
+   * on two different rows race their independent, uncached reference-data
+   * fetches — whichever resolves last must not silently steal the dialog
+   * from the row the operator most recently clicked.
+   */
+  it('binds the reasoned cancel dialog to the row most recently clicked, not whichever reference-data fetch resolves last', async () => {
+    let resolveOrderA: ((reasons: readonly ReasonResponse[]) => void) | undefined;
+    let resolveOrderB: ((reasons: readonly ReasonResponse[]) => void) | undefined;
+    const list = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<readonly ReasonResponse[]>((resolve) => {
+            resolveOrderA = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<readonly ReasonResponse[]>((resolve) => {
+            resolveOrderB = resolve;
+          }),
+      );
+
+    const cancelWithReason = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-B',
+        status: 'CANCELLED',
+        version: 6,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+        deliveryCancellation: null,
+      }),
+    );
+    configureWithActions(
+      [
+        order({
+          orderId: 'order-A',
+          status: 'CONFIRMED',
+          version: 2,
+          actions: [{ action: 'CANCEL' }],
+        }),
+        order({
+          orderId: 'order-B',
+          status: 'CONFIRMED',
+          version: 5,
+          actions: [{ action: 'CANCEL' }],
+        }),
+      ],
+      { cancelWithReason },
+      undefined,
+      { list },
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+
+    const host = harness.routeNativeElement!;
+    const cancelButtons = host.querySelectorAll('[data-testid="order-row-action-CANCEL"]');
+    expect(cancelButtons).toHaveLength(2);
+
+    // Operator clicks order-A's Отменить, then — before that round trip
+    // returns — order-B's.
+    (cancelButtons[0] as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (cancelButtons[1] as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    // Ordinary network jitter: the FIRST-clicked row's fetch (order-A)
+    // resolves LAST, after the second-clicked row's (order-B) already did.
+    expect(resolveOrderB).toBeDefined();
+    resolveOrderB!(FAKE_CANCEL_REASONS);
+    await flushMicrotasks();
+    expect(resolveOrderA).toBeDefined();
+    resolveOrderA!(FAKE_CANCEL_REASONS);
+    await flushMicrotasks();
+
+    (
+      host.querySelector('[data-testid="order-outcome-reason-option-reason-1"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="order-outcome-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    // The dialog must still target order-B — the row the operator most
+    // recently clicked — not order-A, whose superseded fetch merely
+    // resolved later.
+    expect(cancelWithReason).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'order-B',
+      5,
+      'reason-1',
+      'CUSTOMER_CHANGED_MIND',
+      undefined,
+    );
+  });
 });
 
 /**

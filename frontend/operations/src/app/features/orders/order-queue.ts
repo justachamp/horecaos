@@ -283,6 +283,20 @@ export class OrderQueue implements OnInit {
   private readonly decisionIds = new DecisionIdRegistry();
 
   /**
+   * Guards the fetch-before-open race between {@link openRejectDialog} and
+   * {@link openCancelReasonDialog} (bug-hunt H2): both await a reference-data
+   * call and then set the shared {@link dialog}/reason-list signals with no
+   * ordering guarantee between two independent HTTP round trips. Bumped by
+   * every attempt to open one of those dialogs (including the synchronous
+   * reasonless-cancel path in {@link onActionClick}, which can itself be the
+   * "newer" click an in-flight fetch must yield to); an awaited fetch applies
+   * its result only when this counter still matches the value it captured
+   * before awaiting, so a click superseded by a later click never wins the
+   * race just because its own round trip happened to come back first.
+   */
+  private dialogRequestId = 0;
+
+  /**
    * The resolved `ordering.lateness` policy (wave P06) — fetched once per
    * location in {@link start}, not re-fetched on every 10s poll: a tenant
    * changing its own SLA thresholds mid-shift is rare enough that the next
@@ -1009,6 +1023,10 @@ export class OrderQueue implements OnInit {
         if (requiresCancellationReason(order.status)) {
           void this.openCancelReasonDialog(order.orderId, version, scope);
         } else {
+          // Synchronous, but still a "newer" dialog-open attempt an
+          // in-flight openRejectDialog/openCancelReasonDialog fetch for a
+          // different row must yield to (H2) — see dialogRequestId's doc.
+          this.dialogRequestId += 1;
           this.dialog.set({ orderId: order.orderId, kind: 'cancel', version });
         }
         return;
@@ -1035,16 +1053,30 @@ export class OrderQueue implements OnInit {
     }
   }
 
-  /** Fetch-before-open (wave 24) — see `order-detail-pane.ts`'s identical method for why. */
+  /**
+   * Fetch-before-open (wave 24) — see `order-detail-pane.ts`'s identical
+   * method for why. H2: guarded by {@link dialogRequestId} — a second
+   * Reject/Cancel click on another row while this fetch is in flight bumps
+   * the counter, so this call's result is dropped rather than silently
+   * overwriting the dialog the operator's later click is waiting on.
+   */
   private async openRejectDialog(
     orderId: string,
     version: number,
     scope: LocationScope,
   ): Promise<void> {
+    const requestId = (this.dialogRequestId += 1);
     try {
-      this.rejectReasons.set(await this.rejectReasonsApi.list(scope));
+      const reasons = await this.rejectReasonsApi.list(scope);
+      if (requestId !== this.dialogRequestId) {
+        return; // superseded by a newer dialog-open click (H2)
+      }
+      this.rejectReasons.set(reasons);
       this.dialog.set({ orderId, kind: 'reject', version });
     } catch (error) {
+      if (requestId !== this.dialogRequestId) {
+        return;
+      }
       if (error instanceof ApiError) {
         this.actionNotice.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
       } else {
@@ -1060,16 +1092,32 @@ export class OrderQueue implements OnInit {
    * (see {@link onActionClick}'s CANCEL case) — `OrderActionsPolicy.
    * canCancelWithoutReason` refuses the free-text path from here on, so the
    * reasonless dialog is never offered for these statuses at all.
+   *
+   * Guarded by {@link dialogRequestId} against the fetch-before-open race:
+   * two Cancel clicks on two different rows fire two independent,
+   * uncached `GET .../reference-data` round trips, and ordinary network
+   * jitter can resolve the first-clicked row's fetch *after* the
+   * second-clicked row's. Without the guard, whichever resolves last wins
+   * the shared `dialog`/`cancelReasons` signals — silently rebinding the
+   * dialog to a row the operator did not just click.
    */
   private async openCancelReasonDialog(
     orderId: string,
     version: number,
     scope: LocationScope,
   ): Promise<void> {
+    const requestId = (this.dialogRequestId += 1);
     try {
-      this.cancelReasons.set(await this.referenceDataApi.list(scope, 'CANCELLATION'));
+      const reasons = await this.referenceDataApi.list(scope, 'CANCELLATION');
+      if (requestId !== this.dialogRequestId) {
+        return; // superseded by a newer dialog-open click (H2)
+      }
+      this.cancelReasons.set(reasons);
       this.dialog.set({ orderId, kind: 'cancel-reason', version });
     } catch (error) {
+      if (requestId !== this.dialogRequestId) {
+        return;
+      }
       if (error instanceof ApiError) {
         this.actionNotice.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
       } else {
