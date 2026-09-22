@@ -417,6 +417,40 @@ export interface PlatformCart {
   readonly lines: readonly PlatformCartLine[];
 }
 
+/**
+ * How ADR 0037 delivery-fee resolution ended, as far as a checkout may rely
+ * on it. Only `RESOLVED` and `EXTERNALLY_PRICED` are a fee checkout will
+ * accept -- every other value (including one this client does not
+ * recognise) is a refusal.
+ */
+export type DeliveryFeeOutcome = 'RESOLVED' | 'EXTERNALLY_PRICED' | 'UNRESOLVED' | (string & {});
+
+/**
+ * `StorefrontOrderingController.DeliveryChargeResponse`, transcribed.
+ *
+ * Present on a priced cart only for a `DELIVERY` cart whose destination has
+ * been priced -- absent for a `PICKUP` cart and for a `DELIVERY` cart with no
+ * destination chosen yet.
+ */
+export interface DeliveryCharge {
+  /** Final only when `outcome` is `RESOLVED` or `EXTERNALLY_PRICED`; already
+   * folded into the priced cart's own `totalMinor` either way. */
+  readonly feeMinor: number;
+  readonly outcome: DeliveryFeeOutcome;
+  /**
+   * The granular machine reason -- a `fulfillment.api.DeliveryFeeOutcome`
+   * name (`OUT_OF_ZONE`, `NO_TARIFF`, `LOCATION_NOT_LOCATED`,
+   * `OUTSIDE_CATCHMENT`, `BEYOND_MAX_DISTANCE`), `BELOW_MINIMUM_BASKET`, or
+   * the same value as `outcome`. Mapped to customer wording; never rendered
+   * as-is (see `core/api/problem-details.ts#reasonMessageKey`).
+   */
+  readonly reasonCode: string;
+  /** The zone's minimum basket, present only when the zone sets one. */
+  readonly minBasketMinor: number | null;
+  /** The zone's free-delivery threshold, present only when the zone sets one. */
+  readonly freeDeliveryFromMinor: number | null;
+}
+
 export interface PricedCart {
   readonly cartId: string;
   readonly cartVersion: number;
@@ -425,8 +459,13 @@ export interface PricedCart {
   readonly currency: string;
   readonly subtotalMinor: number;
   readonly taxMinor: number;
+  readonly discountMinor: number;
+  /** Total fees -- today, always the ADR 0037 delivery charge -- already
+   * folded into `totalMinor`. */
+  readonly feeMinor: number;
   readonly totalMinor: number;
   readonly expiresAt: string;
+  readonly delivery: DeliveryCharge | null;
 }
 
 export interface PaymentMethods {

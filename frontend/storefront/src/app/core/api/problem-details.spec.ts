@@ -6,6 +6,7 @@ import {
   isSessionExpired,
   isUnauthenticated,
   messageKeyFor,
+  reasonMessageKey,
   toHorecaOSApiError,
 } from './problem-details';
 
@@ -194,5 +195,68 @@ describe('messageKeyFor', () => {
   ] as const)('maps %s to %s', (code, key) => {
     const error = new HorecaOSApiError({ status: 400, code, detail: 'x' });
     expect(messageKeyFor(error)).toBe(key);
+  });
+
+  it('a business reason wins over the code -- RESOURCE_CONFLICT alone would say nothing about why', () => {
+    const error = new HorecaOSApiError({
+      status: 409,
+      code: 'RESOURCE_CONFLICT',
+      detail: 'x',
+      problem: { status: 409, reason: 'DELIVERY_FEE_UNRESOLVED' },
+    });
+    expect(messageKeyFor(error)).toBe('errors.reason.deliveryFeeUnresolved');
+  });
+
+  it('falls back to the code when the reason is present but unmapped', () => {
+    const error = new HorecaOSApiError({
+      status: 409,
+      code: 'RESOURCE_CONFLICT',
+      detail: 'x',
+      problem: { status: 409, reason: 'SOME_FUTURE_REASON' },
+    });
+    expect(messageKeyFor(error)).toBe('errors.generic');
+  });
+});
+
+describe('reasonMessageKey', () => {
+  it.each([
+    ['DELIVERY_FEE_UNRESOLVED', 'errors.reason.deliveryFeeUnresolved'],
+    ['DELIVERY_MINIMUM_BASKET_NOT_MET', 'errors.reason.minimumBasketNotMet'],
+    ['BELOW_MINIMUM_BASKET', 'errors.reason.minimumBasketNotMet'],
+    ['DELIVERY_DESTINATION_REQUIRED', 'errors.reason.destinationRequired'],
+    ['OUT_OF_ZONE', 'errors.reason.outOfZone'],
+    ['OUTSIDE_CATCHMENT', 'errors.reason.outOfZone'],
+    ['BEYOND_MAX_DISTANCE', 'errors.reason.outOfZone'],
+    ['NO_TARIFF', 'errors.reason.deliveryFeeUnresolved'],
+    ['LOCATION_NOT_LOCATED', 'errors.reason.deliveryFeeUnresolved'],
+    ['NOT_SERVICEABLE', 'errors.reason.notServiceable'],
+    ['CHANNEL_NOT_SELLABLE', 'errors.reason.notServiceable'],
+    ['GUEST_ORDERS_NOT_ALLOWED', 'errors.reason.signInRequired'],
+    ['CUSTOMER_BLACKLISTED', 'errors.reason.accountBlocked'],
+    ['CART_EXPIRED', 'errors.reason.cartExpired'],
+    ['CART_NOT_EDITABLE', 'errors.reason.cartNotEditable'],
+    ['ADDRESS_NOT_FOUND', 'errors.reason.addressNotFound'],
+    ['CODE_NOT_FOUND', 'errors.reason.codeNotFound'],
+    ['CODE_NOT_ACTIVE', 'errors.reason.codeNotActive'],
+    ['CODE_NOT_YET_ACTIVE', 'errors.reason.codeNotActive'],
+    ['CODE_EXPIRED', 'errors.reason.codeExpired'],
+    ['REDEMPTION_LIMIT_REACHED', 'errors.reason.codeLimitReached'],
+    ['PER_CUSTOMER_LIMIT_REACHED', 'errors.reason.codeLimitReached'],
+    ['CHANNEL_NOT_ENABLED', 'errors.reason.channelNotEnabled'],
+    ['FULFILMENT_MODE_UNAVAILABLE', 'errors.reason.modeUnavailable'],
+    ['MANUALLY_CLOSED', 'errors.reason.closed'],
+    ['CLOSED_BY_EXCEPTION', 'errors.reason.closed'],
+    ['OUTSIDE_SERVICE_HOURS', 'errors.reason.outsideHours'],
+    ['NO_LIVE_MENU', 'errors.reason.noLiveMenu'],
+    ['AT_CAPACITY', 'errors.reason.atCapacity'],
+  ] as const)('maps %s to %s', (reason, key) => {
+    expect(reasonMessageKey(reason)).toBe(key);
+  });
+
+  it('is null for an absent, empty or unrecognised reason', () => {
+    expect(reasonMessageKey(null)).toBeNull();
+    expect(reasonMessageKey(undefined)).toBeNull();
+    expect(reasonMessageKey('')).toBeNull();
+    expect(reasonMessageKey('SOME_FUTURE_REASON')).toBeNull();
   });
 });

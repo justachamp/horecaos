@@ -1,13 +1,13 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
-import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
-import { CustomerApi } from '../core/api/customer-api';
+import { reasonMessageKey } from '../core/api/problem-details';
 import type { CartResponse, CartResponseItem, CartResponseModifierSelection } from '../types/cart.types';
 import {
   CartService,
   modifierOptionIdsFromLineKey,
   type CheckoutResult,
+  type DeliveryCharge,
   type FulfillmentMode,
   type PlatformCart,
   type PricedCart,
@@ -16,6 +16,11 @@ import { MenuService, type PublishedModifierGroup } from './menu.service';
 import { LangService } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
+
+/** Final -- checkout will accept the fee -- vs. still a refusal. */
+function isDeliveryFeeUsable(outcome: string): boolean {
+  return outcome === 'RESOLVED' || outcome === 'EXTERNALLY_PRICED';
+}
 
 const FALLBACK_IMAGE = '/assets/logo/Logo-sq.png';
 
@@ -46,13 +51,24 @@ const UNRESOLVED = '—';
  * with. Until the cart has been priced, the total reads as unavailable rather
  * than as a guess.
  *
+ * <h2>Delivery is priced with the cart, not against a coordinate</h2>
+ *
+ * `POST /pricing`'s own response carries a `delivery` block (ADR 0037) once a
+ * `DELIVERY` cart's destination has been set -- see {@link deliveryCharge}.
+ * There used to also be a separate preview call,
+ * `GET .../delivery-fee?lat=..&lon=..`, that priced a raw coordinate before a
+ * destination was ever chosen; it is gone from here on purpose; the
+ * customer's coordinates in a URL query string are personal data the
+ * platform's own logging and error-reporting rules refuse to carry, and the
+ * priced cart is both the more honest number (it is what checkout will
+ * actually charge) and the only one that needs no second endpoint.
+ *
  * <h2>Things the legacy screen showed that no longer exist</h2>
  *
- * A packaging charge, a promo code, a vendor block with a name and opening
- * hours, and a delivery estimate on the cart. None has a platform equivalent:
- * delivery is priced by its own endpoint against a destination, and the branch's
- * preparation time is a serviceability answer rather than a cart field. They
- * report zero or empty rather than a number nobody computed.
+ * A packaging charge, a promo code, and a vendor block with a name and opening
+ * hours. None has a platform equivalent, and the branch's preparation time is
+ * a serviceability answer rather than a cart field. They report zero or empty
+ * rather than a number nobody computed.
  *
  * The customer's note is write-only. A line reports whether one exists and never
  * what it says, because the text is personal data revealed only through an
@@ -66,8 +82,6 @@ export class UiCartService {
   private readonly delivery = inject(DeliverySelectionService);
   private readonly translate = inject(TranslateService);
   private readonly config = inject(APP_CONFIG);
-  private readonly api = inject(ApiClient);
-  private readonly customerApi = inject(CustomerApi);
 
   /** The display projection the templates bind to. */
   readonly cartData = signal<CartResponse | null>(null);
@@ -82,13 +96,6 @@ export class UiCartService {
   /** How the cart is being fulfilled. Bound at creation and owned by the server. */
   readonly fulfillmentMode = signal<FulfillmentMode>('DELIVERY');
 
-  /**
-   * The delivery-fee preview for the currently chosen destination, or null
-   * when there is nothing to show one for -- not a delivery cart, no
-   * destination chosen yet, or the read has not resolved (see `deliveryFee`).
-   */
-  readonly deliveryFeeQuote = signal<DeliveryFeeQuote | null>(null);
-
   orderComment = '';
 
   readonly items = computed(() => this.cartData()?.items ?? []);
@@ -97,48 +104,136 @@ export class UiCartService {
     this.items().reduce((sum, item) => sum + item.quantity, 0),
   );
 
+  /**
+   * The priced cart's own total -- goods, tax and (once resolved) delivery,
+   * already summed server-side. This is deliberately the one number the
+   * order button ever charges: a client-side sum of the lines below would
+   * disagree with the platform at the last decimal the moment a promotion or
+   * a rounding rule applies.
+   */
   readonly totalAmount = computed(() => {
     this.translate.current();
     const total = this.priced()?.totalMinor;
     return total != null ? this.formatPrice(total) : this.getZeroPrice();
   });
 
+  /** The goods line -- net of tax. Shown beside {@link taxFormatted} so the
+   * two together, plus delivery, reconcile to {@link totalAmount}. */
   readonly subtotalFormatted = computed(() => {
     this.translate.current();
     return this.formatPrice(this.priced()?.subtotalMinor ?? 0);
   });
 
+  /**
+   * The tax line, when the priced cart reports one.
+   *
+   * Shown as its own row rather than folded silently into the goods line --
+   * under an INCLUSIVE tax profile the platform's `subtotalMinor` is net of
+   * tax, and a screen that showed goods + delivery as the whole story never
+   * summed to `totalMinor`. `null` (not a dash) when there is genuinely
+   * nothing to tax yet, so a template can hide the row instead of printing
+   * "0 so'm" beside every other line.
+   */
+  readonly taxFormatted = computed(() => {
+    this.translate.current();
+    const tax = this.priced()?.taxMinor;
+    return tax ? this.formatPrice(tax) : null;
+  });
+
+  /** The discount line, when the priced cart carries one. `null` hides the row. */
+  readonly discountFormatted = computed(() => {
+    this.translate.current();
+    const discount = this.priced()?.discountMinor;
+    return discount ? this.formatPrice(discount) : null;
+  });
+
   readonly totalWithDelivery = computed(() => this.totalAmount());
 
   /**
-   * A preview of what delivery will cost, from `GET .../delivery-fee`
-   * (`DeliveryFeeController.quote`) -- unauthenticated, like the menu, and
-   * priced against a point rather than against the cart, so it is available
-   * before the cart's own destination is ever set.
+   * The ADR 0037 delivery charge, straight from the priced cart's own
+   * `delivery` block -- never from a separate coordinate-bearing preview
+   * call. `POST /pricing` is what checkout will actually charge, so this is
+   * the one figure that can never disagree with the total above it.
    *
-   * Three states, and each is shown as itself rather than folded into the
-   * others:
-   * - no delivery destination chosen yet, or this is not a delivery cart: a
-   *   dash, because a zero here would read as free delivery;
-   * - chosen but outside every zone this branch delivers to: the platform's
-   *   own refusal, honestly, and never re-homed to "delivery unavailable"
-   *   generically -- the reason is what the customer needs to act on;
-   * - resolved: the fee itself.
+   * `null` for a `PICKUP`/`DINE_IN` cart (no delivery to price) and for a
+   * `DELIVERY` cart whose destination has not been priced yet -- both read
+   * as "not applicable" rather than as a refusal.
+   */
+  readonly deliveryCharge = computed<DeliveryCharge | null>(() => {
+    if (this.fulfillmentMode() !== 'DELIVERY') {
+      return null;
+    }
+    return this.priced()?.delivery ?? null;
+  });
+
+  /** True once a `DELIVERY` cart's fee is final and checkout will accept it.
+   * Always true for a non-delivery cart, which has no fee to resolve. */
+  readonly deliveryFeeResolved = computed(() => {
+    if (this.fulfillmentMode() !== 'DELIVERY') {
+      return true;
+    }
+    const charge = this.deliveryCharge();
+    return !!charge && isDeliveryFeeUsable(charge.outcome);
+  });
+
+  /**
+   * The delivery-fee line, for display.
+   *
+   * Three states, each shown as itself rather than folded into the others:
+   * - not a delivery cart: a dash, because a zero here would read as free
+   *   delivery on an order that never had a delivery line to begin with;
+   * - a delivery cart whose fee is not yet final (no destination chosen, out
+   *   of zone, below the zone's minimum basket, ...): a dash -- the reason
+   *   is {@link deliveryUnresolvedMessage}, read separately so a template can
+   *   show it as an explanation rather than in place of a price;
+   * - resolved: the fee itself, exactly what `totalAmount` already includes.
    */
   readonly deliveryFee = computed(() => {
     this.translate.current();
     if (this.fulfillmentMode() !== 'DELIVERY') {
       return UNRESOLVED;
     }
-    const quote = this.deliveryFeeQuote();
-    if (!quote) {
+    const charge = this.deliveryCharge();
+    if (!charge || !isDeliveryFeeUsable(charge.outcome)) {
       return UNRESOLVED;
     }
-    if (!quote.available) {
-      return this.translate.get('cart.deliveryNotServiceable');
-    }
-    return this.formatPrice(quote.feeMinor ?? 0);
+    return this.formatPrice(charge.feeMinor);
   });
+
+  /**
+   * Why the delivery fee is not final yet, in the customer's language, or
+   * `null` when there is nothing to explain (not a delivery cart, or the fee
+   * is already resolved). Drives both the inline explanation under the
+   * delivery line and the order button's disabled state.
+   */
+  readonly deliveryUnresolvedMessage = computed(() => {
+    this.translate.current();
+    if (this.fulfillmentMode() !== 'DELIVERY' || this.deliveryFeeResolved()) {
+      return null;
+    }
+    const charge = this.deliveryCharge();
+    if (!charge) {
+      // No destination chosen yet -- pricing was never asked to resolve one.
+      return this.translate.get('cart.deliveryChooseAddress');
+    }
+    if (charge.reasonCode === 'BELOW_MINIMUM_BASKET' && charge.minBasketMinor != null) {
+      return this.translate.getWithParams('errors.reason.minimumBasketAmount', {
+        amount: this.formatPrice(charge.minBasketMinor),
+      });
+    }
+    const key = reasonMessageKey(charge.reasonCode);
+    return this.translate.get(key ?? 'errors.reason.deliveryFeeUnresolved');
+  });
+
+  /**
+   * True once this basket may be checked out: a `PICKUP`/`DINE_IN` cart
+   * always may, and a `DELIVERY` cart only once its fee has resolved.
+   * `CheckoutEligibilityGuard` refuses the alternative server-side
+   * (`DELIVERY_FEE_UNRESOLVED` / `DELIVERY_MINIMUM_BASKET_NOT_MET`) -- this
+   * is what stops the customer discovering that only after pressing the
+   * button.
+   */
+  readonly canPlaceOrder = computed(() => this.deliveryFeeResolved());
 
   /** No packaging charge exists on the platform, so there is nothing to state. */
   readonly packagingFormatted = computed(() => {
@@ -398,7 +493,6 @@ export class UiCartService {
     this.carts.discard(this.locationId());
     this.cartData.set(null);
     this.priced.set(null);
-    this.deliveryFeeQuote.set(null);
   }
 
   private locationId(): string {
@@ -420,7 +514,6 @@ export class UiCartService {
     if (!cart || cart.lines.length === 0) {
       this.cartData.set(null);
       this.priced.set(null);
-      this.deliveryFeeQuote.set(null);
       return;
     }
 
@@ -518,8 +611,6 @@ export class UiCartService {
       promo_code: null,
       delivery_duration: 0,
     });
-
-    await this.refreshDeliveryFee(cart);
   }
 
   /**
@@ -530,43 +621,6 @@ export class UiCartService {
    * this is a preview, not the fee checkout will actually charge, which comes
    * from `POST /pricing` once the cart's own destination has been set.
    */
-  private async refreshDeliveryFee(cart: PlatformCart): Promise<void> {
-    if (this.fulfillmentMode() !== 'DELIVERY') {
-      this.deliveryFeeQuote.set(null);
-      return;
-    }
-    const addressId = this.delivery.addressId();
-    if (!addressId) {
-      this.deliveryFeeQuote.set(null);
-      return;
-    }
-    try {
-      const address = await this.customerApi.address(addressId);
-      if (address.latitude == null || address.longitude == null) {
-        // A saved address with no marker (NOT_GEOCODED): there is no point to
-        // ask the resolver about, so this is "unknown", not "refused".
-        this.deliveryFeeQuote.set(null);
-        return;
-      }
-      const view = await this.api.get<DeliveryFeeView>(
-        `/storefront/tenants/${this.config.tenantId}/brands/${this.config.brandId}` +
-          `/locations/${cart.locationId}/delivery-fee`,
-        {
-          query: {
-            lat: address.latitude,
-            lon: address.longitude,
-            currency: cart.currency,
-            subtotalMinor: this.priced()?.subtotalMinor ?? 0,
-          },
-          anonymous: true,
-        },
-      );
-      this.deliveryFeeQuote.set({ available: view.available, feeMinor: view.feeMinor });
-    } catch {
-      this.deliveryFeeQuote.set(null);
-    }
-  }
-
   private getZeroPrice(): string {
     return this.formatPrice(0);
   }
@@ -576,23 +630,4 @@ export class UiCartService {
     // Minor units, and for UZS that is whole som -- nothing divides by a hundred.
     return `${value.toLocaleString('uz-UZ')} ${currency}`;
   }
-}
-
-/** The two facts a screen needs from `DeliveryFeeController.DeliveryFeeView`. */
-export interface DeliveryFeeQuote {
-  readonly available: boolean;
-  readonly feeMinor: number | null;
-}
-
-/** `DeliveryFeeController.DeliveryFeeView`, transcribed from the controller. */
-interface DeliveryFeeView {
-  readonly outcome: string;
-  readonly reasonCode: string | null;
-  readonly available: boolean;
-  readonly feeMinor: number | null;
-  readonly currency: string | null;
-  readonly minBasketMinor: number | null;
-  readonly freeDeliveryFromMinor: number | null;
-  readonly distanceMeters: number | null;
-  readonly distanceSource: string | null;
 }

@@ -1,5 +1,5 @@
 import { newIdempotencyKey } from '../../../core/api/idempotency';
-import { Component, OnInit, signal, inject } from '@angular/core';
+import { Component, OnInit, effect, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -10,6 +10,7 @@ import { PaymentSessionService } from '../../../services/payment-session.service
 import { NotificationService } from '../../../services/notification.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { TranslateService } from '../../../services/translate.service';
+import { HorecaOSApiError, messageKeyFor } from '../../../core/api/problem-details';
 
 export interface PaymentOption {
   id: string;
@@ -122,7 +123,29 @@ export class CartConfirmationComponent implements OnInit {
     public cart: UiCartService,
     private ordersService: OrdersService,
     private router: Router
-  ) {}
+  ) {
+    // Prefills the recipient from the signed-in account, reactively rather
+    // than as a one-time copy in `ngOnInit`. Both sources it reads --
+    // `DeliverySelectionService.recipientName` (the profile's display name,
+    // loaded asynchronously by the home screen) and `recipientPhone` (the
+    // number typed at sign-in, held only in memory) -- can still be empty at
+    // the moment this screen mounts and arrive afterwards. A one-time read
+    // raced that and silently kept the blank it saw first; this keeps
+    // syncing until the customer actually types something of their own,
+    // which is what `recipientTouched` remembers.
+    effect(() => {
+      const name = this.delivery.recipientName();
+      const phone = this.delivery.recipientPhone();
+      if (!this.recipientTouched) {
+        this.recipientName = name;
+        this.recipientPhone = phone;
+      }
+    });
+  }
+
+  /** Set once the customer edits either recipient field, so a late-arriving
+   * profile load never overwrites what they already typed. */
+  private recipientTouched = false;
 
   ngOnInit(): void {
     if (!this.cart.cartData()) {
@@ -133,34 +156,53 @@ export class CartConfirmationComponent implements OnInit {
     // Only the address *id* survives a reload, so a fresh page has a choice it
     // cannot yet name; this reads it back before the screen renders it.
     void this.delivery.ensureAddressResolved();
-    this.recipientName = this.delivery.recipientName();
-    this.recipientPhone = this.delivery.recipientPhone();
   }
 
   get deliveryAddress(): string {
     return this.cart.deliveryAddress() || this.translate.get('cart.addressNotSelected');
   }
 
-  /** Delivery is the only mode with a recipient to ask about. */
+  /** Delivery is the only mode with a recipient and an address to ask about. */
   get delivering(): boolean {
     return this.cart.fulfillmentMode() === 'DELIVERY';
+  }
+
+  get pickingUp(): boolean {
+    return this.cart.fulfillmentMode() === 'PICKUP';
+  }
+
+  /** Why the delivery fee is not final yet, or `null` when it is (or this is
+   * not a delivery cart). See `UiCartService.deliveryUnresolvedMessage`. */
+  get deliveryUnresolvedMessage(): string | null {
+    return this.cart.deliveryUnresolvedMessage();
+  }
+
+  /** False only for a `DELIVERY` cart whose fee has not resolved -- the order
+   * button stays disabled until it does, per `CheckoutEligibilityGuard`. */
+  get canPlaceOrder(): boolean {
+    return this.cart.canPlaceOrder();
   }
 
   /**
    * Who receives this delivery.
    *
-   * Bound to plain fields rather than read straight from
-   * {@link DeliverySelectionService} because the phone is deliberately never
-   * persisted (it is ADR 0029 personal data and `GET /me` will not return it),
-   * so on any page that was reloaded there is nothing to prefill from and the
-   * customer types it once. Before this wave the screen offered nowhere to type
-   * it, and `PUT /carts/{id}/destination` requires it -- which is how a chosen
-   * address still ended in "address required" at checkout.
+   * Bound to plain fields, kept in step with {@link DeliverySelectionService}
+   * by the constructor's `effect` rather than read once in `ngOnInit`, and
+   * editable from here so the customer may change either one. The phone in
+   * particular is never persisted (it is ADR 0029 personal data and `GET /me`
+   * will not return it) -- only the number typed at sign-in, held in memory
+   * for this session, so a page that was actually reloaded still has nothing
+   * to prefill from and the customer types it once. `PUT /carts/{id}/destination`
+   * requires both fields -- which is how a chosen address used to still end in
+   * "address required" at checkout.
    */
   recipientName = '';
   recipientPhone = '';
 
   onRecipientChange(): void {
+    // From here on the customer's own typing wins; the prefill effect above
+    // stops overwriting these two fields.
+    this.recipientTouched = true;
     this.delivery.setRecipient(this.recipientName, this.recipientPhone);
   }
 
@@ -182,6 +224,16 @@ export class CartConfirmationComponent implements OnInit {
 
   get deliveryFee(): string {
     return this.cart.deliveryFee();
+  }
+
+  /** `null` hides the row: no tax to show yet, or the platform reported none. */
+  get taxAmount(): string | null {
+    return this.cart.taxFormatted();
+  }
+
+  /** `null` hides the row: nothing was discounted. */
+  get discountAmount(): string | null {
+    return this.cart.discountFormatted();
   }
 
   get totalWithDelivery(): string {
@@ -277,8 +329,14 @@ export class CartConfirmationComponent implements OnInit {
         return;
       }
       this.router.navigate(['/orders', 'active']).catch(() => {});
-    } catch {
-      this.orderError.set(this.translate.get('cart.orderError'));
+    } catch (failure) {
+      // A platform refusal (DELIVERY_FEE_UNRESOLVED, NOT_SERVICEABLE, a stale
+      // quote, ...) is named specifically here, the same vocabulary
+      // `messageKeyFor` already gives the toast -- so the inline text under
+      // the button agrees with it instead of falling back to one generic
+      // sentence for every reason checkout could have said no.
+      const key = failure instanceof HorecaOSApiError ? messageKeyFor(failure) : 'cart.orderError';
+      this.orderError.set(this.translate.get(key));
     } finally {
       this.submitting.set(false);
     }

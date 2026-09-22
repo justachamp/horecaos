@@ -70,7 +70,6 @@
   "home": {
     "delivery": "Delivery",
     "pickup": "Pickup",
-    "pickupComingSoon": "Pickup coming soon",
     "welcome": "Welcome!",
     "welcomeSubtitle": "Welcome to {{brand}}'s online world!",
     "search": "Search...",
@@ -78,7 +77,8 @@
     "all": "All",
     "goHome": "Go to home",
     "noResults": "No results found",
-    "recentSearches": "Recent searches"
+    "recentSearches": "Recent searches",
+    "modeUnavailableToday": "Not available right now"
   },
   "cart": {
     "title": "Cart",
@@ -103,6 +103,8 @@
     "order": "Order",
     "delivery": "Delivery",
     "packaging": "Packaging",
+    "tax": "Tax",
+    "discount": "Discount",
     "placeOrder": "Place order",
     "orderError": "Order not sent. Please try again.",
     "cash": "Cash",
@@ -120,7 +122,10 @@
     "recipient": "Recipient",
     "recipientName": "Recipient name",
     "recipientPhone": "Recipient phone",
-    "recipientRequired": "Add a recipient name and phone for this delivery."
+    "recipientRequired": "Add a recipient name and phone for this delivery.",
+    "deliveryChooseAddress": "Choose an address to calculate the delivery fee.",
+    "pickupLocation": "Pickup location",
+    "pickupLocationHint": "You'll pick up your order from this branch."
   },
   "orders": {
     "title": "Orders",
@@ -140,6 +145,7 @@
     "cancel": "Cancel",
     "cancelConfirm": "Are you sure you want to cancel this order?",
     "order": "Order",
+    "orderNumberLabel": "Order #{{number}}",
     "backToList": "Back to orders list",
     "orderNotFound": "Order not found.",
     "statusReviewing": "Your order is being reviewed",
@@ -295,7 +301,30 @@
     "insufficientCapability": "You do not have access to do that.",
     "entitlementRequired": "This is not available on your plan.",
     "notFound": "We could not find that.",
-    "rateLimited": "Too many attempts. Please wait a moment."
+    "rateLimited": "Too many attempts. Please wait a moment.",
+    "reason": {
+      "deliveryFeeUnresolved": "We couldn't work out the delivery fee. Choose a different address or try again later.",
+      "minimumBasketNotMet": "Your order is below the minimum for delivery.",
+      "minimumBasketAmount": "The minimum order for delivery is {{amount}}.",
+      "destinationRequired": "Choose a delivery address first.",
+      "outOfZone": "This address is outside the delivery area.",
+      "notServiceable": "This branch cannot take orders right now.",
+      "signInRequired": "Sign in to place an order.",
+      "accountBlocked": "Your account cannot place orders right now. Contact support.",
+      "cartExpired": "This basket has expired. Please start again.",
+      "cartNotEditable": "This basket can no longer be changed.",
+      "addressNotFound": "That address could not be found. Choose a different one.",
+      "codeNotFound": "That promo code could not be found.",
+      "codeNotActive": "That promo code is not active yet.",
+      "codeExpired": "That promo code has expired.",
+      "codeLimitReached": "You've reached the limit for this promo code.",
+      "channelNotEnabled": "This is not available on this channel yet.",
+      "modeUnavailable": "This option is not available right now.",
+      "closed": "This branch is closed right now.",
+      "outsideHours": "This branch is outside its opening hours.",
+      "noLiveMenu": "No menu is available right now.",
+      "atCapacity": "The kitchen is at capacity. Please try again shortly."
+    }
   },
   "money": {
     "unit": {

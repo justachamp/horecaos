@@ -1,14 +1,14 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 
-import { UiCartService, type DeliveryFeeQuote } from './ui-cart.service';
-import { CartService, type PlatformCart, type PricedCart } from './cart.service';
+import { UiCartService } from './ui-cart.service';
+import { CartService, type DeliveryCharge, type PlatformCart, type PricedCart } from './cart.service';
 import { MenuService, type PublishedMenu } from './menu.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
 import { LangService } from './lang.service';
 import { ApiClient } from '../core/api/api-client';
-import { CustomerApi, type CustomerAddress } from '../core/api/customer-api';
+import { CustomerApi } from '../core/api/customer-api';
 import { APP_CONFIG, type AppConfig } from '../core/config/app-config';
 import type { CartResponseItem } from '../types/cart.types';
 
@@ -50,6 +50,9 @@ class FakeDeliverySelectionService {
 class FakeTranslateService {
   get(key: string): string {
     return key;
+  }
+  getWithParams(key: string, params?: Record<string, string | number>): string {
+    return params ? `${key}:${JSON.stringify(params)}` : key;
   }
   current(): Record<string, unknown> {
     return {};
@@ -97,7 +100,7 @@ function baseCart(overrides: Partial<PlatformCart> = {}): PlatformCart {
   };
 }
 
-function pricedFor(cart: PlatformCart): PricedCart {
+function pricedFor(cart: PlatformCart, overrides: Partial<PricedCart> = {}): PricedCart {
   return {
     cartId: cart.cartId,
     cartVersion: cart.version,
@@ -106,8 +109,29 @@ function pricedFor(cart: PlatformCart): PricedCart {
     currency: cart.currency,
     subtotalMinor: 1000,
     taxMinor: 0,
+    discountMinor: 0,
+    feeMinor: 0,
     totalMinor: 1000,
     expiresAt: new Date().toISOString(),
+    delivery: null,
+    ...overrides,
+  };
+}
+
+/** Mirrors `UiCartService.formatPrice` under `FakeTranslateService`, whose
+ * `get('common.currency')` returns the key itself rather than "so'm". */
+function fmt(minor: number): string {
+  return `${minor.toLocaleString('uz-UZ')} common.currency`;
+}
+
+function deliveryCharge(overrides: Partial<DeliveryCharge> = {}): DeliveryCharge {
+  return {
+    feeMinor: 12_000,
+    outcome: 'RESOLVED',
+    reasonCode: 'RESOLVED',
+    minBasketMinor: null,
+    freeDeliveryFromMinor: null,
+    ...overrides,
   };
 }
 
@@ -289,111 +313,139 @@ describe('UiCartService.setQuantity', () => {
   });
 });
 
-describe('UiCartService delivery-fee preview (refreshDeliveryFee, via load())', () => {
+describe('UiCartService delivery charge (from the priced cart, never a coordinate call)', () => {
   function deliveryCart(): PlatformCart {
     return baseCart({
       lines: [{ lineKey: 'v-known', variantId: 'v-known', quantity: 1, hasCustomerNote: false }],
     });
   }
 
-  function geocodedAddress(): CustomerAddress {
-    return {
-      addressId: 'addr-1',
-      label: 'Home',
-      fields: {},
-      deliveryInstructions: null,
-      latitude: 41.3,
-      longitude: 69.2,
-      coordinateSource: 'CUSTOMER_PIN',
-      version: 1,
-    };
-  }
-
-  it('reports the platform\'s own "not serviceable" answer, not a generic error, and not free delivery', async () => {
-    const { service, carts, menu, delivery, customerApi, api } = setUp();
+  it('never calls a coordinate-bearing delivery-fee endpoint -- the fee comes from POST /pricing alone', async () => {
+    const { service, carts, menu, api } = setUp();
     const cart = deliveryCart();
     carts.ensure.mockResolvedValue(cart);
-    carts.price.mockResolvedValue(pricedFor(cart));
-    menu.menu.mockResolvedValue(
-      emptyMenu({
-        products: [
-          {
-            productId: 'p-known',
-            code: null,
-            name: 'Osh',
-            description: null,
-            mediaAssetIds: [],
-            imageUrls: [],
-            variants: [
-              { variantId: 'v-known', sku: null, unitCode: null, isDefault: true, orderable: true, amountMinor: 1000 },
-            ],
-            modifierGroupIds: [],
-          },
-        ],
+    carts.price.mockResolvedValue(
+      pricedFor(cart, { delivery: deliveryCharge({ feeMinor: 12_000, outcome: 'RESOLVED' }) }),
+    );
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.load();
+
+    // No `.../delivery-fee` read at all -- the customer's coordinates never
+    // leave this client for a preview, and the fee below came entirely from
+    // the priced cart `carts.price()` already returned.
+    expect(api.get).not.toHaveBeenCalled();
+    expect(service.deliveryFee()).toBe(fmt(12_000));
+  });
+
+  it('resolves the fee once the priced cart\'s delivery outcome is RESOLVED, and enables checkout', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = deliveryCart();
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(
+      pricedFor(cart, { delivery: deliveryCharge({ feeMinor: 8_000, outcome: 'RESOLVED' }) }),
+    );
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.load();
+
+    expect(service.deliveryFee()).toBe(fmt(8_000));
+    expect(service.deliveryFeeResolved()).toBe(true);
+    expect(service.deliveryUnresolvedMessage()).toBeNull();
+    expect(service.canPlaceOrder()).toBe(true);
+  });
+
+  it('treats EXTERNALLY_PRICED the same as RESOLVED -- both are fees checkout will accept', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = deliveryCart();
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(
+      pricedFor(cart, { delivery: deliveryCharge({ feeMinor: 0, outcome: 'EXTERNALLY_PRICED' }) }),
+    );
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.load();
+
+    expect(service.deliveryFeeResolved()).toBe(true);
+    expect(service.canPlaceOrder()).toBe(true);
+  });
+
+  it('shows a dash and the specific reason, and blocks checkout, when the address is out of zone', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = deliveryCart();
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(
+      pricedFor(cart, {
+        delivery: deliveryCharge({ feeMinor: 0, outcome: 'UNRESOLVED', reasonCode: 'OUT_OF_ZONE' }),
       }),
     );
-    delivery.addressId.mockReturnValue('addr-1');
-    customerApi.address.mockResolvedValue(geocodedAddress());
-    api.get.mockResolvedValue({
-      outcome: 'NOT_SERVICEABLE',
-      reasonCode: 'OUT_OF_ZONE',
-      available: false,
-      feeMinor: null,
-      currency: null,
-      minBasketMinor: null,
-      freeDeliveryFromMinor: null,
-      distanceMeters: null,
-      distanceSource: null,
-    });
-
-    await service.load();
-
-    expect(customerApi.address).toHaveBeenCalledWith('addr-1');
-    const quote = service.deliveryFeeQuote() as DeliveryFeeQuote;
-    expect(quote).toEqual({ available: false, feeMinor: null });
-    // The dedicated "not serviceable" string, not the unresolved dash and
-    // not a fee of 0 (which would read as free delivery).
-    expect(service.deliveryFee()).toBe('cart.deliveryNotServiceable');
-  });
-
-  it('resolves a normal fee when the address is serviceable', async () => {
-    const { service, carts, menu, delivery, customerApi, api } = setUp();
-    const cart = deliveryCart();
-    carts.ensure.mockResolvedValue(cart);
-    carts.price.mockResolvedValue(pricedFor(cart));
     menu.menu.mockResolvedValue(emptyMenu());
-    delivery.addressId.mockReturnValue('addr-1');
-    customerApi.address.mockResolvedValue(geocodedAddress());
-    api.get.mockResolvedValue({
-      outcome: 'OK',
-      reasonCode: null,
-      available: true,
-      feeMinor: 12_000,
-      currency: 'UZS',
-      minBasketMinor: null,
-      freeDeliveryFromMinor: null,
-      distanceMeters: 1200,
-      distanceSource: 'HAVERSINE',
-    });
 
     await service.load();
 
-    expect(service.deliveryFeeQuote()).toEqual({ available: true, feeMinor: 12_000 });
-    expect(service.deliveryFee()).not.toBe('cart.deliveryNotServiceable');
-  });
-
-  it('leaves the preview unresolved (not an error) when no destination has been chosen yet', async () => {
-    const { service, carts, menu, delivery, api } = setUp();
-    const cart = deliveryCart();
-    carts.ensure.mockResolvedValue(cart);
-    carts.price.mockResolvedValue(pricedFor(cart));
-    menu.menu.mockResolvedValue(emptyMenu());
-    delivery.addressId.mockReturnValue(null);
-
-    await service.load();
-
-    expect(api.get).not.toHaveBeenCalled();
-    expect(service.deliveryFeeQuote()).toBeNull();
+    // Never a zero fee, which would read as free delivery.
     expect(service.deliveryFee()).toBe('—');
+    expect(service.deliveryFeeResolved()).toBe(false);
+    expect(service.deliveryUnresolvedMessage()).toBe('errors.reason.outOfZone');
+    expect(service.canPlaceOrder()).toBe(false);
+  });
+
+  it('interpolates the minimum basket amount when the shortfall is the reason', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = deliveryCart();
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(
+      pricedFor(cart, {
+        delivery: deliveryCharge({
+          feeMinor: 0,
+          outcome: 'UNRESOLVED',
+          reasonCode: 'BELOW_MINIMUM_BASKET',
+          minBasketMinor: 100_000,
+        }),
+      }),
+    );
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.load();
+
+    expect(service.deliveryUnresolvedMessage()).toBe(
+      `errors.reason.minimumBasketAmount:{"amount":"${fmt(100_000)}"}`,
+    );
+    expect(service.canPlaceOrder()).toBe(false);
+  });
+
+  it('asks for an address, and blocks checkout, when no destination has been chosen yet', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = deliveryCart();
+    carts.ensure.mockResolvedValue(cart);
+    // No destination set yet: the priced cart's own `delivery` block is
+    // absent (`DeliveryChargeResponse.of` returns null when
+    // `deliveryOutcome` was never attempted), not an error.
+    carts.price.mockResolvedValue(pricedFor(cart, { delivery: null }));
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.load();
+
+    expect(service.deliveryFee()).toBe('—');
+    expect(service.deliveryUnresolvedMessage()).toBe('cart.deliveryChooseAddress');
+    expect(service.canPlaceOrder()).toBe(false);
+  });
+
+  it('is always resolvable for a non-delivery cart -- there is no fee to block checkout on', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = baseCart({
+      fulfillmentMode: 'PICKUP',
+      lines: [{ lineKey: 'v-known', variantId: 'v-known', quantity: 1, hasCustomerNote: false }],
+    });
+    service.fulfillmentMode.set('PICKUP');
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(pricedFor(cart, { delivery: null }));
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.load();
+
+    expect(service.deliveryFee()).toBe('—');
+    expect(service.deliveryUnresolvedMessage()).toBeNull();
+    expect(service.canPlaceOrder()).toBe(true);
   });
 });
