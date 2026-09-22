@@ -3691,6 +3691,9 @@ export const messagesRu: MessageCatalogue = {
   'reports.overview.funnel.title': 'Итоги по заказам',
   'reports.overview.funnel.completed': 'Завершено',
   'reports.overview.funnel.notCompleted': 'Не завершено',
+  'reports.overview.funnel.stage.total': 'Всего заказов',
+  'reports.overview.funnel.stage.onTime': 'Вовремя',
+  'reports.overview.funnel.stage.late': 'Опоздание',
   'reports.overview.funnel.status': 'Статус',
   'reports.overview.funnel.reason': 'Причина',
   'reports.overview.funnel.reasonUnknown': 'не зафиксирована',
@@ -3770,6 +3773,13 @@ export const messagesRu: MessageCatalogue = {
   'reports.orders.summary.branch': 'Филиал',
   'reports.orders.summary.channel': 'Канал',
   'reports.orders.summary.value': 'Значение',
+  'reports.orders.summary.report1.title': 'Сводка 1',
+  'reports.orders.summary.report2.title': 'Сводка 2',
+  'reports.orders.summary.orderType': 'Тип заказа',
+  'reports.orders.summary.count': 'Кол-во заказов',
+  'reports.orders.summary.sum': 'Сумма',
+  'reports.orders.summary.sumWithDelivery': 'Сумма с учётом доставки',
+  'reports.orders.summary.total': 'Итого',
 
   // ------------------------------------------------------- Маркетинг (§6)
 

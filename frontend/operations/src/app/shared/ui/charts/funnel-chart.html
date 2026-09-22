@@ -1,0 +1,106 @@
+<q-chart-frame [ariaLabel]="ariaLabel()" data-testid="q-funnel-chart">
+  <svg chart-graphic [attr.viewBox]="'0 0 ' + width + ' ' + height()" role="presentation">
+    @for (bar of bars(); track bar.key) {
+      <text
+        class="q-chart__bar-label q-body-sm"
+        x="0"
+        [attr.y]="bar.y + bar.height / 2"
+        dominant-baseline="middle"
+      >
+        {{ bar.label }}
+      </text>
+      <rect
+        class="q-funnel__bar"
+        [attr.x]="bar.x"
+        [attr.y]="bar.y"
+        [attr.width]="bar.width"
+        [attr.height]="bar.height"
+        [style.fill]="bar.color"
+        rx="2"
+        (mouseenter)="showHover(bar)"
+        (mouseleave)="clearHover()"
+      />
+      <text
+        class="q-chart__bar-value q-caption q-tnum"
+        [attr.x]="width - 4"
+        [attr.y]="bar.y + bar.height / 2"
+        text-anchor="end"
+        dominant-baseline="middle"
+      >
+        {{ bar.value }} · {{ bar.sharePercent }}%
+      </text>
+    }
+
+    @for (row of dropOffRows(); track row.key) {
+      <line
+        class="q-funnel__branch"
+        x1="24"
+        [attr.x2]="24"
+        [attr.y1]="row.y - 9"
+        [attr.y2]="row.y"
+      />
+      <circle class="q-funnel__branch-dot" cx="24" [attr.cy]="row.y" r="3" />
+      <text
+        class="q-funnel__drop-label q-caption"
+        x="34"
+        [attr.y]="row.y"
+        dominant-baseline="middle"
+      >
+        {{ row.label }}
+      </text>
+      <text
+        class="q-funnel__drop-value q-caption q-tnum"
+        [attr.x]="width - 4"
+        [attr.y]="row.y"
+        text-anchor="end"
+        dominant-baseline="middle"
+      >
+        {{ row.value }} · {{ row.sharePercent }}%
+      </text>
+    }
+  </svg>
+
+  @if (hover(); as tip) {
+    <div
+      chart-tooltip
+      class="q-chart__tooltip"
+      role="tooltip"
+      data-testid="q-funnel-chart-tooltip"
+      [style.left.%]="(tip.x / width) * 100"
+      [style.top.%]="(tip.y / height()) * 100"
+    >
+      {{ tip.label }}: {{ tip.value }}
+    </div>
+  }
+
+  <table chart-table data-testid="q-funnel-chart-table">
+    <caption class="q-visually-hidden">
+      {{
+        ariaLabel()
+      }}
+    </caption>
+    <thead>
+      <tr>
+        <th scope="col"></th>
+        <th scope="col">{{ 'ui.charts.table.count' | t }}</th>
+        <th scope="col">{{ 'ui.charts.table.share' | t }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (bar of bars(); track bar.key) {
+        <tr>
+          <th scope="row">{{ bar.label }}</th>
+          <td>{{ bar.value }}</td>
+          <td>{{ bar.sharePercent }}%</td>
+        </tr>
+      }
+      @for (row of dropOffRows(); track row.key) {
+        <tr class="q-funnel__drop-table-row">
+          <th scope="row">{{ row.label }}</th>
+          <td>{{ row.value }}</td>
+          <td>{{ row.sharePercent }}%</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</q-chart-frame>

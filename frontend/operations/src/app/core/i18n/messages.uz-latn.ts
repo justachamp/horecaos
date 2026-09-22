@@ -3716,6 +3716,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.overview.funnel.title': 'Buyurtmalar natijasi',
   'reports.overview.funnel.completed': 'Yakunlangan',
   'reports.overview.funnel.notCompleted': 'Yakunlanmagan',
+  'reports.overview.funnel.stage.total': 'Jami buyurtmalar',
+  'reports.overview.funnel.stage.onTime': 'Vaqtida',
+  'reports.overview.funnel.stage.late': 'Kechikish',
   'reports.overview.funnel.status': 'Holat',
   'reports.overview.funnel.reason': 'Sabab',
   'reports.overview.funnel.reasonUnknown': 'qayd etilmagan',
@@ -3796,6 +3799,13 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.orders.summary.branch': 'Filial',
   'reports.orders.summary.channel': 'Kanal',
   'reports.orders.summary.value': 'Qiymat',
+  'reports.orders.summary.report1.title': 'Svodka 1',
+  'reports.orders.summary.report2.title': 'Svodka 2',
+  'reports.orders.summary.orderType': 'Buyurtma turi',
+  'reports.orders.summary.count': 'Buyurtmalar soni',
+  'reports.orders.summary.sum': 'Summa',
+  'reports.orders.summary.sumWithDelivery': 'Yetkazib berish bilan summa',
+  'reports.orders.summary.total': 'Jami',
 
   // ------------------------------------------------------- Marketing (§6)
 

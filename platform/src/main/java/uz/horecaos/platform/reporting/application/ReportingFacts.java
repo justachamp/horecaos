@@ -252,11 +252,19 @@ public final class ReportingFacts {
     /**
      * One aggregate row.
      *
-     * @param avgSecondsTotal null when no order closed on this day. A zero would
-     *                        read as an instant order, which is the more damaging
-     *                        wrong answer
-     * @param refundedSom     refunds attributed to <em>this</em> date, from orders
-     *                        of any date
+     * @param avgSecondsTotal  null when no order closed on this day. A zero would
+     *                         read as an instant order, which is the more damaging
+     *                         wrong answer
+     * @param refundedSom      refunds attributed to <em>this</em> date, from orders
+     *                         of any date
+     * @param deliveryFeeSom   wave 8 w7-reports (7.2c, V0383): sum of the slice's
+     *                         COMPLETED orders' {@code delivery_fee_som}. Already
+     *                         part of {@code grossSom} (ADR 0019's total includes
+     *                         the fee) — this exists so a report can show the
+     *                         fee-exclusive figure too, by subtraction, without a
+     *                         second read. Zero, not a real total, on any row
+     *                         closed before the column existed — see
+     *                         {@code delivery_fee.v1}'s own {@code openQuestion}
      */
     public record BranchDayAggregate(
             BranchDayKey key,
@@ -272,7 +280,8 @@ public final class ReportingFacts {
             int promisedCount,
             int lateCount,
             int distinctCustomers,
-            int newCustomers) {}
+            int newCustomers,
+            long deliveryFeeSom) {}
 
     /** One bucket of the fixed SLA distribution, for one location or one courier on one day. */
     public record SlaBucketAggregate(

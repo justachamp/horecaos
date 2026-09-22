@@ -64,6 +64,17 @@ public final class MetricRegistry {
      */
     private static final LocalDate T13_CUSTOMER_ANALYTICS = LocalDate.of(2026, 9, 15);
 
+    /**
+     * Wave 8 w7-reports (7.2c, V0383): when {@code agg_branch_day} started
+     * carrying its own {@code delivery_fee_som} sum. {@code
+     * fact_order.delivery_fee_som} is older (V0031), but nothing rolled it up
+     * to the grain {@code /queries} reads until this migration, so a row
+     * closed before this date reports zero here regardless of what it
+     * actually charged — see {@code delivery_fee.v1}'s own {@code
+     * openQuestion}.
+     */
+    private static final LocalDate W7_DELIVERY_FEE = LocalDate.of(2026, 9, 22);
+
     private static final Map<String, MetricDefinition> BY_CODE = index(List.of(
             new MetricDefinition(
                     new MetricId("revenue.gross", 1),
@@ -680,7 +691,43 @@ public final class MetricRegistry {
                             + "is_first_order, so a refund cannot be attributed to a customer type "
                             + "and this figure is never reduced by one the way revenue.net.v1 is.",
                     null,
-                    T13_CUSTOMER_ANALYTICS)));
+                    T13_CUSTOMER_ANALYTICS),
+            // Wave 8 w7-reports (7.2c): the daily summary («Сводка») needs both
+            // the delivery-fee-inclusive total (already revenue.gross.v1 — see
+            // that metric's own definition) and the fee-exclusive one, matching
+            // Delever's report 1 (statistics.md §2.2). This is the fee's own
+            // total, not a second gross figure — a report computes the
+            // fee-exclusive column as revenue.gross.v1 minus this, and must
+            // never add the two.
+            new MetricDefinition(
+                    new MetricId("delivery_fee", 1),
+                    Grain.DAY_LOCATION_LEGAL_ENTITY,
+                    "reporting.agg_branch_day.delivery_fee_som (V0383), rolled up from "
+                            + "reporting.fact_order.delivery_fee_som",
+                    true,
+                    Aggregation.SUM,
+                    "COMPLETED_ONLY",
+                    CurrencyRule.UZS_SOM,
+                    "Whole som; no sub-unit exists and nothing divides by a hundred",
+                    MetricUnit.MONEY_SOM,
+                    "Sum of the delivery fee charged on COMPLETED orders, on the order's "
+                            + "business date. Already included in revenue.gross.v1's own total "
+                            + "(ADR 0019: total = subtotal + tax + fee - discount, and gross is "
+                            + "total plus the discount back) — this exists so a report can show "
+                            + "the fee-exclusive figure too, by subtraction, without a second read.",
+                    "Orders whose terminal status is COMPLETED.",
+                    "Cancelled, rejected, expired, and payment-failed orders. A DINE_IN or "
+                            + "PICKUP order with no delivery leg contributes zero, not null — it "
+                            + "genuinely charged no delivery fee.",
+                    "A refund reduces revenue.net.v1 and never this figure, the same treatment "
+                            + "revenue.gross.v1 gets and for the same reason.",
+                    "reporting.agg_branch_day.delivery_fee_som did not exist before V0383 "
+                            + "(2026-09-22); an aggregate row closed before that migration reads "
+                            + "zero here, not its real delivery-fee total, because a closed "
+                            + "aggregate is never silently recomputed. A range that crosses that "
+                            + "date understates the fee-exclusive figure derived from this metric "
+                            + "for its earlier days.",
+                    W7_DELIVERY_FEE)));
 
     private MetricRegistry() {}
 

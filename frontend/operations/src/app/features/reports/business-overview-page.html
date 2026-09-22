@@ -182,24 +182,23 @@
       <!-- Band D: funnel + branch table -->
       <div class="band band--funnel">
         <h2 class="q-subhead">{{ 'reports.overview.funnel.title' | t }}</h2>
-        <div class="funnel-summary">
-          <div class="funnel-stat">
-            <div class="funnel-stat__value q-data-lg q-tnum">
-              {{ formatCountValue(completedCount()) }}
-            </div>
-            <div class="funnel-stat__label q-caption">
-              {{ 'reports.overview.funnel.completed' | t }}
-            </div>
-          </div>
-          <button type="button" class="funnel-stat funnel-stat--link" (click)="openOrderLog()">
-            <div class="funnel-stat__value q-data-lg q-tnum">
-              {{ formatCountValue(outcomeTotalCount()) }}
-            </div>
-            <div class="funnel-stat__label q-caption">
-              {{ 'reports.overview.funnel.notCompleted' | t }}
-            </div>
-          </button>
-        </div>
+
+        <q-funnel-chart
+          [stages]="funnelStages()"
+          [dropOffs]="funnelDropOffs()"
+          [ariaLabel]="'reports.overview.funnel.title' | t"
+          [valueFormatter]="formatCountValue"
+        />
+
+        <button
+          type="button"
+          class="funnel-summary__order-log-link q-body-sm"
+          (click)="openOrderLog()"
+          data-testid="funnel-open-order-log"
+        >
+          {{ 'reports.overview.funnel.notCompleted' | t }}:
+          {{ formatCountValue(outcomeTotalCount()) }}
+        </button>
 
         @if (outcomes().length > 0) {
           <table class="outcome-table">
