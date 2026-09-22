@@ -93,8 +93,35 @@ export class UiCartService {
   /** The last pricing answer, or null when the cart has not been priced. */
   readonly priced = signal<PricedCart | null>(null);
 
-  /** How the cart is being fulfilled. Bound at creation and owned by the server. */
-  readonly fulfillmentMode = signal<FulfillmentMode>('DELIVERY');
+  /**
+   * The mode to build or read a cart in before any cart exists for this
+   * location -- what `switchFulfillmentMode` sets, and what a not-yet-created
+   * basket reads. Once a cart exists, {@link fulfillmentMode} ignores this
+   * entirely and reports the cart's own fact instead.
+   */
+  private readonly fulfillmentModeDefault = signal<FulfillmentMode>('DELIVERY');
+
+  /**
+   * How the cart is being fulfilled.
+   *
+   * The server's own fact (`carts.cart().fulfillmentMode`) whenever a cart
+   * exists -- **never** a client guess -- because the platform binds the mode
+   * at creation and this client has no way to change it after the fact (see
+   * {@link switchFulfillmentMode}). Before this was derived from the cart, a
+   * page opened by a fresh load of `/cart` or `/cart/confirmation` -- rather
+   * than reached by an in-app navigation that had already called
+   * `switchFulfillmentMode` -- read whatever this signal's stale default
+   * still was, which was always `'DELIVERY'`: a PICKUP cart's own
+   * confirmation screen showed the delivery address block, an unresolvable
+   * "choose an address" message, and a button disabled on a fee that was
+   * never going to resolve because there was nothing to deliver.
+   *
+   * Falls back to {@link fulfillmentModeDefault} only when there is no cart
+   * yet to have an opinion.
+   */
+  readonly fulfillmentMode = computed<FulfillmentMode>(
+    () => this.carts.cart()?.fulfillmentMode ?? this.fulfillmentModeDefault(),
+  );
 
   orderComment = '';
 
@@ -286,7 +313,7 @@ export class UiCartService {
         modifierOptionIds: modifierOptionIdsFromLineKey(line.lineKey, line.variantId),
       })) ?? [];
 
-    this.fulfillmentMode.set(mode);
+    this.fulfillmentModeDefault.set(mode);
     if (!existing) {
       return;
     }

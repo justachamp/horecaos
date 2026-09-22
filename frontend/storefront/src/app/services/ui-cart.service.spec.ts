@@ -173,7 +173,7 @@ function setUp(): Fakes {
 describe('UiCartService.applyDestination', () => {
   it('short-circuits true for PICKUP without reading the delivery selection or writing a destination', async () => {
     const { service, carts, delivery } = setUp();
-    service.fulfillmentMode.set('PICKUP');
+    carts.cart.set(baseCart({ fulfillmentMode: 'PICKUP' }));
 
     const result = await service.applyDestination();
 
@@ -184,7 +184,7 @@ describe('UiCartService.applyDestination', () => {
 
   it('for DELIVERY, returns false and does not write when no address has been chosen', async () => {
     const { service, carts, delivery } = setUp();
-    service.fulfillmentMode.set('DELIVERY');
+    // No cart yet -- the DELIVERY default applies.
     delivery.addressId.mockReturnValue(null);
 
     const result = await service.applyDestination();
@@ -195,7 +195,7 @@ describe('UiCartService.applyDestination', () => {
 
   it('for DELIVERY with a complete selection, writes the destination and returns true', async () => {
     const { service, carts, delivery } = setUp();
-    service.fulfillmentMode.set('DELIVERY');
+    // No cart yet -- the DELIVERY default applies.
     delivery.addressId.mockReturnValue('addr-1');
     delivery.isComplete.mockReturnValue(true);
     delivery.recipientName.mockReturnValue('Aziz');
@@ -437,7 +437,11 @@ describe('UiCartService delivery charge (from the priced cart, never a coordinat
       fulfillmentMode: 'PICKUP',
       lines: [{ lineKey: 'v-known', variantId: 'v-known', quantity: 1, hasCustomerNote: false }],
     });
-    service.fulfillmentMode.set('PICKUP');
+    // Mirrors the real CartService.ensure, which sets its own `cart` signal
+    // as a side effect -- fulfillmentMode now reads the cart's own fact
+    // rather than a value a test pokes in directly (see the describe block
+    // below this one).
+    carts.cart.set(cart);
     carts.ensure.mockResolvedValue(cart);
     carts.price.mockResolvedValue(pricedFor(cart, { delivery: null }));
     menu.menu.mockResolvedValue(emptyMenu());
@@ -446,6 +450,37 @@ describe('UiCartService delivery charge (from the priced cart, never a coordinat
 
     expect(service.deliveryFee()).toBe('—');
     expect(service.deliveryUnresolvedMessage()).toBeNull();
+    expect(service.canPlaceOrder()).toBe(true);
+  });
+});
+
+describe('UiCartService.fulfillmentMode reflects the loaded cart, not a stale default', () => {
+  // A reload-style construction -- a fresh injection with nothing else having
+  // called `switchFulfillmentMode` first, exactly what a full page load of
+  // /cart or /cart/confirmation does -- has no other way to learn the mode a
+  // PICKUP cart is actually in. Before this, `fulfillmentMode` was a plain
+  // signal defaulting to 'DELIVERY' and set only by `switchFulfillmentMode`,
+  // so `load()` never told it what the cart it just fetched actually was.
+  it('a PICKUP cart loaded fresh reports PICKUP, not the DELIVERY default -- no delivery line, order button enabled', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = baseCart({
+      fulfillmentMode: 'PICKUP',
+      lines: [{ lineKey: 'v-known', variantId: 'v-known', quantity: 1, hasCustomerNote: false }],
+    });
+    // Mirrors the real CartService.ensure, which sets its own `cart` signal
+    // as a side effect of resolving -- the fake normally leaves it null
+    // unless a test does this itself.
+    carts.ensure.mockImplementation(async () => {
+      carts.cart.set(cart);
+      return cart;
+    });
+    carts.price.mockResolvedValue(pricedFor(cart, { delivery: null }));
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.load();
+
+    expect(service.fulfillmentMode()).toBe('PICKUP');
+    expect(service.deliveryFee()).toBe('—');
     expect(service.canPlaceOrder()).toBe(true);
   });
 });
