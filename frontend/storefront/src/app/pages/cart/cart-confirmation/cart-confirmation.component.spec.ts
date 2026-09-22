@@ -37,6 +37,7 @@ class FakeDeliverySelectionService {
   recipientPhone = vi.fn(() => '');
   setRecipient = vi.fn();
   ensureAddressResolved = vi.fn().mockResolvedValue(undefined);
+  isComplete = vi.fn(() => false);
 }
 
 class FakePaymentSessionService {
@@ -116,11 +117,13 @@ function checkoutResult(overrides: Partial<CheckoutResult> = {}): CheckoutResult
 async function setUp(
   paymentCodes: readonly string[] = ['CASH'],
   configureCart?: (cart: FakeUiCartService) => void,
+  configureDelivery?: (delivery: FakeDeliverySelectionService) => void,
 ) {
   const cart = new FakeUiCartService();
   const delivery = new FakeDeliverySelectionService();
   cart.paymentMethods.mockResolvedValue(paymentCodes);
   configureCart?.(cart);
+  configureDelivery?.(delivery);
   const paymentSessions = new FakePaymentSessionService();
   const notification = new FakeNotificationService();
 
@@ -341,6 +344,52 @@ describe('CartConfirmationComponent: order button disabled while the delivery fe
 
     expect(comp.delivering).toBe(false);
     expect(comp.canPlaceOrder).toBe(true);
+  });
+});
+
+describe('CartConfirmationComponent: a fresh DELIVERY cart resolves its fee without a click', () => {
+  // A brand-new DELIVERY cart's first price has no destination yet, so
+  // `canPlaceOrder` starts false and the order button starts disabled. A
+  // disabled <button> never fires (click), and `applyDestination()` was only
+  // ever called from inside `submitOrder()` -- so nothing could ever unblock
+  // the button once it was already blocked. See ui-cart.service.ts's
+  // `applyDestination` doc and `DeliveryChargeResponse`'s "no destination
+  // chosen yet" case.
+  it('applies the destination on its own once the address and recipient are already known, with no click at all', async () => {
+    const { cart } = await setUp(
+      ['CASH'],
+      (cart) => {
+        cart.canPlaceOrder.mockReturnValue(false);
+        cart.applyDestination.mockResolvedValue(true);
+      },
+      (delivery) => {
+        delivery.isComplete = vi.fn(() => true);
+      },
+    );
+
+    expect(cart.applyDestination).toHaveBeenCalled();
+  });
+
+  it('never calls applyDestination on its own once the fee is already resolved', async () => {
+    const { cart } = await setUp(
+      ['CASH'],
+      (cart) => {
+        cart.canPlaceOrder.mockReturnValue(true);
+      },
+      (delivery) => {
+        delivery.isComplete = vi.fn(() => true);
+      },
+    );
+
+    expect(cart.applyDestination).not.toHaveBeenCalled();
+  });
+
+  it('never calls applyDestination on its own before an address and recipient are both known', async () => {
+    const { cart } = await setUp(['CASH'], (cart) => {
+      cart.canPlaceOrder.mockReturnValue(false);
+    });
+
+    expect(cart.applyDestination).not.toHaveBeenCalled();
   });
 });
 

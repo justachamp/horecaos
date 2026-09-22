@@ -141,11 +141,35 @@ export class CartConfirmationComponent implements OnInit {
         this.recipientPhone = phone;
       }
     });
+
+    // Without this, a fresh DELIVERY cart deadlocks: `applyDestination()` is
+    // otherwise called only from `submitOrder()`, the order button stays
+    // disabled until the fee resolves (`canPlaceOrder`), and a disabled
+    // <button> never fires (click) -- so the one call that would resolve the
+    // fee could never run. This resolves it as soon as the chosen address and
+    // a recipient are both known (an address picked earlier on Home, a
+    // recipient prefilled from the account or typed into the fields above),
+    // rather than waiting on a click the disabled state itself prevents.
+    effect(() => {
+      if (this.cart.fulfillmentMode() !== 'DELIVERY') return;
+      if (!this.cart.cartData()) return;
+      if (this.cart.canPlaceOrder()) return; // already resolved
+      if (!this.delivery.isComplete()) return; // nothing to apply yet
+      if (this.resolvingDestination) return;
+      this.resolvingDestination = true;
+      void this.cart.applyDestination().finally(() => {
+        this.resolvingDestination = false;
+      });
+    });
   }
 
   /** Set once the customer edits either recipient field, so a late-arriving
    * profile load never overwrites what they already typed. */
   private recipientTouched = false;
+
+  /** Guards the auto-apply effect above against overlapping calls while one
+   * `applyDestination()` is still in flight. */
+  private resolvingDestination = false;
 
   ngOnInit(): void {
     if (!this.cart.cartData()) {
