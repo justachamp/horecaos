@@ -55,3 +55,49 @@ export function command<TBody>(body: TBody): Command<TBody> {
 export function wasReplayed(headers: { get(name: string): string | null }): boolean {
   return headers.get('Idempotency-Replayed') === 'true';
 }
+
+/**
+ * Holds the {@link Command} for one retryable operator intent, keyed by a
+ * caller-chosen id (an order id, an order id plus an action name, a fixed
+ * string for a single-instance form — whatever identifies "this thing the
+ * operator is doing" in the caller).
+ *
+ * {@link next} is the whole contract: called again with the *same* id and an
+ * unchanged `body` (a manual retry — the operator clicked the button again
+ * after a lost response or a retryable failure), it returns the exact same
+ * `Command`, so the same `Idempotency-Key` goes out and a request that
+ * already landed is replayed rather than repeated. Called with a `body` that
+ * differs from the held one (the operator edited the form before resubmitting)
+ * it mints a fresh command, because that is honestly a new intent — reusing
+ * the old key there would be a 409 `IDEMPOTENCY_KEY_REUSED` at best and a
+ * silent body-wins-arbitrarily race at worst.
+ *
+ * Call {@link forget} once the intent has reached an outcome that should not
+ * be retried under the old key — normally on success, since the server has
+ * confirmed the action already happened and any further click is a new
+ * intent (a second approval, a second cancellation). A failed attempt does
+ * *not* forget: the whole point is that the next click of the same button,
+ * submitting the same body, is still the same intent.
+ */
+export class IntentCommandRegistry<TBody> {
+  private readonly held = new Map<string, Command<TBody>>();
+
+  next(id: string, body: TBody): Command<TBody> {
+    const existing = this.held.get(id);
+    if (existing !== undefined && sameBody(existing.body, body)) {
+      return existing;
+    }
+    const created = command(body);
+    this.held.set(id, created);
+    return created;
+  }
+
+  /** The intent settled (applied) — the next {@link next} for this id always mints a fresh key. */
+  forget(id: string): void {
+    this.held.delete(id);
+  }
+}
+
+function sameBody<T>(a: T, b: T): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
