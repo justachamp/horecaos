@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, tap } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
-import { command } from '../../core/api/idempotency';
+import { IntentCommandRegistry } from '../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 
 /** `OrderBulkActionService.BulkActionType` — bulk courier assignment is explicitly out of scope (orders.md §2.10, wave P07). */
@@ -62,20 +62,35 @@ export interface BulkActionResponse {
  * the same key.** `OrderBulkActionService`'s own doc is explicit that a
  * resubmission under the same `Idempotency-Key` "changes nothing and returns
  * the outcome already recorded, applied or failed alike" — literally, not
- * "retries only the failures". So a retry from the result panel is this
- * class's `submit` called again, with a **fresh** `Idempotency-Key` (via
- * {@link command}, minted per intent per that helper's own contract) and an
- * `orders` list narrowed to only the items that failed — never the ones that
- * already applied, which a fresh key would otherwise re-execute.
+ * "retries only the failures". So a retry from the result panel narrows
+ * `orders` to only the items that failed, never the ones that already
+ * applied.
+ *
+ * That narrowing is exactly what {@link IntentCommandRegistry} already treats
+ * as a new intent — a different `orders` list is a different body, so it
+ * mints a fresh key on its own, preserving the panel's behaviour above with
+ * no special case. What holding one key across the *unchanged* case buys
+ * (2026-09-21 audit follow-up (a)): a lost response to the same, un-narrowed
+ * submission — a double click on "Apply" before the panel shows busy — used
+ * to mint two independent keys and could run the same bulk action twice on
+ * up to 200 orders at once.
  */
 @Injectable({ providedIn: 'root' })
 export class OrderBulkActionsApi {
   private readonly api = inject(ApiClient);
 
+  /**
+   * One bulk-action panel at a time is the real shape of this screen (the
+   * order queue's own selection is singular), so a fixed id is enough —
+   * unlike `OrderActionsApi`, there is no per-order key to hold many
+   * concurrent intents under.
+   */
+  private readonly submitIntents = new IntentCommandRegistry<BulkActionRequest>();
+
   submit(scope: LocationScope, request: BulkActionRequest): Observable<BulkActionResponse> {
-    return this.api.post<BulkActionRequest, BulkActionResponse>(
-      operationsPaths.orderBulkActions(scope),
-      command(request),
-    );
+    const intent = this.submitIntents.next('bulk-actions', request);
+    return this.api
+      .post<BulkActionRequest, BulkActionResponse>(operationsPaths.orderBulkActions(scope), intent)
+      .pipe(tap(() => this.submitIntents.forget('bulk-actions')));
   }
 }
