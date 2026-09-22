@@ -3,6 +3,7 @@ package uz.horecaos.platform.web.authorization;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.util.UUID;
 import org.junit.jupiter.api.Assumptions;
@@ -14,6 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -161,8 +163,16 @@ class StorefrontReadAuthenticationTests {
                 .isNotEqualTo(401);
         assertThat(statusOf(locationPath() + "/serviceability?channel=web&mode=DELIVERY"))
                 .isNotEqualTo(401);
-        assertThat(statusOf(locationPath() + "/delivery-fee?lat=41.31&lon=69.24&currency=UZS"))
-                .isNotEqualTo(401);
+        // POST since 2026-09-21 (audit follow-up (b)): the point moved from the
+        // query string into the body, so this one -- unlike its neighbours here
+        // -- has to send one to reach the handler at all.
+        int deliveryFeeStatus = mvc.perform(post(locationPath() + "/delivery-fee")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lat\":41.31,\"lon\":69.24,\"currency\":\"UZS\"}"))
+                .andReturn()
+                .getResponse()
+                .getStatus();
+        assertThat(deliveryFeeStatus).isNotEqualTo(401);
         assertThat(statusOf("/api/v1/storefront/pickup-locations?lat=41.31&lon=69.24"))
                 .as("a customer has to choose a branch before they can browse its menu")
                 .isNotEqualTo(401);

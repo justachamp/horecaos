@@ -3,6 +3,7 @@ package uz.horecaos.platform.configuration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -100,10 +101,47 @@ class LocalFixtureStorefrontTests {
                 .andExpect(jsonPath("$.available").value(true))
                 .andExpect(jsonPath("$.preparationMinutes").value(20));
 
-        mvc.perform(get(LOCATION_PATH + "/delivery-fee?lat=41.3120&lon=69.2410&currency=UZS&subtotalMinor=100000"))
+        // POST since 2026-09-21 (audit follow-up (b)): the point travels in the
+        // body, not the query string (ADR 0029).
+        mvc.perform(post(LOCATION_PATH + "/delivery-fee")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lat\":41.3120,\"lon\":69.2410,\"currency\":\"UZS\",\"subtotalMinor\":100000}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.available").value(true))
                 .andExpect(jsonPath("$.currency").value("UZS"));
+    }
+
+    /**
+     * 2026-09-21 audit follow-up (b): the coordinate moved from the query
+     * string into the body. A {@code GET} against the same path -- what every
+     * caller sent before this change -- must not silently keep working with
+     * the point exposed in a proxy log; it has to fail loudly instead.
+     *
+     * <p>401, not 405: {@code SecurityConfiguration}'s explicit storefront
+     * allowlist now names only {@code POST} for this path (see its own
+     * comment), so an anonymous {@code GET} is refused by the security chain
+     * before {@code DispatcherServlet} ever gets to notice the method does
+     * not match a mapping.
+     */
+    @Test
+    void deliveryFeeNoLongerAcceptsTheOldGetWithACoordinateInTheQueryString() throws Exception {
+        mvc.perform(get(LOCATION_PATH + "/delivery-fee?lat=41.3120&lon=69.2410&currency=UZS"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * {@code subtotalMinor} is boxed on the request body ({@code
+     * DeliveryFeeController.DeliveryFeeQuoteRequest}) and must stay optional:
+     * the preview is asked before there is always a priced cart to quote a
+     * subtotal from, and Jackson 3 refuses a missing primitive outright.
+     */
+    @Test
+    void deliveryFeeDefaultsAnOmittedSubtotalToZeroRatherThanRefusingTheBody() throws Exception {
+        mvc.perform(post(LOCATION_PATH + "/delivery-fee")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lat\":41.3120,\"lon\":69.2410,\"currency\":\"UZS\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.available").value(true));
     }
 
     /**

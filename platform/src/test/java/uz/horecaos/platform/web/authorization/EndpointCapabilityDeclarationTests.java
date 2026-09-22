@@ -134,7 +134,8 @@ class EndpointCapabilityDeclarationTests {
                     || isStaffPasswordResetEndpoint(handler)
                     || isPreAccountTelegramSignInEndpoint(handler)
                     || isDeviceEnrolmentBootstrapEndpoint(handler)
-                    || isScopeResolvedCourierPolicyEndpoint(handler)) {
+                    || isScopeResolvedCourierPolicyEndpoint(handler)
+                    || isDeliveryFeePreviewEndpoint(handler)) {
                 continue;
             }
             if (authorizationDeclarationCount(handler) == 0) {
@@ -186,7 +187,8 @@ class EndpointCapabilityDeclarationTests {
                     || isStaffInvitationEndpoint(handler)
                     || isStaffPasswordResetEndpoint(handler)
                     || isPreAccountTelegramSignInEndpoint(handler)
-                    || isDeviceEnrolmentBootstrapEndpoint(handler)) {
+                    || isDeviceEnrolmentBootstrapEndpoint(handler)
+                    || isDeliveryFeePreviewEndpoint(handler)) {
                 continue;
             }
             if (!declaresReplayProtection(handler)) {
@@ -518,6 +520,38 @@ class EndpointCapabilityDeclarationTests {
      */
     private static boolean isScopeResolvedCourierPolicyEndpoint(Method handler) {
         return pathOf(handler).equals("/api/v1/operations/tenants/{tenantId}/courier-policy");
+    }
+
+    /**
+     * ADR 0029/ADR 0037: the storefront delivery-fee preview, {@code POST
+     * .../locations/{locationId}/delivery-fee} (2026-09-21 audit follow-up
+     * (b)). It used to be the one deliberate {@code GET} exception to "every
+     * mutating endpoint" — {@code DeliveryFeeController}'s own javadoc named
+     * this exact test as the reason — until carrying a customer's coordinate
+     * in a URL outgrew that trade-off. Moving the point into the body without
+     * an exemption here would have forced a choice between two worse options:
+     * inventing an authorization decision for a caller with no principal (the
+     * identical reasoning {@link #isPreAccountIdentityEndpoint} gives), or
+     * requiring an {@code Idempotency-Key} to protect a write this handler
+     * still does not perform.
+     *
+     * <p>Replay protection specifically: {@code IdempotencyInterceptor} scopes
+     * a key by the calling subject, and this endpoint is unauthenticated like
+     * the branch discovery route beside it, so there is no subject to scope
+     * one by — the same blocker {@link #isPreAccountTelegramSignInEndpoint}
+     * names. And unlike a write, quoting the same point and basket twice costs
+     * nothing and creates no oracle to protect against, so there is no effect
+     * a key would be guarding in the first place.
+     *
+     * <p>Matched on the exact path, the same discipline every other exemption
+     * here keeps: {@code DeliveryFeeController}'s other two reads —
+     * {@code GET .../simulate} (capability-guarded, a staff tool, out of this
+     * follow-up's scope) and {@code GET .../delivery-fee-evidence} — are
+     * never mutating handlers in the first place and reach no exemption list.
+     */
+    private static boolean isDeliveryFeePreviewEndpoint(Method handler) {
+        return pathOf(handler)
+                .equals("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee");
     }
 
     /**
