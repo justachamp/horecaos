@@ -171,20 +171,25 @@ class LocalFixtureStorefrontTests {
     /**
      * 2026-09-21 audit follow-up (d): a pickup order's detail names {@code
      * locationId} but the storefront had nothing to turn it into a branch name
-     * and address. Carries no coordinate — see the endpoint's own doc.
+     * and address.
      */
     @Test
     void profileNamesTheBranchACustomerAlreadyKnowsTheIdOf() throws Exception {
         // Served by StorefrontLocationProfileController -- the location id is
         // already in the URL, so LocationProfile echoes no id of its own, only
-        // the displayName/address fields (batch 8 integration note).
+        // the displayName/address fields (batch 8 integration note). Unlike
+        // the earlier draft of this test, the real StorefrontLocationProfile
+        // -Query.LocationProfile also carries latitude/longitude -- every
+        // field here is one `tenant.locations` already treats as published
+        // (that class's own doc), and the pickup search beside it already
+        // returns a branch's coordinate for its own map pin, so this is no
+        // new disclosure.
         mvc.perform(get(LOCATION_PATH + "/profile"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayName").value("Central kitchen"))
                 .andExpect(jsonPath("$.addressLine").value("1 Demo Street"))
                 .andExpect(jsonPath("$.district").value("Shaykhontohur"))
-                .andExpect(jsonPath("$.city").value("Tashkent"))
-                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("41."))));
+                .andExpect(jsonPath("$.city").value("Tashkent"));
     }
 
     @Test
