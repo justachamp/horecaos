@@ -96,7 +96,7 @@ public class CatalogImportController {
         String subject = currentActor.get().subject();
         UUID runId = imports.submit(
                 tenantId, brandId, request.catalogId(), dryRun, request.fileName(), request.content(), subject);
-        JdbcCatalogImportStore.RunRow run = imports.status(tenantId, runId);
+        JdbcCatalogImportStore.RunRow run = imports.status(tenantId, brandId, runId);
 
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(new CatalogImportSubmitResponse(runId, run.status(), run.rowsTotal()));
@@ -119,7 +119,7 @@ public class CatalogImportController {
             description = "status, rowsTotal, rowsProcessed and the running per-outcome counts.")
     public ResponseEntity<CatalogImportStatusResponse> status(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID runId) {
-        return ResponseEntity.ok(CatalogImportStatusResponse.of(imports.status(tenantId, runId)));
+        return ResponseEntity.ok(CatalogImportStatusResponse.of(imports.status(tenantId, brandId, runId)));
     }
 
     @GetMapping("/imports/{runId}/rows")
@@ -133,7 +133,7 @@ public class CatalogImportController {
             @PathVariable UUID runId,
             @RequestParam(defaultValue = "500") int limit,
             @RequestParam(defaultValue = "0") int offset) {
-        return ResponseEntity.ok(imports.rows(tenantId, runId, limit, offset).stream()
+        return ResponseEntity.ok(imports.rows(tenantId, brandId, runId, limit, offset).stream()
                 .map(CatalogImportRowResponse::of)
                 .toList());
     }

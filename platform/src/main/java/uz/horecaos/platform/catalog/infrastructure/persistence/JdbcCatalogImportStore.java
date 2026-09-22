@@ -168,15 +168,21 @@ public class JdbcCatalogImportStore {
                 .update();
     }
 
-    public Optional<RunRow> run(UUID tenantId, UUID runId) {
+    /**
+     * One run, scoped to the brand asking for it — a runId from a sibling
+     * brand under the same tenant returns empty, exactly like a runId that
+     * does not exist at all, matching {@link #runsForBrand}'s own scoping.
+     */
+    public Optional<RunRow> run(UUID tenantId, UUID brandId, UUID runId) {
         return jdbc.sql("""
                 SELECT id, brand_id, catalog_id, dry_run, status, source_file_name, rows_total, rows_processed,
                        rows_created, rows_updated, rows_skipped, rows_error, failure_reason,
                        created_at, started_at, completed_at
                 FROM catalog.import_runs
-                WHERE tenant_id = :tenantId AND id = :runId
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :runId
                 """)
                 .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("runId", runId)
                 .query((row, number) -> new RunRow(
                         row.getObject("id", UUID.class),
@@ -230,16 +236,26 @@ public class JdbcCatalogImportStore {
                 .list();
     }
 
-    /** Every row of one run's report, in the order it was written. */
-    public List<ImportRowView> rows(UUID tenantId, UUID runId, int limit, int offset) {
+    /**
+     * Every row of one run's report, in the order it was written — scoped to
+     * the brand asking for it. {@code import_run_rows} carries no {@code
+     * brand_id} of its own (see V0380's own comment on why), so the scope is
+     * enforced by joining back to the parent run: a runId from a sibling
+     * brand under the same tenant joins to nothing and returns empty, the
+     * same as a runId that does not exist.
+     */
+    public List<ImportRowView> rows(UUID tenantId, UUID brandId, UUID runId, int limit, int offset) {
         return jdbc.sql("""
-                SELECT row_number, outcome, product_id, variant_id, error_reason
-                FROM catalog.import_run_rows
-                WHERE tenant_id = :tenantId AND run_id = :runId
-                ORDER BY row_number
+                SELECT rows.row_number, rows.outcome, rows.product_id, rows.variant_id, rows.error_reason
+                FROM catalog.import_run_rows rows
+                JOIN catalog.import_runs run
+                    ON run.id = rows.run_id AND run.tenant_id = rows.tenant_id
+                WHERE rows.tenant_id = :tenantId AND rows.run_id = :runId AND run.brand_id = :brandId
+                ORDER BY rows.row_number
                 LIMIT :limit OFFSET :offset
                 """)
                 .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("runId", runId)
                 .param("limit", limit)
                 .param("offset", offset)

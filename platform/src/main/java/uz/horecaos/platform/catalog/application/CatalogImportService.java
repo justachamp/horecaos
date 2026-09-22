@@ -163,8 +163,8 @@ public class CatalogImportService {
         return true;
     }
 
-    public RunRow status(UUID tenantId, UUID runId) {
-        return store.run(tenantId, runId)
+    public RunRow status(UUID tenantId, UUID brandId, UUID runId) {
+        return store.run(tenantId, brandId, runId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such import run"));
     }
 
@@ -172,8 +172,9 @@ public class CatalogImportService {
         return store.runsForBrand(tenantId, brandId, limit);
     }
 
-    public List<JdbcCatalogImportStore.ImportRowView> rows(UUID tenantId, UUID runId, int limit, int offset) {
-        return store.rows(tenantId, runId, limit, offset);
+    public List<JdbcCatalogImportStore.ImportRowView> rows(
+            UUID tenantId, UUID brandId, UUID runId, int limit, int offset) {
+        return store.rows(tenantId, brandId, runId, limit, offset);
     }
 
     /** The empty template a merchant downloads and fills. */
