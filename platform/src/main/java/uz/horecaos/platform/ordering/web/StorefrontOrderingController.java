@@ -570,6 +570,18 @@ public class StorefrontOrderingController {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
         } catch (OrderStateService.CancellationNotPermittedException refused) {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, refused.getMessage());
+        } catch (uz.horecaos.platform.ordering.domain.OrderStateMachine.IllegalTransitionException illegal) {
+            // cancel()'s reasonless-cancel guard excludes CONFIRMED/PREPARING/
+            // READY/FULFILLING but not an order that is already terminal
+            // (COMPLETED/CANCELLED/REJECTED/EXPIRED/PAYMENT_FAILED) -- a retry
+            // that lands after the order already settled must answer the same
+            // 409 every sibling order-action endpoint gives for this exception,
+            // never a raw 500.
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    illegal.getMessage(),
+                    java.util.Map.of(
+                            "from", illegal.from().name(), "to", illegal.to().name()));
         }
     }
 

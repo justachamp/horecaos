@@ -973,6 +973,17 @@ public class OperationsOrderController {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
         } catch (OrderStateService.CancellationNotPermittedException refused) {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, refused.getMessage());
+        } catch (OrderStateMachine.IllegalTransitionException illegal) {
+            // Both the reasonless path (orderState.cancel) and the registry-reason
+            // path (outcomes.cancel, which funnels into the same OrderStateService
+            // .cancel) throw this uncaught for an order that is already terminal --
+            // mapped the same way stateAction/stateOverride/completion already map
+            // it, rather than falling through to a raw 500.
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    illegal.getMessage(),
+                    java.util.Map.of(
+                            "from", illegal.from().name(), "to", illegal.to().name()));
         } catch (OrderOutcomeReasonService.ReasonNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         } catch (IllegalArgumentException refused) {
