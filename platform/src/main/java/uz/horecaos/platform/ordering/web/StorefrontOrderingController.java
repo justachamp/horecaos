@@ -900,9 +900,20 @@ public class StorefrontOrderingController {
             String outcome,
             List<String> warnings) {}
 
+    /**
+     * @param locationId the branch this order was placed at. Additive (2026-09-22
+     *     audit follow-up): a customer's order detail could not name the pickup
+     *     branch without it, since nothing on this response pointed back at a
+     *     location for {@code GET .../locations/{id}/profile} to resolve
+     * @param fulfillmentMode {@code DELIVERY}, {@code PICKUP} or {@code DINE_IN} —
+     *     carried for the same reason as {@code locationId}: the screen decides
+     *     whether to show a doorstep or a branch from this, not from guessing
+     */
     public record OrderResponse(
             UUID orderId,
             String publicOrderNumber,
+            UUID locationId,
+            String fulfillmentMode,
             String status,
             String currency,
             long subtotalMinor,
@@ -919,6 +930,8 @@ public class StorefrontOrderingController {
             return new OrderResponse(
                     order.orderId(),
                     order.publicOrderNumber(),
+                    order.locationId(),
+                    order.fulfillmentMode().name(),
                     order.status().name(),
                     order.currency(),
                     order.subtotalMinor(),
