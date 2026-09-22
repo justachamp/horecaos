@@ -629,7 +629,9 @@ class CartCheckoutAndOrderTests {
                         null,
                         "idem-operator-place",
                         "operator-subject-9",
-                        null)));
+                        null,
+                        null,
+                        false)));
 
         assertThat(result.created()).isTrue();
         UUID orderId = Objects.requireNonNull(result.orderId());
@@ -670,7 +672,9 @@ class CartCheckoutAndOrderTests {
                 null,
                 "idem-operator-click",
                 "operator-subject-9",
-                null);
+                null,
+                null,
+                false);
 
         var result = tx(() -> operatorOrdering.place(command));
 
@@ -703,7 +707,9 @@ class CartCheckoutAndOrderTests {
                 null,
                 "idem-operator-unoffered-method",
                 "operator-subject-9",
-                null);
+                null,
+                null,
+                false);
 
         var result = tx(() -> operatorOrdering.place(command));
 
@@ -788,7 +794,9 @@ class CartCheckoutAndOrderTests {
                 "operator10",
                 "idem-operator-with-promo",
                 "operator-subject-9",
-                null);
+                null,
+                null,
+                false);
 
         var result = tx(() -> operatorOrderingWithSpy.place(withCode));
 
@@ -906,7 +914,9 @@ class CartCheckoutAndOrderTests {
                         null,
                         "idem-operator-no-destination",
                         "operator-subject-9",
-                        null);
+                        null,
+                        null,
+                        false);
 
         assertThatThrownBy(() -> tx(() -> operatorOrdering.place(missingDestination)))
                 .isInstanceOf(ApiException.class)
@@ -929,7 +939,9 @@ class CartCheckoutAndOrderTests {
                         null,
                         "idem-operator-unwanted-destination",
                         "operator-subject-9",
-                        null);
+                        null,
+                        null,
+                        false);
 
         assertThatThrownBy(() -> tx(() -> operatorOrdering.place(pickupWithDestination)))
                 .isInstanceOf(ApiException.class)
@@ -1235,6 +1247,109 @@ class CartCheckoutAndOrderTests {
                 UPDATE ordering.orders SET promise_prep_minutes = NULL WHERE id = :id
                 """).param("id", orderIdOf(result)).update())
                 .hasMessageContaining("ck_order_promise_components");
+    }
+
+    // ------------------------------------------------- row 1.3d: pre-order time
+
+    /**
+     * The fixture's own "Standard hours" schedule (09:00-23:00 every day,
+     * {@code accepts_scheduled_orders = true}) covers this instant, so this is
+     * the ordinary case: a requested time the branch will actually be open for.
+     */
+    @Test
+    @DisplayName("row 1.3d: a requested time inside the branch's own hours promises exactly that instant")
+    void aPreOrderInsideHoursPromisesTheRequestedTime() {
+        Instant requestedFor = NOW.plus(Duration.ofHours(3)); // 15:00 Tashkent — inside 09:00-23:00
+        var cart = readyCart();
+
+        var result = tx(() -> checkout.checkout(preOrderCommand(cart, "idem-pre-order-in-hours", requestedFor, false)));
+
+        assertThat(result.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.CREATED);
+        var order = orderStore.find(TENANT, orderIdOf(result)).orElseThrow();
+        assertThat(order.promise().basis()).isEqualTo(PromiseBasis.SCHEDULED_SLOT);
+        assertThat(order.promise().promisedAt()).isEqualTo(requestedFor);
+        // A chosen slot is not derived from a duration — nothing to decompose it
+        // into (OrderPromise.scheduled's own doc).
+        assertThat(order.promise().prepMinutes()).isNull();
+    }
+
+    @Test
+    @DisplayName("row 1.3d: a requested time outside hours refuses pending confirmation, and succeeds once confirmed")
+    void aPreOrderOutsideHoursNeedsConfirmation() {
+        // 2026-08-22T20:00Z is 2026-08-23 01:00 Tashkent — a Sunday, after
+        // midnight, outside every day's 09:00-23:00 window the fixture seeds.
+        Instant requestedFor = Instant.parse("2026-08-22T20:00:00Z");
+        var cart = readyCart();
+
+        var firstAttempt =
+                tx(() -> checkout.checkout(preOrderCommand(cart, "idem-pre-order-confirm-1", requestedFor, false)));
+
+        assertThat(firstAttempt.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.REJECTED);
+        assertThat(firstAttempt.rejectionCode()).isEqualTo("BRANCH_CLOSED_AT_REQUESTED_TIME_CONFIRM");
+        assertThat(firstAttempt.rejectionDetail()).isEqualTo("OUTSIDE_SERVICE_HOURS");
+        assertThat(countOrders()).isZero();
+
+        // The same cart, a fresh idempotency key (a genuinely different request:
+        // the override flag changed), with the operator's confirmation.
+        var confirmed =
+                tx(() -> checkout.checkout(preOrderCommand(cart, "idem-pre-order-confirm-2", requestedFor, true)));
+
+        assertThat(confirmed.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.CREATED);
+        var order = orderStore.find(TENANT, orderIdOf(confirmed)).orElseThrow();
+        assertThat(order.promise().basis()).isEqualTo(PromiseBasis.SCHEDULED_SLOT);
+        assertThat(order.promise().promisedAt()).isEqualTo(requestedFor);
+    }
+
+    @Test
+    @DisplayName("row 1.3d: a branch whose own policy refuses pre-orders into a closed slot cannot be overridden")
+    void aPreOrderOutsideHoursIsRefusedOutrightWhenTheBranchDoesNotAcceptScheduledOrders() {
+        jdbc.sql("UPDATE tenant.service_schedules SET accepts_scheduled_orders = false WHERE tenant_id = :tenantId")
+                .param("tenantId", TENANT)
+                .update();
+        Instant requestedFor = Instant.parse("2026-08-22T20:00:00Z");
+        var cart = readyCart();
+
+        var overridden =
+                tx(() -> checkout.checkout(preOrderCommand(cart, "idem-pre-order-no-override", requestedFor, true)));
+
+        assertThat(overridden.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.REJECTED);
+        assertThat(overridden.rejectionCode())
+                .as("overrideOutOfHours=true does not reach past the branch's own policy")
+                .isEqualTo("BRANCH_CLOSED_AT_REQUESTED_TIME");
+        assertThat(countOrders()).isZero();
+    }
+
+    @Test
+    @DisplayName("row 1.3d: a requested time already in the past is refused before any hours check")
+    void aPreOrderInThePastIsRefused() {
+        Instant requestedFor = NOW.minus(Duration.ofHours(1));
+        var cart = readyCart();
+
+        var refused = tx(() -> checkout.checkout(preOrderCommand(cart, "idem-pre-order-past", requestedFor, false)));
+
+        assertThat(refused.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.REJECTED);
+        assertThat(refused.rejectionCode()).isEqualTo("REQUESTED_TIME_IN_PAST");
+        assertThat(countOrders()).isZero();
+    }
+
+    private CheckoutService.CheckoutCommand preOrderCommand(
+            UUID cartId, String idempotencyKey, Instant requestedFor, boolean overrideOutOfHours) {
+        var cart = readCart(cartId);
+        return new CheckoutService.CheckoutCommand(
+                TENANT,
+                BRAND,
+                cartId,
+                cart.version(),
+                Objects.requireNonNull(cart.pricingQuoteId(), "the fixture cart is always priced first"),
+                Objects.requireNonNull(cart.pricingContextHash(), "the fixture cart is always priced first"),
+                idempotencyKey,
+                "CASH",
+                0L,
+                "CUSTOMER",
+                CUSTOMER.toString(),
+                null,
+                requestedFor,
+                overrideOutOfHours);
     }
 
     private void insertPreparationBand(LocalTime from, LocalTime to, int minutes) {
@@ -2061,7 +2176,9 @@ class CartCheckoutAndOrderTests {
                 0L,
                 "CUSTOMER",
                 CUSTOMER.toString(),
-                null)));
+                null,
+                null,
+                false)));
 
         assertThat(refused.rejectionCode()).isEqualTo("QUOTE_NOT_BOUND_TO_CART");
         assertThat(countOrders()).isZero();
@@ -2734,7 +2851,9 @@ class CartCheckoutAndOrderTests {
                 0L,
                 "CUSTOMER",
                 CUSTOMER.toString(),
-                null)));
+                null,
+                null,
+                false)));
         assertThat(refused.rejectionCode()).isEqualTo("CART_NOT_FOUND");
     }
 
@@ -4005,7 +4124,9 @@ class CartCheckoutAndOrderTests {
                 10_000L,
                 "CUSTOMER",
                 null,
-                null);
+                null,
+                null,
+                false);
 
         var refused = tx(() -> checkout.checkout(redeeming));
 
@@ -4830,7 +4951,9 @@ class CartCheckoutAndOrderTests {
                 redeemFromBalanceMinor,
                 "CUSTOMER",
                 CUSTOMER.toString(),
-                null);
+                null,
+                null,
+                false);
     }
 
     private OrderStateService.DecisionCommand decision(String decisionId, OrderStateService.DecisionAction action) {
@@ -5391,7 +5514,9 @@ class CartCheckoutAndOrderTests {
                 0L,
                 "CUSTOMER",
                 null,
-                null);
+                null,
+                null,
+                false);
     }
 
     private static void awaitQuietly(CountDownLatch latch) {

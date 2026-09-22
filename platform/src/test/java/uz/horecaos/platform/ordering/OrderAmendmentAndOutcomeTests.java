@@ -2444,7 +2444,9 @@ class OrderAmendmentAndOutcomeTests {
                 0L,
                 "CUSTOMER",
                 CUSTOMER.toString(),
-                null)));
+                null,
+                null,
+                false)));
     }
 
     private int cartVersion(UUID cartId) {

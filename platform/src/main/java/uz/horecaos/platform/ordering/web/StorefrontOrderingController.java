@@ -436,7 +436,11 @@ public class StorefrontOrderingController {
                 body.redeemFromBalanceMinor() == null ? 0L : body.redeemFromBalanceMinor(),
                 "CUSTOMER",
                 currentActor.get().subject(),
-                null));
+                null,
+                // Row 1.3d's requested-time picker is the operator order-intake
+                // screen's own (ADR 0039); a customer's own checkout never sends one.
+                null,
+                false));
 
         if (result.outcome() == CheckoutService.CheckoutResult.Outcome.REJECTED) {
             // A settled business answer, and a conflict rather than a fault: the
@@ -670,8 +674,20 @@ public class StorefrontOrderingController {
             // controller — @NotBlank refuses it at binding — and mapped anyway,
             // because the service's refusal is the one that must hold for every
             // surface and a default of CONFLICT would misdescribe it.
-            case "GUEST_CANNOT_REDEEM", "REDEMPTION_INVALID", "REDEMPTION_EXCEEDS_ORDER", "PAYMENT_METHOD_REQUIRED" ->
-                ErrorCode.VALIDATION_FAILED;
+            // Row 1.3d: a requested time that is not in the future. Nothing about
+            // the branch or the cart is what refuses this — the value itself is
+            // malformed for what it claims to be, the same class of answer as the
+            // three redemption codes beside it.
+            case "GUEST_CANNOT_REDEEM",
+                    "REDEMPTION_INVALID",
+                    "REDEMPTION_EXCEEDS_ORDER",
+                    "PAYMENT_METHOD_REQUIRED",
+                    "REQUESTED_TIME_IN_PAST" -> ErrorCode.VALIDATION_FAILED;
+            // Row 1.3d's other two rejection codes — a well-formed requested time
+            // this branch will not honour right now, either never
+            // (acceptsScheduledOrders) or not without the operator's explicit
+            // confirmation — fall through to CONFLICT below, the same as
+            // NOT_SERVICEABLE does.
             default -> ErrorCode.RESOURCE_CONFLICT;
         };
     }

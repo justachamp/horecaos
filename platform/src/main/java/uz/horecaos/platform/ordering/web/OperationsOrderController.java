@@ -404,11 +404,16 @@ public class OperationsOrderController {
                     + "attribution alone: `customerAccountId` is the resolved or freshly created "
                     + "customer (`POST /customers` and `POST .../customer-lookups` beside this "
                     + "endpoint resolve it), and the order records the operator as its "
-                    + "created_by_actor (V0029) rather than the customer. Cash only in this "
-                    + "release — a card link sent to the customer is a bigger piece of work this "
-                    + "wave does not build, and `paymentMethodCode` is refused for anything else. "
-                    + "On success, route straight to GET .../orders/{orderId}: the operator is "
-                    + "still on the phone and needs to read the number back.")
+                    + "created_by_actor (V0029) rather than the customer. `paymentMethodCode` is "
+                    + "checked against the operator channel's own payment matrix, not hard-coded "
+                    + "to cash (row 1.3e). `fulfillmentMode` may be DELIVERY, using a saved address "
+                    + "of the resolved customer's own (row 1.3b/1.3c). `requestedFor` (row 1.3d) "
+                    + "asks for a promise time instead of now; a branch closed at that time refuses "
+                    + "with BRANCH_CLOSED_AT_REQUESTED_TIME_CONFIRM until `overrideOutOfHours` is "
+                    + "resubmitted true, or with BRANCH_CLOSED_AT_REQUESTED_TIME outright when the "
+                    + "branch's own policy refuses a pre-order into that slot at all. On success, "
+                    + "route straight to GET .../orders/{orderId}: the operator is still on the "
+                    + "phone and needs to read the number back.")
     public ResponseEntity<PlaceOrderResponse> place(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -429,7 +434,9 @@ public class OperationsOrderController {
                     body.promoCode(),
                     idempotencyKey,
                     currentActor.get().subject(),
-                    null));
+                    null,
+                    body.requestedFor(),
+                    Boolean.TRUE.equals(body.overrideOutOfHours())));
 
             if (result.outcome() == CheckoutService.CheckoutResult.Outcome.REJECTED) {
                 String rejectionCode =
@@ -1492,6 +1499,23 @@ public class OperationsOrderController {
      * @param promoCode         optional (ADR 0072); applied to the cart before
      *                          pricing, exactly as a customer's own {@code
      *                          POST /carts/{cartId}/promo-code} would
+     * @param requestedFor      row 1.3d: absent for an ordinary immediate order,
+     *                          or a future instant the operator wants the order
+     *                          promised for instead. Validated against the
+     *                          branch's own hours inside {@code
+     *                          CheckoutEligibilityGuard}; a past instant is
+     *                          refused with {@code REQUESTED_TIME_IN_PAST}
+     * @param overrideOutOfHours boxed and defaulted rather than a primitive
+     *                          (Jackson 3 refuses a missing primitive): whether
+     *                          the operator has already been shown that the
+     *                          branch is closed at {@code requestedFor} — from
+     *                          a first attempt refused with {@code
+     *                          BRANCH_CLOSED_AT_REQUESTED_TIME_CONFIRM} — and
+     *                          chose to place it anyway. Meaningless when
+     *                          {@code requestedFor} is absent, and never enough
+     *                          to override a branch whose own policy refuses a
+     *                          pre-order into a closed slot outright ({@code
+     *                          BRANCH_CLOSED_AT_REQUESTED_TIME})
      */
     public record PlaceOrderRequest(
             @NotNull UUID customerAccountId,
@@ -1500,7 +1524,9 @@ public class OperationsOrderController {
             @NotEmpty @Size(max = 50) List<OrderLineRequest> lines,
             @Nullable DestinationRequest destination,
             @NotBlank @Size(max = 32) String paymentMethodCode,
-            @Nullable @Size(max = 32) String promoCode) {}
+            @Nullable @Size(max = 32) String promoCode,
+            @Nullable Instant requestedFor,
+            Boolean overrideOutOfHours) {}
 
     /** One line the operator entered into the basket, same shape as a storefront cart line. */
     public record OrderLineRequest(

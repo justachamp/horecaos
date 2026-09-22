@@ -360,6 +360,21 @@ those orders never switch back to a legacy writer mid-lifecycle.
 
 - [ ] Approve checkout payment timing, cancellation, timeout, and modification policies.
 - [ ] Approve scheduled/pre-order lead-time, reprice, reservation/payment timing, capacity, and timezone policy.
+      Wave 8/w2 (gap map row 1.3d) landed the narrow slice this open input does
+      not cover: `OperatorOrderingService.place`/`CheckoutService.CheckoutCommand`
+      now accept a caller-chosen `requestedFor` instant, `CheckoutEligibilityGuard`
+      validates it against `ServiceabilityResolver` at that instant (never at
+      `now`, and never instead of the ordinary immediate-service check), and
+      `CheckoutOrderWriter` records it as `OrderPromise.scheduled`
+      (`PromiseBasis.SCHEDULED_SLOT`, ADR 0036) rather than a derived duration.
+      An out-of-hours request is refused pending an explicit operator
+      confirmation, or outright when the branch's own `accepts_scheduled_orders`
+      policy refuses a pre-order into a closed slot at all — see that column's
+      own doc on `Serviceability`. What remains open and unbuilt: any lead-time
+      limit, any repricing or reservation checkpoint for a long wait, any
+      capacity hold, and any payment-authorization-timing decision for a
+      pre-order taken minutes, hours or days ahead — this wave's `requestedFor`
+      is a promise time only, never a hold on price, stock or a kitchen slot.
 - [x] Finalize canonical state-transition and consequence table for both channels.
 - [x] Add cart, order snapshot/history, idempotency, and process-state tables.
 - [x] Implement cart and order aggregates with raw-SQL optimistic repositories.

@@ -204,6 +204,46 @@ class CheckoutEligibilityGuard {
                     "NOT_SERVICEABLE", Objects.requireNonNull(decision.reason()).name());
         }
 
+        // Row 1.3d: a requested-for-later time, validated against the branch's
+        // own hours in addition to (never instead of) the immediate-service
+        // check just above. `decision` stayed resolved at `now` on purpose —
+        // this is a second, independent question about a different instant, not
+        // a replacement of the first: a branch open right now that happens to be
+        // closed at the requested hour is still refused for the requested hour,
+        // and a branch that is (unusually) closed right now but open at the
+        // requested hour is not penalised for the moment the call came in.
+        if (command.requestedFor() != null) {
+            if (!command.requestedFor().isAfter(now)) {
+                return Result.rejected("REQUESTED_TIME_IN_PAST", "A pre-order time must be in the future");
+            }
+            Serviceability atRequestedTime = serviceability.resolve(
+                    command.tenantId(),
+                    command.brandId(),
+                    cart.locationId(),
+                    cart.channelId(),
+                    cart.fulfillmentMode(),
+                    command.requestedFor());
+            if (!atRequestedTime.available()) {
+                String reason = Objects.requireNonNull(atRequestedTime.reason()).name();
+                if (!atRequestedTime.acceptsScheduledOrders()) {
+                    // The branch's own configuration says it does not take a
+                    // pre-order into a closed slot at all (Serviceability's own
+                    // doc: "closed now" and "cannot pre-order" are different
+                    // facts). That is a tenant policy fact, not a single
+                    // order-taker's call, so no override reaches past it.
+                    return Result.rejected("BRANCH_CLOSED_AT_REQUESTED_TIME", reason);
+                }
+                if (!command.overrideOutOfHours()) {
+                    // Policy allows scheduling into this closed slot, but the
+                    // operator has not said yet that they mean to — the warn
+                    // half of "WARN ... while still allowing an explicit
+                    // override". The client re-submits with
+                    // overrideOutOfHours=true once the operator confirms.
+                    return Result.rejected("BRANCH_CLOSED_AT_REQUESTED_TIME_CONFIRM", reason);
+                }
+            }
+        }
+
         // Where it is going, for an order that is going anywhere (ADR 0014, ADR
         // 0019). Refused here, among the read-only validations, and never later.
         //
