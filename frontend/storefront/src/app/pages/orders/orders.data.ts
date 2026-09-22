@@ -126,13 +126,18 @@ export interface OrderDetail {
   lineItems: OrderLineItem[];
   subtotal: string;
   /**
-   * Absent when the platform's order response does not break out a delivery
-   * fee (it never does today -- `OrderResponse` has no such field, and the
-   * amount is folded into `total` with no breakdown). Showing "0 so'm" here
-   * used to claim delivery was free when it may not have been; omitting the
-   * row is the honest answer, matching how `packaging` below is already
-   * handled and how `cart-order-status.component` shows no delivery line at
-   * all.
+   * `OrderResponse.taxMinor` (StorefrontOrderingController), when it is
+   * actually non-zero. Shown as its own row rather than folded into
+   * `subtotal` -- under an INCLUSIVE tax profile `subtotalMinor` is net of
+   * tax, and subtotal + delivery alone never summed to `total`.
+   */
+  tax?: string;
+  /**
+   * `OrderResponse.feeMinor` (StorefrontOrderingController), when it is
+   * actually non-zero. Absent for a PICKUP/DINE_IN order or a waived
+   * delivery fee -- showing "0 so'm" there would claim delivery was priced
+   * at zero rather than not charged at all, matching how `packaging` below
+   * is already handled.
    */
   deliveryFee?: string;
   total: string;

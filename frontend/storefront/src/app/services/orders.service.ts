@@ -210,8 +210,13 @@ export class OrdersService {
       address: undefined,
       payment: undefined,
       subtotal: { price: order.subtotalMinor, discount: 0 },
-      // Delivery and packaging are not order fields. Zero is "not stated here".
-      delivery: { price: 0, discount: 0 },
+      tax: { price: order.taxMinor, discount: 0 },
+      // The ADR 0037 delivery charge -- zero for PICKUP/DINE_IN and for a
+      // waived fee, never absent. `OrderDetailComponent.mapToOrderDetail`
+      // hides the row only when this is actually zero, not because the
+      // field itself is missing.
+      delivery: { price: order.feeMinor, discount: 0 },
+      // Packaging has no order field on the platform yet.
       packaging: { price: 0, discount: 0 },
       total: { price: order.totalMinor, discount: 0 },
       actions: isCancellable(order.status) ? ['cancel'] : [],
@@ -348,6 +353,12 @@ export interface OrderResponse {
   readonly currency: string;
   readonly subtotalMinor: number;
   readonly taxMinor: number;
+  /** The ADR 0037 delivery charge, already folded into `totalMinor` but
+   * carried separately -- see JdbcOrderStore's doc comment on the field --
+   * so an order placed with one can show it instead of a total that never
+   * reconciles against its own subtotal. Zero for PICKUP/DINE_IN and for a
+   * waived delivery fee, never absent. */
+  readonly feeMinor: number;
   readonly totalMinor: number;
   readonly version: number;
   readonly createdAt: string;
@@ -392,6 +403,7 @@ export interface ApiOrderDetail {
   address?: { id: string; name: string; address: string; latitude?: number; longitude?: number };
   payment?: { id: number; name: string; status?: string };
   subtotal?: ApiPriceObject | number;
+  tax?: ApiPriceObject | number;
   delivery?: ApiPriceObject | number;
   packaging?: ApiPriceObject | number;
   total?: ApiPriceObject | number;

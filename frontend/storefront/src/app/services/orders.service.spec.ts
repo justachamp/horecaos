@@ -58,6 +58,7 @@ function orderResponse(orderId: string, version: number, status = 'RECEIVED'): O
     currency: 'UZS',
     subtotalMinor: 1000,
     taxMinor: 0,
+    feeMinor: 0,
     totalMinor: 1000,
     version,
     createdAt: '2026-01-01T00:00:00Z',
@@ -166,6 +167,37 @@ describe('OrdersService: never fabricates an item count or distance', () => {
     const detail = await firstValueFrom(service.getOrderDetail('o1'));
 
     expect(detail.items_count).toBe(1);
+  });
+});
+
+describe('OrdersService.getOrderDetail: the delivery fee and tax the backend now carries reach the screen', () => {
+  // StorefrontOrderingController.OrderResponse gained `feeMinor` alongside
+  // `taxMinor`; before this, `toApiOrderDetail` hardcoded `delivery: {price:
+  // 0, discount: 0}` regardless, so a DELIVERY order's own detail screen
+  // could never reconcile its total against a subtotal with no fee line.
+  it('maps feeMinor onto delivery.price and taxMinor onto tax.price, not a fabricated zero', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      ...orderResponse('o1', 1),
+      subtotalMinor: 40_179,
+      taxMinor: 4_821,
+      feeMinor: 25_000,
+      totalMinor: 70_000,
+    });
+
+    const detail = await firstValueFrom(service.getOrderDetail('o1'));
+
+    expect(detail.delivery).toEqual({ price: 25_000, discount: 0 });
+    expect(detail.tax).toEqual({ price: 4_821, discount: 0 });
+  });
+
+  it('still maps a zero fee through as zero -- a PICKUP order or a waived delivery, not an omission this layer should guess at', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue(orderResponse('o1', 1));
+
+    const detail = await firstValueFrom(service.getOrderDetail('o1'));
+
+    expect(detail.delivery).toEqual({ price: 0, discount: 0 });
   });
 });
 
