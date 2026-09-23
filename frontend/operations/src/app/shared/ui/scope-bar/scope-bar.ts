@@ -20,6 +20,12 @@ export interface ScopeBarOption {
  * `features/settings/settings-scope.ts`; this component only renders the
  * pickers it is handed and emits a selection. Kept in `shared/ui` because
  * every settings wave after this one (P32 onward) mounts one.
+ *
+ * Row 10.3b adds the TENANT toggle: a pill pair beside the level readout, so
+ * any settings screen can offer a tenant-wide default the same `q-scope-bar`
+ * the brand/location pickers already live on — whether a given screen's own
+ * keys are actually settable at TENANT is `q-inherited-field`'s own
+ * `NOT_SETTABLE` state to render, not this bar's concern.
  */
 @Component({
   selector: 'q-scope-bar',
@@ -40,16 +46,38 @@ export class ScopeBar {
   /** Set to disable the location picker with an explanatory chip — a key not settable at LOCATION. */
   readonly locationDisabledReason = input<string | null>(null);
 
+  /**
+   * Row 10.3b — whether the bar is currently at TENANT level, the third
+   * level above BRAND/LOCATION for a tenant-wide default. Orthogonal to
+   * {@link selectedBrandId}/{@link selectedLocationId}, which keep their own
+   * values as display context while this wins.
+   */
+  readonly tenantWide = input(false);
+
   readonly brandChange = output<string>();
   /** Emits `null` for "Все филиалы". */
   readonly locationChange = output<string | null>();
+  /** Emits `true` to switch to TENANT level, `false` to return to BRAND/LOCATION. */
+  readonly tenantWideChange = output<boolean>();
 
-  protected readonly level = computed(() => (this.selectedLocationId() ? 'LOCATION' : 'BRAND'));
+  protected readonly level = computed(() => {
+    if (this.tenantWide()) {
+      return 'TENANT';
+    }
+    return this.selectedLocationId() ? 'LOCATION' : 'BRAND';
+  });
 
   /** A concatenated key (`'scopeBar.level.' + level()`) would not type-check against MessageKey's literal union. */
-  protected readonly levelKey = computed<MessageKey>(() =>
-    this.level() === 'LOCATION' ? 'scopeBar.level.LOCATION' : 'scopeBar.level.BRAND',
-  );
+  protected readonly levelKey = computed<MessageKey>(() => {
+    switch (this.level()) {
+      case 'TENANT':
+        return 'scopeBar.level.TENANT';
+      case 'LOCATION':
+        return 'scopeBar.level.LOCATION';
+      default:
+        return 'scopeBar.level.BRAND';
+    }
+  });
 
   protected onBrandChange(value: string): void {
     if (value) {

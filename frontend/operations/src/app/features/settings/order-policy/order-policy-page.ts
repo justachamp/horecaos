@@ -223,13 +223,18 @@ export class OrderPolicyPage {
 
   constructor() {
     // Re-reads Card 1 and every card 2-5 field whenever the scope bar's own
-    // brand or location changes — the same "effect keyed on the resolved
-    // input" idiom `SettingsScope` itself uses for reloading locations when
-    // the brand changes.
+    // brand, location or level changes — the same "effect keyed on the
+    // resolved input" idiom `SettingsScope` itself uses for reloading
+    // locations when the brand changes. `level` (row 10.3b) is read here
+    // too, not only inside `loadFields`/`loadCard1`: toggling TENANT with
+    // neither brand nor location changing would otherwise leave this effect
+    // with nothing new to react to, and cards 2-5 would keep showing
+    // whatever BRAND/LOCATION last resolved.
     effect(() => {
       const tenantId = this.tenant.tenantId();
       const brandId = this.scope.brandId();
       const locationId = this.scope.locationId();
+      this.scope.level();
       if (tenantId && brandId) {
         void this.loadCard1(tenantId, brandId, locationId);
         void this.loadFields(tenantId, brandId, locationId);

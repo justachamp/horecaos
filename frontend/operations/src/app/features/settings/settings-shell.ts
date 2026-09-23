@@ -41,4 +41,13 @@ export class SettingsShell {
   protected onLocationChange(locationId: string | null): void {
     this.scope.setLocation(locationId);
   }
+
+  /** Row 10.3b — the scope bar's TENANT/per-brand pill pair. */
+  protected onTenantWideChange(tenantWide: boolean): void {
+    if (tenantWide) {
+      this.scope.setTenantLevel();
+    } else {
+      this.scope.leaveTenantLevel();
+    }
+  }
 }

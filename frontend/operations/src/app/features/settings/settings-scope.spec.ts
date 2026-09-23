@@ -196,4 +196,74 @@ describe('SettingsScope', () => {
 
     expect(scope.showBrandPicker()).toBe(false);
   });
+
+  // Row 10.3b: TENANT is a third level, orthogonal to brand/location.
+
+  it('reads ?level=tenant as TENANT level, regardless of the brand/location also named', async () => {
+    configure(get);
+    await RouterTestingHarness.create('/settings?brand=brand-1&location=loc-1&level=tenant');
+    const scope = TestBed.inject(SettingsScope);
+    await flushMicrotasks();
+
+    expect(scope.level()).toBe('TENANT');
+    expect(scope.tenantWide()).toBe(true);
+    // The brand/location pickers keep their own resolved values as display
+    // context even while TENANT wins the level.
+    expect(scope.brandId()).toBe('brand-1');
+    expect(scope.locationId()).toBe('loc-1');
+  });
+
+  it('setTenantLevel switches to TENANT without disturbing the brand/location query params', async () => {
+    configure(get);
+    await RouterTestingHarness.create('/settings?brand=brand-1&location=loc-1');
+    const scope = TestBed.inject(SettingsScope);
+    await flushMicrotasks();
+
+    scope.setTenantLevel();
+    await flushMicrotasks();
+
+    expect(scope.level()).toBe('TENANT');
+    const router = TestBed.inject(Router);
+    expect(router.url).toContain('level=tenant');
+    expect(router.url).toContain('brand=brand-1');
+    expect(router.url).toContain('location=loc-1');
+  });
+
+  it('leaveTenantLevel returns to whatever the brand/location pickers already show', async () => {
+    configure(get);
+    await RouterTestingHarness.create('/settings?brand=brand-1&location=loc-1&level=tenant');
+    const scope = TestBed.inject(SettingsScope);
+    await flushMicrotasks();
+
+    scope.leaveTenantLevel();
+    await flushMicrotasks();
+
+    expect(scope.level()).toBe('LOCATION');
+    const router = TestBed.inject(Router);
+    expect(router.url).not.toContain('level=');
+  });
+
+  it('setBrand leaves TENANT level — picking a brand is picking a narrower scope', async () => {
+    configure(get);
+    await RouterTestingHarness.create('/settings?brand=brand-1&level=tenant');
+    const scope = TestBed.inject(SettingsScope);
+    await flushMicrotasks();
+
+    scope.setBrand('brand-2');
+    await flushMicrotasks();
+
+    expect(scope.level()).toBe('BRAND');
+  });
+
+  it('setLocation leaves TENANT level the same way', async () => {
+    configure(get);
+    await RouterTestingHarness.create('/settings?brand=brand-1&level=tenant');
+    const scope = TestBed.inject(SettingsScope);
+    await flushMicrotasks();
+
+    scope.setLocation('loc-1');
+    await flushMicrotasks();
+
+    expect(scope.level()).toBe('LOCATION');
+  });
 });
