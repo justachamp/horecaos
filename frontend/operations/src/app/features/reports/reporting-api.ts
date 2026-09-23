@@ -803,7 +803,10 @@ export class ReportingApi {
     return result.value ?? [];
   }
 
-  async orderOutcomes(tenantId: string, params: RangeParams): Promise<OutcomeListResponse> {
+  async orderOutcomes(
+    tenantId: string,
+    params: RangeParams & { readonly legalEntityId?: readonly string[] },
+  ): Promise<OutcomeListResponse> {
     const result = await firstValueFrom(
       this.api.get<OutcomeListResponse>(reportsPaths.orderOutcomes(tenantId), {
         params: {
@@ -811,6 +814,7 @@ export class ReportingApi {
           to: params.to,
           locationId: params.locationId,
           channelCode: params.channelCode,
+          legalEntityId: params.legalEntityId,
         },
       }),
     );

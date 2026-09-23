@@ -724,10 +724,10 @@ public class JdbcPartnerStore {
         jdbc.sql("""
                 INSERT INTO integration.provider_activity_watermarks (
                     tenant_id, binding_id, location_id, direction, last_failure_at,
-                    last_failure_code, stale_after_seconds, updated_at)
+                    last_failure_code, stale_after_seconds, alert_state, alert_raised_at, updated_at)
                 VALUES (
                     :tenantId, :bindingId, :locationId, :direction, :at,
-                    :code, :staleAfter, now())
+                    :code, :staleAfter, 'STALE', :at, now())
                 ON CONFLICT (tenant_id, binding_id, direction) DO UPDATE
                 SET last_failure_at = EXCLUDED.last_failure_at,
                     last_failure_code = EXCLUDED.last_failure_code,

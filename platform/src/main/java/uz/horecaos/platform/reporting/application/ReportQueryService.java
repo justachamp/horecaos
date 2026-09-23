@@ -780,13 +780,18 @@ public class ReportQueryService {
      */
     @Transactional(readOnly = true)
     public OutcomeResult orderOutcomes(
-            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<String> channelCodes) {
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> channelCodes,
+            List<UUID> legalEntityIds) {
 
         validateRange(from, to);
         refuseMixedBoundaryRegime(tenantId, from, to);
 
         List<JdbcReportingStore.OutcomeRow> rows =
-                store.readOrderOutcomes(tenantId, from, to, locationIds, channelCodes);
+                store.readOrderOutcomes(tenantId, from, to, locationIds, channelCodes, legalEntityIds);
         return new OutcomeResult(rows, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
     }
 

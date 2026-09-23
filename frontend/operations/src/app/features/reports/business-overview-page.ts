@@ -671,6 +671,7 @@ export class BusinessOverviewPage implements OnInit {
       to: range.to,
       locationId: slice.locationId,
       channelCode: slice.channelCode,
+      legalEntityId: slice.legalEntityId,
     });
     const total = result.rows.reduce((sum, row) => sum + row.count, 0);
     const completed = result.rows

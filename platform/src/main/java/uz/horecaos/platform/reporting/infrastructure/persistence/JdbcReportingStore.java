@@ -1712,7 +1712,12 @@ public class JdbcReportingStore {
      * rather than being folded into {@code /queries}.
      */
     public List<OutcomeRow> readOrderOutcomes(
-            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<String> channelCodes) {
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> channelCodes,
+            List<UUID> legalEntityIds) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -1727,6 +1732,10 @@ public class JdbcReportingStore {
         if (!channelCodes.isEmpty()) {
             filter.append(" AND channel_code IN (:channels)");
             params.put("channels", channelCodes);
+        }
+        if (!legalEntityIds.isEmpty()) {
+            filter.append(" AND legal_entity_id IN (:legalEntities)");
+            params.put("legalEntities", legalEntityIds);
         }
 
         return jdbc.sql("""

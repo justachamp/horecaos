@@ -1195,6 +1195,12 @@ class MarketplaceChannelTests {
                             + "fixed in different places")
                     .isNull();
             assertThat(row.lastFailureCode()).isEqualTo("EXTERNAL_TOTAL_MISMATCH");
+            assertThat(row.alertState())
+                    .as("a binding whose only evidence ever recorded is a failure must not read as "
+                            + "HEALTHY: last_success_at is null forever on this row, so the staleness "
+                            + "sweep (gated on last_success_at IS NOT NULL) can never promote it out of "
+                            + "a false HEALTHY later")
+                    .isEqualTo("STALE");
         });
     }
 

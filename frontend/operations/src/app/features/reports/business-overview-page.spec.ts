@@ -437,4 +437,21 @@ describe('BusinessOverviewPage', () => {
     const table = host.querySelector('[data-testid="q-funnel-chart-table"]') as HTMLElement;
     expect(table.textContent).not.toContain('Late');
   });
+
+  it(
+    'pushes the legal-entity filter into order-outcomes too, so a two-entity tenant’s ' +
+      'TOTAL/COMPLETED funnel stages share the same entity scope as ON_TIME/LATE',
+    async () => {
+      await render((filters) => filters.setLegalEntityIds(['entity-1']));
+      await flushMicrotasks();
+
+      const api = TestBed.inject(ReportingApi) as unknown as {
+        orderOutcomes: ReturnType<typeof vi.fn>;
+      };
+      expect(api.orderOutcomes).toHaveBeenCalledWith(
+        SCOPE.tenantId,
+        expect.objectContaining({ legalEntityId: ['entity-1'] }),
+      );
+    },
+  );
 });
