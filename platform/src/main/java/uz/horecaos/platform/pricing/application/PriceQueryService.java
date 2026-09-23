@@ -11,6 +11,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 
 /**
@@ -31,11 +32,14 @@ public class PriceQueryService {
     private final JdbcPricingStore store;
     private final SalesChannelLookup channels;
     private final Clock clock;
+    private final ConfigurationResolver configuration;
 
-    public PriceQueryService(JdbcPricingStore store, SalesChannelLookup channels, Clock clock) {
+    public PriceQueryService(
+            JdbcPricingStore store, SalesChannelLookup channels, Clock clock, ConfigurationResolver configuration) {
         this.store = store;
         this.channels = channels;
         this.clock = clock;
+        this.configuration = configuration;
     }
 
     /** A brand's price books, ranked the way {@code resolvePriceBook} ranks them. */
@@ -67,8 +71,9 @@ public class PriceQueryService {
      * operator has authored anything, per {@code PriceAuthoringService}'s own
      * Javadoc on the same gap.
      *
-     * <p>{@code channelId} is resolved to its price plane exactly the way {@link
-     * QuoteService} resolves one for an actual cart (ADR 0036):
+     * <p>{@code channelId} is resolved to its price plane through the same
+     * {@link QrKioskHallPricing} {@link QuoteService} resolves one for an
+     * actual cart through (ADR 0036, gap map row {@code 4.4d}):
      * {@code resolvePriceBook}'s own Javadoc requires the <em>price plane</em>
      * channel id, not the channel itself, and a caller-supplied channel that does
      * not exist for this tenant resolves to no channel — matching a cart's own
@@ -85,7 +90,9 @@ public class PriceQueryService {
         Instant at = clock.instant();
         UUID pricingChannelId = channelId == null
                 ? null
-                : channels.pricingChannelId(tenantId, channelId).orElse(null);
+                : channels.byId(tenantId, channelId)
+                        .map(channel -> QrKioskHallPricing.resolve(tenantId, channel, channels, configuration))
+                        .orElse(null);
         Optional<JdbcPricingStore.PriceBookRow> resolved =
                 store.resolvePriceBook(tenantId, brandId, locationId, pricingChannelId, at);
         if (resolved.isEmpty()) {

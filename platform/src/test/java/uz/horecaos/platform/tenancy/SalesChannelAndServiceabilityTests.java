@@ -359,6 +359,32 @@ class SalesChannelAndServiceabilityTests {
     }
 
     @Test
+    @DisplayName("hallChannelId names the tenant's single active POS channel, gap map row 4.4d")
+    void hallChannelIdNamesTheSingleActivePosChannel() {
+        assertThat(channelStore.hallChannelId(TENANT))
+                .as("zero POS channels names no hall")
+                .isEmpty();
+
+        var hall = channels.create(TENANT, createCommand("HALL", "POS"));
+        assertThat(channelStore.hallChannelId(TENANT)).contains(hall.id());
+
+        var secondHall = channels.create(TENANT, createCommand("HALL2", "POS"));
+        assertThat(channelStore.hallChannelId(TENANT))
+                .as("two POS channels name no unambiguous hall")
+                .isEmpty();
+
+        channels.deactivate(TENANT, secondHall.id(), secondHall.version());
+        assertThat(channelStore.hallChannelId(TENANT))
+                .as("only one is still ACTIVE, so it is unambiguous again")
+                .contains(hall.id());
+
+        var otherTenant = UUID.randomUUID();
+        assertThat(channelStore.hallChannelId(otherTenant))
+                .as("never another tenant's POS channel")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("a cross-tenant channel id cannot be bound to this tenant's location")
     void aCrossTenantChannelIsRefusedByTheDatabase() {
         UUID foreign =

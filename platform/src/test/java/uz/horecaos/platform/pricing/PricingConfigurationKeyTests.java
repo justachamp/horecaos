@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.pricing.api.PricingConfigurationKeys;
 import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
@@ -40,6 +41,22 @@ class PricingConfigurationKeyTests {
                 .isEqualTo((int) QuoteService.QUOTE_TTL.toSeconds())
                 .isEqualTo(900);
         assertThat(QuoteService.QUOTE_TTL).isEqualTo(Duration.ofMinutes(15));
+    }
+
+    /** Gap map row {@code 4.4d}, wave w7: the catalog base setting pricing reads. */
+    @Test
+    @DisplayName("the catalog.qr_kiosk_price_plane declaration is identical on both sides, off by default, tenant-only")
+    void theQrKioskPricePlaneKeyAgreesAndIsTenantOnly() {
+        assertThat(registered(PricingConfigurationKeys.CATALOG_QR_KIOSK_PRICE_PLANE_CODE))
+                .isEqualTo(PricingConfigurationKeys.CATALOG_QR_KIOSK_PRICE_PLANE);
+        assertThat(PricingConfigurationKeys.CATALOG_QR_KIOSK_PRICE_PLANE.defaultValue())
+                .as("off by default: a QR or kiosk channel prices as itself until a tenant opts in")
+                .isEqualTo(false);
+        assertThat(PricingConfigurationKeys.CATALOG_QR_KIOSK_PRICE_PLANE.tenantVisible())
+                .isTrue();
+        assertThat(PricingConfigurationKeys.CATALOG_QR_KIOSK_PRICE_PLANE.settableScopes())
+                .as("a whole-company switch, not per brand or per branch")
+                .containsExactlyInAnyOrder(ScopeType.PLATFORM, ScopeType.TENANT);
     }
 
     private static ConfigurationKey<?> registered(String code) {

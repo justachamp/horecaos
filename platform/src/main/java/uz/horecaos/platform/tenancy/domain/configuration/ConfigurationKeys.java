@@ -425,27 +425,31 @@ public final class ConfigurationKeys {
             .build();
 
     /**
-     * Wave P46 (gap map row {@code 4.4d}): catalog base settings' second
+     * Wave P46 / w7 (gap map row {@code 4.4d}): catalog base settings' second
      * switch, "QR and kiosk sell at hall prices." {@code
      * tenancy.api.SalesChannel#pricingChannelId()} already gives every
      * channel a one-hop price-plane override, authored by hand per channel
-     * through {@code SalesChannelService} — this key does not change that
-     * resolution; nothing outside this registry reads it yet, so unlike
-     * {@link #CATALOG_USE_STOCK_LOGIC} it is declared only here. It exists so
-     * the switch can be authored and shown through the operations surface
-     * ahead of whichever later change makes a QR or kiosk channel with no
-     * price plane of its own default to the tenant's hall channel instead of
-     * requiring every one to be pointed there manually.
+     * through {@code SalesChannelService}; this key does not change that
+     * resolution or how a manual override behaves. Wired 2026-09-23:
+     * {@code QuoteService} and {@code PriceQueryService} now read it (a QR or
+     * kiosk channel with no price plane of its own resolves to the tenant's
+     * single active POS channel — ADR 0036's own vocabulary correction names
+     * POS as the waiter-entered channel that carries dine-in — when the
+     * tenant has registered exactly one; zero or several name no unambiguous
+     * hall and the channel still prices as itself). Declared identically in
+     * {@code pricing.api.PricingConfigurationKeys}, because pricing is what
+     * reads it, the same arrangement {@link #CATALOG_USE_STOCK_LOGIC} uses
+     * with {@code inventory.api.InventoryConfigurationKeys}.
      */
     public static final ConfigurationKey<Boolean> CATALOG_QR_KIOSK_PRICE_PLANE = ConfigurationKey.of(
                     "catalog.qr_kiosk_price_plane", Boolean.class)
             .defaultValue(false)
-            .ownedBy("catalog")
+            .ownedBy("pricing")
             .tenantVisible()
             .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
-            .describedAs("QR and kiosk channels take the tenant's hall (dine-in) price plane "
-                    + "automatically. Not yet enforced: a channel with no price plane of its own "
-                    + "still needs one set by hand through Sales channels.")
+            .describedAs("QR and kiosk channels with no price plane of their own take the tenant's "
+                    + "single hall (POS) channel's prices automatically. A channel with a manual "
+                    + "override, or a tenant with zero or several POS channels, is unaffected.")
             .build();
 
     /**
