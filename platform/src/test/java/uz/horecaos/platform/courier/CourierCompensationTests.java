@@ -268,7 +268,7 @@ class CourierCompensationTests {
                 protection,
                 businessDayWindows());
         settlement = new CourierSettlementService(
-                ledgerStore, courierStore, costStore, approvals, audit, objectMapper, clock);
+                ledgerStore, courierStore, costStore, approvals, audit, objectMapper, clock, adjustmentRules);
         cash = new CourierCashService(shiftStore, ledger, audit, clock);
         gate = new CourierDispatchGate(courierStore, shiftStore, policyResolver);
         rateCards = new CourierRateCardService(rateCardStore, audit, clock);
@@ -1327,6 +1327,118 @@ class CourierCompensationTests {
                 .sum();
         assertThat(closed.grossEarningsMinor()).isEqualTo(ledgerGross);
         assertThat(closed.statementHash()).hasSize(64);
+    }
+
+    @Test
+    @DisplayName("closing a settlement period evaluates a wired SETTLEMENT_PERIOD rule and posts it "
+            + "into the very statement it closes (gap map row 3.4c)")
+    void settlementPeriodCloseEvaluatesAWiredRuleAndPostsItIntoTheStatement() {
+        courierStore.insertAdjustmentReason(
+                UUID.randomUUID(),
+                TENANT,
+                "AT_LEAST_ONE_DELIVERY",
+                "BONUS",
+                "DELIVERED_VOLUME",
+                "At least one delivery in the settlement period",
+                new JdbcCourierStore.RuleConfig(15_000, UZS, "GTE", 1, "SETTLEMENT_PERIOD", "SETTLEMENT_PERIOD_CLOSE"));
+
+        accruals.recordDelivery(delivery(deliveredShipment(), 4000, 0));
+        PeriodRow period = ledgerStore.findOpenPeriod(TENANT, courierId).orElseThrow();
+
+        CourierSettlementService.Statement statement = settlement.close(TENANT, period.id(), manager(), "closing");
+
+        assertThat(entriesOfType(LedgerEntryType.BONUS))
+                .as("the period-close rule fired at close, stamped RULE")
+                .filteredOn(entry -> "AT_LEAST_ONE_DELIVERY".equals(entry.reasonCode()))
+                .hasSize(1)
+                .allSatisfy(entry -> {
+                    assertThat(entry.amountMinor()).isEqualTo(15_000);
+                    assertThat(entry.origin()).isEqualTo(AdjustmentOrigin.RULE);
+                });
+
+        // The whole point of AdjustmentRuleEvaluator's own sequencing doc: the
+        // rule-posted bonus must be inside the very statement that was hashed
+        // and stored, not excluded from it because it posted after the read
+        // CourierSettlementService.close used to do first.
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> adjustments = (List<Map<String, Object>>)
+                Objects.requireNonNull(statement.document().get("adjustments"));
+        assertThat(adjustments)
+                .as("the statement document itself carries the rule-posted adjustment")
+                .anySatisfy(line -> assertThat(line.get("reasonCode")).isEqualTo("AT_LEAST_ONE_DELIVERY"));
+
+        PeriodRow closed = ledgerStore.findPeriod(TENANT, period.id()).orElseThrow();
+        assertThat(closed.adjustmentsMinor())
+                .as("the closed period's own stored total reflects the rule-posted bonus too")
+                .isEqualTo(15_000);
+    }
+
+    @Test
+    @DisplayName("re-evaluating a settlement period's rules posts the same bonus back, never a second one")
+    void settlementPeriodCloseRuleEvaluationIsIdempotent() {
+        courierStore.insertAdjustmentReason(
+                UUID.randomUUID(),
+                TENANT,
+                "ONE_DELIVERY_PERIOD",
+                "BONUS",
+                "DELIVERED_VOLUME",
+                "At least one delivery in the settlement period",
+                new JdbcCourierStore.RuleConfig(10_000, UZS, "GTE", 1, "SETTLEMENT_PERIOD", "SETTLEMENT_PERIOD_CLOSE"));
+
+        accruals.recordDelivery(delivery(deliveredShipment(), 4000, 0));
+        PeriodRow period = ledgerStore.findOpenPeriod(TENANT, courierId).orElseThrow();
+
+        // A retried close() re-runs evaluatePeriodClose against the same still-
+        // OPEN period whenever an earlier attempt rolled back after posting it
+        // (AdjustmentRuleEvaluator's own class doc) -- proved directly here,
+        // the same way shiftCloseRuleEvaluationIsIdempotent proves it for the
+        // SHIFT window, since close() itself refuses a genuine second call
+        // once the period is CLOSED.
+        List<CourierAdjustmentService.Outcome> repeated = adjustmentRules.evaluatePeriodClose(TENANT, period, branch);
+        assertThat(repeated).hasSize(1);
+
+        settlement.close(TENANT, period.id(), manager(), "closing");
+
+        assertThat(entriesOfType(LedgerEntryType.BONUS))
+                .filteredOn(entry -> "ONE_DELIVERY_PERIOD".equals(entry.reasonCode()))
+                .as("re-evaluating before close posts the same entry back, not a second one")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a settlement period with no deliveries closes without evaluating period-close rules")
+    void aSettlementPeriodWithNoDeliveriesClosesWithoutEvaluatingRules() {
+        // DELIVERED_VOLUME GTE 0 would hold trivially over zero deliveries;
+        // this proves the empty-earnings period is skipped rather than
+        // attributed to an invented branch (CourierSettlementService.close's
+        // own doc), not merely that no bonus happened to be due.
+        courierStore.insertAdjustmentReason(
+                UUID.randomUUID(),
+                TENANT,
+                "EVEN_ZERO_DELIVERIES",
+                "BONUS",
+                "DELIVERED_VOLUME",
+                "Fires even with no deliveries, to prove the skip",
+                new JdbcCourierStore.RuleConfig(5_000, UZS, "GTE", 0, "SETTLEMENT_PERIOD", "SETTLEMENT_PERIOD_CLOSE"));
+
+        // A shift, closed empty, is what gives this courier an open period at
+        // all without recording a single delivery -- ledger.currentPeriod is
+        // only ever reached from a delivery's own accrual or from a shift
+        // close, and this test needs the latter alone. Closed under the rate
+        // card's own PER_SHIFT_FIXED minimum paid seconds (3600s) so it earns
+        // no shift-fixed pay either -- gross earnings stays genuinely zero.
+        ShiftRow shift = openShift();
+        clock.set(NOON.plus(Duration.ofMinutes(10)));
+        shifts.close(new CourierShiftService.CloseShift(
+                TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
+        PeriodRow period = ledgerStore.findOpenPeriod(TENANT, courierId).orElseThrow();
+
+        CourierSettlementService.Statement statement = settlement.close(TENANT, period.id(), manager(), "closing");
+
+        assertThat(statement.totals().grossEarningsMinor()).isZero();
+        assertThat(entriesOfType(LedgerEntryType.BONUS))
+                .filteredOn(entry -> "EVEN_ZERO_DELIVERIES".equals(entry.reasonCode()))
+                .isEmpty();
     }
 
     @Test
