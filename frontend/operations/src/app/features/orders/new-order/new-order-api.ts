@@ -212,12 +212,15 @@ export interface PlaceOrderResult {
  * critic's named case for HK: with no `expectedVersion` to make a stale
  * retry fail loudly, a fresh `Idempotency-Key` per call was the only thing
  * standing between a lost response and a second, independent order for the
- * same basket. {@link placeOrder} and {@link aggregatorEntry} now hold one
- * `IntentCommandRegistry` each (this service is `providedIn: 'root'`, so it
- * outlives the component across the lifetime of one operator's draft): a
- * retried call with an unchanged request body reuses the held key, a body
- * that differs (the operator edited the form) mints a fresh one, and a
- * successful response forgets the held command so the next order — even an
+ * same basket — and the identical shape applies to {@link createCustomer}'s
+ * create-on-miss, which likewise inserts unconditionally with no natural
+ * conflict to reject a duplicate. {@link placeOrder}, {@link aggregatorEntry}
+ * and {@link createCustomer} each hold their own `IntentCommandRegistry`
+ * (this service is `providedIn: 'root'`, so it outlives the component across
+ * the lifetime of one operator's draft): a retried call with an unchanged
+ * request body reuses the held key, a body that differs (the operator edited
+ * the form) mints a fresh one, and a successful response forgets the held
+ * command so the next order — even an
  * accidental repeat of the same basket — gets its own key.
  */
 @Injectable({ providedIn: 'root' })
@@ -225,6 +228,7 @@ export class NewOrderApi {
   private readonly api = inject(ApiClient);
   private readonly placeOrderIntents = new IntentCommandRegistry<PlaceOrderRequest>();
   private readonly aggregatorEntryIntents = new IntentCommandRegistry<AggregatorOrderRequest>();
+  private readonly createCustomerIntents = new IntentCommandRegistry<CreateCustomerRequest>();
 
   /** orders.md §5.3: a `POST` with the phone in the body, never a query string. */
   async lookupCustomerByPhone(
@@ -322,13 +326,23 @@ export class NewOrderApi {
    * `LOCATION_STAFF`/`LOCATION_MANAGER` can actually reach —
    * `OperationsCustomerController#create`, not `CustomersApi.create`, which
    * 403s for this screen's own persona. See that controller's own doc.
+   *
+   * Held on {@link createCustomerIntents} like {@link placeOrder} and {@link
+   * aggregatorEntry} above, for the identical reason (batch 8 review 2,
+   * finding b-new-order): `CustomerIdentityService.createAccountWithoutPrincipal`
+   * inserts unconditionally, with no phone-uniqueness check, so a retry that
+   * minted a fresh `Idempotency-Key` per call created a second, duplicate
+   * customer account for the same phone whenever the first response was lost.
    */
   async createCustomer(scope: LocationScope, request: CreateCustomerRequest): Promise<string> {
+    const intent = this.createCustomerIntents.next('draft', request);
     const response = await firstValueFrom(
-      this.api.post<CreateCustomerRequest, { id: string }>(
-        operationsPaths.orderIntakeCustomers(scope),
-        command(request),
-      ),
+      this.api
+        .post<CreateCustomerRequest, { id: string }>(
+          operationsPaths.orderIntakeCustomers(scope),
+          intent,
+        )
+        .pipe(tap(() => this.createCustomerIntents.forget('draft'))),
     );
     return response.id;
   }

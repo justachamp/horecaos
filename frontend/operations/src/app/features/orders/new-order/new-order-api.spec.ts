@@ -5,11 +5,22 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { environment } from '../../../../environments/environment';
 import { LocationScope } from '../../../core/api/operations-paths';
-import { AggregatorOrderRequest, NewOrderApi, PlaceOrderRequest } from './new-order-api';
+import {
+  AggregatorOrderRequest,
+  CreateCustomerRequest,
+  NewOrderApi,
+  PlaceOrderRequest,
+} from './new-order-api';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 const BASE = `${environment.apiBaseUrl}/api/v1/tenants/t1/brands/b1/locations/l1/orders`;
+const CUSTOMERS_BASE = `${environment.apiBaseUrl}/api/v1/tenants/t1/brands/b1/locations/l1/customers`;
 const DELIVERY_FEE_BASE = `${environment.apiBaseUrl}/api/v1/storefront/tenants/t1/brands/b1/locations/l1/delivery-fee`;
+
+const CREATE_CUSTOMER_REQUEST: CreateCustomerRequest = {
+  phone: '+998901234567',
+  displayName: 'Aziz',
+};
 
 const REQUEST: PlaceOrderRequest = {
   customerAccountId: 'acct-1',
@@ -161,6 +172,53 @@ describe('NewOrderApi Idempotency-Key stability', () => {
       outcome: 'PLACED',
       warnings: [],
     });
+  });
+
+  /**
+   * Batch 8 review 2, finding b-new-order (major): `createCustomer` wrapped
+   * its request with the plain `command()` helper, minting a brand-new
+   * `Idempotency-Key` on every call — unlike `placeOrder`/`aggregatorEntry`
+   * above. A retried "Создать клиента" after a lost response created a
+   * second, duplicate customer account for the same phone.
+   */
+  it('reuses the same Idempotency-Key across a retried createCustomer() for the unchanged request', () => {
+    void api.createCustomer(SCOPE, CREATE_CUSTOMER_REQUEST);
+    const first = http.expectOne(CUSTOMERS_BASE);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+    expect(firstKey).toBeTruthy();
+
+    // A retry before the first response arrived — the lost-response case.
+    void api.createCustomer(SCOPE, CREATE_CUSTOMER_REQUEST);
+    const second = http.expectOne(CUSTOMERS_BASE);
+    expect(second.request.headers.get('Idempotency-Key')).toBe(firstKey);
+
+    first.flush({ id: 'c1' });
+    second.flush({ id: 'c1' });
+  });
+
+  it('mints a fresh Idempotency-Key for createCustomer() once the operator edits the form before resubmitting', () => {
+    void api.createCustomer(SCOPE, CREATE_CUSTOMER_REQUEST);
+    const first = http.expectOne(CUSTOMERS_BASE);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+
+    void api.createCustomer(SCOPE, { ...CREATE_CUSTOMER_REQUEST, phone: '+998907654321' });
+    const second = http.expectOne(CUSTOMERS_BASE);
+    expect(second.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+
+    first.flush({ id: 'c1' });
+    second.flush({ id: 'c2' });
+  });
+
+  it('mints a fresh Idempotency-Key for the next createCustomer() once the previous one confirmed', () => {
+    void api.createCustomer(SCOPE, CREATE_CUSTOMER_REQUEST);
+    const first = http.expectOne(CUSTOMERS_BASE);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+    first.flush({ id: 'c1' });
+
+    void api.createCustomer(SCOPE, CREATE_CUSTOMER_REQUEST);
+    const second = http.expectOne(CUSTOMERS_BASE);
+    expect(second.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+    second.flush({ id: 'c2' });
   });
 });
 
