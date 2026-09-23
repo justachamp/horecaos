@@ -88,6 +88,8 @@ public final class ReportingFacts {
             @Nullable String publicOrderNumber,
             @Nullable String stockDisposition,
             @Nullable String liabilityParty,
+            /** Wave 9 w4-reports-distance-crm (7.1): the delivery leg's resolved distance (ADR 0037), null for a non-delivery order. */
+            @Nullable Integer deliveryDistanceMeters,
             int metricCalculationVersion,
             int sourceOrderVersion) {
 

@@ -137,6 +137,7 @@ class DayAggregatorTests {
                 null,
                 null,
                 null,
+                null, // deliveryDistanceMeters (wave 9 w4-reports-distance-crm)
                 1,
                 1);
 
@@ -207,6 +208,7 @@ class DayAggregatorTests {
                 null,
                 null,
                 null,
+                null, // deliveryDistanceMeters (wave 9 w4-reports-distance-crm)
                 1,
                 1);
 
@@ -251,6 +253,7 @@ class DayAggregatorTests {
                 null,
                 null,
                 null,
+                null, // deliveryDistanceMeters (wave 9 w4-reports-distance-crm)
                 1,
                 1);
         OrderFact neverPromised = new OrderFact(
@@ -288,6 +291,7 @@ class DayAggregatorTests {
                 null,
                 null,
                 null,
+                null, // deliveryDistanceMeters (wave 9 w4-reports-distance-crm)
                 1,
                 1);
 
@@ -336,6 +340,7 @@ class DayAggregatorTests {
                 null,
                 null,
                 null,
+                null, // deliveryDistanceMeters (wave 9 w4-reports-distance-crm)
                 1,
                 1);
     }
@@ -377,6 +382,7 @@ class DayAggregatorTests {
                 null,
                 null,
                 null,
+                null, // deliveryDistanceMeters (wave 9 w4-reports-distance-crm)
                 1,
                 1);
     }

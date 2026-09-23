@@ -287,7 +287,26 @@ public class JdbcReportingStore {
                              WHERE e.tenant_id = o.tenant_id
                                AND e.customer_account_id = o.customer_account_id
                                AND e.status = 'COMPLETED'
-                               AND e.created_at < o.created_at)) AS is_first_order
+                               AND e.created_at < o.created_at)) AS is_first_order,
+                       -- Wave 9 w4-reports-distance-crm (7.1): the delivery
+                       -- leg's resolved distance (ADR 0037), snapshotted onto
+                       -- the plan at pricing time. A scalar subquery rather
+                       -- than a LEFT JOIN, deliberately: DeliveryPlanningService
+                       -- #open's own doc says a plan is "created once" per
+                       -- order but nothing at the database enforces it (no
+                       -- unique constraint on order_id), and a JOIN that ever
+                       -- met two rows for one order would fan out this whole
+                       -- query and double-count every other figure on it. The
+                       -- most recently created plan is the one whose distance
+                       -- describes the order today; read live, same footing as
+                       -- the is_preorder subquery this class's own header
+                       -- already documents as an accepted exception. Null for
+                       -- PICKUP/DINE_IN, which never has a plan.
+                       (SELECT dp.distance_meters
+                          FROM fulfillment.delivery_plans dp
+                         WHERE dp.tenant_id = o.tenant_id AND dp.order_id = o.id
+                         ORDER BY dp.confirmed_at DESC
+                         LIMIT 1) AS delivery_distance_meters
                   FROM ordering.orders o
                   LEFT JOIN ordering.order_outcomes oo
                     ON oo.tenant_id = o.tenant_id AND oo.order_id = o.id
@@ -529,7 +548,9 @@ public class JdbcReportingStore {
             String publicOrderNumber,
             /** Wave P27 (7.1): ADR 0039's {@code order_outcomes.stock_disposition}, null until a terminal outcome is recorded. */
             @Nullable String stockDisposition,
-            @Nullable String liabilityParty) {}
+            @Nullable String liabilityParty,
+            /** Wave 9 w4-reports-distance-crm (7.1): the delivery leg's resolved distance (ADR 0037), null for a non-delivery order. */
+            @Nullable Integer deliveryDistanceMeters) {}
 
     /** @param categoryId wave W02 (7.8a): see {@link #readSourceLines}'s own doc for how this is resolved */
     public record SourceLine(
@@ -722,6 +743,7 @@ public class JdbcReportingStore {
         params.put("publicOrderNumber", fact.publicOrderNumber());
         params.put("stockDisposition", fact.stockDisposition());
         params.put("liabilityParty", fact.liabilityParty());
+        params.put("deliveryDistanceMeters", fact.deliveryDistanceMeters());
         params.put("calculationVersion", fact.metricCalculationVersion());
         params.put("sourceOrderVersion", fact.sourceOrderVersion());
 
@@ -735,7 +757,7 @@ public class JdbcReportingStore {
                     net_revenue_som, line_count, item_count, seconds_to_confirm, seconds_to_ready,
                     seconds_total, promised_at, promise_travel_minutes, seconds_late,
                     seconds_to_accept, seconds_preparing, public_order_number,
-                    stock_disposition, liability_party,
+                    stock_disposition, liability_party, delivery_distance_meters,
                     metric_calculation_version, source_order_version)
                 VALUES (
                     :tenantId, :orderId, :businessDate, :boundaryVersion, :occurredAt, :closedAt,
@@ -746,7 +768,7 @@ public class JdbcReportingStore {
                     :net, :lineCount, :itemCount, :secondsToConfirm, :secondsToReady,
                     :secondsTotal, :promisedAt, :promiseTravelMinutes, :secondsLate,
                     :secondsToAccept, :secondsPreparing, :publicOrderNumber,
-                    :stockDisposition, :liabilityParty,
+                    :stockDisposition, :liabilityParty, :deliveryDistanceMeters,
                     :calculationVersion, :sourceOrderVersion)
                 """).params(params).update();
     }
@@ -1452,6 +1474,46 @@ public class JdbcReportingStore {
                 .orElse(null);
 
         return median == null ? null : (int) Math.round(median);
+    }
+
+    /**
+     * Wave 9 w4-reports-distance-crm (7.1): the overview's distance KPI tile
+     * — {@code delivery_distance.average.v1}. Its own endpoint, same
+     * reasoning {@link #medianSecondsTotalByFulfilment} documents for the
+     * elapsed-time tiles beside it: one figure over a filtered slice of
+     * {@code fact_order} that the typed {@code /queries} pipeline (which
+     * reads pre-aggregated {@code agg_branch_day}, not the fact directly)
+     * cannot answer.
+     *
+     * @return null when no delivery order carrying a distance closed in
+     *         range — a PICKUP/DINE_IN-only period, or one entirely before
+     *         V0387 — never a zero-metre average
+     */
+    public @Nullable Integer averageDeliveryDistanceMeters(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        Double average = jdbc.sql("""
+                SELECT avg(delivery_distance_meters)
+                  FROM reporting.fact_order
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND fulfilment_type = 'DELIVERY' AND delivery_distance_meters IS NOT NULL
+                """ + locationFilter)
+                .params(params)
+                .query(Double.class)
+                .optional()
+                .orElse(null);
+
+        return average == null ? null : (int) Math.round(average);
     }
 
     /**
@@ -3246,7 +3308,8 @@ public class JdbcReportingStore {
                 instantOrNull(row, "preparing_at"),
                 row.getString("public_order_number"),
                 row.getString("stock_disposition"),
-                row.getString("liability_party"));
+                row.getString("liability_party"),
+                row.getObject("delivery_distance_meters", Integer.class));
     }
 
     private static BranchDayAggregate aggregate(ResultSet row, int number) throws SQLException {
