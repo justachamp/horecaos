@@ -59,6 +59,15 @@
       @if (hasColumn('occurredAt')) {
         <th class="q-caption">{{ 'reports.orders.column.occurredAt' | t }}</th>
       }
+      @if (hasColumn('customer')) {
+        <th class="q-caption">{{ 'reports.orders.column.customer' | t }}</th>
+      }
+      @if (hasColumn('operator')) {
+        <th class="q-caption">{{ 'reports.orders.column.operator' | t }}</th>
+      }
+      @if (hasColumn('courier')) {
+        <th class="q-caption">{{ 'reports.orders.column.courier' | t }}</th>
+      }
     </tr>
   </thead>
   <tbody>
@@ -137,6 +146,22 @@
         }
         @if (hasColumn('occurredAt')) {
           <td class="q-body-sm q-tnum">{{ date(row.businessDate) }} {{ time(row.occurredAt) }}</td>
+        }
+        @if (hasColumn('customer')) {
+          <td class="q-body-sm" data-testid="order-row-customer">
+            {{ customerLabel(row) }}
+            @if (customerPhone(row) !== '—') {
+              <span class="q-caption order-table__customer-phone">{{ customerPhone(row) }}</span>
+            }
+          </td>
+        }
+        @if (hasColumn('operator')) {
+          <td class="q-mono q-body-sm" data-testid="order-row-operator">
+            {{ operatorLabel(row) }}
+          </td>
+        }
+        @if (hasColumn('courier')) {
+          <td class="q-mono q-body-sm" data-testid="order-row-courier">{{ courierLabel(row) }}</td>
         }
       </tr>
     } @empty {

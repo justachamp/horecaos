@@ -3765,7 +3765,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.orders.boundedNote':
     'Chegara ichida eng yomon qatorlar koʻrsatilmoqda — juda keng davr uchun toʻliq roʻyxat emas.',
   'reports.orders.commercial.piiNote':
-    'Mijoz ismi, telefoni, operator va kuryer bu yerda koʻrsatilmaydi — hisobotda umuman shaxsiy maʻlumot saqlanmaydi (ADR 0029).',
+    'Mijoz, operator va kuryer alohida, tekshiriladigan manbadan (order.read) olinadi — hisobotning oʻzi shaxsiy maʻlumot saqlamaydi (ADR 0029). Telefon maskalangan; bu maʻlumotni eksport qilish tekshiriladigan PII chiqishi hisoblanadi.',
   'reports.orders.loadMore': 'Yana yuklash',
   'reports.orders.loadMore.loading': 'Yuklanmoqda…',
   'reports.orders.late.empty': 'Tanlangan davrda kechikishlar yoʻq',
@@ -3792,6 +3792,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.orders.column.net': 'Jami',
   'reports.orders.column.items': 'Mahsulotlar',
   'reports.orders.column.occurredAt': 'Yaratilgan',
+  'reports.orders.column.customer': 'Mijoz',
+  'reports.orders.column.customer.guest': 'Mehmon',
+  'reports.orders.column.operator': 'Operator',
+  'reports.orders.column.courier': 'Kuryer',
 
   'reports.orders.daily.date': 'Sana',
   'reports.orders.daily.gross': 'Umumiy narx boʻyicha',

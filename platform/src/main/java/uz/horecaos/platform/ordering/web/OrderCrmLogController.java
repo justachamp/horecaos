@@ -3,6 +3,8 @@ package uz.horecaos.platform.ordering.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -40,6 +42,15 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * row's own {@code occurredAt}/{@code orderId}, and two different cursor
  * schemes for what is, on screen, one table would cost the caller a second
  * pagination state for no reason.
+ *
+ * <p>{@code from}/{@code to} are business dates, the same shape {@code
+ * ReportingController#orders} takes, converted to a UTC midnight-to-midnight
+ * instant range here: unlike {@code reporting}, {@code ordering} has no
+ * {@code BusinessDayService} to convert against the tenant's own boundary
+ * (that class lives in the reporting module, which this one may not
+ * depend on), so a business day that starts mid-morning reads a few hours
+ * off UTC midnight for this endpoint specifically — a known, narrow
+ * imprecision rather than a silent one.
  */
 @RestController
 @RequestMapping("/api/v1/tenants/{tenantId}/orders/crm-log")
@@ -64,8 +75,8 @@ public class OrderCrmLogController {
                     + "response carries to page both reads together.")
     public ResponseEntity<CrmLogListResponse> log(
             @PathVariable UUID tenantId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) List<UUID> locationId,
             @RequestParam(required = false) Integer limit,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant afterOccurredAt,
@@ -74,10 +85,12 @@ public class OrderCrmLogController {
         if (to.isBefore(from)) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "to must not be before from", Map.of());
         }
+        Instant fromInstant = from.atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant toInstant = to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
 
         int pageSize = clampLimit(limit);
-        List<CrmLogEntry> rows =
-                log.log(tenantId, from, to, orEmpty(locationId), pageSize, cursor(afterOccurredAt, afterOrderId));
+        List<CrmLogEntry> rows = log.log(
+                tenantId, fromInstant, toInstant, orEmpty(locationId), pageSize, cursor(afterOccurredAt, afterOrderId));
 
         List<CrmLogRowResponse> items = rows.stream().map(CrmLogRowResponse::of).toList();
         // A full page does not prove there is no next row, but it is enough to
