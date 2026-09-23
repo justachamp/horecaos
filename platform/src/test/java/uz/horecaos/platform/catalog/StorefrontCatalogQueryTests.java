@@ -370,6 +370,157 @@ class StorefrontCatalogQueryTests {
                 .isEqualTo(PublicationStatus.RETIRED);
     }
 
+    // ------------------------------------------------------------------ row 4.4a
+
+    @Test
+    @DisplayName("a branch with no bound menu publishes from location_offerings exactly as before this row")
+    void aBranchWithNoBoundMenuIsUnaffected() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var burger = authoring.createProduct(
+                TENANT, BRAND, catalogId, "BURGER", "Burger", null, LOCALE, "SKU-M1", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, burger.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        // A menu exists for this brand, and even carries membership -- but is
+        // never bound to LOCATION. Its mere existence must not change what
+        // this branch publishes.
+        UUID menuId = UUID.randomUUID();
+        jdbc.sql("""
+                        INSERT INTO catalog.menus (id, tenant_id, brand_id, name, status, version)
+                        VALUES (:id, :tenantId, :brandId, 'Unbound menu', 'ACTIVE', 1)
+                        """)
+                .param("id", menuId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
+
+        var menu = storefront
+                .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
+                .orElseThrow();
+
+        assertThat(menu.products()).extracting(MenuProduct::code).containsExactly("BURGER");
+    }
+
+    @Test
+    @DisplayName("a branch with a bound default menu publishes from the menu's own membership, not location_offerings")
+    void aBoundDefaultMenuSuppliesOffering() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var burger = authoring.createProduct(
+                TENANT, BRAND, catalogId, "BURGER", "Burger", null, LOCALE, "SKU-M2A", "PIECE", UNCLASSIFIED, ACTOR);
+        var pizza = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PIZZA", "Pizza", null, LOCALE, "SKU-M2B", "PIECE", UNCLASSIFIED, ACTOR);
+        // location_offerings says only PIZZA is sellable here...
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, pizza.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        // ...but the bound menu says BURGER, and only BURGER, is what this
+        // branch actually sells -- membership entirely disjoint from
+        // location_offerings, so a menu that merely unioned the two could
+        // not be mistaken for correct.
+        UUID menuId = insertMenu("Delivery menu");
+        insertMenuItem(menuId, burger.defaultVariantId(), OfferingStatus.AVAILABLE);
+        insertDefaultBinding(menuId, LOCATION);
+
+        var menu = storefront
+                .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
+                .orElseThrow();
+
+        assertThat(menu.products()).extracting(MenuProduct::code).containsExactly("BURGER");
+    }
+
+    @Test
+    @DisplayName("a channel-specific binding outranks the branch's own default binding")
+    void channelBindingOutranksDefault() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var hall = authoring.createProduct(
+                TENANT, BRAND, catalogId, "HALL", "Hall dish", null, LOCALE, "SKU-M3A", "PIECE", UNCLASSIFIED, ACTOR);
+        var kioskOnly = authoring.createProduct(
+                TENANT, BRAND, catalogId, "KIOSK", "Kiosk dish", null, LOCALE, "SKU-M3B", "PIECE", UNCLASSIFIED, ACTOR);
+        publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        UUID defaultMenu = insertMenu("Hall menu");
+        insertMenuItem(defaultMenu, hall.defaultVariantId(), OfferingStatus.AVAILABLE);
+        insertDefaultBinding(defaultMenu, LOCATION);
+
+        // The STOREFRONT channel this class already registers (insertTenancy)
+        // -- the binding must key on the caller's own requested channel code,
+        // not a channel this test invents.
+        UUID storefrontChannelId = jdbc.sql(
+                        "SELECT id FROM tenant.sales_channels WHERE tenant_id = :t AND code = 'STOREFRONT'")
+                .param("t", TENANT)
+                .query(UUID.class)
+                .single();
+        UUID channelMenu = insertMenu("Storefront-channel menu");
+        insertMenuItem(channelMenu, kioskOnly.defaultVariantId(), OfferingStatus.AVAILABLE);
+        insertChannelBinding(channelMenu, LOCATION, storefrontChannelId);
+
+        var menu = storefront
+                .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
+                .orElseThrow();
+
+        assertThat(menu.products()).extracting(MenuProduct::code).containsExactly("KIOSK");
+    }
+
+    private UUID insertMenu(String name) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        INSERT INTO catalog.menus (id, tenant_id, brand_id, name, status, version)
+                        VALUES (:id, :tenantId, :brandId, :name, 'ACTIVE', 1)
+                        """)
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("name", name)
+                .update();
+        return id;
+    }
+
+    private void insertMenuItem(UUID menuId, UUID variantId, OfferingStatus availability) {
+        jdbc.sql("""
+                        INSERT INTO catalog.menu_items (
+                            id, tenant_id, brand_id, menu_id, variant_id, sort_order, availability_default, version)
+                        VALUES (:id, :tenantId, :brandId, :menuId, :variantId, 0, :availability, 1)
+                        """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("menuId", menuId)
+                .param("variantId", variantId)
+                .param("availability", availability.name())
+                .update();
+    }
+
+    private void insertDefaultBinding(UUID menuId, UUID locationId) {
+        jdbc.sql("""
+                        INSERT INTO catalog.branch_menu_bindings (
+                            id, tenant_id, brand_id, location_id, channel_id, menu_id, version)
+                        VALUES (:id, :tenantId, :brandId, :locationId, NULL, :menuId, 1)
+                        """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", locationId)
+                .param("menuId", menuId)
+                .update();
+    }
+
+    private void insertChannelBinding(UUID menuId, UUID locationId, UUID channelId) {
+        jdbc.sql("""
+                        INSERT INTO catalog.branch_menu_bindings (
+                            id, tenant_id, brand_id, location_id, channel_id, menu_id, version)
+                        VALUES (:id, :tenantId, :brandId, :locationId, :channelId, :menuId, 1)
+                        """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", locationId)
+                .param("channelId", channelId)
+                .param("menuId", menuId)
+                .update();
+    }
+
     private void insertTenancy() {
         jdbc.sql("""
                 INSERT INTO tenant.tenants (
