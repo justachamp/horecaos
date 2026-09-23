@@ -47,7 +47,13 @@ import uz.horecaos.platform.media.api.MediaAssetIngestion;
  * "updated but nothing to report": a second import of an unchanged file
  * resolves every row to {@code SKIPPED} and writes nothing, because {@link
  * #diff} finds nothing to write — the property {@code changed} exists to
- * answer.
+ * answer. {@code image_url} is the one field {@code diff} itself does not
+ * cover (its comparison needs the freshly fetched bytes, not just the row —
+ * see the next paragraph): {@link #update} folds {@link
+ * #imageDiffersFromCurrentPrimary}'s own answer into the same "anything to
+ * write?" decision, so a row whose only column is an unchanged photo still
+ * resolves to {@code SKIPPED} rather than reporting {@code UPDATED} on every
+ * re-run.
  *
  * <p><b>The image fetch happens only on {@code apply}, never on a dry
  * run.</b> Fetching is a real network call and — on success — a real,
@@ -56,7 +62,13 @@ import uz.horecaos.platform.media.api.MediaAssetIngestion;
  * run instead treats a syntactically non-blank {@code image_url} as evidence
  * the row would change, without proving the fetch would succeed; {@link
  * CatalogImportRowErrorReason#IMAGE_FETCH_FAILED} can therefore only appear
- * in an {@code apply} run's report, never a dry run's.
+ * in an {@code apply} run's report, never a dry run's. An {@code apply} run
+ * still cannot avoid the fetch itself for an unchanged image (this class
+ * does not persist the URL a previous import used), so re-running an
+ * image-bearing CSV is not free of outbound calls the way an unchanged
+ * price or name row is — only of the duplicate {@code media.assets} row and
+ * the misleading {@code UPDATED} report the fetch used to cost on top of
+ * that.
  *
  * <p><b>Blank vs. explicit-clear, decided per column.</b> {@code status},
  * {@code unit_code} and {@code variant_sku} follow one rule on an {@code
@@ -213,15 +225,18 @@ public class CatalogImportRowService {
 
         Diff diff = diff(tenantId, brandId, catalogId, product, defaultVariant, fields);
         String imageUrl = fields.imageUrl();
-        boolean hasImage = imageUrl != null;
 
         if (dryRun) {
-            return diff.changed() || hasImage
+            // A syntactically non-blank image_url is only ever evidence a
+            // dry run can offer -- fetching (and so proving whether it is
+            // actually the same file already attached) never happens here;
+            // see this class's own class-level doc.
+            return diff.changed() || imageUrl != null
                     ? CatalogImportRowOutcome.updated(product.id(), defaultVariant.id())
                     : CatalogImportRowOutcome.skipped(product.id(), defaultVariant.id());
         }
 
-        if (!diff.changed() && !hasImage) {
+        if (!diff.changed() && imageUrl == null) {
             return CatalogImportRowOutcome.skipped(product.id(), defaultVariant.id());
         }
 
@@ -234,13 +249,26 @@ public class CatalogImportRowService {
             }
         }
 
+        // The fetch itself cannot be skipped without persisting the URL a
+        // previous import used (out of scope for this wave) -- but once
+        // fetched, the freshly ingested asset's own verified checksum tells
+        // whether it is actually the same file as the one already attached,
+        // so an unchanged image_url still resolves this row to SKIPPED
+        // (below) instead of always reporting UPDATED and growing
+        // media.assets with an unreferenced duplicate on every re-run.
         MediaAssetId imageAsset = null;
+        boolean imageChanged = false;
         if (imageUrl != null) {
             Optional<MediaAssetId> fetched = fetchImage(tenantId, brandId, imageUrl, actorId);
             if (fetched.isEmpty()) {
                 return CatalogImportRowOutcome.error(CatalogImportRowErrorReason.IMAGE_FETCH_FAILED);
             }
             imageAsset = fetched.get();
+            imageChanged = imageDiffersFromCurrentPrimary(tenantId, brandId, product.id(), imageAsset);
+        }
+
+        if (!diff.changed() && !imageChanged) {
+            return CatalogImportRowOutcome.skipped(product.id(), defaultVariant.id());
         }
 
         if (diff.nameOrDescriptionChanged()) {
@@ -284,7 +312,7 @@ public class CatalogImportRowService {
         if (diff.priceChanged() && fields.priceAmountMinor() != null) {
             setPriceOrThrow(tenantId, brandId, defaultVariant.id(), fields);
         }
-        if (imageAsset != null) {
+        if (imageChanged) {
             for (var relation :
                     query.productDetail(tenantId, brandId, product.id()).media()) {
                 if (IMAGE_ROLE.equals(relation.role())) {
@@ -298,10 +326,38 @@ public class CatalogImportRowService {
                             relation.channelCode());
                 }
             }
-            authoring.attachMedia(tenantId, brandId, EntityType.PRODUCT, product.id(), imageAsset, IMAGE_ROLE, 0);
+            authoring.attachMedia(
+                    tenantId,
+                    brandId,
+                    EntityType.PRODUCT,
+                    product.id(),
+                    Objects.requireNonNull(imageAsset),
+                    IMAGE_ROLE,
+                    0);
         }
 
         return CatalogImportRowOutcome.updated(product.id(), defaultVariant.id());
+    }
+
+    /**
+     * True when {@code candidate} is not the same content as the product's
+     * currently attached {@code PRIMARY} media (or nothing is attached yet).
+     * Compares the two assets' own verified checksums, never the URL or the
+     * asset id -- {@code candidate} is always a freshly minted {@link
+     * MediaAssetId} (ingestion never deduplicates), so two imports of the
+     * same file are never the same id even though they are the same image.
+     */
+    private boolean imageDiffersFromCurrentPrimary(
+            UUID tenantId, UUID brandId, UUID productId, MediaAssetId candidate) {
+        Optional<String> candidateChecksum = media.checksumOf(tenantId, candidate);
+        for (var relation : query.productDetail(tenantId, brandId, productId).media()) {
+            if (IMAGE_ROLE.equals(relation.role())) {
+                Optional<String> currentChecksum =
+                        media.checksumOf(tenantId, new MediaAssetId(relation.mediaAssetId()));
+                return currentChecksum.isEmpty() || !currentChecksum.equals(candidateChecksum);
+            }
+        }
+        return true;
     }
 
     /** Every field this row states, compared against the brand's current catalog. Never writes anything. */
