@@ -189,6 +189,14 @@
   margin-top: 8px;
 }
 
+.editor__photo-channel-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  max-width: 280px;
+}
+
 .editor__photo-grid {
   display: flex;
   flex-wrap: wrap;
