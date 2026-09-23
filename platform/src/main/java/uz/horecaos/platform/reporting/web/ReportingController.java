@@ -263,6 +263,53 @@ public class ReportingController {
                 new DistanceResponse(result.averageMeters(), ProvenanceResponse.of(result.provenance())));
     }
 
+    /**
+     * Row 7.10b (wave 10 w5-reports-exports): the geography page's distance histogram —
+     * see {@link #distanceBucketSet} for the published bucket boundaries this counts into.
+     */
+    @GetMapping("/distance-buckets")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "The fixed delivery-distance distribution, tenant/branch/period scoped (7.10b)",
+            description = "distance_bucket_set.v1: six half-open meter intervals, exhaustive and "
+                    + "non-overlapping, computed live over reporting.fact_delivery.distance_meters "
+                    + "(not a nightly aggregate — see DistanceBucketSet's own doc). A bucket with no "
+                    + "deliveries in range is a real zero, never a missing row.")
+    public ResponseEntity<DistanceBucketsResponse> distanceBuckets(
+            @PathVariable UUID tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId) {
+
+        var result = queries.distanceBuckets(tenantId, from, to, orEmpty(locationId));
+        return ResponseEntity.ok(new DistanceBucketsResponse(
+                result.buckets().stream()
+                        .map(bucket -> new DistanceBucketResponse(bucket.bucketCode(), bucket.deliveryCount()))
+                        .toList(),
+                ProvenanceResponse.of(result.provenance())));
+    }
+
+    /**
+     * Row 7.10b's own published-formula panel: the same "read the definition, not just
+     * the number" transparency {@link #slaBucketSet} already gives the duration histogram
+     * — mirrors that endpoint's shape exactly, over {@code DistanceBucketSet} instead.
+     */
+    @GetMapping("/distance-bucket-set")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "The delivery-distance buckets the histogram is computed in, and their version",
+            description = "Half-open intervals in meters, exhaustive and fixed per version. "
+                    + "Read-only: the buckets are platform-fixed (row 7.10b's own doc) so a chart "
+                    + "drawn under one version keeps its meaning.")
+    public ResponseEntity<DistanceBucketSetResponse> distanceBucketSet(@PathVariable UUID tenantId) {
+        return ResponseEntity.ok(new DistanceBucketSetResponse(
+                uz.horecaos.platform.reporting.domain.DistanceBucketSet.VERSION,
+                uz.horecaos.platform.reporting.domain.DistanceBucketSet.buckets().stream()
+                        .map(bucket -> new DistanceBucketDefinitionResponse(
+                                bucket.code(), bucket.fromMeters(), bucket.toMetersExclusive()))
+                        .toList()));
+    }
+
     @GetMapping("/cancellation-reasons")
     @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
     @Operation(
@@ -826,6 +873,17 @@ public class ReportingController {
 
     /** Wave 9 w4-reports-distance-crm (7.1): {@code delivery_distance.average.v1} — see {@link #deliveryDistance}. */
     public record DistanceResponse(@Nullable Integer averageMeters, ProvenanceResponse provenance) {}
+
+    /** Row 7.10b: one distance bucket's delivery count — see {@link #distanceBuckets}. */
+    public record DistanceBucketResponse(String bucketCode, int deliveryCount) {}
+
+    public record DistanceBucketsResponse(List<DistanceBucketResponse> buckets, ProvenanceResponse provenance) {}
+
+    /** Row 7.10b: one bucket's published definition — see {@link #distanceBucketSet}. */
+    public record DistanceBucketDefinitionResponse(
+            String code, int fromMeters, @Nullable Integer toMetersExclusive) {}
+
+    public record DistanceBucketSetResponse(int version, List<DistanceBucketDefinitionResponse> buckets) {}
 
     /** Wave T06 (7.3): one branch's median preparation time — see {@link #preparationTimeByLocation}. */
     public record LocationMedianResponse(

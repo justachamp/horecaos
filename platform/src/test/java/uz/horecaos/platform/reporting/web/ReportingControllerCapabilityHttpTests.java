@@ -542,6 +542,61 @@ class ReportingControllerCapabilityHttpTests {
         assertThat(secondBody).contains("\"maybeMore\":true");
     }
 
+    // ------------------------------------------------------------ wave 10 w5-reports-exports (7.10b)
+
+    @Test
+    void distanceBucketsRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/distance-buckets")
+                        .with(tokenFor(DISPATCHER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.REPORTING_READ.code());
+    }
+
+    @Test
+    void distanceBucketsZeroFillsEveryBucketWithNoDeliveriesInRange() throws Exception {
+        MvcResult ok = mvc.perform(get(REPORTING + "/distance-buckets")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01"))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        String body = ok.getResponse().getContentAsString();
+        assertThat(body)
+                .contains("\"bucketCode\":\"UNDER_1KM\",\"deliveryCount\":0")
+                .contains("\"bucketCode\":\"OVER_8KM\",\"deliveryCount\":0");
+    }
+
+    @Test
+    void distanceBucketSetRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/distance-bucket-set").with(tokenFor(DISPATCHER)))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.REPORTING_READ.code());
+    }
+
+    @Test
+    void distanceBucketSetPublishesTheFixedBoundariesAndVersion() throws Exception {
+        MvcResult ok = mvc.perform(get(REPORTING + "/distance-bucket-set").with(tokenFor(MANAGER)))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        String body = ok.getResponse().getContentAsString();
+        assertThat(body)
+                .contains("\"version\":1")
+                .contains("\"code\":\"UNDER_1KM\",\"fromMeters\":0,\"toMetersExclusive\":1000")
+                .contains("\"code\":\"OVER_8KM\",\"fromMeters\":8000,\"toMetersExclusive\":null");
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private static final UUID PIZZA = UUID.fromString("018f9b20-9100-7000-8000-0000000000b1");

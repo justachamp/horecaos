@@ -1059,6 +1059,53 @@ public class JdbcReportingStore {
             int lateCount) {}
 
     /**
+     * Row 7.10b (wave 10 w5-reports-exports): the geography page's distance
+     * histogram — a live bucket count over {@code reporting.fact_delivery.distance_meters},
+     * against {@link uz.horecaos.platform.reporting.domain.DistanceBucketSet}'s fixed
+     * boundaries. Bucketed in SQL with a {@code CASE} expression rather than in Java over
+     * every row, the same "narrow before it crosses the wire" reasoning {@link #readOrders}
+     * and {@link #readVariantSales} already apply. {@code locationIds} empty means every
+     * branch, matching every other reader's own convention in this class.
+     */
+    public List<DistanceBucketRow> readDistanceBuckets(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT
+                       CASE
+                           WHEN distance_meters < 1000 THEN 'UNDER_1KM'
+                           WHEN distance_meters < 2000 THEN 'KM1_2'
+                           WHEN distance_meters < 3000 THEN 'KM2_3'
+                           WHEN distance_meters < 5000 THEN 'KM3_5'
+                           WHEN distance_meters < 8000 THEN 'KM5_8'
+                           ELSE 'OVER_8KM'
+                       END AS bucket_code,
+                       count(*)::integer AS delivery_count
+                  FROM reporting.fact_delivery
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                """ + locationFilter + """
+                 GROUP BY bucket_code
+                """)
+                .params(params)
+                .query((ResultSet row, int number) ->
+                        new DistanceBucketRow(row.getString("bucket_code"), row.getInt("delivery_count")))
+                .list();
+    }
+
+    /** One bucket's delivery count — see {@link #readDistanceBuckets}. Every bucket {@link uz.horecaos.platform.reporting.domain.DistanceBucketSet} defines that found no deliveries is simply absent, never a zero-count row. */
+    public record DistanceBucketRow(String bucketCode, int deliveryCount) {}
+
+    /**
      * T11 (7.4a): the {@code COURIER} scope of {@code agg_sla_bucket_day},
      * narrowed the way {@link #readSlaBuckets} deliberately is not — that
      * method reads every {@code scope_kind} in range for the {@code LOCATION}

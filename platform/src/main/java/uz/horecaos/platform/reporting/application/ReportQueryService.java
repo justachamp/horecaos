@@ -452,6 +452,33 @@ public class ReportQueryService {
     }
 
     /**
+     * Row 7.10b (wave 10 w5-reports-exports): the geography page's distance
+     * histogram — {@link JdbcReportingStore#readDistanceBuckets}'s live count
+     * per {@link uz.horecaos.platform.reporting.domain.DistanceBucketSet} bucket,
+     * zero-filled here so a bucket with no deliveries in range is a real zero on
+     * the chart rather than a missing bar.
+     */
+    @Transactional(readOnly = true)
+    public DistanceBucketsResult distanceBuckets(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        Map<String, Integer> byCode = new LinkedHashMap<>();
+        for (String code : uz.horecaos.platform.reporting.domain.DistanceBucketSet.codes()) {
+            byCode.put(code, 0);
+        }
+        for (JdbcReportingStore.DistanceBucketRow row : store.readDistanceBuckets(tenantId, from, to, locationIds)) {
+            byCode.put(row.bucketCode(), row.deliveryCount());
+        }
+        List<JdbcReportingStore.DistanceBucketRow> rows = byCode.entrySet().stream()
+                .map(entry -> new JdbcReportingStore.DistanceBucketRow(entry.getKey(), entry.getValue()))
+                .toList();
+        return new DistanceBucketsResult(rows, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    public record DistanceBucketsResult(List<JdbcReportingStore.DistanceBucketRow> buckets, Provenance provenance) {}
+
+    /**
      * T11 (7.4a, ADR 0125): the {@code COURIER} scope of the fixed SLA
      * distribution — same shape {@link #slaBuckets} returns for {@code
      * LOCATION}, narrowed to the courier scope at the store layer rather
