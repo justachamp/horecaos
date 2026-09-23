@@ -51,6 +51,13 @@
         <json-schema-validator.version>1.5.8</json-schema-validator.version>
         <aws-sdk.version>2.54.1</aws-sdk.version>
         <commons-csv.version>1.12.0</commons-csv.version>
+        <!-- Row 4.5b: the small, well-maintained workbook library the wave
+             brief asked for over Apache POI: a streaming reader/writer with
+             no POI dependency on its own runtime path (fastexcel-reader
+             pulls in poi-ooxml only as a test-scoped dependency of its own,
+             which does not reach this module's classpath). Verified current
+             on Maven Central as of this change. -->
+        <fastexcel.version>0.20.2</fastexcel.version>
         <java-uuid-generator.version>5.2.0</java-uuid-generator.version>
         <!-- spring-boot-dependencies 4.1.1 manages kafka.version at 4.2.1;
              overridden here to the latest 4.x patch (4.3.1) per the same
@@ -272,6 +279,31 @@
             <version>${commons-csv.version}</version>
         </dependency>
         <dependency>
+            <!-- Row 4.5b: writes CatalogImportParser#templateWorkbook, the
+                 .xlsx template download. Not in spring-boot-starter-parent's
+                 dependency management, so pinned explicitly, matching
+                 commons-csv above. -->
+            <groupId>org.dhatim</groupId>
+            <artifactId>fastexcel</artifactId>
+            <version>${fastexcel.version}</version>
+        </dependency>
+        <dependency>
+            <!-- Row 4.5b: reads an uploaded .xlsx import file. Excludes its
+                 own test-scoped poi-ooxml dependency explicitly rather than
+                 relying on Maven's default scope exclusion alone, since the
+                 brief is explicit that POI must not reach this module's own
+                 runtime classpath. -->
+            <groupId>org.dhatim</groupId>
+            <artifactId>fastexcel-reader</artifactId>
+            <version>${fastexcel.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.poi</groupId>
+                    <artifactId>poi-ooxml</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
             <!-- ADR 0076: RFC 9562 UUIDv7 generation for row identity
                  (uz.horecaos.platform.configuration.Ids). The owner's answer
                  to the ADR's "dependency or hand-rolled" open input
@@ -292,6 +324,20 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <!-- Row 4.5b: pins the version two transitive paths
+                     disagree on: commons-csv pulls commons-io 2.17.0, and
+                     fastexcel-reader's own commons-compress pulls 2.20.0, so
+                     the enforcer's dependency-convergence rule fails the
+                     build without this. The newer of the two, since
+                     commons-io is additive and well-behaved across minor
+                     versions, and pinning to the lower one would ask
+                     commons-compress to run against an older commons-io
+                     than it was built and tested with. -->
+                <groupId>commons-io</groupId>
+                <artifactId>commons-io</artifactId>
+                <version>2.20.0</version>
+            </dependency>
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
                 <artifactId>bom</artifactId>

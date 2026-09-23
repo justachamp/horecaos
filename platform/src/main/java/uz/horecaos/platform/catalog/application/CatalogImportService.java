@@ -87,7 +87,7 @@ public class CatalogImportService {
             String importedBySubject) {
         List<CatalogImportRow> parsedRows;
         try {
-            parsedRows = parser.parse(content);
+            parsedRows = parser.parse(sourceFileName, content);
         } catch (CatalogImportParser.CatalogImportFormatException malformed) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, malformed.getMessage());
         }
@@ -132,7 +132,7 @@ public class CatalogImportService {
         }
         ClaimedRun run = claimed.get();
         try {
-            List<CatalogImportRow> rows = parser.parse(run.content());
+            List<CatalogImportRow> rows = parser.parse(run.sourceFileName(), run.content());
             @Nullable UUID actorId = actorIdOf(run.importedByPrincipalId());
             for (CatalogImportRow row : rows) {
                 CatalogImportRowOutcome outcome;
@@ -180,6 +180,11 @@ public class CatalogImportService {
     /** The empty template a merchant downloads and fills. */
     public String template() {
         return parser.template();
+    }
+
+    /** The same template, as a real {@code .xlsx} workbook. See {@link CatalogImportParser#templateWorkbook}. */
+    public byte[] templateWorkbook() {
+        return parser.templateWorkbook();
     }
 
     /**
