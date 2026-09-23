@@ -3705,6 +3705,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.overview.tile.cancelled.subtitle': 'yakunlangan buyurtmalarga nisbatan ulushi: {share}',
   'reports.overview.tile.late': 'Kechikishlar',
   'reports.overview.tile.late.subtitle': 'mediana {minutes}',
+  'reports.overview.tile.distance': 'Yetkazib berish masofasi',
   'reports.overview.tile.deltaSuffix': 'bir hafta oldingi shu davrga nisbatan',
   'reports.overview.formula.ariaLabel': 'Bu koʻrsatkich qanday hisoblanadi',
   'reports.overview.formula.includes': 'Kiritiladi',

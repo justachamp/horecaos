@@ -32,6 +32,7 @@ import { ProvenanceBanner } from './provenance-banner';
 import {
   ddmm,
   formatCount,
+  formatDistanceKm,
   formatSecondsDuration,
   formatShare,
   formatSignedMinutes,
@@ -49,6 +50,7 @@ import {
 import { Granularity, ReportsFilterState } from './reports-filter-state';
 import {
   CancellationReasonResponse,
+  DistanceResponse,
   MetricResponse,
   OrderRowResponse,
   OutcomeRowResponse,
@@ -142,13 +144,19 @@ type LoadState = 'loading' | 'ready' | 'denied' | 'error';
  * cost — `stock_disposition`/`liability_party`, copied from ADR 0039's
  * `order_outcomes` onto the fact this same wave.
  *
+ * **Wave 9 w4-reports-distance-crm.** The KPI row's own distance tile —
+ * `delivery_distance.average.v1`, over `GET .../reporting/delivery-distance`
+ * — the delivery leg's resolved distance (ADR 0037), snapshotted onto
+ * `fact_order` at close time (V0387). Its own signals and its own endpoint,
+ * the same reason `Доставка`/`Самовывоз` above are: not composable from
+ * `agg_branch_day`, so folded into {@link tiles} rather than {@link
+ * bandATiles} once it resolves, and carrying no sparkline of its own.
+ *
  * **What is still scoped down**, named rather than silently missing: no
  * hourly sparkline (the day-grain query has no hour dimension to draw one
  * from); the delta compares against the same span one *whole number of weeks*
  * back rather than a hand-picked "same weekday last week", which is the same
- * property for every period this bar offers (`ReportsFilterState.comparisonRange`);
- * distance has no tile — `reporting.fact_delivery` has no producer (ADR 0042)
- * and is out of this wave's scope.
+ * property for every period this bar offers (`ReportsFilterState.comparisonRange`).
  */
 @Component({
   selector: 'q-business-overview-page',
@@ -170,7 +178,8 @@ export class BusinessOverviewPage implements OnInit {
   protected readonly state = signal<LoadState>('loading');
   protected readonly lastError = signal<ApiError | null>(null);
 
-  protected readonly tiles = signal<readonly TileViewModel[]>([]);
+  /** Band A's five money/count tiles, straight off `/queries` — see {@link tiles} for the rendered whole. */
+  private readonly bandATiles = signal<readonly TileViewModel[]>([]);
   protected readonly provenance = signal<ProvenanceResponse | null>(null);
   protected readonly prepMedianSeconds = signal<number | null>(null);
   protected readonly channelMix = signal<readonly MixRow[]>([]);
@@ -278,6 +287,53 @@ export class BusinessOverviewPage implements OnInit {
   private readonly pickupTimeLoaded = signal(false);
   protected readonly deliveryTimeBuilt = computed(() => this.deliveryTimeLoaded());
   protected readonly pickupTimeBuilt = computed(() => this.pickupTimeLoaded());
+
+  /**
+   * Wave 9 w4-reports-distance-crm (7.1): the overview's distance KPI tile —
+   * delivery_distance.average.v1, over GET .../reporting/delivery-distance.
+   * Signals rather than folded into {@link bandATiles}, the same reason the
+   * elapsed-time tiles above are separate: not sourced from the typed
+   * `/queries` pipeline this page's other five tiles share.
+   */
+  private readonly distanceMeters = signal<number | null>(null);
+  private readonly distanceMetersPrevious = signal<number | null>(null);
+  private readonly distanceLoaded = signal(false);
+  protected readonly distanceBuilt = computed(() => this.distanceLoaded());
+  private readonly distanceTile = computed<TileViewModel | null>(() => {
+    if (!this.distanceLoaded()) {
+      return null;
+    }
+    const meters = this.distanceMeters();
+    const delta = deltaOf(meters, this.distanceMetersPrevious());
+    // This tile's own metric definition carries `provisional` directly
+    // (MetricResponse), rather than reading `provenance().provisionalMetrics`
+    // — that list comes back on the /queries response Band A's other five
+    // tiles share, and delivery_distance.average.v1 is deliberately never
+    // named in that call (ReportQueryService#run refuses AVERAGE metrics
+    // toward this tile's own endpoint).
+    const provisional =
+      this.metricsByCode().get('delivery_distance.average.v1')?.provisional ?? false;
+    return {
+      key: 'delivery_distance.average.v1',
+      label: this.i18n.t('reports.overview.tile.distance'),
+      display: meters === null ? '—' : formatDistanceKm(meters),
+      deltaText: delta.deltaText,
+      deltaUp: delta.deltaUp,
+      deltaSuffix:
+        delta.deltaText === null ? null : this.i18n.t('reports.overview.tile.deltaSuffix'),
+      subtitle: null,
+      provisional,
+      provisionalNote: provisional ? this.i18n.t('reports.provenance.provisional.short') : null,
+      sparklinePoints: [],
+      formula: this.tileFormula('delivery_distance.average.v1'),
+    };
+  });
+
+  /** Band A as rendered: the five `/queries` tiles plus the distance tile once it has loaded. */
+  protected readonly tiles = computed<readonly TileViewModel[]>(() => {
+    const distance = this.distanceTile();
+    return distance === null ? this.bandATiles() : [...this.bandATiles(), distance];
+  });
 
   /** Wave P27 (7.1): the metric dictionary, keyed by code — GET .../reporting/metrics, called once. */
   private readonly metricsByCode = signal<ReadonlyMap<string, MetricResponse>>(new Map());
@@ -411,6 +467,7 @@ export class BusinessOverviewPage implements OnInit {
         this.loadTilesAndMix(scope),
         this.loadPrepTime(scope),
         this.loadFulfilmentTimes(scope),
+        this.loadDeliveryDistance(scope),
         this.loadOutcomes(scope),
         this.loadBranches(scope),
         this.loadPaymentMix(scope),
@@ -515,7 +572,7 @@ export class BusinessOverviewPage implements OnInit {
     );
     const lateSummary = summariseLateSample(lateSample.rows);
 
-    this.tiles.set([
+    this.bandATiles.set([
       this.buildTile({
         key: 'revenue.gross.v1',
         labelKey: 'reports.overview.tile.revenue',
@@ -650,6 +707,24 @@ export class BusinessOverviewPage implements OnInit {
     this.deliveryTimeLoaded.set(true);
     this.pickupTimeSeconds.set(pickup.medianSeconds);
     this.pickupTimeLoaded.set(true);
+  }
+
+  /** Wave 9 w4-reports-distance-crm (7.1): the overview's distance KPI tile. */
+  private async loadDeliveryDistance(scope: LocationScope): Promise<void> {
+    const range = this.filters.range();
+    const comparison = this.filters.comparisonRange();
+    const locationId = this.sliceParams().locationId;
+    const [current, previous] = await Promise.all([
+      this.api.deliveryDistance(scope.tenantId, { from: range.from, to: range.to, locationId }),
+      this.api.deliveryDistance(scope.tenantId, {
+        from: comparison.from,
+        to: comparison.to,
+        locationId,
+      }),
+    ]);
+    this.distanceMeters.set(current.averageMeters);
+    this.distanceMetersPrevious.set(previous.averageMeters);
+    this.distanceLoaded.set(true);
   }
 
   private async loadPrepTime(scope: LocationScope): Promise<void> {

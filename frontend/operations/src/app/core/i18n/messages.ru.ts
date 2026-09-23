@@ -3680,6 +3680,7 @@ export const messagesRu: MessageCatalogue = {
   'reports.overview.tile.cancelled.subtitle': 'доля от завершённых заказов: {share}',
   'reports.overview.tile.late': 'Опоздания',
   'reports.overview.tile.late.subtitle': 'медиана {minutes}',
+  'reports.overview.tile.distance': 'Дистанция доставки',
   'reports.overview.tile.deltaSuffix': 'к тому же периоду неделю назад',
   'reports.overview.formula.ariaLabel': 'Как считается этот показатель',
   'reports.overview.formula.includes': 'Учитывается',

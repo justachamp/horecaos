@@ -3708,6 +3708,7 @@ export const messagesEn = {
   'reports.overview.tile.cancelled.subtitle': 'share of terminal orders: {share}',
   'reports.overview.tile.late': 'Late',
   'reports.overview.tile.late.subtitle': 'median {minutes}',
+  'reports.overview.tile.distance': 'Delivery distance',
   'reports.overview.tile.deltaSuffix': 'vs. same period a week back',
   'reports.overview.formula.ariaLabel': 'How this figure is calculated',
   'reports.overview.formula.includes': 'Includes',

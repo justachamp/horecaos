@@ -29,7 +29,7 @@
       </div>
     }
     @case ('ready') {
-      <!-- Band A: five KPI tiles -->
+      <!-- Band A: five /queries KPI tiles, plus the distance tile (7.1) once it loads -->
       <div class="tiles">
         @for (tile of tiles(); track tile.key) {
           <q-kpi-tile

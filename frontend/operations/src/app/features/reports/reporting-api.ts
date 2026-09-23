@@ -151,6 +151,12 @@ export interface MedianResponse {
   readonly provenance: ProvenanceResponse;
 }
 
+/** Wave 9 w4-reports-distance-crm (7.1): delivery_distance.average.v1 — see {@link ReportingApi.deliveryDistance}. */
+export interface DistanceResponse {
+  readonly averageMeters: number | null;
+  readonly provenance: ProvenanceResponse;
+}
+
 /** Wave T06 (7.3): every branch's median preparation time from one request. */
 export interface LocationMedianListResponse {
   readonly rows: readonly LocationMedianResponse[];
@@ -787,6 +793,20 @@ export class ReportingApi {
           to: params.to,
           locationId: params.locationId,
           fulfilmentType: params.fulfilmentType,
+        },
+      }),
+    );
+    return result.value;
+  }
+
+  /** Wave 9 w4-reports-distance-crm (7.1): the overview's distance KPI tile. */
+  async deliveryDistance(tenantId: string, params: RangeParams): Promise<DistanceResponse> {
+    const result = await firstValueFrom(
+      this.api.get<DistanceResponse>(reportsPaths.deliveryDistance(tenantId), {
+        params: {
+          from: params.from,
+          to: params.to,
+          locationId: params.locationId,
         },
       }),
     );
