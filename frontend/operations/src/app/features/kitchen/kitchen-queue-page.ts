@@ -10,7 +10,7 @@ import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
-import { operationsPaths } from '../../core/api/operations-paths';
+import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { TimeZone, formatClock } from '../../core/format/datetime';
@@ -19,13 +19,23 @@ import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
-import { DispatchApi, PlanQueueResponse } from '../delivery/dispatch-api';
+import {
+  DispatchApi,
+  ExternalPartnerResponse,
+  ExternalQuoteResponse,
+  PlanQueueResponse,
+} from '../delivery/dispatch-api';
 import {
   ChangeServiceStateRequest,
   LocationsApi,
   ServiceSummaryResponse,
 } from '../settings/locations/locations-api';
+import {
+  ExternalBookingSubmission,
+  ExternalCourierDialog,
+} from '../orders/external-courier-dialog';
 import { describeApiError } from '../orders/order-errors';
+import { OrderDeliveryApi } from '../orders/order-delivery-api';
 import { OrderDetailResponse, OrderLine } from '../orders/order-detail';
 import { OrderRevealApi } from '../orders/order-reveal-api';
 import {
@@ -60,6 +70,10 @@ const REVEAL_LINE_NOTE_PURPOSE = 'Operations console: view a line note (kitchen)
 /** `DispatchApi.assign`'s own reason code, distinct from the dispatch board's `OPERATIONS_MANUAL_ASSIGN` so an auditor can tell the pass assigned it from the board. */
 const KDS_ASSIGN_REASON = 'OPERATIONS_KDS_ASSIGN';
 
+/** `OrderDeliveryApi.decideExternalCourier`'s own reason codes from the pass (gap map row 2.1c), distinct from the order detail pane's `OPERATIONS_EXTERNAL_BOOKING_*` for the same auditing reason `KDS_ASSIGN_REASON` exists. */
+const KDS_EXTERNAL_BOOKING_ACCEPT_REASON = 'OPERATIONS_KDS_EXTERNAL_BOOKING_ACCEPT';
+const KDS_EXTERNAL_BOOKING_ABANDON_REASON = 'OPERATIONS_KDS_EXTERNAL_BOOKING_ABANDON';
+
 /** Same cadence as the order board, until ADR 0045 live updates exist (§1.6). */
 const POLL_INTERVAL_MS = 10_000;
 
@@ -89,17 +103,23 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  * the dispatch board, P18); a counter-sale link to `orders/new` (P13's
  * screen, which did not exist when this class's own doc first called this
  * not-built); the branch open/closed toggle, reusing settings 10.2's own
- * `LocationsApi` rather than inventing a second one.
+ * `LocationsApi` rather than inventing a second one; dispatching to an
+ * *external* provider from the pass (wave 9 w5, gap map row 2.1c) — «Вызвать
+ * курьера» reuses `q-external-courier-dialog` verbatim (the same component
+ * `order-detail-pane.ts` renders for row 1.2e) against `OrderDeliveryApi
+ * .requestExternalCourierQuote`/`decideExternalCourier`
+ * (`OrderDeliveryController.externalCourier`), the order-keyed path both
+ * screens now share instead of each resolving `planId` its own way; the
+ * winning shipment's `sourceType`/status renders on the ticket the same
+ * on-demand way the in-house assignment state already does.
  *
  * **Not built, honestly**: preset product comments (no backend vocabulary
- * exists at all — see the wave's report); dispatching to an *external*
- * provider from the kitchen (only in-house assignment reuses an existing
- * endpoint; a provider dispatch call from the pass has none); change
- * payment type from the kitchen (no backend endpoint exists for it).
+ * exists at all — see the wave's report); change payment type from the
+ * kitchen (no backend endpoint exists for it).
  */
 @Component({
   selector: 'q-kitchen-queue-page',
-  imports: [TPipe],
+  imports: [TPipe, ExternalCourierDialog],
   templateUrl: './kitchen-queue-page.html',
   styleUrl: './kitchen-queue-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -112,6 +132,7 @@ export class KitchenQueuePage implements OnInit {
   private readonly latenessPolicyApi = inject(LatenessPolicyApi);
   private readonly revealApi = inject(OrderRevealApi);
   private readonly dispatchApi = inject(DispatchApi);
+  private readonly orderDeliveryApi = inject(OrderDeliveryApi);
   private readonly couriersApi = inject(CouriersApi);
   private readonly router = inject(Router);
   private readonly i18n = inject(I18n);
@@ -153,6 +174,27 @@ export class KitchenQueuePage implements OnInit {
   /** The dispatch queue's own plan for the open picker's ticket, joined by `orderId` (`DispatchController` carries no `orderId`-keyed read of its own). `undefined` while resolving, `null` when none was found. */
   protected readonly assignPickerPlan = signal<PlanQueueResponse | null | undefined>(undefined);
   protected readonly assigningTicketId = signal<string | null>(null);
+  /**
+   * The last-resolved shipment for a ticket, keyed by `ticketId` (gap map
+   * rows 1.2e/2.1c) — populated by {@link resolvePlanForTicket} regardless of
+   * which picker resolved it, so «Вызвать курьера»'s own PARTNER state stays
+   * visible on the ticket row after the operator closes the dialog, rather
+   * than only while it happens to be open.
+   */
+  protected readonly shipmentByTicketId = signal<
+    ReadonlyMap<string, PlanQueueResponse['shipment']>
+  >(new Map());
+
+  // ------------------------------------------------- wave 9 w5: external dispatch from the pass
+
+  /** Which ticket's «Вызвать курьера» dialog is open (gap map row 2.1c). `null` when closed. */
+  protected readonly externalCourierTicketId = signal<string | null>(null);
+  private externalCourierOrderId: string | null = null;
+  /** The plan behind the open dialog's ticket — same resolution `assignPickerPlan` uses, see {@link resolvePlanForTicket}. */
+  protected readonly externalCourierPlan = signal<PlanQueueResponse | null | undefined>(undefined);
+  protected readonly externalPartners = signal<readonly ExternalPartnerResponse[]>([]);
+  protected readonly externalQuote = signal<ExternalQuoteResponse | null>(null);
+  protected readonly externalCourierBusy = signal(false);
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
 
@@ -598,13 +640,28 @@ export class KitchenQueuePage implements OnInit {
   }
 
   /**
-   * Opens the courier picker and resolves the one delivery plan this
-   * ticket's own order maps to. `DispatchController`'s queue is keyed by
-   * `planId`, not `orderId` — the kitchen board never learned a `planId` of
-   * its own — so this reads the branch's whole dispatch queue (`P18`'s own
-   * `<=200`-row read) and joins it here by `orderId`, exactly the seam the
-   * wave's own brief names.
+   * The one delivery plan a ticket's own order maps to. `DispatchController`'s
+   * queue is keyed by `planId`, not `orderId` — the kitchen board never
+   * learned a `planId` of its own — so this reads the branch's whole dispatch
+   * queue (`P18`'s own `<=200`-row read) and joins it here by `orderId`,
+   * exactly the seam wave P16's own brief named. Shared by the in-house
+   * assign picker and the external-courier dialog (gap map rows 2.1/2.1c) —
+   * both act on the same plan for the same ticket.
    */
+  private async resolvePlanForTicket(
+    scope: LocationScope,
+    ticket: TicketResponse,
+  ): Promise<PlanQueueResponse | null> {
+    const queue = await this.dispatchApi.queue(scope);
+    const plan = queue.find((candidate) => candidate.orderId === ticket.orderId) ?? null;
+    this.shipmentByTicketId.update((byTicket) => {
+      const next = new Map(byTicket);
+      next.set(ticket.ticketId, plan?.shipment ?? null);
+      return next;
+    });
+    return plan;
+  }
+
   protected async openAssignPicker(ticket: TicketResponse): Promise<void> {
     if (this.isAssignPickerOpen(ticket)) {
       this.assignPickerForTicketId.set(null);
@@ -618,9 +675,7 @@ export class KitchenQueuePage implements OnInit {
       return;
     }
     try {
-      const queue = await this.dispatchApi.queue(scope);
-      const plan = queue.find((candidate) => candidate.orderId === ticket.orderId) ?? null;
-      this.assignPickerPlan.set(plan);
+      this.assignPickerPlan.set(await this.resolvePlanForTicket(scope, ticket));
     } catch (error) {
       this.assignPickerPlan.set(null);
       this.actionNotice.set(this.describeError(error));
@@ -657,6 +712,108 @@ export class KitchenQueuePage implements OnInit {
       this.actionNotice.set(this.describeError(error));
     } finally {
       this.assigningTicketId.set(null);
+    }
+  }
+
+  // ------------------------------------------------- wave 9 w5: external dispatch from the pass
+
+  protected isExternalCourierOpen(ticket: TicketResponse): boolean {
+    return this.externalCourierTicketId() === ticket.ticketId;
+  }
+
+  /**
+   * Opens «Вызвать курьера» (gap map row 2.1c) and resolves the ticket's plan
+   * the same way {@link openAssignPicker} does — the picker and this dialog
+   * act on one plan, they just reached it independently for the same reason
+   * `resolvePlanForTicket`'s own doc gives.
+   */
+  protected async openExternalCourierDialog(ticket: TicketResponse): Promise<void> {
+    this.assignPickerForTicketId.set(null);
+    this.externalCourierTicketId.set(ticket.ticketId);
+    this.externalCourierOrderId = ticket.orderId;
+    this.externalCourierPlan.set(undefined);
+    this.externalQuote.set(null);
+    this.externalPartners.set([]);
+    const scope = this.location.scope();
+    if (!scope) {
+      this.externalCourierPlan.set(null);
+      return;
+    }
+    try {
+      const plan = await this.resolvePlanForTicket(scope, ticket);
+      this.externalCourierPlan.set(plan);
+      if (plan) {
+        this.externalPartners.set(await this.dispatchApi.externalPartners(scope, plan.planId));
+      }
+    } catch (error) {
+      this.externalCourierPlan.set(null);
+      this.actionNotice.set(this.describeError(error));
+    }
+  }
+
+  protected closeExternalCourierDialog(): void {
+    this.externalCourierTicketId.set(null);
+    this.externalCourierOrderId = null;
+    this.externalCourierPlan.set(undefined);
+    this.externalQuote.set(null);
+    this.externalPartners.set([]);
+  }
+
+  protected async requestExternalQuote(bindingId: string): Promise<void> {
+    const scope = this.location.scope();
+    const orderId = this.externalCourierOrderId;
+    if (!scope || !orderId) {
+      return;
+    }
+    this.externalCourierBusy.set(true);
+    try {
+      this.externalQuote.set(
+        await this.orderDeliveryApi.requestExternalCourierQuote(scope, orderId, bindingId),
+      );
+    } catch (error) {
+      this.actionNotice.set(this.describeError(error));
+    } finally {
+      this.externalCourierBusy.set(false);
+    }
+  }
+
+  protected async acceptExternalBooking(submission: ExternalBookingSubmission): Promise<void> {
+    await this.settleExternalBooking(submission, 'ACCEPT', KDS_EXTERNAL_BOOKING_ACCEPT_REASON);
+  }
+
+  protected async abandonExternalBooking(submission: ExternalBookingSubmission): Promise<void> {
+    await this.settleExternalBooking(submission, 'ABANDON', KDS_EXTERNAL_BOOKING_ABANDON_REASON);
+  }
+
+  private async settleExternalBooking(
+    submission: ExternalBookingSubmission,
+    decision: 'ACCEPT' | 'ABANDON',
+    reasonCode: string,
+  ): Promise<void> {
+    const scope = this.location.scope();
+    const orderId = this.externalCourierOrderId;
+    if (!scope || !orderId) {
+      return;
+    }
+    this.externalCourierBusy.set(true);
+    try {
+      const result = await this.orderDeliveryApi.decideExternalCourier(
+        scope,
+        orderId,
+        submission.bindingId,
+        submission.quoteId,
+        decision,
+        reasonCode,
+      );
+      if (!result.applied && result.reason) {
+        this.actionNotice.set(this.i18n.t('kitchen.assign.refused', { reason: result.reason }));
+      }
+      this.closeExternalCourierDialog();
+      await this.refresh();
+    } catch (error) {
+      this.actionNotice.set(this.describeError(error));
+    } finally {
+      this.externalCourierBusy.set(false);
     }
   }
 

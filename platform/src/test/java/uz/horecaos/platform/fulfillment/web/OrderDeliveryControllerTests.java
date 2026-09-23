@@ -2,6 +2,7 @@ package uz.horecaos.platform.fulfillment.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -24,6 +25,7 @@ import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.Waypoint;
 import uz.horecaos.platform.fulfillment.application.DeliveryPlanningService;
+import uz.horecaos.platform.fulfillment.application.ManualExternalBookingService;
 import uz.horecaos.platform.fulfillment.application.SourcingJournal;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryPlan;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySubsidyBearer;
@@ -33,6 +35,7 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryE
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDispatchBranchStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcSourcingJobStore;
+import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
@@ -111,8 +114,17 @@ class OrderDeliveryControllerTests {
         planStore = new JdbcDeliveryPlanStore(jdbc);
         assignments = new JdbcAssignmentStore(jdbc);
         subsidies = new JdbcDeliveryCostSubsidyStore(jdbc);
-        controller =
-                new OrderDeliveryController(planStore, assignments, subsidies, new JdbcDeliveryExceptionStore(jdbc));
+        // `externalCourier` (gap map rows 1.2e/2.1c) is not this suite's concern
+        // -- OrderDeliveryExternalCourierHttpTests proves it -- so both of its
+        // dependencies are unused stand-ins, the same way this class already
+        // builds a minimal, directly-inserted plan rather than a full checkout.
+        controller = new OrderDeliveryController(
+                planStore,
+                assignments,
+                subsidies,
+                new JdbcDeliveryExceptionStore(jdbc),
+                mock(ManualExternalBookingService.class),
+                mock(CurrentActor.class));
 
         seedTenancy();
         planning = new DeliveryPlanningService(

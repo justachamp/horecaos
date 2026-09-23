@@ -196,6 +196,17 @@ export const operationsPaths = {
   },
 
   /**
+   * Request an external courier for this order (`OrderDeliveryController
+   * .externalCourier`, gap map rows 1.2e/2.1c) — the order-keyed path the
+   * order detail pane and the KDS pass both call, over the same Millenium
+   * pattern quote/accept services `dispatchExternalQuote`/`dispatchExternalBook`
+   * expose per `planId` (gap map row 1.2f). Mutation: key required.
+   */
+  orderExternalCourier(scope: LocationScope, orderId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/orders/${encodeURIComponent(orderId)}/external-courier`;
+  },
+
+  /**
    * Every revision of this order (ADR 0039, wave P09/gap map `1.2p`) — the
    * append-only chain `orderQuery.revisions` already serves and no screen has
    * read before now.

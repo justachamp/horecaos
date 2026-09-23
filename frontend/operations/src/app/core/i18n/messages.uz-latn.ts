@@ -383,6 +383,13 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.courier.pickerPlaceholder': 'Kuryerlarni qidirish…',
   'orders.detail.courier.empty': 'Reyestrda kuryer yoʻq',
   'orders.detail.courier.refused': 'Qoʻllanilmadi: {reason}',
+  'orders.detail.courier.external': 'Tashqi hamkor — {status}',
+  'orders.detail.courier.status.PENDING': 'Kutilmoqda',
+  'orders.detail.courier.status.ASSIGNED': 'Tayinlangan',
+  'orders.detail.courier.status.PICKUP_PENDING': 'Olib ketishni kutmoqda',
+  'orders.detail.courier.status.PICKED_UP': 'Olib ketildi',
+  'orders.detail.courier.status.DELIVERED': 'Yetkazildi',
+  'orders.detail.courier.status.CANCELLED': 'Bekor qilindi',
 
   'orders.detail.section.outcome': 'Yakun',
   'orders.detail.outcome.kind': 'Qanday yakunlandi',
@@ -2409,6 +2416,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.assign.empty': "Shtatda kuryerlar yo'q",
   'kitchen.assign.cancel': 'Bekor qilish',
   'kitchen.assign.refused': 'Biriktirish rad etildi ({reason})',
+  'kitchen.assign.externalButton': 'Tashqi kuryer chaqirish',
+  'kitchen.assign.externalAssigned': 'Tashqi hamkor tayinlangan',
 
   // Peshtaxta savdosi — yangi buyurtma ekraniga havola (2.1e) — P16 to'lqini
   'kitchen.action.counterSale': 'Peshtaxta savdosi',

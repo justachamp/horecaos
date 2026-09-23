@@ -1510,6 +1510,18 @@ export class OrderDetailPane {
     return key ? this.i18n.t(key) : stage;
   }
 
+  /**
+   * `ShipmentStatus`'s own six values (gap map rows 1.2e/2.1c) — distinct
+   * from {@link deliveryStageLabel}, which only covers the three the
+   * timeline's `q-steps` renders as milestones; this one is for the § Курьер
+   * panel's external-partner state line, which needs every status including
+   * `PENDING`/`PICKUP_PENDING`/`CANCELLED`.
+   */
+  protected shipmentStatusLabel(status: string): string {
+    const key = SHIPMENT_STATUS_LABEL_KEYS[status];
+    return key ? this.i18n.t(key) : status;
+  }
+
   /** `formatDuration`'s own `hour`/`minute` units, applied to the gap between two ISO instants — the production/delivery lanes' own "elapsed durations between stages". */
   protected formatElapsed(fromIso: string, toIso: string): string {
     const minutes = (new Date(toIso).getTime() - new Date(fromIso).getTime()) / 60_000;
@@ -1677,12 +1689,19 @@ export class OrderDetailPane {
   protected async requestExternalQuote(bindingId: string): Promise<void> {
     const scope = this.location.scope();
     const plan = this.delivery();
-    if (!scope || !plan) {
+    const orderId = this.order()?.value.summary.orderId;
+    if (!scope || !plan || !orderId) {
       return;
     }
     this.externalCourierBusy.set(true);
     try {
-      this.externalQuote.set(await this.dispatchApi.externalQuote(scope, plan.planId, bindingId));
+      // Order-keyed (gap map rows 1.2e/2.1c) rather than `dispatchApi
+      // .externalQuote(scope, plan.planId, ...)` -- the same path the KDS
+      // pass now calls, so both screens share one server-side plan
+      // resolution instead of each carrying its own.
+      this.externalQuote.set(
+        await this.deliveryApi.requestExternalCourierQuote(scope, orderId, bindingId),
+      );
     } catch (error) {
       this.noticeFromRevealError(error);
     } finally {
@@ -1711,9 +1730,10 @@ export class OrderDetailPane {
     }
     this.externalCourierBusy.set(true);
     try {
-      const result = await this.dispatchApi.externalBook(
+      // Same order-keyed path {@link requestExternalQuote} switched to.
+      const result = await this.deliveryApi.decideExternalCourier(
         scope,
-        plan.planId,
+        orderId,
         submission.bindingId,
         submission.quoteId,
         decision,
@@ -1827,6 +1847,16 @@ const DELIVERY_STAGE_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> =
   ASSIGNED: 'orders.detail.timeline.delivery.ASSIGNED',
   PICKED_UP: 'orders.detail.timeline.delivery.PICKED_UP',
   DELIVERED: 'orders.detail.timeline.delivery.DELIVERED',
+};
+
+/** `ShipmentStatus`'s own six values (gap map rows 1.2e/2.1c) — see {@link OrderDetailPane.shipmentStatusLabel}. */
+const SHIPMENT_STATUS_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
+  PENDING: 'orders.detail.courier.status.PENDING',
+  ASSIGNED: 'orders.detail.courier.status.ASSIGNED',
+  PICKUP_PENDING: 'orders.detail.courier.status.PICKUP_PENDING',
+  PICKED_UP: 'orders.detail.courier.status.PICKED_UP',
+  DELIVERED: 'orders.detail.courier.status.DELIVERED',
+  CANCELLED: 'orders.detail.courier.status.CANCELLED',
 };
 
 const TRIGGER_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {

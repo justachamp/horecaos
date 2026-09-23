@@ -1794,6 +1794,104 @@ describe('OrderDetailPane: assign/unassign courier (wave P11, row 1.2e)', () => 
   });
 });
 
+describe('OrderDetailPane: call an external courier (gap map rows 1.2e/2.1c)', () => {
+  it('requests a quote and accepts it through the order-keyed path OrderDeliveryController.externalCourier exposes, not the plan-keyed DispatchController route', async () => {
+    const externalPartners = vi
+      .fn()
+      .mockResolvedValue([{ bindingId: 'binding-1', providerType: 'YANDEX', supportsHold: false }]);
+    const requestExternalCourierQuote = vi.fn().mockResolvedValue({
+      priced: true,
+      quoteId: 'quote-1',
+      bindingId: 'binding-1',
+      providerType: 'YANDEX',
+      priceMinor: 12_000,
+      currency: 'UZS',
+      customerDeliveryFeeMinor: 12_000,
+      deltaMinor: 0,
+    });
+    const decideExternalCourier = vi
+      .fn()
+      .mockResolvedValue({
+        applied: true,
+        abandoned: false,
+        planVersion: 3,
+        shipmentId: 'shipment-1',
+      });
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () => Promise.resolve(deliveryResponse()),
+        requestExternalCourierQuote,
+        decideExternalCourier,
+      },
+      dispatchApi: { externalPartners },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-external-courier"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // The partner picker is still the plan-keyed read (row 1.2f) -- only
+    // quote/accept moved to the order-keyed path this wave built.
+    expect(externalPartners).toHaveBeenCalledWith(FAKE_SCOPE, 'plan-1');
+
+    (host.querySelector('[data-testid="external-courier-quote"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(requestExternalCourierQuote).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'binding-1');
+
+    (host.querySelector('[data-testid="external-courier-accept"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(decideExternalCourier).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'order-1',
+      'binding-1',
+      'quote-1',
+      'ACCEPT',
+      expect.any(String),
+    );
+    expect(host.querySelector('[data-testid="external-courier-dialog"]')).toBeNull();
+  });
+
+  it("renders the provider's booking state instead of claiming no courier is assigned once an external partner carries the plan", async () => {
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () =>
+          Promise.resolve(
+            deliveryResponse({
+              shipment: {
+                shipmentId: 'shipment-1',
+                status: 'PICKED_UP',
+                sourceType: 'PARTNER',
+                providerBindingId: 'binding-1',
+                version: 2,
+              },
+            }),
+          ),
+      },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const state = host.querySelector('[data-testid="order-detail-courier-external"]');
+    expect(state).not.toBeNull();
+    expect(state?.textContent).toContain('External partner');
+    expect(state?.textContent).toContain('Picked up');
+    // Never the misleading "no courier" line a `courierId`-only check would show.
+    expect(host.textContent).not.toContain('No courier assigned');
+    // «Вызвать курьера» is only offered while nobody carries the plan yet (row 1.2f).
+    expect(host.querySelector('[data-testid="order-detail-external-courier"]')).toBeNull();
+  });
+});
+
 describe('OrderDetailPane: three real timeline lanes with elapsed durations (wave P11, row 1.2b)', () => {
   function stageLabels(
     fixture: { nativeElement: HTMLElement },

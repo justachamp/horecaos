@@ -395,6 +395,13 @@ export const messagesEn = {
   'orders.detail.courier.pickerPlaceholder': 'Search couriers…',
   'orders.detail.courier.empty': 'No couriers on the roster',
   'orders.detail.courier.refused': 'Not applied: {reason}',
+  'orders.detail.courier.external': 'External partner — {status}',
+  'orders.detail.courier.status.PENDING': 'Pending',
+  'orders.detail.courier.status.ASSIGNED': 'Assigned',
+  'orders.detail.courier.status.PICKUP_PENDING': 'Awaiting pickup',
+  'orders.detail.courier.status.PICKED_UP': 'Picked up',
+  'orders.detail.courier.status.DELIVERED': 'Delivered',
+  'orders.detail.courier.status.CANCELLED': 'Cancelled',
 
   'orders.detail.section.outcome': 'Outcome',
   'orders.detail.outcome.kind': 'Ended as',
@@ -2416,6 +2423,8 @@ export const messagesEn = {
   'kitchen.assign.empty': 'No couriers on the roster',
   'kitchen.assign.cancel': 'Cancel',
   'kitchen.assign.refused': 'The assignment was refused ({reason})',
+  'kitchen.assign.externalButton': 'Call external courier',
+  'kitchen.assign.externalAssigned': 'External partner assigned',
 
   // Counter sale link to the new-order screen (2.1e) — wave P16
   'kitchen.action.counterSale': 'Counter sale',

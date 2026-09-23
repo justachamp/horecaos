@@ -379,6 +379,13 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.courier.pickerPlaceholder': 'Поиск курьеров…',
   'orders.detail.courier.empty': 'В реестре нет курьеров',
   'orders.detail.courier.refused': 'Не применено: {reason}',
+  'orders.detail.courier.external': 'Внешний партнёр — {status}',
+  'orders.detail.courier.status.PENDING': 'Ожидает',
+  'orders.detail.courier.status.ASSIGNED': 'Назначен',
+  'orders.detail.courier.status.PICKUP_PENDING': 'Ожидает забора',
+  'orders.detail.courier.status.PICKED_UP': 'Забран',
+  'orders.detail.courier.status.DELIVERED': 'Доставлен',
+  'orders.detail.courier.status.CANCELLED': 'Отменён',
 
   'orders.detail.section.outcome': 'Исход',
   'orders.detail.outcome.kind': 'Завершён как',
@@ -2388,6 +2395,8 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.assign.empty': 'В штате нет курьеров',
   'kitchen.assign.cancel': 'Отмена',
   'kitchen.assign.refused': 'В назначении отказано ({reason})',
+  'kitchen.assign.externalButton': 'Вызвать курьера',
+  'kitchen.assign.externalAssigned': 'Внешний партнёр назначен',
 
   // Продажа за прилавком — ссылка на экран нового заказа (2.1e) — волна P16
   'kitchen.action.counterSale': 'Продажа за прилавком',
