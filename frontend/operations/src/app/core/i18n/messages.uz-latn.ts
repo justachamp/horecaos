@@ -995,6 +995,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.salesChannels.field.socialLinks.add': 'Qoʻshish',
   'settings.salesChannels.field.socialLinks.remove': 'Oʻchirish',
   'settings.salesChannels.field.socialLinks.empty': 'Hali havolalar yoʻq.',
+  'settings.salesChannels.field.socialLinks.httpsOnly': 'Havola https:// bilan boshlanishi kerak',
   'settings.salesChannels.create.action': 'Kanal qoʻshish',
   'settings.salesChannels.create.cancel': 'Bekor qilish',
   'settings.salesChannels.create.submit': 'Yaratish',
@@ -1504,6 +1505,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.locations.list.bulk.reopen': 'Tanlanganlarni qayta ochish',
   'settings.locations.list.bulk.outcome.applied': 'bajarildi',
   'settings.locations.list.bulk.outcome.failed': 'xato',
+  'settings.locations.list.bulk.outcome.problem.VALIDATION_FAILED': 'Notoʻgʻri deb rad etildi',
+  'settings.locations.list.bulk.outcome.problem.LOCATION_NOT_IN_BRAND':
+    'Ushbu brendga tegishli emas',
+  'settings.locations.list.bulk.outcome.problem.UNEXPECTED_FAILURE': 'Nimadir notoʻgʻri ketdi',
   'settings.locations.tab.basics': 'Asosiy',
   'settings.locations.tab.hours': 'Ish vaqti',
   'settings.locations.tab.load': 'Yuklama va tayyorlash',
@@ -1870,7 +1875,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.menuSets.create.trigger': 'Yangi menyu',
   'catalog.menuSets.loading': 'Yuklanmoqda…',
   'catalog.menuSets.denied': 'Sizda bu brend menyulariga kirish huquqi yoʻq.',
-  'catalog.menuSets.empty': 'Hali menyu yoʻq. Assortimentni filiallarga tarqatish uchun toʻplam yarating.',
+  'catalog.menuSets.empty':
+    'Hali menyu yoʻq. Assortimentni filiallarga tarqatish uchun toʻplam yarating.',
   'catalog.menuSets.table.name': 'Nomi',
   'catalog.menuSets.table.status': 'Holati',
   'catalog.menuSets.copy.trigger': 'Nusxalash',
@@ -2108,7 +2114,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.photos.role.GALLERY': 'Galereya',
   'catalog.editor.photos.channel.label': 'Kanal',
   'catalog.editor.photos.channel.all': 'Universal (barcha kanallar)',
-  'catalog.editor.photos.channel.empty': 'Bu kanal uchun hali oʻzgartirish yoʻq — universal rasmlar koʻrsatiladi.',
+  'catalog.editor.photos.channel.empty':
+    'Bu kanal uchun hali oʻzgartirish yoʻq — universal rasmlar koʻrsatiladi.',
   'catalog.editor.photos.channel.hint': 'Yangi rasmlar yuqorida tanlangan kanalga biriktiriladi.',
   'catalog.editor.fiscal.mxik': 'IKPU/MXIK',
   'catalog.editor.fiscal.packageCode': 'Qadoq kodi',

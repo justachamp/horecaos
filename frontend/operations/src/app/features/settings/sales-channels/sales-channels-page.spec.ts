@@ -432,9 +432,9 @@ describe('SalesChannelsPage', () => {
 
     (rows[0].querySelector('[data-testid="social-link-remove"]') as HTMLButtonElement).click();
     fixture.detectChanges();
-    expect(
-      fixture.nativeElement.querySelectorAll('[data-testid="social-link-row"]'),
-    ).toHaveLength(0);
+    expect(fixture.nativeElement.querySelectorAll('[data-testid="social-link-row"]')).toHaveLength(
+      0,
+    );
 
     const save = fixture.nativeElement.querySelector(
       '[data-testid="save-channel"]',
@@ -464,15 +464,20 @@ describe('SalesChannelsPage', () => {
     urlInput.value = 'https://t.me/rayhon';
     urlInput.dispatchEvent(new Event('input'));
 
-    (fixture.nativeElement.querySelector('[data-testid="social-link-add"]') as HTMLButtonElement).click();
+    (
+      fixture.nativeElement.querySelector('[data-testid="social-link-add"]') as HTMLButtonElement
+    ).click();
     fixture.detectChanges();
 
     const rows = fixture.nativeElement.querySelectorAll('[data-testid="social-link-row"]');
     expect(rows).toHaveLength(1);
     // TELEGRAM is no longer offered a second time -- one live link per platform.
     const remainingOptions = Array.from(
-      (fixture.nativeElement.querySelector('[data-testid="social-link-platform"]') as HTMLSelectElement)
-        .options,
+      (
+        fixture.nativeElement.querySelector(
+          '[data-testid="social-link-platform"]',
+        ) as HTMLSelectElement
+      ).options,
     ).map((option) => option.value);
     expect(remainingOptions).not.toContain('TELEGRAM');
 
@@ -488,6 +493,83 @@ describe('SalesChannelsPage', () => {
       { TELEGRAM: 'https://t.me/rayhon' },
       expect.any(Number),
     );
+  });
+
+  it('refuses a non-https social link before it ever reaches the draft or the server', async () => {
+    const row = fixture.nativeElement.querySelectorAll('.row')[0] as HTMLElement; // Front kiosk -- no links yet
+    row.click();
+    fixture.detectChanges();
+
+    const platformSelect = fixture.nativeElement.querySelector(
+      '[data-testid="social-link-platform"]',
+    ) as HTMLSelectElement;
+    platformSelect.value = 'TELEGRAM';
+    platformSelect.dispatchEvent(new Event('change'));
+
+    const urlInput = fixture.nativeElement.querySelector(
+      '[data-testid="social-link-url"]',
+    ) as HTMLInputElement;
+    urlInput.value = 'http://t.me/rayhon';
+    urlInput.dispatchEvent(new Event('input'));
+
+    (
+      fixture.nativeElement.querySelector('[data-testid="social-link-add"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    // Never added to the draft -- ADR 0036's https-only rule, checked
+    // client-side before saveEdit's three writes ever start, the same rule
+    // SalesChannelService.replaceSocialLinks enforces server-side.
+    expect(fixture.nativeElement.querySelectorAll('[data-testid="social-link-row"]')).toHaveLength(
+      0,
+    );
+    expect(fixture.nativeElement.textContent ?? '').toContain('The link must start with https://');
+
+    const save = fixture.nativeElement.querySelector(
+      '[data-testid="save-channel"]',
+    ) as HTMLButtonElement;
+    save.click();
+    await flushMicrotasks();
+
+    expect(api.replaceSocialLinks).toHaveBeenCalledWith(SCOPE, 'chan-2', {}, expect.any(Number));
+  });
+
+  it('reloads the list after a partial save failure instead of leaving it showing stale data', async () => {
+    // update() and replaceLocations() land; replaceSocialLinks() (the last
+    // of the three writes) is the one that fails -- the exact partial-save
+    // shape saveEdit can produce.
+    api.replaceSocialLinks.mockRejectedValue(
+      new ApiError(ApiErrorCode.VALIDATION_FAILED, 400, null, null),
+    );
+    // The next read reflects that update()/replaceLocations() already
+    // committed: a new display name for chan-1.
+    api.list.mockResolvedValue([{ ...STOREFRONT, displayName: 'Our site' }, KIOSK]);
+
+    const row = fixture.nativeElement.querySelectorAll('.row')[1] as HTMLElement; // Website
+    row.click();
+    fixture.detectChanges();
+
+    const nameInput = fixture.nativeElement.querySelector('#edit-name-chan-1') as HTMLInputElement;
+    nameInput.value = 'Our site';
+    nameInput.dispatchEvent(new Event('input'));
+
+    const save = fixture.nativeElement.querySelector(
+      '[data-testid="save-channel"]',
+    ) as HTMLButtonElement;
+    save.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.update).toHaveBeenCalled();
+    expect(api.replaceLocations).toHaveBeenCalled();
+    // The list is re-read after the failure, not left showing what was on
+    // screen before update()/replaceLocations() already committed.
+    expect(api.list).toHaveBeenCalledTimes(2);
+    expect(fixture.nativeElement.textContent ?? '').toContain('Our site');
+    // An error is still shown, and the edit panel stays open rather than
+    // pretending the save fully succeeded.
+    expect(fixture.nativeElement.querySelector('.error')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('#edit-name-chan-1')).toBeTruthy();
   });
 
   it('deactivates an active channel and reactivates an inactive one', async () => {

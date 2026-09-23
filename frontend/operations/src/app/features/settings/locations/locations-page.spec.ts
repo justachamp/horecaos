@@ -278,12 +278,16 @@ describe('LocationsPage', () => {
       } satisfies BulkServiceStateResponse),
     });
 
-    (rowFor(fixture, 'Chilanzar').querySelector('input[type=checkbox]') as HTMLInputElement).click();
+    (
+      rowFor(fixture, 'Chilanzar').querySelector('input[type=checkbox]') as HTMLInputElement
+    ).click();
     (rowFor(fixture, 'Sergeli').querySelector('input[type=checkbox]') as HTMLInputElement).click();
     fixture.detectChanges();
 
-    const reopenButton = Array.from(fixture.nativeElement.querySelectorAll('.bulk-bar button')).find(
-      (button) => (button as HTMLButtonElement).textContent?.includes('Reopen selected'),
+    const reopenButton = Array.from(
+      fixture.nativeElement.querySelectorAll('.bulk-bar button'),
+    ).find((button) =>
+      (button as HTMLButtonElement).textContent?.includes('Reopen selected'),
     ) as HTMLButtonElement;
     reopenButton.click();
     await flushMicrotasks();
@@ -297,17 +301,24 @@ describe('LocationsPage', () => {
     expect(api.bulkChangeServiceState).toHaveBeenCalledTimes(1);
 
     const outcomesText =
-      (fixture.nativeElement.querySelector('.bulk-outcomes') as HTMLElement | null)?.textContent ?? '';
+      (fixture.nativeElement.querySelector('.bulk-outcomes') as HTMLElement | null)?.textContent ??
+      '';
     expect(outcomesText).toContain('Chilanzar');
     expect(outcomesText).toContain('done');
     expect(outcomesText).toContain('Sergeli');
-    expect(outcomesText).toContain('VALIDATION_FAILED');
+    // Translated through settings.locations.list.bulk.outcome.problem.* --
+    // the raw backend code must never reach the screen untranslated (it
+    // breaks the ru/uz-latn key-parity requirement for user-facing text).
+    expect(outcomesText).toContain('Rejected as invalid');
+    expect(outcomesText).not.toContain('VALIDATION_FAILED');
   });
 
   it('bulk-closes every selected branch with a required reason', async () => {
     await render();
 
-    (rowFor(fixture, 'Chilanzar').querySelector('input[type=checkbox]') as HTMLInputElement).click();
+    (
+      rowFor(fixture, 'Chilanzar').querySelector('input[type=checkbox]') as HTMLInputElement
+    ).click();
     fixture.detectChanges();
 
     const closeButton = Array.from(fixture.nativeElement.querySelectorAll('.bulk-bar button')).find(
@@ -318,12 +329,16 @@ describe('LocationsPage', () => {
 
     const confirmButton = Array.from(
       fixture.nativeElement.querySelectorAll('.bulk-bar .close-form__actions button'),
-    ).find((button) => (button as HTMLButtonElement).textContent?.includes('Close')) as HTMLButtonElement;
+    ).find((button) =>
+      (button as HTMLButtonElement).textContent?.includes('Close'),
+    ) as HTMLButtonElement;
     confirmButton.click();
     await flushMicrotasks();
     expect(api.bulkChangeServiceState).not.toHaveBeenCalled();
 
-    const reasonInput = fixture.nativeElement.querySelector('.bulk-bar .close-form input') as HTMLInputElement;
+    const reasonInput = fixture.nativeElement.querySelector(
+      '.bulk-bar .close-form input',
+    ) as HTMLInputElement;
     reasonInput.value = 'regional holiday';
     reasonInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();

@@ -283,6 +283,15 @@ export class SalesChannelsPage {
     if (!platform || !url || this.editSocialLinks().some((row) => row.platform === platform)) {
       return;
     }
+    // Mirrors SalesChannelService.replaceSocialLinks's own https-only rule
+    // (ADR 0036) -- catching it here means the operator sees the problem
+    // before saveEdit's update()/replaceLocations() have already committed
+    // ahead of this check failing at the server.
+    if (!/^https:\/\//i.test(url)) {
+      this.rowError.set(this.i18n.t('settings.salesChannels.field.socialLinks.httpsOnly'));
+      return;
+    }
+    this.rowError.set(null);
     this.editSocialLinks.update((rows) => [...rows, { platform, url }]);
     this.newSocialUrl.set('');
     const next = this.availableSocialPlatforms().find((candidate) => candidate !== platform);
@@ -321,12 +330,27 @@ export class SalesChannelsPage {
       // #update then #replaceLocations each bump the channel's own version
       // by exactly one (SalesChannelService's own doc); +1 here is that same
       // arithmetic carried one call further, not a guess.
-      const links = Object.fromEntries(this.editSocialLinks().map((row) => [row.platform, row.url]));
+      const links = Object.fromEntries(
+        this.editSocialLinks().map((row) => [row.platform, row.url]),
+      );
       await this.api.replaceSocialLinks(scope, channel.id, links, updated.version + 1);
       await this.reloadAll(scope);
       this.selectedChannelId.set(null);
     } catch (error) {
+      // update()/replaceLocations()/replaceSocialLinks() are three
+      // independent writes; any of the later ones can fail after an
+      // earlier one already committed. Reloading here (best-effort -- its
+      // own failure must not mask the error already being shown) keeps the
+      // list from going on showing a display name or location set that is
+      // no longer what actually landed in the database, whichever of the
+      // three steps this failure happened on.
       this.rowError.set(this.describe(error));
+      try {
+        await this.reloadAll(scope);
+      } catch {
+        // The original error above already tells the operator something is
+        // wrong; a reload failure here must not replace or hide it.
+      }
     } finally {
       this.rowSaving.set(false);
     }
