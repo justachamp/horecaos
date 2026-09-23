@@ -12,6 +12,7 @@ import { LocationsApi, LocationView } from '../locations/locations-api';
 import { BindSubmission, ConnectProviderPanel, ConnectSubmission } from './connect-provider-panel';
 import { InstallationDetailPanel } from './installation-detail-panel';
 import {
+  CapabilityCatalogueView,
   EffectiveBindingView,
   InstallationView,
   IntegrationsApi,
@@ -32,16 +33,19 @@ const VERIFIABLE_PROVIDER_TYPE = 'TELEGRAM_BOT_API';
 
 /**
  * Categories with a real backend capability catalogue (`PosCapability`,
- * `DeliveryCapability`) that neither this screen nor {@link
- * IntegrationsApi.bindInstallation}'s caller has a picker for. Binding one of
- * these with the empty `capabilities`/`primaryCapabilities` the connect
+ * `DeliveryCapability`) — gap-map row 10.8a's fix path. Binding one of these
+ * needs a real, non-empty `capabilities`/`primaryCapabilities` set:
+ * `integration.bindings` requires an INNER JOIN against {@code
+ * integration.binding_capabilities} to appear in {@link
+ * IntegrationsApi.effectiveBindings} at all, so the empty arrays the connect
  * drawer sends for PAYMENT/NOTIFICATION (which truly have no catalogue) would
- * not be a narrower binding — `integration.bindings` requires an INNER JOIN
- * against `integration.binding_capabilities` to appear in {@link
- * IntegrationsApi.effectiveBindings} at all, so a capability-less binding can
- * never resolve, activated or not, and would never surface in the branches
- * table this dialog just fed. Excluded here rather than silently created
- * broken; see {@link bindableInstallations}.
+ * create a binding that can never resolve, activated or not. {@link
+ * openBindToBranch} and {@link onBindToBranchInstallationChange} fetch this
+ * category's real catalogue through {@link IntegrationsApi.capabilityCatalogue}
+ * and default every capability to selected, the same "everything on by
+ * default, narrow if you must" posture a picker with no prior state should
+ * take; PAYMENT/NOTIFICATION still bind with the connect drawer's own empty
+ * arrays, unchanged.
  */
 const CAPABILITY_CATALOGUED_CATEGORIES: ReadonlySet<string> = new Set(['POS', 'DELIVERY']);
 
@@ -197,16 +201,25 @@ export class IntegrationsPage {
   protected readonly bindToBranchLocationId = signal<string | null>(null);
 
   /**
-   * {@link installations} minus the categories in {@link
-   * CAPABILITY_CATALOGUED_CATEGORIES} — what {@link submitBindToBranch} may
-   * actually offer, since it has no picker to fill a real capability
-   * catalogue and an empty one is a dead binding for those categories.
+   * The selected installation's own capability catalogue (gap-map row
+   * 10.8a's fix path) — empty for a category with none, loaded fresh every
+   * time {@link bindToBranchInstallationId} changes to a POS or DELIVERY
+   * installation. {@link selectedCapabilities} starts as every entry here,
+   * checked, the picker's own default.
    */
-  protected readonly bindableInstallations = computed(() =>
-    this.installations().filter(
-      (installation) => !CAPABILITY_CATALOGUED_CATEGORIES.has(installation.category),
-    ),
-  );
+  protected readonly bindToBranchCatalogue = signal<readonly string[]>([]);
+  protected readonly bindToBranchCatalogueLoading = signal(false);
+  protected readonly selectedCapabilities = signal<ReadonlySet<string>>(new Set());
+
+  /** Every installation is offerable now that {@link bindToBranchCatalogue} can fill a real picker for POS/DELIVERY too. */
+  protected readonly bindableInstallations = computed(() => this.installations());
+
+  /** Whether the currently selected installation needs a capability-assignment picker at all. */
+  protected readonly bindToBranchNeedsCapabilityPicker = computed(() => {
+    const installationId = this.bindToBranchInstallationId();
+    const installation = this.installations().find((candidate) => candidate.id === installationId);
+    return installation !== undefined && CAPABILITY_CATALOGUED_CATEGORIES.has(installation.category);
+  });
 
   /** One row per branch that has at least one resolved capability, branch name resolved for display. */
   protected readonly branchRows = computed(() => {
@@ -241,9 +254,11 @@ export class IntegrationsPage {
 
   protected openBindToBranch(): void {
     this.bindToBranchError.set(null);
-    this.bindToBranchInstallationId.set(this.bindableInstallations()[0]?.id ?? null);
     this.bindToBranchLocationId.set(this.locations()[0]?.id ?? null);
+    const firstInstallationId = this.bindableInstallations()[0]?.id ?? null;
+    this.bindToBranchInstallationId.set(firstInstallationId);
     this.showBindToBranch.set(true);
+    void this.loadBindToBranchCatalogue(firstInstallationId);
   }
 
   protected closeBindToBranch(): void {
@@ -252,15 +267,71 @@ export class IntegrationsPage {
     }
   }
 
+  /** The `<select>`'s own `(change)` — reloads the capability catalogue for whichever installation is now selected. */
+  protected onBindToBranchInstallationChange(installationId: string): void {
+    this.bindToBranchInstallationId.set(installationId);
+    void this.loadBindToBranchCatalogue(installationId);
+  }
+
+  private async loadBindToBranchCatalogue(installationId: string | null): Promise<void> {
+    const scope = this.location.scope();
+    const installation = this.installations().find((candidate) => candidate.id === installationId);
+    if (!scope || installation === undefined || !CAPABILITY_CATALOGUED_CATEGORIES.has(installation.category)) {
+      this.bindToBranchCatalogue.set([]);
+      this.selectedCapabilities.set(new Set());
+      return;
+    }
+    this.bindToBranchCatalogueLoading.set(true);
+    this.bindToBranchError.set(null);
+    try {
+      const view: CapabilityCatalogueView = await this.api.capabilityCatalogue(scope, installation.id);
+      this.bindToBranchCatalogue.set(view.capabilities);
+      // Default = every capability the installation's provider declares,
+      // exactly as gap-map row 10.8a's own fix-path text asks for.
+      this.selectedCapabilities.set(new Set(view.capabilities));
+    } catch (failure) {
+      this.bindToBranchCatalogue.set([]);
+      this.selectedCapabilities.set(new Set());
+      this.bindToBranchError.set(this.describeError(failure));
+    } finally {
+      this.bindToBranchCatalogueLoading.set(false);
+    }
+  }
+
+  protected toggleBindToBranchCapability(capability: string, checked: boolean): void {
+    this.selectedCapabilities.update((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(capability);
+      } else {
+        next.delete(capability);
+      }
+      return next;
+    });
+  }
+
   protected canSubmitBindToBranch(): boolean {
-    return (
-      !this.bindToBranchSubmitting() &&
-      this.bindToBranchInstallationId() !== null &&
-      this.bindToBranchLocationId() !== null
-    );
+    if (this.bindToBranchSubmitting() || this.bindToBranchCatalogueLoading()) {
+      return false;
+    }
+    if (this.bindToBranchInstallationId() === null || this.bindToBranchLocationId() === null) {
+      return false;
+    }
+    // A picker with nothing checked would bind with an empty capabilities
+    // array -- exactly the dead, INNER-JOIN-invisible binding this row's fix
+    // path exists to stop creating.
+    return !this.bindToBranchNeedsCapabilityPicker() || this.selectedCapabilities().size > 0;
   }
 
   protected async submitBindToBranch(): Promise<void> {
+    if (!this.canSubmitBindToBranch()) {
+      // The submit button's own [disabled] binding is the ordinary guard;
+      // this repeats the same rule so a caller that invokes the method
+      // directly can never bind with an empty, dead capabilities array
+      // (gap-map row 10.8a's own fix path) just because the button state was
+      // bypassed.
+      return;
+    }
     const scope = this.location.scope();
     const installationId = this.bindToBranchInstallationId();
     const locationId = this.bindToBranchLocationId();
@@ -271,14 +342,19 @@ export class IntegrationsPage {
     if (!branch) {
       return;
     }
+    // Every selected capability is also primary: this dialog offers no
+    // finer split, and effectiveBindings only resolves a primary capability
+    // (bc.is_primary), so a selected-but-non-primary capability would check
+    // in the picker and still never appear as this branch's own resolution.
+    const capabilities = [...this.selectedCapabilities()];
     this.bindToBranchSubmitting.set(true);
     this.bindToBranchError.set(null);
     try {
       await this.api.bindInstallation(scope, installationId, {
         brandId: branch.brandId,
         locationId,
-        capabilities: [],
-        primaryCapabilities: [],
+        capabilities,
+        primaryCapabilities: capabilities,
       });
       this.showBindToBranch.set(false);
       await this.reloadEffectiveBindings(scope);

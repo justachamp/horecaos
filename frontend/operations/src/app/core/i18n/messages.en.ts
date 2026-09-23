@@ -847,10 +847,11 @@ export const messagesEn = {
   'settings.integrations.branches.bindDialog.lead':
     'A branch binding overrides the brand default for that branch alone.',
   'settings.integrations.branches.bindDialog.installation': 'Installation',
-  'settings.integrations.branches.bindDialog.someExcluded':
-    'POS and delivery installations are not listed here — they need specific capabilities this dialog cannot assign yet.',
-  'settings.integrations.branches.bindDialog.noneEligible':
-    'None of your installations can be bound from this dialog yet. POS and delivery installations need specific capabilities this dialog cannot assign.',
+  'settings.integrations.branches.bindDialog.noneEligible': 'Connect an installation first — none exist yet to bind.',
+  'settings.integrations.branches.bindDialog.capabilities': 'Capabilities to bind',
+  'settings.integrations.branches.bindDialog.capabilitiesLoading': 'Loading this provider’s capabilities…',
+  'settings.integrations.branches.bindDialog.capabilitiesNone':
+    'This provider declares no capabilities in this build, so it cannot be bound from this dialog.',
   'settings.integrations.branches.bindDialog.branch': 'Branch',
   'settings.integrations.branches.bindDialog.cancel': 'Cancel',
   'settings.integrations.branches.bindDialog.submit': 'Bind',
