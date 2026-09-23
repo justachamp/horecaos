@@ -3706,6 +3706,7 @@ export const messagesRu: MessageCatalogue = {
   'reports.overview.tile.cancelled.subtitle': 'доля от завершённых заказов: {share}',
   'reports.overview.tile.late': 'Опоздания',
   'reports.overview.tile.late.subtitle': 'медиана {minutes}',
+  'reports.overview.tile.distance': 'Дистанция доставки',
   'reports.overview.tile.deltaSuffix': 'к тому же периоду неделю назад',
   'reports.overview.formula.ariaLabel': 'Как считается этот показатель',
   'reports.overview.formula.includes': 'Учитывается',
@@ -3765,7 +3766,7 @@ export const messagesRu: MessageCatalogue = {
   'reports.orders.boundedNote':
     'Показаны наихудшие строки в пределах лимита — не полный список для очень широкого периода.',
   'reports.orders.commercial.piiNote':
-    'Имя клиента, телефон, оператор и курьер здесь не показаны — в отчётности нет персональных данных вообще (ADR 0029).',
+    'Клиент, оператор и курьер получены из отдельного аудируемого источника (order.read) — сама отчётность не хранит персональных данных (ADR 0029). Телефон замаскирован; выгрузка этих данных — аудируемый вывоз ПДн.',
   'reports.orders.loadMore': 'Показать ещё',
   'reports.orders.loadMore.loading': 'Загрузка…',
   'reports.orders.late.empty': 'Нет опозданий за выбранный период',
@@ -3791,6 +3792,10 @@ export const messagesRu: MessageCatalogue = {
   'reports.orders.column.net': 'Итого',
   'reports.orders.column.items': 'Товаров',
   'reports.orders.column.occurredAt': 'Дата создания',
+  'reports.orders.column.customer': 'Клиент',
+  'reports.orders.column.customer.guest': 'Гость',
+  'reports.orders.column.operator': 'Оператор',
+  'reports.orders.column.courier': 'Курьер',
 
   'reports.orders.daily.date': 'Дата',
   'reports.orders.daily.gross': 'По общей цене',

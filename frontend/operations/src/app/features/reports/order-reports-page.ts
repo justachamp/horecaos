@@ -28,6 +28,7 @@ import {
   buildSummaryGrid,
 } from './order-summary-grid';
 import { OrderRowsTable, OrderTableColumn } from './order-rows-table';
+import { CrmLogRowResponse, OrderCrmLogApi } from './order-crm-log-api';
 import { ProvenanceBanner } from './provenance-banner';
 import { ddmm, formatCount, formatShare, formatSignedMinutes, median } from './report-formatting';
 import { deriveAverageCheck, sumAcrossDays } from './report-rollup';
@@ -61,7 +62,13 @@ const STAGE_COLUMNS: readonly OrderTableColumn[] = [
   'total',
 ];
 
-/** «Заказы»: wave P27 adds branch, «Предзаказ» and the public order number (via `orderId`'s own rendering). */
+/**
+ * «Заказы»: wave P27 adds branch, «Предзаказ» and the public order number
+ * (via `orderId`'s own rendering). Wave 9 w4-reports-distance-crm (7.2a)
+ * adds the CRM half — `customer`/`operator`/`courier` — joined client-side
+ * from `GET /orders/crm-log` (`order-crm-log-api.ts`'s own doc explains why
+ * that read is not part of `ReportingApi`).
+ */
 const COMMERCIAL_COLUMNS: readonly OrderTableColumn[] = [
   'orderId',
   'businessDate',
@@ -70,6 +77,9 @@ const COMMERCIAL_COLUMNS: readonly OrderTableColumn[] = [
   'fulfilment',
   'preorder',
   'status',
+  'customer',
+  'operator',
+  'courier',
   'gross',
   'discount',
   'deliveryFee',
@@ -117,11 +127,13 @@ interface AggregatorChannel {
  * the two roll-ups as one pivot («Сводка»), and delayed orders («Опоздания»).
  * Excel/CSV export is the sixth thing the IA row names — wave P28 builds the
  * export centre (`/statistics/exports`) behind `report.export`/
- * `customer.pii.export` and an async job queue; the Export button here links
- * there rather than triggering an order-log export of its own, since no
- * export source is registered for the order log yet
- * (`ReportExportRegistry`'s own doc names `CUSTOMER_DIRECTORY` as the one
- * report wired end to end so far).
+ * `customer.pii.export` and an async job queue; the Export button here still
+ * links there rather than triggering an export of its own. Wave 9
+ * w4-reports-distance-crm registers `ReportExportRegistry.ORDER_CRM_LOG`
+ * server-side and it is reachable via `ReportingApi.requestExport` with
+ * `reportKey: 'ORDER_CRM_LOG'` — `export-centre-page.ts` still offers only
+ * `CUSTOMER_DIRECTORY` in its own picker, so triggering an order-log export
+ * from this screen is not yet wired to a control here.
  *
  * «Этапы»/«Заказы»/«Опоздания» read `GET .../reporting/orders`, a bounded
  * order-grain read (see its own doc) rather than a paginated feed — real data,
@@ -169,6 +181,8 @@ interface AggregatorChannel {
 })
 export class OrderReportsPage {
   private readonly api = inject(ReportingApi);
+  /** Wave 9 w4-reports-distance-crm (7.2a): the CRM half of «Заказы» — its own service, its own module. */
+  private readonly crmLogApi = inject(OrderCrmLogApi);
   private readonly location = inject(CurrentLocation);
   private readonly locationsApi = inject(LocationsApi);
   private readonly channelsApi = inject(SalesChannelsApi);
@@ -193,6 +207,14 @@ export class OrderReportsPage {
   protected readonly commercialMaybeMore = signal(false);
   private commercialCursor: { readonly occurredAt: string; readonly orderId: string } | null = null;
   protected readonly commercialLoadingMore = signal(false);
+  /**
+   * Wave 9 w4-reports-distance-crm (7.2a): orderId -> the CRM row for the
+   * same order, from `GET /orders/crm-log` — populated only for «Заказы»
+   * (`OrderRowsTable.crmByOrderId`'s own doc). Cleared, not merged, on every
+   * fresh load: an order that fell out of the reporting page (a filter
+   * change) must not leave a stale CRM row behind it.
+   */
+  protected readonly crmByOrderId = signal<ReadonlyMap<string, CrmLogRowResponse>>(new Map());
 
   protected readonly stageColumns = STAGE_COLUMNS;
   protected readonly commercialColumns = COMMERCIAL_COLUMNS;
@@ -270,6 +292,10 @@ export class OrderReportsPage {
     this.commercialLoadingMore.set(true);
     try {
       const range = this.filters.range();
+      // Captured before this.commercialCursor moves on: loadCommercialCrm's
+      // own `append` branch reads it to fetch exactly this same page's CRM
+      // half, off the identical afterOccurredAt/afterOrderId pair.
+      const pageCursor = this.commercialCursor;
       const result = await this.api.orders(scope.tenantId, {
         from: range.from,
         to: range.to,
@@ -279,12 +305,13 @@ export class OrderReportsPage {
         channelCode: this.slice().channelCode,
         fulfilmentType: this.fulfilmentTypeParam(),
         legalEntityId: this.slice().legalEntityId,
-        afterOccurredAt: this.commercialCursor.occurredAt,
-        afterOrderId: this.commercialCursor.orderId,
+        afterOccurredAt: pageCursor.occurredAt,
+        afterOrderId: pageCursor.orderId,
       });
       this.commercialRows_.update((existing) => [...existing, ...result.rows]);
       this.commercialMaybeMore.set(result.maybeMore);
       this.commercialCursor = cursorOf(result.rows);
+      await this.loadCommercialCrm(scope, range, result.rows, true, pageCursor);
     } finally {
       this.commercialLoadingMore.set(false);
     }
@@ -398,6 +425,7 @@ export class OrderReportsPage {
             this.commercialMaybeMore,
           );
           this.commercialCursor = cursorOf(this.commercialRows_());
+          await this.loadCommercialCrm(scope, range, this.commercialRows_(), false);
           break;
         case 'late':
           await this.loadOrders(scope, range, 'LATENESS_DESC', this.lateRows_, this.lateMaybeMore);
@@ -444,6 +472,49 @@ export class OrderReportsPage {
     target.set(result.rows);
     maybeMoreTarget.set(result.maybeMore);
     this.provenance.set(result.provenance);
+  }
+
+  /**
+   * Wave 9 w4-reports-distance-crm (7.2a): fetches the CRM half for exactly
+   * the page of reporting rows «Заказы» just loaded — same `from`/`to` and
+   * `locationId`, and the same `afterOccurredAt`/`afterOrderId` cursor the
+   * reporting page's own last row carries once `loadMoreCommercial` starts
+   * paging past the first 200. `maybeMore` is not read here: the CRM log's
+   * own bounded page tracks the reporting page it was fetched for, one call
+   * per one call, and the two never drift because both are keyed by the
+   * same cursor.
+   */
+  private async loadCommercialCrm(
+    scope: LocationScope,
+    range: DateRange,
+    pageRows: readonly OrderRowResponse[],
+    append: boolean,
+    cursor: { readonly occurredAt: string; readonly orderId: string } | null = null,
+  ): Promise<void> {
+    if (pageRows.length === 0) {
+      if (!append) {
+        this.crmByOrderId.set(new Map());
+      }
+      return;
+    }
+    const result = await this.crmLogApi
+      .log(scope.tenantId, {
+        from: range.from,
+        to: range.to,
+        locationId: this.slice().locationId,
+        limit: 200,
+        afterOccurredAt: cursor?.occurredAt,
+        afterOrderId: cursor?.orderId,
+      })
+      .catch(() => ({ rows: [], maybeMore: false }) as const);
+
+    this.crmByOrderId.update((existing) => {
+      const next = append ? new Map(existing) : new Map<string, CrmLogRowResponse>();
+      for (const row of result.rows) {
+        next.set(row.orderId, row);
+      }
+      return next;
+    });
   }
 
   private async loadDaily(scope: LocationScope, range: DateRange): Promise<void> {

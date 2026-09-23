@@ -239,6 +239,9 @@ describe('BusinessOverviewPage', () => {
             fulfilmentTime: vi
               .fn()
               .mockResolvedValue({ medianSeconds: null, provenance: provenance() }),
+            deliveryDistance: vi
+              .fn()
+              .mockResolvedValue({ averageMeters: null, provenance: provenance() }),
           },
         },
         { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
@@ -258,12 +261,82 @@ describe('BusinessOverviewPage', () => {
     await render();
     const host = fixture.nativeElement as HTMLElement;
     const tiles = host.querySelectorAll('[data-testid="q-kpi-tile"]');
-    expect(tiles.length).toBe(5);
+    // Five from /queries, plus the distance tile (7.1) once its own endpoint resolves.
+    expect(tiles.length).toBe(6);
     expect(host.textContent).toContain('Revenue');
     // Revenue totals 1 000 000 over the two days — the tile's own formatted value.
     expect(host.textContent).toMatch(/1[\s ]000[\s ]000/);
-    // Every tile draws a sparkline from the two-day series (both days have data).
+    // Every /queries tile draws a sparkline from the two-day series (both days
+    // have data); the distance tile carries none, sourced from its own
+    // non-daily endpoint rather than the daily rows the others share.
     expect(host.querySelectorAll('[data-testid="q-sparkline"]').length).toBe(5);
+  });
+
+  /** Wave 9 w4-reports-distance-crm (7.1): the overview's distance KPI tile. */
+  it('renders the distance tile as — rather than a fabricated zero when nothing resolved a distance', async () => {
+    await render();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.textContent).toContain('Delivery distance');
+    // averageMeters is null in the shared render() stub -- an honest "no
+    // resolved distance in range" rather than a fabricated zero.
+    expect(host.textContent).toContain('—');
+  });
+
+  it('formats the distance tile in kilometres once GET .../reporting/delivery-distance resolves a value', async () => {
+    TestBed.resetTestingModule();
+    history.replaceState(null, '', '/statistics/overview');
+    paymentMixSpy = vi.fn().mockResolvedValue(paymentMixResponse());
+    await TestBed.configureTestingModule({
+      imports: [BusinessOverviewPage],
+      providers: [
+        provideRouter([]),
+        ReportsFilterState,
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal<LocationScope | null>(SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        {
+          provide: ReportingApi,
+          useValue: {
+            query: vi.fn(queryStub()),
+            preparationTime: vi
+              .fn()
+              .mockResolvedValue({ medianSeconds: 300, provenance: provenance() }),
+            orderOutcomes: vi
+              .fn()
+              .mockResolvedValue({ rows: outcomeRows(), provenance: provenance() }),
+            orders: vi
+              .fn()
+              .mockResolvedValue({ rows: [], maybeMore: false, provenance: provenance() }),
+            paymentMix: paymentMixSpy,
+            metrics: vi.fn().mockResolvedValue([]),
+            cancellationReasons: vi.fn().mockResolvedValue([]),
+            fulfilmentTime: vi
+              .fn()
+              .mockResolvedValue({ medianSeconds: null, provenance: provenance() }),
+            deliveryDistance: vi
+              .fn()
+              .mockResolvedValue({ averageMeters: 4_200, provenance: provenance() }),
+          },
+        },
+        { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
+        { provide: SalesChannelsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
+        { provide: PaymentMethodsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(BusinessOverviewPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.textContent).toContain('4.2 km');
+    expect(host.querySelectorAll('[data-testid="q-kpi-tile"]').length).toBe(6);
   });
 
   it('renders the channel mix as a donut, not the retired bar-row divs', async () => {

@@ -122,6 +122,11 @@ export const reportsPaths = {
     return `${TENANT_REPORTING(tenantId)}/fulfilment-time`;
   },
 
+  /** Wave 9 w4-reports-distance-crm (7.1): the overview's distance KPI tile — delivery_distance.average.v1. */
+  deliveryDistance(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/delivery-distance`;
+  },
+
   /** Wave P27 (7.1a): the tenant's cancellation-reason registry. */
   cancellationReasons(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/cancellation-reasons`;

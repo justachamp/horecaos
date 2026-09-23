@@ -22,8 +22,15 @@ type ExportCentreState = 'loading' | 'ready' | 'denied' | 'error';
 const POLL_INTERVAL_MS = 2_000;
 
 /**
- * Only `CUSTOMER_DIRECTORY` is wired server-side today (`ReportExportRegistry`'s
- * own doc); this list grows as more reports join the export centre.
+ * This screen's own picker still offers only `CUSTOMER_DIRECTORY`. Wave 9
+ * w4-reports-distance-crm also wires `ORDER_CRM_LOG` server-side
+ * (`ReportExportRegistry`'s own doc) — `orderId`/`occurredAt`/`locationId`/
+ * `customerType`/`customerName`/`customerPhone`/`operatorPrincipalId`/
+ * `courierDisplayReference`, `customerName`/`customerPhone` the PII group —
+ * but this screen was not extended with a report picker to reach it; it
+ * remains reachable only via `ReportingApi.requestExport({ reportKey:
+ * 'ORDER_CRM_LOG', ... })` directly. This list grows as more reports join
+ * this screen's own picker.
  */
 const CUSTOMER_DIRECTORY_COLUMNS: readonly ExportColumnOption[] = [
   { key: 'accountId', labelKey: 'reports.exportCentre.column.accountId', pii: false },
@@ -58,13 +65,14 @@ function isPending(row: ReportExportStatusResponse): boolean {
  * checklist; wave P28). `/statistics/exports` — the route the row's own gap
  * text names as missing.
  *
- * Only the `CUSTOMER_DIRECTORY` report is wired end to end today; a second
- * report joins this screen the same way it joins `ReportExportRegistry`
- * server-side — a new option in `reportKey`, not a new screen. The trigger
- * here is the general one; `order-reports-page.html`'s own Export button
- * (row 7.2) now links here rather than staying hard-coded `disabled`, since
- * an order-log export has no registered source yet — see this file's own
- * `CUSTOMER_DIRECTORY_COLUMNS` comment.
+ * Only the `CUSTOMER_DIRECTORY` report is wired into this screen's own
+ * picker today; `ORDER_CRM_LOG` is wired server-side (see this file's own
+ * `CUSTOMER_DIRECTORY_COLUMNS` comment) but has no picker option here yet —
+ * a second report joins this screen the same way it joined
+ * `ReportExportRegistry` server-side: a new option in `reportKey`, not a
+ * new screen. The trigger here is the general one; `order-reports-page.html`'s
+ * own Export button (row 7.2) links here rather than triggering an
+ * order-log export of its own.
  */
 @Component({
   selector: 'q-export-centre-page',

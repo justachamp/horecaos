@@ -31,7 +31,9 @@ import uz.horecaos.platform.customers.application.CustomerListQueryService;
 import uz.horecaos.platform.customers.application.CustomerProfileService;
 import uz.horecaos.platform.customers.application.CustomerProfileService.ContactType;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
+import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
+import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
 import uz.horecaos.platform.iam.infrastructure.protection.DataEncryptionKeyProvider;
 import uz.horecaos.platform.iam.infrastructure.protection.EnvelopeFieldProtection;
 import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver;
@@ -55,6 +57,11 @@ class ReportExportServiceTests {
     private RecordingObjectStorage storage;
     private JdbcReportExportStore exportStore;
     private CustomerProfileService profiles;
+    private FieldProtection protection;
+    private UUID brandId;
+    private UUID locationId;
+    private UUID channelId;
+    private UUID publicationId;
 
     @BeforeAll
     static void startDatabase() {
@@ -84,10 +91,11 @@ class ReportExportServiceTests {
                             status, version)
                         VALUES (:id, :slug, 'Legal', 'Display', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
                         """).param("id", TENANT).param("slug", "export-centre-test").update();
+        seedOrderingFixture();
 
         Clock clock = Clock.fixed(Instant.parse("2026-09-15T10:00:00Z"), ZoneOffset.UTC);
         var objectMapper = JsonMapper.builder().build();
-        FieldProtection protection = new EnvelopeFieldProtection(new DataEncryptionKeyProvider(
+        protection = new EnvelopeFieldProtection(new DataEncryptionKeyProvider(
                 new EnvironmentSecretResolver(
                         java.util.Map.of("horecaos.secrets.data_encryption.platform.kek", "a-test-key-encryption-key")
                                 ::get,
@@ -105,6 +113,12 @@ class ReportExportServiceTests {
                 (tenantId, at) -> new uz.horecaos.platform.customers.api.BusinessDayWindows.Window(at, at));
         CustomerDirectoryExportPort customerDirectory = new CustomerDirectoryExportAdapter(lists);
 
+        var crmLogStore = new uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderCrmLogStore(jdbc);
+        var crmLogQueries =
+                new uz.horecaos.platform.ordering.application.OrderCrmLogQueryService(crmLogStore, protection);
+        uz.horecaos.platform.ordering.api.OrderCrmLogExportPort orderCrmLog =
+                new uz.horecaos.platform.ordering.application.OrderCrmLogExportAdapter(crmLogQueries);
+
         exportStore = new JdbcReportExportStore(jdbc, objectMapper);
         storage = new RecordingObjectStorage();
         TransactionTemplate transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
@@ -112,6 +126,7 @@ class ReportExportServiceTests {
         service = new ReportExportService(
                 exportStore,
                 customerDirectory,
+                orderCrmLog,
                 protection,
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 storage,
@@ -298,6 +313,227 @@ class ReportExportServiceTests {
         assertThat(ownerView.includesPiiColumns()).isTrue();
         assertThat(ownerView.effectiveColumns()).contains("phone");
         assertThat(ownerView.downloadUrl()).isNotNull();
+    }
+
+    // ------------------------------------------------------- ORDER_CRM_LOG (7.2a)
+
+    @Test
+    @DisplayName("ORDER_CRM_LOG requires both from and to at queue time")
+    void orderCrmLogRequiresARange() {
+        assertThat(org.junit.jupiter.api.Assertions.assertThrows(
+                                uz.horecaos.platform.web.api.ApiException.class,
+                                () -> service.requestExport(
+                                        TENANT,
+                                        ReportExportRegistry.ORDER_CRM_LOG,
+                                        List.of("orderId", "customerName"),
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        List.of(),
+                                        "no-range-test",
+                                        SUBJECT,
+                                        true))
+                        .errorCode())
+                .isEqualTo(uz.horecaos.platform.web.api.ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("ORDER_CRM_LOG omits customer name and phone when the caller lacks customer.pii.export")
+    void orderCrmLogOmitsPiiWithoutTheCapability() {
+        seedCrmOrder("crm-1", "Alisher Karimov", "+998900000010");
+        Instant from = Instant.parse("2026-09-01T00:00:00Z");
+        Instant to = Instant.parse("2026-09-30T00:00:00Z");
+
+        UUID id = service.requestExport(
+                TENANT,
+                ReportExportRegistry.ORDER_CRM_LOG,
+                List.of("orderId", "customerName", "customerPhone", "operatorPrincipalId"),
+                null,
+                null,
+                from,
+                to,
+                List.of(),
+                "crm-log-no-pii-test",
+                SUBJECT,
+                false);
+
+        assertThat(service.processNextQueued()).isTrue();
+
+        ReportExportService.ExportStatusView view =
+                service.status(TENANT, id, false).orElseThrow();
+        assertThat(view.status()).isEqualTo("COMPLETE");
+        assertThat(view.includesPiiColumns()).isFalse();
+        assertThat(view.effectiveColumns()).doesNotContain("customerName", "customerPhone");
+
+        String csv = new String(storage.puts.getLast().content(), StandardCharsets.UTF_8);
+        assertThat(csv).doesNotContain("Alisher Karimov").doesNotContain("+998900000010");
+    }
+
+    @Test
+    @DisplayName("ORDER_CRM_LOG includes the decrypted name and phone when the caller holds customer.pii.export, "
+            + "and the completed export's audit fact names ORDER_CRM_LOG")
+    void orderCrmLogIncludesPiiWhenGranted() {
+        seedCrmOrder("crm-2", "Nodira Yusupova", "+998900000011");
+        Instant from = Instant.parse("2026-09-01T00:00:00Z");
+        Instant to = Instant.parse("2026-09-30T00:00:00Z");
+
+        UUID id = service.requestExport(
+                TENANT,
+                ReportExportRegistry.ORDER_CRM_LOG,
+                List.of("orderId", "customerName", "customerPhone"),
+                null,
+                null,
+                from,
+                to,
+                List.of(),
+                "crm-log-pii-test",
+                SUBJECT,
+                true);
+
+        assertThat(service.processNextQueued()).isTrue();
+
+        ReportExportService.ExportStatusView view =
+                service.status(TENANT, id, true).orElseThrow();
+        assertThat(view.includesPiiColumns()).isTrue();
+        String csv = new String(storage.puts.getLast().content(), StandardCharsets.UTF_8);
+        assertThat(csv).contains("Nodira Yusupova").contains("+998900000011");
+
+        var fact = jdbc.sql("""
+                        SELECT change_document ->> 'reportKey', change_document ->> 'piiColumnGroup'
+                          FROM audit.audit_events
+                         WHERE action_code = 'report.export.completed' AND correlation_id = :id
+                        """)
+                .param("id", id.toString())
+                .query((row, number) -> new String[] {row.getString(1), row.getString(2)})
+                .single();
+        assertThat(fact[0]).isEqualTo(ReportExportRegistry.ORDER_CRM_LOG);
+        assertThat(fact[1]).isEqualTo("INCLUDED");
+    }
+
+    private void seedOrderingFixture() {
+        brandId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :t, 'MAIN', 'main', 'Brand', 'ACTIVE', 0)
+                """).param("id", brandId).param("t", TENANT).update();
+        locationId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
+                    timezone, status, version)
+                VALUES (:id, :t, :b, 'CENTRE', 'centre', 'Centre', 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", locationId)
+                .param("t", TENANT)
+                .param("b", brandId)
+                .update();
+        channelId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name, status)
+                VALUES (:id, :t, 'STOREFRONT', 'WEB', 'Storefront', 'ACTIVE')
+                """).param("id", channelId).param("t", TENANT).update();
+        UUID catalogId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
+                VALUES (:id, :t, :b, 'MAIN', 'Main menu', 'ACTIVE')
+                """)
+                .param("id", catalogId)
+                .param("t", TENANT)
+                .param("b", brandId)
+                .update();
+        publicationId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel, status,
+                    content_hash, activated_at)
+                VALUES (:id, :t, :b, :cat, 'STOREFRONT', 'PUBLISHED', 'hash', now())
+                """)
+                .param("id", publicationId)
+                .param("t", TENANT)
+                .param("b", brandId)
+                .param("cat", catalogId)
+                .update();
+    }
+
+    /** One delivered order with a customer snapshot, for {@link #orderCrmLogOmitsPiiWithoutTheCapability}'s own suite. */
+    private UUID seedCrmOrder(String seed, String customerName, String phone) {
+        UUID orderId = UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8));
+        UUID cartId = UUID.nameUUIDFromBytes(("cart:" + seed).getBytes(StandardCharsets.UTF_8));
+        UUID quoteId = UUID.nameUUIDFromBytes(("quote:" + seed).getBytes(StandardCharsets.UTF_8));
+        Instant createdAt = Instant.parse("2026-09-10T12:00:00Z");
+
+        jdbc.sql("""
+                INSERT INTO pricing.quotes (id, tenant_id, brand_id, location_id, currency,
+                    catalog_publication_id, calculation_version, context_hash, subtotal_minor, tax_minor,
+                    total_minor, expires_at)
+                VALUES (:id, :t, :b, :loc, 'UZS', :pub, 1, 'hash', 45000, 0, 45000, now() + interval '1 hour')
+                """)
+                .param("id", quoteId)
+                .param("t", TENANT)
+                .param("b", brandId)
+                .param("loc", locationId)
+                .param("pub", publicationId)
+                .update();
+        jdbc.sql("""
+                INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
+                    fulfillment_mode, currency, status, guest_reference_hash, expires_at)
+                VALUES (:id, :t, :b, :loc, :ch, 'DELIVERY', 'UZS', 'ACTIVE', :guestHash, now() + interval '1 hour')
+                """)
+                .param("id", cartId)
+                .param("t", TENANT)
+                .param("b", brandId)
+                .param("loc", locationId)
+                .param("ch", channelId)
+                .param("guestHash", "guest-" + seed)
+                .update();
+        jdbc.sql("""
+                INSERT INTO ordering.orders (id, public_order_number, tenant_id, brand_id, location_id,
+                    channel_id, channel_code_snapshot, guest_reference_hash, fulfillment_mode,
+                    acceptance_mode_snapshot, acceptance_policy_version, approval_channel_snapshot, status,
+                    currency, subtotal_minor, tax_minor, total_minor, pricing_quote_id, pricing_context_hash,
+                    catalog_publication_id, cart_id, idempotency_key, version, created_at)
+                VALUES (:id, :num, :t, :b, :loc, :ch, 'STOREFRONT', :guestHash, 'DELIVERY', 'AUTO_CONFIRM', 0,
+                    'NONE', 'RECEIVED', 'UZS', 45000, 0, 45000, :quoteId, 'hash', :pub, :cartId, :idem, 1,
+                    :createdAt)
+                """)
+                .param("id", orderId)
+                .param("num", "F-" + seed)
+                .param("t", TENANT)
+                .param("b", brandId)
+                .param("loc", locationId)
+                .param("ch", channelId)
+                .param("guestHash", "guest-" + seed)
+                .param("quoteId", quoteId)
+                .param("pub", publicationId)
+                .param("cartId", cartId)
+                .param("idem", "crm-export-" + seed)
+                .param("createdAt", createdAt.atOffset(ZoneOffset.UTC))
+                .update();
+
+        String nameCipher = protection
+                .protect(
+                        TENANT,
+                        DataClass.PERSONAL,
+                        new RecordRef("ordering.order_customer_snapshots", "display_name_encrypted", orderId),
+                        customerName)
+                .serialize();
+        String phoneCipher = protection
+                .protect(
+                        TENANT,
+                        DataClass.PERSONAL,
+                        new RecordRef("ordering.order_customer_snapshots", "contact_encrypted", orderId),
+                        phone)
+                .serialize();
+        jdbc.sql("""
+                INSERT INTO ordering.order_customer_snapshots (order_id, tenant_id, display_name_encrypted,
+                    contact_encrypted)
+                VALUES (:orderId, :t, :name, :phone)
+                """)
+                .param("orderId", orderId)
+                .param("t", TENANT)
+                .param("name", nameCipher)
+                .param("phone", phoneCipher)
+                .update();
+        return orderId;
     }
 
     private long auditFactCount() {

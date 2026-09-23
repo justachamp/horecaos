@@ -3734,6 +3734,7 @@ export const messagesEn = {
   'reports.overview.tile.cancelled.subtitle': 'share of terminal orders: {share}',
   'reports.overview.tile.late': 'Late',
   'reports.overview.tile.late.subtitle': 'median {minutes}',
+  'reports.overview.tile.distance': 'Delivery distance',
   'reports.overview.tile.deltaSuffix': 'vs. same period a week back',
   'reports.overview.formula.ariaLabel': 'How this figure is calculated',
   'reports.overview.formula.includes': 'Includes',
@@ -3793,7 +3794,7 @@ export const messagesEn = {
   'reports.orders.boundedNote':
     'Showing the worst rows up to this view’s limit — not a complete list for a very wide range.',
   'reports.orders.commercial.piiNote':
-    'Customer name, phone, operator and courier are not shown here — reporting keeps no personal data at all (ADR 0029).',
+    'Customer, operator and courier come from a separate, audited read (order.read) — reporting itself keeps no personal data at all (ADR 0029). The phone is masked; exporting this data is an audited PII egress.',
   'reports.orders.loadMore': 'Load more',
   'reports.orders.loadMore.loading': 'Loading…',
   'reports.orders.late.empty': 'No late orders in the selected period',
@@ -3819,6 +3820,10 @@ export const messagesEn = {
   'reports.orders.column.net': 'Total',
   'reports.orders.column.items': 'Items',
   'reports.orders.column.occurredAt': 'Created',
+  'reports.orders.column.customer': 'Customer',
+  'reports.orders.column.customer.guest': 'Guest',
+  'reports.orders.column.operator': 'Operator',
+  'reports.orders.column.courier': 'Courier',
 
   'reports.orders.daily.date': 'Date',
   'reports.orders.daily.gross': 'Gross',

@@ -445,6 +445,7 @@ public class DayCloseService {
                 source.publicOrderNumber(),
                 source.stockDisposition(),
                 source.liabilityParty(),
+                source.deliveryDistanceMeters(),
                 MetricRegistry.CALCULATION_VERSION,
                 source.version());
     }
