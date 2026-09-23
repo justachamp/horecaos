@@ -64,7 +64,14 @@ class PlatformRoleTests {
      * role does not hold them without treating that absence as an unresolved gap.
      */
     private static final Set<Capability> NON_STAFF_RELATIONSHIP_AUTHORIZED = EnumSet.of(
-            Capability.MARKETPLACE_ORDER_RECEIVE, Capability.COURIER_SHIFT_OPEN, Capability.COURIER_SHIFT_BREAK);
+            Capability.MARKETPLACE_ORDER_RECEIVE,
+            // Batch 8 (row 10.9d): the aggregator's shift open/close notice arrives
+            // on the same partner-bound machine principal as its orders
+            // (PartnerShiftController, @PartnerBound), so it is authorised by the
+            // partner binding and belongs in no staff bundle either.
+            Capability.MARKETPLACE_SHIFT_RECEIVE,
+            Capability.COURIER_SHIFT_OPEN,
+            Capability.COURIER_SHIFT_BREAK);
 
     /**
      * ADR 0045: capabilities that are in no bundle because being in one is the
