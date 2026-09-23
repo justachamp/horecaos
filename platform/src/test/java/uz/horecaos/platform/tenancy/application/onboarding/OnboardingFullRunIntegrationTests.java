@@ -547,7 +547,8 @@ class OnboardingFullRunIntegrationTests {
                 new uz.horecaos.platform.pricing.infrastructure.catalog.PricingMenuPriceLookup(
                         new JdbcPricingStore(jdbc, JsonMapper.builder().build()),
                         new JdbcSalesChannelStore(jdbc),
-                        CLOCK));
+                        CLOCK),
+                new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore(jdbc));
     }
 
     private uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore catalogStore() {

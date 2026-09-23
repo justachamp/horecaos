@@ -31,6 +31,7 @@ import uz.horecaos.platform.catalog.application.CatalogValidator;
 import uz.horecaos.platform.catalog.application.SampleMenuService;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
 import uz.horecaos.platform.fulfillment.application.DeliveryFeeResolver;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryFeeResolutionStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryTariffStore;
@@ -733,7 +734,9 @@ class SampleMenuPublishStepTests {
 
     private StorefrontCatalogQuery storefront() {
         return new StorefrontCatalogQuery(
-                catalogStore(), new PricingMenuPriceLookup(pricingStore(), new JdbcSalesChannelStore(jdbc), CLOCK));
+                catalogStore(),
+                new PricingMenuPriceLookup(pricingStore(), new JdbcSalesChannelStore(jdbc), CLOCK),
+                new JdbcMenuStore(jdbc));
     }
 
     private OnboardingStepHandlers.CatalogReadinessValidate catalogReadiness() {

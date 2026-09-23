@@ -34,6 +34,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
 import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
@@ -66,6 +67,7 @@ class StorefrontCatalogQueryTests {
 
     private JdbcClient jdbc;
     private JdbcCatalogStore store;
+    private JdbcMenuStore menuStore;
     private CatalogAuthoringService authoring;
     private CatalogPublicationService publication;
     private StorefrontCatalogQuery storefront;
@@ -93,7 +95,8 @@ class StorefrontCatalogQueryTests {
                         + "catalog.product_modifier_groups, catalog.variant_modifier_groups, "
                         + "catalog.category_products, catalog.catalog_products, catalog.modifier_options, "
                         + "catalog.modifier_groups, catalog.categories, catalog.fiscal_classifications, "
-                        + "catalog.fees, catalog.variants, "
+                        + "catalog.fees, catalog.branch_menu_bindings, catalog.menu_items, catalog.menus, "
+                        + "catalog.variants, "
                         + "catalog.products, catalog.catalogs CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE media.assets CASCADE").update();
@@ -118,8 +121,9 @@ class StorefrontCatalogQueryTests {
                 loader,
                 new JdbcSalesChannelStore(jdbc),
                 Clock.fixed(Instant.parse("2026-08-21T10:00:00Z"), ZoneOffset.UTC));
+        menuStore = new JdbcMenuStore(jdbc);
         storefront = new StorefrontCatalogQuery(
-                store, (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.empty());
+                store, (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.empty(), menuStore);
     }
 
     @Test
@@ -312,7 +316,8 @@ class StorefrontCatalogQueryTests {
         StorefrontCatalogQuery pricedStorefront = new StorefrontCatalogQuery(
                 store,
                 (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.of(
-                        new MenuPriceLookup.MenuPrices("UZS", Map.of(somePricedVariantElsewhere, 15_000L), Map.of())));
+                        new MenuPriceLookup.MenuPrices("UZS", Map.of(somePricedVariantElsewhere, 15_000L), Map.of())),
+                menuStore);
 
         var menu = pricedStorefront
                 .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")

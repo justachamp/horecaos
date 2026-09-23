@@ -16,6 +16,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.LocationOffering;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
 
 /**
  * What a customer sees (ADR 0016).
@@ -27,16 +28,33 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
  * <p>Location offerings <em>are</em> read live, and deliberately so: marking a
  * dish sold out must take effect at once, and routing it through a republish
  * would mean re-validating an entire menu to hide one item.
+ *
+ * <p><strong>Row 4.4a — the named Menu entity.</strong> A branch that has
+ * bound a named menu ({@code catalog.branch_menu_bindings}, V0390) publishes
+ * its per-variant availability from that menu's own membership instead of
+ * from {@code location_offerings} — {@link #offeringsFor} resolves a
+ * channel-specific binding first, then the branch's default binding, and
+ * falls back to {@code location_offerings} only when neither exists. A
+ * tenant that has never bound a menu anywhere therefore sees no behaviour
+ * change at all: {@code findBoundMenuId} returns empty for every branch, and
+ * this method takes exactly the path it always did. See {@code
+ * JdbcMenuStore}'s own class doc and {@code V0389}/{@code V0390} for why this
+ * is additive to ADR 0016's model rather than a second publication mechanism
+ * — the publication itself (what a product/category/modifier looks like) is
+ * completely unaffected; only the answer to "does this branch sell this
+ * variant, at what default availability" gains a second, curated source.
  */
 @Service
 public class StorefrontCatalogQuery {
 
     private final JdbcCatalogStore store;
     private final MenuPriceLookup prices;
+    private final JdbcMenuStore menus;
 
-    public StorefrontCatalogQuery(JdbcCatalogStore store, MenuPriceLookup prices) {
+    public StorefrontCatalogQuery(JdbcCatalogStore store, MenuPriceLookup prices, JdbcMenuStore menus) {
         this.store = store;
         this.prices = prices;
+        this.menus = menus;
     }
 
     /**
@@ -60,9 +78,7 @@ public class StorefrontCatalogQuery {
         }
         UUID publication = publicationId.get();
 
-        Map<UUID, OfferingStatus> offeringByVariant = store.offeringsForLocation(tenantId, locationId).stream()
-                .collect(Collectors.toMap(
-                        LocationOffering::variantId, LocationOffering::status, (first, second) -> first));
+        Map<UUID, OfferingStatus> offeringByVariant = offeringsFor(tenantId, brandId, locationId, channelCode);
 
         // ADR 0036's sparse per-channel exclusions: default is offered, and a row
         // removes one item from one channel, optionally at one location. Read live
@@ -165,6 +181,24 @@ public class StorefrontCatalogQuery {
                 .toList();
 
         return Optional.of(new StorefrontMenu(publication, locale, currency, categories, pricedProducts, pricedGroups));
+    }
+
+    /**
+     * Row 4.4a: a bound menu's membership when this branch has one, exactly
+     * as {@code location_offerings} always answered when it did not. See
+     * this class's own doc for why a tenant with no bindings anywhere is
+     * provably unaffected — {@code findBoundMenuId} returns empty and this
+     * falls straight through to the unmodified {@code offeringsForLocation}
+     * call.
+     */
+    private Map<UUID, OfferingStatus> offeringsFor(UUID tenantId, UUID brandId, UUID locationId, String channelCode) {
+        Optional<UUID> boundMenuId = menus.findBoundMenuId(tenantId, brandId, locationId, channelCode);
+        if (boundMenuId.isPresent()) {
+            return menus.menuMembershipOfferings(tenantId, brandId, boundMenuId.get());
+        }
+        return store.offeringsForLocation(tenantId, locationId).stream()
+                .collect(Collectors.toMap(
+                        LocationOffering::variantId, LocationOffering::status, (first, second) -> first));
     }
 
     @SuppressWarnings("unchecked")
