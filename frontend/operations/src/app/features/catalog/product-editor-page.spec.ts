@@ -824,6 +824,66 @@ describe('ProductEditorPage', () => {
     );
   });
 
+  it('detaching one channel’s override leaves another channel’s relation for the same asset and role alone', async () => {
+    // The same photo re-uploaded verbatim under two different channels would
+    // collide on (mediaAssetId, role) alone — exactly what catalog.media_relations'
+    // own primary key since V0223 says is two distinct rows, not one. Detaching
+    // the universal copy must not also remove UZUM's.
+    const detachMedia = vi.fn().mockReturnValue(of(undefined));
+    configure(
+      {
+        productDetail: () =>
+          of(
+            productDetail({
+              media: [
+                { mediaAssetId: 'shared-asset', role: 'PRIMARY', sortOrder: 0, channelCode: 'ALL' },
+                { mediaAssetId: 'shared-asset', role: 'PRIMARY', sortOrder: 0, channelCode: 'UZUM' },
+              ],
+            }),
+          ),
+        detachMedia,
+      },
+      {},
+      { downloadUrl: () => of('https://cdn.example/thumb.jpg') },
+      {},
+      {},
+      {},
+      { list: () => Promise.resolve([channel()]) },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-PHOTOS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    // The default (universal) selection shows exactly the ALL relation.
+    (host.querySelector('[data-testid="editor-photo-detach"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(detachMedia).toHaveBeenCalledWith(
+      BRAND_SCOPE,
+      'PRODUCT',
+      'product-1',
+      'shared-asset',
+      'PRIMARY',
+      'ALL',
+    );
+    expect(detachMedia).toHaveBeenCalledTimes(1);
+
+    const select = host.querySelector<HTMLSelectElement>(
+      '[data-testid="editor-photo-channel-select"]',
+    )!;
+    select.value = 'UZUM';
+    select.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+
+    // UZUM's own relation for the very same asset and role survived the
+    // universal one's detach — the pre-fix code matched on (mediaAssetId,
+    // role) alone and would have dropped both from local state at once.
+    expect(host.querySelectorAll('[data-testid="editor-photo-tile"]').length).toBe(1);
+  });
+
   it('saves marking, excise, alcohol % and age gate — fields the domain always carried with no control anywhere', async () => {
     const classifyVariant = vi.fn().mockReturnValue(of(undefined));
     configure({ productDetail: () => of(productDetail()), classifyVariant });
