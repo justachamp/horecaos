@@ -12,6 +12,7 @@ import { LocationsApi, LocationView } from '../locations/locations-api';
 import { BindSubmission, ConnectProviderPanel, ConnectSubmission } from './connect-provider-panel';
 import { InstallationDetailPanel } from './installation-detail-panel';
 import {
+  EffectiveBindingView,
   InstallationView,
   IntegrationsApi,
   MerchantBindingView,
@@ -163,8 +164,109 @@ export class IntegrationsPage {
     return names;
   });
 
+  // --------------------------------------------------------- 10.8a branches
+  // The per-branch install model — tenant default overridden per branch —
+  // surfaced, and the missing half of the loop closed: before this wave a
+  // tenant admin could bind an installation to a branch only in the instant
+  // right after connecting it (the connect drawer's own bind step); nothing
+  // let them add a second branch's binding, or bind one later, to an
+  // installation that already existed. `effectiveBindings` is fetched per
+  // brand, the same fan-out `loadPickerData` already runs for locations —
+  // there is no single endpoint that answers "every branch in this tenant".
+  protected readonly effectiveBindings = signal<readonly EffectiveBindingView[]>([]);
+
+  protected readonly showBindToBranch = signal(false);
+  protected readonly bindToBranchSubmitting = signal(false);
+  protected readonly bindToBranchError = signal<string | null>(null);
+  protected readonly bindToBranchInstallationId = signal<string | null>(null);
+  protected readonly bindToBranchLocationId = signal<string | null>(null);
+
+  /** One row per branch that has at least one resolved capability, branch name resolved for display. */
+  protected readonly branchRows = computed(() => {
+    const names = this.scopeNames();
+    const byLocation = new Map<string, EffectiveBindingView[]>();
+    for (const row of this.effectiveBindings()) {
+      const rows = byLocation.get(row.locationId);
+      if (rows) {
+        rows.push(row);
+      } else {
+        byLocation.set(row.locationId, [row]);
+      }
+    }
+    return [...byLocation.entries()]
+      .map(([locationId, rows]) => ({
+        locationId,
+        locationName: names.get(locationId) ?? locationId,
+        rows,
+      }))
+      .sort((a, b) => a.locationName.localeCompare(b.locationName));
+  });
+
   constructor() {
     void this.load();
+  }
+
+  protected sourceLabel(row: EffectiveBindingView): string {
+    return row.locationScoped
+      ? this.i18n.t('settings.integrations.branches.source.branch')
+      : this.i18n.t('settings.integrations.branches.source.brand');
+  }
+
+  protected openBindToBranch(): void {
+    this.bindToBranchError.set(null);
+    this.bindToBranchInstallationId.set(this.installations()[0]?.id ?? null);
+    this.bindToBranchLocationId.set(this.locations()[0]?.id ?? null);
+    this.showBindToBranch.set(true);
+  }
+
+  protected closeBindToBranch(): void {
+    if (!this.bindToBranchSubmitting()) {
+      this.showBindToBranch.set(false);
+    }
+  }
+
+  protected canSubmitBindToBranch(): boolean {
+    return (
+      !this.bindToBranchSubmitting() &&
+      this.bindToBranchInstallationId() !== null &&
+      this.bindToBranchLocationId() !== null
+    );
+  }
+
+  protected async submitBindToBranch(): Promise<void> {
+    const scope = this.location.scope();
+    const installationId = this.bindToBranchInstallationId();
+    const locationId = this.bindToBranchLocationId();
+    if (!scope || installationId === null || locationId === null) {
+      return;
+    }
+    const branch = this.locations().find((candidate) => candidate.id === locationId);
+    if (!branch) {
+      return;
+    }
+    this.bindToBranchSubmitting.set(true);
+    this.bindToBranchError.set(null);
+    try {
+      await this.api.bindInstallation(scope, installationId, {
+        brandId: branch.brandId,
+        locationId,
+        capabilities: [],
+        primaryCapabilities: [],
+      });
+      this.showBindToBranch.set(false);
+      await this.reloadEffectiveBindings(scope);
+    } catch (failure) {
+      this.bindToBranchError.set(this.describeError(failure));
+    } finally {
+      this.bindToBranchSubmitting.set(false);
+    }
+  }
+
+  private async reloadEffectiveBindings(scope: LocationScope): Promise<void> {
+    const perBrand = await Promise.all(
+      this.brands().map((brand) => this.api.effectiveBindings(scope, brand.id).catch(() => [])),
+    );
+    this.effectiveBindings.set(perBrand.flat());
   }
 
   protected statusLabel(status: string): string {
@@ -482,6 +584,14 @@ export class IntegrationsPage {
     } catch {
       this.brands.set([]);
       this.locations.set([]);
+    }
+    // Best-effort, after brands are known: gap-map row 10.8a's per-branch
+    // view is a convenience over the two tables above, not a blocker for
+    // them.
+    try {
+      await this.reloadEffectiveBindings(scope);
+    } catch {
+      this.effectiveBindings.set([]);
     }
   }
 

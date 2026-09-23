@@ -13,7 +13,9 @@ import { Drawer } from '../../../shared/ui/drawer';
 import { StatusPill, StatusTone } from '../../../shared/ui/status-pill';
 import { describeApiError } from '../../orders/order-errors';
 import {
+  CHANNEL_SOURCES,
   EventClassOption,
+  FULFILLMENT_MODES,
   NOTIFICATION_CHANNELS,
   NotificationsApi,
   RoutingBinding,
@@ -76,6 +78,9 @@ export class NotificationsPage {
   protected readonly notificationClasses = NOTIFICATION_CLASSES;
   protected readonly channels = NOTIFICATION_CHANNELS;
   protected readonly wiredChannels = WIRED_CHANNELS;
+  /** Gap-map row 10.9a: the variant picker's two dimensions. `''` means "any" (the wildcard, null on the wire). */
+  protected readonly fulfilmentModes = FULFILLMENT_MODES;
+  protected readonly channelSources = CHANNEL_SOURCES;
 
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);
@@ -88,6 +93,9 @@ export class NotificationsPage {
   protected readonly newTemplateKey = signal('');
   protected readonly newNotificationClass = signal(NOTIFICATION_CLASSES[0]);
   protected readonly newChannel = signal(NOTIFICATION_CHANNELS[0]);
+  /** `''` is "every fulfilment mode" / "every channel source" — the wildcard row, sent as `null`. */
+  protected readonly newFulfilmentMode = signal('');
+  protected readonly newChannelSource = signal('');
 
   // ------------------------------------------------------------ automation
 
@@ -152,7 +160,8 @@ export class NotificationsPage {
       return this.eventClassOptions();
     }
     return this.eventClassOptions().filter(
-      (option) => option.id.toLowerCase().includes(query) || option.label.toLowerCase().includes(query),
+      (option) =>
+        option.id.toLowerCase().includes(query) || option.label.toLowerCase().includes(query),
     );
   });
 
@@ -187,9 +196,13 @@ export class NotificationsPage {
         templateKey: this.newTemplateKey().trim(),
         notificationClass: this.newNotificationClass(),
         channel: this.newChannel(),
+        fulfillmentMode: this.newFulfilmentMode() === '' ? null : this.newFulfilmentMode(),
+        channelSource: this.newChannelSource() === '' ? null : this.newChannelSource(),
       });
       this.showCreateForm.set(false);
       this.newTemplateKey.set('');
+      this.newFulfilmentMode.set('');
+      this.newChannelSource.set('');
       await this.reload(scope);
       const created = this.templates().find((row) => row.id === templateId);
       if (created) {
@@ -288,7 +301,9 @@ export class NotificationsPage {
     if (!group) {
       return null;
     }
-    const withheld = group.locales.find((row) => row.providerReview === 'PENDING' || row.providerReview === 'REJECTED');
+    const withheld = group.locales.find(
+      (row) => row.providerReview === 'PENDING' || row.providerReview === 'REJECTED',
+    );
     return withheld ? this.moderationLabel(withheld.providerReview) : null;
   }
 
@@ -365,6 +380,16 @@ export class NotificationsPage {
 
   // ------------------------------------------------------------- labels
 
+  /** Gap-map row 10.9a: which variant a row resolves for, or "any" for the wildcard default. */
+  protected variantLabel(template: TemplateResponse): string {
+    const parts = [template.fulfillmentMode, template.channelSource].filter(
+      (part): part is string => part !== null,
+    );
+    return parts.length === 0
+      ? this.i18n.t('settings.notifications.field.variant.any')
+      : parts.join(' · ');
+  }
+
   protected moderationLabel(review: string): string {
     switch (review) {
       case 'PENDING':
@@ -438,7 +463,13 @@ export class NotificationsPage {
     try {
       const [paymentLink, shift] = await Promise.all([
         this.configApi.resolution(scope.tenantId, PAYMENT_LINK_CODE, 'BRAND', scope.brandId, null),
-        this.configApi.resolution(scope.tenantId, AGGREGATOR_SHIFT_CODE, 'BRAND', scope.brandId, null),
+        this.configApi.resolution(
+          scope.tenantId,
+          AGGREGATOR_SHIFT_CODE,
+          'BRAND',
+          scope.brandId,
+          null,
+        ),
       ]);
       this.paymentLinkAutoSend.set(Boolean(paymentLink.value));
       this.paymentLinkVersion = paymentLink.currentVersionAtScope;
@@ -519,7 +550,9 @@ export class NotificationsPage {
   }
 
   protected eventClassLabel(code: string): string {
-    return this.routingEventClasses().find((entry) => entry.eventClass === code)?.description ?? code;
+    return (
+      this.routingEventClasses().find((entry) => entry.eventClass === code)?.description ?? code
+    );
   }
 
   protected selectedEventClasses(binding: RoutingBinding): readonly ComboboxOption[] {
@@ -537,7 +570,9 @@ export class NotificationsPage {
       return;
     }
     const selectedIds = new Set(selected.map((option) => option.id));
-    const currentlyEnabled = new Set(binding.subscriptions.filter((sub) => sub.enabled).map((sub) => sub.eventClass));
+    const currentlyEnabled = new Set(
+      binding.subscriptions.filter((sub) => sub.enabled).map((sub) => sub.eventClass),
+    );
     for (const id of selectedIds) {
       if (!currentlyEnabled.has(id)) {
         await this.api.setRoutingSubscription(scope, binding.bindingId, id, true);
@@ -571,7 +606,11 @@ export class NotificationsPage {
     try {
       const raw = this.topicDraft().trim();
       const topicId = raw.length === 0 ? null : Number.parseInt(raw, 10);
-      await this.api.changeRoutingTopic(scope, binding.bindingId, Number.isNaN(topicId as number) ? null : topicId);
+      await this.api.changeRoutingTopic(
+        scope,
+        binding.bindingId,
+        Number.isNaN(topicId as number) ? null : topicId,
+      );
       this.topicEditBindingId.set(null);
       await this.loadRouting();
     } catch (error) {

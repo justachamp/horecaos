@@ -787,6 +787,24 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.installations.column.lastRotated': 'Последнее обновление',
   'settings.integrations.installations.column.actions': 'Действия',
 
+  'settings.integrations.branches.title': 'Филиалы',
+  'settings.integrations.branches.empty': 'Ни один провайдер ещё не привязан ни к одному филиалу.',
+  'settings.integrations.branches.bindAction': 'Привязать к филиалу',
+  'settings.integrations.branches.column.branch': 'Филиал',
+  'settings.integrations.branches.column.capability': 'Возможность',
+  'settings.integrations.branches.column.installation': 'Провайдер',
+  'settings.integrations.branches.column.source': 'Источник',
+  'settings.integrations.branches.source.branch': 'Этот филиал',
+  'settings.integrations.branches.source.brand': 'По умолчанию для бренда',
+  'settings.integrations.branches.bindDialog.title': 'Привязать провайдера к филиалу',
+  'settings.integrations.branches.bindDialog.lead':
+    'Привязка на уровне филиала переопределяет значение бренда по умолчанию только для этого филиала.',
+  'settings.integrations.branches.bindDialog.installation': 'Провайдер',
+  'settings.integrations.branches.bindDialog.branch': 'Филиал',
+  'settings.integrations.branches.bindDialog.cancel': 'Отмена',
+  'settings.integrations.branches.bindDialog.submit': 'Привязать',
+  'settings.integrations.branches.bindDialog.submitting': 'Привязка…',
+
   'settings.integrations.merchantBindings.title': 'Привязки продавца',
   'settings.integrations.merchantBindings.empty': 'Мерчант-аккаунты ещё не зарегистрированы.',
   'settings.integrations.merchantBindings.column.provider': 'Провайдер',
@@ -1222,6 +1240,12 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.field.activateImmediately': 'Активировать эту версию сразу',
   'settings.notifications.field.channel.hint':
     'Сегодня реально отправляют только SMS и Telegram. Email и Push объявлены в схеме и ключе шаблона, но ни один адаптер их не доставляет.',
+  'settings.notifications.field.variant': 'Вариант',
+  'settings.notifications.field.fulfilmentMode': 'Способ выполнения',
+  'settings.notifications.field.channelSource': 'Источник канала',
+  'settings.notifications.field.variant.any': 'Любой',
+  'settings.notifications.field.variant.hint':
+    'Оставьте оба поля «Любой» для текста по умолчанию. Вариант применяется только к заказу, который ему соответствует; побеждает наиболее точное совпадение, а менее точная формулировка остаётся резервной.',
   'settings.notifications.empty': 'Шаблонов пока нет.',
   'settings.notifications.action.rowMenu': 'Действия',
   'settings.notifications.action.versions': 'Версии',
