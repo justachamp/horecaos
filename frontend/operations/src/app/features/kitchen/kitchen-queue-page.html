@@ -159,8 +159,9 @@
                    sibling of the in-house picker above, over the same
                    order-keyed path `order-detail-pane.ts` uses for row 1.2e.
                    Same rule as that pane's own button: offered only while
-                   {@link resolvePlanForTicket} has not (yet) found this
-                   ticket already carrying a shipment of either kind. -->
+                   `shipmentByTicketId` -- kept current every poll by
+                   {@link refreshShipmentStates} -- has not found this ticket
+                   already carrying a shipment of either kind. -->
               @if (!shipmentByTicketId().get(ticket.ticketId)) {
                 <button
                   type="button"
