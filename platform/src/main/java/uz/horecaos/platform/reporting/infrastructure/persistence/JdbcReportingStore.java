@@ -1485,6 +1485,17 @@ public class JdbcReportingStore {
      * reads pre-aggregated {@code agg_branch_day}, not the fact directly)
      * cannot answer.
      *
+     * <p>{@code closed_at IS NOT NULL} — the registry's own population
+     * ("delivery orders closed in the requested range") is not
+     * {@code delivery_distance_meters IS NOT NULL} alone. A plan resolves its
+     * distance right after order confirmation, well before the order itself
+     * reaches a terminal state, so without this filter an order still open
+     * (PREPARING, ASSIGNED — possibly about to be cancelled) would be
+     * averaged in the moment its plan resolves a distance, not when it
+     * closes. {@code closed_at} is set on every terminal status, not only
+     * {@code COMPLETED} — matching "closed", not the narrower
+     * {@code COMPLETED_ONLY} population {@code revenue}-family metrics use.
+     *
      * @return null when no delivery order carrying a distance closed in
      *         range — a PICKUP/DINE_IN-only period, or one entirely before
      *         V0387 — never a zero-metre average
@@ -1507,6 +1518,7 @@ public class JdbcReportingStore {
                   FROM reporting.fact_order
                  WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
                    AND fulfilment_type = 'DELIVERY' AND delivery_distance_meters IS NOT NULL
+                   AND closed_at IS NOT NULL
                 """ + locationFilter)
                 .params(params)
                 .query(Double.class)

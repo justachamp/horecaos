@@ -283,6 +283,34 @@ class DayCloseDeliveryDistanceTests {
         assertThat(average).isEqualTo(5_000);
     }
 
+    @Test
+    @DisplayName("averageDeliveryDistanceMeters excludes a delivery order that is still open")
+    void averageDeliveryDistanceExcludesOpenOrders() {
+        UUID closedDelivery = seedOrder("DELIVERY");
+        UUID closedPlan = UUID.randomUUID();
+        seedDeliveryPlan(closedDelivery, closedPlan, 4_000, "ROUTING");
+        seedShipment(closedDelivery, closedPlan);
+
+        // Still in flight — e.g. PREPARING, not yet delivered, possibly headed
+        // for cancellation — but its delivery plan already resolved a distance,
+        // the way a plan resolves right after order confirmation, long before
+        // the order itself closes. Never counted: the registry documents this
+        // metric's population as delivery orders "closed in range", not every
+        // delivery order that merely has a resolved distance.
+        UUID openDelivery = seedOrder("DELIVERY", "PREPARING", null);
+        UUID openPlan = UUID.randomUUID();
+        seedDeliveryPlan(openDelivery, openPlan, 8_000, "ROUTING");
+        seedShipment(openDelivery, openPlan);
+
+        close.close(TENANT, DAY);
+
+        Integer average = store.averageDeliveryDistanceMeters(TENANT, DAY, DAY, List.of());
+
+        assertThat(average)
+                .as("the open order's 8,000m plan must not be averaged in alongside the closed order's 4,000m")
+                .isEqualTo(4_000);
+    }
+
     // --------------------------------------------------------------- fixture
 
     private void seedTenancy() {
@@ -356,6 +384,19 @@ class DayCloseDeliveryDistanceTests {
     }
 
     private UUID seedOrder(String fulfilmentMode) {
+        return seedOrder(fulfilmentMode, "COMPLETED", CLOSED_AT);
+    }
+
+    /**
+     * Same fixture, with the order's own status and {@code closed_at}
+     * exposed — so a test can seed a delivery order that is still open
+     * (e.g. {@code PREPARING}, {@code closedAt} null) the way a branch's
+     * close job actually meets one mid-shift: created and confirmed, its
+     * delivery plan already resolved a distance, but not yet delivered and
+     * not yet in {@link #seedOrder(String)}'s always-{@code COMPLETED}
+     * shape.
+     */
+    private UUID seedOrder(String fulfilmentMode, String status, @Nullable Instant closedAt) {
         UUID orderId = UUID.randomUUID();
         UUID quoteId = UUID.randomUUID();
         UUID cartId = UUID.randomUUID();
@@ -394,7 +435,7 @@ class DayCloseDeliveryDistanceTests {
                     catalog_publication_id, cart_id, idempotency_key, version, created_at, confirmed_at,
                     closed_at)
                 VALUES (:id, :orderNumber, :tenantId, :brandId, :locationId, :channelId, 'STOREFRONT',
-                        'distance-fixture', :mode, 'AUTO_CONFIRM', 0, 'NONE', 'COMPLETED', 'UZS', 45000, 0,
+                        'distance-fixture', :mode, 'AUTO_CONFIRM', 0, 'NONE', :status, 'UZS', 45000, 0,
                         45000, :quoteId, 'hash', :publicationId, :cartId, :idempotencyKey, 1, :createdAt,
                         :createdAt, :closedAt)
                 """)
@@ -405,12 +446,13 @@ class DayCloseDeliveryDistanceTests {
                 .param("locationId", branch)
                 .param("channelId", channelId)
                 .param("mode", fulfilmentMode)
+                .param("status", status)
                 .param("quoteId", quoteId)
                 .param("publicationId", publicationId)
                 .param("cartId", cartId)
                 .param("idempotencyKey", "distance-fixture-" + orderId)
                 .param("createdAt", OffsetDateTime.ofInstant(CREATED_AT, ZoneOffset.UTC))
-                .param("closedAt", OffsetDateTime.ofInstant(CLOSED_AT, ZoneOffset.UTC))
+                .param("closedAt", closedAt == null ? null : OffsetDateTime.ofInstant(closedAt, ZoneOffset.UTC))
                 .update();
         return orderId;
     }
