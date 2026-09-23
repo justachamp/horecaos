@@ -79,9 +79,15 @@ export class OrderOutcomeReasonDialog {
   protected readonly note = signal('');
   private readonly touched = signal(false);
 
-  protected readonly orderedReasons = computed(() =>
-    [...this.reasons()].sort((a, b) => a.internalName.localeCompare(b.internalName)),
-  );
+  /**
+   * Row 10.10a: renders `reasons()` in the order it already arrived, the
+   * tenant's own deliberate rank (`ReferenceDataApi.list`,
+   * `display_order`) — this used to re-sort alphabetically, which is
+   * exactly the "an alphabetic accident, not an operator's ranking" the
+   * gap map row named. The name `orderedReasons` predates that fix; kept so
+   * the template binding did not need to change.
+   */
+  protected readonly orderedReasons = computed(() => this.reasons());
 
   private readonly selectedReason = computed(
     () => this.reasons().find((r) => r.id === this.selectedId()) ?? null,

@@ -1409,6 +1409,9 @@ export const messagesEn = {
     '"{name}" will stop being offered. Outcomes already recorded under it are unaffected. Continue?',
   'settings.referenceData.field.status': 'Status',
   'settings.referenceData.field.allowedFulfillmentModes': 'Allowed fulfilment modes',
+  'settings.referenceData.field.order': 'Order',
+  'settings.referenceData.moveUp': 'Move up',
+  'settings.referenceData.moveDown': 'Move down',
   'settings.referenceData.fulfillmentModes.required':
     'Pick at least one fulfilment mode this reason is valid for.',
   'settings.referenceData.edit': 'Edit',

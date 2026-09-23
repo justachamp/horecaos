@@ -645,6 +645,11 @@ export const settingsPaths = {
     return `${this.orderOutcomeReasons(scope)}/${enc(reasonId)}`;
   },
 
+  /** Row 10.10a — ranks every active reason of one kind. */
+  orderOutcomeReasonReorder(scope: LocationScope): string {
+    return `${this.orderOutcomeReasons(scope)}/reorder`;
+  },
+
   // ---------------------------------------------------------- 10.10d Branch tags
 
   /** `BranchTagController` — the tenant-wide registry and assignment read. */

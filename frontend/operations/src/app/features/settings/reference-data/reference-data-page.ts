@@ -55,9 +55,18 @@ const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
  * promise tenant-configurable buckets; ADR 0107 raises that contradiction
  * rather than building the configurability the platform decision refuses.
  *
- * Simplified relative to the spec: no drag-reorder `display_order` (the
- * column does not exist — a small, named gap), and a reason's customer text
- * covers three locales without `LocalizedFieldGroup`'s completeness chips.
+ * **Reordered, two ways** (row 10.10a): native HTML5 drag-and-drop on each
+ * row, the same "no `@angular/cdk`" posture `q-rule-list` documents, plus an
+ * explicit move-up/move-down pair for a keyboard operator or anyone who
+ * cannot drag a `<tr>`. Cancellation and completion each reorder
+ * independently — `PUT .../reorder`'s own `kind` field. `q-rule-list` was
+ * not reused here: its `{id, label, description, enabled}` shape has no
+ * room for this screen's own columns (system category, stock disposition,
+ * liability party, customer refund, status), so the table keeps its own
+ * rows and borrows only the gesture.
+ *
+ * Simplified relative to the spec: a reason's customer text covers three
+ * locales without `LocalizedFieldGroup`'s completeness chips.
  */
 @Component({
   selector: 'q-reference-data-page',
@@ -375,6 +384,95 @@ export class ReferenceDataPage {
   private async reload(scope: NonNullable<ReturnType<CurrentLocation['scope']>>): Promise<void> {
     this.cancellationReasons.set(await this.api.list(scope, 'CANCELLATION'));
     this.completionReasons.set(await this.api.list(scope, 'COMPLETION'));
+  }
+
+  // -------------------------------------------------------- 10.10a: reorder
+
+  protected readonly reorderError = signal<string | null>(null);
+
+  private dragIndex: { readonly kind: OutcomeReasonKind; readonly index: number } | null = null;
+
+  protected onReasonDragStart(kind: OutcomeReasonKind, index: number, event: DragEvent): void {
+    this.dragIndex = { kind, index };
+    event.dataTransfer?.setData('text/plain', String(index));
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+    }
+  }
+
+  protected onReasonDragOver(event: DragEvent): void {
+    // A drop target must cancel dragover, or the browser never fires `drop`.
+    event.preventDefault();
+  }
+
+  protected onReasonDrop(kind: OutcomeReasonKind, index: number, event: DragEvent): void {
+    event.preventDefault();
+    const from = this.dragIndex;
+    this.dragIndex = null;
+    if (!from || from.kind !== kind || from.index === index) {
+      return;
+    }
+    void this.moveReason(kind, from.index, index);
+  }
+
+  protected onReasonDragEnd(): void {
+    this.dragIndex = null;
+  }
+
+  protected moveReasonUp(kind: OutcomeReasonKind, index: number): void {
+    if (index > 0) {
+      void this.moveReason(kind, index, index - 1);
+    }
+  }
+
+  protected moveReasonDown(kind: OutcomeReasonKind, index: number): void {
+    const reasons = kind === 'CANCELLATION' ? this.cancellationReasons() : this.completionReasons();
+    if (index < reasons.length - 1) {
+      void this.moveReason(kind, index, index + 1);
+    }
+  }
+
+  /**
+   * Row 10.10a: moves one reason from `from` to `to` in the local draft, then
+   * persists the whole new order over `PUT .../reorder`. `expectedVersion`
+   * is the highest `version` among the reasons of this kind — see
+   * `ReferenceDataApi.reorder`'s own doc for why there is no separate list
+   * aggregate to version instead.
+   *
+   * <p>Optimistic: the local list reorders immediately, and a refused write
+   * (a concurrent edit or reorder elsewhere) reloads the server's own order
+   * over it rather than leaving the screen showing a rank that was never
+   * saved.
+   */
+  private async moveReason(kind: OutcomeReasonKind, from: number, to: number): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    const signalFor = kind === 'CANCELLATION' ? this.cancellationReasons : this.completionReasons;
+    const current = signalFor();
+    const reordered = [...current];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+    signalFor.set(reordered);
+
+    this.reorderError.set(null);
+    const expectedVersion = current.reduce((max, reason) => Math.max(max, reason.version), 0);
+    try {
+      const saved = await this.api.reorder(
+        scope,
+        kind,
+        reordered.map((reason) => reason.id),
+        expectedVersion,
+      );
+      signalFor.set(saved);
+    } catch (error) {
+      this.reorderError.set(this.describe(error));
+      // The write was refused (stale version, or the set no longer matches
+      // what the server has) -- reload rather than leave the screen showing
+      // an order that was never actually saved.
+      await this.reload(scope);
+    }
   }
 
   // ======================================================== business calendar

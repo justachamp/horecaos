@@ -1382,6 +1382,9 @@ export const messagesRu: MessageCatalogue = {
     '«{name}» больше не будет предлагаться. На уже зафиксированные результаты это не влияет. Продолжить?',
   'settings.referenceData.field.status': 'Статус',
   'settings.referenceData.field.allowedFulfillmentModes': 'Допустимые способы выполнения',
+  'settings.referenceData.field.order': 'Порядок',
+  'settings.referenceData.moveUp': 'Переместить вверх',
+  'settings.referenceData.moveDown': 'Переместить вниз',
   'settings.referenceData.fulfillmentModes.required':
     'Выберите хотя бы один способ выполнения, для которого действует эта причина.',
   'settings.referenceData.edit': 'Изменить',

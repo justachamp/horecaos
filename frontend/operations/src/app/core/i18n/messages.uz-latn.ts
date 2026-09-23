@@ -1394,6 +1394,9 @@ export const messagesUzLatn: MessageCatalogue = {
     '"{name}" endi taklif qilinmaydi. Allaqachon qayd etilgan natijalarga taʻsir qilmaydi. Davom etasizmi?',
   'settings.referenceData.field.status': 'Holati',
   'settings.referenceData.field.allowedFulfillmentModes': 'Ruxsat etilgan bajarish usullari',
+  'settings.referenceData.field.order': 'Tartib',
+  'settings.referenceData.moveUp': 'Yuqoriga koʻchirish',
+  'settings.referenceData.moveDown': 'Pastga koʻchirish',
   'settings.referenceData.fulfillmentModes.required':
     'Bu sabab amal qiladigan kamida bitta bajarish usulini tanlang.',
   'settings.referenceData.edit': 'Tahrirlash',

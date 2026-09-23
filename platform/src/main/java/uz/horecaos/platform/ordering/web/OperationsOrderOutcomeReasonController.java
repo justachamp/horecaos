@@ -22,6 +22,7 @@ import uz.horecaos.platform.ordering.domain.OutcomeReasonKind;
 import uz.horecaos.platform.ordering.web.OrderOutcomeReasonController.IdResponse;
 import uz.horecaos.platform.ordering.web.OrderOutcomeReasonController.ReasonRequest;
 import uz.horecaos.platform.ordering.web.OrderOutcomeReasonController.ReasonResponse;
+import uz.horecaos.platform.ordering.web.OrderOutcomeReasonController.ReorderRequest;
 import uz.horecaos.platform.ordering.web.OrderOutcomeReasonController.VersionResponse;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
@@ -109,5 +110,13 @@ public class OperationsOrderOutcomeReasonController {
     public ResponseEntity<Void> archive(
             @PathVariable UUID tenantId, @PathVariable UUID reasonId, HttpServletRequest request) {
         return delegate.archive(tenantId, reasonId, request);
+    }
+
+    @PutMapping("/reorder")
+    @RequiresCapability(value = Capability.ORDER_OUTCOME_REASON_MANAGE, scope = ScopeType.TENANT, mutating = true)
+    @Operation(summary = "Rank every active reason of one kind (gap-map row 10.10a)")
+    public ResponseEntity<List<ReasonResponse>> reorder(
+            @PathVariable UUID tenantId, @Valid @RequestBody ReorderRequest body, HttpServletRequest request) {
+        return delegate.reorder(tenantId, body, request);
     }
 }
