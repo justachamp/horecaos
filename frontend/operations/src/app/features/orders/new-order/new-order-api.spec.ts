@@ -5,10 +5,22 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { environment } from '../../../../environments/environment';
 import { LocationScope } from '../../../core/api/operations-paths';
-import { AggregatorOrderRequest, NewOrderApi, PlaceOrderRequest } from './new-order-api';
+import {
+  AggregatorOrderRequest,
+  CreateCustomerRequest,
+  NewOrderApi,
+  PlaceOrderRequest,
+} from './new-order-api';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 const BASE = `${environment.apiBaseUrl}/api/v1/tenants/t1/brands/b1/locations/l1/orders`;
+const CUSTOMERS_BASE = `${environment.apiBaseUrl}/api/v1/tenants/t1/brands/b1/locations/l1/customers`;
+const DELIVERY_FEE_BASE = `${environment.apiBaseUrl}/api/v1/storefront/tenants/t1/brands/b1/locations/l1/delivery-fee`;
+
+const CREATE_CUSTOMER_REQUEST: CreateCustomerRequest = {
+  phone: '+998901234567',
+  displayName: 'Aziz',
+};
 
 const REQUEST: PlaceOrderRequest = {
   customerAccountId: 'acct-1',
@@ -159,6 +171,103 @@ describe('NewOrderApi Idempotency-Key stability', () => {
       version: 1,
       outcome: 'PLACED',
       warnings: [],
+    });
+  });
+
+  /**
+   * Batch 8 review 2, finding b-new-order (major): `createCustomer` wrapped
+   * its request with the plain `command()` helper, minting a brand-new
+   * `Idempotency-Key` on every call — unlike `placeOrder`/`aggregatorEntry`
+   * above. A retried "Создать клиента" after a lost response created a
+   * second, duplicate customer account for the same phone.
+   */
+  it('reuses the same Idempotency-Key across a retried createCustomer() for the unchanged request', () => {
+    void api.createCustomer(SCOPE, CREATE_CUSTOMER_REQUEST);
+    const first = http.expectOne(CUSTOMERS_BASE);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+    expect(firstKey).toBeTruthy();
+
+    // A retry before the first response arrived — the lost-response case.
+    void api.createCustomer(SCOPE, CREATE_CUSTOMER_REQUEST);
+    const second = http.expectOne(CUSTOMERS_BASE);
+    expect(second.request.headers.get('Idempotency-Key')).toBe(firstKey);
+
+    first.flush({ id: 'c1' });
+    second.flush({ id: 'c1' });
+  });
+
+  it('mints a fresh Idempotency-Key for createCustomer() once the operator edits the form before resubmitting', () => {
+    void api.createCustomer(SCOPE, CREATE_CUSTOMER_REQUEST);
+    const first = http.expectOne(CUSTOMERS_BASE);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+
+    void api.createCustomer(SCOPE, { ...CREATE_CUSTOMER_REQUEST, phone: '+998907654321' });
+    const second = http.expectOne(CUSTOMERS_BASE);
+    expect(second.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+
+    first.flush({ id: 'c1' });
+    second.flush({ id: 'c2' });
+  });
+
+  it('mints a fresh Idempotency-Key for the next createCustomer() once the previous one confirmed', () => {
+    void api.createCustomer(SCOPE, CREATE_CUSTOMER_REQUEST);
+    const first = http.expectOne(CUSTOMERS_BASE);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+    first.flush({ id: 'c1' });
+
+    void api.createCustomer(SCOPE, CREATE_CUSTOMER_REQUEST);
+    const second = http.expectOne(CUSTOMERS_BASE);
+    expect(second.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+    second.flush({ id: 'c2' });
+  });
+});
+
+/**
+ * Batch 8 review 2, finding b-new-order (blocker): `deliveryFeeQuote` issued
+ * a GET with the coordinate serialized into the URL query string, against an
+ * endpoint that only maps POST with a JSON body (`DeliveryFeeController
+ * .quote`, migrated 2026-09-21 audit follow-up (b), ADR 0029). Every phone
+ * DELIVERY order's fee preview 404/405'd, and the customer's coordinate was
+ * put on the wire in a URL in the process.
+ */
+describe('NewOrderApi.deliveryFeeQuote', () => {
+  let api: NewOrderApi;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting(), NewOrderApi],
+    });
+    api = TestBed.inject(NewOrderApi);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  it('sends the point and basket as a POST body, never as query-string params', () => {
+    const pending = api.deliveryFeeQuote(SCOPE, { lat: 41.31, lon: 69.28 }, 'UZS', 30_000);
+    const request = http.expectOne(DELIVERY_FEE_BASE);
+
+    expect(request.request.method).toBe('POST');
+    // No coordinate on the URL (ADR 0029) — HttpTestingController resolves
+    // `expectOne` against the URL alone, so a match here already proves no
+    // query string was appended; this also pins the body shape explicitly.
+    expect(request.request.params.keys().length).toBe(0);
+    expect(request.request.body).toEqual({
+      lat: 41.31,
+      lon: 69.28,
+      currency: 'UZS',
+      subtotalMinor: 30_000,
+    });
+
+    request.flush({
+      outcome: 'RESOLVED',
+      reasonCode: null,
+      available: true,
+      feeMinor: 12_000,
+      currency: 'UZS',
+    });
+
+    return pending.then((quote) => {
+      expect(quote).toEqual({ available: true, feeMinor: 12_000, reasonCode: null });
     });
   });
 });
