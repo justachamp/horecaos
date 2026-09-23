@@ -1097,6 +1097,7 @@ public class JdbcOrderStore {
                                   SELECT 1 FROM ordering.order_external_references r
                                    WHERE r.tenant_id = orders.tenant_id AND r.order_id = orders.id
                                      AND r.reference_value_normalised = CAST(:reference AS varchar)))
+                          AND (CAST(:origin AS varchar) IS NULL OR origin = CAST(:origin AS varchar))
                           AND (:unbounded
                                OR (created_at, id)
                                   < (CAST(:beforeCreatedAt AS timestamptz), CAST(:beforeId AS uuid)))
@@ -1118,6 +1119,7 @@ public class JdbcOrderStore {
                         query.courierId() == null ? null : query.courierId().toString())
                 .param("paymentMethodCode", query.paymentMethodCode())
                 .param("reference", query.normalisedReference())
+                .param("origin", query.origin())
                 .param("unbounded", beforeCreatedAt == null)
                 // Cast in the statement rather than typed here, so the null a
                 // first page sends is a typed null the row comparison can be
@@ -2212,6 +2214,10 @@ public class JdbcOrderStore {
      *                     external reference, matched against both; normalised
      *                     once, here, so the fingerprint and the predicate agree
      *                     on the form
+     * @param origin       {@code ordering.orders.origin} (V0038, ADR 0040):
+     *                     {@code "HORECAOS"} or {@code "MARKETPLACE"} — the
+     *                     coarse «Источник» toggle (wave 9, gap map row
+     *                     `1.1c`), not a specific aggregator binding
      */
     public record OrderListQuery(
             UUID tenantId,
@@ -2225,7 +2231,8 @@ public class JdbcOrderStore {
             @Nullable UUID courierId,
             @Nullable String paymentMethodCode,
             @Nullable String createdByActorId,
-            @Nullable String reference) {
+            @Nullable String reference,
+            @Nullable String origin) {
 
         /** ASCII unit separator: not producible by any parameter of this query. */
         private static final String FINGERPRINT_SEPARATOR = "\u001f";
@@ -2275,7 +2282,8 @@ public class JdbcOrderStore {
                     String.valueOf(courierId),
                     String.valueOf(paymentMethodCode),
                     String.valueOf(createdByActorId),
-                    String.valueOf(normalisedReference()));
+                    String.valueOf(normalisedReference()),
+                    String.valueOf(origin));
         }
     }
 
