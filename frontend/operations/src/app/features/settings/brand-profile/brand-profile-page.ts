@@ -11,7 +11,7 @@ import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
-import { MediaUploader } from '../../../shared/ui/media-uploader';
+import { MediaUploader, mediaUploaderRejectionMessageKey } from '../../../shared/ui/media-uploader';
 import { MediaApi } from '../../catalog/media-api';
 import { describeApiError } from '../../orders/order-errors';
 import {
@@ -295,11 +295,7 @@ export class BrandProfilePage {
 
   /** `q-media-uploader` rejected the file client-side — before any network call. */
   protected onMediaRejected(reason: string): void {
-    this.profileError.set(
-      this.i18n.t(
-        reason === 'tooLarge' ? 'ui.mediaUploader.tooLarge' : 'ui.mediaUploader.unsupportedType',
-      ),
-    );
+    this.profileError.set(this.i18n.t(mediaUploaderRejectionMessageKey(reason)));
   }
 
   // --------------------------------------------------------------- load

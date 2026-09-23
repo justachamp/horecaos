@@ -5455,6 +5455,7 @@ export const messagesEn = {
   'ui.mediaUploader.browse': 'Choose a file',
   'ui.mediaUploader.tooLarge': 'That file is larger than this upload allows',
   'ui.mediaUploader.unsupportedType': 'That file type is not accepted here',
+  'ui.mediaUploader.videoNotSupported': 'Video is not supported yet — please choose a photo instead',
   'ui.mediaUploader.ratio': 'Crop ratio',
   'ui.mediaUploader.zoom': 'Zoom',
   'ui.mediaUploader.confirm': 'Use this crop',

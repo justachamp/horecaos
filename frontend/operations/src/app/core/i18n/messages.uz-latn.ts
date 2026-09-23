@@ -5474,6 +5474,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'ui.mediaUploader.browse': 'Fayl tanlash',
   'ui.mediaUploader.tooLarge': 'Fayl ruxsat etilgan hajmdan katta',
   'ui.mediaUploader.unsupportedType': 'Bu fayl turi qabul qilinmaydi',
+  'ui.mediaUploader.videoNotSupported': 'Video hali qoʻllab-quvvatlanmaydi — iltimos, rasm tanlang',
   'ui.mediaUploader.ratio': 'Kesish nisbati',
   'ui.mediaUploader.zoom': 'Kattalashtirish',
   'ui.mediaUploader.confirm': 'Kesishni qoʻllash',

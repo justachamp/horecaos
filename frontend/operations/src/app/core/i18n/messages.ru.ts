@@ -5436,6 +5436,7 @@ export const messagesRu: MessageCatalogue = {
   'ui.mediaUploader.browse': 'Выбрать файл',
   'ui.mediaUploader.tooLarge': 'Файл больше допустимого размера',
   'ui.mediaUploader.unsupportedType': 'Этот тип файла здесь не принимается',
+  'ui.mediaUploader.videoNotSupported': 'Видео пока не поддерживается — выберите, пожалуйста, фото',
   'ui.mediaUploader.ratio': 'Соотношение сторон',
   'ui.mediaUploader.zoom': 'Масштаб',
   'ui.mediaUploader.confirm': 'Применить кадрирование',

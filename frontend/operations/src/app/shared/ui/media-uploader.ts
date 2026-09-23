@@ -11,7 +11,25 @@ import {
   signal,
 } from '@angular/core';
 
+import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+
+/**
+ * Maps a {@link MediaUploader.rejected} reason to the sentence a caller
+ * should show — one place for it, since every call site otherwise
+ * duplicates the same three-way branch (`brand-profile-page.ts`'s own
+ * `onMediaRejected` was the first to need a third arm once video gained its
+ * own reason, gap-map row `X.12`).
+ */
+export const MEDIA_UPLOADER_REJECTION_MESSAGE_KEYS: Readonly<Record<string, MessageKey>> = {
+  tooLarge: 'ui.mediaUploader.tooLarge',
+  videoNotSupported: 'ui.mediaUploader.videoNotSupported',
+};
+
+/** Falls back to the generic "unsupported type" sentence for any reason not named above. */
+export function mediaUploaderRejectionMessageKey(reason: string): MessageKey {
+  return MEDIA_UPLOADER_REJECTION_MESSAGE_KEYS[reason] ?? 'ui.mediaUploader.unsupportedType';
+}
 
 /** `w:h`, e.g. `'1:1'`, `'3:2'`, `'3:1'`, `'9:16'`. */
 export type AspectRatio = string;
@@ -40,13 +58,17 @@ const MAX_ZOOM = 3;
  * original, and JPEG because it is the one format every derivative renderer
  * and every ADR 0010 upload path already accepts.
  *
- * **Video** is accepted for selection (no crop step — there is no client-side
- * video crop here) but is not yet a type `MediaAssetService` will accept: its
- * upload-request allowlist is images only today, widening it needs a
- * verification path this wave did not build (see this wave's own report).
- * Selecting a video still emits {@link selected} so a caller can attempt the
- * upload and surface whatever the server answers, rather than silently
- * dropping the file client-side.
+ * **Video** is refused client-side (gap-map row `X.12`), never sent to
+ * {@link selected}: `MediaAssetService`'s upload-request allowlist is images
+ * only, and a build that let a video reach an upload call would surface the
+ * server's own refusal as a confusing failure well after the operator picked
+ * the file, rather than the clear, immediate reason {@link rejected} gives
+ * here. Still {@link accept}ed by the file picker (the input's own `accept`
+ * attribute still lists `video/mp4`/`video/webm`) so a video is at least
+ * selectable and this component's own refusal — not a silent absence from an
+ * OS file dialog — is what an operator sees. Widening this to actually accept
+ * video needs a verification and processing path this component does not
+ * have yet; see this row's own gap-map note.
  *
  * Fully controlled like every primitive in this directory: this component
  * never calls an upload API itself. A caller listens for {@link cropped} (an
@@ -135,8 +157,19 @@ export class MediaUploader {
       return;
     }
 
+    if (file.type.startsWith('video/')) {
+      // Gap-map row X.12: MediaAssetService's own pipeline is image-only
+      // today. Refused here, with a reason a caller can render as a clear
+      // sentence, rather than let a video reach an upload call the server
+      // was always going to refuse for a reason this screen never explains.
+      this.rejected.emit('videoNotSupported');
+      return;
+    }
+
     if (!file.type.startsWith('image/')) {
-      // No client-side crop for video — pass it straight through.
+      // Some other non-image, non-video type the accept list still allowed
+      // through (a caller can widen accept() beyond the default) — no
+      // client-side crop for it, pass it straight through as before.
       this.selected.emit(file);
       return;
     }
