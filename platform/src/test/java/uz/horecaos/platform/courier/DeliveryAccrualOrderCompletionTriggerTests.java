@@ -232,7 +232,12 @@ class DeliveryAccrualOrderCompletionTriggerTests {
                 ledgerStore.findEarningByAttempt(TENANT, fixture.attemptId());
         assertThat(earning).isPresent();
         assertThat(earning.orElseThrow().courierId()).isEqualTo(courierId);
-        assertThat(earning.orElseThrow().totalMinor()).isGreaterThan(0);
+        // Gap map row 3.4b: an activated rate card must actually earn, against
+        // its own ladder -- not merely a positive number. seedRateCard's card
+        // is PER_ORDER 3_000 plus a single unbounded PER_KM_BAND at 2_000/km,
+        // and seedAssignedShipment's plan is 4_200m: 3_000 + (4_200 * 2_000 /
+        // 1_000) = 11_400, exactly.
+        assertThat(earning.orElseThrow().totalMinor()).isEqualTo(11_400L);
 
         List<LedgerEntryRow> cashEntries = entriesOfType(LedgerEntryType.CASH_COLLECTED);
         assertThat(cashEntries).hasSize(1);
