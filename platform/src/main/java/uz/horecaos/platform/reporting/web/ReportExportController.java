@@ -81,6 +81,9 @@ public class ReportExportController {
                 request.columns(),
                 request.status(),
                 request.query(),
+                request.from(),
+                request.to(),
+                request.locationId() == null ? List.of() : request.locationId(),
                 request.purpose(),
                 subject,
                 holdsPiiCapability);
@@ -130,11 +133,21 @@ public class ReportExportController {
                 currentActor.get().subject(), Capability.CUSTOMER_PII_EXPORT, ResourceScope.tenant(tenantId));
     }
 
+    /**
+     * @param from        {@code ORDER_CRM_LOG}'s own required range start; ignored by every
+     *                    other report
+     * @param to          {@code ORDER_CRM_LOG}'s own required range end
+     * @param locationId  {@code ORDER_CRM_LOG}'s own optional branch filter; absent or empty
+     *                    means every branch the caller's tenant-wide grant already covers
+     */
     public record ReportExportRequest(
             @NotBlank String reportKey,
             @NotEmpty List<@NotBlank String> columns,
             @Nullable String status,
             @Nullable String query,
+            @Nullable Instant from,
+            @Nullable Instant to,
+            @Nullable List<UUID> locationId,
             @NotBlank String purpose) {}
 
     public record ReportExportQueuedResponse(UUID exportId, String status) {}

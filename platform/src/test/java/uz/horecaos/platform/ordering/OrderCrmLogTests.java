@@ -305,10 +305,6 @@ class OrderCrmLogTests {
         return planId;
     }
 
-    private void seedShipment(UUID orderId, UUID planId, UUID courierId, Instant assignedAt) {
-        seedShipment(orderId, planId, courierId, assignedAt, "ASSIGNED");
-    }
-
     /**
      * @param status "CANCELLED" for a shipment being replaced -- {@code
      *               ux_shipment_one_active_per_plan} permits only one
