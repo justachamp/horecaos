@@ -56,6 +56,9 @@ public class StorefrontChannelSeeder {
                         false,
                         true,
                         null,
+                        null,
+                        null,
+                        null,
                         1),
                 clock.instant());
     }

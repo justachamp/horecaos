@@ -216,7 +216,8 @@ class SalesChannelAndServiceabilityTests {
         var updated = channels.update(
                 TENANT,
                 channel.id(),
-                new SalesChannelService.UpdateChannelCommand("Uzum Tezkor (renamed)", null, true, false, null),
+                new SalesChannelService.UpdateChannelCommand(
+                        "Uzum Tezkor (renamed)", null, true, false, null, null, null, null),
                 channel.version());
 
         assertThat(updated.displayName()).isEqualTo("Uzum Tezkor (renamed)");
@@ -235,9 +236,132 @@ class SalesChannelAndServiceabilityTests {
         assertThat(catchThrowable(() -> channels.update(
                         TENANT,
                         channel.id(),
-                        new SalesChannelService.UpdateChannelCommand("Hall", channel.id(), false, true, null),
+                        new SalesChannelService.UpdateChannelCommand(
+                                "Hall", channel.id(), false, true, null, null, null, null),
                         channel.version())))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName(
+            "a fresh channel has no icon or brand colours, and update sets them -- row 10.4a's own presentation fields")
+    void updateSetsIconAndBrandColors() {
+        var channel = channels.create(TENANT, createCommand("KIOSK_FRONT", "KIOSK"));
+        assertThat(channel.icon()).isNull();
+        assertThat(channel.brandColorPrimary()).isNull();
+        assertThat(channel.brandColorSecondary()).isNull();
+
+        var updated = channels.update(
+                TENANT,
+                channel.id(),
+                new SalesChannelService.UpdateChannelCommand(
+                        channel.displayName(), null, false, true, null, "kiosk", "#0f62fe", "#161616"),
+                channel.version());
+
+        assertThat(updated.icon()).isEqualTo("kiosk");
+        assertThat(updated.brandColorPrimary()).isEqualTo("#0f62fe");
+        assertThat(updated.brandColorSecondary()).isEqualTo("#161616");
+
+        // Persisted, not just echoed back from the command.
+        assertThat(channelStore.byId(TENANT, channel.id())).get().satisfies(reread -> {
+            assertThat(reread.icon()).isEqualTo("kiosk");
+            assertThat(reread.brandColorPrimary()).isEqualTo("#0f62fe");
+            assertThat(reread.brandColorSecondary()).isEqualTo("#161616");
+        });
+    }
+
+    @Test
+    @DisplayName("update refuses a brand colour that is not a six-digit hex value")
+    void updateRefusesAMalformedBrandColor() {
+        var channel = channels.create(TENANT, createCommand("BAD_COLOR", "WEB"));
+
+        assertThat(catchThrowable(() -> channels.update(
+                        TENANT,
+                        channel.id(),
+                        new SalesChannelService.UpdateChannelCommand(
+                                channel.displayName(), null, false, true, null, null, "blue", null),
+                        channel.version())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("hex colour");
+
+        // The refused write must not have landed: an update is one statement
+        // here, but the premise is worth proving rather than assuming.
+        assertThat(channelStore.byId(TENANT, channel.id()))
+                .get()
+                .satisfies(reread -> assertThat(reread.brandColorPrimary()).isNull());
+    }
+
+    @Test
+    @DisplayName("deactivate, reactivate and archive all preserve a channel's own icon and brand colours")
+    void statusTransitionsPreservePresentation() {
+        var channel = channels.create(TENANT, createCommand("PRESENTED", "TELEGRAM"));
+        channels.update(
+                TENANT,
+                channel.id(),
+                new SalesChannelService.UpdateChannelCommand(
+                        channel.displayName(), null, false, true, null, "telegram", "#2aabee", null),
+                channel.version());
+
+        var suspended = channels.deactivate(TENANT, channel.id(), channel.version() + 1);
+        assertThat(suspended.icon()).isEqualTo("telegram");
+        assertThat(suspended.brandColorPrimary()).isEqualTo("#2aabee");
+
+        var resumed = channels.reactivate(TENANT, channel.id(), suspended.version());
+        assertThat(resumed.icon()).isEqualTo("telegram");
+
+        var archived = channels.archive(TENANT, channel.id(), resumed.version());
+        assertThat(archived.icon()).isEqualTo("telegram");
+        assertThat(archived.brandColorPrimary()).isEqualTo("#2aabee");
+    }
+
+    @Test
+    @DisplayName("social links replace wholesale, in request order, and are readable back through matrices()")
+    void socialLinksReplaceWholesaleInOrder() {
+        var channel = channels.create(TENANT, createCommand("SOCIAL", "WEB"));
+        assertThat(channels.matrices(TENANT, channel.id()).socialLinks()).isEmpty();
+
+        var links = new java.util.LinkedHashMap<String, String>();
+        links.put("INSTAGRAM", "https://instagram.com/rayhon");
+        links.put("TELEGRAM", "https://t.me/rayhon");
+        channels.replaceSocialLinks(TENANT, channel.id(), links, channel.version());
+
+        assertThat(channels.matrices(TENANT, channel.id()).socialLinks())
+                .containsExactly(
+                        Map.entry("INSTAGRAM", "https://instagram.com/rayhon"),
+                        Map.entry("TELEGRAM", "https://t.me/rayhon"));
+
+        // A second replace under the bumped version is a clean swap, not a
+        // merge -- dropping INSTAGRAM here must leave it gone, not stale.
+        channels.replaceSocialLinks(
+                TENANT, channel.id(), Map.of("TELEGRAM", "https://t.me/rayhon_new"), channel.version() + 1);
+        assertThat(channels.matrices(TENANT, channel.id()).socialLinks())
+                .containsExactly(Map.entry("TELEGRAM", "https://t.me/rayhon_new"));
+    }
+
+    @Test
+    @DisplayName("social links refuse a platform outside ADR 0036's closed set")
+    void socialLinksRefuseAnUnknownPlatform() {
+        var channel = channels.create(TENANT, createCommand("SOCIAL_BAD_PLATFORM", "WEB"));
+
+        assertThat(catchThrowable(() -> channels.replaceSocialLinks(
+                        TENANT, channel.id(), Map.of("WHATSAPP", "https://wa.me/998712000000"), channel.version())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ADR 0036");
+
+        assertThat(channels.matrices(TENANT, channel.id()).socialLinks()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("social links refuse anything but an https URL")
+    void socialLinksRefuseANonHttpsUrl() {
+        var channel = channels.create(TENANT, createCommand("SOCIAL_BAD_URL", "WEB"));
+
+        assertThat(catchThrowable(() -> channels.replaceSocialLinks(
+                        TENANT, channel.id(), Map.of("WEBSITE", "http://insecure.example"), channel.version())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("https");
+
+        assertThat(channels.matrices(TENANT, channel.id()).socialLinks()).isEmpty();
     }
 
     @Test

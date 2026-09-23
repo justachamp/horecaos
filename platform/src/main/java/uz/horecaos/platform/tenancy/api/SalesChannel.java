@@ -27,6 +27,16 @@ public record SalesChannel(
         boolean externallyPriced,
         boolean guestOrdersAllowed,
         @Nullable UUID providerInstallationId,
+        // Row 10.4a: a channel's own presentation, none of it settled at
+        // creation (a fresh channel reads as unconfigured here, the same
+        // "empty means unset, not a default" model the matrices already use).
+        // icon mirrors payments.payment_methods.icon (V0245): free text, a
+        // console falls back to a generic icon on an unknown value rather
+        // than refusing the row. The two colours are six-digit hex
+        // (q-color-input's own shape, row X.32).
+        @Nullable String icon,
+        @Nullable String brandColorPrimary,
+        @Nullable String brandColorSecondary,
         int version) {
 
     /** Channels archive, never delete: every order carries its channel forever. */
