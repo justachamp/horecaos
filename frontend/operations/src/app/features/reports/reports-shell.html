@@ -115,22 +115,11 @@
             </button>
           }
           @if (state.period() === 'custom') {
-            <input
-              type="date"
-              class="reports-filter-bar__date-input"
-              [value]="state.customRange().from"
-              (change)="onCustomFromChange($any($event.target).value)"
-              [attr.aria-label]="'reports.filter.period.customFrom' | t"
-              data-testid="reports-filter-custom-from"
-            />
-            <span class="reports-filter-bar__date-sep" aria-hidden="true">—</span>
-            <input
-              type="date"
-              class="reports-filter-bar__date-input"
-              [value]="state.customRange().to"
-              (change)="onCustomToChange($any($event.target).value)"
-              [attr.aria-label]="'reports.filter.period.customTo' | t"
-              data-testid="reports-filter-custom-to"
+            <q-date-range-picker
+              [start]="state.customRange().from"
+              [end]="state.customRange().to"
+              (rangeChange)="onCustomRangeChange($event)"
+              data-testid="reports-filter-custom-range"
             />
           }
         </div>

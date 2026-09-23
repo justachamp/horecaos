@@ -74,18 +74,6 @@
   outline-offset: 1px;
 }
 
-.reports-filter-bar__date-input {
-  padding: 5px 8px;
-  border: 1px solid var(--q-hairline);
-  background: var(--q-canvas);
-  color: var(--q-ink);
-  font-size: var(--q-type-body-sm);
-}
-
-.reports-filter-bar__date-sep {
-  color: var(--q-ink-subtle);
-}
-
 /* Row 2: amber-outlined segmented controls. */
 .filter-bar__segmented {
   display: inline-flex;

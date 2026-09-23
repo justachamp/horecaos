@@ -13,6 +13,7 @@ import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
+import { DateRange as PickerDateRange, DateRangePicker } from '../../shared/ui/date-range-picker';
 import { FilterBar, FilterBarChip } from '../../shared/ui/filter-bar';
 import { FiscalizationApi, LegalEntityView } from '../settings/fiscalization/fiscalization-api';
 import { LocationView, LocationsApi } from '../settings/locations/locations-api';
@@ -39,6 +40,13 @@ import { Granularity, PeriodPreset, ReportsFilterState } from './reports-filter-
  * `order-reports-page.ts`'s own docs) and round-trips through the URL via
  * `ReportsFilterState` itself.
  *
+ * **Row `X.11`.** The custom-period fields are `q-date-range-picker`
+ * (`DateRangePicker`) itself, not a second pair of raw `<input type="date">`
+ * — the component `X.11` built and left with no call site now has this bar
+ * as its first consumer. Its own preset buttons duplicate this bar's period
+ * pills, which is fine: a manager who opens the picker to hand-pick a range
+ * still has "Today"/"Last 7 days" one click away inside it.
+ *
  * 7.1 Business overview and 7.2 Order reports (tier P, wave 33) are joined
  * over subsequent waves by every tier-2 row the IA lists: 7.3 Branch & SLA,
  * 7.4 Courier (T11, wave 139), 7.5/7.5a Staff (T12), 7.7 Product analytics
@@ -59,7 +67,7 @@ import { Granularity, PeriodPreset, ReportsFilterState } from './reports-filter-
  */
 @Component({
   selector: 'q-reports-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, TPipe, FilterBar, Combobox],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, TPipe, FilterBar, Combobox, DateRangePicker],
   providers: [ReportsFilterState],
   templateUrl: './reports-shell.html',
   styleUrl: './reports-shell.css',
@@ -197,12 +205,9 @@ export class ReportsShell implements OnInit {
     this.state.setPeriod(period);
   }
 
-  protected onCustomFromChange(value: string): void {
-    this.state.setCustomRange({ ...this.state.customRange(), from: value });
-  }
-
-  protected onCustomToChange(value: string): void {
-    this.state.setCustomRange({ ...this.state.customRange(), to: value });
+  /** Row `X.11`: `q-date-range-picker`'s own `{start, end}` shape, mapped onto `ReportsFilterState`'s `{from, to}`. */
+  protected onCustomRangeChange(range: PickerDateRange): void {
+    this.state.setCustomRange({ from: range.start, to: range.end });
   }
 
   protected selectFulfilmentType(type: 'ALL' | 'DELIVERY' | 'PICKUP' | 'DINE_IN'): void {
