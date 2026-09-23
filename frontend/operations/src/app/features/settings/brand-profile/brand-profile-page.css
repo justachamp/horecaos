@@ -110,9 +110,26 @@ input.field {
   box-sizing: border-box;
 }
 
-.media-note {
-  margin: 8px 0 0;
+.ink-subtle {
   color: var(--q-ink-subtle);
+}
+
+.media-editor {
+  margin-top: 4px;
+  display: grid;
+  gap: 8px;
+}
+
+.media-preview {
+  max-width: 160px;
+  max-height: 90px;
+  object-fit: cover;
+  border-radius: var(--q-radius);
+  border: 1px solid var(--q-hairline);
+}
+
+.media-preview--banner {
+  max-width: 320px;
 }
 
 .locale-grid {

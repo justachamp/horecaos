@@ -4,6 +4,7 @@ import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { ColorInput } from '../../../shared/ui/color-input';
 import { MatrixGrid } from '../../../shared/ui/matrix-grid/matrix-grid';
 import {
   MatrixBulkToggleEvent,
@@ -15,12 +16,19 @@ import { InstallationView, IntegrationsApi } from '../integrations/integrations-
 import { LocationView, LocationsApi } from '../locations/locations-api';
 import { PaymentMethodView, PaymentMethodsApi } from '../payment-methods/payment-methods-api';
 import {
+  CHANNEL_SOCIAL_PLATFORMS,
   ChannelMatrices,
   ChannelView,
   CreateChannelRequest,
   SalesChannelsApi,
   UpdateChannelRequest,
 } from './sales-channels-api';
+
+/** One row of the edit panel's social-links list. */
+interface SocialLinkDraft {
+  readonly platform: string;
+  url: string;
+}
 
 /** ADR 0036's closed system-type set. */
 export const CHANNEL_SYSTEM_TYPES: readonly string[] = [
@@ -61,7 +69,7 @@ type Severity = 0 | 1 | 2 | 3 | 4;
  */
 @Component({
   selector: 'q-sales-channels-page',
-  imports: [TPipe, MatrixGrid],
+  imports: [TPipe, MatrixGrid, ColorInput],
   templateUrl: './sales-channels-page.html',
   styleUrl: './sales-channels-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -108,6 +116,21 @@ export class SalesChannelsPage {
   protected readonly editLocationIds = signal<ReadonlySet<string>>(new Set());
   protected readonly rowSaving = signal(false);
   protected readonly rowError = signal<string | null>(null);
+
+  // ------------------------------------------------------- 10.4a presentation
+  protected readonly editIcon = signal('');
+  protected readonly editBrandColorPrimary = signal('');
+  protected readonly editBrandColorSecondary = signal('');
+  protected readonly editSocialLinks = signal<readonly SocialLinkDraft[]>([]);
+  protected readonly newSocialPlatform = signal<string>(CHANNEL_SOCIAL_PLATFORMS[0]);
+  protected readonly newSocialUrl = signal('');
+  protected readonly socialPlatforms = CHANNEL_SOCIAL_PLATFORMS;
+
+  /** {@link CHANNEL_SOCIAL_PLATFORMS} not already on the draft list. */
+  protected readonly availableSocialPlatforms = computed(() => {
+    const used = new Set(this.editSocialLinks().map((row) => row.platform));
+    return this.socialPlatforms.filter((platform) => !used.has(platform));
+  });
 
   constructor() {
     void this.load();
@@ -213,6 +236,13 @@ export class SalesChannelsPage {
     this.editInstallationId.set(channel.providerInstallationId ?? '');
     const bound = this.matricesByChannel()[channel.id]?.locationIds ?? [];
     this.editLocationIds.set(new Set(bound));
+    this.editIcon.set(channel.icon ?? '');
+    this.editBrandColorPrimary.set(channel.brandColorPrimary ?? '');
+    this.editBrandColorSecondary.set(channel.brandColorSecondary ?? '');
+    const links = this.matricesByChannel()[channel.id]?.socialLinks ?? {};
+    this.editSocialLinks.set(Object.entries(links).map(([platform, url]) => ({ platform, url })));
+    this.newSocialPlatform.set(CHANNEL_SOCIAL_PLATFORMS[0]);
+    this.newSocialUrl.set('');
     this.rowError.set(null);
   }
 
@@ -228,6 +258,41 @@ export class SalesChannelsPage {
     });
   }
 
+  // ------------------------------------------------------- 10.4a presentation
+
+  /** `q-color-input` only ever emits a complete hex value; an empty draft (unset) never calls this. */
+  protected setBrandColorPrimary(hex: string): void {
+    this.editBrandColorPrimary.set(hex);
+  }
+
+  protected setBrandColorSecondary(hex: string): void {
+    this.editBrandColorSecondary.set(hex);
+  }
+
+  protected clearBrandColorPrimary(): void {
+    this.editBrandColorPrimary.set('');
+  }
+
+  protected clearBrandColorSecondary(): void {
+    this.editBrandColorSecondary.set('');
+  }
+
+  protected addSocialLink(): void {
+    const platform = this.newSocialPlatform();
+    const url = this.newSocialUrl().trim();
+    if (!platform || !url || this.editSocialLinks().some((row) => row.platform === platform)) {
+      return;
+    }
+    this.editSocialLinks.update((rows) => [...rows, { platform, url }]);
+    this.newSocialUrl.set('');
+    const next = this.availableSocialPlatforms().find((candidate) => candidate !== platform);
+    this.newSocialPlatform.set(next ?? platform);
+  }
+
+  protected removeSocialLink(platform: string): void {
+    this.editSocialLinks.update((rows) => rows.filter((row) => row.platform !== platform));
+  }
+
   protected async saveEdit(channel: ChannelView): Promise<void> {
     const scope = this.location.scope();
     if (!scope) {
@@ -241,6 +306,9 @@ export class SalesChannelsPage {
       externallyPriced: this.editExternallyPriced(),
       guestOrdersAllowed: this.editGuestOrdersAllowed(),
       providerInstallationId: this.editInstallationId() || null,
+      icon: this.editIcon().trim() || undefined,
+      brandColorPrimary: this.editBrandColorPrimary() || undefined,
+      brandColorSecondary: this.editBrandColorSecondary() || undefined,
     };
     try {
       const updated = await this.api.update(scope, channel.id, request, channel.version);
@@ -250,6 +318,11 @@ export class SalesChannelsPage {
         Array.from(this.editLocationIds()),
         updated.version,
       );
+      // #update then #replaceLocations each bump the channel's own version
+      // by exactly one (SalesChannelService's own doc); +1 here is that same
+      // arithmetic carried one call further, not a guess.
+      const links = Object.fromEntries(this.editSocialLinks().map((row) => [row.platform, row.url]));
+      await this.api.replaceSocialLinks(scope, channel.id, links, updated.version + 1);
       await this.reloadAll(scope);
       this.selectedChannelId.set(null);
     } catch (error) {

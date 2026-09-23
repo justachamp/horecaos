@@ -182,6 +182,43 @@
   overflow-y: auto;
 }
 
+.edit__social-links {
+  min-width: 280px;
+  max-width: 380px;
+}
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.social-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.social-row__platform {
+  min-width: 72px;
+  color: var(--q-ink-muted);
+}
+
+.social-row__url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.social-row--new .field {
+  height: 32px;
+  margin-top: 0;
+}
+
 .checkbox-label {
   display: flex;
   align-items: center;
