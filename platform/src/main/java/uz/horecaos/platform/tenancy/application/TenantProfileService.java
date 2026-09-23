@@ -11,6 +11,7 @@ import java.time.MonthDay;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DuplicateKeyException;
@@ -63,6 +64,18 @@ public class TenantProfileService {
 
     public List<TenantProfile> all() {
         return profiles.all();
+    }
+
+    /**
+     * One tenant's own market facts — gap map row {@code 10.1}: the brand
+     * profile screen shows the tenant's country/currency/timezone read-only
+     * beside the brand's own editable fields, and this is the first
+     * tenant-self-service caller of a profile the ADR 0090 residency board
+     * ({@link uz.horecaos.platform.tenancy.web.TenantProfileController}) had
+     * read only at {@code PLATFORM} scope until now.
+     */
+    public Optional<TenantProfile> find(UUID tenantId) {
+        return profiles.find(tenantId);
     }
 
     public List<PublicHoliday> holidays() {

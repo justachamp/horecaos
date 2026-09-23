@@ -90,6 +90,18 @@ export const settingsPaths = {
     return `${this.brandRevise(scope)}/profile`;
   },
 
+  /**
+   * `TenantProfileController.tenantProfile` (row 10.1) — the tenant's own
+   * country/currency/timezone, read-only, shown beside the brand's editable
+   * fields. Operations-native (`BRAND_READ` at `TENANT` scope, the same
+   * capability {@link brands} already requires), not the control-plane
+   * `.../residency` board, which is `PLATFORM_ADMIN`-only and answers for
+   * every tenant at once.
+   */
+  tenantProfile(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/profile`;
+  },
+
   // ---------------------------------------------------------- 10.2 Locations
 
   /** `OperationsBrandController.locations` — the branch list and the scope bar's location picker. */

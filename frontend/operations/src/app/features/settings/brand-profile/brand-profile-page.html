@@ -31,6 +31,20 @@
         <dt class="q-caption">{{ 'settings.brandProfile.field.status' | t }}</dt>
         <dd class="q-body">{{ statusLabel(value.status) }}</dd>
       </div>
+      @if (tenantMarket(); as market) {
+        <div class="field" data-testid="brand-profile-country">
+          <dt class="q-caption">{{ 'settings.brandProfile.field.country' | t }}</dt>
+          <dd class="q-body">{{ market.countryCode }}</dd>
+        </div>
+        <div class="field" data-testid="brand-profile-currency">
+          <dt class="q-caption">{{ 'settings.brandProfile.field.currency' | t }}</dt>
+          <dd class="q-body q-mono">{{ market.defaultCurrency }}</dd>
+        </div>
+        <div class="field" data-testid="brand-profile-timezone">
+          <dt class="q-caption">{{ 'settings.brandProfile.field.timezone' | t }}</dt>
+          <dd class="q-body">{{ market.defaultTimezone }}</dd>
+        </div>
+      }
     </dl>
 
     @if (!editingName()) {

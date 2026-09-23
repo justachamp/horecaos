@@ -70,6 +70,24 @@ public class TenantProfileController {
                 profiles.all().stream().map(TenantProfileView::of).toList()));
     }
 
+    @GetMapping("/api/v1/operations/tenants/{tenantId}/profile")
+    @RequiresCapability(Capability.BRAND_READ)
+    @Operation(
+            summary = "The tenant's own market facts, read-only (gap map row 10.1)",
+            description = "Country, default currency and default timezone, shown beside the brand's "
+                    + "own editable fields on the Settings 10.1 brand-profile screen. TENANT scope, "
+                    + "the same capability and scope OperationsBrandController.list already requires "
+                    + "for the scope bar's brand picker — the ADR 0090 residency board "
+                    + "(GET .../control-plane/residency) read this same data before, but only for a "
+                    + "PLATFORM_ADMIN across every tenant; this is the tenant's own operators reading "
+                    + "only their own.")
+    public ResponseEntity<TenantMarketView> tenantProfile(@PathVariable UUID tenantId) {
+        return profiles.find(tenantId)
+                .map(TenantMarketView::of)
+                .map(ResponseEntity::ok)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such tenant"));
+    }
+
     @PostMapping("/api/v1/control-plane/tenants/{tenantId}/country-change")
     @RequiresCapability(value = Capability.TENANT_WRITE, scope = ScopeType.PLATFORM, mutating = true)
     @Operation(
@@ -122,6 +140,13 @@ public class TenantProfileController {
     public record MarketView(String code, String name, String defaultCurrency, String defaultTimezone) {
         static MarketView of(Markets.Market market) {
             return new MarketView(market.code(), market.name(), market.defaultCurrency(), market.defaultTimezone());
+        }
+    }
+
+    /** Gap map row 10.1 — a tenant's own read of its market facts, nothing else the residency board carries. */
+    public record TenantMarketView(String countryCode, String defaultCurrency, String defaultTimezone) {
+        static TenantMarketView of(TenantProfile profile) {
+            return new TenantMarketView(profile.countryCode(), profile.defaultCurrency(), profile.defaultTimezone());
         }
     }
 

@@ -31,6 +31,13 @@ export interface BrandView {
   readonly version: number;
 }
 
+/** Mirrors uz.horecaos.platform.tenancy.web.TenantProfileController.TenantMarketView — row 10.1, read-only. */
+export interface TenantMarketView {
+  readonly countryCode: string;
+  readonly defaultCurrency: string;
+  readonly defaultTimezone: string;
+}
+
 export interface ReviseBrandRequest {
   readonly code: string;
   readonly slug: string;
@@ -69,6 +76,14 @@ export class BrandProfileApi {
 
   async getBrand(scope: LocationScope): Promise<BrandView> {
     const result = await firstValueFrom(this.api.get<BrandView>(settingsPaths.brand(scope)));
+    return result.value;
+  }
+
+  /** Row 10.1 — the tenant's own country/currency/timezone, read-only. */
+  async tenantProfile(tenantId: string): Promise<TenantMarketView> {
+    const result = await firstValueFrom(
+      this.api.get<TenantMarketView>(settingsPaths.tenantProfile(tenantId)),
+    );
     return result.value;
   }
 
