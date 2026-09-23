@@ -1006,6 +1006,17 @@
             </p>
           }
 
+          @if (posExportHasMappingDeepLink()) {
+            <button
+              type="button"
+              class="pane__reveal-link"
+              (click)="openPosExportMapping()"
+              data-testid="order-detail-pos-export-fix-mapping"
+            >
+              {{ 'orders.detail.posExport.action.fixMapping' | t }}
+            </button>
+          }
+
           @if (!posExportPushOpen()) {
             <button
               type="button"

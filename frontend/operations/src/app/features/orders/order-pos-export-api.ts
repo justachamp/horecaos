@@ -34,6 +34,16 @@ export interface PosExportView {
   readonly resolutionKind: string | null;
   readonly resolutionReason: string | null;
   readonly resolvedAt: string | null;
+  /**
+   * Gap-map row 1.2i's fix path: `'VARIANT'` or `'MODIFIER'` when {@link lastErrorCode}
+   * is `LINE_UNMAPPED`/`MODIFIER_UNMAPPED` and the server found a currently-unmapped
+   * line or modifier on a live re-check — null otherwise, including when the error
+   * code names a mapping gap but every line now resolves (an operator may already
+   * have fixed it since the last attempt).
+   */
+  readonly unmappedEntityType: 'VARIANT' | 'MODIFIER' | null;
+  /** The id to pre-select on the ADR 0012 mapping screen, paired one-to-one with {@link unmappedEntityType}. */
+  readonly unmappedHorecaosEntityId: string | null;
 }
 
 /** Mirrors `OrderPosExportController.OrderPosExportResponse`. */

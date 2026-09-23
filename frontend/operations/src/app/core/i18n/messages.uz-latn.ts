@@ -534,6 +534,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.posExport.action.push.submit': 'Yuborish',
   'orders.detail.posExport.action.push.submitting': 'Yuborilmoqda…',
   'orders.detail.posExport.action.push.notSendable': 'Joriy holatda qayta yuborib boʻlmaydi',
+  'orders.detail.posExport.action.fixMapping': 'Moslikni tuzatish',
 
   'orders.severity.blocked': 'aralashuv talab qilinadi',
   'orders.severity.approvalDeadline': '{mmss} ichida tasdiqlang',

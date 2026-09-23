@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -161,6 +162,7 @@ function configure(options: {
   couriersApi?: Partial<CouriersApi>;
   kitchenApi?: Partial<KitchenApi>;
   posExportApi?: Partial<OrderPosExportApi>;
+  router?: Partial<Router>;
   scope?: typeof FAKE_SCOPE | null;
 }): void {
   TestBed.configureTestingModule({
@@ -226,6 +228,13 @@ function configure(options: {
         useValue: options.posExportApi ?? {
           forOrder: () => Promise.resolve({ posCapable: false, export: null }),
         },
+      },
+      // Row 1.2i's deep link (openPosExportMapping): every test not focused
+      // on it gets a harmless no-op, the same rule the collaborators above
+      // follow.
+      {
+        provide: Router,
+        useValue: options.router ?? { navigate: () => Promise.resolve(true) },
       },
     ],
   });
@@ -2094,6 +2103,8 @@ function posExportView(overrides: Partial<PosExportView> = {}): PosExportView {
     resolutionKind: null,
     resolutionReason: null,
     resolvedAt: null,
+    unmappedEntityType: null,
+    unmappedHorecaosEntityId: null,
     ...overrides,
   };
 }
@@ -2157,6 +2168,72 @@ describe('OrderDetailPane: POS export and its §3.11 amendment interlock (wave P
     expect(
       host.querySelector('[data-testid="order-detail-pos-export-last-error"]')?.textContent,
     ).toContain('no provider mapping');
+    // lastErrorCode names a mapping gap here, but the fixture leaves the
+    // live-recheck fields null -- no deep-link target, no button.
+    expect(host.querySelector('[data-testid="order-detail-pos-export-fix-mapping"]')).toBeNull();
+  });
+
+  it('shows a deep link to the ADR 0012 mapping screen and navigates with the offending entity pre-selected (row 1.2i)', async () => {
+    const navigate = vi.fn().mockResolvedValue(true);
+    configure({
+      get: apiGet({ value: amendableDetail(), version: 3 }),
+      posExportApi: {
+        forOrder: () =>
+          Promise.resolve({
+            posCapable: true,
+            export: posExportView({
+              state: 'REJECTED',
+              permitsAmendment: true,
+              lastErrorCode: 'LINE_UNMAPPED',
+              lastError: 'no provider mapping',
+              unmappedEntityType: 'VARIANT',
+              unmappedHorecaosEntityId: 'variant-42',
+            }),
+          }),
+      },
+      router: { navigate },
+    });
+    const fixture = await render();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const link = host.querySelector(
+      '[data-testid="order-detail-pos-export-fix-mapping"]',
+    ) as HTMLButtonElement;
+    expect(link).not.toBeNull();
+
+    link.click();
+
+    expect(navigate).toHaveBeenCalledWith(['/catalog/import'], {
+      queryParams: { entityType: 'VARIANT', focusHorecaosId: 'variant-42' },
+    });
+  });
+
+  it('shows no deep-link button once the export settles with nothing left unmapped', async () => {
+    configure({
+      get: apiGet({ value: amendableDetail(), version: 3 }),
+      posExportApi: {
+        forOrder: () =>
+          Promise.resolve({
+            posCapable: true,
+            export: posExportView({
+              state: 'ACCEPTED',
+              permitsAmendment: false,
+              lastErrorCode: null,
+              lastError: null,
+              unmappedEntityType: null,
+              unmappedHorecaosEntityId: null,
+            }),
+          }),
+      },
+    });
+    const fixture = await render();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="order-detail-pos-export-fix-mapping"]')).toBeNull();
   });
 
   it('disables AMEND and shows the reason while an export is unacknowledged', async () => {

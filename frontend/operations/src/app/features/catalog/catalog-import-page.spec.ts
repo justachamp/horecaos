@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -110,6 +111,7 @@ describe('CatalogImportPage', () => {
     mappingApi?: Partial<PosMappingApi>;
     catalogApi?: Partial<CatalogApi>;
     fileApi?: Partial<CatalogImportFileApi>;
+    queryParams?: Readonly<Record<string, string>>;
   }): Promise<void> {
     const installations = options.installations ?? [INSTALLATION];
     const bindings = options.bindings ?? [BINDING];
@@ -205,6 +207,10 @@ describe('CatalogImportPage', () => {
             history: () => Promise.resolve([]),
             ...options.fileApi,
           },
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap(options.queryParams ?? {}) } },
         },
       ],
     }).compileComponents();
@@ -308,6 +314,53 @@ describe('CatalogImportPage', () => {
 
     expect(requestedEntityType).toBe('PRODUCT');
     expect(fixture.nativeElement.querySelector('q-mapping-pane')).toBeTruthy();
+  });
+
+  // ---------------------------------------------------------- row 1.2i's fix path: deep link
+
+  it('a ?entityType=VARIANT&focusHorecaosId= deep link opens directly on the mapping tab, for that entity type, with the item pre-selected', async () => {
+    let requestedEntityType: unknown;
+    await render({
+      queryParams: { entityType: 'VARIANT', focusHorecaosId: 'variant-9' },
+      mappingApi: {
+        unmapped: (_scope, _bindingId, entityType) => {
+          requestedEntityType = entityType;
+          return of({
+            ...EMPTY_UNMAPPED,
+            horecaosCandidates: [{ id: 'variant-9', name: 'Large Osh' }],
+          });
+        },
+      },
+    });
+
+    expect(requestedEntityType).toBe('VARIANT');
+    const mappingPane = fixture.nativeElement.querySelector('q-mapping-pane');
+    expect(mappingPane).toBeTruthy();
+    expect(
+      mappingPane!.querySelector('[data-testid="q-combobox-input"]') as HTMLInputElement,
+    ).toBeTruthy();
+  });
+
+  it('an unrecognized ?entityType= is ignored -- the mapping tab stays on PRODUCT rather than trusting an untyped query param', async () => {
+    let requestedEntityType: unknown;
+    await render({
+      queryParams: { entityType: 'NOT_A_REAL_TYPE' },
+      mappingApi: {
+        unmapped: (_scope, _bindingId, entityType) => {
+          requestedEntityType = entityType;
+          return of(EMPTY_UNMAPPED);
+        },
+      },
+    });
+
+    // Never auto-opened the mapping tab from an untrusted param, and the
+    // runs tab (the default) never calls unmapped() at all.
+    expect(requestedEntityType).toBeUndefined();
+    const tabs = Array.from(
+      fixture.nativeElement.querySelectorAll('button[role="tab"]'),
+    ) as HTMLElement[];
+    const runsTab = tabs.find((tab) => tab.getAttribute('aria-selected') === 'true');
+    expect(runsTab?.textContent).not.toContain('Соответствия');
   });
 
   // ---------------------------------------------------------- row 4.5b: CSV import

@@ -543,6 +543,7 @@ export const messagesEn = {
   'orders.detail.posExport.action.push.submit': 'Send',
   'orders.detail.posExport.action.push.submitting': 'Sending…',
   'orders.detail.posExport.action.push.notSendable': 'Cannot be sent again from this state',
+  'orders.detail.posExport.action.fixMapping': 'Fix the mapping',
 
   'orders.severity.blocked': 'needs attention',
   'orders.severity.approvalDeadline': 'confirm within {mmss}',

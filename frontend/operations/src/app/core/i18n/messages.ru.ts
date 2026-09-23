@@ -528,6 +528,7 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.posExport.action.push.submit': 'Отправить',
   'orders.detail.posExport.action.push.submitting': 'Отправка…',
   'orders.detail.posExport.action.push.notSendable': 'Нельзя отправить повторно в этом состоянии',
+  'orders.detail.posExport.action.fixMapping': 'Исправить сопоставление',
 
   'orders.severity.blocked': 'требуется вмешательство',
   'orders.severity.approvalDeadline': 'подтвердить за {mmss}',
