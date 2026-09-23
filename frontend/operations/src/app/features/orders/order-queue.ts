@@ -268,6 +268,21 @@ export class OrderQueue implements OnInit {
   protected readonly hasMore = signal(false);
   protected readonly loadingMore = signal(false);
 
+  /**
+   * Guards the {@link refresh} vs {@link loadMore} race (fix8 review 2,
+   * a-orders): {@link refresh} always starts over from the board's own first
+   * page under a brand-new cursor chain, so a {@link loadMore} page-2 fetch
+   * that was already in flight when a refresh lands — the 10s poll and every
+   * realtime frame call refresh unconditionally, including while an operator
+   * is mid-scroll — must not be allowed to append onto (or clobber
+   * `pageState`/`hasMore` back onto) rows a newer refresh already replaced.
+   * Bumped by every {@link refresh} before it awaits anything; `loadMore`
+   * captures the value it started under and discards its own result if the
+   * generation has since moved on — the same pattern {@link dialogRequestId}
+   * uses for H2 above.
+   */
+  private pageGeneration = 0;
+
   /** §2.4: the toolbar's own filters for the active tab. */
   protected readonly filters: Signal<OrderQueueFilters> = this.filterState.current;
   protected readonly paymentMethodCodes = PAYMENT_METHOD_CODES;
@@ -424,19 +439,34 @@ export class OrderQueue implements OnInit {
       return;
     }
 
+    // Captured before the first await: a refresh started later (a filter
+    // change, another poll tick, another realtime frame) bumps this and must
+    // win — this call's own result, and any loadMore() page still chasing
+    // the cursor chain it is about to replace, get silently dropped instead.
+    const generation = ++this.pageGeneration;
     this.refreshing.set(true);
     try {
       const startState = firstPage(FETCH_LIMIT);
       const page = await this.fetchBoardPage(scope, startState);
+      if (generation !== this.pageGeneration) {
+        return;
+      }
       const orders = page.items;
       const now = new Date();
 
       this.rows.set(orders.map((order) => decorate(order, now, this.latenessPolicy)));
       this.pageState.set(nextPage(startState, page) ?? startState);
       this.hasMore.set(page.nextCursor !== null);
-      this.tabCounts.set(
-        await this.counts.forOrders(scope, orders.map(toCountable), now, this.latenessPolicy),
+      const tabCounts = await this.counts.forOrders(
+        scope,
+        orders.map(toCountable),
+        now,
+        this.latenessPolicy,
       );
+      if (generation !== this.pageGeneration) {
+        return;
+      }
+      this.tabCounts.set(tabCounts);
       this.lastUpdatedAt.set(now);
       this.lastError.set(null);
       this.denied.set(false);
@@ -457,7 +487,11 @@ export class OrderQueue implements OnInit {
         throw error;
       }
     } finally {
-      this.refreshing.set(false);
+      // A superseded call's own `finally` must not flip `refreshing` back to
+      // false while the newer call that superseded it is still in flight.
+      if (generation === this.pageGeneration) {
+        this.refreshing.set(false);
+      }
       this.firstLoadComplete.set(true);
     }
   }
@@ -474,16 +508,35 @@ export class OrderQueue implements OnInit {
    * jump as an operator scrolls, which is a worse surprise than the
    * documented "still undercounts above the first page" limitation {@link
    * FETCH_LIMIT} already names.
+   *
+   * Guarded against {@link refresh} (fix8 review 2, a-orders): a refresh
+   * already in flight is skipped outright (its own fresh first page is
+   * coming regardless of whatever page this call would append), and — the
+   * race an early check cannot close, since `refreshing()` can flip true
+   * *after* this call's own fetch has already started — {@link
+   * pageGeneration} is captured before the fetch and checked after it, so a
+   * refresh that lands while this fetch is in flight makes its result a
+   * silent no-op instead of appending a stale page onto (or clobbering
+   * `pageState`/`hasMore` back onto) the board that refresh just replaced.
    */
   protected async loadMore(): Promise<void> {
     const scope = this.location.scope();
-    if (!scope || !this.hasMore() || this.loadingMore()) {
+    if (!scope || !this.hasMore() || this.loadingMore() || this.refreshing()) {
       return;
     }
+    const generation = this.pageGeneration;
     this.loadingMore.set(true);
     try {
       const state = this.pageState();
       const page = await this.fetchBoardPage(scope, state);
+      if (generation !== this.pageGeneration) {
+        // A refresh() started and landed while this page-2 fetch was in
+        // flight and has already replaced rows/pageState/hasMore with its
+        // own fresh first page — this page is paged relative to a cursor
+        // chain that no longer exists. Drop it; the operator can click
+        // "Load more" again under the fresh board if they still want more.
+        return;
+      }
       const now = new Date();
       const appended = page.items.map((order) => decorate(order, now, this.latenessPolicy));
       this.rows.set([...this.rows(), ...appended]);
@@ -1028,7 +1081,9 @@ export class OrderQueue implements OnInit {
     const actions = order.actions ?? [];
     const hasComplete = actions.some((action) => action.action === 'COMPLETE');
     return hasComplete
-      ? actions.filter((action) => !(action.action === 'ADVANCE' && action.targetStatus === 'COMPLETED'))
+      ? actions.filter(
+          (action) => !(action.action === 'ADVANCE' && action.targetStatus === 'COMPLETED'),
+        )
       : actions;
   }
 

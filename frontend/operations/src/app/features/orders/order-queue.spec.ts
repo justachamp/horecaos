@@ -3,7 +3,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { of, throwError } from 'rxjs';
+import { from, of, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClient } from '../../core/api/api-client';
@@ -1809,6 +1809,149 @@ describe('OrderQueue: cursor paging and Load more (row 1.1, X.18)', () => {
 
     const lastCall = getOrders.mock.calls.at(-1)!;
     expect(lastCall[1].params.cursor).toBeUndefined();
+  });
+
+  /**
+   * fix8 review 2 (a-orders): the 10s poll and every realtime frame call
+   * `refresh()` unconditionally, including while an operator is mid-scroll
+   * with a `loadMore()` page-2 fetch already in flight. `refresh()` always
+   * starts over from a brand-new first page/cursor chain — if `loadMore()`'s
+   * stale fetch (paged relative to the chain `refresh()` just discarded) is
+   * still allowed to land afterwards, it silently duplicates/drops rows and
+   * clobbers `pageState`/`hasMore` back onto the discarded chain. The manual
+   * refresh control drives the exact same `refresh()` the poll and realtime
+   * frames do, so it stands in for "the poll lands" here deterministically.
+   */
+  it('drops a loadMore() page that resolves after a refresh() has already replaced the board', async () => {
+    let resolveLoadMore:
+      | ((page: { items: readonly OrderSummaryResponse[]; nextCursor: string | null }) => void)
+      | undefined;
+    let resolveRefresh:
+      | ((page: { items: readonly OrderSummaryResponse[]; nextCursor: string | null }) => void)
+      | undefined;
+
+    const getOrders = vi
+      .fn()
+      .mockReturnValueOnce(
+        of({
+          value: { items: [order({ orderId: 'a', publicOrderNumber: '0001' })], nextCursor: 'c1' },
+          version: null,
+        }),
+      )
+      .mockImplementationOnce(() =>
+        from(
+          new Promise((resolve) => {
+            resolveLoadMore = (page) => resolve({ value: page, version: null });
+          }),
+        ),
+      )
+      .mockImplementationOnce(() =>
+        from(
+          new Promise((resolve) => {
+            resolveRefresh = (page) => resolve({ value: page, version: null });
+          }),
+        ),
+      );
+    configure(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    expect(rowNumbers(host)).toEqual(['0001']);
+
+    // Operator scrolls and clicks Load more — its page-2 fetch, under cursor
+    // c1, starts and hangs.
+    const loadMore = host.querySelector(
+      '[data-testid="order-queue-load-more"]',
+    ) as HTMLButtonElement;
+    loadMore.click();
+    await flushMicrotasks();
+    expect(getOrders).toHaveBeenCalledTimes(2);
+
+    // Before that returns, the 10s poll's refresh() lands and starts a
+    // brand-new first-page fetch under a new cursor chain.
+    const refreshButton = host.querySelector('.order-queue__refresh') as HTMLButtonElement;
+    refreshButton.click();
+    await flushMicrotasks();
+    expect(getOrders).toHaveBeenCalledTimes(3);
+
+    // Ordinary network jitter: refresh()'s fetch, started SECOND, resolves
+    // FIRST — replacing the board with its own fresh first page.
+    expect(resolveRefresh).toBeDefined();
+    resolveRefresh!({
+      items: [order({ orderId: 'x', publicOrderNumber: '9001' })],
+      nextCursor: null,
+    });
+    await flushMicrotasks();
+    expect(rowNumbers(host)).toEqual(['9001']);
+    expect(host.querySelector('[data-testid="order-queue-load-more"]')).toBeNull();
+
+    // ...and only THEN does loadMore()'s stale page-2 fetch resolve. It must
+    // be silently dropped, not appended onto the fresh board, and must not
+    // resurrect the "Load more" control off the discarded cursor's hasMore.
+    expect(resolveLoadMore).toBeDefined();
+    resolveLoadMore!({
+      items: [order({ orderId: 'b', publicOrderNumber: '0002' })],
+      nextCursor: null,
+    });
+    await flushMicrotasks();
+
+    expect(rowNumbers(host)).toEqual(['9001']);
+    expect(host.querySelector('[data-testid="order-queue-load-more"]')).toBeNull();
+  });
+
+  it('a loadMore() click while a refresh() is already in flight does not start a second, conflicting fetch', async () => {
+    let resolveRefresh:
+      | ((page: { items: readonly OrderSummaryResponse[]; nextCursor: string | null }) => void)
+      | undefined;
+
+    const getOrders = vi
+      .fn()
+      .mockReturnValueOnce(
+        of({
+          value: { items: [order({ orderId: 'a', publicOrderNumber: '0001' })], nextCursor: 'c1' },
+          version: null,
+        }),
+      )
+      .mockImplementationOnce(() =>
+        from(
+          new Promise((resolve) => {
+            resolveRefresh = (page) => resolve({ value: page, version: null });
+          }),
+        ),
+      );
+    configure(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    // The poll's refresh() lands and hangs mid-fetch.
+    const refreshButton = host.querySelector('.order-queue__refresh') as HTMLButtonElement;
+    refreshButton.click();
+    await flushMicrotasks();
+    expect(getOrders).toHaveBeenCalledTimes(2);
+
+    // The "Load more" control is still on screen (hasMore from the first
+    // page is still true — refresh() hasn't resolved yet) and is not
+    // disabled by loadingMore(), so a real click here is a real interaction.
+    const loadMore = host.querySelector(
+      '[data-testid="order-queue-load-more"]',
+    ) as HTMLButtonElement;
+    expect(loadMore).toBeTruthy();
+    loadMore.click();
+    await flushMicrotasks();
+
+    // No third fetch — loadMore() bailed out because a refresh was in flight.
+    expect(getOrders).toHaveBeenCalledTimes(2);
+
+    expect(resolveRefresh).toBeDefined();
+    resolveRefresh!({
+      items: [order({ orderId: 'x', publicOrderNumber: '9001' })],
+      nextCursor: null,
+    });
+    await flushMicrotasks();
+
+    expect(rowNumbers(host)).toEqual(['9001']);
+    expect(host.querySelector('[data-testid="order-queue-load-more"]')).toBeNull();
   });
 });
 
