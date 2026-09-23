@@ -335,7 +335,8 @@ class OrderGrainReportingTests {
         insertCancelled("OUT_OF_STOCK-1", "OUT_OF_STOCK");
         insertRejected("R-1", "KITCHEN_CLOSED");
 
-        List<JdbcReportingStore.OutcomeRow> rows = store.readOrderOutcomes(TENANT, DAY, DAY, List.of(), List.of());
+        List<JdbcReportingStore.OutcomeRow> rows =
+                store.readOrderOutcomes(TENANT, DAY, DAY, List.of(), List.of(), List.of());
 
         Map<String, Integer> byKey = new HashMap<>();
         for (JdbcReportingStore.OutcomeRow row : rows) {
@@ -357,10 +358,73 @@ class OrderGrainReportingTests {
         insertOrder("MINE", LOCATION_A, "COMPLETED", 600, null);
         insertOrderForTenant(OTHER_TENANT, "THEIRS", LOCATION_A, "COMPLETED", 600, null);
 
-        List<JdbcReportingStore.OutcomeRow> rows = store.readOrderOutcomes(TENANT, DAY, DAY, List.of(), List.of());
+        List<JdbcReportingStore.OutcomeRow> rows =
+                store.readOrderOutcomes(TENANT, DAY, DAY, List.of(), List.of(), List.of());
 
         int total = rows.stream().mapToInt(JdbcReportingStore.OutcomeRow::count).sum();
         assertThat(total).isEqualTo(1);
+    }
+
+    /**
+     * Wave 8 batch review (d-reports-integrations): the funnel's TOTAL/COMPLETED
+     * stages come off this exact read, and the operations overview page filters
+     * its late-order count by legal entity — on a two-entity tenant, every stage
+     * has to share the same entity scope or the funnel does not reconcile.
+     */
+    @Test
+    void outcomesLegalEntityFilterNarrowsTheFunnelToOneEntity() {
+        UUID entityA = UUID.randomUUID();
+        UUID entityB = UUID.randomUUID();
+        insertRow(
+                TENANT,
+                "EA-1",
+                LOCATION_A,
+                "TELEGRAM",
+                "COMPLETED",
+                tashkent(9, 0),
+                tashkent(9, 0).plusSeconds(600),
+                600,
+                null,
+                null,
+                null,
+                "DELIVERY",
+                entityA);
+        insertRow(
+                TENANT,
+                "EA-2",
+                LOCATION_A,
+                "TELEGRAM",
+                "CANCELLED",
+                tashkent(9, 0),
+                null,
+                null,
+                null,
+                null,
+                "NO_COURIER_AVAILABLE",
+                "DELIVERY",
+                entityA);
+        insertRow(
+                TENANT,
+                "EB-1",
+                LOCATION_A,
+                "TELEGRAM",
+                "COMPLETED",
+                tashkent(9, 0),
+                tashkent(9, 0).plusSeconds(600),
+                600,
+                null,
+                null,
+                null,
+                "DELIVERY",
+                entityB);
+
+        List<JdbcReportingStore.OutcomeRow> rows =
+                store.readOrderOutcomes(TENANT, DAY, DAY, List.of(), List.of(), List.of(entityA));
+
+        int total = rows.stream().mapToInt(JdbcReportingStore.OutcomeRow::count).sum();
+        assertThat(total)
+                .as("entity B's COMPLETED order must not inflate entity A's funnel")
+                .isEqualTo(2);
     }
 
     // ----------------------------------------------------------------- fixtures

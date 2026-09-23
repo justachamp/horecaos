@@ -37612,6 +37612,17 @@
             },
             "type" : "array"
           }
+        }, {
+          "in" : "query",
+          "name" : "legalEntityId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
         } ],
         "responses" : {
           "200" : {

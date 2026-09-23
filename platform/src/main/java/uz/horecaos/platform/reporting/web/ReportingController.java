@@ -328,9 +328,11 @@ public class ReportingController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) List<UUID> locationId,
-            @RequestParam(required = false) List<String> channelCode) {
+            @RequestParam(required = false) List<String> channelCode,
+            @RequestParam(required = false) List<UUID> legalEntityId) {
 
-        var result = queries.orderOutcomes(tenantId, from, to, orEmpty(locationId), orEmpty(channelCode));
+        var result = queries.orderOutcomes(
+                tenantId, from, to, orEmpty(locationId), orEmpty(channelCode), orEmpty(legalEntityId));
         return ResponseEntity.ok(new OutcomeListResponse(
                 result.rows().stream().map(OutcomeRowResponse::of).toList(),
                 ProvenanceResponse.of(result.provenance())));
