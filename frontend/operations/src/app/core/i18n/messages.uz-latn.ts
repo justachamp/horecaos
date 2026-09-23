@@ -1957,6 +1957,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.tab.availability': 'Mavjudlik',
   'catalog.editor.tab.schedule': 'Sotuv jadvali',
   'catalog.editor.tab.recommendations': 'Tavsiya etilgan tovarlar',
+  'catalog.editor.tab.commentPresets': 'Tayyor izohlar',
   'catalog.editor.tab.history': 'Tarix',
   'catalog.editor.locale.label': 'Tahrirlash tili',
   'catalog.editor.save': 'Saqlash',
@@ -2050,6 +2051,18 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.recommendations.detach': 'Oʻchirish',
   'catalog.editor.recommendations.targetLabel': 'Tavsiya qilinadigan variant ID',
   'catalog.editor.recommendations.attach': 'Qoʻshish',
+  'catalog.editor.commentPresets.hint':
+    'Ushbu mahsulot uchun qatorda tenantning qaysi tayyor oshxona koʻrsatmalarini belgilash mumkinligi. Yangi presetlar Sozlamalar → Tayyor mahsulot izohlarida roʻyxatga olinadi.',
+  'catalog.editor.commentPresets.loading': 'Tayyor izohlar yuklanmoqda…',
+  'catalog.editor.commentPresets.empty': 'Hali birorta tayyor izoh biriktirilmagan',
+  'catalog.editor.commentPresets.column.preset': 'Preset',
+  'catalog.editor.commentPresets.column.posModifierCode': 'POS modifikatori',
+  'catalog.editor.commentPresets.detach': 'Oʻchirish',
+  'catalog.editor.commentPresets.pickerLabel': 'Preset biriktirish',
+  'catalog.editor.commentPresets.pickerPlaceholder': 'Preset tanlang…',
+  'catalog.editor.commentPresets.attach': 'Biriktirish',
+  'catalog.editor.commentPresets.noneAvailable':
+    'Barcha faol presetlar allaqachon shu mahsulotga biriktirilgan.',
   'catalog.editor.history.scope':
     'Faqat shu filialdagi mavjudlik oʻzgarishlari — mahsulot, narx va modifikator tahrirlari hali audit qilinmaydi.',
   'catalog.editor.history.loading': 'Yuklanmoqda…',

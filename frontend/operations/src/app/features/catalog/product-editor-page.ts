@@ -45,6 +45,12 @@ import {
 import { PricingApi } from './pricing-api';
 import { MediaApi } from './media-api';
 import { InventoryApi } from './inventory-api';
+import {
+  AttachPresetRequest,
+  ProductCommentPresetsApi,
+  ProductPresetResponse,
+} from './product-comment-presets-api';
+import { CommentPresetsApi, PresetResponse } from '../settings/comment-presets/comment-presets-api';
 
 const STATUSES: readonly CatalogStatus[] = ['DRAFT', 'ACTIVE', 'ARCHIVED'];
 
@@ -57,6 +63,7 @@ type EditorTab =
   | 'AVAILABILITY'
   | 'SCHEDULE'
   | 'RECOMMENDATIONS'
+  | 'COMMENT_PRESETS'
   | 'HISTORY';
 
 const TABS: readonly EditorTab[] = [
@@ -68,6 +75,7 @@ const TABS: readonly EditorTab[] = [
   'AVAILABILITY',
   'SCHEDULE',
   'RECOMMENDATIONS',
+  'COMMENT_PRESETS',
   'HISTORY',
 ];
 const TAB_LABEL: Readonly<Record<EditorTab, MessageKey>> = {
@@ -79,6 +87,7 @@ const TAB_LABEL: Readonly<Record<EditorTab, MessageKey>> = {
   AVAILABILITY: 'catalog.editor.tab.availability',
   SCHEDULE: 'catalog.editor.tab.schedule',
   RECOMMENDATIONS: 'catalog.editor.tab.recommendations',
+  COMMENT_PRESETS: 'catalog.editor.tab.commentPresets',
   HISTORY: 'catalog.editor.tab.history',
 };
 
@@ -202,6 +211,8 @@ export class ProductEditorPage implements OnInit {
   private readonly inventoryApi = inject(InventoryApi);
   private readonly activityLogApi = inject(ActivityLogApi);
   private readonly kitchenApi = inject(CapacityApi);
+  private readonly productCommentPresetsApi = inject(ProductCommentPresetsApi);
+  private readonly commentPresetsApi = inject(CommentPresetsApi);
   private readonly brand = inject(CurrentBrand);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
@@ -299,6 +310,23 @@ export class ProductEditorPage implements OnInit {
    * attached here on purpose, per {@link detachRecommendation}'s own doc).
    */
   protected readonly eligibleTargetVariantIds = signal<ReadonlySet<string>>(new Set());
+
+  /** Row 2.1b's product-scoped half — which of the tenant's preset kitchen instructions this product's line may carry. */
+  protected readonly commentPresetsLoading = signal(false);
+  protected readonly commentPresetsLoaded = signal(false);
+  protected readonly attachedCommentPresets = signal<readonly ProductPresetResponse[]>([]);
+  /** The tenant's own vocabulary ({@link CommentPresetsApi}, settings screen), so the picker below can offer it. */
+  protected readonly tenantCommentPresets = signal<readonly PresetResponse[]>([]);
+  protected readonly commentPresetSaving = signal(false);
+  protected readonly commentPresetNotice = signal<string | null>(null);
+
+  /** Active tenant presets not yet attached to this product — what the picker offers. */
+  protected readonly availableCommentPresets = computed(() => {
+    const attached = new Set(this.attachedCommentPresets().map((p) => p.presetId));
+    return this.tenantCommentPresets().filter(
+      (p) => p.status === 'ACTIVE' && !attached.has(p.presetId),
+    );
+  });
 
   async ngOnInit(): Promise<void> {
     this.editingLocale.set(toCatalogLocale(this.i18n.locale()));
@@ -401,6 +429,9 @@ export class ProductEditorPage implements OnInit {
     }
     if (tab === 'RECOMMENDATIONS' && !this.recommendationsLoaded()) {
       void this.loadRecommendations();
+    }
+    if (tab === 'COMMENT_PRESETS' && !this.commentPresetsLoaded()) {
+      void this.loadCommentPresets();
     }
   }
 
@@ -1454,6 +1485,107 @@ export class ProductEditorPage implements OnInit {
       this.handleSaveError(error);
     } finally {
       this.recommendationSaving.set(false);
+    }
+  }
+
+  // -------------------------------------------------------- Row 2.1b — Preset comments
+
+  /**
+   * Both halves this tab needs: every preset attached to this product
+   * ({@link ProductCommentPresetsApi.list}, brand-scoped), and the tenant's
+   * whole vocabulary ({@link CommentPresetsApi.list}, tenant-scoped) so
+   * {@link availableCommentPresets} can offer what is not yet attached.
+   * Best-effort on the vocabulary read alone: a denied or failed fetch of it
+   * leaves the picker empty rather than blocking the management list above,
+   * which does not depend on it — the identical shape {@link
+   * loadEligibleRecommendations} already uses for its own secondary read.
+   */
+  private async loadCommentPresets(): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    if (!scope || !product) {
+      return;
+    }
+    this.commentPresetsLoading.set(true);
+    try {
+      const attached = await firstValueFrom(
+        this.productCommentPresetsApi.list(scope, product.productId),
+      );
+      this.attachedCommentPresets.set(attached);
+      this.commentPresetsLoaded.set(true);
+      try {
+        this.tenantCommentPresets.set(await this.commentPresetsApi.list(scope.tenantId));
+      } catch {
+        this.tenantCommentPresets.set([]);
+      }
+    } catch (error) {
+      this.handleSaveError(error);
+    } finally {
+      this.commentPresetsLoading.set(false);
+    }
+  }
+
+  /** A preset's label in this editor's own {@link editingLocale} — presets carry one label per locale directly (`labelRu`/`labelUz`/`labelEn`), not the `translations` map every other entity here uses. */
+  protected localizedPresetLabel(preset: {
+    readonly labelRu: string;
+    readonly labelUz: string;
+    readonly labelEn: string;
+  }): string {
+    switch (this.editingLocale()) {
+      case 'uz':
+        return preset.labelUz;
+      case 'en':
+        return preset.labelEn;
+      default:
+        return preset.labelRu;
+    }
+  }
+
+  /** Attaches the preset the picker's `<select>` currently names, or re-sorts it if already attached — the same call. */
+  protected async attachCommentPreset(presetId: string): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    if (!scope || !product || !presetId) {
+      return;
+    }
+    const request: AttachPresetRequest = {
+      presetId,
+      sortOrder: this.attachedCommentPresets().length,
+    };
+    this.commentPresetSaving.set(true);
+    this.commentPresetNotice.set(null);
+    try {
+      await firstValueFrom(this.productCommentPresetsApi.attach(scope, product.productId, request));
+      await this.loadCommentPresets();
+    } catch (error) {
+      this.commentPresetNotice.set(
+        error instanceof ApiError
+          ? describeApiError(error, (key, values) => this.i18n.t(key, values))
+          : this.i18n.t('error.unknown.noReference'),
+      );
+    } finally {
+      this.commentPresetSaving.set(false);
+    }
+  }
+
+  protected async detachCommentPreset(item: ProductPresetResponse): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    if (!scope || !product) {
+      return;
+    }
+    this.commentPresetSaving.set(true);
+    try {
+      await firstValueFrom(
+        this.productCommentPresetsApi.detach(scope, product.productId, item.presetId),
+      );
+      this.attachedCommentPresets.set(
+        this.attachedCommentPresets().filter((p) => p.presetId !== item.presetId),
+      );
+    } catch (error) {
+      this.handleSaveError(error);
+    } finally {
+      this.commentPresetSaving.set(false);
     }
   }
 

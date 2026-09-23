@@ -810,6 +810,83 @@
                 }
               </div>
             }
+            @case ('COMMENT_PRESETS') {
+              <div class="editor__section">
+                <p class="q-caption">{{ 'catalog.editor.commentPresets.hint' | t }}</p>
+
+                @if (commentPresetsLoading()) {
+                  <p class="q-caption">{{ 'catalog.editor.commentPresets.loading' | t }}</p>
+                } @else if (attachedCommentPresets().length === 0) {
+                  <p class="q-caption">{{ 'catalog.editor.commentPresets.empty' | t }}</p>
+                } @else {
+                  <table class="editor__table">
+                    <thead>
+                      <tr>
+                        <th>{{ 'catalog.editor.commentPresets.column.preset' | t }}</th>
+                        <th>{{ 'catalog.editor.commentPresets.column.posModifierCode' | t }}</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (item of attachedCommentPresets(); track item.presetId) {
+                        <tr>
+                          <td>
+                            {{ localizedPresetLabel(item) }}
+                            <span class="q-caption q-mono">{{ item.code }}</span>
+                          </td>
+                          <td data-testid="editor-comment-preset-pos-modifier">
+                            {{ item.posModifierCode || '—' }}
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              [disabled]="commentPresetSaving()"
+                              (click)="detachCommentPreset(item)"
+                              data-testid="editor-comment-preset-detach"
+                            >
+                              {{ 'catalog.editor.commentPresets.detach' | t }}
+                            </button>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+
+                @if (availableCommentPresets().length > 0) {
+                  <label class="editor__field">
+                    <span class="q-body-sm">{{
+                      'catalog.editor.commentPresets.pickerLabel' | t
+                    }}</span>
+                    <select #newCommentPreset data-testid="editor-comment-preset-picker">
+                      <option value="">
+                        {{ 'catalog.editor.commentPresets.pickerPlaceholder' | t }}
+                      </option>
+                      @for (preset of availableCommentPresets(); track preset.presetId) {
+                        <option [value]="preset.presetId">
+                          {{ localizedPresetLabel(preset) }} ({{ preset.code }})
+                        </option>
+                      }
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    [disabled]="commentPresetSaving()"
+                    (click)="
+                      attachCommentPreset(newCommentPreset.value); newCommentPreset.value = ''
+                    "
+                    data-testid="editor-comment-preset-attach"
+                  >
+                    {{ 'catalog.editor.commentPresets.attach' | t }}
+                  </button>
+                } @else if (!commentPresetsLoading()) {
+                  <p class="q-caption">{{ 'catalog.editor.commentPresets.noneAvailable' | t }}</p>
+                }
+                @if (commentPresetNotice(); as notice) {
+                  <span class="q-caption">{{ notice }}</span>
+                }
+              </div>
+            }
             @case ('HISTORY') {
               <div class="editor__section">
                 <p class="q-caption">{{ 'catalog.editor.history.scope' | t }}</p>
