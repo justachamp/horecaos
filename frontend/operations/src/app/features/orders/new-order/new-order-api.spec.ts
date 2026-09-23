@@ -9,6 +9,7 @@ import { AggregatorOrderRequest, NewOrderApi, PlaceOrderRequest } from './new-or
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 const BASE = `${environment.apiBaseUrl}/api/v1/tenants/t1/brands/b1/locations/l1/orders`;
+const DELIVERY_FEE_BASE = `${environment.apiBaseUrl}/api/v1/storefront/tenants/t1/brands/b1/locations/l1/delivery-fee`;
 
 const REQUEST: PlaceOrderRequest = {
   customerAccountId: 'acct-1',
@@ -159,6 +160,56 @@ describe('NewOrderApi Idempotency-Key stability', () => {
       version: 1,
       outcome: 'PLACED',
       warnings: [],
+    });
+  });
+});
+
+/**
+ * Batch 8 review 2, finding b-new-order (blocker): `deliveryFeeQuote` issued
+ * a GET with the coordinate serialized into the URL query string, against an
+ * endpoint that only maps POST with a JSON body (`DeliveryFeeController
+ * .quote`, migrated 2026-09-21 audit follow-up (b), ADR 0029). Every phone
+ * DELIVERY order's fee preview 404/405'd, and the customer's coordinate was
+ * put on the wire in a URL in the process.
+ */
+describe('NewOrderApi.deliveryFeeQuote', () => {
+  let api: NewOrderApi;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting(), NewOrderApi],
+    });
+    api = TestBed.inject(NewOrderApi);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  it('sends the point and basket as a POST body, never as query-string params', () => {
+    const pending = api.deliveryFeeQuote(SCOPE, { lat: 41.31, lon: 69.28 }, 'UZS', 30_000);
+    const request = http.expectOne(DELIVERY_FEE_BASE);
+
+    expect(request.request.method).toBe('POST');
+    // No coordinate on the URL (ADR 0029) — HttpTestingController resolves
+    // `expectOne` against the URL alone, so a match here already proves no
+    // query string was appended; this also pins the body shape explicitly.
+    expect(request.request.params.keys().length).toBe(0);
+    expect(request.request.body).toEqual({
+      lat: 41.31,
+      lon: 69.28,
+      currency: 'UZS',
+      subtotalMinor: 30_000,
+    });
+
+    request.flush({
+      outcome: 'RESOLVED',
+      reasonCode: null,
+      available: true,
+      feeMinor: 12_000,
+      currency: 'UZS',
+    });
+
+    return pending.then((quote) => {
+      expect(quote).toEqual({ available: true, feeMinor: 12_000, reasonCode: null });
     });
   });
 });

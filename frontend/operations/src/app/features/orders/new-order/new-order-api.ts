@@ -176,6 +176,20 @@ export interface DeliveryFeeQuote {
   readonly reasonCode: string | null;
 }
 
+/**
+ * `DeliveryFeeController.DeliveryFeeQuoteRequest` — the point and basket to
+ * price delivery for, sent as the POST body since 2026-09-21 (audit
+ * follow-up (b)): the point used to be a query-string parameter, which put a
+ * customer's coordinate in the URL (ADR 0029). See {@link
+ * NewOrderApi.deliveryFeeQuote}.
+ */
+interface DeliveryFeeQuoteRequest {
+  readonly lat: number;
+  readonly lon: number;
+  readonly currency: string;
+  readonly subtotalMinor: number;
+}
+
 /** `OperationsOrderController.PlaceOrderResponse`. */
 export interface PlaceOrderResult {
   readonly orderId: string;
@@ -327,6 +341,14 @@ export class NewOrderApi {
    * caller on the phone, and the fee that actually settles is resolved fresh,
    * inside the checkout transaction, from the destination
    * `OperatorOrderingService.place` sets — not from this read.
+   *
+   * `POST` with the point in the body since 2026-09-21 (audit follow-up
+   * (b)): `DeliveryFeeController.quote` no longer maps `GET`, and a query
+   * string would put the customer's coordinate on the wire and in browser
+   * history (ADR 0029). The endpoint writes nothing and needs neither a
+   * capability nor a stable `Idempotency-Key` (see its own doc), so a fresh
+   * key per call via the plain {@link command} helper is correct here, unlike
+   * {@link createCustomer} above.
    */
   async deliveryFeeQuote(
     scope: LocationScope,
@@ -335,25 +357,24 @@ export class NewOrderApi {
     subtotalMinor: number,
   ): Promise<DeliveryFeeQuote> {
     const result = await firstValueFrom(
-      this.api.get<{
-        outcome: string;
-        reasonCode: string | null;
-        available: boolean;
-        feeMinor: number | null;
-        currency: string;
-      }>(catalogPaths.deliveryFee(toBrandScope(scope), scope.locationId), {
-        params: {
-          lat: point.lat,
-          lon: point.lon,
-          currency,
-          subtotalMinor,
-        },
-      }),
+      this.api.post<
+        DeliveryFeeQuoteRequest,
+        {
+          outcome: string;
+          reasonCode: string | null;
+          available: boolean;
+          feeMinor: number | null;
+          currency: string;
+        }
+      >(
+        catalogPaths.deliveryFee(toBrandScope(scope), scope.locationId),
+        command({ lat: point.lat, lon: point.lon, currency, subtotalMinor }),
+      ),
     );
     return {
-      available: result.value.available,
-      feeMinor: result.value.feeMinor,
-      reasonCode: result.value.reasonCode,
+      available: result.available,
+      feeMinor: result.feeMinor,
+      reasonCode: result.reasonCode,
     };
   }
 

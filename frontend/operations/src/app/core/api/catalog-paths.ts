@@ -219,10 +219,12 @@ export const catalogPaths = {
    * `DeliveryFeeController.quote` (ADR 0037) — the same unauthenticated
    * `/api/v1/storefront/**` preview `ui-cart.service.ts` already calls for the
    * storefront's own delivery cart, reused here for row 1.3's New order
-   * composer rather than a second delivery-fee client. Query params `lat`,
-   * `lon`, `currency` and `subtotalMinor` (see {@link
-   * NewOrderApi.deliveryFeeQuote} for why this needs a real coordinate — a
-   * saved address with no pin has nothing to ask this about).
+   * composer rather than a second delivery-fee client. `POST` since
+   * 2026-09-21 (audit follow-up (b)): `lat`, `lon`, `currency` and
+   * `subtotalMinor` travel in the JSON body, never as query params — a query
+   * string would put the customer's coordinate on the wire (ADR 0029). See
+   * {@link NewOrderApi.deliveryFeeQuote} for why this needs a real
+   * coordinate — a saved address with no pin has nothing to ask this about.
    */
   deliveryFee(scope: BrandScope, locationId: string): string {
     return `/api/v1/storefront${tenantBrand(scope)}/locations/${encodeURIComponent(locationId)}/delivery-fee`;
