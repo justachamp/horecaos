@@ -123,6 +123,21 @@ public class SecurityConfiguration {
                                 // stay behind a customer session because there is
                                 // nobody to accept on behalf of otherwise.
                                 "/api/v1/storefront/tenants/*/brands/*/terms",
+                                // Row 10.5: a channel's own SEO facts and static
+                                // pages (about/contacts/delivery-terms/
+                                // privacy-offer). Read before an account exists,
+                                // same reasoning as the menu and the terms of
+                                // service above -- nothing here is per-customer.
+                                "/api/v1/storefront/tenants/*/channels/*/presentation",
+                                "/api/v1/storefront/tenants/*/channels/*/pages/*",
+                                // Row 10.5: which tenant and channel a hostname
+                                // belongs to. Necessarily tenant-less -- resolving
+                                // the tenant from an incoming Host header is the
+                                // whole point of the call, the one storefront read
+                                // that cannot be scoped by a tenant id nobody has
+                                // yet. ChannelSetupService#resolveHostname answers
+                                // only a verified row and nothing personal.
+                                "/api/v1/storefront/channel-hostnames/*",
                                 // ADR 0036 and its delivery-fee companion: the same
                                 // customer, the same moment, before an account
                                 // exists. "Can I order from here" and "what does
