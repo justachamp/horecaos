@@ -72,6 +72,7 @@ class StorefrontCatalogQueryTests {
     private CatalogPublicationService publication;
     private StorefrontCatalogQuery storefront;
     private uz.horecaos.platform.catalog.application.CatalogTenantContext tenantContext;
+    private uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore commentPresetStore;
 
     @BeforeAll
     static void startDatabase() {
@@ -124,12 +125,14 @@ class StorefrontCatalogQueryTests {
                 Clock.fixed(Instant.parse("2026-08-21T10:00:00Z"), ZoneOffset.UTC));
         menuStore = new JdbcMenuStore(jdbc);
         tenantContext = new uz.horecaos.platform.catalog.infrastructure.tenancy.JdbcCatalogTenantContext(jdbc);
+        commentPresetStore = new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore(jdbc);
         storefront = new StorefrontCatalogQuery(
                 store,
                 (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.empty(),
                 menuStore,
                 tenantContext,
-                Clock.systemUTC());
+                Clock.systemUTC(),
+                commentPresetStore);
     }
 
     @Test
@@ -325,7 +328,8 @@ class StorefrontCatalogQueryTests {
                         new MenuPriceLookup.MenuPrices("UZS", Map.of(somePricedVariantElsewhere, 15_000L), Map.of())),
                 menuStore,
                 tenantContext,
-                Clock.systemUTC());
+                Clock.systemUTC(),
+                commentPresetStore);
 
         var menu = pricedStorefront
                 .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
@@ -382,7 +386,8 @@ class StorefrontCatalogQueryTests {
                 (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.empty(),
                 menuStore,
                 tenantContext,
-                Clock.fixed(Instant.parse("2026-08-21T10:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-08-21T10:00:00Z"), ZoneOffset.UTC),
+                commentPresetStore);
 
         var menu =
                 atThreePm.menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT").orElseThrow();

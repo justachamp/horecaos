@@ -28,6 +28,7 @@ import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.CustomerSnapshotRow;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderCommentPresetRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderCountsRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderLineRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderModifierRow;
@@ -150,10 +151,17 @@ public class OrderQueryService implements OrderCountsQuery {
             List<OrderLineRow> lines = orders.lines(tenantId, orderId, revision);
             Map<UUID, List<OrderModifierRow>> modifiers = orders.lineModifiers(tenantId, orderId).stream()
                     .collect(Collectors.groupingBy(OrderModifierRow::orderLineId));
+            // Row 2.1b: the presets a line was checked out carrying, beside its
+            // modifiers — the order detail line renders both.
+            Map<UUID, List<OrderCommentPresetRow>> commentPresets =
+                    orders.lineCommentPresets(tenantId, orderId).stream()
+                            .collect(Collectors.groupingBy(OrderCommentPresetRow::orderLineId));
 
             List<DetailLine> detailLines = new ArrayList<>(lines.size());
-            lines.forEach(
-                    line -> detailLines.add(new DetailLine(line, modifiers.getOrDefault(line.lineId(), List.of()))));
+            lines.forEach(line -> detailLines.add(new DetailLine(
+                    line,
+                    modifiers.getOrDefault(line.lineId(), List.of()),
+                    commentPresets.getOrDefault(line.lineId(), List.of()))));
 
             return new OrderDetail(order, detailLines, warnings(), customerDetail(tenantId, order));
         });
@@ -495,7 +503,8 @@ public class OrderQueryService implements OrderCountsQuery {
 
     public record OrderDetail(OrderRow order, List<DetailLine> lines, List<String> warnings, CustomerDetail customer) {}
 
-    public record DetailLine(OrderLineRow line, List<OrderModifierRow> modifiers) {}
+    public record DetailLine(
+            OrderLineRow line, List<OrderModifierRow> modifiers, List<OrderCommentPresetRow> commentPresets) {}
 
     /**
      * The customer block an ordinary detail read may show (orders.md

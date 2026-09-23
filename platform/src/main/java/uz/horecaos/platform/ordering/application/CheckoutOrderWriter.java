@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
+import uz.horecaos.platform.catalog.api.CommentPresetLookup;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.ordering.api.OrderReceived;
@@ -67,7 +68,9 @@ class CheckoutOrderWriter {
     private final ObjectMapper objectMapper;
     private final PaymentIntentPort payments;
     private final ApplicationEventPublisher events;
+    private final CommentPresetLookup commentPresets;
 
+    @SuppressWarnings("checkstyle:ParameterNumber")
     CheckoutOrderWriter(
             JdbcOrderStore orders,
             OrderAcceptancePolicyService acceptancePolicies,
@@ -77,7 +80,8 @@ class CheckoutOrderWriter {
             FieldProtection protection,
             ObjectMapper objectMapper,
             PaymentIntentPort payments,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events,
+            CommentPresetLookup commentPresets) {
         this.orders = orders;
         this.acceptancePolicies = acceptancePolicies;
         this.tenancy = tenancy;
@@ -87,6 +91,7 @@ class CheckoutOrderWriter {
         this.objectMapper = objectMapper;
         this.payments = payments;
         this.events = events;
+        this.commentPresets = commentPresets;
     }
 
     /**
@@ -255,6 +260,15 @@ class CheckoutOrderWriter {
         Map<UUID, OrderCatalogSnapshot.ModifierDescriptor> options =
                 catalog.modifierOptions(command.tenantId(), command.brandId(), optionIds);
 
+        // Row 2.1b: every preset code carried by any line, resolved once — the
+        // same "one bulk read, not one per line" discipline variants/options
+        // above already follow.
+        Set<String> presetCodes = cartLines.stream()
+                .flatMap(line -> line.commentPresetCodes().stream())
+                .collect(Collectors.toUnmodifiableSet());
+        Map<String, CommentPresetLookup.ResolvedPreset> resolvedPresets =
+                commentPresets.resolve(command.tenantId(), presetCodes);
+
         Map<String, UUID> orderLineIdsByKey = new HashMap<>();
         int lineNumber = 0;
 
@@ -301,6 +315,27 @@ class CheckoutOrderWriter {
                         1,
                         0L,
                         0L);
+            }
+
+            // Row 2.1b: a code the vocabulary no longer answers for (renamed,
+            // archived or deleted since the line was added) is silently
+            // dropped from the snapshot rather than refusing checkout over it
+            // — see CommentPresetLookup#resolve's own doc for why.
+            int sortOrder = 0;
+            for (String code : cartLine.commentPresetCodes()) {
+                CommentPresetLookup.ResolvedPreset preset = resolvedPresets.get(code);
+                if (preset == null) {
+                    continue;
+                }
+                orders.insertLineCommentPreset(
+                        command.tenantId(),
+                        orderLineId,
+                        preset.presetId(),
+                        preset.code(),
+                        preset.labelRu(),
+                        preset.labelUz(),
+                        preset.labelEn(),
+                        sortOrder++);
             }
         }
 

@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
+import uz.horecaos.platform.catalog.api.CommentPresetLookup;
 import uz.horecaos.platform.customers.api.CustomerBlacklistPort;
 import uz.horecaos.platform.fulfillment.api.PricingAuthority;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -110,6 +111,7 @@ public class CartService {
     private final PromoCodeQueryPort promoCodes;
     private final ConfigurationResolver configuration;
     private final CartSaleWindowRules saleWindows;
+    private final CommentPresetLookup commentPresets;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public CartService(
@@ -126,7 +128,8 @@ public class CartService {
             CustomerBlacklistPort blacklist,
             PromoCodeQueryPort promoCodes,
             ConfigurationResolver configuration,
-            CartSaleWindowRules saleWindows) {
+            CartSaleWindowRules saleWindows,
+            CommentPresetLookup commentPresets) {
         this.carts = carts;
         this.channels = channels;
         this.menu = menu;
@@ -141,6 +144,7 @@ public class CartService {
         this.promoCodes = promoCodes;
         this.configuration = configuration;
         this.saleWindows = saleWindows;
+        this.commentPresets = commentPresets;
     }
 
     /**
@@ -252,6 +256,10 @@ public class CartService {
      * holds two sizes of one drink, or a burger with no bun chosen from a required
      * group, is a basket the kitchen cannot make, and discovering that at the
      * payment step is the worst moment to learn it.
+     *
+     * <p>Carries no comment presets (row 2.1b) — the four-argument overload every
+     * caller before this row used, still exactly what a line with no kitchen
+     * instruction on it needs.
      */
     @Transactional
     public CartView putLine(
@@ -265,11 +273,50 @@ public class CartService {
             int quantity,
             List<UUID> modifierOptionIds,
             @Nullable String customerNote) {
+        return putLine(
+                tenantId,
+                brandId,
+                callerAccountId,
+                cartId,
+                expectedVersion,
+                lineKey,
+                variantId,
+                quantity,
+                modifierOptionIds,
+                List.of(),
+                customerNote);
+    }
+
+    /**
+     * Adds or replaces one line, with the coded kitchen-instruction presets
+     * (row 2.1b) the customer or operator chose for it.
+     *
+     * <p>{@code commentPresetCodes} is validated against {@link
+     * CommentPresetLookup#offeredCodesForVariant} exactly as {@code
+     * modifierOptionIds} is validated against {@link CartMenuRules} —
+     * refused by name here, at add time, rather than discovered as an
+     * unrenderable chip on a kitchen ticket.
+     */
+    @Transactional
+    public CartView putLine(
+            UUID tenantId,
+            UUID brandId,
+            UUID callerAccountId,
+            UUID cartId,
+            int expectedVersion,
+            String lineKey,
+            UUID variantId,
+            int quantity,
+            List<UUID> modifierOptionIds,
+            @Nullable List<String> commentPresetCodes,
+            @Nullable String customerNote) {
 
         CartRow cart = requireEditable(tenantId, brandId, callerAccountId, cartId);
         requireSelectionRules(tenantId, brandId, cart, variantId, modifierOptionIds);
         Instant now = clock.instant();
         requireOnSaleNow(tenantId, cart, variantId, now);
+        List<String> presetCodes = commentPresetCodes == null ? List.of() : commentPresetCodes;
+        requireOfferedCommentPresets(tenantId, brandId, variantId, presetCodes);
 
         UUID lineId = lines(tenantId, cartId).stream()
                 .filter(line -> line.lineKey().equals(lineKey))
@@ -295,6 +342,7 @@ public class CartService {
                 variantId,
                 quantity,
                 modifiersJson(modifierOptionIds),
+                List.copyOf(new java.util.LinkedHashSet<>(presetCodes)),
                 noteEncrypted,
                 now);
 
@@ -715,6 +763,11 @@ public class CartService {
                     line.variantId(),
                     line.quantity(),
                     line.selectedModifiersJson(),
+                    // Row 2.1b: presets carry across a rebuild exactly as the
+                    // modifier selection does — unlike the note, a preset code
+                    // is not personal data bound to the old row's encryption,
+                    // so there is nothing stopping the copy.
+                    line.commentPresetCodes(),
                     null,
                     now);
         }
@@ -847,6 +900,28 @@ public class CartService {
         if (!saleWindows.isOnSaleAt(tenantId, cart.locationId(), variantId, zone, at)) {
             throw new CartRefusedException(
                     "ITEM_OUT_OF_SALE_WINDOW", "Variant " + variantId + " is outside its sale window right now");
+        }
+    }
+
+    /**
+     * Row 2.1b: refuses a preset code this line's product does not offer.
+     *
+     * <p>Duplicates within {@code codes} are tolerated rather than refused —
+     * a repeated tap on the same chip is a client bug worth ignoring, not an
+     * order worth refusing — and the duplicate is written once: {@code
+     * carts.upsertLine} stores exactly what is passed, so this method
+     * de-duplicates before it ever reaches the column.
+     */
+    private void requireOfferedCommentPresets(UUID tenantId, UUID brandId, UUID variantId, List<String> codes) {
+        if (codes.isEmpty()) {
+            return;
+        }
+        List<String> offered = commentPresets.offeredCodesForVariant(tenantId, brandId, variantId);
+        for (String code : codes) {
+            if (!offered.contains(code)) {
+                throw new CartRefusedException(
+                        "COMMENT_PRESET_NOT_OFFERED", "Preset '%s' is not offered by this product".formatted(code));
+            }
         }
     }
 

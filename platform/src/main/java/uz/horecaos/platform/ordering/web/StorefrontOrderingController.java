@@ -177,6 +177,7 @@ public class StorefrontOrderingController {
                     body.variantId(),
                     body.quantity(),
                     body.modifierOptionIds(),
+                    body.commentPresetCodes(),
                     body.customerNote());
             return ResponseEntity.ok(CartResponse.of(view));
         } catch (CartService.StaleCartException stale) {
@@ -721,6 +722,10 @@ public class StorefrontOrderingController {
             @NotNull UUID variantId,
             @Positive @Max(999) int quantity,
             @Size(max = 20) List<UUID> modifierOptionIds,
+            // Row 2.1b: the coded kitchen-instruction presets the customer
+            // picked from the product's own offered subset (@Size null-safe
+            // below, matching modifierOptionIds' own optional shape).
+            @Size(max = 20) List<String> commentPresetCodes,
             @Size(max = 500) String customerNote) {}
 
     public record MoveLocationRequest(@NotNull UUID locationId) {}
@@ -853,6 +858,7 @@ public class StorefrontOrderingController {
                                     line.lineKey(),
                                     line.variantId(),
                                     line.quantity(),
+                                    line.commentPresetCodes(),
                                     line.customerNoteEncrypted() != null))
                             .toList(),
                     view.cart().appliedCouponCode());
@@ -866,7 +872,13 @@ public class StorefrontOrderingController {
      *                        text is personal data and is revealed only through
      *                        the endpoint that records a purpose for it
      */
-    public record CartLineResponse(String lineKey, UUID variantId, int quantity, boolean hasCustomerNote) {}
+    public record CartLineResponse(
+            String lineKey,
+            UUID variantId,
+            int quantity,
+            // Row 2.1b: the coded presets this line currently carries.
+            List<String> commentPresetCodes,
+            boolean hasCustomerNote) {}
 
     /**
      * The destination just set on this cart.

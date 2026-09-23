@@ -98,7 +98,8 @@ class ChannelOfferingExclusionsReaderTests {
                 noPrices,
                 new JdbcMenuStore(jdbc),
                 new uz.horecaos.platform.catalog.infrastructure.tenancy.JdbcCatalogTenantContext(jdbc),
-                java.time.Clock.systemUTC());
+                java.time.Clock.systemUTC(),
+                new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore(jdbc));
 
         seedTenancy();
         variant1 = seedProductAndVariant("BURGER");

@@ -56,18 +56,21 @@ public class StorefrontCatalogQuery {
     private final JdbcMenuStore menus;
     private final CatalogTenantContext tenantContext;
     private final Clock clock;
+    private final uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore commentPresets;
 
     public StorefrontCatalogQuery(
             JdbcCatalogStore store,
             MenuPriceLookup prices,
             JdbcMenuStore menus,
             CatalogTenantContext tenantContext,
-            Clock clock) {
+            Clock clock,
+            uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore commentPresets) {
         this.store = store;
         this.prices = prices;
         this.menus = menus;
         this.tenantContext = tenantContext;
         this.clock = clock;
+        this.commentPresets = commentPresets;
     }
 
     /**
@@ -110,6 +113,14 @@ public class StorefrontCatalogQuery {
         List<PublicationItem> productItems = store.publicationItems(publication, EntityType.PRODUCT);
         List<PublicationItem> groupItems = store.publicationItems(publication, EntityType.MODIFIER_GROUP);
 
+        // Row 2.1b: which presets each product offers, read live for the same
+        // reason offeringByVariant is — see CommentPresetLookup's own doc.
+        // One bulk read for the whole menu rather than one per product.
+        Set<UUID> productIds =
+                productItems.stream().map(PublicationItem::entityId).collect(Collectors.toUnmodifiableSet());
+        Map<UUID, List<uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore.ProductPresetRow>>
+                presetsByProduct = commentPresets.listForProducts(tenantId, brandId, productIds);
+
         List<MenuProduct> products = new ArrayList<>();
         for (PublicationItem item : productItems) {
             List<MenuVariant> variants =
@@ -131,7 +142,8 @@ public class StorefrontCatalogQuery {
                     // Prices are attached after the loop, once every variant on
                     // the menu is known, so the price book is read once rather
                     // than once per dish.
-                    idList(item.content(), "modifierGroupIds")));
+                    idList(item.content(), "modifierGroupIds"),
+                    commentPresetsOf(presetsByProduct.getOrDefault(item.entityId(), List.of()))));
         }
 
         // A product the location does not offer was dropped above. Its id must
@@ -268,6 +280,14 @@ public class StorefrontCatalogQuery {
                     null));
         }
         return variants;
+    }
+
+    private static List<CommentPresetOption> commentPresetsOf(
+            List<uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore.ProductPresetRow>
+                    rows) {
+        return rows.stream()
+                .map(row -> new CommentPresetOption(row.code(), row.labelRu(), row.labelUz(), row.labelEn()))
+                .toList();
     }
 
     /**
@@ -484,7 +504,11 @@ public class StorefrontCatalogQuery {
             List<String> mediaAssetIds,
             List<String> imageUrls,
             List<MenuVariant> variants,
-            List<UUID> modifierGroupIds) {
+            List<UUID> modifierGroupIds,
+            // Row 2.1b: the coded kitchen-instruction presets this product
+            // offers on a line, in display order — read live, not from the
+            // publication; see CommentPresetLookup's own doc for why.
+            List<CommentPresetOption> commentPresets) {
 
         MenuProduct withPrices(Map<UUID, Long> variantPrices) {
             return new MenuProduct(
@@ -497,9 +521,13 @@ public class StorefrontCatalogQuery {
                     variants.stream()
                             .map(variant -> variant.withPrice(variantPrices.get(variant.variantId())))
                             .toList(),
-                    modifierGroupIds);
+                    modifierGroupIds,
+                    commentPresets);
         }
     }
+
+    /** One preset a product offers on a line, every locale so the storefront renders its own. */
+    public record CommentPresetOption(String code, String labelRu, String labelUz, String labelEn) {}
 
     /**
      * One orderable size or form of a product.

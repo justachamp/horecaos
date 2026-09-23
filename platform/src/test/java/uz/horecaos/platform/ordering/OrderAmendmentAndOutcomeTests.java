@@ -285,6 +285,9 @@ class OrderAmendmentAndOutcomeTests {
                 new uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalTerminalStore(jdbc, objectMapper));
 
         var saleWindowRules = new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcCartSaleWindowRules(jdbc);
+        var commentPresetLookup = new uz.horecaos.platform.catalog.application.CommentPresetLookupAdapter(
+                new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore(jdbc, objectMapper),
+                new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore(jdbc));
         carts = new CartService(
                 cartStore,
                 channelStore,
@@ -300,7 +303,8 @@ class OrderAmendmentAndOutcomeTests {
                 customerBlacklist,
                 new PromoCodeEligibilityService(promoCodeStore),
                 new FakeConfigurationResolver(),
-                saleWindowRules);
+                saleWindowRules,
+                commentPresetLookup);
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
         paymentProcess = new OrderPaymentProcess(processStore, objectMapper);
         orderStateWith = store -> new OrderStateService(
@@ -368,7 +372,8 @@ class OrderAmendmentAndOutcomeTests {
                 clock,
                 customerBlacklist,
                 new FakeConfigurationResolver(),
-                saleWindowRules);
+                saleWindowRules,
+                commentPresetLookup);
 
         seedTenancyAndCatalog();
         seedPricingAndStock();

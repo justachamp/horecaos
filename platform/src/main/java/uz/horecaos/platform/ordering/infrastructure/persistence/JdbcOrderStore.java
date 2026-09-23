@@ -477,6 +477,39 @@ public class JdbcOrderStore {
                 .update();
     }
 
+    /**
+     * Row 2.1b: one preset a line was checked out carrying, with the label
+     * text of that moment (V0397) — the identical "copy, never a join back to
+     * catalog" discipline {@link #insertLineModifier} keeps for a modifier
+     * option's own name.
+     */
+    public void insertLineCommentPreset(
+            UUID tenantId,
+            UUID orderLineId,
+            UUID sourcePresetId,
+            String code,
+            String labelRu,
+            String labelUz,
+            String labelEn,
+            int sortOrder) {
+        jdbc.sql("""
+                INSERT INTO ordering.order_line_comment_presets (
+                    id, tenant_id, order_line_id, source_preset_id,
+                    code_snapshot, label_ru_snapshot, label_uz_snapshot, label_en_snapshot, sort_order)
+                VALUES (:id, :tenantId, :lineId, :presetId, :code, :labelRu, :labelUz, :labelEn, :sortOrder)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("lineId", orderLineId)
+                .param("presetId", sourcePresetId)
+                .param("code", code)
+                .param("labelRu", labelRu)
+                .param("labelUz", labelUz)
+                .param("labelEn", labelEn)
+                .param("sortOrder", sortOrder)
+                .update();
+    }
+
     public void insertAdjustment(
             UUID tenantId,
             UUID orderId,
@@ -1512,6 +1545,33 @@ public class JdbcOrderStore {
                 .list();
     }
 
+    /**
+     * Row 2.1b: every line's checked-out comment presets for one order, in
+     * display order — the KDS ticket's chips and the order detail line both
+     * read this, matching {@link #lineModifiers}'s own shape.
+     */
+    public List<OrderCommentPresetRow> lineCommentPresets(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT p.order_line_id, p.source_preset_id, p.code_snapshot,
+                       p.label_ru_snapshot, p.label_uz_snapshot, p.label_en_snapshot, p.sort_order
+                FROM ordering.order_line_comment_presets p
+                JOIN ordering.order_lines l ON l.id = p.order_line_id AND l.tenant_id = p.tenant_id
+                WHERE p.tenant_id = :tenantId AND l.order_id = :orderId
+                ORDER BY l.line_number, p.sort_order
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> new OrderCommentPresetRow(
+                        row.getObject("order_line_id", UUID.class),
+                        row.getObject("source_preset_id", UUID.class),
+                        row.getString("code_snapshot"),
+                        row.getString("label_ru_snapshot"),
+                        row.getString("label_uz_snapshot"),
+                        row.getString("label_en_snapshot"),
+                        row.getInt("sort_order")))
+                .list();
+    }
+
     // ------------------------------------------------------------ approvals
 
     public void insertApprovalDecision(
@@ -2420,6 +2480,16 @@ public class JdbcOrderStore {
             int quantity,
             long unitAmountMinor,
             long finalAmountMinor) {}
+
+    /** Row 2.1b: one preset a line was checked out carrying, labels as of that moment. */
+    public record OrderCommentPresetRow(
+            UUID orderLineId,
+            UUID sourcePresetId,
+            String code,
+            String labelRu,
+            String labelUz,
+            String labelEn,
+            int sortOrder) {}
 
     public record TransitionRow(
             int sequenceNumber,

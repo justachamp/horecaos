@@ -738,7 +738,8 @@ class SampleMenuPublishStepTests {
                 new PricingMenuPriceLookup(pricingStore(), new JdbcSalesChannelStore(jdbc), CLOCK),
                 new JdbcMenuStore(jdbc),
                 new uz.horecaos.platform.catalog.infrastructure.tenancy.JdbcCatalogTenantContext(jdbc),
-                CLOCK);
+                CLOCK,
+                new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore(jdbc));
     }
 
     private OnboardingStepHandlers.CatalogReadinessValidate catalogReadiness() {

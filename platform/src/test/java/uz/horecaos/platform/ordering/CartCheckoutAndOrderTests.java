@@ -213,6 +213,7 @@ class CartCheckoutAndOrderTests {
     private java.util.function.Function<PaymentIntentPort, CheckoutService> checkoutWith;
     private JdbcPaymentIntentStore intentStore;
     private uz.horecaos.platform.ordering.application.CartSaleWindowRules saleWindowRules;
+    private uz.horecaos.platform.catalog.api.CommentPresetLookup commentPresetLookup;
     private JdbcPaymentAttemptStore paymentAttemptStore;
     private JdbcFiscalDocumentStore fiscalStore;
     private JdbcSettlementStore settlementStore;
@@ -447,6 +448,12 @@ class CartCheckoutAndOrderTests {
         // above is real — whether an item is inside its own schedule is exactly
         // the property this suite's sale-window tests exist to check.
         saleWindowRules = new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcCartSaleWindowRules(jdbc);
+        // Row 2.1b: the real adapter, over the real catalog.comment_presets
+        // and catalog.product_comment_presets tables, for the identical
+        // reason saleWindowRules above is real.
+        commentPresetLookup = new uz.horecaos.platform.catalog.application.CommentPresetLookupAdapter(
+                new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore(jdbc, objectMapper),
+                new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore(jdbc));
         carts = new CartService(
                 cartStore,
                 channelStore,
@@ -462,7 +469,8 @@ class CartCheckoutAndOrderTests {
                 customerBlacklist,
                 new PromoCodeEligibilityService(promoCodeStore),
                 new FakeConfigurationResolver(),
-                saleWindowRules);
+                saleWindowRules,
+                commentPresetLookup);
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
         paymentProcess = new OrderPaymentProcess(processStore, objectMapper);
         orderState = new OrderStateService(
@@ -566,7 +574,8 @@ class CartCheckoutAndOrderTests {
                 clock,
                 customerBlacklist,
                 orderingConfig,
-                saleWindowRules);
+                saleWindowRules,
+                commentPresetLookup);
 
         checkout = checkoutWith.apply(UNWIRED_PAYMENTS);
         // ADR 0075's port over the same services, so a bot repeat and a
@@ -784,7 +793,7 @@ class CartCheckoutAndOrderTests {
                         "STOREFRONT",
                         FulfillmentMode.PICKUP,
                         List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
-                                burgerVariant, 2, List.of(), null)),
+                                burgerVariant, 2, List.of(), List.of(), null)),
                         null,
                         "CASH",
                         null,
@@ -827,7 +836,7 @@ class CartCheckoutAndOrderTests {
                 "STOREFRONT",
                 FulfillmentMode.PICKUP,
                 List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
-                        burgerVariant, 1, List.of(), null)),
+                        burgerVariant, 1, List.of(), List.of(), null)),
                 null,
                 "CLICK",
                 null,
@@ -862,7 +871,7 @@ class CartCheckoutAndOrderTests {
                 "STOREFRONT",
                 FulfillmentMode.PICKUP,
                 List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
-                        burgerVariant, 1, List.of(), null)),
+                        burgerVariant, 1, List.of(), List.of(), null)),
                 null,
                 "BANK_TRANSFER",
                 null,
@@ -949,7 +958,7 @@ class CartCheckoutAndOrderTests {
                 "STOREFRONT",
                 FulfillmentMode.PICKUP,
                 List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
-                        burgerVariant, 1, List.of(), null)),
+                        burgerVariant, 1, List.of(), List.of(), null)),
                 null,
                 "CASH",
                 "operator10",
@@ -1131,7 +1140,7 @@ class CartCheckoutAndOrderTests {
                         "STOREFRONT",
                         FulfillmentMode.DELIVERY,
                         List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
-                                burgerVariant, 1, List.of(), null)),
+                                burgerVariant, 1, List.of(), List.of(), null)),
                         null,
                         "CASH",
                         null,
@@ -1155,7 +1164,7 @@ class CartCheckoutAndOrderTests {
                         "STOREFRONT",
                         FulfillmentMode.PICKUP,
                         List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
-                                burgerVariant, 1, List.of(), null)),
+                                burgerVariant, 1, List.of(), List.of(), null)),
                         new uz.horecaos.platform.ordering.application.OperatorOrderingService.Destination(
                                 UUID.randomUUID(), "A Customer", "+998901234567", null),
                         "CASH",
@@ -2558,6 +2567,74 @@ class CartCheckoutAndOrderTests {
         assertThat(detail.lines().getFirst().line().hasNote()).isTrue();
         assertThat(orderQuery.revealLineNote(TENANT, orderIdOf(result), lineId, "KITCHEN_TICKET", "support-1"))
                 .contains("No onions, ring the top bell");
+    }
+
+    /**
+     * Row 2.1b's own headline capability, cart to order: an operator or
+     * customer attaches a preset to a line, and it round-trips to the order
+     * detail line with the label text of the moment — the KDS ticket itself
+     * renders no name at all (ADR 0041, {@code KitchenOrderSource}'s own
+     * doc), so the order detail read this asserts against is the identical
+     * authorized read the kitchen display resolves a ticket's chips through.
+     */
+    @Test
+    @DisplayName("row 2.1b: a line's chosen presets round-trip cart -> order with the label text of the moment")
+    void commentPresetsRoundTripFromCartToOrder() {
+        UUID noOnions = seedCommentPresetForBurger("NO_ONIONS", "Без лука");
+        UUID extraSpicy = seedCommentPresetForBurger("EXTRA_SPICY", "Поострее");
+
+        UUID cart = openCart();
+        var view = tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                "a",
+                burgerVariant,
+                1,
+                List.of(),
+                List.of("NO_ONIONS", "EXTRA_SPICY"),
+                null));
+        assertThat(view.lines())
+                .singleElement()
+                .satisfies(line -> assertThat(line.commentPresetCodes()).containsExactly("NO_ONIONS", "EXTRA_SPICY"));
+
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-comment-presets")));
+
+        var detail = orderQuery.detail(TENANT, orderIdOf(result)).orElseThrow();
+        assertThat(detail.lines())
+                .singleElement()
+                .satisfies(line -> assertThat(line.commentPresets())
+                        .extracting(
+                                JdbcOrderStore.OrderCommentPresetRow::sourcePresetId,
+                                JdbcOrderStore.OrderCommentPresetRow::code,
+                                JdbcOrderStore.OrderCommentPresetRow::labelRu)
+                        .containsExactly(
+                                tuple(noOnions, "NO_ONIONS", "Без лука"),
+                                tuple(extraSpicy, "EXTRA_SPICY", "Поострее")));
+    }
+
+    @Test
+    @DisplayName("row 2.1b: a preset the product does not offer is refused")
+    void aPresetTheProductDoesNotOfferIsRefused() {
+        var cart = openCart();
+
+        var refused = catchThrowable(() -> tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                "a",
+                burgerVariant,
+                1,
+                List.of(),
+                List.of("NEVER_ATTACHED"),
+                null)));
+
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("COMMENT_PRESET_NOT_OFFERED");
     }
 
     @Test
@@ -6663,6 +6740,39 @@ class CartCheckoutAndOrderTests {
                 .param("locationId", LOCATION)
                 .param("variantId", variantId)
                 .update();
+    }
+
+    /**
+     * Row 2.1b: a preset the burger product offers, coded and labelled exactly
+     * as the authoring screen would leave it. Presets are tenant-scoped
+     * (V0378's own migration doc); attaching one to a product is brand-scoped.
+     */
+    private UUID seedCommentPresetForBurger(String code, String labelRu) {
+        UUID presetId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO catalog.comment_presets (
+                    id, tenant_id, code, label_ru, label_uz, label_en, sort_order, status, version)
+                VALUES (:id, :tenantId, :code, :labelRu, :labelUz, :labelEn, 0, 'ACTIVE', 1)
+                """)
+                .param("id", presetId)
+                .param("tenantId", TENANT)
+                .param("code", code)
+                .param("labelRu", labelRu)
+                .param("labelUz", labelRu + " (uz)")
+                .param("labelEn", labelRu + " (en)")
+                .update();
+        jdbc.sql("""
+                INSERT INTO catalog.product_comment_presets (
+                    id, tenant_id, brand_id, product_id, preset_id, sort_order, version)
+                VALUES (:id, :tenantId, :brandId, :productId, :presetId, 0, 1)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("productId", java.util.Objects.requireNonNull(productIdByCode.get("BURGER")))
+                .param("presetId", presetId)
+                .update();
+        return presetId;
     }
 
     private void seedPricingAndStock() {

@@ -149,7 +149,8 @@ class CatalogPublicationTests {
                 (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.empty(),
                 new JdbcMenuStore(jdbc),
                 new uz.horecaos.platform.catalog.infrastructure.tenancy.JdbcCatalogTenantContext(jdbc),
-                Clock.systemUTC());
+                Clock.systemUTC(),
+                new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore(jdbc));
     }
 
     @Test

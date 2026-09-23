@@ -77,6 +77,10 @@ public class OperatorOrderingService {
             UUID variantId,
             int quantity,
             List<UUID> modifierOptionIds,
+            // Row 2.1b: the coded kitchen-instruction presets, same vocabulary
+            // and the same offered-subset check a customer's own cart line
+            // goes through in CartService.putLine.
+            List<String> commentPresetCodes,
             @Nullable String customerNote) {}
 
     /**
@@ -164,6 +168,7 @@ public class OperatorOrderingService {
                     line.variantId(),
                     line.quantity(),
                     line.modifierOptionIds(),
+                    line.commentPresetCodes(),
                     line.customerNote());
             version = view.cart().version();
         }

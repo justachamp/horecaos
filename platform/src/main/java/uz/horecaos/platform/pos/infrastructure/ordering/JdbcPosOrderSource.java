@@ -134,6 +134,26 @@ public class JdbcPosOrderSource implements PosOrderSource {
                         .computeIfAbsent(entry.getKey(), key -> new ArrayList<>())
                         .add(entry.getValue()));
 
+        // Row 2.1b: the presets this line was checked out carrying, ordered
+        // exactly as the customer/operator chose them (V0397).
+        Map<UUID, List<UUID>> commentPresetsByLine = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT p.order_line_id, p.source_preset_id
+                  FROM ordering.order_line_comment_presets p
+                  JOIN ordering.order_lines l
+                    ON l.id = p.order_line_id AND l.tenant_id = p.tenant_id
+                 WHERE p.tenant_id = :tenantId AND l.order_id = :orderId
+                 ORDER BY l.line_number, p.sort_order
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> Map.entry(
+                        row.getObject("order_line_id", UUID.class), row.getObject("source_preset_id", UUID.class)))
+                .list()
+                .forEach(entry -> commentPresetsByLine
+                        .computeIfAbsent(entry.getKey(), key -> new ArrayList<>())
+                        .add(entry.getValue()));
+
         return jdbc.sql("""
                 SELECT id, source_variant_id, product_name_snapshot, variant_name_snapshot,
                        quantity, unit_amount_minor
@@ -152,7 +172,8 @@ public class JdbcPosOrderSource implements PosOrderSource {
                             row.getString("variant_name_snapshot"),
                             row.getInt("quantity"),
                             row.getLong("unit_amount_minor"),
-                            modifiersByLine.getOrDefault(lineId, List.of()));
+                            modifiersByLine.getOrDefault(lineId, List.of()),
+                            commentPresetsByLine.getOrDefault(lineId, List.of()));
                 })
                 .list();
     }
