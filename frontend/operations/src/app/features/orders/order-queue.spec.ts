@@ -20,6 +20,7 @@ import { OrderActionsApi } from './order-actions-api';
 import { OrderBulkActionsApi } from './order-bulk-actions-api';
 import { OrderCounts, zeroTabCounts } from './order-counts';
 import { OrderQueue } from './order-queue';
+import { EMPTY_ORDER_QUEUE_FILTERS } from './order-queue-filter-state';
 import { RejectReasonOption } from './order-reject-reason-dialog';
 import { RejectReasonsApi } from './order-reject-reasons-api';
 import { OrderSummaryResponse } from './order-summary';
@@ -1505,6 +1506,107 @@ describe('OrderQueue: toolbar filters (orders.md §2.4, wave P07)', () => {
 
     const lastCall = getOrders.mock.calls.at(-1)!;
     expect(lastCall[1].params.origin).toBeUndefined();
+  });
+
+  it('sends the payment-status select as the board’s paymentStatus parameter (wave 10, gap map row 1.1c)', async () => {
+    const getOrders = ordersResponse([]);
+    configure(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    // «Оплата» lives behind §2.4's "⋯ ещё" secondary row too.
+    (host.querySelector('[data-testid="q-filter-bar-more"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const select = host.querySelector(
+      '[data-testid="order-queue-filter-paymentStatus"]',
+    ) as HTMLSelectElement;
+    select.value = 'CAPTURED';
+    select.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+
+    const lastCall = getOrders.mock.calls.at(-1)!;
+    expect(lastCall[1].params.paymentStatus).toBe('CAPTURED');
+  });
+});
+
+/**
+ * Gap map row 1.1c: every filter change round-trips through the URL's own
+ * query parameters, so a filtered board is a link — never a bare `tab=`
+ * that only `localStorage` can explain.
+ */
+describe('OrderQueue: filters round-trip through the URL (gap map row 1.1c)', () => {
+  it('pushes a filter change into the URL, replacing rather than adding a history entry', async () => {
+    const getOrders = ordersResponse([]);
+    configure(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+
+    const select = harness.routeNativeElement!.querySelector(
+      '[data-testid="order-queue-filter-fulfillmentMode"]',
+    ) as HTMLSelectElement;
+    select.value = 'DELIVERY';
+    select.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+
+    const url = TestBed.inject(Location).path();
+    expect(url).toContain('tab=all');
+    expect(url).toContain('fulfillmentMode=DELIVERY');
+  });
+
+  it('a URL carrying a filter parameter is this load’s source of truth, fetched on the very first request', async () => {
+    const getOrders = ordersResponse([]);
+    configure(getOrders);
+    await RouterTestingHarness.create('/orders?tab=all&origin=MARKETPLACE');
+    await flushMicrotasks();
+
+    // Exactly one fetch — the URL-derived filter is applied to the first
+    // request, not fetched plain and then corrected by a second call.
+    expect(getOrders).toHaveBeenCalledTimes(1);
+    expect(getOrders.mock.calls[0][1].params.origin).toBe('MARKETPLACE');
+  });
+
+  it('a plain tab-only URL still restores localStorage’s remembered filters for that tab, unchanged', async () => {
+    localStorage.setItem(
+      'horecaos.operations.orderQueue.filters.all',
+      JSON.stringify({ ...EMPTY_ORDER_QUEUE_FILTERS, channelCode: 'wolt' }),
+    );
+
+    const getOrders = ordersResponse([]);
+    configure(getOrders);
+    await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+
+    expect(getOrders.mock.calls[0][1].params.channelCode).toBe('wolt');
+  });
+
+  it('a link opened once is remembered by localStorage too, for a later plain reload', async () => {
+    const getOrders = ordersResponse([]);
+    configure(getOrders);
+    await RouterTestingHarness.create('/orders?tab=all&paymentStatus=FAILED');
+    await flushMicrotasks();
+
+    const stored = JSON.parse(
+      localStorage.getItem('horecaos.operations.orderQueue.filters.all') ?? '{}',
+    );
+    expect(stored.paymentStatus).toBe('FAILED');
+  });
+
+  it('switching tabs clears the previous tab’s filter parameters from the URL rather than carrying them forward', async () => {
+    const getOrders = ordersResponse([]);
+    configure(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=all&origin=MARKETPLACE');
+    await flushMicrotasks();
+
+    const tabs = [...harness.routeNativeElement!.querySelectorAll('[role="tab"]')];
+    const newTab = tabs.find((b) => b.textContent?.trim() === 'New');
+    (newTab as HTMLElement).click();
+    await flushMicrotasks();
+
+    const url = TestBed.inject(Location).path();
+    expect(url).toContain('tab=new');
+    expect(url).not.toContain('origin=');
   });
 });
 

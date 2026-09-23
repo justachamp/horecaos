@@ -40,9 +40,9 @@ import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchro
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
- * Gap map rows 1.1, 1.1e and 9.2d through the real HTTP stack: the board's
- * Курьер field, {@code ASSIGN_COURIER} in {@code actions[]}, and the detail
- * read's resolved actor display names.
+ * Gap map rows 1.1, 1.1c, 1.1e and 9.2d through the real HTTP stack: the
+ * board's Курьер field and `paymentStatus` filter, {@code ASSIGN_COURIER} in
+ * {@code actions[]}, and the detail read's resolved actor display names.
  *
  * <p>Mirrors {@link OperationsOrderControllerActionCapabilitiesHttpTests}'
  * own style and fixture shape — a real request through {@code
@@ -180,6 +180,36 @@ class OperationsOrderControllerCourierAndAttributionHttpTests {
 
         String detail = readDetail(LOCATION_A, orderId, MANAGER);
         assertThat(detail).contains("\"createdByDisplayName\":null");
+    }
+
+    @Test
+    @DisplayName("gap map 1.1c: paymentStatus narrows the board to orders.payment_status_projection, "
+            + "and an unknown value is refused rather than silently answering \"no orders\"")
+    void paymentStatusFiltersTheBoardAndRefusesAnUnknownValue() throws Exception {
+        UUID captured = seedConfirmedDeliveryOrder("5005", null, null);
+        setPaymentStatusProjection(captured, "CAPTURED");
+        UUID notRequired = seedConfirmedDeliveryOrder("5006", null, null);
+
+        MvcResult filtered = mvc.perform(get(ordersPath(LOCATION_A) + "/board")
+                        .param("paymentStatus", "CAPTURED")
+                        .with(tokenFor(MANAGER)))
+                .andReturn();
+        assertThat(filtered.getResponse().getStatus()).isEqualTo(200);
+        String body = filtered.getResponse().getContentAsString();
+        assertThat(body).contains(captured.toString()).doesNotContain(notRequired.toString());
+
+        MvcResult refused = mvc.perform(get(ordersPath(LOCATION_A) + "/board")
+                        .param("paymentStatus", "NONSENSE")
+                        .with(tokenFor(MANAGER)))
+                .andReturn();
+        assertThat(refused.getResponse().getStatus()).isEqualTo(400);
+    }
+
+    private void setPaymentStatusProjection(UUID orderId, String projection) {
+        jdbc.sql("UPDATE ordering.orders SET payment_status_projection = :projection WHERE id = :id")
+                .param("projection", projection)
+                .param("id", orderId)
+                .update();
     }
 
     // --------------------------------------------------------------- helpers

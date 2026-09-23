@@ -148,6 +148,20 @@
           }
         </select>
 
+        <!-- «Оплата» (wave 10, gap map row 1.1c): payment_status_projection, distinct from «Способ оплаты» above. -->
+        <select
+          class="order-queue__select"
+          [value]="filters().paymentStatus ?? ''"
+          (change)="onPaymentStatusChange($any($event.target).value)"
+          [attr.aria-label]="'orders.queue.filter.paymentStatus.label' | t"
+          data-testid="order-queue-filter-paymentStatus"
+        >
+          <option value="">{{ 'orders.queue.filter.paymentStatus.all' | t }}</option>
+          @for (status of paymentStatusOptions; track status) {
+            <option [value]="status">{{ paymentStatusFilterLabel(status) }}</option>
+          }
+        </select>
+
         <!-- «Источник» (wave 9, gap map row 1.1c): ordering.orders.origin, distinct from Канал — see order-queue-filter-state.ts's own doc. -->
         <select
           class="order-queue__select"

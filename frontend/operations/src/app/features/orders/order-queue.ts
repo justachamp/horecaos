@@ -53,11 +53,18 @@ import {
 import { CountableOrder, OrderCounts, TabCounts, zeroTabCounts } from './order-counts';
 import { describeApiError, errorReference, mutationErrorNotice } from './order-errors';
 import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outcome-reason-dialog';
-import { paymentStatusProjectionLabel } from './order-payment-status';
 import {
+  ORDER_PAYMENT_STATUS_PROJECTIONS,
+  paymentStatusProjectionLabel,
+} from './order-payment-status';
+import {
+  EMPTY_ORDER_QUEUE_FILTERS,
   OrderQueueFilters,
   OrderQueueFilterState,
   boardQueryParams,
+  filtersFromQueryParams,
+  filtersToQueryParams,
+  hasFilterQueryParams,
 } from './order-queue-filter-state';
 import {
   bulkAdvanceTarget,
@@ -291,6 +298,8 @@ export class OrderQueue implements OnInit {
   /** §2.4: the toolbar's own filters for the active tab. */
   protected readonly filters: Signal<OrderQueueFilters> = this.filterState.current;
   protected readonly paymentMethodCodes = PAYMENT_METHOD_CODES;
+  /** «Оплата» (wave 10, gap map row `1.1c`): the board's own seven projections — the same fixed set the Оплата column renders. */
+  protected readonly paymentStatusOptions = ORDER_PAYMENT_STATUS_PROJECTIONS;
 
   /** §2.4's Канал: every channel code this session has observed, only ever growing — see {@link refresh}. */
   protected readonly channelOptions = signal<readonly string[]>([]);
@@ -362,15 +371,40 @@ export class OrderQueue implements OnInit {
   /** Guards the tab-change refetch below from also firing on the very first route resolution — {@link start} already fetches once. */
   private hasStarted = false;
 
+  /** {@link syncUrlFromFilters}'s own guard against reacting to the navigation it just made. */
+  private syncingUrlFromFilters = false;
+
   ngOnInit(): void {
     const querySub = this.route.queryParamMap.subscribe((params) => {
       const tab = params.get('tab');
       const resolved = isOrderTabId(tab) ? tab : DEFAULT_ORDER_TAB;
+      const tabChanged = this.hasStarted && this.activeTab() !== resolved;
+      this.activeTab.set(resolved);
+
+      if (this.syncingUrlFromFilters) {
+        // order-queue.ts's own filter -> URL push (syncUrlFromFilters): the
+        // filter signal already holds this exact value, so there is
+        // nothing to reconcile — see that method's own doc.
+        this.syncingUrlFromFilters = false;
+        return;
+      }
+
+      if (hasFilterQueryParams(params)) {
+        // Gap map row 1.1c: a pasted link, or the browser's own
+        // back/forward — the URL is this load's source of truth, not
+        // localStorage's per-tab memory (still written there too, via
+        // OrderQueueFilterState.setFilters, so the next cold visit
+        // remembers it).
+        this.filterState.setFilters(resolved, filtersFromQueryParams(params));
+        if (this.hasStarted) {
+          void this.refresh();
+        }
+        return;
+      }
+
       // §2.4: filters are remembered **per tab**, and the board's one fetch
       // is filtered by whichever tab is active — so switching tabs switches
       // which remembered filter set is in effect and re-fetches under it.
-      const tabChanged = this.hasStarted && this.activeTab() !== resolved;
-      this.activeTab.set(resolved);
       this.filterState.loadForTab(resolved);
       if (tabChanged) {
         void this.refresh();
@@ -588,10 +622,20 @@ export class OrderQueue implements OnInit {
     }
   }
 
+  /**
+   * Clears every filter query parameter alongside `tab` (gap map row 1.1c):
+   * filters are remembered **per tab**, so switching tabs by clicking one
+   * must hand control back to the newly-active tab's own `localStorage`
+   * memory (`ngOnInit`'s `loadForTab` branch) rather than carrying the
+   * previous tab's URL filters forward through `queryParamsHandling:
+   * 'merge'`. Reuses `filtersToQueryParams(EMPTY_ORDER_QUEUE_FILTERS)`,
+   * which is exactly "every filter parameter, cleared" since every field is
+   * already at its default.
+   */
   protected selectTab(tab: OrderTabId): void {
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { tab },
+      queryParams: { tab, ...filtersToQueryParams(EMPTY_ORDER_QUEUE_FILTERS) },
       queryParamsHandling: 'merge',
     });
   }
@@ -744,9 +788,45 @@ export class OrderQueue implements OnInit {
 
   private searchDebounceHandle: ReturnType<typeof setTimeout> | null = null;
 
+  /**
+   * Every filter handler below routes through this one method (gap map row
+   * 1.1c): applies the patch, then pushes the resulting filter state into
+   * the URL's own query parameters, so the address bar is always a link
+   * that reproduces exactly what the operator sees. Never the fetch itself
+   * — the search box's own 300ms debounce needs to delay {@link refresh}
+   * without delaying the URL update, so each caller still fires its own
+   * {@link refresh} afterward.
+   */
+  private applyFilterPatch(patch: Partial<OrderQueueFilters>): void {
+    this.filterState.update(patch);
+    this.syncUrlFromFilters();
+  }
+
+  /**
+   * Pushes {@link filters}' current value into the URL (gap map row 1.1c),
+   * via {@link OrderQueueFilterState}'s own `filtersToQueryParams`. Sets
+   * {@link syncingUrlFromFilters} first so the `queryParamMap` subscription
+   * in {@link ngOnInit} recognises this as its own navigation and does not
+   * treat it as a pasted link to reconcile the filter state *from* (which
+   * would be a no-op read of the value this call itself just wrote, but a
+   * redundant board re-fetch all the same). `replaceUrl: true`: each filter
+   * click replaces the last filter state in browser history rather than
+   * adding a new entry — the same reason a debounced search box does not
+   * push one history entry per keystroke.
+   */
+  private syncUrlFromFilters(): void {
+    this.syncingUrlFromFilters = true;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: filtersToQueryParams(this.filters()),
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
   /** §2.8: 300ms debounce before the search box re-fetches — every other filter refetches immediately on change. */
   protected onSearchInput(text: string): void {
-    this.filterState.update({ reference: text });
+    this.applyFilterPatch({ reference: text });
     if (this.searchDebounceHandle !== null) {
       clearTimeout(this.searchDebounceHandle);
     }
@@ -754,41 +834,47 @@ export class OrderQueue implements OnInit {
   }
 
   protected onDateRangeChange(range: DateRange): void {
-    this.filterState.update({ dateRange: { start: range.start, end: range.end } });
+    this.applyFilterPatch({ dateRange: { start: range.start, end: range.end } });
     void this.refresh();
   }
 
   protected onChannelChange(channelCode: string): void {
-    this.filterState.update({ channelCode: channelCode || null });
+    this.applyFilterPatch({ channelCode: channelCode || null });
     void this.refresh();
   }
 
   /** «Источник» (wave 9, gap map row `1.1c`): `HORECAOS` vs `MARKETPLACE` — see `order-queue-filter-state.ts`'s own doc for why this is not the same control as Канал. */
   protected onOriginChange(origin: string): void {
-    this.filterState.update({ origin: origin ? (origin as OrderQueueFilters['origin']) : null });
+    this.applyFilterPatch({ origin: origin ? (origin as OrderQueueFilters['origin']) : null });
     void this.refresh();
   }
 
   protected onFulfillmentModeChange(mode: string): void {
-    this.filterState.update({
+    this.applyFilterPatch({
       fulfillmentMode: mode ? (mode as OrderQueueFilters['fulfillmentMode']) : null,
     });
     void this.refresh();
   }
 
   protected onCourierChange(courierId: string): void {
-    this.filterState.update({ courierId: courierId || null });
+    this.applyFilterPatch({ courierId: courierId || null });
     void this.refresh();
   }
 
   protected onPaymentMethodChange(code: string): void {
-    this.filterState.update({ paymentMethodCode: code || null });
+    this.applyFilterPatch({ paymentMethodCode: code || null });
+    void this.refresh();
+  }
+
+  /** «Оплата» (wave 10, gap map row `1.1c`): `ordering.orders.payment_status_projection`, distinct from {@link onPaymentMethodChange}'s Способ оплаты. */
+  protected onPaymentStatusChange(status: string): void {
+    this.applyFilterPatch({ paymentStatus: status || null });
     void this.refresh();
   }
 
   protected onMineOnlyToggle(): void {
     const next = !this.filters().mineOnly;
-    this.filterState.update({ mineOnly: next });
+    this.applyFilterPatch({ mineOnly: next });
     // §2.4: the client supplies its own subject; there is no server-side
     // `me`. Lazily loaded here rather than at start-up, so a session that
     // never touches this toggle never spends the extra request.
@@ -797,16 +883,19 @@ export class OrderQueue implements OnInit {
 
   protected onResetFilters(): void {
     this.filterState.reset();
+    this.syncUrlFromFilters();
     void this.refresh();
   }
 
   protected onChipRemoved(chipId: string): void {
     if (chipId === 'mine') {
-      this.filterState.update({ mineOnly: false });
+      this.applyFilterPatch({ mineOnly: false });
     } else if (chipId === 'paymentMethod') {
-      this.filterState.update({ paymentMethodCode: null });
+      this.applyFilterPatch({ paymentMethodCode: null });
+    } else if (chipId === 'paymentStatus') {
+      this.applyFilterPatch({ paymentStatus: null });
     } else if (chipId === 'origin') {
-      this.filterState.update({ origin: null });
+      this.applyFilterPatch({ origin: null });
     }
     void this.refresh();
   }
@@ -821,6 +910,12 @@ export class OrderQueue implements OnInit {
       chips.push({
         id: 'paymentMethod',
         label: this.paymentMethodLabel(filters.paymentMethodCode),
+      });
+    }
+    if (filters.paymentStatus) {
+      chips.push({
+        id: 'paymentStatus',
+        label: this.paymentStatusFilterLabel(filters.paymentStatus),
       });
     }
     if (filters.origin) {
@@ -848,6 +943,33 @@ export class OrderQueue implements OnInit {
         return this.i18n.t('orders.queue.filter.paymentMethod.PAYME');
       default:
         return code;
+    }
+  }
+
+  /**
+   * «Оплата»'s own filter option label (wave 10, gap map row `1.1c`) —
+   * unlike {@link paymentStatusLabel} (§2.5 column 10), `NOT_REQUIRED` gets
+   * a real word here rather than a dash: an operator who explicitly picked
+   * it from the filter is choosing a value, not reading an empty cell.
+   */
+  protected paymentStatusFilterLabel(status: string): string {
+    switch (status) {
+      case 'NOT_REQUIRED':
+        return this.i18n.t('orders.queue.filter.paymentStatus.NOT_REQUIRED');
+      case 'PENDING':
+        return this.i18n.t('orders.paymentStatus.PENDING');
+      case 'AUTHORIZED':
+        return this.i18n.t('orders.paymentStatus.AUTHORIZED');
+      case 'CAPTURED':
+        return this.i18n.t('orders.paymentStatus.CAPTURED');
+      case 'FAILED':
+        return this.i18n.t('orders.paymentStatus.FAILED');
+      case 'VOIDED':
+        return this.i18n.t('orders.paymentStatus.VOIDED');
+      case 'REFUNDED':
+        return this.i18n.t('orders.paymentStatus.REFUNDED');
+      default:
+        return status;
     }
   }
 

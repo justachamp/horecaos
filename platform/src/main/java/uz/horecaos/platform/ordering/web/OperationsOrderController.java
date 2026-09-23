@@ -137,6 +137,15 @@ public class OperationsOrderController {
             // itself declares.
             Capability.DELIVERY_MANUAL_ASSIGN);
 
+    /**
+     * {@code ordering.orders.payment_status_projection}'s own seven values
+     * (V0022, {@code ck_order_payment_projection}, gap map row 1.1c) — the
+     * board's {@code paymentStatus} filter parameter refuses anything else
+     * rather than silently answering "no orders" for a typo.
+     */
+    private static final Set<String> KNOWN_PAYMENT_STATUS_PROJECTIONS =
+            Set.of("NOT_REQUIRED", "PENDING", "AUTHORIZED", "CAPTURED", "FAILED", "VOIDED", "REFUNDED");
+
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OperationsOrderController(
             OrderQueryService orderQuery,
@@ -222,8 +231,8 @@ public class OperationsOrderController {
             @RequestParam(required = false) List<String> status,
             @RequestParam(defaultValue = "100") @jakarta.validation.constraints.Max(500) int limit) {
 
-        JdbcOrderStore.OrderListQuery query =
-                boardQuery(tenantId, brandId, locationId, status, null, null, null, null, null, null, null, null, null);
+        JdbcOrderStore.OrderListQuery query = boardQuery(
+                tenantId, brandId, locationId, status, null, null, null, null, null, null, null, null, null, null);
         Set<Capability> granted = grantedOrderActionCapabilities(tenantId, brandId, locationId);
         return ResponseEntity.ok(orderQuery.forLocation(query, null, limit).stream()
                 .map(row -> OrderSummaryResponse.of(row, granted))
@@ -249,10 +258,13 @@ public class OperationsOrderController {
                     + "`MARKETPLACE` for anything recorded under an aggregator's own binding "
                     + "(ADR 0040, wave 9 row `1.1c`) — the coarse «Источник» toggle orders.md §2.4 "
                     + "names; picking one specific aggregator binding when a tenant runs several "
-                    + "is not yet a filter here. Keyset-paginated "
+                    + "is not yet a filter here. `paymentStatus` narrows to `ordering.orders"
+                    + ".payment_status_projection` (V0022, gap map row 1.1c) — Оплата, never to be "
+                    + "confused with `paymentMethodCode`'s Способ оплаты. Keyset-paginated "
                     + "(ADR 0031): pass the previous page's `nextCursor` back as `cursor`. "
                     + "Changing a filter invalidates the cursor — start the list again — because "
                     + "a window cut for one filter set says nothing about another.")
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public Page<OrderSummaryResponse> board(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -267,6 +279,7 @@ public class OperationsOrderController {
             @RequestParam(required = false) @Nullable String createdByActorId,
             @RequestParam(required = false) @Nullable String reference,
             @RequestParam(required = false) @Nullable String origin,
+            @RequestParam(required = false) @Nullable String paymentStatus,
             @RequestParam(required = false) @Nullable String cursor,
             @RequestParam(required = false) @Nullable Integer limit) {
 
@@ -283,7 +296,8 @@ public class OperationsOrderController {
                 paymentMethodCode,
                 createdByActorId,
                 reference,
-                origin);
+                origin,
+                paymentStatus);
 
         String filterHash = filterHashOf(query);
         @Nullable UUID cursorOrderId = null;
@@ -332,13 +346,15 @@ public class OperationsOrderController {
             @Nullable String paymentMethodCode,
             @Nullable String createdByActorId,
             @Nullable String reference,
-            @Nullable String origin) {
+            @Nullable String origin,
+            @Nullable String paymentStatus) {
 
         List<String> statuses = status == null ? List.of() : status;
         statuses.forEach(OperationsOrderController::requireKnownStatus);
         requireKnownFulfillmentMode(fulfillmentMode);
         requireSearchableReference(reference);
         requireKnownOrigin(origin);
+        requireKnownPaymentStatus(paymentStatus);
 
         return new JdbcOrderStore.OrderListQuery(
                 tenantId,
@@ -353,7 +369,8 @@ public class OperationsOrderController {
                 paymentMethodCode,
                 createdByActorId,
                 reference,
-                origin == null ? null : origin.toUpperCase(Locale.ROOT));
+                origin == null ? null : origin.toUpperCase(Locale.ROOT),
+                paymentStatus == null ? null : paymentStatus.toUpperCase(Locale.ROOT));
     }
 
     /**
@@ -404,6 +421,23 @@ public class OperationsOrderController {
         String normalised = origin.toUpperCase(Locale.ROOT);
         if (!normalised.equals("HORECAOS") && !normalised.equals("MARKETPLACE")) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown order origin \"%s\"".formatted(origin));
+        }
+    }
+
+    /**
+     * {@code ordering.orders.payment_status_projection}'s own seven values
+     * (V0022, {@code ck_order_payment_projection}, gap map row 1.1c) —
+     * dropping an unknown one would silently answer "no orders" for a typo,
+     * exactly the failure {@link #requireKnownOrigin} already refuses for its
+     * own parameter.
+     */
+    private static void requireKnownPaymentStatus(@Nullable String paymentStatus) {
+        if (paymentStatus == null) {
+            return;
+        }
+        if (!KNOWN_PAYMENT_STATUS_PROJECTIONS.contains(paymentStatus.toUpperCase(Locale.ROOT))) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "Unknown payment status \"%s\"".formatted(paymentStatus));
         }
     }
 

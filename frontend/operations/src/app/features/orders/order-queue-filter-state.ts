@@ -1,4 +1,5 @@
 import { Injectable, Signal, computed, signal } from '@angular/core';
+import { ParamMap } from '@angular/router';
 
 import { OrderTabId } from './order-tabs';
 
@@ -32,10 +33,11 @@ export interface OrderQueueDateRange {
  *   answers in one click instead of one per channel. Picking a single
  *   aggregator *binding* when a tenant runs two installations of the same
  *   provider is narrower than `origin` reaches and is not offered here.
- * - **Оплата** (payment *status*) has no board predicate at all yet — only
- *   **Способ оплаты** (payment *method*, `paymentMethodCode`) does. This
- *   toolbar's "payment type" filter is the method, matching what the
- *   endpoint can actually answer.
+ * - **Оплата** (payment *status*, wave 10 gap map `1.1c`) is
+ *   `paymentStatus` — `ordering.orders.payment_status_projection` — beside
+ *   **Способ оплаты** (payment *method*, `paymentMethodCode`), which reads
+ *   the payment module's own intent instead. The two answer different
+ *   questions the same way `channelCode`/`origin` do above.
  * - **Только опаздывающие / С проблемой / Требуется звонок / Фискализация**
  *   have no board predicate either (orders.md §2.4's own status line on
  *   each) and are not offered.
@@ -48,6 +50,8 @@ export interface OrderQueueFilters {
   readonly fulfillmentMode: 'DELIVERY' | 'PICKUP' | 'DINE_IN' | null;
   readonly courierId: string | null;
   readonly paymentMethodCode: string | null;
+  /** «Оплата» (wave 10, gap map `1.1c`) — `ordering.orders.payment_status_projection`. */
+  readonly paymentStatus: string | null;
   readonly mineOnly: boolean;
   /** The exact-match search box (§2.8's built half) — order number or external reference. */
   readonly reference: string;
@@ -60,6 +64,7 @@ export const EMPTY_ORDER_QUEUE_FILTERS: OrderQueueFilters = {
   fulfillmentMode: null,
   courierId: null,
   paymentMethodCode: null,
+  paymentStatus: null,
   mineOnly: false,
   reference: '',
 };
@@ -75,6 +80,7 @@ export function hasActiveFilters(filters: OrderQueueFilters): boolean {
     filters.fulfillmentMode !== null ||
     filters.courierId !== null ||
     filters.paymentMethodCode !== null ||
+    filters.paymentStatus !== null ||
     filters.mineOnly ||
     filters.reference.trim().length > 0
   );
@@ -126,6 +132,9 @@ export function boardQueryParams(
   if (filters.paymentMethodCode) {
     params['paymentMethodCode'] = filters.paymentMethodCode;
   }
+  if (filters.paymentStatus) {
+    params['paymentStatus'] = filters.paymentStatus;
+  }
   if (filters.mineOnly && actorId) {
     params['createdByActorId'] = actorId;
   }
@@ -137,6 +146,77 @@ export function boardQueryParams(
     params['reference'] = reference;
   }
   return params;
+}
+
+/**
+ * The URL query parameter names the board's filters round-trip through
+ * (wave 10, gap map `1.1c`) — deliberately distinct from `boardQueryParams`'
+ * own server-facing names in the two spots where they'd otherwise collide
+ * with a *different* meaning: `dateStart`/`dateEnd` are the raw `YYYY-MM-DD`
+ * calendar days the picker holds, never `boardQueryParams`' own derived
+ * `+05:00` timestamps, and `mine`/`q` read shorter than `mineOnly`/
+ * `reference` for a link an operator might actually paste somewhere. No
+ * value here is personal data (ADR 0029): every one is a code, an id, a
+ * plain boolean flag or a calendar day — `reference`/`q` is an order number
+ * or an external reference, the same non-PII search text §2.8 already sends
+ * as a query parameter to the board endpoint itself.
+ */
+const FILTER_PARAM_NAMES = [
+  'channelCode',
+  'origin',
+  'fulfillmentMode',
+  'courierId',
+  'paymentMethodCode',
+  'paymentStatus',
+  'mine',
+  'q',
+  'dateStart',
+  'dateEnd',
+] as const;
+
+/** Whether the URL carries any of this board's own filter parameters — the signal that a link, not `localStorage`, is this load's source of truth. */
+export function hasFilterQueryParams(params: ParamMap): boolean {
+  return FILTER_PARAM_NAMES.some((name) => params.has(name));
+}
+
+/** The filter state a URL's query parameters describe — {@link EMPTY_ORDER_QUEUE_FILTERS} for any field the URL leaves out. */
+export function filtersFromQueryParams(params: ParamMap): OrderQueueFilters {
+  const dateStart = params.get('dateStart');
+  const dateEnd = params.get('dateEnd');
+  return {
+    dateRange: dateStart && dateEnd ? { start: dateStart, end: dateEnd } : null,
+    channelCode: params.get('channelCode'),
+    origin: params.get('origin') as OrderQueueFilters['origin'],
+    fulfillmentMode: params.get('fulfillmentMode') as OrderQueueFilters['fulfillmentMode'],
+    courierId: params.get('courierId'),
+    paymentMethodCode: params.get('paymentMethodCode'),
+    paymentStatus: params.get('paymentStatus'),
+    mineOnly: params.get('mine') === '1',
+    reference: params.get('q') ?? '',
+  };
+}
+
+/**
+ * `filters` as a `Router.navigate` `queryParams` patch — `null` for a
+ * default-valued field, which `queryParamsHandling: 'merge'` reads as
+ * "remove this parameter" rather than writing it as the literal string
+ * `"null"`. The mirror of {@link filtersFromQueryParams}: applying one then
+ * the other is the identity on every field both functions carry.
+ */
+export function filtersToQueryParams(filters: OrderQueueFilters): Record<string, string | null> {
+  const reference = filters.reference.trim();
+  return {
+    channelCode: filters.channelCode,
+    origin: filters.origin,
+    fulfillmentMode: filters.fulfillmentMode,
+    courierId: filters.courierId,
+    paymentMethodCode: filters.paymentMethodCode,
+    paymentStatus: filters.paymentStatus,
+    mine: filters.mineOnly ? '1' : null,
+    q: reference.length > 0 ? reference : null,
+    dateStart: filters.dateRange?.start ?? null,
+    dateEnd: filters.dateRange?.end ?? null,
+  };
 }
 
 function readStored(tab: OrderTabId): OrderQueueFilters {
@@ -168,15 +248,19 @@ function writeStored(tab: OrderTabId, filters: OrderQueueFilters): void {
 /**
  * The toolbar's own filter values, persisted **per tab** (orders.md §1.1c):
  * switching from Внимание to Завершены and back restores each tab's own last
- * filter set, and a full page reload restores whichever tab's filters were
- * open.
+ * filter set, and a full page reload with no filters in the URL restores
+ * whichever tab's filters were open.
  *
- * **Not yet a URL parameter.** §2.4 makes query parameters the source of
- * truth and `localStorage` a cold-entry restore only; this wave keeps every
- * filter in `localStorage` on every change instead, the same scope reduction
- * `ReportsFilterState`'s own doc comment already makes for the reports bar —
- * a filtered board is not yet a shareable link. Round-tripping through the
- * URL is follow-up work, not built this wave.
+ * **Round-trips through the URL** (wave 10, gap map `1.1c`): {@code
+ * order-queue.ts} pushes every filter change into the URL's own query
+ * parameters (via {@link filtersToQueryParams}) so a filtered board is a
+ * link an operator can paste to a colleague, and reads them back out (via
+ * {@link filtersFromQueryParams}/{@link setFilters}) when a URL already
+ * carries any — a pasted link, or the browser's own back/forward. `
+ * localStorage` stays the cold-entry source of truth for a plain reload or
+ * a fresh visit with no filter parameters in the URL at all: {@link
+ * setFilters} still persists to it, so opening a shared link once means the
+ * next cold visit remembers it too.
  */
 @Injectable({ providedIn: 'root' })
 export class OrderQueueFilterState {
@@ -193,6 +277,18 @@ export class OrderQueueFilterState {
     }
     this.tab.set(tab);
     this.filters.set(readStored(tab));
+  }
+
+  /**
+   * Sets this tab's filters directly, from a URL a link just carried in —
+   * never merged with what {@code localStorage} remembered, the same way a
+   * pasted link overrides a browser's own autofill. Still persisted (this
+   * link is now what the next cold visit to this tab remembers too).
+   */
+  setFilters(tab: OrderTabId, filters: OrderQueueFilters): void {
+    this.tab.set(tab);
+    this.filters.set(filters);
+    this.persist();
   }
 
   update(patch: Partial<OrderQueueFilters>): void {

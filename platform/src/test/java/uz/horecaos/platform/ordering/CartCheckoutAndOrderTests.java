@@ -5378,7 +5378,7 @@ class CartCheckoutAndOrderTests {
                                 .listForLocation(
                                         new JdbcOrderStore.OrderListQuery(
                                                 TENANT, BRAND, LOCATION, List.of(), null, null, null, null, null, null,
-                                                null, null, null),
+                                                null, null, null, null),
                                         null,
                                         null,
                                         10)

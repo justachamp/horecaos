@@ -196,6 +196,26 @@ class OrderBoardQueryTests {
         assertThat(idsOf(query().paymentMethodCode("CLICK"))).containsExactly(card);
     }
 
+    /**
+     * Gap map row 1.1c: `paymentStatus` reads {@code
+     * ordering.orders.payment_status_projection} directly — the board's own
+     * Оплата column value, distinct from {@link #thePaymentMethodFilter}'s
+     * `paymentMethodCode`, which reads the payment module's own intent row.
+     */
+    @Test
+    @DisplayName("the payment status filter reads the order's own payment_status_projection")
+    void thePaymentStatusFilter() {
+        UUID captured = insertOrder(order("PS-1").paymentStatusProjection("CAPTURED"));
+        UUID failed = insertOrder(order("PS-2").paymentStatusProjection("FAILED"));
+        UUID notRequired = insertOrder(order("PS-3"));
+
+        assertThat(idsOf(query().paymentStatus("CAPTURED")))
+                .containsExactly(captured)
+                .doesNotContain(failed, notRequired);
+        assertThat(idsOf(query().paymentStatus("FAILED"))).containsExactly(failed);
+        assertThat(idsOf(query().paymentStatus("NOT_REQUIRED"))).containsExactly(notRequired);
+    }
+
     @Test
     @DisplayName("Мои заказы: the creating actor filter")
     void theCreatingActorFilter() {
@@ -308,6 +328,7 @@ class OrderBoardQueryTests {
                 null,
                 null,
                 "WLT-200",
+                null,
                 null);
         assertThat(store.listForLocation(theirBoard, null, null, 50).stream()
                         .map(row -> row.order().orderId())
@@ -581,7 +602,7 @@ class OrderBoardQueryTests {
         return new QueryBuilder();
     }
 
-    /** Keeps the twelve-argument query record out of every assertion above. */
+    /** Keeps the thirteen-argument query record out of every assertion above. */
     private static final class QueryBuilder {
         private List<String> statuses = List.of();
         private @Nullable Instant from;
@@ -593,6 +614,7 @@ class OrderBoardQueryTests {
         private @Nullable String createdByActorId;
         private @Nullable String reference;
         private @Nullable String origin;
+        private @Nullable String paymentStatus;
 
         QueryBuilder statuses(String... values) {
             this.statuses = List.of(values);
@@ -644,6 +666,11 @@ class OrderBoardQueryTests {
             return this;
         }
 
+        QueryBuilder paymentStatus(String value) {
+            this.paymentStatus = value;
+            return this;
+        }
+
         OrderListQuery build() {
             return new OrderListQuery(
                     TENANT,
@@ -658,7 +685,8 @@ class OrderBoardQueryTests {
                     paymentMethodCode,
                     createdByActorId,
                     reference,
-                    origin);
+                    origin,
+                    paymentStatus);
         }
     }
 
@@ -677,6 +705,7 @@ class OrderBoardQueryTests {
         private @Nullable String createdByActorId;
         private boolean confirmed;
         private String origin = "HORECAOS";
+        private String paymentStatusProjection = "NOT_REQUIRED";
 
         private OrderSpec(String seed) {
             this.seed = seed;
@@ -719,6 +748,11 @@ class OrderBoardQueryTests {
 
         OrderSpec origin(String value) {
             this.origin = value;
+            return this;
+        }
+
+        OrderSpec paymentStatusProjection(String value) {
+            this.paymentStatusProjection = value;
             return this;
         }
     }
@@ -793,7 +827,7 @@ class OrderBoardQueryTests {
                     origin, pricing_authority, marketplace_binding_id)
                 VALUES (:id, :number, :t, :b, :loc, :ch, :channelCode, :cust,
                     :mode, 'AUTO_CONFIRM', 'NONE',
-                    :status, 'NOT_REQUIRED', 'UZS', 100000, 0,
+                    :status, :paymentStatusProjection, 'UZS', 100000, 0,
                     1000, 2000, 101000, :quote,
                     :hash, :pub, :cart, :key,
                     :promisedAt, 'PREPARATION_BAND', 35, 1, :createdAt,
@@ -811,6 +845,7 @@ class OrderBoardQueryTests {
                 .param("cust", customerOf(tenantId))
                 .param("mode", spec.mode)
                 .param("status", spec.status)
+                .param("paymentStatusProjection", spec.paymentStatusProjection)
                 .param("quote", quoteId)
                 .param("hash", marketplace ? null : "hash-" + orderId)
                 .param("pub", marketplace ? null : publicationOf(tenantId))
