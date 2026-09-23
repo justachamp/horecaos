@@ -242,6 +242,46 @@ export const settingsPaths = {
     return `${this.salesChannel(scope, channelId)}/reactivate`;
   },
 
+  // ------------------------------------------------------------- 10.5 Channel setup
+
+  /** `ChannelSetupController` (control-plane surface), nested under the channel itself. */
+  channelSetup(scope: LocationScope, channelId: string): string {
+    return `${this.salesChannel(scope, channelId)}/setup`;
+  },
+
+  channelHostname(scope: LocationScope, channelId: string): string {
+    return `${this.channelSetup(scope, channelId)}/hostname`;
+  },
+
+  channelHostnameSubdomain(scope: LocationScope, channelId: string): string {
+    return `${this.channelHostname(scope, channelId)}/subdomain`;
+  },
+
+  channelHostnameCustom(scope: LocationScope, channelId: string): string {
+    return `${this.channelHostname(scope, channelId)}/custom`;
+  },
+
+  channelHostnameVerify(scope: LocationScope, channelId: string): string {
+    return `${this.channelHostname(scope, channelId)}/verify`;
+  },
+
+  channelPresentation(scope: LocationScope, channelId: string): string {
+    return `${this.channelSetup(scope, channelId)}/presentation`;
+  },
+
+  /** `ChannelPagesController` (control-plane surface). */
+  channelPages(scope: LocationScope, channelId: string): string {
+    return `${this.channelSetup(scope, channelId)}/pages`;
+  },
+
+  channelPageCurrent(scope: LocationScope, channelId: string, slug: string): string {
+    return `${this.channelPages(scope, channelId)}/${enc(slug)}/current`;
+  },
+
+  channelPagePublish(scope: LocationScope, channelId: string, slug: string): string {
+    return `${this.channelPages(scope, channelId)}/${enc(slug)}`;
+  },
+
   // ---------------------------------------------------------------- 10.6 Payment methods
 
   /** `PaymentMethodController` (operations surface, wave P33) -- the tenant-scoped registry. */

@@ -2,7 +2,6 @@ package uz.horecaos.platform.tenancy.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -66,7 +65,8 @@ class ChannelSetupControllerEndpointTests {
     @BeforeAll
     static void requireDocker() {
         Assumptions.assumeTrue(
-                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for the channel setup endpoint test");
+                DockerClientFactory.instance().isDockerAvailable(),
+                "Docker is required for the channel setup endpoint test");
     }
 
     @DynamicPropertySource
@@ -259,8 +259,7 @@ class ChannelSetupControllerEndpointTests {
                         .param("expectedVersion", "1")
                         .content("""
                                 {"seoTitle":"Tandir House — order online","seoDescription":"Fresh non bread, delivered.","ogImageAssetId":"%s"}
-                                """
-                                .formatted(ogImage)))
+                                """.formatted(ogImage)))
                 .andReturn();
 
         assertThat(saved.getResponse().getStatus()).isEqualTo(200);
@@ -268,9 +267,9 @@ class ChannelSetupControllerEndpointTests {
                 .contains("Tandir House")
                 .contains(ogImage.toString());
 
-        MvcResult read =
-                mvc.perform(get(setupPath(TENANT, CHANNEL) + "/presentation").with(tokenFor(OWNER)))
-                        .andReturn();
+        MvcResult read = mvc.perform(
+                        get(setupPath(TENANT, CHANNEL) + "/presentation").with(tokenFor(OWNER)))
+                .andReturn();
         assertThat(read.getResponse().getContentAsString()).contains("Tandir House");
     }
 
@@ -281,10 +280,7 @@ class ChannelSetupControllerEndpointTests {
                 INSERT INTO tenant.tenants
                     (id, slug, legal_name, display_name, default_currency, default_timezone, status, version)
                 VALUES (:id, :slug, 'Legal', 'Display', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
-                """)
-                .param("id", id)
-                .param("slug", slug)
-                .update();
+                """).param("id", id).param("slug", slug).update();
     }
 
     private void insertChannel(UUID tenantId, UUID channelId, String code, String systemType) {
@@ -308,7 +304,9 @@ class ChannelSetupControllerEndpointTests {
                         'ACTIVE', 'test-fixture', 'channel setup endpoint test', :validFrom)
                 ON CONFLICT DO NOTHING
                 """)
-                .param("id", UUID.nameUUIDFromBytes((subject + role.code() + tenantId).getBytes(StandardCharsets.UTF_8)))
+                .param(
+                        "id",
+                        UUID.nameUUIDFromBytes((subject + role.code() + tenantId).getBytes(StandardCharsets.UTF_8)))
                 .param("tenantId", tenantId)
                 .param("subject", subject)
                 .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
