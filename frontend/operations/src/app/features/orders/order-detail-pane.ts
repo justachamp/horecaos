@@ -22,6 +22,7 @@ import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
+import { ConfirmDialog } from '../../shared/ui/confirm-dialog';
 import { StepItem, Steps } from '../../shared/ui/steps';
 import { Timeline, TimelineEntry } from '../../shared/ui/timeline';
 import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
@@ -114,6 +115,12 @@ const REVEAL_PURPOSE = {
 const ORDER_DETAIL_ASSIGN_REASON = 'OPERATIONS_ORDER_DETAIL_ASSIGN';
 const ORDER_DETAIL_UNASSIGN_REASON = 'OPERATIONS_ORDER_DETAIL_UNASSIGN';
 
+/** `DispatchApi.cancelShipment`'s own reason code from this pane (gap map row 1.2g) — distinct from the dispatch board's own. */
+const ORDER_DETAIL_SHIPMENT_CANCEL_REASON = 'OPERATIONS_ORDER_DETAIL_SHIPMENT_CANCEL';
+
+/** A shipment past these statuses is already settled — cancelling it again is refused server-side, so the action is not offered. */
+const SHIPMENT_CANCEL_TERMINAL_STATUSES: ReadonlySet<string> = new Set(['DELIVERED', 'CANCELLED']);
+
 /** Which reason dialog is open, if any. */
 type DialogKind =
   | 'reject'
@@ -125,7 +132,8 @@ type DialogKind =
   | 'courierNote'
   | 'internalNote'
   | 'cashTendered'
-  | 'externalCourier';
+  | 'externalCourier'
+  | 'shipmentCancel';
 
 /**
  * The order detail — `docs/operations-spec/orders.md` §3, docked beside the
@@ -162,6 +170,7 @@ type DialogKind =
     OrderRejectReasonDialog,
     OrderHandoverPanel,
     ExternalCourierDialog,
+    ConfirmDialog,
     OrderPaymentPanel,
     OrderFiscalPanel,
     Steps,
@@ -241,6 +250,9 @@ export class OrderDetailPane {
   protected readonly externalPartners = signal<readonly ExternalPartnerResponse[]>([]);
   protected readonly externalQuote = signal<ExternalQuoteResponse | null>(null);
   protected readonly externalCourierBusy = signal(false);
+
+  /** Cancel shipment (gap map row 1.2g) — `DispatchController.cancelShipment`'s first console caller on this pane. */
+  protected readonly shipmentCancelBusy = signal(false);
 
   /**
    * `q-timeline`'s own shape, row `X.26` — the same idea as the staff
@@ -1748,6 +1760,55 @@ export class OrderDetailPane {
       this.noticeFromRevealError(error);
     } finally {
       this.externalCourierBusy.set(false);
+    }
+  }
+
+  // ------------------------------------------------------------ §1.2g cancel shipment
+
+  /** Whether the current plan's shipment may be cancelled at all — a `DELIVERED`/`CANCELLED` one is already settled. */
+  protected canCancelShipment(): boolean {
+    const shipment = this.delivery()?.shipment;
+    return !!shipment && !SHIPMENT_CANCEL_TERMINAL_STATUSES.has(shipment.status);
+  }
+
+  protected openShipmentCancelDialog(): void {
+    this.dialog.set('shipmentCancel');
+  }
+
+  /**
+   * The dedicated, provider-notifying cancel (gap map row 1.2g) —
+   * `DispatchController.cancelShipment`'s first console caller on this pane,
+   * distinct from {@link unassignCourier}: a `PARTNER` shipment's provider is
+   * actually called, and an uncertain or chargeable answer opens
+   * `fulfillment.delivery_exceptions`, which the {@link loadDelivery} reload
+   * below picks straight back up into the delivery-exception band.
+   */
+  protected async confirmShipmentCancel(): Promise<void> {
+    const scope = this.location.scope();
+    const plan = this.delivery();
+    const orderId = this.order()?.value.summary.orderId;
+    if (!scope || !plan?.shipment || !orderId) {
+      return;
+    }
+    this.shipmentCancelBusy.set(true);
+    try {
+      const result = await this.dispatchApi.cancelShipment(
+        scope,
+        plan.shipment.shipmentId,
+        plan.shipment.version,
+        ORDER_DETAIL_SHIPMENT_CANCEL_REASON,
+      );
+      if (!result.applied) {
+        this.notice.set(
+          this.i18n.t('orders.detail.courier.refused', { reason: result.conflictReason ?? '' }),
+        );
+      }
+      this.dialog.set(null);
+      await this.loadDelivery(orderId);
+    } catch (error) {
+      this.noticeFromRevealError(error);
+    } finally {
+      this.shipmentCancelBusy.set(false);
     }
   }
 

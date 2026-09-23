@@ -1794,6 +1794,181 @@ describe('OrderDetailPane: assign/unassign courier (wave P11, row 1.2e)', () => 
   });
 });
 
+describe('OrderDetailPane: cancel shipment (gap map row 1.2g)', () => {
+  it('offers a cancel-shipment action for a carried, not-yet-terminal shipment', async () => {
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () =>
+          Promise.resolve(
+            deliveryResponse({
+              shipment: {
+                shipmentId: 'shipment-1',
+                status: 'ASSIGNED',
+                sourceType: 'INTERNAL',
+                courierId: 'courier-1',
+                version: 4,
+              },
+            }),
+          ),
+      },
+    });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-shipment-cancel"]'),
+    ).not.toBeNull();
+  });
+
+  it('offers no cancel-shipment action once the shipment is already DELIVERED', async () => {
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () =>
+          Promise.resolve(
+            deliveryResponse({
+              shipment: {
+                shipmentId: 'shipment-1',
+                status: 'DELIVERED',
+                sourceType: 'INTERNAL',
+                courierId: 'courier-1',
+                version: 4,
+              },
+            }),
+          ),
+      },
+    });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-shipment-cancel"]'),
+    ).toBeNull();
+  });
+
+  it('cancels the shipment through DispatchApi against the shipment id and version, then reloads the delivery band', async () => {
+    const cancelShipment = vi.fn().mockResolvedValue({
+      applied: true,
+      outcome: 'INTERNAL_CANCELLED',
+    });
+    let deliveryCallCount = 0;
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () => {
+          deliveryCallCount += 1;
+          return Promise.resolve(
+            deliveryResponse({
+              shipment: {
+                shipmentId: 'shipment-1',
+                status: deliveryCallCount === 1 ? 'ASSIGNED' : 'CANCELLED',
+                sourceType: 'INTERNAL',
+                courierId: 'courier-1',
+                version: 4,
+              },
+            }),
+          );
+        },
+      },
+      dispatchApi: { cancelShipment },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-shipment-cancel"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    expect(
+      host.querySelector('[data-testid="order-detail-shipment-cancel-dialog"]'),
+    ).not.toBeNull();
+
+    (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(cancelShipment).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'shipment-1',
+      4,
+      'OPERATIONS_ORDER_DETAIL_SHIPMENT_CANCEL',
+    );
+    // The delivery band reloaded -- a second read, and the dialog is gone.
+    expect(deliveryCallCount).toBe(2);
+    expect(host.querySelector('[data-testid="order-detail-shipment-cancel-dialog"]')).toBeNull();
+  });
+
+  it('surfaces a refused cancel (STALE_VERSION) as a notice, never a thrown error', async () => {
+    const cancelShipment = vi.fn().mockResolvedValue({
+      applied: false,
+      conflictReason: 'STALE_VERSION',
+    });
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () =>
+          Promise.resolve(
+            deliveryResponse({
+              shipment: {
+                shipmentId: 'shipment-1',
+                status: 'ASSIGNED',
+                sourceType: 'INTERNAL',
+                courierId: 'courier-1',
+                version: 4,
+              },
+            }),
+          ),
+      },
+      dispatchApi: { cancelShipment },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-shipment-cancel"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.textContent).toContain('STALE_VERSION');
+  });
+
+  it('dismisses the confirm dialog without cancelling on Cancel/Keep', async () => {
+    const cancelShipment = vi.fn();
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () =>
+          Promise.resolve(
+            deliveryResponse({
+              shipment: {
+                shipmentId: 'shipment-1',
+                status: 'ASSIGNED',
+                sourceType: 'INTERNAL',
+                courierId: 'courier-1',
+                version: 4,
+              },
+            }),
+          ),
+      },
+      dispatchApi: { cancelShipment },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-shipment-cancel"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="q-confirm-cancel"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(cancelShipment).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="order-detail-shipment-cancel-dialog"]')).toBeNull();
+  });
+});
+
 describe('OrderDetailPane: call an external courier (gap map rows 1.2e/2.1c)', () => {
   it('requests a quote and accepts it through the order-keyed path OrderDeliveryController.externalCourier exposes, not the plan-keyed DispatchController route', async () => {
     const externalPartners = vi
@@ -1809,14 +1984,12 @@ describe('OrderDetailPane: call an external courier (gap map rows 1.2e/2.1c)', (
       customerDeliveryFeeMinor: 12_000,
       deltaMinor: 0,
     });
-    const decideExternalCourier = vi
-      .fn()
-      .mockResolvedValue({
-        applied: true,
-        abandoned: false,
-        planVersion: 3,
-        shipmentId: 'shipment-1',
-      });
+    const decideExternalCourier = vi.fn().mockResolvedValue({
+      applied: true,
+      abandoned: false,
+      planVersion: 3,
+      shipmentId: 'shipment-1',
+    });
     configure({
       get: apiGet({ value: detail(), version: 3 }),
       deliveryApi: {

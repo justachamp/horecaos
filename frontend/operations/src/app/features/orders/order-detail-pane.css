@@ -262,6 +262,11 @@
   cursor: default;
 }
 
+.pane__reveal-link--destructive {
+  color: var(--q-error-text);
+  border-color: var(--q-error-text);
+}
+
 /* ---- money (§3.5, §1.3) -------------------------------------------------- */
 
 .pane__money {

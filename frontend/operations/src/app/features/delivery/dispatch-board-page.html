@@ -19,8 +19,59 @@
     </div>
   }
 
+  @if (bulkResult(); as result) {
+    <div class="dispatch__notice-band" role="status" data-testid="dispatch-bulk-result">
+      <span class="q-body-sm">
+        {{
+          'delivery.dispatch.bulk.result'
+            | t: { applied: bulkAppliedCount(), failed: bulkFailedCount() }
+        }}
+      </span>
+      <button type="button" class="dispatch__notice-dismiss" (click)="dismissBulkResult()">
+        ×
+      </button>
+    </div>
+  }
+
   @if (firstLoadComplete() && !denied() && sortedPlans().length > 0) {
     <p class="dispatch__hint q-caption">{{ 'delivery.dispatch.hint' | t }}</p>
+  }
+
+  @if (selectedCount() > 0) {
+    <div class="dispatch__bulk-bar" data-testid="dispatch-bulk-bar">
+      <span class="q-body-sm">
+        {{ 'delivery.dispatch.bulk.selected' | t: { count: selectedCount() } }}
+      </span>
+      <select
+        class="dispatch__bulk-select"
+        data-testid="dispatch-bulk-courier-select"
+        [disabled]="bulkAssigning()"
+        (change)="setBulkCourier($any($event.target).value || null)"
+      >
+        <option value="">{{ 'delivery.dispatch.bulk.courierPlaceholder' | t }}</option>
+        @for (option of courierOptions(); track option.id) {
+          <option [value]="option.id">{{ option.label }}</option>
+        }
+      </select>
+      <button
+        type="button"
+        class="dispatch__bulk-assign"
+        data-testid="dispatch-bulk-assign"
+        [disabled]="!canSubmitBulkAssign()"
+        (click)="submitBulkAssign()"
+      >
+        {{ 'delivery.dispatch.bulk.assign' | t }}
+      </button>
+      <button
+        type="button"
+        class="dispatch__bulk-clear"
+        data-testid="dispatch-bulk-clear"
+        [disabled]="bulkAssigning()"
+        (click)="clearBulkSelection()"
+      >
+        {{ 'delivery.dispatch.bulk.clear' | t }}
+      </button>
+    </div>
   }
 
   <div class="dispatch__board-wrap">
@@ -52,6 +103,15 @@
         <ng-template qBoardCard let-plan>
           <div class="dispatch-card" data-testid="dispatch-card">
             <div class="dispatch-card__row">
+              @if (isBulkSelectable(plan)) {
+                <input
+                  type="checkbox"
+                  class="dispatch-card__select"
+                  data-testid="dispatch-card-select"
+                  [checked]="isPlanSelected(plan)"
+                  (click)="toggleBulkSelection(plan); $event.stopPropagation()"
+                />
+              }
               <span class="q-mono">{{ orderFor(plan)?.publicOrderNumber || plan.orderId }}</span>
               <q-status-pill
                 [label]="planStatusLabel(plan.status)"
@@ -67,19 +127,71 @@
                 {{ reason }}
               </p>
             }
-            @if (plan.shipment) {
-              <button
-                type="button"
-                class="dispatch-card__unassign"
-                [disabled]="isBusy(plan)"
-                (click)="manualUnassign(plan)"
-              >
-                {{ 'delivery.dispatch.action.unassign' | t }}
-              </button>
+            @if (externalProviderLabel(plan); as providerLabel) {
+              <p class="q-body-sm q-caption" data-testid="dispatch-card-provider">
+                {{ providerLabel }}
+              </p>
             }
+            <div class="dispatch-card__actions">
+              @if (plan.shipment) {
+                <button
+                  type="button"
+                  class="dispatch-card__unassign"
+                  [disabled]="isBusy(plan)"
+                  (click)="manualUnassign(plan)"
+                >
+                  {{ 'delivery.dispatch.action.unassign' | t }}
+                </button>
+              } @else {
+                <button
+                  type="button"
+                  class="dispatch-card__external-courier"
+                  data-testid="dispatch-card-external-courier"
+                  (click)="openExternalCourierDialog(plan)"
+                >
+                  {{ 'orders.dialog.externalCourier.title' | t }}
+                </button>
+              }
+              @if (canCancelShipment(plan)) {
+                <button
+                  type="button"
+                  class="dispatch-card__cancel-shipment"
+                  data-testid="dispatch-card-cancel-shipment"
+                  (click)="openCancelShipmentDialog(plan)"
+                >
+                  {{ 'delivery.dispatch.action.cancelShipment' | t }}
+                </button>
+              }
+            </div>
           </div>
         </ng-template>
       </q-drag-drop-assign>
     }
   </div>
+
+  @if (cancelShipmentPlan(); as plan) {
+    <q-confirm-dialog
+      [title]="'delivery.dispatch.cancelShipment.confirmTitle' | t"
+      [body]="'delivery.dispatch.cancelShipment.confirmBody' | t"
+      [confirmLabel]="'delivery.dispatch.cancelShipment.confirm' | t"
+      [cancelLabel]="'delivery.dispatch.cancelShipment.keep' | t"
+      tone="destructive"
+      [busy]="cancellingShipment()"
+      (confirm)="confirmCancelShipment()"
+      (cancel)="dismissCancelShipmentDialog()"
+      data-testid="dispatch-cancel-shipment-dialog"
+    />
+  }
+
+  @if (externalCourierPlan()) {
+    <q-external-courier-dialog
+      [partners]="externalPartnersForPlan()"
+      [quote]="externalQuoteForPlan()"
+      [busy]="externalCourierBusy()"
+      (quoteRequested)="requestExternalQuoteForPlan($event)"
+      (accepted)="acceptExternalBookingForPlan($event)"
+      (abandoned)="abandonExternalBookingForPlan($event)"
+      (dismiss)="dismissExternalCourierDialog()"
+    />
+  }
 </div>
