@@ -3903,6 +3903,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.orders.column.occurredAt': 'Yaratilgan',
   'reports.orders.column.customer': 'Mijoz',
   'reports.orders.column.customer.guest': 'Mehmon',
+  'reports.orders.column.customer.account': 'Mijoz hisobi',
   'reports.orders.column.operator': 'Operator',
   'reports.orders.column.courier': 'Kuryer',
 

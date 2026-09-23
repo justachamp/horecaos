@@ -283,6 +283,78 @@ class DayCloseDeliveryDistanceTests {
         assertThat(average).isEqualTo(5_000);
     }
 
+    @Test
+    @DisplayName("averageDeliveryDistanceMeters excludes a delivery order that is still open")
+    void averageDeliveryDistanceExcludesOpenOrders() {
+        UUID closedDelivery = seedOrder("DELIVERY");
+        UUID closedPlan = UUID.randomUUID();
+        seedDeliveryPlan(closedDelivery, closedPlan, 4_000, "ROUTING");
+        seedShipment(closedDelivery, closedPlan);
+
+        // Still in flight — e.g. PREPARING, not yet delivered, possibly headed
+        // for cancellation — but its delivery plan already resolved a distance,
+        // the way a plan resolves right after order confirmation, long before
+        // the order itself closes. Never counted: the registry documents this
+        // metric's population as delivery orders "closed in range", not every
+        // delivery order that merely has a resolved distance.
+        UUID openDelivery = seedOrder("DELIVERY", "PREPARING", null);
+        UUID openPlan = UUID.randomUUID();
+        seedDeliveryPlan(openDelivery, openPlan, 8_000, "ROUTING");
+        seedShipment(openDelivery, openPlan);
+
+        close.close(TENANT, DAY);
+
+        Integer average = store.averageDeliveryDistanceMeters(TENANT, DAY, DAY, List.of());
+
+        assertThat(average)
+                .as("the open order's 8,000m plan must not be averaged in alongside the closed order's 4,000m")
+                .isEqualTo(4_000);
+    }
+
+    @Test
+    @DisplayName("when two plans for one order tie on confirmed_at, the fact's distance comes from the "
+            + "most recently created plan, not whichever the tie happens to return first")
+    void tiedConfirmedAtBreaksOnMostRecentlyCreatedPlan() {
+        UUID orderId = seedOrder("DELIVERY");
+
+        // ux_plan_one_live only forbids two *live* plans for one order — a
+        // cancelled one beside a live one is exactly what the schema allows,
+        // and every plan for the same order snapshots the same order-
+        // confirmation instant (ADR 0014's time model), so confirmed_at always
+        // ties between them. Only created_at tells them apart.
+        //
+        // Status is deliberately CANCELLED/COMPLETED rather than
+        // CANCELLED/ASSIGNED: `dp.tenant_id = :tenantId` is answered off
+        // ix_plan_location_status (tenant_id, location_id, status, ...), so
+        // the scan itself already visits rows in ascending status order
+        // before confirmed_at is ever sorted, and a sort that leaves tied
+        // rows exactly where the scan handed them to it — which is what this
+        // Postgres does for two rows — would otherwise "accidentally" prefer
+        // whichever status sorts first (ASSIGNED before CANCELLED) and pass
+        // even without the fix. CANCELLED sorts before COMPLETED, so this
+        // pairing cannot pass on index-scan-order luck; only an explicit
+        // created_at tiebreak gets it right.
+        UUID cancelledPlan = UUID.randomUUID();
+        seedDeliveryPlan(orderId, cancelledPlan, 8_000, "PROVIDER_QUOTE", "CANCELLED", CREATED_AT);
+
+        UUID completedPlan = UUID.randomUUID();
+        seedDeliveryPlan(orderId, completedPlan, 4_000, "ROUTING", "COMPLETED", CREATED_AT.plusSeconds(5));
+        seedShipment(orderId, completedPlan);
+
+        close.close(TENANT, DAY);
+
+        Integer distance = jdbc.sql(
+                        "SELECT delivery_distance_meters FROM reporting.fact_order WHERE tenant_id = :t AND order_id = :o")
+                .param("t", TENANT)
+                .param("o", orderId)
+                .query(Integer.class)
+                .single();
+
+        assertThat(distance)
+                .as("the cancelled plan's 8,000m must not win the tie over the live plan's 4,000m")
+                .isEqualTo(4_000);
+    }
+
     // --------------------------------------------------------------- fixture
 
     private void seedTenancy() {
@@ -309,17 +381,37 @@ class DayCloseDeliveryDistanceTests {
 
     private void seedDeliveryPlan(
             UUID orderId, UUID planId, @Nullable Integer distanceMeters, @Nullable String distanceSource) {
+        seedDeliveryPlan(orderId, planId, distanceMeters, distanceSource, "ASSIGNED", CREATED_AT);
+    }
+
+    /**
+     * Same fixture, with the plan's own {@code status} and {@code created_at}
+     * exposed — so a test can seed two plans for one order the way the
+     * schema's {@code ux_plan_one_live} partial unique index actually allows
+     * a second one to exist at all: one {@code CANCELLED}, one live, both
+     * sharing the same {@code confirmed_at} (every plan for an order
+     * snapshots that same order-confirmation instant) but different {@code
+     * created_at}.
+     */
+    private void seedDeliveryPlan(
+            UUID orderId,
+            UUID planId,
+            @Nullable Integer distanceMeters,
+            @Nullable String distanceSource,
+            String status,
+            Instant createdAt) {
         OffsetDateTime anchor = OffsetDateTime.ofInstant(CREATED_AT, ZoneOffset.UTC);
         jdbc.sql("""
                 INSERT INTO fulfillment.delivery_plans (
                     id, tenant_id, brand_id, location_id, order_id, status, sourcing_mode,
                     service_level, customer_delivery_fee_minor, currency, confirmed_at,
                     preparation_seconds, estimated_ready_at, pickup_window_start, pickup_window_end,
-                    source_at, latest_assignment_at, branch_zone, distance_meters, distance_source)
-                SELECT :id, :tenantId, :brandId, :locationId, :orderId, 'ASSIGNED', 'FLEET_FIRST',
+                    source_at, latest_assignment_at, branch_zone, distance_meters, distance_source,
+                    created_at)
+                SELECT :id, :tenantId, :brandId, :locationId, :orderId, :status, 'FLEET_FIRST',
                        'STANDARD', 12000, 'UZS', anchor, 900, anchor, anchor,
                        anchor + interval '10 minutes', anchor, anchor + interval '10 minutes',
-                       'Asia/Tashkent', :distanceMeters, :distanceSource
+                       'Asia/Tashkent', :distanceMeters, :distanceSource, :createdAt
                   FROM (SELECT CAST(:anchor AS timestamptz) AS anchor) AS moment
                 """)
                 .param("id", planId)
@@ -327,9 +419,11 @@ class DayCloseDeliveryDistanceTests {
                 .param("brandId", BRAND)
                 .param("locationId", branch)
                 .param("orderId", orderId)
+                .param("status", status)
                 .param("anchor", anchor)
                 .param("distanceMeters", distanceMeters)
                 .param("distanceSource", distanceSource)
+                .param("createdAt", OffsetDateTime.ofInstant(createdAt, ZoneOffset.UTC))
                 .update();
     }
 
@@ -356,6 +450,19 @@ class DayCloseDeliveryDistanceTests {
     }
 
     private UUID seedOrder(String fulfilmentMode) {
+        return seedOrder(fulfilmentMode, "COMPLETED", CLOSED_AT);
+    }
+
+    /**
+     * Same fixture, with the order's own status and {@code closed_at}
+     * exposed — so a test can seed a delivery order that is still open
+     * (e.g. {@code PREPARING}, {@code closedAt} null) the way a branch's
+     * close job actually meets one mid-shift: created and confirmed, its
+     * delivery plan already resolved a distance, but not yet delivered and
+     * not yet in {@link #seedOrder(String)}'s always-{@code COMPLETED}
+     * shape.
+     */
+    private UUID seedOrder(String fulfilmentMode, String status, @Nullable Instant closedAt) {
         UUID orderId = UUID.randomUUID();
         UUID quoteId = UUID.randomUUID();
         UUID cartId = UUID.randomUUID();
@@ -394,7 +501,7 @@ class DayCloseDeliveryDistanceTests {
                     catalog_publication_id, cart_id, idempotency_key, version, created_at, confirmed_at,
                     closed_at)
                 VALUES (:id, :orderNumber, :tenantId, :brandId, :locationId, :channelId, 'STOREFRONT',
-                        'distance-fixture', :mode, 'AUTO_CONFIRM', 0, 'NONE', 'COMPLETED', 'UZS', 45000, 0,
+                        'distance-fixture', :mode, 'AUTO_CONFIRM', 0, 'NONE', :status, 'UZS', 45000, 0,
                         45000, :quoteId, 'hash', :publicationId, :cartId, :idempotencyKey, 1, :createdAt,
                         :createdAt, :closedAt)
                 """)
@@ -405,12 +512,13 @@ class DayCloseDeliveryDistanceTests {
                 .param("locationId", branch)
                 .param("channelId", channelId)
                 .param("mode", fulfilmentMode)
+                .param("status", status)
                 .param("quoteId", quoteId)
                 .param("publicationId", publicationId)
                 .param("cartId", cartId)
                 .param("idempotencyKey", "distance-fixture-" + orderId)
                 .param("createdAt", OffsetDateTime.ofInstant(CREATED_AT, ZoneOffset.UTC))
-                .param("closedAt", OffsetDateTime.ofInstant(CLOSED_AT, ZoneOffset.UTC))
+                .param("closedAt", closedAt == null ? null : OffsetDateTime.ofInstant(closedAt, ZoneOffset.UTC))
                 .update();
         return orderId;
     }

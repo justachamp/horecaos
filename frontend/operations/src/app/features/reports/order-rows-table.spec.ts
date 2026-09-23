@@ -231,4 +231,20 @@ describe('OrderRowsTable', () => {
       'BOT',
     );
   });
+
+  it('never labels an ACCOUNT customer with no snapshot name as "Guest"', () => {
+    const fixture = render(
+      [row()],
+      ['orderId', 'customer'],
+      undefined,
+      new Map([
+        [row().orderId, crmRow({ customerType: 'ACCOUNT', customerName: null })],
+      ]),
+    );
+    const text = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="order-row-customer"]',
+    )?.textContent;
+    expect(text).not.toContain('Guest');
+    expect(text).toContain('Customer account');
+  });
 });

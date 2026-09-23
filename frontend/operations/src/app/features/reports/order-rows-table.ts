@@ -95,7 +95,14 @@ export class OrderRowsTable {
     return this.crmByOrderId().get(row.orderId);
   }
 
-  /** «Клиент»: the account's or guest's name in full — never masked (orders.md §1.5, §3.7). */
+  /**
+   * «Клиент»: the account's or guest's name in full — never masked (orders.md
+   * §1.5, §3.7). A `GUEST` order has no account and is always labelled
+   * "Guest". An `ACCOUNT` order with no `customerName` (the snapshot row
+   * predates the snapshot feature, or was otherwise never written) falls back
+   * to "Customer account", never "Guest" — collapsing the two would mislead
+   * an operator into treating a real account holder as anonymous.
+   */
   protected customerLabel(row: OrderRowResponse): string {
     const crm = this.crmRow(row);
     if (!crm) {
@@ -104,7 +111,7 @@ export class OrderRowsTable {
     if (crm.customerType === 'GUEST') {
       return this.i18n.t('reports.orders.column.customer.guest');
     }
-    return crm.customerName ?? this.i18n.t('reports.orders.column.customer.guest');
+    return crm.customerName ?? this.i18n.t('reports.orders.column.customer.account');
   }
 
   /** The masked phone beside the name — already masked server-side, never the plaintext. */

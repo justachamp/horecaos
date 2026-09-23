@@ -302,10 +302,23 @@ public class JdbcReportingStore {
                        -- the is_preorder subquery this class's own header
                        -- already documents as an accepted exception. Null for
                        -- PICKUP/DINE_IN, which never has a plan.
+                       --
+                       -- `confirmed_at` alone never actually breaks a tie: it
+                       -- is the order's own confirmation instant, snapshotted
+                       -- onto every plan for that order, so two plans for the
+                       -- same order always share it. `created_at DESC` is the
+                       -- real tiebreak, matching what the comment above always
+                       -- claimed ("most recently created") and the same
+                       -- deterministic-secondary-key discipline
+                       -- JdbcOrderCrmLogStore's own courier lookup uses
+                       -- (`assigned_at DESC NULLS LAST, created_at DESC`) for
+                       -- the identical reason: an untied ORDER BY ... LIMIT 1
+                       -- is whatever order Postgres's plan happens to return
+                       -- tied rows in, not a promise about which one you get.
                        (SELECT dp.distance_meters
                           FROM fulfillment.delivery_plans dp
                          WHERE dp.tenant_id = o.tenant_id AND dp.order_id = o.id
-                         ORDER BY dp.confirmed_at DESC
+                         ORDER BY dp.confirmed_at DESC, dp.created_at DESC
                          LIMIT 1) AS delivery_distance_meters
                   FROM ordering.orders o
                   LEFT JOIN ordering.order_outcomes oo
@@ -1485,6 +1498,17 @@ public class JdbcReportingStore {
      * reads pre-aggregated {@code agg_branch_day}, not the fact directly)
      * cannot answer.
      *
+     * <p>{@code closed_at IS NOT NULL} — the registry's own population
+     * ("delivery orders closed in the requested range") is not
+     * {@code delivery_distance_meters IS NOT NULL} alone. A plan resolves its
+     * distance right after order confirmation, well before the order itself
+     * reaches a terminal state, so without this filter an order still open
+     * (PREPARING, ASSIGNED — possibly about to be cancelled) would be
+     * averaged in the moment its plan resolves a distance, not when it
+     * closes. {@code closed_at} is set on every terminal status, not only
+     * {@code COMPLETED} — matching "closed", not the narrower
+     * {@code COMPLETED_ONLY} population {@code revenue}-family metrics use.
+     *
      * @return null when no delivery order carrying a distance closed in
      *         range — a PICKUP/DINE_IN-only period, or one entirely before
      *         V0387 — never a zero-metre average
@@ -1507,6 +1531,7 @@ public class JdbcReportingStore {
                   FROM reporting.fact_order
                  WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
                    AND fulfilment_type = 'DELIVERY' AND delivery_distance_meters IS NOT NULL
+                   AND closed_at IS NOT NULL
                 """ + locationFilter)
                 .params(params)
                 .query(Double.class)
