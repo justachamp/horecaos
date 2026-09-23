@@ -1489,6 +1489,10 @@ export const messagesRu: MessageCatalogue = {
   'settings.locations.list.bulk.reopen': 'Открыть выбранные',
   'settings.locations.list.bulk.outcome.applied': 'готово',
   'settings.locations.list.bulk.outcome.failed': 'ошибка',
+  'settings.locations.list.bulk.outcome.problem.VALIDATION_FAILED': 'Отклонено как некорректное',
+  'settings.locations.list.bulk.outcome.problem.LOCATION_NOT_IN_BRAND':
+    'Не относится к этому бренду',
+  'settings.locations.list.bulk.outcome.problem.UNEXPECTED_FAILURE': 'Что-то пошло не так',
   'settings.locations.tab.basics': 'Основное',
   'settings.locations.tab.hours': 'Часы',
   'settings.locations.tab.load': 'Загрузка и приготовление',
@@ -1855,7 +1859,8 @@ export const messagesRu: MessageCatalogue = {
   'catalog.menuSets.create.trigger': 'Новое меню',
   'catalog.menuSets.loading': 'Загрузка…',
   'catalog.menuSets.denied': 'У вас нет доступа к меню этого бренда.',
-  'catalog.menuSets.empty': 'Пока нет меню. Создайте набор, чтобы раскатать ассортимент по филиалам.',
+  'catalog.menuSets.empty':
+    'Пока нет меню. Создайте набор, чтобы раскатать ассортимент по филиалам.',
   'catalog.menuSets.table.name': 'Название',
   'catalog.menuSets.table.status': 'Статус',
   'catalog.menuSets.copy.trigger': 'Копировать',
@@ -2091,7 +2096,8 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.photos.role.GALLERY': 'Галерея',
   'catalog.editor.photos.channel.label': 'Канал',
   'catalog.editor.photos.channel.all': 'Универсальное (все каналы)',
-  'catalog.editor.photos.channel.empty': 'Для этого канала переопределения ещё нет — показываются универсальные фото.',
+  'catalog.editor.photos.channel.empty':
+    'Для этого канала переопределения ещё нет — показываются универсальные фото.',
   'catalog.editor.photos.channel.hint': 'Новые фото прикрепляются к каналу, выбранному выше.',
   'catalog.editor.fiscal.mxik': 'ИКПУ/MXIK',
   'catalog.editor.fiscal.packageCode': 'Код упаковки',

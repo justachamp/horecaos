@@ -120,7 +120,7 @@
               {{
                 outcome.applied
                   ? ('settings.locations.list.bulk.outcome.applied' | t)
-                  : (outcome.problemCode ?? ('settings.locations.list.bulk.outcome.failed' | t))
+                  : bulkProblemLabel(outcome.problemCode)
               }}
             </li>
           }

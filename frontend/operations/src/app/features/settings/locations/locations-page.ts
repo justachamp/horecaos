@@ -74,9 +74,7 @@ export class LocationsPage {
   protected readonly legalEntities = signal<ReadonlyMap<string, LocationLegalEntityView>>(
     new Map(),
   );
-  protected readonly channelsByLocation = signal<ReadonlyMap<string, readonly string[]>>(
-    new Map(),
-  );
+  protected readonly channelsByLocation = signal<ReadonlyMap<string, readonly string[]>>(new Map());
   protected readonly docked = signal(false);
 
   protected readonly stateFilter = signal<StateFilter>('ALL');
@@ -131,7 +129,10 @@ export class LocationsPage {
       if (channelFilter !== ALL && !(channels.get(location.id) ?? []).includes(channelFilter)) {
         return false;
       }
-      if (legalEntityFilter !== ALL && entities.get(location.id)?.legalEntityCode !== legalEntityFilter) {
+      if (
+        legalEntityFilter !== ALL &&
+        entities.get(location.id)?.legalEntityCode !== legalEntityFilter
+      ) {
         return false;
       }
       return true;
@@ -274,7 +275,29 @@ export class LocationsPage {
   }
 
   protected displayNameOf(locationId: string): string {
-    return this.locations().find((location) => location.id === locationId)?.displayName ?? locationId;
+    return (
+      this.locations().find((location) => location.id === locationId)?.displayName ?? locationId
+    );
+  }
+
+  /**
+   * The known {@link BulkServiceStateItemView.problemCode} values
+   * (`ServiceScheduleService.changeServiceStateBulk`). Same shape as
+   * `order-queue.ts`'s `bulkProblemLabel`: an additive server release must
+   * not blank a row, so a code this client does not know renders as itself
+   * rather than through a fabricated i18n key.
+   */
+  protected bulkProblemLabel(code: string | null | undefined): string {
+    switch (code) {
+      case 'VALIDATION_FAILED':
+        return this.i18n.t('settings.locations.list.bulk.outcome.problem.VALIDATION_FAILED');
+      case 'LOCATION_NOT_IN_BRAND':
+        return this.i18n.t('settings.locations.list.bulk.outcome.problem.LOCATION_NOT_IN_BRAND');
+      case 'UNEXPECTED_FAILURE':
+        return this.i18n.t('settings.locations.list.bulk.outcome.problem.UNEXPECTED_FAILURE');
+      default:
+        return code ?? this.i18n.t('settings.locations.list.bulk.outcome.failed');
+    }
   }
 
   protected startClosing(locationId: string): void {
