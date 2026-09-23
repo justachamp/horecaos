@@ -66,7 +66,22 @@ public class CatalogImportParser {
         }
     }
 
-    /** The empty template a merchant downloads and fills — header row only, UTF-8, this import's own column order. */
+    /**
+     * The empty template a merchant downloads and fills — header row only,
+     * UTF-8, this import's own column order.
+     *
+     * <p>Only {@code product_code} and {@code product_name} are required.
+     * Every other column may be left blank on a row that updates an
+     * existing product, and a blank one there always means "leave this
+     * field as it already is" — never "clear it". In particular, a blank
+     * {@code status}, {@code unit_code} or {@code variant_sku} column on a
+     * corrective re-import (one that only fixes, say, {@code
+     * price_amount_minor}) leaves the product's current status, unit and
+     * SKU untouched; it can never re-activate an archived product or null
+     * out a SKU. See {@link CatalogImportRowService}'s own class doc for the
+     * full rule and why {@code create} (a blank cell there defaults to
+     * {@code ACTIVE}/{@code PIECE}) is the one case it does not apply to.
+     */
     public String template() {
         return writeCsv(List.of());
     }

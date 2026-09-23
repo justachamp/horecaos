@@ -57,6 +57,26 @@ import uz.horecaos.platform.media.api.MediaAssetIngestion;
  * the row would change, without proving the fetch would succeed; {@link
  * CatalogImportRowErrorReason#IMAGE_FETCH_FAILED} can therefore only appear
  * in an {@code apply} run's report, never a dry run's.
+ *
+ * <p><b>Blank vs. explicit-clear, decided per column.</b> {@code status},
+ * {@code unit_code} and {@code variant_sku} follow one rule on an {@code
+ * update}: <i>a blank cell means "the CSV says nothing about this field",
+ * never "clear it"</i> — the same rule {@code category_code} and {@code
+ * price_amount_minor}/{@code price_currency} already followed. A corrective
+ * re-import that only fills {@code product_code}/{@code product_name}/{@code
+ * price_amount_minor} to fix a price must never re-activate an archived
+ * product, reset its unit to the {@code PIECE} default, or null out its SKU
+ * — {@link ParsedFields.Ok#status} and {@link ParsedFields.Ok#unitCode} are
+ * therefore {@code null}, not defaulted, when the column is blank, and
+ * {@link #diff} only flags a field as changed when the row actually stated a
+ * value. <b>There is no way to explicitly clear a SKU (or reset the unit
+ * code, or blank the status) through this CSV</b> — a blank cell can only
+ * ever mean "unchanged" here, on {@code update}. Doing so is the product
+ * editor's job, not this importer's; a merchant who needs to remove a SKU
+ * clears it there. On {@code create}, by contrast, there is no existing row
+ * for "unchanged" to mean anything against, so a blank {@code status}/{@code
+ * unit_code} falls back to the ordinary new-product defaults ({@code ACTIVE}
+ * / {@code PIECE}) exactly as before.
  */
 @Service
 public class CatalogImportRowService {
@@ -136,6 +156,13 @@ public class CatalogImportRowService {
             imageAsset = fetched.get();
         }
 
+        // A blank status/unit_code cell means "leave unchanged" on an
+        // update (see the guards in diff()/update() below), but there is no
+        // existing row to leave unchanged when creating one -- a blank cell
+        // here instead falls back to the ordinary new-product defaults.
+        Status status = fields.status() == null ? Status.ACTIVE : fields.status();
+        String unitCode = fields.unitCode() == null ? "PIECE" : fields.unitCode();
+
         CatalogAuthoringService.ProductCreated created = authoring.createProduct(
                 tenantId,
                 brandId,
@@ -145,12 +172,12 @@ public class CatalogImportRowService {
                 fields.description(),
                 defaultLocale,
                 sku,
-                fields.unitCode(),
+                unitCode,
                 FiscalClassification.unclassified(),
                 actorId);
 
-        if (fields.status() != Status.ACTIVE) {
-            authoring.setProductStatus(tenantId, brandId, created.productId(), fields.status());
+        if (status != Status.ACTIVE) {
+            authoring.setProductStatus(tenantId, brandId, created.productId(), status);
         }
         String categoryCode = fields.categoryCode();
         if (categoryCode != null) {
@@ -227,11 +254,27 @@ public class CatalogImportRowService {
                     fields.description());
         }
         if (diff.skuChanged() || diff.unitChanged() || diff.variantStatusChanged()) {
+            // JdbcCatalogStore#updateVariant sets sku/unit_code/status
+            // unconditionally in one UPDATE, so a field the diff did not
+            // flag (because the CSV cell was blank) must still be re-sent
+            // as the variant's current value -- not fields.xxx(), which is
+            // null/absent for exactly that "leave it alone" case.
+            String effectiveSku = diff.skuChanged() ? sku : defaultVariant.sku();
+            String effectiveUnitCode = fields.unitCode() != null ? fields.unitCode() : defaultVariant.unitCode();
+            Status effectiveVariantStatus = fields.status() != null ? fields.status() : defaultVariant.status();
             authoring.updateVariant(
-                    tenantId, brandId, product.id(), defaultVariant.id(), sku, fields.unitCode(), fields.status());
+                    tenantId,
+                    brandId,
+                    product.id(),
+                    defaultVariant.id(),
+                    effectiveSku,
+                    effectiveUnitCode,
+                    effectiveVariantStatus);
         }
         if (diff.productStatusChanged()) {
-            authoring.setProductStatus(tenantId, brandId, product.id(), fields.status());
+            // fields.status() is guaranteed non-null here: productStatusChanged
+            // can only be true when the CSV actually stated a status (see diff()).
+            authoring.setProductStatus(tenantId, brandId, product.id(), Objects.requireNonNull(fields.status()));
         }
         String categoryCode = fields.categoryCode();
         if (diff.categoryChanged() && categoryCode != null) {
@@ -276,10 +319,18 @@ public class CatalogImportRowService {
                 || !fields.productName().equals(current.name())
                 || !Objects.equals(fields.description(), current.description());
 
-        boolean skuChanged = !Objects.equals(fields.sku(), defaultVariant.sku());
-        boolean unitChanged = !fields.unitCode().equals(defaultVariant.unitCode());
-        boolean variantStatusChanged = fields.status() != defaultVariant.status();
-        boolean productStatusChanged = fields.status() != product.status();
+        // A blank sku/unit_code/status column parses to null (ParsedFields
+        // never substitutes a default the way it used to) and means "the
+        // CSV said nothing about this field", not "clear it" -- so each
+        // guard below requires the column to have actually carried a value
+        // before comparing it against the stored row. There is no way to
+        // explicitly clear a SKU through this importer's CSV; that is a
+        // deliberate limitation (see this class's own class-level doc) and
+        // goes through the product editor instead.
+        boolean skuChanged = fields.sku() != null && !fields.sku().equals(defaultVariant.sku());
+        boolean unitChanged = fields.unitCode() != null && !fields.unitCode().equals(defaultVariant.unitCode());
+        boolean variantStatusChanged = fields.status() != null && fields.status() != defaultVariant.status();
+        boolean productStatusChanged = fields.status() != null && fields.status() != product.status();
 
         boolean categoryChanged = false;
         String categoryCode = fields.categoryCode();
@@ -370,15 +421,27 @@ public class CatalogImportRowService {
      */
     private sealed interface ParsedFields {
 
+        /**
+         * @param unitCode null when the CSV cell was blank -- "leave
+         *                 unchanged" on an update, "default to PIECE" on a
+         *                 create; see {@link #update} and {@link #create}.
+         *                 Never null once past {@link #parse}'s validation
+         *                 for a field with no blank-means-something-else
+         *                 case, the way {@code productCode}/{@code
+         *                 productName} never are.
+         * @param status   null when the CSV cell was blank, with the
+         *                 identical "leave unchanged on update, default to
+         *                 ACTIVE on create" meaning {@code unitCode} has.
+         */
         record Ok(
                 String productCode,
                 String productName,
                 @Nullable String description,
                 @Nullable String sku,
-                String unitCode,
+                @Nullable String unitCode,
                 @Nullable Long priceAmountMinor,
                 @Nullable String currency,
-                Status status,
+                @Nullable Status status,
                 @Nullable String categoryCode,
                 @Nullable String categoryName,
                 @Nullable String imageUrl)
@@ -396,7 +459,13 @@ public class CatalogImportRowService {
                 return new Invalid(CatalogImportRowErrorReason.MISSING_PRODUCT_NAME);
             }
 
-            Status status = Status.ACTIVE;
+            // null (not a default) when the column is blank -- see the Ok
+            // record's own doc for why: a blank cell means something
+            // different on create (default to ACTIVE) than on update
+            // (leave the existing status alone), and only the caller that
+            // already knows which of those two cases it is in can resolve
+            // that, not this row-shape-only parse step.
+            Status status = null;
             String rawStatus = blank(row.status());
             if (rawStatus != null) {
                 try {
@@ -435,7 +504,7 @@ public class CatalogImportRowService {
                     productName,
                     blank(row.productDescription()),
                     blank(row.variantSku()),
-                    unitCode == null ? "PIECE" : unitCode.toUpperCase(Locale.ROOT),
+                    unitCode == null ? null : unitCode.toUpperCase(Locale.ROOT),
                     amount,
                     currency,
                     status,

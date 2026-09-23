@@ -48,6 +48,8 @@ import uz.horecaos.platform.catalog.application.CatalogImportRowErrorReason;
 import uz.horecaos.platform.catalog.application.CatalogImportRowOutcome;
 import uz.horecaos.platform.catalog.application.CatalogImportRowService;
 import uz.horecaos.platform.catalog.application.CatalogQueryService;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.integration.outbox.JdbcOutboxStore;
 import uz.horecaos.platform.integration.outbox.MediaOutboxEventListener;
@@ -461,6 +463,74 @@ class CatalogImportRowServiceTests {
         assertThat(outcome.errorReason()).isNull();
     }
 
+    // ------------------------------------------------- blank-vs-clear semantics
+
+    @Test
+    @DisplayName(
+            "a blank status/unit_code/variant_sku on update leaves each one unchanged, and never re-activates an archived product")
+    void blankFieldsOnUpdateLeaveStatusUnitAndSkuUnchanged() {
+        CatalogImportRowOutcome created = rows.process(
+                TENANT,
+                BRAND,
+                catalogId,
+                rowFull("PLOV-001", "Osh", "OSH-KG-1", "KG", "50000", "UZS", "ARCHIVED"),
+                false,
+                null);
+        assertThat(created.type()).isEqualTo(CatalogImportRowOutcome.Type.CREATED);
+
+        // A corrective re-import that only carries product_code/product_name/price,
+        // leaving status/variant_sku/unit_code blank -- exactly the plausible
+        // hand-authored partial file the template's own columns invite,
+        // since only product_code/product_name are documented as required.
+        CatalogImportRowOutcome updated = rows.process(
+                TENANT, BRAND, catalogId, rowFull("PLOV-001", "Osh", null, null, "60000", "UZS", null), false, null);
+
+        assertThat(updated.type()).isEqualTo(CatalogImportRowOutcome.Type.UPDATED);
+        var product = catalogStore.productByCode(TENANT, BRAND, "PLOV-001").orElseThrow();
+        assertThat(product.status())
+                .as("a blank status column must never re-activate an archived product")
+                .isEqualTo(Status.ARCHIVED);
+        Variant variant = defaultVariantOf(product.id());
+        assertThat(variant.unitCode())
+                .as("a blank unit_code must leave the existing unit alone")
+                .isEqualTo("KG");
+        assertThat(variant.sku())
+                .as("a blank variant_sku must leave the existing SKU alone, not null it out")
+                .isEqualTo("OSH-KG-1");
+    }
+
+    @Test
+    @DisplayName(
+            "re-importing a row with every optional column blank besides an unchanged price resolves to SKIPPED, not UPDATED")
+    void blankOptionalFieldsAloneNeverForceAnUpdate() {
+        rows.process(
+                TENANT,
+                BRAND,
+                catalogId,
+                rowFull("PLOV-001", "Osh", "OSH-KG-1", "KG", "50000", "UZS", "ARCHIVED"),
+                false,
+                null);
+
+        CatalogImportRowOutcome reimported = rows.process(
+                TENANT, BRAND, catalogId, rowFull("PLOV-001", "Osh", null, null, "50000", "UZS", null), false, null);
+
+        assertThat(reimported.type())
+                .as("a blank status/unit/sku column carries no diff signal of its own")
+                .isEqualTo(CatalogImportRowOutcome.Type.SKIPPED);
+    }
+
+    @Test
+    @DisplayName("blank status and unit_code on a brand-new product still default to ACTIVE and PIECE")
+    void blankStatusAndUnitOnCreateStillDefault() {
+        CatalogImportRowOutcome created = rows.process(
+                TENANT, BRAND, catalogId, rowFull("PLOV-002", "Lag'mon", null, null, null, null, null), false, null);
+
+        var product = catalogStore.productByCode(TENANT, BRAND, "PLOV-002").orElseThrow();
+        assertThat(product.status()).isEqualTo(Status.ACTIVE);
+        assertThat(defaultVariantOf(product.id()).unitCode()).isEqualTo("PIECE");
+        assertThat(created.type()).isEqualTo(CatalogImportRowOutcome.Type.CREATED);
+    }
+
     // ------------------------------------------------------------ isolation
 
     @Test
@@ -525,6 +595,37 @@ class CatalogImportRowServiceTests {
                 priceCurrency,
                 null,
                 null);
+    }
+
+    /** Every optional column explicit or explicitly blank ({@code null}), for the blank-vs-clear-semantics tests. */
+    private static CatalogImportRow rowFull(
+            String productCode,
+            String productName,
+            @Nullable String sku,
+            @Nullable String unitCode,
+            @Nullable String priceAmountMinor,
+            @Nullable String priceCurrency,
+            @Nullable String status) {
+        return new CatalogImportRow(
+                1,
+                productCode,
+                null,
+                null,
+                productName,
+                null,
+                sku,
+                unitCode,
+                priceAmountMinor,
+                priceCurrency,
+                status,
+                null);
+    }
+
+    private Variant defaultVariantOf(UUID productId) {
+        return catalogStore.variantsForProduct(TENANT, BRAND, productId).stream()
+                .filter(Variant::isDefault)
+                .findFirst()
+                .orElseThrow();
     }
 
     private static CatalogImportRow rowWithImage(String productCode, String productName, URI imageUrl) {
