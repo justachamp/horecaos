@@ -2185,6 +2185,20 @@
         },
         "type" : "object"
       },
+      "BindMenuRequest" : {
+        "properties" : {
+          "channelId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "menuId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "menuId" ],
+        "type" : "object"
+      },
       "BindRequest" : {
         "properties" : {
           "brandId" : {
@@ -2444,6 +2458,28 @@
         },
         "type" : "object"
       },
+      "BookedState" : {
+        "properties" : {
+          "abandoned" : {
+            "type" : "boolean"
+          },
+          "applied" : {
+            "type" : "boolean"
+          },
+          "planVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "shipmentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "BoundaryChangeResponse" : {
         "properties" : {
           "approvalRequestId" : {
@@ -2452,6 +2488,36 @@
           },
           "status" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "BranchMenuBindingResponse" : {
+        "properties" : {
+          "channelCode" : {
+            "type" : "string"
+          },
+          "channelId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationName" : {
+            "type" : "string"
+          },
+          "menuId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "menuName" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -2690,6 +2756,38 @@
             "type" : "boolean"
           },
           "requestedCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "BulkAddByFilterRequest" : {
+        "properties" : {
+          "availabilityDefault" : {
+            "pattern" : "AVAILABLE|UNAVAILABLE|HIDDEN",
+            "type" : "string"
+          },
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locale" : {
+            "maxLength" : 8,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "search" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "BulkAddByFilterResponse" : {
+        "properties" : {
+          "added" : {
             "format" : "int32",
             "type" : "integer"
           }
@@ -3012,6 +3110,77 @@
             "type" : "array"
           },
           "totalItems" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "BulkServiceStateItemResponse" : {
+        "properties" : {
+          "applied" : {
+            "type" : "boolean"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "problemCode" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "BulkServiceStateRequest" : {
+        "properties" : {
+          "effectiveUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "locationIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "mode" : {
+            "enum" : [ "FOLLOW_SCHEDULE", "FORCE_OPEN", "FORCE_CLOSED" ],
+            "type" : "string"
+          },
+          "note" : {
+            "maxLength" : 400,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "maxLength" : 48,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "locationIds", "mode" ],
+        "type" : "object"
+      },
+      "BulkServiceStateResponse" : {
+        "properties" : {
+          "appliedCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "failedCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BulkServiceStateItemResponse"
+            },
+            "type" : "array"
+          },
+          "requestedCount" : {
             "format" : "int32",
             "type" : "integer"
           }
@@ -3896,6 +4065,12 @@
               "type" : "boolean"
             },
             "type" : "object"
+          },
+          "socialLinks" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           }
         },
         "type" : "object"
@@ -3916,6 +4091,12 @@
       },
       "ChannelView" : {
         "properties" : {
+          "brandColorPrimary" : {
+            "type" : "string"
+          },
+          "brandColorSecondary" : {
+            "type" : "string"
+          },
           "code" : {
             "type" : "string"
           },
@@ -3937,6 +4118,9 @@
           },
           "guestOrdersAllowed" : {
             "type" : "boolean"
+          },
+          "icon" : {
+            "type" : "string"
           },
           "id" : {
             "format" : "uuid",
@@ -5135,6 +5319,17 @@
         },
         "type" : "object"
       },
+      "CopyMenuRequest" : {
+        "properties" : {
+          "name" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "name" ],
+        "type" : "object"
+      },
       "CostReport" : {
         "properties" : {
           "basis" : {
@@ -6255,6 +6450,17 @@
         "required" : [ "bindingId", "entityType", "externalEntityId", "horecaosEntityId" ],
         "type" : "object"
       },
+      "CreateMenuRequest" : {
+        "properties" : {
+          "name" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "name" ],
+        "type" : "object"
+      },
       "CreateModifierGroupRequest" : {
         "properties" : {
           "allowSameOptionMultipleTimes" : {
@@ -6529,9 +6735,17 @@
             "enum" : [ "SMS", "EMAIL", "PUSH", "MESSAGING_APP", "TELEGRAM" ],
             "type" : "string"
           },
+          "channelSource" : {
+            "enum" : [ "WEB", "IOS", "ANDROID", "TELEGRAM", "KIOSK", "QR_TABLE", "CALL_CENTRE", "AGGREGATOR", "POS" ],
+            "type" : "string"
+          },
           "consentPurpose" : {
             "maxLength" : 64,
             "minLength" : 0,
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
+            "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
             "type" : "string"
           },
           "notificationClass" : {
@@ -6640,6 +6854,55 @@
           "rotationIntervalDays" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CrmLogListResponse" : {
+        "properties" : {
+          "maybeMore" : {
+            "type" : "boolean"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CrmLogRowResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "CrmLogRowResponse" : {
+        "properties" : {
+          "anonymized" : {
+            "type" : "boolean"
+          },
+          "courierDisplayReference" : {
+            "type" : "string"
+          },
+          "customerName" : {
+            "type" : "string"
+          },
+          "customerPhone" : {
+            "type" : "string"
+          },
+          "customerType" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "occurredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "operatorPrincipalId" : {
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -8185,6 +8448,18 @@
         "required" : [ "reason" ],
         "type" : "object"
       },
+      "DistanceResponse" : {
+        "properties" : {
+          "averageMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          }
+        },
+        "type" : "object"
+      },
       "Divergence" : {
         "properties" : {
           "entitlementKey" : {
@@ -8600,6 +8875,38 @@
             "type" : "string"
           },
           "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "EffectiveBindingView" : {
+        "properties" : {
+          "bindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "capabilityCode" : {
+            "type" : "string"
+          },
+          "installationDisplayName" : {
+            "type" : "string"
+          },
+          "installationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationScoped" : {
+            "type" : "boolean"
+          },
+          "providerCategory" : {
+            "type" : "string"
+          },
+          "providerType" : {
             "type" : "string"
           }
         },
@@ -9089,6 +9396,43 @@
           "shipmentId" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ExternalCourierRequest" : {
+        "properties" : {
+          "bindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "decision" : {
+            "enum" : [ "ACCEPT", "ABANDON" ],
+            "type" : "string"
+          },
+          "quoteId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "bindingId", "reasonCode" ],
+        "type" : "object"
+      },
+      "ExternalCourierResponse" : {
+        "properties" : {
+          "booked" : {
+            "$ref" : "#/components/schemas/BookedState"
+          },
+          "phase" : {
+            "type" : "string"
+          },
+          "quoted" : {
+            "$ref" : "#/components/schemas/QuotedState"
           }
         },
         "type" : "object"
@@ -11175,6 +11519,21 @@
         "required" : [ "byLocale" ],
         "type" : "object"
       },
+      "LocationChannelsResponse" : {
+        "properties" : {
+          "channelCodes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "LocationFiscalAssignmentView" : {
         "properties" : {
           "approvalReference" : {
@@ -11210,6 +11569,21 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "LocationLegalEntityResponse" : {
+        "properties" : {
+          "legalEntityCode" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "taxpayerNumber" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -11823,6 +12197,51 @@
         },
         "type" : "object"
       },
+      "MenuItemRequest" : {
+        "properties" : {
+          "availabilityDefault" : {
+            "minLength" : 1,
+            "pattern" : "AVAILABLE|UNAVAILABLE|HIDDEN",
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "availabilityDefault" ],
+        "type" : "object"
+      },
+      "MenuItemResponse" : {
+        "properties" : {
+          "availabilityDefault" : {
+            "type" : "string"
+          },
+          "productId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "productName" : {
+            "type" : "string"
+          },
+          "sku" : {
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "MenuModifierGroup" : {
         "properties" : {
           "allowSameOptionMultipleTimes" : {
@@ -11917,6 +12336,25 @@
               "$ref" : "#/components/schemas/MenuVariant"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "MenuResponse" : {
+        "properties" : {
+          "menuId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -17880,6 +18318,39 @@
         },
         "type" : "object"
       },
+      "QuotedState" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "customerDeliveryFeeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "deltaMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "failureCode" : {
+            "type" : "string"
+          },
+          "priceMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "priced" : {
+            "type" : "boolean"
+          },
+          "providerType" : {
+            "type" : "string"
+          },
+          "quoteId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "RateCardDetailResponse" : {
         "properties" : {
           "cardId" : {
@@ -19257,6 +19728,17 @@
             "minItems" : 1,
             "type" : "array"
           },
+          "from" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "locationId" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "purpose" : {
             "minLength" : 1,
             "type" : "string"
@@ -19269,6 +19751,10 @@
             "type" : "string"
           },
           "status" : {
+            "type" : "string"
+          },
+          "to" : {
+            "format" : "date-time",
             "type" : "string"
           }
         },
@@ -23431,7 +23917,13 @@
           "channel" : {
             "type" : "string"
           },
+          "channelSource" : {
+            "type" : "string"
+          },
           "consentPurpose" : {
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
             "type" : "string"
           },
           "id" : {
@@ -24487,6 +24979,14 @@
       },
       "UpdateChannelRequest" : {
         "properties" : {
+          "brandColorPrimary" : {
+            "pattern" : "^#[0-9a-fA-F]{6}$",
+            "type" : "string"
+          },
+          "brandColorSecondary" : {
+            "pattern" : "^#[0-9a-fA-F]{6}$",
+            "type" : "string"
+          },
           "displayName" : {
             "maxLength" : 200,
             "minLength" : 0,
@@ -24497,6 +24997,11 @@
           },
           "guestOrdersAllowed" : {
             "type" : "boolean"
+          },
+          "icon" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
           },
           "pricePlaneChannelId" : {
             "format" : "uuid",
@@ -24625,6 +25130,26 @@
           }
         },
         "required" : [ "legalName" ],
+        "type" : "object"
+      },
+      "UpdateMenuRequest" : {
+        "properties" : {
+          "expectedVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "status" : {
+            "minLength" : 1,
+            "pattern" : "DRAFT|ACTIVE|ARCHIVED",
+            "type" : "string"
+          }
+        },
+        "required" : [ "expectedVersion", "name", "status" ],
         "type" : "object"
       },
       "UpdatePaymentMethodRequest" : {
@@ -25931,7 +26456,7 @@
     "/api/v1/control-plane/capabilities" : {
       "get" : {
         "description" : "The code-owned registry, not one session's slice of it. Platform-admin only: the vocabulary itself is what an approval policy's requiredApproverCapability and a grant's roleCode are built from.",
-        "operationId" : "list_45",
+        "operationId" : "list_46",
         "responses" : {
           "200" : {
             "content" : {
@@ -26183,7 +26708,7 @@
     "/api/v1/control-plane/event-contracts" : {
       "get" : {
         "description" : "Code-owned (ADR 0032): a producer cannot publish an event with no entry here. Static within a build, so there is nothing to paginate.",
-        "operationId" : "list_44",
+        "operationId" : "list_45",
         "responses" : {
           "200" : {
             "content" : {
@@ -26339,7 +26864,7 @@
     },
     "/api/v1/control-plane/grants" : {
       "get" : {
-        "operationId" : "list_32",
+        "operationId" : "list_33",
         "responses" : {
           "200" : {
             "content" : {
@@ -26429,7 +26954,7 @@
     "/api/v1/control-plane/incidents" : {
       "get" : {
         "description" : "Each alert class and subject has at most one live incident; raising it again counts another occurrence.",
-        "operationId" : "list_43",
+        "operationId" : "list_44",
         "parameters" : [ {
           "in" : "query",
           "name" : "includeResolved",
@@ -27041,7 +27566,7 @@
     },
     "/api/v1/control-plane/onboarding-templates" : {
       "get" : {
-        "operationId" : "list_42",
+        "operationId" : "list_43",
         "responses" : {
           "200" : {
             "content" : {
@@ -27424,7 +27949,7 @@
     "/api/v1/control-plane/template-reviews" : {
       "get" : {
         "description" : "Versions in force or in draft, awaiting first. A version awaiting or refused is not sent. Filter to one state with ?state=.",
-        "operationId" : "list_41",
+        "operationId" : "list_42",
         "parameters" : [ {
           "in" : "query",
           "name" : "state",
@@ -27635,7 +28160,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/approval-policies" : {
       "get" : {
         "description" : "Every version of each policy, newest first. An action code with no row here needs no second signature, which is the state every action is in until somebody publishes one.",
-        "operationId" : "list_31",
+        "operationId" : "list_32",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -29912,6 +30437,533 @@
         "tags" : [ "Catalog authoring" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus" : {
+      "get" : {
+        "operationId" : "list_31",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/MenuResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every menu this brand has authored, every status",
+        "tags" : [ "Named menus" ]
+      },
+      "post" : {
+        "description" : "Starts in DRAFT with no membership.",
+        "operationId" : "create_18",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateMenuRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MenuResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Create a named menu",
+        "tags" : [ "Named menus" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/bindings" : {
+      "get" : {
+        "operationId" : "listBindings",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/BranchMenuBindingResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every branch's current menu binding, one row per (branch, channel scope)",
+        "tags" : [ "Named menus" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/bindings/locations/{locationId}" : {
+      "delete" : {
+        "description" : "Query param channelId names which scope to clear; omitted clears the branch's default binding. The branch falls back to today's unmodified location_offerings behaviour the moment no binding covers it. Idempotent.",
+        "operationId" : "unbind",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channelId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Unbinds a branch's menu",
+        "tags" : [ "Named menus" ]
+      },
+      "put" : {
+        "description" : "A null channelId binds the branch's default, across every sales channel; naming one overrides the default for that channel alone. Replaces whichever menu previously held that exact scope. Takes effect immediately, exactly like a location_offerings toggle — no republish required. Refused for an archived menu.",
+        "operationId" : "bind",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BindMenuRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Binds a menu to a branch",
+        "tags" : [ "Named menus" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}" : {
+      "put" : {
+        "description" : "Whole-record PUT with an expected version, the same discipline CommentPresetController's own update already uses.",
+        "operationId" : "update_8",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "menuId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateMenuRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MenuResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rename, archive, or reactivate a menu",
+        "tags" : [ "Named menus" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}/copy" : {
+      "post" : {
+        "description" : "A new menu, in DRAFT, with the same membership (variants, sort, default availability) as the source — the gesture that lets a chain roll one assortment out to a further branch without re-authoring it. The copy's own name must be given and must differ from every other menu on this brand.",
+        "operationId" : "copy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "menuId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CopyMenuRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MenuResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Copy a menu",
+        "tags" : [ "Named menus" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}/items" : {
+      "get" : {
+        "operationId" : "items",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "menuId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/MenuItemResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A menu's membership, in sort order",
+        "tags" : [ "Named menus" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}/items/bulk-add-by-filter" : {
+      "post" : {
+        "description" : "The row's own \"filtered select-all\": category and/or a case-insensitive product-name-or-SKU search resolve to a membership write in one call rather than one gesture per product. Tag filtering is not offered — catalog carries no tag vocabulary yet (gap map row 4.7 stays BLOCKED on the same unanswered classification question).",
+        "operationId" : "addByFilter",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "menuId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BulkAddByFilterRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BulkAddByFilterResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add every active variant matching a category and/or search filter, in one command",
+        "tags" : [ "Named menus" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}/items/{variantId}" : {
+      "delete" : {
+        "description" : "Idempotent.",
+        "operationId" : "removeItem",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "menuId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove a variant from a menu",
+        "tags" : [ "Named menus" ]
+      },
+      "put" : {
+        "description" : "Never a second row for one (menu, variant) pair.",
+        "operationId" : "addItem",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "menuId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MenuItemRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add a variant to a menu, or re-sort/re-default it if already there",
+        "tags" : [ "Named menus" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/modifier-groups" : {
       "get" : {
         "description" : "Brand-wide, not catalog-scoped: a modifier group carries no catalog id and is shared across every catalog the brand has.",
@@ -31059,7 +32111,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows" : {
       "get" : {
         "description" : "Every version of every flow key, newest first. At most one version per flow key is ever active at once.",
-        "operationId" : "list_40",
+        "operationId" : "list_41",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -31283,7 +32335,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/locations" : {
       "post" : {
         "description" : "The middle rung of fee resolution: outranked by a zone's own tariff, and outranking the brand default.",
-        "operationId" : "bind_5",
+        "operationId" : "bind_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -32974,7 +34026,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/locations" : {
       "post" : {
         "description" : "A zone with no binding covers nothing. That is the safe direction: a half-configured zone is visibly inert rather than quietly serving the whole brand.",
-        "operationId" : "bind_4",
+        "operationId" : "bind_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -33611,6 +34663,46 @@
         "tags" : [ "Provider integrations" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/integrations/branches/effective-bindings" : {
+      "get" : {
+        "description" : "For every location of the given brand: the installation that would actually handle each capability bound there, whether bound directly to the location or inherited from the brand's own default. A branch with no row for a capability has nothing bound at either scope.",
+        "operationId" : "effectiveBindings_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/EffectiveBindingView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The effective installation per branch, per capability (gap-map row 10.8a)",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/integrations/connect-fields" : {
       "get" : {
         "description" : "Static, code-owned catalogue: which fields a Click, Payme, or Telegram connect flow needs, and which of those must travel through the write-only secret door rather than as plain configuration. The control-plane app renders its connect form from this, so a new provider adapter costs a catalogue entry, not a new screen. Each declaration also carries the environments a tenant may actually choose for it (integration.provider_environments, platform-owned): the approved-catalogue join a connect form needs to offer a picker instead of a free-text field an operator has no way to guess.",
@@ -33722,7 +34814,7 @@
       },
       "post" : {
         "description" : "Created suspended. Activation is separate, so a binding cannot go live before someone has confirmed it points at the intended restaurant.",
-        "operationId" : "bind_3",
+        "operationId" : "bind_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -36522,6 +37614,57 @@
         "tags" : [ "Sales channels" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/social-links" : {
+      "put" : {
+        "description" : "Whole set, never per-link -- the same discipline the payment-method, fulfilment-mode and location matrices already use. Key is the platform, a checked vocabulary (ADR 0036); value is the destination URL, https only. Entry order in the request body becomes display order.",
+        "operationId" : "replaceSocialLinks",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "additionalProperties" : {
+                  "type" : "string"
+                },
+                "type" : "object"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace the channel's social links",
+        "tags" : [ "Sales channels" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/sendpulse-imports" : {
       "post" : {
         "description" : "Parses the export and reports, per row, what it would do (or, when dryRun=false, what it did): a matched or newly created customer account, a bound Telegram chat, an imported consent decision — or a rejection with a reason. Idempotent: importing the same file twice writes nothing new for a row already imported.",
@@ -36627,7 +37770,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/statements" : {
       "get" : {
         "description" : "Newest month first, void ones included.",
-        "operationId" : "list_39",
+        "operationId" : "list_40",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -38252,7 +39395,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands" : {
       "get" : {
-        "operationId" : "list_36",
+        "operationId" : "list_37",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -38413,7 +39556,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
         "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. No message bodies here — open a conversation for its decrypted history.",
-        "operationId" : "list_38",
+        "operationId" : "list_39",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -38845,7 +39988,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/locations" : {
       "post" : {
         "description" : "The middle rung of fee resolution: outranked by a zone's own tariff, and outranking the brand default.",
-        "operationId" : "bind_2",
+        "operationId" : "bind_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -39387,6 +40530,84 @@
         "tags" : [ "Operations brand profile" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/channels" : {
+      "get" : {
+        "operationId" : "locationChannels",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/LocationChannelsResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every location's own active sales-channel codes, batched, for the branch list's channel filter",
+        "tags" : [ "Operations brand profile" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/legal-entities" : {
+      "get" : {
+        "operationId" : "locationLegalEntities",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/LocationLegalEntityResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every location's own assigned legal entity, batched, for the branch list's INN filter",
+        "tags" : [ "Operations brand profile" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/service-states" : {
       "get" : {
         "operationId" : "locationServiceStates",
@@ -39423,6 +40644,51 @@
           }
         },
         "summary" : "Every location's manual-override state, batched, for the branch list's state column and filter",
+        "tags" : [ "Operations brand profile" ]
+      },
+      "post" : {
+        "description" : "Settings 10.2a's bulk close/open bar. N independent writes, never one all-or-nothing transaction: each location is applied through the same single-location write a lone request would use, so one location already in the target mode cannot fail the rest of the selection. Always 200 with a per-location outcome list, capped at 200 locations.",
+        "operationId" : "bulkChangeServiceState",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BulkServiceStateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BulkServiceStateResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Close, force open, or return several locations to schedule at once",
         "tags" : [ "Operations brand profile" ]
       }
     },
@@ -40174,6 +41440,69 @@
           }
         },
         "summary" : "This order's delivery plan, current shipment and both money figures",
+        "tags" : [ "Order delivery" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/external-courier" : {
+      "post" : {
+        "description" : "One order-keyed action over the Millenium pattern's own quote/accept services (ManualExternalBookingService, gap map row 1.2f), so the order detail pane and the KDS pass share one path instead of each resolving planId a different way. Omit quoteId to price one partner (phase QUOTED); once QUOTED, call again with that quoteId and a decision to accept or abandon it (phase BOOKED). The price booked is always the one fulfillment.delivery_quotes recorded under quoteId, never a figure this request carries.",
+        "operationId" : "externalCourier",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExternalCourierRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExternalCourierResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request an external courier for this order (gap map rows 1.2e/2.1c)",
         "tags" : [ "Order delivery" ]
       }
     },
@@ -41627,7 +42956,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews" : {
       "get" : {
         "description" : "Every filter is optional. Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end. Row 5.2h: pass customerAccountId to narrow to one customer's own reviews — the customer detail pane's own tab.",
-        "operationId" : "list_37",
+        "operationId" : "list_38",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -41966,7 +43295,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/locations" : {
       "post" : {
         "description" : "A zone with no binding covers nothing. That is the safe direction: a half-configured zone is visibly inert rather than quietly serving the whole brand.",
-        "operationId" : "bind_1",
+        "operationId" : "bind_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -42014,7 +43343,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/locations/{locationId}" : {
       "delete" : {
         "description" : "Closes the binding's validity window; the row stays, because a fee resolution six weeks old names the binding that applied. A branch that was not bound answers not-found rather than success — the two are identical on screen and one of them means the wrong row was clicked.",
-        "operationId" : "unbind_1",
+        "operationId" : "unbind_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -44540,6 +45869,45 @@
         "tags" : [ "Provider integrations" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/integrations/branches/effective-bindings" : {
+      "get" : {
+        "operationId" : "effectiveBindings",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/EffectiveBindingView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The effective installation per branch, per capability (gap-map row 10.8a)",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/integrations/connect-fields" : {
       "get" : {
         "description" : "Identical to the control-plane-prefixed path's own operation; see ProviderInstallationController.connectFields for the full description. Published here too so the operations app's generated client covers what it actually calls.",
@@ -44783,7 +46151,7 @@
       },
       "post" : {
         "description" : "Created suspended. Activation is separate, so a binding cannot go live before someone has confirmed it points at the intended restaurant.",
-        "operationId" : "bind",
+        "operationId" : "bind_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -54694,7 +56062,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices" : {
       "get" : {
         "description" : "Active and revoked alike, with who enrolled or revoked each one. Behind kitchen.station.manage rather than kitchen.ticket.read, because a revocation reason and an enrolling manager's name are administrative facts a line cook's board read does not need.",
-        "operationId" : "list_35",
+        "operationId" : "list_36",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -56254,7 +57622,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/board" : {
       "get" : {
-        "description" : "orders.md §2.4 (ADR 0102): the board's filter set, every predicate applied in the database rather than in the browser. An empty status filter returns everything rather than silently hiding the closed ones, because a branch reconciling a shift needs the orders that are over as much as the ones that are live. `reference` narrows this branch's orders by the order's own number or by an aggregator's or a POS's identifier (ADR 0040), normalised so `0911-142`, `0911 142` and `#0911142` are one query — it is a filter, not the tenant-wide search of orders.md §2.8, which needs an endpoint at its own scope: nothing here reaches past this location. It is not a phone lookup either: a phone number goes in a POST body, never a query string (orders.md §2.8, ADR 0029). Keyset-paginated (ADR 0031): pass the previous page's `nextCursor` back as `cursor`. Changing a filter invalidates the cursor — start the list again — because a window cut for one filter set says nothing about another.",
+        "description" : "orders.md §2.4 (ADR 0102): the board's filter set, every predicate applied in the database rather than in the browser. An empty status filter returns everything rather than silently hiding the closed ones, because a branch reconciling a shift needs the orders that are over as much as the ones that are live. `reference` narrows this branch's orders by the order's own number or by an aggregator's or a POS's identifier (ADR 0040), normalised so `0911-142`, `0911 142` and `#0911142` are one query — it is a filter, not the tenant-wide search of orders.md §2.8, which needs an endpoint at its own scope: nothing here reaches past this location. It is not a phone lookup either: a phone number goes in a POST body, never a query string (orders.md §2.8, ADR 0029). `origin` narrows to how the order arrived — `HORECAOS` for the tenant's own channels or `MARKETPLACE` for anything recorded under an aggregator's own binding (ADR 0040, wave 9 row `1.1c`) — the coarse «Источник» toggle orders.md §2.4 names; picking one specific aggregator binding when a tenant runs several is not yet a filter here. Keyset-paginated (ADR 0031): pass the previous page's `nextCursor` back as `cursor`. Changing a filter invalidates the cursor — start the list again — because a window cut for one filter set says nothing about another.",
         "operationId" : "board",
         "parameters" : [ {
           "in" : "path",
@@ -56345,6 +57713,13 @@
         }, {
           "in" : "query",
           "name" : "reference",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "origin",
           "required" : false,
           "schema" : {
             "type" : "string"
@@ -59560,7 +60935,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-routing/bindings/{bindingId}/unbind" : {
       "post" : {
         "description" : "The same retirement taxonomy Telegram itself drives on a 403 or a deleted topic (ADR 0058), attributed here to an operator's own choice (MANUAL) instead.",
-        "operationId" : "unbind",
+        "operationId" : "unbind_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -60604,7 +61979,7 @@
     "/api/v1/tenants/{tenantId}/consent-types" : {
       "get" : {
         "description" : "Bootstraps the code-owned default catalogue on this tenant's first read, so a tenant with no rows yet still sees the two purposes already in production use (MARKETING_PROMOTIONS, TERMS_OF_SERVICE) rather than an empty registry.",
-        "operationId" : "list_34",
+        "operationId" : "list_35",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -62081,7 +63456,7 @@
     "/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences" : {
       "get" : {
         "description" : "Only what has been set. An absent row means the default for that class, which is on rather than off: a customer who never expressed a preference has not opted out of anything.",
-        "operationId" : "list_33",
+        "operationId" : "list_34",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -62756,6 +64131,86 @@
         "tags" : [ "Order lookup" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/orders/crm-log" : {
+      "get" : {
+        "description" : "Never reads reporting.fact_order and is never read by it (ADR 0029's SubjectPseudonym exists precisely to stop that link). The customer's name renders in full and the phone masked, the same ordinary-read rule orders.md §1.5 states for the order board and detail screens — pass the same afterOccurredAt/afterOrderId pair GET .../reporting/orders's own response carries to page both reads together.",
+        "operationId" : "log",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "afterOccurredAt",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "afterOrderId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CrmLogListResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Customer, operator and courier for orders in range — the console log's CRM half (7.2a)",
+        "tags" : [ "Order CRM log" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/reporting/cancellation-reasons" : {
       "get" : {
         "description" : "Resolves a CANCELLED order's cancellationReasonCode (order_outcome_reasons.id, as a string) to the internal_name an operator actually picked, so the funnel's cancellation panel prints a name rather than a UUID. REJECTED/EXPIRED reason codes name a different, platform-fixed registry this does not cover.",
@@ -63272,6 +64727,62 @@
           }
         },
         "summary" : "7.6b: the Recency x Frequency cross-tab, member counts and revenue per cell",
+        "tags" : [ "Reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/delivery-distance" : {
+      "get" : {
+        "description" : "delivery_distance.average.v1 — the mean of reporting.fact_order.delivery_distance_meters over delivery orders closed in range. Null when nothing in range resolved a distance, which is not a zero-metre delivery.",
+        "operationId" : "deliveryDistance",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DistanceResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Mean resolved delivery distance for the overview's distance tile (7.1)",
         "tags" : [ "Reporting" ]
       }
     },
@@ -64811,6 +66322,9 @@
     "description" : "Audiences, campaigns, and suppression (ADR 0044)",
     "name" : "Marketing"
   }, {
+    "description" : "7.2a: customer, operator and courier for the console order log",
+    "name" : "Order CRM log"
+  }, {
     "description" : "Capability grants and session context",
     "name" : "Authorization"
   }, {
@@ -64909,6 +66423,9 @@
   }, {
     "description" : "The inbound-call client card (ADR 0064)",
     "name" : "Voice screen-pop"
+  }, {
+    "description" : "Row 4.4a — a copyable, bindable assortment",
+    "name" : "Named menus"
   }, {
     "description" : "The maker-checker queue: actions waiting for a second signature",
     "name" : "Approval requests"

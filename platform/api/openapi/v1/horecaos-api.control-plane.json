@@ -864,6 +864,20 @@
         },
         "type" : "object"
       },
+      "BindMenuRequest" : {
+        "properties" : {
+          "channelId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "menuId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "menuId" ],
+        "type" : "object"
+      },
       "BindRequest" : {
         "properties" : {
           "brandId" : {
@@ -1009,6 +1023,36 @@
         },
         "type" : "object"
       },
+      "BranchMenuBindingResponse" : {
+        "properties" : {
+          "channelCode" : {
+            "type" : "string"
+          },
+          "channelId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationName" : {
+            "type" : "string"
+          },
+          "menuId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "menuName" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "BrandLocaleRequest" : {
         "properties" : {
           "description" : {
@@ -1087,6 +1131,38 @@
           },
           "version" : {
             "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "BulkAddByFilterRequest" : {
+        "properties" : {
+          "availabilityDefault" : {
+            "pattern" : "AVAILABLE|UNAVAILABLE|HIDDEN",
+            "type" : "string"
+          },
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locale" : {
+            "maxLength" : 8,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "search" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "BulkAddByFilterResponse" : {
+        "properties" : {
+          "added" : {
+            "format" : "int32",
             "type" : "integer"
           }
         },
@@ -1692,12 +1768,24 @@
               "type" : "boolean"
             },
             "type" : "object"
+          },
+          "socialLinks" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           }
         },
         "type" : "object"
       },
       "ChannelView" : {
         "properties" : {
+          "brandColorPrimary" : {
+            "type" : "string"
+          },
+          "brandColorSecondary" : {
+            "type" : "string"
+          },
           "code" : {
             "type" : "string"
           },
@@ -1719,6 +1807,9 @@
           },
           "guestOrdersAllowed" : {
             "type" : "boolean"
+          },
+          "icon" : {
+            "type" : "string"
           },
           "id" : {
             "format" : "uuid",
@@ -2208,6 +2299,17 @@
         "required" : [ "note" ],
         "type" : "object"
       },
+      "CopyMenuRequest" : {
+        "properties" : {
+          "name" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "name" ],
+        "type" : "object"
+      },
       "Country" : {
         "properties" : {
           "code" : {
@@ -2406,6 +2508,17 @@
           }
         },
         "required" : [ "bindingId", "entityType", "externalEntityId", "horecaosEntityId" ],
+        "type" : "object"
+      },
+      "CreateMenuRequest" : {
+        "properties" : {
+          "name" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "name" ],
         "type" : "object"
       },
       "CreateModifierGroupRequest" : {
@@ -3306,6 +3419,38 @@
             "type" : "string"
           },
           "lastRotatedAt" : {
+            "type" : "string"
+          },
+          "providerType" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "EffectiveBindingView" : {
+        "properties" : {
+          "bindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "capabilityCode" : {
+            "type" : "string"
+          },
+          "installationDisplayName" : {
+            "type" : "string"
+          },
+          "installationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationScoped" : {
+            "type" : "boolean"
+          },
+          "providerCategory" : {
             "type" : "string"
           },
           "providerType" : {
@@ -4779,6 +4924,70 @@
             "type" : "string"
           },
           "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "MenuItemRequest" : {
+        "properties" : {
+          "availabilityDefault" : {
+            "minLength" : 1,
+            "pattern" : "AVAILABLE|UNAVAILABLE|HIDDEN",
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "availabilityDefault" ],
+        "type" : "object"
+      },
+      "MenuItemResponse" : {
+        "properties" : {
+          "availabilityDefault" : {
+            "type" : "string"
+          },
+          "productId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "productName" : {
+            "type" : "string"
+          },
+          "sku" : {
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "MenuResponse" : {
+        "properties" : {
+          "menuId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
             "format" : "int32",
             "type" : "integer"
           }
@@ -9432,6 +9641,14 @@
       },
       "UpdateChannelRequest" : {
         "properties" : {
+          "brandColorPrimary" : {
+            "pattern" : "^#[0-9a-fA-F]{6}$",
+            "type" : "string"
+          },
+          "brandColorSecondary" : {
+            "pattern" : "^#[0-9a-fA-F]{6}$",
+            "type" : "string"
+          },
           "displayName" : {
             "maxLength" : 200,
             "minLength" : 0,
@@ -9442,6 +9659,11 @@
           },
           "guestOrdersAllowed" : {
             "type" : "boolean"
+          },
+          "icon" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
           },
           "pricePlaneChannelId" : {
             "format" : "uuid",
@@ -9502,6 +9724,26 @@
           }
         },
         "required" : [ "legalName" ],
+        "type" : "object"
+      },
+      "UpdateMenuRequest" : {
+        "properties" : {
+          "expectedVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "status" : {
+            "minLength" : 1,
+            "pattern" : "DRAFT|ACTIVE|ARCHIVED",
+            "type" : "string"
+          }
+        },
+        "required" : [ "expectedVersion", "name", "status" ],
         "type" : "object"
       },
       "UpdatePresetRequest" : {
@@ -10439,7 +10681,7 @@
     "/api/v1/control-plane/capabilities" : {
       "get" : {
         "description" : "The code-owned registry, not one session's slice of it. Platform-admin only: the vocabulary itself is what an approval policy's requiredApproverCapability and a grant's roleCode are built from.",
-        "operationId" : "list_20",
+        "operationId" : "list_21",
         "responses" : {
           "200" : {
             "content" : {
@@ -10691,7 +10933,7 @@
     "/api/v1/control-plane/event-contracts" : {
       "get" : {
         "description" : "Code-owned (ADR 0032): a producer cannot publish an event with no entry here. Static within a build, so there is nothing to paginate.",
-        "operationId" : "list_19",
+        "operationId" : "list_20",
         "responses" : {
           "200" : {
             "content" : {
@@ -10847,7 +11089,7 @@
     },
     "/api/v1/control-plane/grants" : {
       "get" : {
-        "operationId" : "list_13",
+        "operationId" : "list_14",
         "responses" : {
           "200" : {
             "content" : {
@@ -10937,7 +11179,7 @@
     "/api/v1/control-plane/incidents" : {
       "get" : {
         "description" : "Each alert class and subject has at most one live incident; raising it again counts another occurrence.",
-        "operationId" : "list_18",
+        "operationId" : "list_19",
         "parameters" : [ {
           "in" : "query",
           "name" : "includeResolved",
@@ -11549,7 +11791,7 @@
     },
     "/api/v1/control-plane/onboarding-templates" : {
       "get" : {
-        "operationId" : "list_17",
+        "operationId" : "list_18",
         "responses" : {
           "200" : {
             "content" : {
@@ -11932,7 +12174,7 @@
     "/api/v1/control-plane/template-reviews" : {
       "get" : {
         "description" : "Versions in force or in draft, awaiting first. A version awaiting or refused is not sent. Filter to one state with ?state=.",
-        "operationId" : "list_16",
+        "operationId" : "list_17",
         "parameters" : [ {
           "in" : "query",
           "name" : "state",
@@ -12143,7 +12385,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/approval-policies" : {
       "get" : {
         "description" : "Every version of each policy, newest first. An action code with no row here needs no second signature, which is the state every action is in until somebody publishes one.",
-        "operationId" : "list_12",
+        "operationId" : "list_13",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -14420,6 +14662,533 @@
         "tags" : [ "Catalog authoring" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus" : {
+      "get" : {
+        "operationId" : "list_12",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/MenuResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every menu this brand has authored, every status",
+        "tags" : [ "Named menus" ]
+      },
+      "post" : {
+        "description" : "Starts in DRAFT with no membership.",
+        "operationId" : "create_9",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateMenuRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MenuResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Create a named menu",
+        "tags" : [ "Named menus" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/bindings" : {
+      "get" : {
+        "operationId" : "listBindings",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/BranchMenuBindingResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every branch's current menu binding, one row per (branch, channel scope)",
+        "tags" : [ "Named menus" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/bindings/locations/{locationId}" : {
+      "delete" : {
+        "description" : "Query param channelId names which scope to clear; omitted clears the branch's default binding. The branch falls back to today's unmodified location_offerings behaviour the moment no binding covers it. Idempotent.",
+        "operationId" : "unbind",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channelId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Unbinds a branch's menu",
+        "tags" : [ "Named menus" ]
+      },
+      "put" : {
+        "description" : "A null channelId binds the branch's default, across every sales channel; naming one overrides the default for that channel alone. Replaces whichever menu previously held that exact scope. Takes effect immediately, exactly like a location_offerings toggle — no republish required. Refused for an archived menu.",
+        "operationId" : "bind",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BindMenuRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Binds a menu to a branch",
+        "tags" : [ "Named menus" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}" : {
+      "put" : {
+        "description" : "Whole-record PUT with an expected version, the same discipline CommentPresetController's own update already uses.",
+        "operationId" : "update_4",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "menuId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateMenuRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MenuResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rename, archive, or reactivate a menu",
+        "tags" : [ "Named menus" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}/copy" : {
+      "post" : {
+        "description" : "A new menu, in DRAFT, with the same membership (variants, sort, default availability) as the source — the gesture that lets a chain roll one assortment out to a further branch without re-authoring it. The copy's own name must be given and must differ from every other menu on this brand.",
+        "operationId" : "copy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "menuId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CopyMenuRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MenuResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Copy a menu",
+        "tags" : [ "Named menus" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}/items" : {
+      "get" : {
+        "operationId" : "items",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "menuId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/MenuItemResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A menu's membership, in sort order",
+        "tags" : [ "Named menus" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}/items/bulk-add-by-filter" : {
+      "post" : {
+        "description" : "The row's own \"filtered select-all\": category and/or a case-insensitive product-name-or-SKU search resolve to a membership write in one call rather than one gesture per product. Tag filtering is not offered — catalog carries no tag vocabulary yet (gap map row 4.7 stays BLOCKED on the same unanswered classification question).",
+        "operationId" : "addByFilter",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "menuId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BulkAddByFilterRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BulkAddByFilterResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add every active variant matching a category and/or search filter, in one command",
+        "tags" : [ "Named menus" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}/items/{variantId}" : {
+      "delete" : {
+        "description" : "Idempotent.",
+        "operationId" : "removeItem",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "menuId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove a variant from a menu",
+        "tags" : [ "Named menus" ]
+      },
+      "put" : {
+        "description" : "Never a second row for one (menu, variant) pair.",
+        "operationId" : "addItem",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "menuId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MenuItemRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add a variant to a menu, or re-sort/re-default it if already there",
+        "tags" : [ "Named menus" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/modifier-groups" : {
       "get" : {
         "description" : "Brand-wide, not catalog-scoped: a modifier group carries no catalog id and is shared across every catalog the brand has.",
@@ -15567,7 +16336,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows" : {
       "get" : {
         "description" : "Every version of every flow key, newest first. At most one version per flow key is ever active at once.",
-        "operationId" : "list_15",
+        "operationId" : "list_16",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -15791,7 +16560,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/locations" : {
       "post" : {
         "description" : "The middle rung of fee resolution: outranked by a zone's own tariff, and outranking the brand default.",
-        "operationId" : "bind_2",
+        "operationId" : "bind_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -17482,7 +18251,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/locations" : {
       "post" : {
         "description" : "A zone with no binding covers nothing. That is the safe direction: a half-configured zone is visibly inert rather than quietly serving the whole brand.",
-        "operationId" : "bind_1",
+        "operationId" : "bind_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18119,6 +18888,46 @@
         "tags" : [ "Provider integrations" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/integrations/branches/effective-bindings" : {
+      "get" : {
+        "description" : "For every location of the given brand: the installation that would actually handle each capability bound there, whether bound directly to the location or inherited from the brand's own default. A branch with no row for a capability has nothing bound at either scope.",
+        "operationId" : "effectiveBindings",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/EffectiveBindingView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The effective installation per branch, per capability (gap-map row 10.8a)",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/integrations/connect-fields" : {
       "get" : {
         "description" : "Static, code-owned catalogue: which fields a Click, Payme, or Telegram connect flow needs, and which of those must travel through the write-only secret door rather than as plain configuration. The control-plane app renders its connect form from this, so a new provider adapter costs a catalogue entry, not a new screen. Each declaration also carries the environments a tenant may actually choose for it (integration.provider_environments, platform-owned): the approved-catalogue join a connect form needs to offer a picker instead of a free-text field an operator has no way to guess.",
@@ -18230,7 +19039,7 @@
       },
       "post" : {
         "description" : "Created suspended. Activation is separate, so a binding cannot go live before someone has confirmed it points at the intended restaurant.",
-        "operationId" : "bind",
+        "operationId" : "bind_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21030,6 +21839,57 @@
         "tags" : [ "Sales channels" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/social-links" : {
+      "put" : {
+        "description" : "Whole set, never per-link -- the same discipline the payment-method, fulfilment-mode and location matrices already use. Key is the platform, a checked vocabulary (ADR 0036); value is the destination URL, https only. Entry order in the request body becomes display order.",
+        "operationId" : "replaceSocialLinks",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "additionalProperties" : {
+                  "type" : "string"
+                },
+                "type" : "object"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace the channel's social links",
+        "tags" : [ "Sales channels" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/sendpulse-imports" : {
       "post" : {
         "description" : "Parses the export and reports, per row, what it would do (or, when dryRun=false, what it did): a matched or newly created customer account, a bound Telegram chat, an imported consent decision — or a rejection with a reason. Idempotent: importing the same file twice writes nothing new for a row already imported.",
@@ -21135,7 +21995,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/statements" : {
       "get" : {
         "description" : "Newest month first, void ones included.",
-        "operationId" : "list_14",
+        "operationId" : "list_15",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -23872,6 +24732,9 @@
   }, {
     "description" : "Control-plane alerts raised from outside the Java process",
     "name" : "SaaS control plane"
+  }, {
+    "description" : "Row 4.4a — a copyable, bindable assortment",
+    "name" : "Named menus"
   }, {
     "description" : "The maker-checker queue: actions waiting for a second signature",
     "name" : "Approval requests"

@@ -1771,6 +1771,28 @@
         },
         "type" : "object"
       },
+      "BookedState" : {
+        "properties" : {
+          "abandoned" : {
+            "type" : "boolean"
+          },
+          "applied" : {
+            "type" : "boolean"
+          },
+          "planVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "shipmentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "BoundaryChangeResponse" : {
         "properties" : {
           "approvalRequestId" : {
@@ -2081,6 +2103,77 @@
           }
         },
         "required" : [ "expectedVersion", "orderId" ],
+        "type" : "object"
+      },
+      "BulkServiceStateItemResponse" : {
+        "properties" : {
+          "applied" : {
+            "type" : "boolean"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "problemCode" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "BulkServiceStateRequest" : {
+        "properties" : {
+          "effectiveUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "locationIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "mode" : {
+            "enum" : [ "FOLLOW_SCHEDULE", "FORCE_OPEN", "FORCE_CLOSED" ],
+            "type" : "string"
+          },
+          "note" : {
+            "maxLength" : 400,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "maxLength" : 48,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "locationIds", "mode" ],
+        "type" : "object"
+      },
+      "BulkServiceStateResponse" : {
+        "properties" : {
+          "appliedCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "failedCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BulkServiceStateItemResponse"
+            },
+            "type" : "array"
+          },
+          "requestedCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
         "type" : "object"
       },
       "BypassRequest" : {
@@ -4243,9 +4336,17 @@
             "enum" : [ "SMS", "EMAIL", "PUSH", "MESSAGING_APP", "TELEGRAM" ],
             "type" : "string"
           },
+          "channelSource" : {
+            "enum" : [ "WEB", "IOS", "ANDROID", "TELEGRAM", "KIOSK", "QR_TABLE", "CALL_CENTRE", "AGGREGATOR", "POS" ],
+            "type" : "string"
+          },
           "consentPurpose" : {
             "maxLength" : 64,
             "minLength" : 0,
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
+            "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
             "type" : "string"
           },
           "notificationClass" : {
@@ -4289,6 +4390,55 @@
           }
         },
         "required" : [ "code", "displayNameEn", "displayNameRu", "displayNameUz", "role" ],
+        "type" : "object"
+      },
+      "CrmLogListResponse" : {
+        "properties" : {
+          "maybeMore" : {
+            "type" : "boolean"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CrmLogRowResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "CrmLogRowResponse" : {
+        "properties" : {
+          "anonymized" : {
+            "type" : "boolean"
+          },
+          "courierDisplayReference" : {
+            "type" : "string"
+          },
+          "customerName" : {
+            "type" : "string"
+          },
+          "customerPhone" : {
+            "type" : "string"
+          },
+          "customerType" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "occurredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "operatorPrincipalId" : {
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "CurrencyTotalResponse" : {
@@ -5366,6 +5516,18 @@
         "required" : [ "reason" ],
         "type" : "object"
       },
+      "DistanceResponse" : {
+        "properties" : {
+          "averageMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          }
+        },
+        "type" : "object"
+      },
       "DownloadResponse" : {
         "properties" : {
           "url" : {
@@ -5684,6 +5846,38 @@
         },
         "type" : "object"
       },
+      "EffectiveBindingView" : {
+        "properties" : {
+          "bindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "capabilityCode" : {
+            "type" : "string"
+          },
+          "installationDisplayName" : {
+            "type" : "string"
+          },
+          "installationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationScoped" : {
+            "type" : "boolean"
+          },
+          "providerCategory" : {
+            "type" : "string"
+          },
+          "providerType" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "EligibilityResponse" : {
         "properties" : {
           "eligible" : {
@@ -5917,6 +6111,43 @@
           "shipmentId" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ExternalCourierRequest" : {
+        "properties" : {
+          "bindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "decision" : {
+            "enum" : [ "ACCEPT", "ABANDON" ],
+            "type" : "string"
+          },
+          "quoteId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "bindingId", "reasonCode" ],
+        "type" : "object"
+      },
+      "ExternalCourierResponse" : {
+        "properties" : {
+          "booked" : {
+            "$ref" : "#/components/schemas/BookedState"
+          },
+          "phase" : {
+            "type" : "string"
+          },
+          "quoted" : {
+            "$ref" : "#/components/schemas/QuotedState"
           }
         },
         "type" : "object"
@@ -7115,6 +7346,21 @@
         "required" : [ "byLocale" ],
         "type" : "object"
       },
+      "LocationChannelsResponse" : {
+        "properties" : {
+          "channelCodes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "LocationFiscalAssignmentView" : {
         "properties" : {
           "approvalReference" : {
@@ -7150,6 +7396,21 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "LocationLegalEntityResponse" : {
+        "properties" : {
+          "legalEntityCode" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "taxpayerNumber" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -10973,6 +11234,39 @@
         },
         "type" : "object"
       },
+      "QuotedState" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "customerDeliveryFeeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "deltaMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "failureCode" : {
+            "type" : "string"
+          },
+          "priceMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "priced" : {
+            "type" : "boolean"
+          },
+          "providerType" : {
+            "type" : "string"
+          },
+          "quoteId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "RateCardDetailResponse" : {
         "properties" : {
           "cardId" : {
@@ -12112,6 +12406,17 @@
             "minItems" : 1,
             "type" : "array"
           },
+          "from" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "locationId" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "purpose" : {
             "minLength" : 1,
             "type" : "string"
@@ -12124,6 +12429,10 @@
             "type" : "string"
           },
           "status" : {
+            "type" : "string"
+          },
+          "to" : {
+            "format" : "date-time",
             "type" : "string"
           }
         },
@@ -14752,7 +15061,13 @@
           "channel" : {
             "type" : "string"
           },
+          "channelSource" : {
+            "type" : "string"
+          },
           "consentPurpose" : {
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
             "type" : "string"
           },
           "id" : {
@@ -18091,6 +18406,84 @@
         "tags" : [ "Operations brand profile" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/channels" : {
+      "get" : {
+        "operationId" : "locationChannels",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/LocationChannelsResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every location's own active sales-channel codes, batched, for the branch list's channel filter",
+        "tags" : [ "Operations brand profile" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/legal-entities" : {
+      "get" : {
+        "operationId" : "locationLegalEntities",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/LocationLegalEntityResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every location's own assigned legal entity, batched, for the branch list's INN filter",
+        "tags" : [ "Operations brand profile" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/service-states" : {
       "get" : {
         "operationId" : "locationServiceStates",
@@ -18127,6 +18520,51 @@
           }
         },
         "summary" : "Every location's manual-override state, batched, for the branch list's state column and filter",
+        "tags" : [ "Operations brand profile" ]
+      },
+      "post" : {
+        "description" : "Settings 10.2a's bulk close/open bar. N independent writes, never one all-or-nothing transaction: each location is applied through the same single-location write a lone request would use, so one location already in the target mode cannot fail the rest of the selection. Always 200 with a per-location outcome list, capped at 200 locations.",
+        "operationId" : "bulkChangeServiceState",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BulkServiceStateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BulkServiceStateResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Close, force open, or return several locations to schedule at once",
         "tags" : [ "Operations brand profile" ]
       }
     },
@@ -18878,6 +19316,69 @@
           }
         },
         "summary" : "This order's delivery plan, current shipment and both money figures",
+        "tags" : [ "Order delivery" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/external-courier" : {
+      "post" : {
+        "description" : "One order-keyed action over the Millenium pattern's own quote/accept services (ManualExternalBookingService, gap map row 1.2f), so the order detail pane and the KDS pass share one path instead of each resolving planId a different way. Omit quoteId to price one partner (phase QUOTED); once QUOTED, call again with that quoteId and a decision to accept or abandon it (phase BOOKED). The price booked is always the one fulfillment.delivery_quotes recorded under quoteId, never a figure this request carries.",
+        "operationId" : "externalCourier",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExternalCourierRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExternalCourierResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request an external courier for this order (gap map rows 1.2e/2.1c)",
         "tags" : [ "Order delivery" ]
       }
     },
@@ -23241,6 +23742,45 @@
           }
         },
         "summary" : "Install a provider",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/integrations/branches/effective-bindings" : {
+      "get" : {
+        "operationId" : "effectiveBindings",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/EffectiveBindingView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The effective installation per branch, per capability (gap-map row 10.8a)",
         "tags" : [ "Provider integrations" ]
       }
     },
@@ -30075,7 +30615,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/board" : {
       "get" : {
-        "description" : "orders.md §2.4 (ADR 0102): the board's filter set, every predicate applied in the database rather than in the browser. An empty status filter returns everything rather than silently hiding the closed ones, because a branch reconciling a shift needs the orders that are over as much as the ones that are live. `reference` narrows this branch's orders by the order's own number or by an aggregator's or a POS's identifier (ADR 0040), normalised so `0911-142`, `0911 142` and `#0911142` are one query — it is a filter, not the tenant-wide search of orders.md §2.8, which needs an endpoint at its own scope: nothing here reaches past this location. It is not a phone lookup either: a phone number goes in a POST body, never a query string (orders.md §2.8, ADR 0029). Keyset-paginated (ADR 0031): pass the previous page's `nextCursor` back as `cursor`. Changing a filter invalidates the cursor — start the list again — because a window cut for one filter set says nothing about another.",
+        "description" : "orders.md §2.4 (ADR 0102): the board's filter set, every predicate applied in the database rather than in the browser. An empty status filter returns everything rather than silently hiding the closed ones, because a branch reconciling a shift needs the orders that are over as much as the ones that are live. `reference` narrows this branch's orders by the order's own number or by an aggregator's or a POS's identifier (ADR 0040), normalised so `0911-142`, `0911 142` and `#0911142` are one query — it is a filter, not the tenant-wide search of orders.md §2.8, which needs an endpoint at its own scope: nothing here reaches past this location. It is not a phone lookup either: a phone number goes in a POST body, never a query string (orders.md §2.8, ADR 0029). `origin` narrows to how the order arrived — `HORECAOS` for the tenant's own channels or `MARKETPLACE` for anything recorded under an aggregator's own binding (ADR 0040, wave 9 row `1.1c`) — the coarse «Источник» toggle orders.md §2.4 names; picking one specific aggregator binding when a tenant runs several is not yet a filter here. Keyset-paginated (ADR 0031): pass the previous page's `nextCursor` back as `cursor`. Changing a filter invalidates the cursor — start the list again — because a window cut for one filter set says nothing about another.",
         "operationId" : "board",
         "parameters" : [ {
           "in" : "path",
@@ -30166,6 +30706,13 @@
         }, {
           "in" : "query",
           "name" : "reference",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "origin",
           "required" : false,
           "schema" : {
             "type" : "string"
@@ -36577,6 +37124,86 @@
         "tags" : [ "Order lookup" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/orders/crm-log" : {
+      "get" : {
+        "description" : "Never reads reporting.fact_order and is never read by it (ADR 0029's SubjectPseudonym exists precisely to stop that link). The customer's name renders in full and the phone masked, the same ordinary-read rule orders.md §1.5 states for the order board and detail screens — pass the same afterOccurredAt/afterOrderId pair GET .../reporting/orders's own response carries to page both reads together.",
+        "operationId" : "log",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "afterOccurredAt",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "afterOrderId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CrmLogListResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Customer, operator and courier for orders in range — the console log's CRM half (7.2a)",
+        "tags" : [ "Order CRM log" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/reporting/cancellation-reasons" : {
       "get" : {
         "description" : "Resolves a CANCELLED order's cancellationReasonCode (order_outcome_reasons.id, as a string) to the internal_name an operator actually picked, so the funnel's cancellation panel prints a name rather than a UUID. REJECTED/EXPIRED reason codes name a different, platform-fixed registry this does not cover.",
@@ -37093,6 +37720,62 @@
           }
         },
         "summary" : "7.6b: the Recency x Frequency cross-tab, member counts and revenue per cell",
+        "tags" : [ "Reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/delivery-distance" : {
+      "get" : {
+        "description" : "delivery_distance.average.v1 — the mean of reporting.fact_order.delivery_distance_meters over delivery orders closed in range. Null when nothing in range resolved a distance, which is not a zero-metre delivery.",
+        "operationId" : "deliveryDistance",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DistanceResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Mean resolved delivery distance for the overview's distance tile (7.1)",
         "tags" : [ "Reporting" ]
       }
     },
@@ -38436,6 +39119,9 @@
   }, {
     "description" : "The order-keyed read of one order's delivery plan, shipment and money",
     "name" : "Order delivery"
+  }, {
+    "description" : "7.2a: customer, operator and courier for the console order log",
+    "name" : "Order CRM log"
   }, {
     "description" : "One customer's own orders, as staff may read them",
     "name" : "Customer order history"
