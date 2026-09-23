@@ -1,11 +1,15 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
+import { MediaUploader } from '../../../shared/ui/media-uploader';
+import { MediaApi, MediaAssetView } from '../../catalog/media-api';
 import { BrandProfileApi, BrandView } from './brand-profile-api';
 import { BrandProfilePage } from './brand-profile-page';
 
@@ -24,6 +28,12 @@ const BRAND: BrandView = {
   bannerAssetId: null,
   locales: [{ locale: 'ru', description: 'Ресторан', isDefault: true }],
   version: 3,
+};
+
+const BRAND_WITH_MEDIA: BrandView = {
+  ...BRAND,
+  logoAssetId: 'asset-logo-1',
+  bannerAssetId: 'asset-banner-1',
 };
 
 class FakeCurrentLocation {
@@ -54,10 +64,15 @@ describe('BrandProfilePage', () => {
     reviseBrand: ReturnType<typeof vi.fn>;
     updateProfile: ReturnType<typeof vi.fn>;
   };
+  let mediaApi: {
+    upload: ReturnType<typeof vi.fn>;
+    downloadUrl: ReturnType<typeof vi.fn>;
+  };
 
   async function render(
     overrides: Partial<typeof api> = {},
     location: FakeCurrentLocation = new FakeCurrentLocation(),
+    mediaOverrides: Partial<typeof mediaApi> = {},
   ) {
     api = {
       getBrand: vi.fn().mockResolvedValue(BRAND),
@@ -65,10 +80,17 @@ describe('BrandProfilePage', () => {
       updateProfile: vi.fn(),
       ...overrides,
     };
+    mediaApi = {
+      // No asset by default; individual tests set a downloadUrl per id.
+      downloadUrl: vi.fn().mockReturnValue(throwError(() => new Error('no such asset'))),
+      upload: vi.fn(),
+      ...mediaOverrides,
+    };
     await TestBed.configureTestingModule({
       imports: [BrandProfilePage],
       providers: [
         { provide: BrandProfileApi, useValue: api },
+        { provide: MediaApi, useValue: mediaApi },
         { provide: CurrentLocation, useValue: location },
       ],
     }).compileComponents();
@@ -78,6 +100,21 @@ describe('BrandProfilePage', () => {
     await flushMicrotasks();
     fixture.detectChanges();
     return fixture;
+  }
+
+  function emitFromUploader(testId: string, event: 'cropped' | 'selected', file: File): void {
+    const uploaders = fixture.debugElement.queryAll(By.directive(MediaUploader));
+    const match = uploaders.find(
+      (debugEl) => (debugEl.nativeElement as HTMLElement).getAttribute('data-testid') === testId,
+    );
+    if (!match) {
+      throw new Error(`No q-media-uploader with data-testid="${testId}"`);
+    }
+    (match.componentInstance as MediaUploader)[event].emit(file);
+  }
+
+  function asset(assetId: string): MediaAssetView {
+    return { assetId, status: 'AVAILABLE' };
   }
 
   it('renders the brand fields the operations surface returns', async () => {
@@ -196,5 +233,118 @@ describe('BrandProfilePage', () => {
         locales: [{ locale: 'uz-Latn', description: undefined, isDefault: true }],
       }),
     );
+  });
+
+  // -------------------------------------------------------- 10.1 / X.12 media
+
+  it('shows the current logo and banner as thumbnails, not a raw asset id (row 10.1)', async () => {
+    const downloadUrl = vi.fn().mockImplementation((_tenantId: string, assetId: string) =>
+      of(`https://cdn.example/${assetId}.jpg`),
+    );
+    await render({ getBrand: vi.fn().mockResolvedValue(BRAND_WITH_MEDIA) }, new FakeCurrentLocation(), {
+      downloadUrl,
+    });
+
+    expect(downloadUrl).toHaveBeenCalledWith('tenant-1', 'asset-logo-1', 'THUMBNAIL');
+    expect(downloadUrl).toHaveBeenCalledWith('tenant-1', 'asset-banner-1', 'THUMBNAIL');
+
+    const logo = fixture.nativeElement.querySelector(
+      '[data-testid="brand-logo-preview"]',
+    ) as HTMLImageElement;
+    const banner = fixture.nativeElement.querySelector(
+      '[data-testid="brand-banner-preview"]',
+    ) as HTMLImageElement;
+    expect(logo.src).toBe('https://cdn.example/asset-logo-1.jpg');
+    expect(banner.src).toBe('https://cdn.example/asset-banner-1.jpg');
+
+    // No raw UUID text anywhere on the page -- the gap row 10.1/X.12 close.
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('asset-logo-1');
+  });
+
+  it('renders no thumbnail, not a broken image, when no logo/banner is set yet', async () => {
+    await render();
+    expect(fixture.nativeElement.querySelector('[data-testid="brand-logo-preview"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="brand-banner-preview"]')).toBeNull();
+  });
+
+  it('uploads a cropped logo through the real q-media-uploader and writes the returned asset id on save (row 10.1/X.12)', async () => {
+    const upload = vi.fn().mockReturnValue(of(asset('asset-new-logo')));
+    await render(
+      { updateProfile: vi.fn().mockResolvedValue({ ...BRAND, logoAssetId: 'asset-new-logo' }) },
+      new FakeCurrentLocation(),
+      { upload },
+    );
+
+    const profileBlock = fixture.nativeElement.querySelectorAll('.block')[1] as HTMLElement;
+    (profileBlock.querySelector('.primary') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const file = new File(['x'], 'logo.jpg', { type: 'image/jpeg' });
+    emitFromUploader('brand-logo-uploader', 'cropped', file);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(upload).toHaveBeenCalledWith('tenant-1', 'BRAND', 'brand-1', 'PUBLIC', file);
+    // The upload writes the draft immediately -- visible as a preview -- and
+    // the draft is what saveProfile actually sends.
+    expect(
+      (fixture.nativeElement.querySelector('[data-testid="brand-logo-preview"]') as HTMLImageElement)
+        .src,
+    ).toMatch(/^blob:/);
+
+    findButton(profileBlock, 'Save').click();
+    await flushMicrotasks();
+
+    expect(api.updateProfile).toHaveBeenCalledWith(
+      SCOPE,
+      expect.objectContaining({ logoAssetId: 'asset-new-logo' }),
+    );
+  });
+
+  it('uploads a banner through its own uploader independently of the logo', async () => {
+    const upload = vi.fn().mockReturnValue(of(asset('asset-new-banner')));
+    await render(
+      { updateProfile: vi.fn().mockResolvedValue({ ...BRAND, bannerAssetId: 'asset-new-banner' }) },
+      new FakeCurrentLocation(),
+      { upload },
+    );
+
+    const profileBlock = fixture.nativeElement.querySelectorAll('.block')[1] as HTMLElement;
+    (profileBlock.querySelector('.primary') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const file = new File(['x'], 'banner.jpg', { type: 'image/jpeg' });
+    emitFromUploader('brand-banner-uploader', 'cropped', file);
+    await flushMicrotasks();
+
+    expect(upload).toHaveBeenCalledWith('tenant-1', 'BRAND', 'brand-1', 'PUBLIC', file);
+
+    findButton(profileBlock, 'Save').click();
+    await flushMicrotasks();
+
+    expect(api.updateProfile).toHaveBeenCalledWith(
+      SCOPE,
+      expect.objectContaining({ bannerAssetId: 'asset-new-banner' }),
+    );
+  });
+
+  it('surfaces a legible error when the uploader rejects a file client-side, never a network call', async () => {
+    const upload = vi.fn();
+    await render({}, new FakeCurrentLocation(), { upload });
+
+    const profileBlock = fixture.nativeElement.querySelectorAll('.block')[1] as HTMLElement;
+    (profileBlock.querySelector('.primary') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const uploaders = fixture.debugElement.queryAll(By.directive(MediaUploader));
+    const logoUploader = uploaders.find(
+      (debugEl) =>
+        (debugEl.nativeElement as HTMLElement).getAttribute('data-testid') === 'brand-logo-uploader',
+    )!;
+    (logoUploader.componentInstance as MediaUploader).rejected.emit('tooLarge');
+    fixture.detectChanges();
+
+    expect(upload).not.toHaveBeenCalled();
+    expect(profileBlock.querySelector('[role="alert"]')?.textContent).toContain('larger');
   });
 });
