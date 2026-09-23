@@ -110,8 +110,10 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  * .requestExternalCourierQuote`/`decideExternalCourier`
  * (`OrderDeliveryController.externalCourier`), the order-keyed path both
  * screens now share instead of each resolving `planId` its own way; the
- * winning shipment's `sourceType`/status renders on the ticket the same
- * on-demand way the in-house assignment state already does.
+ * winning shipment's `sourceType`/status renders on every visible delivery
+ * ticket from the same 10-second poll that loads the board itself
+ * ({@link refreshShipmentStates}), not only once an operator happens to open
+ * a picker for that one ticket.
  *
  * **Not built, honestly**: preset product comments (no backend vocabulary
  * exists at all — see the wave's report); change payment type from the
@@ -176,8 +178,10 @@ export class KitchenQueuePage implements OnInit {
   protected readonly assigningTicketId = signal<string | null>(null);
   /**
    * The last-resolved shipment for a ticket, keyed by `ticketId` (gap map
-   * rows 1.2e/2.1c) — populated by {@link resolvePlanForTicket} regardless of
-   * which picker resolved it, so «Вызвать курьера»'s own PARTNER state stays
+   * rows 1.2e/2.1c) — kept current for every visible delivery ticket by
+   * {@link refreshShipmentStates} on each board poll, and also written by
+   * {@link resolvePlanForTicket} whenever a picker/dialog resolves one
+   * ticket's plan directly, so «Вызвать курьера»'s own PARTNER state stays
    * visible on the ticket row after the operator closes the dialog, rather
    * than only while it happens to be open.
    */
@@ -259,6 +263,7 @@ export class KitchenQueuePage implements OnInit {
       this.wiringWarning.set(board.warnings.length > 0);
       this.denied.set(false);
       this.lastError.set(null);
+      await this.refreshShipmentStates(scope, board.tickets);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);
@@ -637,6 +642,42 @@ export class KitchenQueuePage implements OnInit {
 
   protected isAssigning(ticket: TicketResponse): boolean {
     return this.assigningTicketId() === ticket.ticketId;
+  }
+
+  /**
+   * Refreshes {@link shipmentByTicketId} for every visible delivery ticket
+   * on each board poll, from the same branch-wide dispatch queue read
+   * {@link resolvePlanForTicket} makes for one ticket at a time. Without
+   * this, a PARTNER shipment another operator assigned from the order
+   * detail pane (row 1.2e) stayed invisible on this pass — still offering
+   * «Вызвать курьера» with no "assigned" badge — until someone happened to
+   * open a picker for that exact ticket (gap map rows 1.2e/2.1c's own
+   * finding: the button/badge must reflect real state without requiring a
+   * click first).
+   */
+  private async refreshShipmentStates(
+    scope: LocationScope,
+    tickets: readonly TicketResponse[],
+  ): Promise<void> {
+    const deliveryTickets = tickets.filter((ticket) => ticket.fulfilmentMode === 'DELIVERY');
+    if (deliveryTickets.length === 0) {
+      return;
+    }
+    try {
+      const queue = await this.dispatchApi.queue(scope);
+      const shipmentByOrderId = new Map(queue.map((plan) => [plan.orderId, plan.shipment ?? null]));
+      this.shipmentByTicketId.update((byTicket) => {
+        const next = new Map(byTicket);
+        for (const ticket of deliveryTickets) {
+          next.set(ticket.ticketId, shipmentByOrderId.get(ticket.orderId) ?? null);
+        }
+        return next;
+      });
+    } catch {
+      // Best-effort, same rule as `start()`'s other reads -- the button/badge
+      // simply keep their last-known state if this poll's dispatch-queue read
+      // fails; the next poll tries again.
+    }
   }
 
   /**

@@ -132,6 +132,10 @@ class OrderDeliveryExternalCourierHttpTests {
         fakeBookings.options = List.of(new ShipmentBookingPort.PartnerOption(BINDING, "FAKE_PROVIDER", true, true));
         fakeBookings.quoteOutcome = ShipmentBookingPort.QuoteOutcome.priced(12_000L, "UZS", 300, 900, 3_000, 200);
         fakeBookings.bookStatus = ShipmentBookingPort.BookingStatus.BOOKED;
+        // The Spring context (and this @Primary bean) is shared across every test in this
+        // class, so a `booked` assertion in one test would otherwise see bookings a
+        // differently-ordered earlier test already recorded.
+        fakeBookings.booked.clear();
     }
 
     @Test
@@ -153,6 +157,54 @@ class OrderDeliveryExternalCourierHttpTests {
                 .contains("\"phase\":\"QUOTED\"")
                 .contains("\"priced\":true")
                 .contains("\"priceMinor\":12000");
+        assertThat(fakeBookings.booked).isEmpty();
+    }
+
+    @Test
+    @DisplayName("prices one partner without reasonCode -- the exact body every real frontend caller sends "
+            + "for the QUOTE phase (OrderDeliveryApi.requestExternalCourierQuote never carries one)")
+    void quotesWithoutReasonCode() throws Exception {
+        UUID orderId = seedDeliveryOrder();
+        seedDeliveryPlan(orderId);
+
+        MvcResult result = mvc.perform(post(externalCourierPath(orderId))
+                        .with(tokenFor(DISPATCHER))
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bindingId\":\"" + BINDING + "\"}"))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getContentAsString())
+                .contains("\"phase\":\"QUOTED\"")
+                .contains("\"priced\":true");
+    }
+
+    @Test
+    @DisplayName(
+            "BOOK phase still requires reasonCode -- omitting it once quoteId is set is refused, not silently applied")
+    void bookingWithoutReasonCodeIsRefused() throws Exception {
+        UUID orderId = seedDeliveryOrder();
+        seedDeliveryPlan(orderId);
+
+        MvcResult quoted = mvc.perform(post(externalCourierPath(orderId))
+                        .with(tokenFor(DISPATCHER))
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bindingId\":\"" + BINDING + "\"}"))
+                .andReturn();
+        String quoteId = extractQuoteId(quoted.getResponse().getContentAsString());
+
+        MvcResult booked = mvc.perform(post(externalCourierPath(orderId))
+                        .with(tokenFor(DISPATCHER))
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bindingId\":\"" + BINDING + "\",\"quoteId\":\"" + quoteId
+                                + "\",\"decision\":\"ACCEPT\"}"))
+                .andReturn();
+
+        assertThat(booked.getResponse().getStatus()).isEqualTo(400);
+        assertThat(booked.getResponse().getContentAsString()).contains("VALIDATION_FAILED");
         assertThat(fakeBookings.booked).isEmpty();
     }
 

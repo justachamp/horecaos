@@ -3,7 +3,6 @@ package uz.horecaos.platform.fulfillment.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
@@ -159,6 +158,9 @@ public class OrderDeliveryController {
             if (body.decision() == null) {
                 throw new ApiException(ErrorCode.VALIDATION_FAILED, "decision is required once quoteId is set");
             }
+            if (body.reasonCode() == null || body.reasonCode().isBlank()) {
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, "reasonCode is required once quoteId is set");
+            }
             BookOutcome outcome = externalBooking.book(
                     tenantId,
                     brandId,
@@ -181,11 +183,21 @@ public class OrderDeliveryController {
 
     // --------------------------------------------------------------- payloads
 
+    /**
+     * {@code reasonCode} is required only once {@code quoteId} is set (the
+     * BOOK phase) -- validated in the controller body, not by {@code
+     * @NotBlank} here, because the QUOTE phase (no {@code quoteId}) is priced
+     * before any reason for booking exists, and every real frontend caller
+     * (the order detail pane and the KDS pass, via {@code
+     * OrderDeliveryApi.requestExternalCourierQuote}) omits it on that call.
+     * Mirrors {@code DispatchController}'s own split
+     * {@code ExternalQuoteRequest}/{@code ExternalBookRequest}.
+     */
     public record ExternalCourierRequest(
             @NotNull UUID bindingId,
             @Nullable UUID quoteId,
             @Nullable Decision decision,
-            @NotBlank @Size(max = 64) String reasonCode) {}
+            @Nullable @Size(max = 64) String reasonCode) {}
 
     /**
      * @param phase  {@code QUOTED} when this call priced a partner; {@code

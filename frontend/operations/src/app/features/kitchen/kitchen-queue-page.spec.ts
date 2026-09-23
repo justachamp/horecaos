@@ -575,7 +575,7 @@ describe('KitchenQueuePage', () => {
     expect(host.querySelector('[data-testid="external-courier-dialog"]')).toBeNull();
   });
 
-  it('renders the external partner state on the ticket once the plan resolves a PARTNER shipment, and hides the call-external-courier button', async () => {
+  it('renders the external partner state on the ticket from the same poll that loads the board, before any picker is ever opened', async () => {
     dispatchQueue = vi.fn(() =>
       Promise.resolve<readonly PlanQueueResponse[]>([
         {
@@ -644,23 +644,103 @@ describe('KitchenQueuePage', () => {
     fixture.detectChanges();
 
     const host = fixture.nativeElement as HTMLElement;
-    expect(host.querySelector('[data-testid="kitchen-external-courier-state"]')).toBeNull();
 
-    // Nothing resolves the plan eagerly (P16's own "no orderId-keyed board
-    // join" limitation) -- opening the in-house picker once is what learns
-    // the ticket's plan, the same seam `resolvePlanForTicket` shares.
-    const assignButton = host.querySelector(
-      '[data-testid="kitchen-assign-courier"]',
-    ) as HTMLButtonElement;
-    assignButton.click();
-    fixture.detectChanges();
-    await flushMicrotasks();
-    fixture.detectChanges();
-
+    // `refreshShipmentStates` joins the same branch-wide dispatch queue this
+    // fixture's `dispatchQueue` returns against the board's own tickets, on
+    // the very refresh that loaded them -- no picker was ever opened here.
+    expect(dispatchQueue).toHaveBeenCalledWith(SCOPE);
     const state = host.querySelector('[data-testid="kitchen-external-courier-state"]');
     expect(state).not.toBeNull();
     expect(state?.textContent).toContain('External partner assigned');
     expect(host.querySelector('[data-testid="kitchen-external-courier"]')).toBeNull();
+  });
+
+  it('picks up a shipment another operator assigned meanwhile on the next 10-second poll, without any picker being opened', async () => {
+    vi.useFakeTimers();
+    try {
+      dispatchQueue = vi.fn(() => Promise.resolve<readonly PlanQueueResponse[]>([]));
+
+      await TestBed.configureTestingModule({
+        imports: [KitchenQueuePage],
+        providers: [
+          {
+            provide: CurrentLocation,
+            useValue: {
+              scope: signal<LocationScope | null>(SCOPE),
+              denied: signal(false),
+              ensureLoaded: () => Promise.resolve(),
+            },
+          },
+          {
+            provide: KitchenApi,
+            useValue: {
+              board: () => Promise.resolve(board([DELIVERY_TICKET])),
+              stations: () => Promise.resolve([]),
+            },
+          },
+          {
+            provide: LocationsApi,
+            useValue: { serviceSummary: () => Promise.reject(new Error('n/a')) },
+          },
+          {
+            provide: ApiClient,
+            useValue: { get: () => of({ value: { lines: [], kitchenNote: null }, version: null }) },
+          },
+          { provide: OrderRevealApi, useValue: { revealLineNote: vi.fn() } },
+          {
+            provide: DispatchApi,
+            useValue: { queue: dispatchQueue, assign: dispatchAssign, externalPartners: vi.fn() },
+          },
+          {
+            provide: OrderDeliveryApi,
+            useValue: { requestExternalCourierQuote: vi.fn(), decideExternalCourier: vi.fn() },
+          },
+          { provide: CouriersApi, useValue: { roster } },
+          { provide: Router, useValue: { navigateByUrl } },
+        ],
+      }).compileComponents();
+      TestBed.inject(I18n).setLocale('en');
+      fixture = TestBed.createComponent(KitchenQueuePage);
+      fixture.detectChanges();
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="kitchen-external-courier-state"]')).toBeNull();
+      expect(host.querySelector('[data-testid="kitchen-external-courier"]')).not.toBeNull();
+
+      // Another operator assigned a PARTNER courier from the order detail
+      // pane meanwhile -- the dispatch queue now carries it.
+      dispatchQueue.mockResolvedValue([
+        {
+          planId: 'plan-1',
+          orderId: 'order-1',
+          status: 'ASSIGNED',
+          customerDeliveryFeeMinor: 15_000,
+          currency: 'UZS',
+          sourceAt: new Date().toISOString(),
+          estimatedReadyAt: new Date().toISOString(),
+          version: 4,
+          shipment: {
+            shipmentId: 'shipment-1',
+            status: 'ASSIGNED',
+            sourceType: 'PARTNER',
+            providerBindingId: 'binding-1',
+            version: 1,
+          },
+        },
+      ]);
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      fixture.detectChanges();
+
+      const state = host.querySelector('[data-testid="kitchen-external-courier-state"]');
+      expect(state).not.toBeNull();
+      expect(state?.textContent).toContain('External partner assigned');
+      expect(host.querySelector('[data-testid="kitchen-external-courier"]')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // ------------------------------------------------------- P16: counter sale
