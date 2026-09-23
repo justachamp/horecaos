@@ -38,6 +38,7 @@ import uz.horecaos.platform.catalog.domain.FiscalClassification.MarkingScheme;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.support.CommercialDefaults;
@@ -144,7 +145,9 @@ class CatalogPublicationTests {
         // renders unpriced. That is the honest shape for a catalog test: what a
         // dish costs is ADR 0018's question and is asserted in the pricing suite.
         storefront = new StorefrontCatalogQuery(
-                store, (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.empty());
+                store,
+                (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.empty(),
+                new JdbcMenuStore(jdbc));
     }
 
     @Test

@@ -21,6 +21,7 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.catalog.api.MenuPriceLookup;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -92,7 +93,7 @@ class ChannelOfferingExclusionsReaderTests {
         catalogStore = new JdbcCatalogStore(jdbc, objectMapper);
         MenuPriceLookup noPrices =
                 (tenantId, brandId, locationId, channelCode, variantIds, optionIds) -> Optional.empty();
-        menu = new StorefrontCatalogQuery(catalogStore, noPrices);
+        menu = new StorefrontCatalogQuery(catalogStore, noPrices, new JdbcMenuStore(jdbc));
 
         seedTenancy();
         variant1 = seedProductAndVariant("BURGER");
