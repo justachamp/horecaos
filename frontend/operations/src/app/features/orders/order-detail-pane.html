@@ -787,6 +787,17 @@
               >
                 {{ 'orders.detail.courier.unassign' | t }}
               </button>
+            } @else if (plan.shipment?.sourceType === 'PARTNER') {
+              <!-- The provider's own booking state (gap map rows 1.2e/2.1c) --
+                   an external partner carries no `courierId` of its own, so
+                   this branch is what keeps the panel from claiming "none"
+                   once «Вызвать курьера» has actually won the shipment. -->
+              <p class="q-body-sm" data-testid="order-detail-courier-external">
+                {{
+                  'orders.detail.courier.external'
+                    | t: { status: shipmentStatusLabel(plan.shipment!.status) }
+                }}
+              </p>
             } @else {
               <p class="q-body-sm">{{ 'orders.detail.courier.none' | t }}</p>
             }

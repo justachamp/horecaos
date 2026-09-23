@@ -154,6 +154,35 @@
                   </button>
                 </div>
               }
+
+              <!-- «Вызвать курьера» (gap map row 2.1c) -- the external partner
+                   sibling of the in-house picker above, over the same
+                   order-keyed path `order-detail-pane.ts` uses for row 1.2e.
+                   Same rule as that pane's own button: offered only while
+                   {@link resolvePlanForTicket} has not (yet) found this
+                   ticket already carrying a shipment of either kind. -->
+              @if (!shipmentByTicketId().get(ticket.ticketId)) {
+                <button
+                  type="button"
+                  class="ticket__assign-toggle"
+                  [disabled]="isExternalCourierOpen(ticket)"
+                  (click)="openExternalCourierDialog(ticket)"
+                  data-testid="kitchen-external-courier"
+                >
+                  {{ 'kitchen.assign.externalButton' | t }}
+                </button>
+                @if (isExternalCourierOpen(ticket) && externalCourierPlan() === undefined) {
+                  <span class="q-caption">{{ 'kitchen.assign.loading' | t }}</span>
+                } @else if (isExternalCourierOpen(ticket) && externalCourierPlan() === null) {
+                  <span class="q-caption">{{ 'kitchen.assign.noPlan' | t }}</span>
+                }
+              }
+
+              @if (shipmentByTicketId().get(ticket.ticketId)?.sourceType === 'PARTNER') {
+                <span class="q-caption" data-testid="kitchen-external-courier-state">
+                  {{ 'kitchen.assign.externalAssigned' | t }}
+                </span>
+              }
             </div>
           }
 
@@ -236,4 +265,19 @@
       }
     }
   </div>
+
+  <!-- «Вызвать курьера» (gap map row 2.1c) -- the same dialog component
+       `order-detail-pane.ts` renders for row 1.2e, over the order-keyed
+       `OrderDeliveryApi.requestExternalCourierQuote`/`decideExternalCourier`. -->
+  @if (externalCourierTicketId() && externalCourierPlan()) {
+    <q-external-courier-dialog
+      [partners]="externalPartners()"
+      [quote]="externalQuote()"
+      [busy]="externalCourierBusy()"
+      (quoteRequested)="requestExternalQuote($event)"
+      (accepted)="acceptExternalBooking($event)"
+      (abandoned)="abandonExternalBooking($event)"
+      (dismiss)="closeExternalCourierDialog()"
+    />
+  }
 </div>
