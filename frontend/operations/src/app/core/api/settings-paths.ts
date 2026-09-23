@@ -109,6 +109,35 @@ export const settingsPaths = {
     return `${this.locations(scope)}/service-states`;
   },
 
+  /**
+   * `OperationsBrandController.bulkChangeServiceState`, wave 9 — the same
+   * batched-read path as {@link locationsServiceStates}, `POST`ed to instead
+   * of `GET`: the branch list's bulk close/open bar over several locations
+   * at once, reusing the single-location write's own request shape.
+   */
+  locationsServiceStatesBulk(scope: LocationScope): string {
+    return this.locationsServiceStates(scope);
+  },
+
+  /**
+   * `OperationsBrandController.locationLegalEntities`, wave 9 — every
+   * location's own assigned legal entity, batched, for the branch list's INN
+   * filter. The same batched-over-a-brand shape {@link locationsServiceStates}
+   * already uses for the state column.
+   */
+  locationsLegalEntities(scope: LocationScope): string {
+    return `${this.locations(scope)}/legal-entities`;
+  },
+
+  /**
+   * `OperationsBrandController.locationChannels`, wave 9 — every location's
+   * own active sales-channel codes, batched, for the branch list's channel
+   * filter.
+   */
+  locationsChannels(scope: LocationScope): string {
+    return `${this.locations(scope)}/channels`;
+  },
+
   /** `LocationServiceOperationsController.profile` — one branch's own fields. */
   location(scope: LocationScope): string {
     return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/locations/${enc(scope.locationId)}`;

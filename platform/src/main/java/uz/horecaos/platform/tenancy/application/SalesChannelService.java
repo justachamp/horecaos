@@ -112,6 +112,18 @@ public class SalesChannelService {
                 .toList();
     }
 
+    /**
+     * Every active location's own set of active channel codes, batched over a
+     * whole brand (Settings 10.2a branch list's channel filter) — a thin
+     * passthrough to {@link JdbcSalesChannelStore#activeChannelCodesByLocation},
+     * the same shape {@link ServiceScheduleService}'s own reads section uses
+     * for {@code statesForBrand}.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, List<String>> activeChannelCodesByLocation(UUID tenantId, UUID brandId) {
+        return store.activeChannelCodesByLocation(tenantId, brandId);
+    }
+
     @Transactional(readOnly = true)
     public SalesChannel require(UUID tenantId, UUID channelId) {
         return store.byId(tenantId, channelId)

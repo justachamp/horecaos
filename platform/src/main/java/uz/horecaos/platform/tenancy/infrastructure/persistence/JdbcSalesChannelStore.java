@@ -190,6 +190,35 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
     }
 
     /**
+     * Every active location's own set of active channel codes, batched over a
+     * whole brand (Settings 10.2a branch list's channel filter) — the same
+     * batched-over-a-brand shape {@code ServiceScheduleService#statesForBrand}
+     * already uses for the branch list's state column, so the channel filter
+     * does not call {@link #locations} once per channel per row.
+     */
+    public Map<UUID, List<String>> activeChannelCodesByLocation(UUID tenantId, UUID brandId) {
+        Map<UUID, List<String>> codes = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT scl.location_id, sc.code
+                  FROM tenant.sales_channel_locations scl
+                  JOIN tenant.sales_channels sc
+                    ON sc.tenant_id = scl.tenant_id AND sc.id = scl.channel_id
+                  JOIN tenant.locations l
+                    ON l.tenant_id = scl.tenant_id AND l.id = scl.location_id
+                 WHERE scl.tenant_id = :tenantId AND l.brand_id = :brandId
+                   AND scl.status = 'ACTIVE' AND sc.status = 'ACTIVE'
+                 ORDER BY scl.location_id, sc.code
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> Map.entry(row.getObject("location_id", UUID.class), row.getString("code")))
+                .list()
+                .forEach(entry -> codes.computeIfAbsent(entry.getKey(), key -> new ArrayList<>())
+                        .add(entry.getValue()));
+        return codes;
+    }
+
+    /**
      * Moves a channel to a new status, bumping its version.
      *
      * <p>There is no delete. Every order carries its channel forever, and a

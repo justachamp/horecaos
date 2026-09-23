@@ -156,6 +156,74 @@ class OperationsBrandControllerEndpointTests {
                 .isEqualTo(200);
     }
 
+    /**
+     * Wave 9, gap map row {@code 10.2a}: {@code locationLegalEntities} batches
+     * {@code LegalEntityDirectory#sellersForBrand} the same way {@code
+     * locationServiceStates} above already batches the service-state read, for
+     * the branch list's INN filter.
+     */
+    @Test
+    void locationLegalEntitiesBatchesEveryLocationsOwnAssignedEntity() throws Exception {
+        UUID legalEntityId = UUID.fromString("018f9b20-8000-7000-8000-0000000000f1");
+        jdbc.sql("""
+                        INSERT INTO tenant.legal_entities (id, tenant_id, code, legal_name, tin, vat_registered, status)
+                        VALUES (:id, :tenantId, 'ACME', 'Acme LLC', '123456789', false, 'ACTIVE')
+                        """).param("id", legalEntityId).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                        INSERT INTO tenant.location_fiscal_assignments
+                            (id, tenant_id, brand_id, location_id, legal_entity_id, effective_from, approved_by)
+                        VALUES (:id, :tenantId, :brandId, :locationId, :entityId, :from, 'test')
+                        """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("entityId", legalEntityId)
+                .param("from", java.time.LocalDate.now().minusYears(1))
+                .update();
+
+        MvcResult result = mvc.perform(
+                        get(BRANDS + "/" + BRAND + "/locations/legal-entities").with(tokenFor(FULL)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        String body = result.getResponse().getContentAsString();
+        assertThat(body)
+                .contains(LOCATION.toString())
+                .contains("\"legalEntityCode\":\"ACME\"")
+                .contains("123456789");
+    }
+
+    /**
+     * Wave 9, gap map row {@code 10.2a}: {@code locationChannels} batches every
+     * location's active sales-channel codes for the branch list's channel
+     * filter, one join rather than one call per channel per row.
+     */
+    @Test
+    void locationChannelsBatchesEveryLocationsOwnActiveChannelCodes() throws Exception {
+        UUID channelId = UUID.fromString("018f9b20-8000-7000-8000-0000000000f2");
+        jdbc.sql("""
+                        INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name, status)
+                        VALUES (:id, :tenantId, 'STOREFRONT', 'WEB', 'Storefront', 'ACTIVE')
+                        """).param("id", channelId).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                        INSERT INTO tenant.sales_channel_locations (tenant_id, channel_id, location_id, status)
+                        VALUES (:tenantId, :channelId, :locationId, 'ACTIVE')
+                        """)
+                .param("tenantId", TENANT)
+                .param("channelId", channelId)
+                .param("locationId", LOCATION)
+                .update();
+
+        MvcResult result = mvc.perform(
+                        get(BRANDS + "/" + BRAND + "/locations/channels").with(tokenFor(FULL)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        String body = result.getResponse().getContentAsString();
+        assertThat(body).contains(LOCATION.toString()).contains("STOREFRONT");
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private void insertTenancy() {

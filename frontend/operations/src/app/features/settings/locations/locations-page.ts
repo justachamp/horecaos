@@ -8,7 +8,9 @@ import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
 import {
+  BulkServiceStateItemView,
   ChangeServiceStateRequest,
+  LocationLegalEntityView,
   LocationServiceStateView,
   LocationsApi,
   LocationView,
@@ -16,6 +18,12 @@ import {
 } from './locations-api';
 
 type StateFilter = 'ALL' | ServiceMode;
+const ALL = 'ALL';
+
+/** Forced-closed first, everything else after — Settings 10.2a's severity sort. */
+function severityRank(mode: ServiceMode): number {
+  return mode === 'FORCE_CLOSED' ? 0 : 1;
+}
 
 /**
  * 10.2a Location list — `docs/operations-spec/settings.md` §10.2a.
@@ -26,10 +34,18 @@ type StateFilter = 'ALL' | ServiceMode;
  * been an n+1 (`serviceSummary` per row). `LocationsApi.serviceStates` now
  * batches the whole brand's `location_service_state` in one call
  * (`OperationsBrandController.locationServiceStates`), so all three are real
- * here. Still simplified relative to the spec: no severity sort
- * (forced-closed first), no channel or INN filter, and closing several
- * branches at once is still one call per branch rather than a bulk endpoint
- * — named rather than pretended away.
+ * here.
+ *
+ * Wave 9 closes the rest of that gap: the channel and INN filters
+ * ({@link channelFilter}/{@link legalEntityFilter}, over {@link
+ * LocationsApi.channels}/{@link LocationsApi.legalEntities}, both batched the
+ * same way {@link LocationsApi.serviceStates} already is), the severity sort
+ * (forced-closed branches always sort first, see {@link severityRank}), and
+ * the bulk close/open bar ({@link selected}, {@link bulkClose}, {@link
+ * bulkReopen}) over {@link LocationsApi.bulkChangeServiceState} — the same
+ * batched service-state write `OperationsBrandController` exposes beside its
+ * batched read, reporting one outcome per selected branch rather than one
+ * call per branch.
  *
  * The docked detail (`:locationId`) is a routed child, the same shape
  * `order-queue`/`order-detail-pane` already use in this app.
@@ -55,9 +71,17 @@ export class LocationsPage {
   protected readonly serviceStates = signal<ReadonlyMap<string, LocationServiceStateView>>(
     new Map(),
   );
+  protected readonly legalEntities = signal<ReadonlyMap<string, LocationLegalEntityView>>(
+    new Map(),
+  );
+  protected readonly channelsByLocation = signal<ReadonlyMap<string, readonly string[]>>(
+    new Map(),
+  );
   protected readonly docked = signal(false);
 
   protected readonly stateFilter = signal<StateFilter>('ALL');
+  protected readonly channelFilter = signal<string>(ALL);
+  protected readonly legalEntityFilter = signal<string>(ALL);
 
   /** The one row currently showing its inline "why are you closing this" reason field. */
   protected readonly closingLocationId = signal<string | null>(null);
@@ -65,12 +89,60 @@ export class LocationsPage {
   protected readonly stateActionSaving = signal<string | null>(null);
   protected readonly stateActionError = signal<string | null>(null);
 
-  protected readonly filteredLocations = computed(() => {
-    const filter = this.stateFilter();
-    if (filter === 'ALL') {
-      return this.locations();
+  /** The bulk close/open bar's own selection, keyed by location id. */
+  protected readonly selected = signal<ReadonlySet<string>>(new Set());
+  protected readonly bulkClosing = signal(false);
+  protected readonly bulkReasonCode = signal('');
+  protected readonly bulkSaving = signal(false);
+  protected readonly bulkError = signal<string | null>(null);
+  protected readonly bulkOutcomes = signal<readonly BulkServiceStateItemView[] | null>(null);
+
+  /** Every channel code any of the brand's locations currently sells on, sorted, for the channel filter's own options. */
+  protected readonly availableChannels = computed(() => {
+    const codes = new Set<string>();
+    for (const perLocation of this.channelsByLocation().values()) {
+      for (const code of perLocation) {
+        codes.add(code);
+      }
     }
-    return this.locations().filter((location) => this.effectiveModeOf(location.id) === filter);
+    return [...codes].sort();
+  });
+
+  /** Every legal entity code currently assigned to any of the brand's locations, sorted, for the INN filter's own options. */
+  protected readonly availableLegalEntities = computed(() => {
+    const codes = new Set<string>();
+    for (const entity of this.legalEntities().values()) {
+      codes.add(entity.legalEntityCode);
+    }
+    return [...codes].sort();
+  });
+
+  protected readonly filteredLocations = computed(() => {
+    const stateFilter = this.stateFilter();
+    const channelFilter = this.channelFilter();
+    const legalEntityFilter = this.legalEntityFilter();
+    const channels = this.channelsByLocation();
+    const entities = this.legalEntities();
+
+    const filtered = this.locations().filter((location) => {
+      if (stateFilter !== ALL && this.effectiveModeOf(location.id) !== stateFilter) {
+        return false;
+      }
+      if (channelFilter !== ALL && !(channels.get(location.id) ?? []).includes(channelFilter)) {
+        return false;
+      }
+      if (legalEntityFilter !== ALL && entities.get(location.id)?.legalEntityCode !== legalEntityFilter) {
+        return false;
+      }
+      return true;
+    });
+
+    // Settings 10.2a's severity sort: a forced-closed branch is the one thing
+    // an operator opening this list needs to see first, wherever it falls
+    // alphabetically or by code.
+    return [...filtered].sort(
+      (a, b) => severityRank(this.effectiveModeOf(a.id)) - severityRank(this.effectiveModeOf(b.id)),
+    );
   });
 
   constructor() {
@@ -107,6 +179,102 @@ export class LocationsPage {
 
   protected reasonCodeOf(locationId: string): string | null {
     return this.serviceStates().get(locationId)?.reasonCode ?? null;
+  }
+
+  protected channelCodesOf(locationId: string): readonly string[] {
+    return this.channelsByLocation().get(locationId) ?? [];
+  }
+
+  protected legalEntityCodeOf(locationId: string): string | null {
+    return this.legalEntities().get(locationId)?.legalEntityCode ?? null;
+  }
+
+  // ------------------------------------------------------------- selection
+
+  protected isSelected(locationId: string): boolean {
+    return this.selected().has(locationId);
+  }
+
+  protected toggleOne(locationId: string): void {
+    const next = new Set(this.selected());
+    if (next.has(locationId)) {
+      next.delete(locationId);
+    } else {
+      next.add(locationId);
+    }
+    this.selected.set(next);
+  }
+
+  /** Selects every currently-filtered row, or clears the selection when every one is already selected. */
+  protected toggleSelectAll(): void {
+    const ids = this.filteredLocations().map((location) => location.id);
+    if (ids.length === 0) {
+      return;
+    }
+    const allSelected = ids.every((id) => this.selected().has(id));
+    this.selected.set(allSelected ? new Set() : new Set(ids));
+  }
+
+  protected clearSelection(): void {
+    this.selected.set(new Set());
+    this.bulkClosing.set(false);
+    this.bulkOutcomes.set(null);
+  }
+
+  // -------------------------------------------------------- bulk close/open
+
+  protected startBulkClosing(): void {
+    this.bulkClosing.set(true);
+    this.bulkReasonCode.set('');
+    this.bulkError.set(null);
+  }
+
+  protected cancelBulkClosing(): void {
+    this.bulkClosing.set(false);
+  }
+
+  protected async confirmBulkClose(): Promise<void> {
+    const reason = this.bulkReasonCode().trim();
+    if (!reason) {
+      this.bulkError.set(this.i18n.t('settings.locations.hours.reasonRequired'));
+      return;
+    }
+    const closed = await this.bulkChangeState({ mode: 'FORCE_CLOSED', reasonCode: reason });
+    if (closed) {
+      this.bulkClosing.set(false);
+    }
+  }
+
+  protected async bulkReopen(): Promise<void> {
+    await this.bulkChangeState({ mode: 'FOLLOW_SCHEDULE' });
+  }
+
+  /** @returns whether the request was sent at all, so a caller can close its own inline editor only then */
+  private async bulkChangeState(request: ChangeServiceStateRequest): Promise<boolean> {
+    const base = this.location.scope();
+    const locationIds = [...this.selected()];
+    if (!base || locationIds.length === 0 || this.bulkSaving()) {
+      return false;
+    }
+    this.bulkSaving.set(true);
+    this.bulkError.set(null);
+    try {
+      const response = await this.api.bulkChangeServiceState(base, { ...request, locationIds });
+      this.bulkOutcomes.set(response.items);
+      const states = await this.api.serviceStates(base);
+      this.serviceStates.set(new Map(states.map((state) => [state.locationId, state])));
+      this.selected.set(new Set());
+      return true;
+    } catch (error) {
+      this.bulkError.set(this.describe(error));
+      return false;
+    } finally {
+      this.bulkSaving.set(false);
+    }
+  }
+
+  protected displayNameOf(locationId: string): string {
+    return this.locations().find((location) => location.id === locationId)?.displayName ?? locationId;
   }
 
   protected startClosing(locationId: string): void {
@@ -173,12 +341,18 @@ export class LocationsPage {
       return;
     }
     try {
-      const [locations, states] = await Promise.all([
+      const [locations, states, entities, channels] = await Promise.all([
         this.api.list(scope),
         this.api.serviceStates(scope),
+        this.api.legalEntities(scope),
+        this.api.channels(scope),
       ]);
       this.locations.set(locations);
       this.serviceStates.set(new Map(states.map((state) => [state.locationId, state])));
+      this.legalEntities.set(new Map(entities.map((entity) => [entity.locationId, entity])));
+      this.channelsByLocation.set(
+        new Map(channels.map((entry) => [entry.locationId, entry.channelCodes])),
+      );
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);

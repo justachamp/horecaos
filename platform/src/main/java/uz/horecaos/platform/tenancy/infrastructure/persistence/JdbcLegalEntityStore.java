@@ -6,7 +6,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -130,6 +132,45 @@ public class JdbcLegalEntityStore implements LegalEntityDirectory {
                 .param("businessDate", businessDate)
                 .query(JdbcLegalEntityStore::toSeller)
                 .optional();
+    }
+
+    /**
+     * Every location's own {@link #sellerFor}, batched over a whole brand and
+     * one business date (Settings 10.2a branch list's INN filter).
+     *
+     * <p>An inner join throughout, the same as {@link #sellerFor}: a location
+     * with no assignment covering {@code businessDate}, or an assignment whose
+     * entity row somehow does not resolve, is simply absent from the map
+     * rather than present with a null seller.
+     */
+    @Override
+    public Map<UUID, FiscalSeller> sellersForBrand(UUID tenantId, UUID brandId, LocalDate businessDate) {
+        if (!isWired()) {
+            return Map.of();
+        }
+        Map<UUID, FiscalSeller> sellers = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT l.id AS location_id,
+                       e.id, e.tenant_id, e.code, e.legal_name, e.tin, e.vat_registered,
+                       e.tax_profile_id, e.status,
+                       a.id AS assignment_id, a.version AS assignment_version,
+                       a.effective_from, a.effective_until
+                  FROM tenant.locations l
+                  JOIN tenant.location_fiscal_assignments a
+                    ON a.tenant_id = l.tenant_id AND a.location_id = l.id
+                   AND a.effective_from <= :businessDate
+                   AND (a.effective_until IS NULL OR a.effective_until > :businessDate)
+                  JOIN tenant.legal_entities e
+                    ON e.tenant_id = a.tenant_id AND e.id = a.legal_entity_id
+                 WHERE l.tenant_id = :tenantId AND l.brand_id = :brandId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("businessDate", businessDate)
+                .query((row, number) -> Map.entry(row.getObject("location_id", UUID.class), toSeller(row, number)))
+                .list()
+                .forEach(entry -> sellers.put(entry.getKey(), entry.getValue()));
+        return sellers;
     }
 
     /**
