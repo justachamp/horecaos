@@ -39,6 +39,7 @@ class VariantSalesReportingTests {
     private static final UUID LOCATION_B = UUID.fromString("018f6f4e-2000-7000-8000-00000000d004");
     private static final UUID VARIANT_PIZZA = UUID.fromString("018f6f4e-2000-7000-8000-00000000d005");
     private static final UUID VARIANT_SALAD = UUID.fromString("018f6f4e-2000-7000-8000-00000000d006");
+    private static final UUID VARIANT_BURGER = UUID.fromString("018f6f4e-2000-7000-8000-00000000d008");
     private static final UUID CATEGORY = UUID.fromString("018f6f4e-2000-7000-8000-00000000d007");
 
     private static final LocalDate DAY = LocalDate.of(2026, 8, 21);
@@ -185,6 +186,107 @@ class VariantSalesReportingTests {
         assertThat(all.provenance().timezone()).isEqualTo("Asia/Tashkent");
     }
 
+    // ------------------------------------------------------- wave 10 w5-reports-exports (7.7): sort + cursor
+
+    /**
+     * Burger sells more units at a lower price than pizza (fewer, pricier
+     * orders) -- proving QUANTITY_DESC is a real second axis, not revenue
+     * order relabelled.
+     */
+    @Test
+    void quantityDescSortsByTotalQuantityRatherThanRevenue() {
+        UUID pizzaOrder = insertOrder(TENANT, "Q-PIZZA", LOCATION_A, "DELIVERY");
+        insertLine(TENANT, pizzaOrder, LOCATION_A, VARIANT_PIZZA, 2, 200_000L, 200_000L);
+        UUID burgerOrder = insertOrder(TENANT, "Q-BURGER", LOCATION_A, "DELIVERY");
+        insertLine(TENANT, burgerOrder, LOCATION_A, VARIANT_BURGER, 10, 100_000L, 100_000L);
+
+        List<JdbcReportingStore.VariantSalesRow> byRevenue = store.readVariantSales(
+                TENANT, DAY, DAY, List.of(), List.of(), JdbcReportingStore.VariantSalesSort.REVENUE_DESC, 100, null);
+        assertThat(byRevenue)
+                .extracting(JdbcReportingStore.VariantSalesRow::variantId)
+                .containsExactly(VARIANT_PIZZA, VARIANT_BURGER);
+
+        List<JdbcReportingStore.VariantSalesRow> byQuantity = store.readVariantSales(
+                TENANT, DAY, DAY, List.of(), List.of(), JdbcReportingStore.VariantSalesSort.QUANTITY_DESC, 100, null);
+        assertThat(byQuantity)
+                .as("burger outsells pizza in units though it earns less -- the two sorts must disagree")
+                .extracting(JdbcReportingStore.VariantSalesRow::variantId)
+                .containsExactly(VARIANT_BURGER, VARIANT_PIZZA);
+    }
+
+    @Test
+    void nameAscSortsAlphabeticallyByProductName() {
+        UUID pizzaOrder = insertOrder(TENANT, "N-PIZZA", LOCATION_A, "DELIVERY");
+        insertLine(TENANT, pizzaOrder, LOCATION_A, VARIANT_PIZZA, 1, 40_000L, 40_000L);
+        UUID burgerOrder = insertOrder(TENANT, "N-BURGER", LOCATION_A, "DELIVERY");
+        insertLine(TENANT, burgerOrder, LOCATION_A, VARIANT_BURGER, 1, 20_000L, 20_000L);
+        UUID saladOrder = insertOrder(TENANT, "N-SALAD", LOCATION_A, "DELIVERY");
+        insertLine(TENANT, saladOrder, LOCATION_A, VARIANT_SALAD, 1, 10_000L, 10_000L);
+
+        List<JdbcReportingStore.VariantSalesRow> rows = store.readVariantSales(
+                TENANT, DAY, DAY, List.of(), List.of(), JdbcReportingStore.VariantSalesSort.NAME_ASC, 100, null);
+
+        assertThat(rows)
+                .extracting(JdbcReportingStore.VariantSalesRow::productName)
+                // Cyrillic alphabetical: Бургер, Пицца, Салат.
+                .containsExactly("Бургер Классик", "Пицца Маргарита", "Салат Цезарь");
+    }
+
+    @Test
+    void cursorPagingUnderRevenueDescCoversEveryRowExactlyOnceAndMatchesTheUnpagedOrder() {
+        UUID pizzaOrder = insertOrder(TENANT, "C-PIZZA", LOCATION_A, "DELIVERY");
+        insertLine(TENANT, pizzaOrder, LOCATION_A, VARIANT_PIZZA, 1, 120_000L, 120_000L);
+        UUID burgerOrder = insertOrder(TENANT, "C-BURGER", LOCATION_A, "DELIVERY");
+        insertLine(TENANT, burgerOrder, LOCATION_A, VARIANT_BURGER, 1, 80_000L, 80_000L);
+        UUID saladOrder = insertOrder(TENANT, "C-SALAD", LOCATION_A, "DELIVERY");
+        insertLine(TENANT, saladOrder, LOCATION_A, VARIANT_SALAD, 1, 40_000L, 40_000L);
+
+        List<JdbcReportingStore.VariantSalesRow> whole = store.readVariantSales(
+                TENANT, DAY, DAY, List.of(), List.of(), JdbcReportingStore.VariantSalesSort.REVENUE_DESC, 100, null);
+        assertThat(whole)
+                .extracting(JdbcReportingStore.VariantSalesRow::variantId)
+                .containsExactly(VARIANT_PIZZA, VARIANT_BURGER, VARIANT_SALAD);
+
+        List<JdbcReportingStore.VariantSalesRow> firstPage = store.readVariantSales(
+                TENANT, DAY, DAY, List.of(), List.of(), JdbcReportingStore.VariantSalesSort.REVENUE_DESC, 2, null);
+        assertThat(firstPage)
+                .extracting(JdbcReportingStore.VariantSalesRow::variantId)
+                .containsExactly(VARIANT_PIZZA, VARIANT_BURGER);
+
+        JdbcReportingStore.VariantSalesRow last = firstPage.get(firstPage.size() - 1);
+        List<JdbcReportingStore.VariantSalesRow> secondPage = store.readVariantSales(
+                TENANT,
+                DAY,
+                DAY,
+                List.of(),
+                List.of(),
+                JdbcReportingStore.VariantSalesSort.REVENUE_DESC,
+                2,
+                new JdbcReportingStore.VariantSalesCursor(
+                        last.totalQuantity(),
+                        last.totalNetSom(),
+                        null,
+                        java.util.Objects.requireNonNull(last.variantId())));
+
+        assertThat(secondPage)
+                .as("the cursor page picks up exactly where the first page stopped, no overlap and no gap")
+                .extracting(JdbcReportingStore.VariantSalesRow::variantId)
+                .containsExactly(VARIANT_SALAD);
+    }
+
+    @Test
+    void theServiceOverloadWithSortAndCursorRoutesThroughToTheStore() {
+        UUID order = insertOrder(TENANT, "SVC-1", LOCATION_A, "DELIVERY");
+        insertLine(TENANT, order, LOCATION_A, VARIANT_PIZZA, 1, 40_000L, 40_000L);
+        insertLine(TENANT, order, LOCATION_A, VARIANT_BURGER, 5, 20_000L, 20_000L);
+
+        var byQuantity = queries.variantSales(
+                TENANT, DAY, DAY, List.of(), List.of(), JdbcReportingStore.VariantSalesSort.QUANTITY_DESC, 100, null);
+        assertThat(byQuantity.rows())
+                .extracting(JdbcReportingStore.VariantSalesRow::variantId)
+                .containsExactly(VARIANT_BURGER, VARIANT_PIZZA);
+    }
+
     // ----------------------------------------------------------------- fixtures
 
     private static UUID orderId(String seed) {
@@ -248,7 +350,7 @@ class VariantSalesReportingTests {
                 .param("locationId", locationId)
                 .param("variantId", variantId)
                 .param("categoryId", CATEGORY)
-                .param("productName", variantId.equals(VARIANT_PIZZA) ? "Пицца Маргарита" : "Салат Цезарь")
+                .param("productName", productNameFor(variantId))
                 .param("quantity", quantity)
                 .param("gross", grossSom)
                 .param("discount", grossSom - netSom)
@@ -259,6 +361,16 @@ class VariantSalesReportingTests {
                 // wave W02 backfill migration joins on.
                 .param("occurredAt", DAY.atTime(9, 0).minusHours(5).atOffset(ZoneOffset.UTC))
                 .update();
+    }
+
+    private static String productNameFor(UUID variantId) {
+        if (variantId.equals(VARIANT_PIZZA)) {
+            return "Пицца Маргарита";
+        }
+        if (variantId.equals(VARIANT_BURGER)) {
+            return "Бургер Классик";
+        }
+        return "Салат Цезарь";
     }
 
     private void seedTenant(UUID tenantId) {

@@ -720,12 +720,37 @@ public class ReportQueryService {
             List<UUID> locationIds,
             List<String> fulfilmentTypes,
             int limit) {
+        return variantSales(
+                tenantId,
+                from,
+                to,
+                locationIds,
+                fulfilmentTypes,
+                JdbcReportingStore.VariantSalesSort.REVENUE_DESC,
+                limit,
+                null);
+    }
+
+    /**
+     * Wave 10 w5-reports-exports (7.7): server-side sort and cursor paging, past the page's
+     * previous hard-coded revenue order and 200-row cap.
+     */
+    @Transactional(readOnly = true)
+    public VariantSalesResult variantSales(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> fulfilmentTypes,
+            JdbcReportingStore.VariantSalesSort sort,
+            int limit,
+            JdbcReportingStore.@Nullable VariantSalesCursor cursor) {
 
         validateRange(from, to);
         refuseMixedBoundaryRegime(tenantId, from, to);
 
         List<JdbcReportingStore.VariantSalesRow> rows =
-                store.readVariantSales(tenantId, from, to, locationIds, fulfilmentTypes, limit);
+                store.readVariantSales(tenantId, from, to, locationIds, fulfilmentTypes, sort, limit, cursor);
         return new VariantSalesResult(
                 rows, rows.size() >= limit, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
     }

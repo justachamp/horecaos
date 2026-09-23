@@ -367,21 +367,66 @@ public class ReportingController {
                     + "same reason order-grain reads get their own endpoint rather than folding "
                     + "into /queries. fulfilmentType narrows every column, including the totals: a "
                     + "DINE_IN order has no delivery or pickup column of its own, so the totals "
-                    + "with no filter applied can exceed delivery plus pickup by exactly its share.")
+                    + "with no filter applied can exceed delivery plus pickup by exactly its share. "
+                    + "sort (wave 10 w5-reports-exports, 7.7) is QUANTITY_DESC/REVENUE_DESC "
+                    + "(default)/NAME_ASC; afterQuantity/afterRevenueSom/afterProductName plus "
+                    + "afterVariantId page past the bounded read with a keyset cursor, matching "
+                    + "whichever one field the requested sort names on the previous page's last "
+                    + "row -- the other two are ignored.")
     public ResponseEntity<VariantSalesListResponse> variantSales(
             @PathVariable UUID tenantId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) List<UUID> locationId,
             @RequestParam(required = false) List<String> fulfilmentType,
-            @RequestParam(required = false) Integer limit) {
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(defaultValue = "REVENUE_DESC") String sort,
+            @RequestParam(required = false) Integer afterQuantity,
+            @RequestParam(required = false) Long afterRevenueSom,
+            @RequestParam(required = false) String afterProductName,
+            @RequestParam(required = false) UUID afterVariantId) {
 
         var result = queries.variantSales(
-                tenantId, from, to, orEmpty(locationId), orEmpty(fulfilmentType), clampVariantLimit(limit));
+                tenantId,
+                from,
+                to,
+                orEmpty(locationId),
+                orEmpty(fulfilmentType),
+                variantSalesSort(sort),
+                clampVariantLimit(limit),
+                variantSalesCursor(afterQuantity, afterRevenueSom, afterProductName, afterVariantId));
         return ResponseEntity.ok(new VariantSalesListResponse(
                 result.rows().stream().map(VariantSalesRowResponse::of).toList(),
                 result.maybeMore(),
                 ProvenanceResponse.of(result.provenance())));
+    }
+
+    private static JdbcReportingStore.VariantSalesSort variantSalesSort(String requested) {
+        try {
+            return JdbcReportingStore.VariantSalesSort.valueOf(requested);
+        } catch (IllegalArgumentException unknown) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "Unknown sort \"%s\"".formatted(requested), Map.of("sort", requested));
+        }
+    }
+
+    /** wave 10 w5-reports-exports (7.7): the previous page's last row, in whichever field the active sort names -- absent means no cursor (the first page). */
+    private static JdbcReportingStore.@Nullable VariantSalesCursor variantSalesCursor(
+            @Nullable Integer afterQuantity,
+            @Nullable Long afterRevenueSom,
+            @Nullable String afterProductName,
+            @Nullable UUID afterVariantId) {
+        if (afterQuantity == null && afterRevenueSom == null && afterProductName == null && afterVariantId == null) {
+            return null;
+        }
+        if (afterVariantId == null) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "afterVariantId is required alongside any after* cursor field",
+                    Map.of());
+        }
+        return new JdbcReportingStore.VariantSalesCursor(
+                afterQuantity, afterRevenueSom, afterProductName, afterVariantId);
     }
 
     @GetMapping("/operator-leaderboard")
