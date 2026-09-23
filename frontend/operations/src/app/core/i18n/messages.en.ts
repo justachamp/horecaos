@@ -3898,6 +3898,7 @@ export const messagesEn = {
   'reports.orders.column.occurredAt': 'Created',
   'reports.orders.column.customer': 'Customer',
   'reports.orders.column.customer.guest': 'Guest',
+  'reports.orders.column.customer.account': 'Customer account',
   'reports.orders.column.operator': 'Operator',
   'reports.orders.column.courier': 'Courier',
 

@@ -3870,6 +3870,7 @@ export const messagesRu: MessageCatalogue = {
   'reports.orders.column.occurredAt': 'Дата создания',
   'reports.orders.column.customer': 'Клиент',
   'reports.orders.column.customer.guest': 'Гость',
+  'reports.orders.column.customer.account': 'Аккаунт клиента',
   'reports.orders.column.operator': 'Оператор',
   'reports.orders.column.courier': 'Курьер',
 
