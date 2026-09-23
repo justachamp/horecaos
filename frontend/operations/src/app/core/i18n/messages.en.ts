@@ -1967,6 +1967,7 @@ export const messagesEn = {
   'catalog.editor.tab.availability': 'Availability',
   'catalog.editor.tab.schedule': 'Sale schedule',
   'catalog.editor.tab.recommendations': 'Recommended products',
+  'catalog.editor.tab.commentPresets': 'Preset comments',
   'catalog.editor.tab.history': 'History',
   'catalog.editor.locale.label': 'Editing language',
   'catalog.editor.save': 'Save',
@@ -2060,6 +2061,18 @@ export const messagesEn = {
   'catalog.editor.recommendations.detach': 'Remove',
   'catalog.editor.recommendations.targetLabel': 'Variant ID to recommend',
   'catalog.editor.recommendations.attach': 'Attach',
+  'catalog.editor.commentPresets.hint':
+    'Which of the tenant’s preset kitchen instructions a line for this product may carry. Register new presets under Settings → Preset product comments.',
+  'catalog.editor.commentPresets.loading': 'Loading preset comments…',
+  'catalog.editor.commentPresets.empty': 'No preset comments attached yet',
+  'catalog.editor.commentPresets.column.preset': 'Preset',
+  'catalog.editor.commentPresets.column.posModifierCode': 'POS modifier',
+  'catalog.editor.commentPresets.detach': 'Remove',
+  'catalog.editor.commentPresets.pickerLabel': 'Attach a preset',
+  'catalog.editor.commentPresets.pickerPlaceholder': 'Choose a preset…',
+  'catalog.editor.commentPresets.attach': 'Attach',
+  'catalog.editor.commentPresets.noneAvailable':
+    'Every active preset is already attached to this product.',
   'catalog.editor.history.scope':
     'Availability changes at this location only — product, price, and modifier edits are not audited yet.',
   'catalog.editor.history.loading': 'Loading…',

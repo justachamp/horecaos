@@ -271,6 +271,14 @@ public class MediaAssetIngestionService implements MediaAssetIngestion {
         return stripped.length() > 255 ? stripped.substring(0, 255) : stripped;
     }
 
+    @Override
+    public Optional<String> checksumOf(UUID tenantId, MediaAssetId assetId) {
+        return store.findOwned(tenantId, assetId)
+                .map(asset -> asset.verifiedChecksumSha256() != null
+                        ? asset.verifiedChecksumSha256()
+                        : asset.declaredChecksumSha256());
+    }
+
     private static String sha256Base64(byte[] content) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

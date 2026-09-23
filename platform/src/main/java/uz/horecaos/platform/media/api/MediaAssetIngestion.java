@@ -1,6 +1,7 @@
 package uz.horecaos.platform.media.api;
 
 import java.net.URI;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
@@ -56,6 +57,20 @@ public interface MediaAssetIngestion {
             byte[] content,
             @Nullable String originalFilename,
             @Nullable UUID actorId);
+
+    /**
+     * The checksum verified for an already-ingested asset, or empty when it
+     * does not exist for this tenant.
+     *
+     * <p>Exists so a caller that re-ingests the same content on every call
+     * (row 4.5b: a CSV re-imported with an {@code image_url} column that
+     * happens not to have changed) can tell "the same file, re-submitted"
+     * from "a real change" and skip re-attaching it, without this port
+     * exposing anything about where or how the asset is stored -- narrow in
+     * the same spirit {@link MediaAvailability}'s own doc explains for why
+     * it hands back a boolean rather than the assets themselves.
+     */
+    Optional<String> checksumOf(UUID tenantId, MediaAssetId assetId);
 
     /** Mirrors {@code media.domain.MediaOwner.Scope} — restated here so a caller outside {@code media} never imports it. */
     enum OwnerScope {

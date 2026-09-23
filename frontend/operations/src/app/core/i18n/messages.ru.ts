@@ -1940,6 +1940,7 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.tab.availability': 'Наличие',
   'catalog.editor.tab.schedule': 'График продаж',
   'catalog.editor.tab.recommendations': 'Рекомендованные товары',
+  'catalog.editor.tab.commentPresets': 'Готовые комментарии',
   'catalog.editor.tab.history': 'История',
   'catalog.editor.locale.label': 'Язык редактирования',
   'catalog.editor.save': 'Сохранить',
@@ -2033,6 +2034,18 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.recommendations.detach': 'Удалить',
   'catalog.editor.recommendations.targetLabel': 'ID варианта для рекомендации',
   'catalog.editor.recommendations.attach': 'Добавить',
+  'catalog.editor.commentPresets.hint':
+    'Какие готовые кухонные инструкции тенанта можно указать в строке для этого товара. Новые пресеты регистрируются в Настройках → Готовые комментарии к товарам.',
+  'catalog.editor.commentPresets.loading': 'Загрузка готовых комментариев…',
+  'catalog.editor.commentPresets.empty': 'Пока не прикреплён ни один готовый комментарий',
+  'catalog.editor.commentPresets.column.preset': 'Пресет',
+  'catalog.editor.commentPresets.column.posModifierCode': 'Модификатор POS',
+  'catalog.editor.commentPresets.detach': 'Убрать',
+  'catalog.editor.commentPresets.pickerLabel': 'Прикрепить пресет',
+  'catalog.editor.commentPresets.pickerPlaceholder': 'Выберите пресет…',
+  'catalog.editor.commentPresets.attach': 'Прикрепить',
+  'catalog.editor.commentPresets.noneAvailable':
+    'Все активные пресеты уже прикреплены к этому товару.',
   'catalog.editor.history.scope':
     'Только изменения доступности в этом филиале — правки товара, цены и модификаторов пока не аудируются.',
   'catalog.editor.history.loading': 'Загрузка…',
