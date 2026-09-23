@@ -1919,7 +1919,7 @@ export interface ExternalCourierRequest {
   bindingId: string;
   decision?: "ACCEPT" | "ABANDON";
   quoteId?: string;
-  reasonCode: string;
+  reasonCode?: string;
 }
 
 export interface ExternalCourierResponse {

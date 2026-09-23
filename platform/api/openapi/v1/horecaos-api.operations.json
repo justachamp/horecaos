@@ -6135,7 +6135,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "bindingId", "reasonCode" ],
+        "required" : [ "bindingId" ],
         "type" : "object"
       },
       "ExternalCourierResponse" : {

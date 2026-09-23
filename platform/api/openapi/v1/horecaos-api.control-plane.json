@@ -14831,7 +14831,7 @@
         "tags" : [ "Named menus" ]
       },
       "put" : {
-        "description" : "A null channelId binds the branch's default, across every sales channel; naming one overrides the default for that channel alone. Replaces whichever menu previously held that exact scope. Takes effect immediately, exactly like a location_offerings toggle — no republish required. Refused for an archived menu.",
+        "description" : "A null channelId binds the branch's default, across every sales channel; naming one overrides the default for that channel alone. Replaces whichever menu previously held that exact scope. Takes effect immediately, exactly like a location_offerings toggle — no republish required. Refused unless the menu is ACTIVE — a DRAFT menu is not yet reviewed and complete, and an ARCHIVED one is retired; activate the menu first.",
         "operationId" : "bind",
         "parameters" : [ {
           "in" : "path",
