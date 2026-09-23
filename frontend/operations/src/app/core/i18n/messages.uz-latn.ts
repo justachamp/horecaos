@@ -827,6 +827,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.branches.bindDialog.lead':
     'Filial darajasidagi bogʻlanish faqat shu filial uchun brend andozasini bekor qiladi.',
   'settings.integrations.branches.bindDialog.installation': 'Provayder',
+  'settings.integrations.branches.bindDialog.someExcluded':
+    'POS va yetkazib berish provayderlari bu yerda koʻrsatilmaydi — ularga ushbu oyna hali belgilay olmaydigan aniq imkoniyatlar kerak.',
+  'settings.integrations.branches.bindDialog.noneEligible':
+    'Hozircha provayderlaringizdan birortasini ham shu oyna orqali bogʻlab boʻlmaydi. POS va yetkazib berish provayderlariga ushbu oyna hali belgilay olmaydigan aniq imkoniyatlar kerak.',
   'settings.integrations.branches.bindDialog.branch': 'Filial',
   'settings.integrations.branches.bindDialog.cancel': 'Bekor qilish',
   'settings.integrations.branches.bindDialog.submit': 'Bogʻlash',

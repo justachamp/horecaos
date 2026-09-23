@@ -246,6 +246,16 @@
       </h2>
       <p class="q-body-sm lead">{{ i18n.t('settings.integrations.branches.bindDialog.lead') }}</p>
 
+      @if (bindableInstallations().length === 0) {
+        <p class="q-body-sm error" role="alert">
+          {{ i18n.t('settings.integrations.branches.bindDialog.noneEligible') }}
+        </p>
+      } @else if (bindableInstallations().length < installations().length) {
+        <p class="q-body-sm lead">
+          {{ i18n.t('settings.integrations.branches.bindDialog.someExcluded') }}
+        </p>
+      }
+
       <label class="q-caption field-label" for="bind-to-branch-installation">
         {{ i18n.t('settings.integrations.branches.bindDialog.installation') }}
       </label>
@@ -254,9 +264,9 @@
         class="q-body field"
         [value]="bindToBranchInstallationId()"
         (change)="bindToBranchInstallationId.set($any($event.target).value)"
-        [disabled]="bindToBranchSubmitting()"
+        [disabled]="bindToBranchSubmitting() || bindableInstallations().length === 0"
       >
-        @for (installation of installations(); track installation.id) {
+        @for (installation of bindableInstallations(); track installation.id) {
           <option [value]="installation.id">
             {{ installation.category }} · {{ installation.providerType }}
           </option>
