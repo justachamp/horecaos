@@ -366,6 +366,29 @@ public class ProviderInstallationController {
         return ResponseEntity.ok(Map.of("bindingId", id, "status", "SUSPENDED"));
     }
 
+    @GetMapping("/{installationId}/capability-catalogue")
+    @RequiresCapability(Capability.INTEGRATION_INSTALLATION_MANAGE)
+    @Operation(
+            summary = "The vendor ceiling this installation's own provider declares (gap-map row 10.8a)",
+            description = "Never a per-credential fact -- the same declaration ceiling "
+                    + "ProviderCapabilityReconciliationService#reconcile caps live evidence at, read "
+                    + "here before any reconciliation has run. Backs the branch-binding dialog's own "
+                    + "capability-assignment picker: a POS or DELIVERY installation returns its real "
+                    + "capability codes; a category with no wired catalogue (or no adapter for this "
+                    + "installation's own provider type) answers an empty list rather than a guess.")
+    ResponseEntity<CapabilityCatalogueView> capabilityCatalogue(
+            @PathVariable UUID tenantId, @PathVariable UUID installationId) {
+        InstallationSnapshot installation = installations
+                .installation(tenantId, installationId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Installation is not available"));
+        List<String> capabilities =
+                reconciliation.declaredCapabilities(installation.category(), installation.providerType()).stream()
+                        .sorted()
+                        .toList();
+        return ResponseEntity.ok(new CapabilityCatalogueView(
+                installationId, installation.category(), installation.providerType(), capabilities));
+    }
+
     @PostMapping("/{installationId}/capability-reconciliation")
     @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, mutating = true)
     @Operation(
@@ -1180,6 +1203,16 @@ public class ProviderInstallationController {
             ProviderCategory category,
             List<ConnectFieldCatalog.ConnectField> fields,
             List<ConnectFieldEnvironment> environments) {}
+
+    /**
+     * The vendor ceiling one installation's own provider declares (gap-map
+     * row 10.8a) — {@code capabilities} is empty, never null, when this build
+     * has no catalogue for the category or no adapter for the provider type,
+     * so the branch-binding dialog can render "nothing to assign" rather than
+     * treat a missing list as a loading state that never resolves.
+     */
+    public record CapabilityCatalogueView(
+            UUID installationId, ProviderCategory category, String providerType, List<String> capabilities) {}
 
     /** Where an installation applies: a brand, or one location of it. */
     public record BindingView(

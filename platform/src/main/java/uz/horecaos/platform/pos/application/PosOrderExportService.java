@@ -718,6 +718,58 @@ public class PosOrderExportService {
      */
     public record ApprovalObservation(PosAdapter.ApprovalRead read, String providerType) {}
 
+    /**
+     * Which of this order's lines or modifiers still lacks a provider mapping
+     * — gap-map row 1.2i's fix path, the entity id the console's deep link
+     * into the ADR 0012 mapping screen pre-selects.
+     *
+     * <p>Derived fresh rather than read back from a stored {@code
+     * LINE_UNMAPPED}/{@code MODIFIER_UNMAPPED} attempt: the same lookup
+     * {@link #prepare} runs before ever building an export, so an operator
+     * who has since mapped the first offender sees the next one — or none —
+     * rather than a snapshot from whenever the last attempt happened to run.
+     * Side-effect free and never sent anywhere: no adapter is called, and
+     * this never opens, claims, or settles an export row.
+     *
+     * @return empty when the order cannot be read, has no POS binding for
+     *         {@link PosCapability#ORDER_EXPORT}, or every line and modifier
+     *         already resolves
+     */
+    public Optional<UnmappedEntity> findUnmappedEntity(UUID tenantId, UUID orderId) {
+        Optional<PosOrderSource.ExportableOrder> maybeOrder = orders.find(tenantId, orderId, REVEAL_PURPOSE);
+        if (maybeOrder.isEmpty()) {
+            return Optional.empty();
+        }
+        PosOrderSource.ExportableOrder order = maybeOrder.get();
+        Optional<BindingRef> binding = installations.primaryBinding(
+                tenantId, order.brandId(), order.locationId(), PosCapability.ORDER_EXPORT.code());
+        if (binding.isEmpty()) {
+            return Optional.empty();
+        }
+        UUID bindingId = binding.get().bindingId();
+        for (PosOrderSource.ExportableOrder.Line line : order.lines()) {
+            if (mappings.externalIdFor(bindingId, VARIANT_ENTITY, line.sourceVariantId())
+                    .isEmpty()) {
+                return Optional.of(new UnmappedEntity("VARIANT", line.sourceVariantId()));
+            }
+            for (UUID optionId : line.modifierOptionIds()) {
+                if (mappings.externalIdFor(bindingId, MODIFIER_ENTITY, optionId).isEmpty()) {
+                    return Optional.of(new UnmappedEntity("MODIFIER", optionId));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * @param entityType     {@code "VARIANT"} or {@code "MODIFIER"} — matches
+     *                       {@link uz.horecaos.platform.integration.api.provider.MappingEntityType#VARIANT}
+     *                       and {@code #MODIFIER}'s own {@code storedAs()}
+     * @param horecaosEntityId never a provider id or free text — an internal
+     *                         id only, safe for a URL query string (ADR 0029)
+     */
+    public record UnmappedEntity(String entityType, UUID horecaosEntityId) {}
+
     private Prepared prepare(UUID tenantId, JdbcPosExportStore.ExportRow export) {
         PosOrderSource.ExportableOrder order = orders.find(tenantId, export.orderId(), REVEAL_PURPOSE)
                 .orElseThrow(

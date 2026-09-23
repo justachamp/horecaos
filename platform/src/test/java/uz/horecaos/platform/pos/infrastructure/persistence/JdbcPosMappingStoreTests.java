@@ -71,6 +71,18 @@ class JdbcPosMappingStoreTests {
         jdbc.sql("DELETE FROM payments.payment_methods WHERE tenant_id = :t")
                 .param("t", TENANT)
                 .update();
+        jdbc.sql("DELETE FROM catalog.modifier_options WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .update();
+        jdbc.sql("DELETE FROM catalog.modifier_groups WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .update();
+        jdbc.sql("DELETE FROM catalog.variants WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .update();
+        jdbc.sql("DELETE FROM catalog.products WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .update();
         jdbc.sql("DELETE FROM integration.pos_sync_runs WHERE tenant_id = :t")
                 .param("t", TENANT)
                 .update();
@@ -213,6 +225,45 @@ class JdbcPosMappingStoreTests {
     }
 
     @Test
+    @DisplayName(
+            "unmapped variants excludes an already-ACTIVE-mapped one and includes the rest (gap-map row 1.2i's fix path)")
+    void unmappedVariantsExcludesMapped() {
+        UUID mappedVariant = insertVariant("SKU-MAPPED");
+        UUID freeVariant = insertVariant("SKU-FREE");
+        store.create(TENANT, INSTALLATION, BINDING, MappingEntityType.VARIANT, mappedVariant, "ext-v1", null, NOW);
+
+        List<NamedCandidate> unmapped = store.unmappedVariants(TENANT, BINDING, BRAND, "uz-UZ");
+
+        assertThat(unmapped).extracting(NamedCandidate::id).containsExactly(freeVariant);
+    }
+
+    @Test
+    @DisplayName(
+            "unmapped modifier options excludes an already-ACTIVE-mapped one and includes the rest (gap-map row 1.2i's fix path)")
+    void unmappedModifierOptionsExcludesMapped() {
+        UUID mappedOption = insertModifierOption("EXTRA_CHEESE");
+        UUID freeOption = insertModifierOption("EXTRA_SAUCE");
+        store.create(TENANT, INSTALLATION, BINDING, MappingEntityType.MODIFIER, mappedOption, "ext-m1", null, NOW);
+
+        List<NamedCandidate> unmapped = store.unmappedModifierOptions(TENANT, BINDING, BRAND);
+
+        assertThat(unmapped).extracting(NamedCandidate::id).containsExactly(freeOption);
+    }
+
+    @Test
+    @DisplayName(
+            "resolveHorecaosNames names an already-mapped VARIANT and MODIFIER row too, the exact entity types PosOrderExportService resolves an order line against")
+    void resolveHorecaosNamesForVariantAndModifier() {
+        UUID variant = insertVariant("SKU-NAMED");
+        UUID option = insertModifierOption("SPICY");
+
+        assertThat(store.resolveHorecaosNames(TENANT, BRAND, MappingEntityType.VARIANT, Set.of(variant)))
+                .containsEntry(variant, "SKU-NAMED");
+        assertThat(store.resolveHorecaosNames(TENANT, null, MappingEntityType.MODIFIER, Set.of(option)))
+                .containsEntry(option, "SPICY");
+    }
+
+    @Test
     @DisplayName("unmapped staged products come from the latest run and exclude an already-mapped one")
     void unmappedStagedProductsFromLatestRun() {
         openRunWithStagedProducts();
@@ -235,6 +286,56 @@ class JdbcPosMappingStoreTests {
                 .param("displayName", displayName)
                 .update();
         return id;
+    }
+
+    private UUID insertVariant(String sku) {
+        UUID productId = Ids.newId();
+        jdbc.sql("""
+                INSERT INTO catalog.products (id, tenant_id, brand_id, code, status)
+                VALUES (:id, :t, :brandId, :code, 'ACTIVE')
+                """)
+                .param("id", productId)
+                .param("t", TENANT)
+                .param("brandId", BRAND)
+                .param("code", "PRODUCT-" + sku)
+                .update();
+        UUID variantId = Ids.newId();
+        jdbc.sql("""
+                INSERT INTO catalog.variants (id, tenant_id, brand_id, product_id, sku, status)
+                VALUES (:id, :t, :brandId, :productId, :sku, 'ACTIVE')
+                """)
+                .param("id", variantId)
+                .param("t", TENANT)
+                .param("brandId", BRAND)
+                .param("productId", productId)
+                .param("sku", sku)
+                .update();
+        return variantId;
+    }
+
+    private UUID insertModifierOption(String code) {
+        UUID groupId = Ids.newId();
+        jdbc.sql("""
+                INSERT INTO catalog.modifier_groups (id, tenant_id, brand_id, code, status)
+                VALUES (:id, :t, :brandId, :code, 'ACTIVE')
+                """)
+                .param("id", groupId)
+                .param("t", TENANT)
+                .param("brandId", BRAND)
+                .param("code", "GROUP-" + code)
+                .update();
+        UUID optionId = Ids.newId();
+        jdbc.sql("""
+                INSERT INTO catalog.modifier_options (id, tenant_id, brand_id, modifier_group_id, code, status)
+                VALUES (:id, :t, :brandId, :groupId, :code, 'ACTIVE')
+                """)
+                .param("id", optionId)
+                .param("t", TENANT)
+                .param("brandId", BRAND)
+                .param("groupId", groupId)
+                .param("code", code)
+                .update();
+        return optionId;
     }
 
     private UUID openRunWithStagedProducts() {

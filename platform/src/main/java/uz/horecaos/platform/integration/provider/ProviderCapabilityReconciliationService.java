@@ -57,6 +57,29 @@ public class ProviderCapabilityReconciliationService {
         this.clock = clock;
     }
 
+    /**
+     * The vendor ceiling a category's own {@link ProviderCapabilityCatalog}
+     * declares for one provider type — gap-map row 10.8a's fix path: the
+     * "Bind to a branch" dialog's capability-assignment picker reads this to
+     * default to "every capability the installation's provider declares"
+     * before an operator narrows it.
+     *
+     * <p>Read-only and, unlike {@link #reconcile}, never refuses POS: this
+     * answers only what the wired adapter's own interface declares before any
+     * credential is considered, the same ceiling {@code
+     * PosCapabilityService#capAtCeiling} caps live discovery at, never a
+     * per-installation, per-credential fact.
+     *
+     * @return empty when this build has no catalogue for the category at all,
+     *         or no wired adapter for the provider type
+     */
+    public Set<String> declaredCapabilities(ProviderCategory category, String providerType) {
+        return Optional.ofNullable(catalogs.get(category))
+                .flatMap(catalog -> catalog.declarationFor(providerType))
+                .map(ProviderCapabilityCatalog.Declaration::capabilities)
+                .orElse(Set.of());
+    }
+
     /** Runs a non-effectful preflight and records a complete current snapshot. */
     @Transactional
     public Reconciliation reconcile(UUID tenantId, UUID installationId) {
