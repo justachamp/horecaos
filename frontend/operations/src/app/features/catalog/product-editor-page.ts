@@ -51,6 +51,7 @@ import {
   ProductPresetResponse,
 } from './product-comment-presets-api';
 import { CommentPresetsApi, PresetResponse } from '../settings/comment-presets/comment-presets-api';
+import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 
 const STATUSES: readonly CatalogStatus[] = ['DRAFT', 'ACTIVE', 'ARCHIVED'];
 
@@ -113,6 +114,20 @@ const EDITING_LOCALES = ['ru', 'uz', 'en'] as const;
  */
 const CATALOG_DEFAULT_LOCALE = 'uz';
 
+/**
+ * `catalog.media_relations`' own primary key since V0223 (gap map row 4.2f):
+ * `(entity_type — implicitly PRODUCT here —, media_asset_id, role,
+ * channel_code)`. The same asset attached to the universal gallery and to a
+ * channel's own override is two distinct rows sharing a `mediaAssetId`, so
+ * every place that used to match on `mediaAssetId` and `role` alone now
+ * matches on this instead — otherwise a channel override and the universal
+ * relation for the same photo would be indistinguishable and an action meant
+ * for one could reorder or detach the other.
+ */
+function mediaKey(item: Pick<MediaRelation, 'mediaAssetId' | 'role' | 'channelCode'>): string {
+  return `${item.mediaAssetId}\u0000${item.role}\u0000${item.channelCode}`;
+}
+
 /** `CatalogValidator`'s stable finding codes this console has copy for — see `messages.en.ts`'s `catalog.editor.finding.*` block. */
 const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
   PRODUCT_HAS_NO_ACTIVE_VARIANT: 'catalog.editor.finding.PRODUCT_HAS_NO_ACTIVE_VARIANT',
@@ -169,13 +184,15 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
  * the official dataset is imported — an unanswered finance/owner input this
  * wave does not resolve).
  *
- * **Still not built:** combo groups, nested/hidden modifiers, and
- * per-aggregator image overrides beyond the storage dimension (`4.2f`'s
- * backend half — `catalog.media_relations.channel_code` — landed this wave;
- * no screen here authors a channel-specific override yet). Video upload is
- * accepted by `q-media-uploader`'s selection step but not by the server: see
- * this wave's own report on why widening the allowlist needs a video
- * dimension probe first.
+ * **Still not built:** combo groups and nested/hidden modifiers. Photos
+ * (Tab 4) gained a channel picker (gap map row `4.2f`, wave w7): choosing a
+ * channel above the grid scopes the whole tab to that channel's own gallery
+ * — upload, reorder and detach all act on it alone, and the universal
+ * (`ALL_CHANNELS`) gallery every channel without an override falls back to
+ * is just the default selection, never touched by a channel-scoped action.
+ * Video upload is accepted by `q-media-uploader`'s selection step but not by
+ * the server: see this wave's own report on why widening the allowlist
+ * needs a video dimension probe first.
  *
  * **Tab 9 (History): real, and narrower than "history" implies.** `CatalogAuthoringService`
  * records exactly one audit fact today — `catalog.offering.set`, this
@@ -213,6 +230,7 @@ export class ProductEditorPage implements OnInit {
   private readonly kitchenApi = inject(CapacityApi);
   private readonly productCommentPresetsApi = inject(ProductCommentPresetsApi);
   private readonly commentPresetsApi = inject(CommentPresetsApi);
+  private readonly channelsApi = inject(SalesChannelsApi);
   private readonly brand = inject(CurrentBrand);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
@@ -266,6 +284,18 @@ export class ProductEditorPage implements OnInit {
 
   protected readonly uploadingPhoto = signal(false);
   protected readonly photoUrls = signal<Readonly<Record<string, string>>>({});
+  /** The template's own handle on the constant — see `catalog-domain.ts`'s doc. */
+  protected readonly allChannelsCode = ALL_CHANNELS;
+  /** Sales channels this tenant's registered — the picker's own options (gap map row 4.2f). */
+  protected readonly photoChannels = signal<readonly ChannelView[]>([]);
+  /** Which gallery the Photos tab is scoped to right now: {@link ALL_CHANNELS} or one channel's own code. */
+  protected readonly selectedPhotoChannel = signal<string>(ALL_CHANNELS);
+
+  /** The selected channel's own gallery — upload, reorder and detach all act on exactly this slice. */
+  protected readonly selectedChannelPhotos = computed<readonly MediaRelation[]>(() => {
+    const channel = this.selectedPhotoChannel();
+    return (this.product()?.media ?? []).filter((item) => item.channelCode === channel);
+  });
   protected readonly statuses = STATUSES;
 
   /** One combobox's search state per variant, keyed by `variantId` — IA 4.2e. */
@@ -423,6 +453,9 @@ export class ProductEditorPage implements OnInit {
     }
     if (tab === 'PHOTOS') {
       void this.loadPhotoUrls();
+      if (this.photoChannels().length === 0) {
+        void this.loadPhotoChannels();
+      }
     }
     if (tab === 'SCHEDULE' && !this.scheduleLoaded()) {
       void this.loadSchedule();
@@ -484,6 +517,32 @@ export class ProductEditorPage implements OnInit {
         entries.filter((entry): entry is readonly [string, string] => entry !== null),
       ),
     );
+  }
+
+  /**
+   * The channel picker's own options (gap map row 4.2f) — `SalesChannelsApi`
+   * is TENANT-scoped exactly like `PublicationPage` already reads it, so a
+   * missing location scope or a failed read degrades to "universal gallery
+   * only" rather than blocking the rest of the tab: choosing, uploading,
+   * reordering and detaching the universal gallery need no channel list at
+   * all.
+   */
+  private async loadPhotoChannels(): Promise<void> {
+    await this.location.ensureLoaded();
+    const locationScope = this.location.scope();
+    if (!locationScope) {
+      return;
+    }
+    try {
+      const channels = await this.channelsApi.list(locationScope);
+      this.photoChannels.set(channels.filter((channel) => channel.status === 'ACTIVE'));
+    } catch {
+      this.photoChannels.set([]);
+    }
+  }
+
+  protected setPhotoChannel(channel: string): void {
+    this.selectedPhotoChannel.set(channel);
   }
 
   private async loadModifierLibrary(): Promise<void> {
@@ -942,22 +1001,33 @@ export class ProductEditorPage implements OnInit {
 
   // ------------------------------------------------------------ Tab 4 — Фото
 
+  /**
+   * Uploads and attaches to whichever gallery the channel picker is
+   * currently scoped to (gap map row 4.2f) — {@link ALL_CHANNELS}'s
+   * universal gallery by default, or one channel's own override once an
+   * operator picks it. `role` is decided per gallery, not per product: a
+   * channel's first override photo is its own `PRIMARY`, independent of how
+   * many photos the universal gallery already has.
+   */
   protected async uploadPhoto(file: File): Promise<void> {
     const scope = this.brand.scope();
     const product = this.product();
     if (!scope || !product) {
       return;
     }
+    const channel = this.selectedPhotoChannel();
+    const gallerySize = this.selectedChannelPhotos().length;
     this.uploadingPhoto.set(true);
     try {
       const asset = await firstValueFrom(
         this.mediaApi.upload(scope.tenantId, 'BRAND', scope.brandId, 'PUBLIC', file),
       );
-      const role = product.media.length === 0 ? 'PRIMARY' : 'GALLERY';
+      const role = gallerySize === 0 ? 'PRIMARY' : 'GALLERY';
       await firstValueFrom(
         this.api.attachMedia(scope, 'PRODUCT', product.productId, asset.assetId, {
           role,
-          sortOrder: product.media.length,
+          sortOrder: gallerySize,
+          channel,
         }),
       );
       this.product.set({
@@ -967,8 +1037,8 @@ export class ProductEditorPage implements OnInit {
           {
             mediaAssetId: asset.assetId,
             role,
-            sortOrder: product.media.length,
-            channelCode: ALL_CHANNELS,
+            sortOrder: gallerySize,
+            channelCode: channel,
           },
         ],
       });
@@ -994,6 +1064,12 @@ export class ProductEditorPage implements OnInit {
    * exactly the shape the brief asked for, no new endpoint. Swaps this photo
    * with its neighbour in the given direction; both re-attach so the array
    * order and the server's `sort_order` never disagree.
+   *
+   * <p>Scoped to the item's own {@code (role, channelCode)} gallery, not the
+   * product's whole flat `media` list: moving one channel's override up or
+   * down must never reshuffle the universal gallery's own order, or another
+   * channel's — the two galleries share one array but are otherwise
+   * independent (gap map row 4.2f).
    */
   protected async reorderPhoto(item: MediaRelation, direction: -1 | 1): Promise<void> {
     const scope = this.brand.scope();
@@ -1001,19 +1077,19 @@ export class ProductEditorPage implements OnInit {
     if (!scope || !product) {
       return;
     }
-    const media = [...product.media];
-    const index = media.findIndex(
+    const group = product.media.filter((m) => m.channelCode === item.channelCode);
+    const index = group.findIndex(
       (m) => m.mediaAssetId === item.mediaAssetId && m.role === item.role,
     );
     const swapWith = index + direction;
-    if (index < 0 || swapWith < 0 || swapWith >= media.length) {
+    if (index < 0 || swapWith < 0 || swapWith >= group.length) {
       return;
     }
-    [media[index], media[swapWith]] = [media[swapWith], media[index]];
+    [group[index], group[swapWith]] = [group[swapWith], group[index]];
     this.savingField.set(`photo-reorder:${item.mediaAssetId}`);
     try {
       await Promise.all(
-        media.map((m, sortOrder) =>
+        group.map((m, sortOrder) =>
           firstValueFrom(
             this.api.attachMedia(scope, 'PRODUCT', product.productId, m.mediaAssetId, {
               role: m.role,
@@ -1023,9 +1099,10 @@ export class ProductEditorPage implements OnInit {
           ),
         ),
       );
+      const reordered = new Map(group.map((m, sortOrder) => [mediaKey(m), { ...m, sortOrder }]));
       this.product.set({
         ...product,
-        media: media.map((m, sortOrder) => ({ ...m, sortOrder })),
+        media: product.media.map((m) => reordered.get(mediaKey(m)) ?? m),
       });
     } catch (error) {
       this.handleSaveError(error);
@@ -1034,7 +1111,12 @@ export class ProductEditorPage implements OnInit {
     }
   }
 
-  /** The undo `attachMedia` never had, at any layer — a wrong upload could not be corrected. */
+  /**
+   * The undo `attachMedia` never had, at any layer — a wrong upload could
+   * not be corrected. Matched by the full `(mediaAssetId, role, channelCode)`
+   * key: `catalog.media_relations`' own primary key since V0223, so the same
+   * asset attached to two different channels' galleries no longer collide.
+   */
   protected async detachPhoto(item: MediaRelation): Promise<void> {
     const scope = this.brand.scope();
     const product = this.product();
@@ -1055,9 +1137,7 @@ export class ProductEditorPage implements OnInit {
       );
       this.product.set({
         ...product,
-        media: product.media.filter(
-          (m) => !(m.mediaAssetId === item.mediaAssetId && m.role === item.role),
-        ),
+        media: product.media.filter((m) => mediaKey(m) !== mediaKey(item)),
       });
     } catch (error) {
       this.handleSaveError(error);

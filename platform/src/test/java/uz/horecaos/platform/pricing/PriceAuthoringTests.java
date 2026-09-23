@@ -131,7 +131,7 @@ class PriceAuthoringTests {
                 // any better than this constructor already exercises.
                 event -> {},
                 () -> new AuthenticatedActor("price-authoring-test", Set.of(), Map.of()));
-        query = new PriceQueryService(pricingStore, channelStore, clock);
+        query = new PriceQueryService(pricingStore, channelStore, clock, new FakeConfigurationResolver());
         bulkApply = new PriceBulkApplyService(
                 authoring, pricingStore, clock, new TransactionTemplate(new DataSourceTransactionManager(dataSource)));
 

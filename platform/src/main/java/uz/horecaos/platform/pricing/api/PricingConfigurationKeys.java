@@ -1,5 +1,6 @@
 package uz.horecaos.platform.pricing.api;
 
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 
 /**
@@ -48,6 +49,41 @@ public final class PricingConfigurationKeys {
             .defaultValue(900)
             .ownedBy("pricing")
             .describedAs("Seconds a pricing quote stays acceptable at checkout.")
+            .build();
+
+    /** The code both declarations share (gap map row {@code 4.4d}, wave w7). */
+    public static final String CATALOG_QR_KIOSK_PRICE_PLANE_CODE = "catalog.qr_kiosk_price_plane";
+
+    /**
+     * Whether a QR or kiosk channel with no price plane of its own takes the
+     * tenant's hall (POS) channel's prices automatically.
+     *
+     * <p>Off by default. {@code QuoteService} and {@code PriceQueryService}
+     * resolve it at {@code TENANT} scope and, when on, substitute the
+     * tenant's single active POS channel for a QR_TABLE or KIOSK channel
+     * whose own {@code price_plane_channel_id} is unset — never for a channel
+     * an operator already pointed somewhere by hand, and never when the
+     * tenant has zero or several POS channels, since neither state names an
+     * unambiguous hall.
+     *
+     * <p><strong>Declared twice.</strong> The registry ADR 0030's startup
+     * validator consults lives in {@code tenancy.domain.configuration},
+     * which is internal to the tenancy module; importing it here is not
+     * possible and importing this from there would make the two modules
+     * cyclic. The registry therefore carries an identical declaration, and
+     * {@code PricingConfigurationKeyTests} fails the build if the two ever
+     * drift apart — the same arrangement {@code
+     * inventory.api.InventoryConfigurationKeys#CATALOG_USE_STOCK_LOGIC} uses.
+     */
+    public static final ConfigurationKey<Boolean> CATALOG_QR_KIOSK_PRICE_PLANE = ConfigurationKey.of(
+                    CATALOG_QR_KIOSK_PRICE_PLANE_CODE, Boolean.class)
+            .defaultValue(false)
+            .ownedBy("pricing")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("QR and kiosk channels with no price plane of their own take the tenant's "
+                    + "single hall (POS) channel's prices automatically. A channel with a manual "
+                    + "override, or a tenant with zero or several POS channels, is unaffected.")
             .build();
 
     private PricingConfigurationKeys() {}
