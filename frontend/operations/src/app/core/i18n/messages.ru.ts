@@ -985,6 +985,7 @@ export const messagesRu: MessageCatalogue = {
   'settings.salesChannels.field.socialLinks.add': 'Добавить',
   'settings.salesChannels.field.socialLinks.remove': 'Удалить',
   'settings.salesChannels.field.socialLinks.empty': 'Ссылок пока нет.',
+  'settings.salesChannels.field.socialLinks.httpsOnly': 'Ссылка должна начинаться с https://',
   'settings.salesChannels.create.action': 'Добавить канал',
   'settings.salesChannels.create.cancel': 'Отмена',
   'settings.salesChannels.create.submit': 'Создать',

@@ -1015,6 +1015,7 @@ export const messagesEn = {
   'settings.salesChannels.field.socialLinks.add': 'Add',
   'settings.salesChannels.field.socialLinks.remove': 'Remove',
   'settings.salesChannels.field.socialLinks.empty': 'No social links yet.',
+  'settings.salesChannels.field.socialLinks.httpsOnly': 'The link must start with https://',
   'settings.salesChannels.create.action': 'Add channel',
   'settings.salesChannels.create.cancel': 'Cancel',
   'settings.salesChannels.create.submit': 'Create',

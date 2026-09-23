@@ -995,6 +995,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.salesChannels.field.socialLinks.add': 'Qoʻshish',
   'settings.salesChannels.field.socialLinks.remove': 'Oʻchirish',
   'settings.salesChannels.field.socialLinks.empty': 'Hali havolalar yoʻq.',
+  'settings.salesChannels.field.socialLinks.httpsOnly': 'Havola https:// bilan boshlanishi kerak',
   'settings.salesChannels.create.action': 'Kanal qoʻshish',
   'settings.salesChannels.create.cancel': 'Bekor qilish',
   'settings.salesChannels.create.submit': 'Yaratish',
