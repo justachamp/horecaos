@@ -114,6 +114,64 @@ export interface LocationServiceStateView {
 }
 
 /**
+ * Mirrors uz.horecaos.platform.tenancy.web.OperationsBrandController
+ * .LocationLegalEntityResponse — one row of the branch list's batched INN
+ * read (10.2a, wave 9). A location absent from this list has no legal entity
+ * currently assigned.
+ */
+export interface LocationLegalEntityView {
+  readonly locationId: string;
+  readonly legalEntityCode: string;
+  readonly taxpayerNumber: string;
+}
+
+/**
+ * Mirrors uz.horecaos.platform.tenancy.web.OperationsBrandController
+ * .LocationChannelsResponse — one row of the branch list's batched channel
+ * read (10.2a, wave 9). A location absent from this list sells on no active
+ * channel.
+ */
+export interface LocationChannelsView {
+  readonly locationId: string;
+  readonly channelCodes: readonly string[];
+}
+
+/**
+ * Mirrors uz.horecaos.platform.tenancy.web.OperationsBrandController
+ * .BulkServiceStateRequest — the branch list's bulk close/open bar (10.2a,
+ * wave 9), the same fields {@link ChangeServiceStateRequest} carries plus the
+ * selection itself.
+ */
+export interface BulkServiceStateRequest {
+  readonly locationIds: readonly string[];
+  readonly mode: ServiceMode;
+  readonly reasonCode?: string;
+  readonly note?: string;
+  readonly effectiveUntil?: string;
+}
+
+/**
+ * Mirrors uz.horecaos.platform.tenancy.web.OperationsBrandController
+ * .BulkServiceStateItemResponse — one selected branch's own outcome.
+ */
+export interface BulkServiceStateItemView {
+  readonly locationId: string;
+  readonly applied: boolean;
+  readonly problemCode: string | null;
+}
+
+/**
+ * Mirrors uz.horecaos.platform.tenancy.web.OperationsBrandController
+ * .BulkServiceStateResponse.
+ */
+export interface BulkServiceStateResponse {
+  readonly requestedCount: number;
+  readonly appliedCount: number;
+  readonly failedCount: number;
+  readonly items: readonly BulkServiceStateItemView[];
+}
+
+/**
  * Mirrors uz.horecaos.platform.tenancy.web.ServiceScheduleController
  * .ScheduleSummaryResponse (wave P43) — the Hours tab's rebind picker and
  * the source of `sharedWithLocationCount`'s own live count.
@@ -194,6 +252,41 @@ export class LocationsApi {
       ),
     );
     return result.value ?? [];
+  }
+
+  /** Every location's own assigned legal entity, batched — the branch list's INN filter (wave 9). */
+  async legalEntities(scope: LocationScope): Promise<readonly LocationLegalEntityView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly LocationLegalEntityView[]>(settingsPaths.locationsLegalEntities(scope)),
+    );
+    return result.value ?? [];
+  }
+
+  /** Every location's own active sales-channel codes, batched — the branch list's channel filter (wave 9). */
+  async channels(scope: LocationScope): Promise<readonly LocationChannelsView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly LocationChannelsView[]>(settingsPaths.locationsChannels(scope)),
+    );
+    return result.value ?? [];
+  }
+
+  /**
+   * Closes, force-opens, or returns several selected branches to schedule at
+   * once — the branch list's bulk close/open bar (wave 9). Reuses the same
+   * batched-state path {@link serviceStates} reads, `POST`ed to instead.
+   */
+  async bulkChangeServiceState(
+    scope: LocationScope,
+    request: BulkServiceStateRequest,
+  ): Promise<BulkServiceStateResponse> {
+    const response = await firstValueFrom(
+      this.api.send<BulkServiceStateRequest, BulkServiceStateResponse>(
+        'POST',
+        settingsPaths.locationsServiceStatesBulk(scope),
+        command(request),
+      ),
+    );
+    return response.body as BulkServiceStateResponse;
   }
 
   async profile(scope: LocationScope): Promise<LocationView> {

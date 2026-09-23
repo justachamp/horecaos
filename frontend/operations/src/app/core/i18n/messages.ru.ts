@@ -750,6 +750,8 @@ export const messagesRu: MessageCatalogue = {
     'У филиала есть зона доставки, но для неё не определён тариф.',
   'settings.home.readiness.code.POS_BINDING_UNHEALTHY':
     'Подключение к POS настроено, но не работает.',
+  'settings.home.readiness.code.NO_ACTIVE_BRAND':
+    'У аккаунта нет ни одного бренда, готового продавать — ни сейчас, ни после активации.',
   'settings.home.readiness.code.NO_PUBLISHED_MENU': 'У бренда нет опубликованного меню.',
   'settings.home.readiness.code.NO_AVAILABLE_ITEM':
     'В опубликованном меню бренда нет доступных позиций.',
@@ -1447,6 +1449,15 @@ export const messagesRu: MessageCatalogue = {
   'settings.locations.list.state.closed': 'Закрыт',
   'settings.locations.list.close': 'Закрыть',
   'settings.locations.list.reopen': 'Открыть снова',
+  'settings.locations.list.filterChannel': 'Канал',
+  'settings.locations.list.filterLegalEntity': 'Юрлицо (ИНН)',
+  'settings.locations.list.bulk.selectAll': 'Выбрать все',
+  'settings.locations.list.bulk.selected': 'Выбрано: {count}',
+  'settings.locations.list.bulk.clear': 'Снять выделение',
+  'settings.locations.list.bulk.close': 'Закрыть выбранные',
+  'settings.locations.list.bulk.reopen': 'Открыть выбранные',
+  'settings.locations.list.bulk.outcome.applied': 'готово',
+  'settings.locations.list.bulk.outcome.failed': 'ошибка',
   'settings.locations.tab.basics': 'Основное',
   'settings.locations.tab.hours': 'Часы',
   'settings.locations.tab.load': 'Загрузка и приготовление',

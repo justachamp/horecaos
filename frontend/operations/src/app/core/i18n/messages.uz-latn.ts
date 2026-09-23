@@ -758,6 +758,8 @@ export const messagesUzLatn: MessageCatalogue = {
     'Filialda yetkazib berish zonasi bor, lekin unga tarif aniqlanmagan.',
   'settings.home.readiness.code.POS_BINDING_UNHEALTHY':
     'POS ulanishi sozlangan, lekin ishlamayapti.',
+  'settings.home.readiness.code.NO_ACTIVE_BRAND':
+    'Tenantda sotishga tayyor brend yoʻq — hozir ham, faollashtirilgandan keyin ham.',
   'settings.home.readiness.code.NO_PUBLISHED_MENU': 'Brendda nashr etilgan menyu yoʻq.',
   'settings.home.readiness.code.NO_AVAILABLE_ITEM':
     'Brendning nashr etilgan menyusida buyurtma uchun mavjud narsa yoʻq.',
@@ -1462,6 +1464,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.locations.list.state.closed': 'Yopiq',
   'settings.locations.list.close': 'Yopish',
   'settings.locations.list.reopen': 'Qayta ochish',
+  'settings.locations.list.filterChannel': 'Kanal',
+  'settings.locations.list.filterLegalEntity': 'Yuridik shaxs (INN)',
+  'settings.locations.list.bulk.selectAll': 'Barchasini tanlash',
+  'settings.locations.list.bulk.selected': '{count} ta tanlandi',
+  'settings.locations.list.bulk.clear': 'Tanlovni bekor qilish',
+  'settings.locations.list.bulk.close': 'Tanlanganlarni yopish',
+  'settings.locations.list.bulk.reopen': 'Tanlanganlarni qayta ochish',
+  'settings.locations.list.bulk.outcome.applied': 'bajarildi',
+  'settings.locations.list.bulk.outcome.failed': 'xato',
   'settings.locations.tab.basics': 'Asosiy',
   'settings.locations.tab.hours': 'Ish vaqti',
   'settings.locations.tab.load': 'Yuklama va tayyorlash',

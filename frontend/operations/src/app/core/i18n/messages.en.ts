@@ -778,6 +778,8 @@ export const messagesEn = {
     'A branch has a delivery zone but no tariff resolves for it.',
   'settings.home.readiness.code.POS_BINDING_UNHEALTHY':
     'A POS connection is configured but not healthy.',
+  'settings.home.readiness.code.NO_ACTIVE_BRAND':
+    'The tenant has no brand able to sell, now or once activated.',
   'settings.home.readiness.code.NO_PUBLISHED_MENU': 'A brand has no published menu.',
   'settings.home.readiness.code.NO_AVAILABLE_ITEM':
     "A brand's published menu has nothing available to order.",
@@ -1474,6 +1476,15 @@ export const messagesEn = {
   'settings.locations.list.state.closed': 'Closed',
   'settings.locations.list.close': 'Close',
   'settings.locations.list.reopen': 'Reopen',
+  'settings.locations.list.filterChannel': 'Channel',
+  'settings.locations.list.filterLegalEntity': 'Legal entity (INN)',
+  'settings.locations.list.bulk.selectAll': 'Select all',
+  'settings.locations.list.bulk.selected': '{count} selected',
+  'settings.locations.list.bulk.clear': 'Clear selection',
+  'settings.locations.list.bulk.close': 'Close selected',
+  'settings.locations.list.bulk.reopen': 'Reopen selected',
+  'settings.locations.list.bulk.outcome.applied': 'done',
+  'settings.locations.list.bulk.outcome.failed': 'failed',
   'settings.locations.tab.basics': 'Basics',
   'settings.locations.tab.hours': 'Hours',
   'settings.locations.tab.load': 'Load & prep',

@@ -25,11 +25,121 @@
           <option value="FORCE_OPEN">{{ 'settings.locations.list.state.forceOpen' | t }}</option>
           <option value="FORCE_CLOSED">{{ 'settings.locations.list.state.closed' | t }}</option>
         </select>
+
+        <label class="q-caption" for="channel-filter">{{
+          'settings.locations.list.filterChannel' | t
+        }}</label>
+        <select
+          id="channel-filter"
+          class="q-body-sm field"
+          [value]="channelFilter()"
+          (change)="channelFilter.set($any($event.target).value)"
+        >
+          <option value="ALL">{{ 'settings.locations.list.state.all' | t }}</option>
+          @for (code of availableChannels(); track code) {
+            <option [value]="code">{{ code }}</option>
+          }
+        </select>
+
+        <label class="q-caption" for="legal-entity-filter">{{
+          'settings.locations.list.filterLegalEntity' | t
+        }}</label>
+        <select
+          id="legal-entity-filter"
+          class="q-body-sm field"
+          [value]="legalEntityFilter()"
+          (change)="legalEntityFilter.set($any($event.target).value)"
+        >
+          <option value="ALL">{{ 'settings.locations.list.state.all' | t }}</option>
+          @for (code of availableLegalEntities(); track code) {
+            <option [value]="code">{{ code }}</option>
+          }
+        </select>
       </div>
+
+      @if (selected().size > 0) {
+        <div class="bulk-bar">
+          <span class="q-body-sm bulk-bar__count">{{
+            'settings.locations.list.bulk.selected' | t: { count: selected().size }
+          }}</span>
+          <button type="button" class="q-body-sm secondary" (click)="clearSelection()">
+            {{ 'settings.locations.list.bulk.clear' | t }}
+          </button>
+          <button
+            type="button"
+            class="q-body-sm secondary"
+            [disabled]="bulkSaving()"
+            (click)="bulkReopen()"
+          >
+            {{ 'settings.locations.list.bulk.reopen' | t }}
+          </button>
+          @if (bulkClosing()) {
+            <div class="close-form bulk-bar__form">
+              <input
+                class="q-body-sm field"
+                type="text"
+                [value]="bulkReasonCode()"
+                (input)="bulkReasonCode.set($any($event.target).value)"
+                [placeholder]="'settings.locations.hours.reasonCode' | t"
+              />
+              <div class="close-form__actions">
+                <button type="button" class="q-body-sm secondary" (click)="cancelBulkClosing()">
+                  {{ 'settings.locations.cancel' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="q-body-sm primary"
+                  [disabled]="bulkSaving()"
+                  (click)="confirmBulkClose()"
+                >
+                  {{ 'settings.locations.list.close' | t }}
+                </button>
+              </div>
+            </div>
+          } @else {
+            <button
+              type="button"
+              class="q-body-sm primary"
+              [disabled]="bulkSaving()"
+              (click)="startBulkClosing()"
+            >
+              {{ 'settings.locations.list.bulk.close' | t }}
+            </button>
+          }
+        </div>
+        @if (bulkError(); as message) {
+          <p class="q-body-sm error" role="alert">{{ message }}</p>
+        }
+      }
+
+      @if (bulkOutcomes(); as outcomes) {
+        <ul class="bulk-outcomes">
+          @for (outcome of outcomes; track outcome.locationId) {
+            <li class="q-body-sm" [class.bulk-outcomes__item--failed]="!outcome.applied">
+              {{ displayNameOf(outcome.locationId) }}:
+              {{
+                outcome.applied
+                  ? ('settings.locations.list.bulk.outcome.applied' | t)
+                  : (outcome.problemCode ?? ('settings.locations.list.bulk.outcome.failed' | t))
+              }}
+            </li>
+          }
+        </ul>
+      }
 
       <table class="table">
         <thead>
           <tr>
+            <th class="q-caption">
+              <input
+                type="checkbox"
+                [checked]="
+                  filteredLocations().length > 0 && filteredLocations().length === selected().size
+                "
+                (click)="toggleSelectAll()"
+                [attr.aria-label]="'settings.locations.list.bulk.selectAll' | t"
+              />
+            </th>
             <th class="q-caption">{{ 'settings.locations.field.displayName' | t }}</th>
             <th class="q-caption">{{ 'settings.locations.field.code' | t }}</th>
             <th class="q-caption">{{ 'settings.locations.field.status' | t }}</th>
@@ -42,6 +152,14 @@
         <tbody>
           @for (location of filteredLocations(); track location.id) {
             <tr class="row" (click)="openLocation(location)">
+              <td class="q-body-sm" (click)="$event.stopPropagation()">
+                <input
+                  type="checkbox"
+                  [checked]="isSelected(location.id)"
+                  (click)="toggleOne(location.id)"
+                  [attr.aria-label]="location.displayName"
+                />
+              </td>
               <td class="q-body-sm">{{ location.displayName }}</td>
               <td class="q-body-sm q-mono">{{ location.code }}</td>
               <td class="q-body-sm">
@@ -108,7 +226,7 @@
             </tr>
           } @empty {
             <tr>
-              <td class="q-body-sm empty" colspan="7">{{ 'settings.locations.empty' | t }}</td>
+              <td class="q-body-sm empty" colspan="8">{{ 'settings.locations.empty' | t }}</td>
             </tr>
           }
         </tbody>

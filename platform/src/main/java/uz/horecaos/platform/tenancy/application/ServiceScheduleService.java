@@ -4,12 +4,17 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -41,6 +46,15 @@ import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcServiceabilit
  */
 @Service
 public class ServiceScheduleService {
+
+    private static final Logger log = LoggerFactory.getLogger(ServiceScheduleService.class);
+
+    /**
+     * The same cap {@code OrderBulkActionService.MAX_ORDERS} applies to a bulk
+     * order action, reused here for {@link #changeServiceStateBulk} — a bound
+     * on one request's blast radius, not a real-world branch count.
+     */
+    public static final int MAX_BULK_LOCATIONS = 200;
 
     private final JdbcServiceabilityStore store;
     private final AuditRecorder audit;
@@ -251,6 +265,80 @@ public class ServiceScheduleService {
                 reasonCode,
                 version));
     }
+
+    /**
+     * Applies one manual-override command to several of a brand's locations at
+     * once (Settings 10.2a bulk close/open bar).
+     *
+     * <p>N independent writes, each through {@link #changeServiceState} in its
+     * own transaction — never one all-or-nothing transaction, for the same
+     * reason {@code OrderBulkActionService} isn't one either: a lock convoy
+     * during the peak that produced the bulk action, and one branch already in
+     * the target mode failing the other nineteen. A resubmission under the same
+     * {@code Idempotency-Key} is answered by {@code IdempotencyInterceptor}
+     * from the recorded response and never reaches this method a second time
+     * (ADR 0031) — there is no per-item key the way ADR 0039's bulk order
+     * actions derive one, because unlike an order a repeated {@link
+     * #changeServiceState} call for the same location is not a duplicate
+     * effect, it is the same manual override applied again.
+     *
+     * <p>Every location named must already belong to this brand, checked
+     * against {@link #statesForBrand}'s own location set before anything is
+     * written: {@link JdbcServiceabilityStore#upsertServiceState} trusts its
+     * {@code brandId} parameter rather than re-deriving it from the row, and a
+     * caller naming a location from another brand would otherwise silently
+     * reassign that row's brand ownership rather than being refused.
+     *
+     * @param locationIds at most {@link #MAX_BULK_LOCATIONS}; a duplicate is
+     *                     answered once rather than reported twice
+     */
+    public List<BulkStateChangeOutcome> changeServiceStateBulk(
+            UUID tenantId, UUID brandId, List<UUID> locationIds, ChangeServiceStateCommand command) {
+
+        if (locationIds.isEmpty()) {
+            throw new IllegalArgumentException("A bulk service-state change names at least one location");
+        }
+        if (locationIds.size() > MAX_BULK_LOCATIONS) {
+            throw new IllegalArgumentException(
+                    "A bulk service-state change names at most " + MAX_BULK_LOCATIONS + " locations");
+        }
+
+        Set<UUID> locationsInBrand = statesForBrand(tenantId, brandId).keySet();
+        List<BulkStateChangeOutcome> outcomes = new ArrayList<>();
+        Set<UUID> seen = new HashSet<>();
+        for (UUID locationId : locationIds) {
+            if (!seen.add(locationId)) {
+                // Named twice in one request: answered once, not reported twice.
+                continue;
+            }
+            if (!locationsInBrand.contains(locationId)) {
+                outcomes.add(new BulkStateChangeOutcome(locationId, false, "LOCATION_NOT_IN_BRAND"));
+                continue;
+            }
+            try {
+                changeServiceState(tenantId, brandId, locationId, command);
+                outcomes.add(new BulkStateChangeOutcome(locationId, true, null));
+            } catch (IllegalArgumentException invalid) {
+                outcomes.add(new BulkStateChangeOutcome(locationId, false, "VALIDATION_FAILED"));
+            } catch (RuntimeException unexpected) {
+                // One location's unexpected failure must never stop the rest of
+                // the bar's selection, and must never be reported as a silent
+                // success either — the same discipline OrderBulkActionService
+                // applies per item.
+                log.error(
+                        "Bulk service-state change for location {} in brand {} failed unexpectedly",
+                        locationId,
+                        brandId,
+                        unexpected);
+                outcomes.add(new BulkStateChangeOutcome(locationId, false, "UNEXPECTED_FAILURE"));
+            }
+        }
+        return outcomes;
+    }
+
+    /** One location's own outcome inside a {@link #changeServiceStateBulk} request. */
+    public record BulkStateChangeOutcome(
+            UUID locationId, boolean applied, @Nullable String problemCode) {}
 
     /** Sets or clears the concurrent-order ceiling. */
     @Transactional

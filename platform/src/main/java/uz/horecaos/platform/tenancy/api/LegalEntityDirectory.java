@@ -1,6 +1,7 @@
 package uz.horecaos.platform.tenancy.api;
 
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -41,6 +42,26 @@ public interface LegalEntityDirectory {
      *         visible work rather than a guess
      */
     Optional<FiscalSeller> sellerFor(UUID tenantId, UUID locationId, LocalDate businessDate);
+
+    /**
+     * Every location's own {@link #sellerFor}, batched over a whole brand and
+     * one business date (Settings 10.2a branch list's INN filter) — the same
+     * batched-over-a-brand shape {@code ServiceScheduleService#statesForBrand}
+     * already uses for the branch list's state column, so the INN filter does
+     * not call {@link #sellerFor} once per row.
+     *
+     * <p>Defaults to always-empty, the same way {@link #summary} does: a test
+     * double built only for {@link #sellerFor} is not asserting anything about
+     * the branch list and should not have to implement a query it never
+     * exercises.
+     *
+     * @return only locations that currently resolve a seller; one with no
+     *         covering assignment is simply absent from the map, exactly what
+     *         {@link #sellerFor} answers empty for individually
+     */
+    default Map<UUID, FiscalSeller> sellersForBrand(UUID tenantId, UUID brandId, LocalDate businessDate) {
+        return Map.of();
+    }
 
     /**
      * The entity itself, by the id a caller already holds.
