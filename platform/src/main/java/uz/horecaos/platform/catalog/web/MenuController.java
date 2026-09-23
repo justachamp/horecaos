@@ -229,7 +229,9 @@ public class MenuController {
                     + "channel; naming one overrides the default for that channel alone. "
                     + "Replaces whichever menu previously held that exact scope. Takes effect "
                     + "immediately, exactly like a location_offerings toggle — no republish "
-                    + "required. Refused for an archived menu.")
+                    + "required. Refused unless the menu is ACTIVE — a DRAFT menu is not yet "
+                    + "reviewed and complete, and an ARCHIVED one is retired; activate the menu "
+                    + "first.")
     public ResponseEntity<Void> bind(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,

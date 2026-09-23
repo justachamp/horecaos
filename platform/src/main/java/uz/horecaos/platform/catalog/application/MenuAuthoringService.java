@@ -249,17 +249,26 @@ public class MenuAuthoringService {
 
     /**
      * Binds a menu to a branch, for one channel or — {@code channelId} null
-     * — as the branch's default across every channel. Refuses an archived
-     * menu: archiving is a deliberate two-step (see {@code V0389}'s own
-     * header), never an implicit unbind, so a menu already bound stays bound
-     * when it is archived, but a fresh bind cannot start from an archived one.
+     * — as the branch's default across every channel. Requires the menu to
+     * be ACTIVE: {@link StorefrontCatalogQuery} reads a bound menu's
+     * membership live, with no publish step of its own, so binding is the
+     * one moment a menu goes from draft authoring to customer-facing, and it
+     * has to happen deliberately. A fresh menu starts DRAFT (see {@code
+     * MenuController#create}) and would otherwise go live with whatever
+     * partial membership it happens to carry the instant an operator binds
+     * it mid-edit; ARCHIVED is refused for the separate reason {@code
+     * V0389}'s own header gives — archiving is a deliberate two-step, never
+     * an implicit unbind, so a menu already bound stays bound when it is
+     * archived, but a fresh bind cannot start from an archived one either.
      */
     @Transactional
     public void bindToBranch(
             UUID tenantId, UUID brandId, UUID locationId, @Nullable UUID channelId, UUID menuId, String actorSubject) {
         MenuRow menu = requireMenu(tenantId, brandId, menuId);
-        if ("ARCHIVED".equals(menu.status())) {
-            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE, "Cannot bind an archived menu to a branch");
+        if (!"ACTIVE".equals(menu.status())) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "Cannot bind a menu to a branch unless it is ACTIVE (currently " + menu.status() + ")");
         }
         if (channelId != null && channels.byId(tenantId, channelId).isEmpty()) {
             throw new UnknownChannelException(channelId);

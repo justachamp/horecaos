@@ -285,7 +285,7 @@ class MenuControllerTests {
     @Test
     @DisplayName("PUT .../bindings/locations/{locationId} over HTTP binds a menu as the branch's default")
     void bindOverHttp() throws Exception {
-        UUID menuId = createMenuDirectly("Main menu");
+        UUID menuId = createMenuDirectly("Main menu", "ACTIVE");
 
         MvcResult result = mvc.perform(put(path() + "/bindings/locations/" + LOCATION)
                         .with(tokenFor(BRANCH_AUTHOR))
@@ -297,6 +297,23 @@ class MenuControllerTests {
 
         assertThat(result.getResponse().getStatus()).isEqualTo(204);
         assertThat(boundMenuId(LOCATION)).isEqualTo(menuId);
+    }
+
+    @Test
+    @DisplayName("PUT .../bindings/locations/{locationId} refuses a still-DRAFT menu")
+    void bindOfADraftMenuIsRefused() throws Exception {
+        UUID menuId = createMenuDirectly("Unfinished menu", "DRAFT");
+
+        MvcResult attempt = mvc.perform(put(path() + "/bindings/locations/" + LOCATION)
+                        .with(tokenFor(BRANCH_AUTHOR))
+                        .header("Idempotency-Key", "menu-bind-422-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"menuId":"%s","channelId":null}""".formatted(menuId)))
+                .andReturn();
+
+        assertThat(attempt.getResponse().getStatus()).isEqualTo(422);
+        assertThat(boundMenuId(LOCATION)).isNull();
     }
 
     @Test
@@ -341,15 +358,21 @@ class MenuControllerTests {
     }
 
     private UUID createMenuDirectly(String name) {
+        return createMenuDirectly(name, "DRAFT");
+    }
+
+    /** bindOverHttp needs an ACTIVE menu -- bindToBranch refuses anything else. */
+    private UUID createMenuDirectly(String name, String status) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                         INSERT INTO catalog.menus (id, tenant_id, brand_id, name, status, version)
-                        VALUES (:id, :t, :b, :name, 'DRAFT', 1)
+                        VALUES (:id, :t, :b, :name, :status, 1)
                         """)
                 .param("id", id)
                 .param("t", TENANT)
                 .param("b", BRAND)
                 .param("name", name)
+                .param("status", status)
                 .update();
         return id;
     }
