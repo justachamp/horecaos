@@ -276,6 +276,17 @@ export interface VariantSalesListResponse {
   readonly provenance: ProvenanceResponse;
 }
 
+/** Row 7.7: server-side sort for {@link ReportingApi.variantSales} — mirrors `JdbcReportingStore.VariantSalesSort`. */
+export type VariantSalesSort = 'QUANTITY_DESC' | 'REVENUE_DESC' | 'NAME_ASC';
+
+/** Row 7.7: the previous page's last row, in whichever field matches the active {@link VariantSalesSort} — the other two are ignored server-side. */
+export interface VariantSalesCursor {
+  readonly afterQuantity?: number;
+  readonly afterRevenueSom?: number;
+  readonly afterProductName?: string;
+  readonly afterVariantId: string;
+}
+
 /**
  * T14 (7.7a/7.7b, ADR 0134): one product's persisted ABC/XYZ classification.
  * Mirrors `ProductClassificationController.ClassificationRowResponse`.
@@ -913,10 +924,18 @@ export class ReportingApi {
    * Wave T14 (7.7): `fulfilmentType` now reaches the query, previously
    * accepted nowhere and the filter bar's control read by nothing — see
    * `product-analytics-page.ts`'s own doc for the defect this replaced.
+   *
+   * Wave 10 w5-reports-exports (7.7): `sort` and `cursor` — the page's own
+   * hard-coded revenue order and 200-row cap it could never see past.
    */
   async variantSales(
     tenantId: string,
-    params: RangeParams & { readonly fulfilmentType?: readonly string[]; readonly limit?: number },
+    params: RangeParams & {
+      readonly fulfilmentType?: readonly string[];
+      readonly limit?: number;
+      readonly sort?: VariantSalesSort;
+      readonly cursor?: VariantSalesCursor;
+    },
   ): Promise<VariantSalesListResponse> {
     const result = await firstValueFrom(
       this.api.get<VariantSalesListResponse>(reportsPaths.variantSales(tenantId), {
@@ -926,6 +945,11 @@ export class ReportingApi {
           locationId: params.locationId,
           fulfilmentType: params.fulfilmentType,
           limit: params.limit,
+          sort: params.sort,
+          afterQuantity: params.cursor?.afterQuantity,
+          afterRevenueSom: params.cursor?.afterRevenueSom,
+          afterProductName: params.cursor?.afterProductName,
+          afterVariantId: params.cursor?.afterVariantId,
         },
       }),
     );

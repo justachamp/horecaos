@@ -56,6 +56,23 @@
         </div>
       }
       @case ('ready') {
+        <div class="sort-controls">
+          <span class="q-caption sort-controls__label">{{ 'reports.products.sort.label' | t }}</span>
+          <div class="sort-controls__group" role="group" [attr.aria-label]="'reports.products.sort.label' | t">
+            @for (option of sortOptions; track option.id) {
+              <button
+                type="button"
+                class="segment"
+                [class.segment--active]="sort() === option.id"
+                [attr.aria-pressed]="sort() === option.id"
+                (click)="selectSort(option.id)"
+                [attr.data-testid]="'products-sort-' + option.id"
+              >
+                {{ option.labelKey | t }}
+              </button>
+            }
+          </div>
+        </div>
         <table class="table">
           <thead>
             <tr>
@@ -104,7 +121,15 @@
           </tbody>
         </table>
         @if (maybeMore()) {
-          <p class="q-caption">{{ 'reports.products.maybeMore' | t }}</p>
+          <button
+            type="button"
+            class="load-more"
+            [disabled]="loadingMore()"
+            (click)="loadMoreSales()"
+            data-testid="products-load-more"
+          >
+            {{ (loadingMore() ? 'reports.products.loadMore.loading' : 'reports.products.loadMore') | t }}
+          </button>
         }
         <p class="q-caption dine-in-note">{{ 'reports.products.dineInNote' | t }}</p>
       }

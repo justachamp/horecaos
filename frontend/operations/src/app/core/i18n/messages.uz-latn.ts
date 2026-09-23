@@ -4579,6 +4579,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.products.column.share': 'Tushumdagi ulush',
   'reports.products.maybeMore':
     'Mahsulotlar koʻproq boʻlishi mumkin — bu chegaralangan oʻqish, toʻliq eksport emas.',
+  'reports.products.sort.label': 'Saralash',
+  'reports.products.sort.revenue': 'Tushum',
+  'reports.products.sort.quantity': 'Miqdor',
+  'reports.products.sort.name': 'Nomi',
+  'reports.products.loadMore': 'Yana yuklash',
+  'reports.products.loadMore.loading': 'Yuklanmoqda…',
   'reports.products.stop': 'STOP',
   'reports.products.dineInNote':
     'Zalda buyurtmalar jamiga qoʻshiladi, lekin yetkazib berish yoki olib ketish ustunlariga kirmaydi, shuning uchun ular yigʻindisi jamiga teng boʻlmasligi mumkin.',

@@ -4573,6 +4573,12 @@ export const messagesEn = {
   'reports.products.column.share': 'Revenue share',
   'reports.products.maybeMore':
     'There may be more products than shown — this is a bounded read, not a full export.',
+  'reports.products.sort.label': 'Sort by',
+  'reports.products.sort.revenue': 'Revenue',
+  'reports.products.sort.quantity': 'Quantity',
+  'reports.products.sort.name': 'Name',
+  'reports.products.loadMore': 'Load more',
+  'reports.products.loadMore.loading': 'Loading…',
   'reports.products.stop': 'STOP',
   'reports.products.dineInNote':
     'Dine-in lines are summed into the total but split into neither the delivery nor the pickup column, so delivery plus pickup need not add up to the total.',

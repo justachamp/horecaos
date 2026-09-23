@@ -13,6 +13,7 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { formatDateTime } from '../../core/format/datetime';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
+import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { CatalogApi, fetchAllVariantsAtLocation } from '../catalog/catalog-api';
 import { ProvenanceBanner } from './provenance-banner';
@@ -23,8 +24,16 @@ import {
   ClassificationRunResponse,
   ProvenanceResponse,
   ReportingApi,
+  VariantSalesCursor,
   VariantSalesRowResponse,
+  VariantSalesSort,
 } from './reporting-api';
+
+/** The row-quantity page pages 200 at a time — same width the previous hard-coded `limit: 200` read in one shot. */
+const SALES_PAGE_SIZE = 200;
+
+/** {@code JdbcReportingStore#NIL_VARIANT_ID} — a line with no catalogue reference, mirrored here so the cursor's tiebreak matches the server's exactly. */
+const NIL_VARIANT_ID = '00000000-0000-0000-0000-000000000000';
 
 interface ProductRow {
   readonly key: string;
@@ -101,6 +110,16 @@ const MINIMUM_CLASSIFICATION_DAYS = 28;
  * into `quantity`/`netSom` and into neither split, so delivery plus pickup
  * need not equal the total whenever the tenant serves any dine-in at all —
  * stated on screen rather than left for a manager to notice as a discrepancy.
+ *
+ * **Wave 10 w5-reports-exports (7.7).** «Продажи» had no sort control at all
+ * (`GET .../variant-sales` only ever answered revenue order) and its
+ * `limit: 200` had no way past it. `sort` now reaches the query
+ * (QUANTITY_DESC/REVENUE_DESC/NAME_ASC) and a "Load more" button pages past
+ * the first 200 with the server's own keyset cursor — the same
+ * fetch-then-append shape `order-reports-page.ts`'s «Заказы» tab already
+ * uses for its own cursor, not a second, silently-incomplete fetch. Changing
+ * the sort discards whatever was paged in and starts over from page one,
+ * since a cursor is only meaningful under the sort it was taken from.
  */
 @Component({
   selector: 'q-product-analytics-page',
@@ -125,6 +144,21 @@ export class ProductAnalyticsPage {
   protected readonly provenance = signal<ProvenanceResponse | null>(null);
   protected readonly maybeMore = signal(false);
   protected readonly requestedTo = computed(() => this.filters.range().to);
+
+  /** Row 7.7: the sort control the page previously had none of. */
+  protected readonly sort = signal<VariantSalesSort>('REVENUE_DESC');
+  protected readonly sortOptions: readonly {
+    readonly id: VariantSalesSort;
+    readonly labelKey: MessageKey;
+  }[] = [
+    { id: 'REVENUE_DESC', labelKey: 'reports.products.sort.revenue' },
+    { id: 'QUANTITY_DESC', labelKey: 'reports.products.sort.quantity' },
+    { id: 'NAME_ASC', labelKey: 'reports.products.sort.name' },
+  ];
+  protected readonly loadingMore = signal(false);
+  /** Row 7.7: keyset cursor paging past the 200-row cap — mirrors `order-reports-page.ts`'s own `commercialCursor`. */
+  private salesCursor: VariantSalesCursor | null = null;
+  private allSalesRows: readonly VariantSalesRowResponse[] = [];
 
   /** `categoryId -> name`, best-effort (CATALOG_READ may be absent for a finance-only viewer — see `loadCategoryNames`). */
   protected readonly categoryNames = signal<ReadonlyMap<string, string>>(new Map());
@@ -187,7 +221,8 @@ export class ProductAnalyticsPage {
     effect(() => {
       const range = this.filters.range();
       const fulfilment = this.filters.fulfilmentType();
-      void this.load(range, fulfilment);
+      const sort = this.sort();
+      void this.load(range, fulfilment, sort);
     });
 
     // ABC/XYZ read whatever run is on file for the active window whenever
@@ -209,7 +244,39 @@ export class ProductAnalyticsPage {
   }
 
   protected retry(): void {
-    void this.load(this.filters.range(), this.filters.fulfilmentType());
+    void this.load(this.filters.range(), this.filters.fulfilmentType(), this.sort());
+  }
+
+  /** Row 7.7: changing the sort has no cursor to page from yet, so it starts over from page one. */
+  protected selectSort(sort: VariantSalesSort): void {
+    this.sort.set(sort);
+  }
+
+  /** Row 7.7: pages past the first 200 rows with the server's own keyset cursor. */
+  protected async loadMoreSales(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope || this.salesCursor === null || this.loadingMore()) {
+      return;
+    }
+    this.loadingMore.set(true);
+    try {
+      const range = this.filters.range();
+      const fulfilment = this.filters.fulfilmentType();
+      const result = await this.api.variantSales(scope.tenantId, {
+        from: range.from,
+        to: range.to,
+        fulfilmentType: fulfilment === 'ALL' ? undefined : [fulfilment],
+        limit: SALES_PAGE_SIZE,
+        sort: this.sort(),
+        cursor: this.salesCursor,
+      });
+      this.allSalesRows = [...this.allSalesRows, ...result.rows];
+      this.maybeMore.set(result.maybeMore);
+      this.salesCursor = cursorAfter(result.rows, this.sort());
+      this.applyLoadedSalesRows();
+    } finally {
+      this.loadingMore.set(false);
+    }
   }
 
   protected retryClassification(): void {
@@ -265,8 +332,14 @@ export class ProductAnalyticsPage {
 
   // ------------------------------------------------------------- loading
 
-  private async load(range: { from: string; to: string }, fulfilment: string): Promise<void> {
+  private async load(
+    range: { from: string; to: string },
+    fulfilment: string,
+    sort: VariantSalesSort,
+  ): Promise<void> {
     this.state.set('loading');
+    this.salesCursor = null;
+    this.allSalesRows = [];
     await this.location.ensureLoaded();
     const scope = this.location.scope();
     if (!scope) {
@@ -278,18 +351,32 @@ export class ProductAnalyticsPage {
         from: range.from,
         to: range.to,
         fulfilmentType: fulfilment === 'ALL' ? undefined : [fulfilment],
-        limit: 200,
+        limit: SALES_PAGE_SIZE,
+        sort,
       });
       this.provenance.set(result.provenance);
       this.maybeMore.set(result.maybeMore);
-      const totalNet = result.rows.reduce((sum, row) => sum + row.totalNetSom, 0);
-      this.rows.set(result.rows.map((row) => toProductRow(row, totalNet)));
+      this.allSalesRows = result.rows;
+      this.salesCursor = cursorAfter(result.rows, sort);
+      this.applyLoadedSalesRows();
       this.state.set('ready');
       void this.loadCategoryNames(scope.tenantId, scope.brandId);
       void this.loadStoppedVariants(scope);
     } catch {
       this.state.set('error');
     }
+  }
+
+  /**
+   * `revenueSharePercent` is a share of every row currently on screen, not
+   * of the tenant's whole catalogue in range — the same bounded-read caveat
+   * `reports.products.maybeMore` already discloses. Recomputed over the
+   * full accumulated set on every page, "Load more" included, so a share
+   * printed against page one is not silently stale once page two arrives.
+   */
+  private applyLoadedSalesRows(): void {
+    const totalNet = this.allSalesRows.reduce((sum, row) => sum + row.totalNetSom, 0);
+    this.rows.set(this.allSalesRows.map((row) => toProductRow(row, totalNet)));
   }
 
   /**
@@ -361,6 +448,32 @@ export class ProductAnalyticsPage {
     } catch {
       this.classificationState.set('error');
     }
+  }
+}
+
+/**
+ * Row 7.7: the keyset cursor for the next «Продажи» page — whichever field
+ * matches `sort`, off the last row. `variantId` falls back to {@link
+ * NIL_VARIANT_ID} when null (a line with no catalogue reference), mirroring
+ * `JdbcReportingStore#NIL_VARIANT_ID`'s own substitution so the tuple
+ * comparison server-side is never evaluated against a real `NULL`.
+ */
+function cursorAfter(
+  rows: readonly VariantSalesRowResponse[],
+  sort: VariantSalesSort,
+): VariantSalesCursor | null {
+  const last = rows.at(-1);
+  if (!last) {
+    return null;
+  }
+  const afterVariantId = last.variantId ?? NIL_VARIANT_ID;
+  switch (sort) {
+    case 'QUANTITY_DESC':
+      return { afterQuantity: last.totalQuantity, afterVariantId };
+    case 'REVENUE_DESC':
+      return { afterRevenueSom: last.totalNetSom, afterVariantId };
+    case 'NAME_ASC':
+      return { afterProductName: last.productName, afterVariantId };
   }
 }
 

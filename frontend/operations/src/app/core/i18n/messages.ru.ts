@@ -4550,6 +4550,12 @@ export const messagesRu: MessageCatalogue = {
   'reports.products.column.share': 'Доля выручки',
   'reports.products.maybeMore':
     'Товаров может быть больше — это ограниченная выборка, а не полная выгрузка.',
+  'reports.products.sort.label': 'Сортировка',
+  'reports.products.sort.revenue': 'Выручка',
+  'reports.products.sort.quantity': 'Количество',
+  'reports.products.sort.name': 'Название',
+  'reports.products.loadMore': 'Показать ещё',
+  'reports.products.loadMore.loading': 'Загрузка…',
   'reports.products.stop': 'СТОП',
   'reports.products.dineInNote':
     'Заказы в зале суммируются в «Итого», но не входят ни в столбец доставки, ни в столбец самовывоза, поэтому доставка плюс самовывоз не обязаны сходиться с итогом.',
