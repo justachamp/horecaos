@@ -11,6 +11,8 @@ export interface ChannelHostnameView {
   readonly configured: boolean;
   readonly hostname: string | null;
   readonly verified: boolean;
+  /** The platform's own base domain a subdomain slug is composed under -- authoritative, always present. */
+  readonly baseDomain: string;
 }
 
 /** Mirrors `ChannelSetupController.PresentationView`. */

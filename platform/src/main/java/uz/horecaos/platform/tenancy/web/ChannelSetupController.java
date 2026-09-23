@@ -54,7 +54,9 @@ public class ChannelSetupController {
                     + "-- the console shows 'not configured' rather than treating an unset facet "
                     + "as an error.")
     public HostnameView hostname(@PathVariable UUID tenantId, @PathVariable UUID channelId) {
-        return setup.hostname(tenantId, channelId).map(HostnameView::of).orElseGet(HostnameView::unset);
+        return setup.hostname(tenantId, channelId)
+                .map(hostname -> HostnameView.of(hostname, setup.baseDomain()))
+                .orElseGet(() -> HostnameView.unset(setup.baseDomain()));
     }
 
     @PutMapping("/hostname/subdomain")
@@ -69,7 +71,8 @@ public class ChannelSetupController {
             @PathVariable UUID channelId,
             @Valid @RequestBody SubdomainRequest body,
             @RequestParam int expectedVersion) {
-        return HostnameView.of(setup.setSubdomain(tenantId, channelId, body.slug(), expectedVersion));
+        return HostnameView.of(
+                setup.setSubdomain(tenantId, channelId, body.slug(), expectedVersion), setup.baseDomain());
     }
 
     @PutMapping("/hostname/custom")
@@ -84,7 +87,8 @@ public class ChannelSetupController {
             @PathVariable UUID channelId,
             @Valid @RequestBody CustomHostnameRequest body,
             @RequestParam int expectedVersion) {
-        return HostnameView.of(setup.setCustomHostname(tenantId, channelId, body.hostname(), expectedVersion));
+        return HostnameView.of(
+                setup.setCustomHostname(tenantId, channelId, body.hostname(), expectedVersion), setup.baseDomain());
     }
 
     @PostMapping("/hostname/verify")
@@ -92,7 +96,7 @@ public class ChannelSetupController {
     @Operation(summary = "Mark the channel's current hostname verified")
     public HostnameView verify(
             @PathVariable UUID tenantId, @PathVariable UUID channelId, @RequestParam int expectedVersion) {
-        return HostnameView.of(setup.verifyCustomHostname(tenantId, channelId, expectedVersion));
+        return HostnameView.of(setup.verifyCustomHostname(tenantId, channelId, expectedVersion), setup.baseDomain());
     }
 
     @DeleteMapping("/hostname")
@@ -137,13 +141,14 @@ public class ChannelSetupController {
             @Size(max = 500) String seoDescription,
             UUID ogImageAssetId) {}
 
-    record HostnameView(boolean configured, @Nullable String hostname, boolean verified) {
-        static HostnameView of(ChannelHostname hostname) {
-            return new HostnameView(true, hostname.hostname(), hostname.verified());
+    /** @param baseDomain the platform's own base domain, for the console to show alongside a subdomain field -- the authoritative value, not a copy the frontend has to keep in sync. */
+    record HostnameView(boolean configured, @Nullable String hostname, boolean verified, String baseDomain) {
+        static HostnameView of(ChannelHostname hostname, String baseDomain) {
+            return new HostnameView(true, hostname.hostname(), hostname.verified(), baseDomain);
         }
 
-        static HostnameView unset() {
-            return new HostnameView(false, null, false);
+        static HostnameView unset(String baseDomain) {
+            return new HostnameView(false, null, false, baseDomain);
         }
     }
 

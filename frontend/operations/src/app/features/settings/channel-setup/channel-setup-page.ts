@@ -83,7 +83,8 @@ export class ChannelSetupPage {
   protected readonly hostnameCustom = signal('');
   protected readonly hostnameSaving = signal(false);
   protected readonly hostnameError = signal<string | null>(null);
-  protected readonly baseDomain = 'stores.horecaos.uz';
+  /** Read from the server (`ChannelSetupController.HostnameView.baseDomain`), never hardcoded here -- a config override on the backend must not leave this label wrong. */
+  protected readonly baseDomain = computed(() => this.hostname()?.baseDomain ?? '');
 
   // ------------------------------------------------------- (c) presentation
   protected readonly presentation = signal<ChannelPresentationView | null>(null);
@@ -278,7 +279,12 @@ export class ChannelSetupPage {
     this.hostnameError.set(null);
     try {
       await this.setupApi.clearHostname(scope, channel.id, this.version());
-      this.hostname.set({ configured: false, hostname: null, verified: false });
+      this.hostname.update((current) => ({
+        configured: false,
+        hostname: null,
+        verified: false,
+        baseDomain: current?.baseDomain ?? '',
+      }));
       this.channel.update((current) => (current ? { ...current, version: current.version + 1 } : current));
     } catch (error) {
       this.hostnameError.set(this.describe(error));

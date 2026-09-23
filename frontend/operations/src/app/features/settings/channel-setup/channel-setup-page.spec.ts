@@ -63,7 +63,9 @@ describe('ChannelSetupPage', () => {
       matrices: vi.fn().mockResolvedValue({ paymentMethods: {}, fulfillmentModes: {}, locationIds: [] }),
     };
     setupApi = {
-      hostname: vi.fn().mockResolvedValue({ configured: false, hostname: null, verified: false }),
+      hostname: vi
+        .fn()
+        .mockResolvedValue({ configured: false, hostname: null, verified: false, baseDomain: 'stores.horecaos.uz' }),
       presentation: vi.fn().mockResolvedValue({ seoTitle: null, seoDescription: null, ogImageAssetId: null }),
       currentPage: vi.fn().mockResolvedValue({
         published: false,
@@ -76,7 +78,12 @@ describe('ChannelSetupPage', () => {
       }),
       setSubdomain: vi
         .fn()
-        .mockResolvedValue({ configured: true, hostname: 'tandir-house.stores.horecaos.uz', verified: true }),
+        .mockResolvedValue({
+          configured: true,
+          hostname: 'tandir-house.stores.horecaos.uz',
+          verified: true,
+          baseDomain: 'stores.horecaos.uz',
+        }),
     };
 
     await TestBed.configureTestingModule({
