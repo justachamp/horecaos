@@ -38,6 +38,18 @@ export interface PushResponse {
   unmappedItems?: Array<string>;
 }
 
+export interface ShiftEventRequest {
+  event: string;
+  occurredAt?: string;
+  venueReference: string;
+}
+
+export interface ShiftEventResponse {
+  notified?: boolean;
+  rejectionCode?: string;
+  status?: string;
+}
+
 export interface Totals {
   currency: string;
   discountMinor?: number;
@@ -48,6 +60,7 @@ export interface Totals {
 }
 
 export interface Operations {
+  "push_1": { method: "POST"; path: "/api/v1/partner/tenants/{tenantId}/marketplace/shift-events"; request: { parameters: { path: { tenantId: string } }; body: ShiftEventRequest }; responses: { "200": ShiftEventResponse } };
   "push": { method: "POST"; path: "/api/v1/partner/tenants/{tenantId}/orders"; request: { parameters: { path: { tenantId: string } }; body: PartnerOrderControllerPushRequest }; responses: { "200": PushResponse } };
   "handle_3": { method: "DELETE"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };
   "handle": { method: "GET"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };

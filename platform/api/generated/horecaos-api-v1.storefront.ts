@@ -157,6 +157,13 @@ export interface DeliveryChargeResponse {
   reasonCode?: string;
 }
 
+export interface DeliveryFeeQuoteRequest {
+  currency?: string;
+  lat?: number;
+  lon?: number;
+  subtotalMinor?: number;
+}
+
 export interface DeliveryFeeView {
   available?: boolean;
   currency?: string;
@@ -325,7 +332,9 @@ export interface OrderResponse {
   createdAt?: string;
   currency?: string;
   feeMinor?: number;
+  fulfillmentMode?: string;
   lines?: Array<OrderLineResponse>;
+  locationId?: string;
   orderId?: string;
   publicOrderNumber?: string;
   status?: string;
@@ -643,7 +652,7 @@ export interface Operations {
   "signOut": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/sessions/current"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };
   "requestCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/verification-challenges"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RequestCodeRequest }; responses: { "200": ChallengeResponse } };
   "submitCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/verification-challenges/{challengeId}/attempts"; request: { parameters: { path: { brandId: string; challengeId: string; tenantId: string } }; body: SubmitCodeRequest }; responses: { "200": GrantResponse } };
-  "quote": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { currency: string; lat: number; lon: number; subtotalMinor?: number } } }; responses: { "200": DeliveryFeeView } };
+  "quote": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: DeliveryFeeQuoteRequest }; responses: { "200": DeliveryFeeView } };
   "fulfillmentModes": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/fulfillment-modes"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channel: string } } }; responses: { "200": FulfillmentModesResponse } };
   "menu": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/menu"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channel: string; locale?: string } } }; responses: { "200": StorefrontMenu } };
   "profile_1": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/profile"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LocationProfile } };

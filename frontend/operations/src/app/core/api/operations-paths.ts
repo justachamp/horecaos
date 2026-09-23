@@ -130,6 +130,19 @@ export const operationsPaths = {
     return `${this.orders(scope)}/customer-lookups`;
   },
 
+  /**
+   * Row 1.3a: `OperationsCustomerController#create` — create-on-miss for a
+   * caller whose only grant is at `LOCATION` scope, a sibling of {@link
+   * orders} and not a path under it (a customer has no order yet to nest
+   * under). See that controller's own doc for why this is a second endpoint
+   * rather than a widened {@link CustomersApi.create}: `LOCATION_STAFF`/
+   * `LOCATION_MANAGER` cannot reach `customers(scope)` above, which
+   * `CustomerController#createManually` declares at `TENANT` scope.
+   */
+  orderIntakeCustomers(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/customers`;
+  },
+
   /** Row 1.3g (ADR 0040): record an aggregator's own order by hand. */
   orderAggregatorEntries(scope: LocationScope): string {
     return `${this.orders(scope)}/aggregator-entries`;
@@ -444,6 +457,16 @@ export const operationsPaths = {
    */
   kitchenRoutingRules(scope: LocationScope): string {
     return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/routing-rules`;
+  },
+
+  /**
+   * One routing rule, by id — `PUT` changes its role (brand layer) or its
+   * station (location layer), row 4.2g's other half: before this, a product
+   * already routed could only be re-`POST`ed into a 409, never actually
+   * changed.
+   */
+  kitchenRoutingRule(scope: LocationScope, ruleId: string): string {
+    return `${this.kitchenRoutingRules(scope)}/${encodeURIComponent(ruleId)}`;
   },
 
   /**

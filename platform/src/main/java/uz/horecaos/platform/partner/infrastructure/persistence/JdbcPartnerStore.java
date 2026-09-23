@@ -99,6 +99,32 @@ public class JdbcPartnerStore {
     }
 
     /**
+     * The IANA zone gap map row {@code 10.9d} renders an aggregator shift
+     * event's own local time in — Delever's own defect named as the reason
+     * to have this at all: "originally always sent in Uzbekistan time; the
+     * system now sends them in the timezone of the company's registered
+     * country". A branch-scoped binding reads its own branch's zone; a
+     * brand-wide binding ({@code locationId} null) has no single branch to
+     * read, so it falls back to the tenant's own registered zone. Never
+     * throws: an unresolvable zone answers UTC, the identical fallback
+     * {@code JdbcPaymentBusinessCalendar} uses for the same reason.
+     */
+    public String businessTimezone(UUID tenantId, @Nullable UUID locationId) {
+        Optional<String> zone = locationId != null
+                ? jdbc.sql("""
+                        SELECT timezone FROM tenant.locations WHERE tenant_id = :tenantId AND id = :locationId
+                        """)
+                        .param("tenantId", tenantId)
+                        .param("locationId", locationId)
+                        .query(String.class)
+                        .optional()
+                : jdbc.sql("""
+                        SELECT default_timezone FROM tenant.tenants WHERE id = :tenantId
+                        """).param("tenantId", tenantId).query(String.class).optional();
+        return zone.orElse("UTC");
+    }
+
+    /**
      * Whether the branch is closed by an explicit override.
      *
      * <p>Only {@code FORCE_CLOSED} is consulted. The schedule half of ADR 0036's
@@ -698,10 +724,10 @@ public class JdbcPartnerStore {
         jdbc.sql("""
                 INSERT INTO integration.provider_activity_watermarks (
                     tenant_id, binding_id, location_id, direction, last_failure_at,
-                    last_failure_code, stale_after_seconds, updated_at)
+                    last_failure_code, stale_after_seconds, alert_state, alert_raised_at, updated_at)
                 VALUES (
                     :tenantId, :bindingId, :locationId, :direction, :at,
-                    :code, :staleAfter, now())
+                    :code, :staleAfter, 'STALE', :at, now())
                 ON CONFLICT (tenant_id, binding_id, direction) DO UPDATE
                 SET last_failure_at = EXCLUDED.last_failure_at,
                     last_failure_code = EXCLUDED.last_failure_code,

@@ -54,6 +54,13 @@ public class StorefrontPickupLocationQuery {
         return new PickupLocations(result);
     }
 
+    // A branch's public name and address by id (2026-09-21 audit follow-up
+    // (d)) is served by `StorefrontLocationProfileQuery`/
+    // `JdbcStorefrontLocationProfileStore` — see
+    // `StorefrontPickupLocationController`'s own note on why a second,
+    // from-scratch implementation of the identical read was removed here
+    // during batch 8 integration rather than kept alongside it.
+
     private PickupLocation viewOf(PickupLocationCandidate candidate, Instant now) {
         Serviceability answer = serviceability.resolve(
                 candidate.tenantId(),

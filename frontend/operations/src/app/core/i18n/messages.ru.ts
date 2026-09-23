@@ -188,8 +188,17 @@ export const messagesRu: MessageCatalogue = {
   'orders.column.time': 'Время',
   'orders.column.type': 'Тип / канал',
   'orders.column.total': 'Сумма',
+  'orders.column.fee': 'Доставка',
+  'orders.column.payment': 'Оплата',
   'orders.column.status': 'Статус',
   'orders.column.actions': 'Действия',
+
+  'orders.paymentStatus.PENDING': 'Ожидает оплаты',
+  'orders.paymentStatus.AUTHORIZED': 'Авторизован',
+  'orders.paymentStatus.CAPTURED': 'Оплачен',
+  'orders.paymentStatus.FAILED': 'Оплата не прошла',
+  'orders.paymentStatus.VOIDED': 'Отменён',
+  'orders.paymentStatus.REFUNDED': 'Возврат',
 
   'orders.action.approve': 'Принять',
   'orders.action.reject': 'Отклонить',
@@ -706,6 +715,7 @@ export const messagesRu: MessageCatalogue = {
   'settings.nav.integrations': 'Интеграции',
   'settings.nav.referenceData': 'Справочные данные',
   'settings.nav.catalogBaseSettings': 'Базовые настройки каталога',
+  'settings.nav.commentPresets': 'Пресеты комментариев к блюду',
   'settings.nav.deliveryPolicy': 'Политика доставки',
 
   'settings.home.title': 'Настройки',
@@ -749,6 +759,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.home.description.orderPolicy': 'Свод правил, по которым оценивается каждый заказ.',
   'settings.home.description.catalogBaseSettings':
     'Переключатели логики остатков и цен QR/киоска — общие для всей компании.',
+  'settings.home.description.commentPresets':
+    'Кодовые инструкции для кухни, которые товар может предложить на строке вместо свободного текста.',
   'settings.home.description.deliveryPolicy':
     'Адреса вне зоны, что видит и может курьер, проверка действий по GPS.',
   'settings.home.description.paymentMethods': 'Собственный список способов оплаты тенанта.',
@@ -1055,6 +1067,40 @@ export const messagesRu: MessageCatalogue = {
   'settings.catalog.qrKioskPricePlane.body':
     'Автоматически направляет каналы QR и киоск на ценовой план зала вместо отдельного плана, составленного вручную.',
   'settings.catalog.qrKioskPricePlane.field': 'QR и киоск продают по ценам зала',
+
+  // Пункт 2.1b: пресеты комментариев к блюду
+  'settings.commentPresets.title': 'Пресеты комментариев к блюду',
+  'settings.commentPresets.lead':
+    'Кодовая инструкция для кухни («без лука», «хорошо прожарить»), которую строка заказа несёт вместо свободного текста.',
+  'settings.commentPresets.tenantWideNote': 'Общий для всех брендов этого тенанта.',
+  'settings.commentPresets.empty': 'Пресеты ещё не зарегистрированы.',
+  'settings.commentPresets.status.active': 'Активен',
+  'settings.commentPresets.status.archived': 'В архиве',
+  'settings.commentPresets.table.code': 'Код',
+  'settings.commentPresets.table.labelRu': 'Метка (ru)',
+  'settings.commentPresets.table.labelUz': 'Метка (uz)',
+  'settings.commentPresets.table.labelEn': 'Метка (en)',
+  'settings.commentPresets.table.posModifierCode': 'Модификатор кассы',
+  'settings.commentPresets.table.sortOrder': 'Порядок',
+  'settings.commentPresets.table.status': 'Статус',
+  'settings.commentPresets.edit': 'Изменить',
+  'settings.commentPresets.edit.submit': 'Сохранить',
+  'settings.commentPresets.edit.submitting': 'Сохранение…',
+  'settings.commentPresets.cancel': 'Отмена',
+  'settings.commentPresets.create.title': 'Зарегистрировать пресет',
+  'settings.commentPresets.create.code': 'Код',
+  'settings.commentPresets.create.codeHint':
+    'Только заглавные буквы, цифры, «_» и «-». Клиенту никогда не показывается.',
+  'settings.commentPresets.create.labelRu': 'Метка (ru)',
+  'settings.commentPresets.create.labelUz': 'Метка (uz)',
+  'settings.commentPresets.create.labelEn': 'Метка (en)',
+  'settings.commentPresets.create.posModifierCode': 'Код модификатора кассы',
+  'settings.commentPresets.create.posModifierCodeHint':
+    'Необязательно. Кодовое значение, в которое экспорт на кассу превращает этот пресет там, где ожидается модификатор.',
+  'settings.commentPresets.create.sortOrder': 'Порядок',
+  'settings.commentPresets.create.submit': 'Зарегистрировать',
+  'settings.commentPresets.create.submitting': 'Регистрация…',
+  'settings.commentPresets.create.incomplete': 'Нужны код и все три метки.',
 
   // 10.7 Фискализация
   'settings.fiscalization.title': 'Фискализация',
@@ -1776,6 +1822,35 @@ export const messagesRu: MessageCatalogue = {
   'catalog.import.detail.applyItems.column.action': 'Действие',
   'catalog.import.detail.applyItems.column.status': 'Статус',
   'catalog.import.detail.applyItems.column.reason': 'Причина',
+  'catalog.import.tab.file': 'Импорт CSV',
+  'catalog.import.file.title': 'Импорт товаров из CSV-файла',
+  'catalog.import.file.downloadTemplate': 'Скачать шаблон',
+  'catalog.import.file.downloadExport': 'Экспортировать текущий каталог',
+  'catalog.import.file.catalog': 'Каталог',
+  'catalog.import.file.noCatalog.title': 'Каталога пока нет',
+  'catalog.import.file.noCatalog':
+    'У этого бренда пока нет каталога. Сначала создайте его в разделе «Товары».',
+  'catalog.import.file.noLocation': 'Бренд не назначен. Попросите менеджера назначить вам бренд.',
+  'catalog.import.file.previewColumn.productCode': 'Код товара',
+  'catalog.import.file.previewColumn.productName': 'Название',
+  'catalog.import.file.previewColumn.categoryCode': 'Категория',
+  'catalog.import.file.previewColumn.sku': 'SKU',
+  'catalog.import.file.previewColumn.price': 'Цена',
+  'catalog.import.file.previewColumn.status': 'Статус',
+  'catalog.import.file.outcome.CREATED': 'Создан',
+  'catalog.import.file.outcome.UPDATED': 'Обновлён',
+  'catalog.import.file.outcome.SKIPPED': 'Без изменений',
+  'catalog.import.file.outcome.ERROR': 'Ошибка',
+  'catalog.import.file.error.MISSING_PRODUCT_CODE': 'В этой строке нет кода товара',
+  'catalog.import.file.error.MISSING_PRODUCT_NAME': 'В этой строке нет названия товара',
+  'catalog.import.file.error.INVALID_STATUS': 'Статус должен быть DRAFT, ACTIVE или ARCHIVED',
+  'catalog.import.file.error.INVALID_PRICE':
+    'Сумма и валюта цены должны быть указаны вместе, а сумма — целым неотрицательным числом',
+  'catalog.import.file.error.PRICE_REFUSED':
+    'Цена отклонена - проверьте книгу цен импорта каталога бренда',
+  'catalog.import.file.error.DUPLICATE_SKU': 'Этот SKU уже используется другим товаром',
+  'catalog.import.file.error.IMAGE_FETCH_FAILED': 'Не удалось загрузить изображение по этой ссылке',
+  'catalog.import.file.error.OTHER': 'Не удалось импортировать',
 
   'catalog.status.DRAFT': 'Черновик',
   'catalog.status.ACTIVE': 'Активен',
@@ -1865,6 +1940,7 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.tab.availability': 'Наличие',
   'catalog.editor.tab.schedule': 'График продаж',
   'catalog.editor.tab.recommendations': 'Рекомендованные товары',
+  'catalog.editor.tab.commentPresets': 'Готовые комментарии',
   'catalog.editor.tab.history': 'История',
   'catalog.editor.locale.label': 'Язык редактирования',
   'catalog.editor.save': 'Сохранить',
@@ -1958,6 +2034,18 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.recommendations.detach': 'Удалить',
   'catalog.editor.recommendations.targetLabel': 'ID варианта для рекомендации',
   'catalog.editor.recommendations.attach': 'Добавить',
+  'catalog.editor.commentPresets.hint':
+    'Какие готовые кухонные инструкции тенанта можно указать в строке для этого товара. Новые пресеты регистрируются в Настройках → Готовые комментарии к товарам.',
+  'catalog.editor.commentPresets.loading': 'Загрузка готовых комментариев…',
+  'catalog.editor.commentPresets.empty': 'Пока не прикреплён ни один готовый комментарий',
+  'catalog.editor.commentPresets.column.preset': 'Пресет',
+  'catalog.editor.commentPresets.column.posModifierCode': 'Модификатор POS',
+  'catalog.editor.commentPresets.detach': 'Убрать',
+  'catalog.editor.commentPresets.pickerLabel': 'Прикрепить пресет',
+  'catalog.editor.commentPresets.pickerPlaceholder': 'Выберите пресет…',
+  'catalog.editor.commentPresets.attach': 'Прикрепить',
+  'catalog.editor.commentPresets.noneAvailable':
+    'Все активные пресеты уже прикреплены к этому товару.',
   'catalog.editor.history.scope':
     'Только изменения доступности в этом филиале — правки товара, цены и модификаторов пока не аудируются.',
   'catalog.editor.history.loading': 'Загрузка…',
@@ -3616,6 +3704,9 @@ export const messagesRu: MessageCatalogue = {
   'reports.overview.funnel.title': 'Итоги по заказам',
   'reports.overview.funnel.completed': 'Завершено',
   'reports.overview.funnel.notCompleted': 'Не завершено',
+  'reports.overview.funnel.stage.total': 'Всего заказов',
+  'reports.overview.funnel.stage.onTime': 'Вовремя',
+  'reports.overview.funnel.stage.late': 'Опоздание',
   'reports.overview.funnel.status': 'Статус',
   'reports.overview.funnel.reason': 'Причина',
   'reports.overview.funnel.reasonUnknown': 'не зафиксирована',
@@ -3695,6 +3786,13 @@ export const messagesRu: MessageCatalogue = {
   'reports.orders.summary.branch': 'Филиал',
   'reports.orders.summary.channel': 'Канал',
   'reports.orders.summary.value': 'Значение',
+  'reports.orders.summary.report1.title': 'Сводка 1',
+  'reports.orders.summary.report2.title': 'Сводка 2',
+  'reports.orders.summary.orderType': 'Тип заказа',
+  'reports.orders.summary.count': 'Кол-во заказов',
+  'reports.orders.summary.sum': 'Сумма',
+  'reports.orders.summary.sumWithDelivery': 'Сумма с учётом доставки',
+  'reports.orders.summary.total': 'Итого',
 
   // ------------------------------------------------------- Маркетинг (§6)
 
@@ -5083,12 +5181,10 @@ export const messagesRu: MessageCatalogue = {
   'orders.newOrder.basket.unavailable': 'Больше не доступно — удалите, чтобы продолжить',
   'orders.newOrder.order.title': 'Заказ',
   'orders.newOrder.order.fulfillmentMode': 'Тип',
-  'orders.newOrder.order.deliveryComingLater':
-    'Для доставки нужен адрес — появится в следующей волне',
   'orders.newOrder.order.payment': 'Оплата',
-  'orders.newOrder.order.paymentCashOnly': 'Только наличные в этом релизе (ADR 0039)',
   'orders.newOrder.order.total': 'Итого',
   'orders.newOrder.order.totalPending': 'Итог посчитается, когда у каждой позиции будет цена',
+  'orders.newOrder.order.totalWithDelivery': 'Итого с доставкой',
   'orders.newOrder.order.submit': 'Создать',
   'orders.newOrder.order.submitting': 'Создание…',
   'orders.newOrder.order.cancel': 'Отмена',
@@ -5099,6 +5195,17 @@ export const messagesRu: MessageCatalogue = {
   'orders.newOrder.order.promoCode': 'Промокод',
   'orders.newOrder.order.cashTendered': 'Сдача с',
   'orders.newOrder.order.changeDue': 'Сдача',
+  'orders.newOrder.order.deliveryFee': 'Стоимость доставки',
+  'orders.newOrder.order.deliveryFeeCalculating': 'Считаем…',
+  'orders.newOrder.order.deliveryFeeUnavailable': 'Недоступно для этого адреса',
+  'orders.newOrder.order.preOrder.toggle': 'Заказ на потом',
+  'orders.newOrder.order.preOrder.time': 'Время выполнения',
+  'orders.newOrder.order.preOrder.mustBeFuture': 'Выберите время, которое ещё не наступило',
+  'orders.newOrder.order.preOrder.confirmOutOfHours':
+    'В это время филиал закрыт. Всё равно оформить заказ?',
+  'orders.newOrder.order.preOrder.confirmSubmit': 'Оформить всё равно',
+  'orders.newOrder.order.preOrder.closedNoOverride':
+    'Этот филиал не принимает заказы на закрытое время. Выберите другое время.',
 
   // wave P14: §5.4 адресная панель (строка 1.3b)
   'orders.newOrder.address.title': 'Адрес',

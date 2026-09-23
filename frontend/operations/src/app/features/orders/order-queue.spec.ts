@@ -3,7 +3,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { of, throwError } from 'rxjs';
+import { from, of, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClient } from '../../core/api/api-client';
@@ -534,7 +534,14 @@ function configureWithActions(
 ): void {
   TestBed.configureTestingModule({
     providers: [
-      provideRouter([{ path: 'orders', component: OrderQueue }]),
+      // `orders/:id` is a stub target — AMEND's own navigation test below
+      // only checks the resulting URL, never renders `OrderDetailPane`
+      // itself (a whole separate dependency graph), the same shortcut
+      // `order-detail-pane.spec.ts` is not needed for here.
+      provideRouter([
+        { path: 'orders', component: OrderQueue },
+        { path: 'orders/:id', component: OrderQueue },
+      ]),
       {
         provide: CurrentLocation,
         useValue: {
@@ -650,6 +657,33 @@ describe('OrderQueue: row actions render exactly from actions[] (§2.9, §4.2)',
     expect(approve).toHaveBeenCalledTimes(1);
     // Still on the board — the row-open navigation never fired.
     expect(TestBed.inject(Location).path()).toBe('/orders?tab=attention');
+  });
+
+  it('AMEND opens the order rather than a menu of its own — the five dialogs live on the detail pane', async () => {
+    configureWithActions(
+      [
+        order({
+          orderId: 'order-1',
+          status: 'CONFIRMED',
+          actions: [{ action: 'AMEND' }],
+        }),
+      ],
+      {},
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+
+    (
+      harness.routeNativeElement!.querySelector(
+        '[data-testid="order-row-action-AMEND"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    // `queryParamsHandling: 'preserve'` (order-queue.ts's own `openOrder`):
+    // the tab the operator was on survives the round trip to the order and
+    // back, the same as every other row-open path.
+    expect(TestBed.inject(Location).path()).toBe('/orders/order-1?tab=preparing');
   });
 
   it('renders the settling decision on a lost approval race, not a generic failure', async () => {
@@ -1062,15 +1096,16 @@ describe('OrderQueue: no dead completion button (H3)', () => {
     await flushMicrotasks();
 
     const host = harness.routeNativeElement!;
-    // The redundant COMPLETE entry never renders — ADVANCE is the one this
-    // component knows how to invoke.
-    expect(host.querySelector('[data-testid="order-row-action-COMPLETE"]')).toBeNull();
-    expect(host.querySelector('[data-testid="order-row-action-ADVANCE"]')).not.toBeNull();
+    // batch 8: COMPLETE is now wired (startCompletion), so this row prefers
+    // it over the redundant ADVANCE(COMPLETED) entry — the same direction
+    // order-detail-pane.ts's own visibleActions already filters.
+    expect(host.querySelector('[data-testid="order-row-action-ADVANCE"]')).toBeNull();
+    expect(host.querySelector('[data-testid="order-row-action-COMPLETE"]')).not.toBeNull();
     expect(host.querySelectorAll('.row-actions__inline')).toHaveLength(1);
   });
 
-  it('clicking the single completion control calls the wired advance(), never leaves a second dead click', async () => {
-    const advance = vi.fn().mockReturnValue(
+  it('clicking the single completion control calls the wired complete(), never leaves a second dead click', async () => {
+    const complete = vi.fn().mockReturnValue(
       of({
         orderId: 'order-1',
         status: 'COMPLETED',
@@ -1089,16 +1124,19 @@ describe('OrderQueue: no dead completion button (H3)', () => {
           actions: [{ action: 'ADVANCE', targetStatus: 'COMPLETED' }, { action: 'COMPLETE' }],
         }),
       ],
-      { advance },
+      { complete },
     );
     const harness = await RouterTestingHarness.create('/orders?tab=preparing');
     await flushMicrotasks();
 
     const host = harness.routeNativeElement!;
-    (host.querySelector('[data-testid="order-row-action-ADVANCE"]') as HTMLButtonElement).click();
+    (host.querySelector('[data-testid="order-row-action-COMPLETE"]') as HTMLButtonElement).click();
     await flushMicrotasks();
 
-    expect(advance).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'COMPLETED', 1);
+    // The default referenceDataApi stub (FAKE_CANCEL_REASONS) hands back
+    // exactly one reason with no fulfilment-mode restriction, so
+    // startCompletion submits it automatically rather than opening a picker.
+    expect(complete).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 1, 'reason-1');
   });
 });
 
@@ -1634,5 +1672,551 @@ describe('OrderQueue: selection and bulk actions (orders.md §2.10, wave P07)', 
       'All 1 applied',
     );
     expect(host.querySelector('[data-testid="order-queue-bulk-retry"]')).toBeNull();
+  });
+});
+
+/**
+ * §2.5's Оплата and Доставка columns (row `1.1`, wave P04) — data the board
+ * endpoint has carried since `OrderSummaryResponse` widened to 23 fields, not
+ * rendered anywhere on this table until this wave.
+ */
+describe('OrderQueue: Оплата and Доставка columns (orders.md §2.5, row 1.1)', () => {
+  it('renders a known payment projection through its i18n label', async () => {
+    configure(ordersResponse([order({ paymentStatusProjection: 'CAPTURED' })]));
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="order-row-payment-status"]')
+        ?.textContent,
+    ).toBe('Paid');
+  });
+
+  it('renders NOT_REQUIRED, and a response minted before this field existed, as a dash rather than a fabricated method', async () => {
+    configure(
+      ordersResponse([
+        order({ orderId: 'a', paymentStatusProjection: 'NOT_REQUIRED' }),
+        order({ orderId: 'b', paymentStatusProjection: undefined }),
+      ]),
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+
+    const cells = [
+      ...harness.routeNativeElement!.querySelectorAll('[data-testid="order-row-payment-status"]'),
+    ].map((cell) => cell.textContent?.trim());
+    expect(cells).toEqual(['—', '—']);
+  });
+
+  it('renders the delivery fee as money when set, and a dash for a pickup order with none', async () => {
+    configure(
+      ordersResponse([
+        order({ orderId: 'a', feeMinor: 1_500_000, currency: 'UZS' }),
+        order({ orderId: 'b', feeMinor: 0 }),
+      ]),
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+
+    const cells = [
+      ...harness.routeNativeElement!.querySelectorAll('[data-testid="order-row-fee"]'),
+    ].map((cell) => cell.textContent?.trim());
+    // UZS has no minor unit this platform stores (`money.ts`'s own doc) —
+    // 1 500 000 renders exactly, not divided by 100. `money.ts` groups with
+    // U+00A0 (NBSP), not a plain space.
+    expect(cells[0]).toContain('1 500 000');
+    expect(cells[1]).toBe('—');
+  });
+});
+
+/**
+ * X.18: cursor paging over `GET .../orders/board`, mirroring
+ * `products-page.spec.ts`'s identical proof for the same `page`/`nextCursor`
+ * contract — the queue's own `pageState`/`hasMore`/`loadMore` loop.
+ */
+describe('OrderQueue: cursor paging and Load more (row 1.1, X.18)', () => {
+  function pageOf(
+    orders: readonly OrderSummaryResponse[],
+    nextCursor: string | null,
+  ): ReturnType<typeof vi.fn> {
+    return vi.fn().mockReturnValue(of({ value: { items: orders, nextCursor }, version: null }));
+  }
+
+  it('offers no Load more control when the first page is the whole collection', async () => {
+    configure(pageOf([order({ orderId: 'a' })], null));
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="order-queue-load-more"]'),
+    ).toBeNull();
+  });
+
+  it('appends the next cursor page to what is already loaded, and hides the control once the collection ends', async () => {
+    const getOrders = vi
+      .fn()
+      .mockReturnValueOnce(
+        of({
+          value: { items: [order({ orderId: 'a', publicOrderNumber: '0001' })], nextCursor: 'c1' },
+          version: null,
+        }),
+      )
+      .mockReturnValueOnce(
+        of({
+          value: { items: [order({ orderId: 'b', publicOrderNumber: '0002' })], nextCursor: null },
+          version: null,
+        }),
+      );
+    configure(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    expect(rowNumbers(host)).toEqual(['0001']);
+    const loadMore = host.querySelector(
+      '[data-testid="order-queue-load-more"]',
+    ) as HTMLButtonElement;
+    expect(loadMore).toBeTruthy();
+
+    loadMore.click();
+    await flushMicrotasks();
+
+    expect(getOrders).toHaveBeenCalledTimes(2);
+    // The second call's cursor is the first page's own nextCursor, not a
+    // fresh first page — the one thing distinguishing "load more" from
+    // "refetch from the top".
+    expect(getOrders.mock.calls[1][1].params.cursor).toBe('c1');
+    expect(rowNumbers(host)).toEqual(['0001', '0002']);
+    expect(host.querySelector('[data-testid="order-queue-load-more"]')).toBeNull();
+  });
+
+  it('a full refresh (tab switch) starts over from the first page rather than carrying the cursor forward', async () => {
+    const getOrders = pageOf([order({ orderId: 'a', publicOrderNumber: '0001' })], 'c1');
+    configure(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+
+    harness.routeNativeElement!.querySelector<HTMLButtonElement>(
+      '[data-testid="order-queue-filter-bar"]',
+    );
+    // The manual refresh control is always on screen — the same "full
+    // reload" path a tab switch or a filter change takes.
+    const refreshButton = harness.routeNativeElement!.querySelector(
+      '.order-queue__refresh',
+    ) as HTMLButtonElement;
+    refreshButton.click();
+    await flushMicrotasks();
+
+    const lastCall = getOrders.mock.calls.at(-1)!;
+    expect(lastCall[1].params.cursor).toBeUndefined();
+  });
+
+  /**
+   * fix8 review 2 (a-orders): the 10s poll and every realtime frame call
+   * `refresh()` unconditionally, including while an operator is mid-scroll
+   * with a `loadMore()` page-2 fetch already in flight. `refresh()` always
+   * starts over from a brand-new first page/cursor chain — if `loadMore()`'s
+   * stale fetch (paged relative to the chain `refresh()` just discarded) is
+   * still allowed to land afterwards, it silently duplicates/drops rows and
+   * clobbers `pageState`/`hasMore` back onto the discarded chain. The manual
+   * refresh control drives the exact same `refresh()` the poll and realtime
+   * frames do, so it stands in for "the poll lands" here deterministically.
+   */
+  it('drops a loadMore() page that resolves after a refresh() has already replaced the board', async () => {
+    let resolveLoadMore:
+      | ((page: { items: readonly OrderSummaryResponse[]; nextCursor: string | null }) => void)
+      | undefined;
+    let resolveRefresh:
+      | ((page: { items: readonly OrderSummaryResponse[]; nextCursor: string | null }) => void)
+      | undefined;
+
+    const getOrders = vi
+      .fn()
+      .mockReturnValueOnce(
+        of({
+          value: { items: [order({ orderId: 'a', publicOrderNumber: '0001' })], nextCursor: 'c1' },
+          version: null,
+        }),
+      )
+      .mockImplementationOnce(() =>
+        from(
+          new Promise((resolve) => {
+            resolveLoadMore = (page) => resolve({ value: page, version: null });
+          }),
+        ),
+      )
+      .mockImplementationOnce(() =>
+        from(
+          new Promise((resolve) => {
+            resolveRefresh = (page) => resolve({ value: page, version: null });
+          }),
+        ),
+      );
+    configure(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    expect(rowNumbers(host)).toEqual(['0001']);
+
+    // Operator scrolls and clicks Load more — its page-2 fetch, under cursor
+    // c1, starts and hangs.
+    const loadMore = host.querySelector(
+      '[data-testid="order-queue-load-more"]',
+    ) as HTMLButtonElement;
+    loadMore.click();
+    await flushMicrotasks();
+    expect(getOrders).toHaveBeenCalledTimes(2);
+
+    // Before that returns, the 10s poll's refresh() lands and starts a
+    // brand-new first-page fetch under a new cursor chain.
+    const refreshButton = host.querySelector('.order-queue__refresh') as HTMLButtonElement;
+    refreshButton.click();
+    await flushMicrotasks();
+    expect(getOrders).toHaveBeenCalledTimes(3);
+
+    // Ordinary network jitter: refresh()'s fetch, started SECOND, resolves
+    // FIRST — replacing the board with its own fresh first page.
+    expect(resolveRefresh).toBeDefined();
+    resolveRefresh!({
+      items: [order({ orderId: 'x', publicOrderNumber: '9001' })],
+      nextCursor: null,
+    });
+    await flushMicrotasks();
+    expect(rowNumbers(host)).toEqual(['9001']);
+    expect(host.querySelector('[data-testid="order-queue-load-more"]')).toBeNull();
+
+    // ...and only THEN does loadMore()'s stale page-2 fetch resolve. It must
+    // be silently dropped, not appended onto the fresh board, and must not
+    // resurrect the "Load more" control off the discarded cursor's hasMore.
+    expect(resolveLoadMore).toBeDefined();
+    resolveLoadMore!({
+      items: [order({ orderId: 'b', publicOrderNumber: '0002' })],
+      nextCursor: null,
+    });
+    await flushMicrotasks();
+
+    expect(rowNumbers(host)).toEqual(['9001']);
+    expect(host.querySelector('[data-testid="order-queue-load-more"]')).toBeNull();
+  });
+
+  it('a loadMore() click while a refresh() is already in flight does not start a second, conflicting fetch', async () => {
+    let resolveRefresh:
+      | ((page: { items: readonly OrderSummaryResponse[]; nextCursor: string | null }) => void)
+      | undefined;
+
+    const getOrders = vi
+      .fn()
+      .mockReturnValueOnce(
+        of({
+          value: { items: [order({ orderId: 'a', publicOrderNumber: '0001' })], nextCursor: 'c1' },
+          version: null,
+        }),
+      )
+      .mockImplementationOnce(() =>
+        from(
+          new Promise((resolve) => {
+            resolveRefresh = (page) => resolve({ value: page, version: null });
+          }),
+        ),
+      );
+    configure(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    // The poll's refresh() lands and hangs mid-fetch.
+    const refreshButton = host.querySelector('.order-queue__refresh') as HTMLButtonElement;
+    refreshButton.click();
+    await flushMicrotasks();
+    expect(getOrders).toHaveBeenCalledTimes(2);
+
+    // The "Load more" control is still on screen (hasMore from the first
+    // page is still true — refresh() hasn't resolved yet) and is not
+    // disabled by loadingMore(), so a real click here is a real interaction.
+    const loadMore = host.querySelector(
+      '[data-testid="order-queue-load-more"]',
+    ) as HTMLButtonElement;
+    expect(loadMore).toBeTruthy();
+    loadMore.click();
+    await flushMicrotasks();
+
+    // No third fetch — loadMore() bailed out because a refresh was in flight.
+    expect(getOrders).toHaveBeenCalledTimes(2);
+
+    expect(resolveRefresh).toBeDefined();
+    resolveRefresh!({
+      items: [order({ orderId: 'x', publicOrderNumber: '9001' })],
+      nextCursor: null,
+    });
+    await flushMicrotasks();
+
+    expect(rowNumbers(host)).toEqual(['9001']);
+    expect(host.querySelector('[data-testid="order-queue-load-more"]')).toBeNull();
+  });
+});
+
+/**
+ * §4.6/row 1.1e: `COMPLETE` is emitted by `OrderActionsPolicy` (wave P09) and
+ * already has a translated label (`order-actions.ts`) — until this wave the
+ * row menu's `onActionClick` had no case for it, so a real operator's click
+ * silently did nothing. `order-detail-pane.spec.ts` proves the identical
+ * reason-resolution rule on the detail pane; these prove the queue's row menu
+ * now reaches the same endpoint.
+ */
+describe('OrderQueue: COMPLETE row action (orders.md §4.6, row 1.1e)', () => {
+  const completedOrder = order({
+    orderId: 'order-1',
+    status: 'FULFILLING',
+    fulfillmentMode: 'PICKUP',
+    version: 2,
+    actions: [{ action: 'COMPLETE' }],
+  });
+
+  function decisionResponse() {
+    return vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'COMPLETED',
+        version: 2,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+  }
+
+  it('submits completion with no reasonId when the registry has no eligible reason — no dialog', async () => {
+    const complete = decisionResponse();
+    configureWithActions([completedOrder], { complete }, undefined, {
+      list: () => Promise.resolve([]),
+    });
+    const harness = await RouterTestingHarness.create('/orders?tab=delivering');
+    await flushMicrotasks();
+
+    (
+      harness.routeNativeElement!.querySelector(
+        '[data-testid="order-row-action-COMPLETE"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(complete).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 2, undefined);
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="order-queue-complete-dialog"]'),
+    ).toBeNull();
+  });
+
+  it('submits the one eligible reason automatically when the registry has exactly one — no dialog', async () => {
+    const complete = decisionResponse();
+    configureWithActions([completedOrder], { complete }, undefined, {
+      list: () =>
+        Promise.resolve([
+          {
+            id: 'reason-pickup',
+            kind: 'COMPLETION',
+            systemCategory: 'COLLECTED_BY_CUSTOMER',
+            internalName: 'Collected by the customer',
+            stockDisposition: null,
+            liabilityParty: null,
+            customerRefund: null,
+            allowedFulfillmentModes: ['PICKUP'],
+            customerTexts: {},
+            status: 'ACTIVE',
+            version: 1,
+            updatedAt: new Date().toISOString(),
+          },
+        ]),
+    });
+    const harness = await RouterTestingHarness.create('/orders?tab=delivering');
+    await flushMicrotasks();
+
+    (
+      harness.routeNativeElement!.querySelector(
+        '[data-testid="order-row-action-COMPLETE"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(complete).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 2, 'reason-pickup');
+  });
+
+  it('opens a picker and submits the chosen reason when more than one is eligible', async () => {
+    const complete = decisionResponse();
+    configureWithActions([completedOrder], { complete }, undefined, {
+      list: () =>
+        Promise.resolve([
+          {
+            id: 'reason-a',
+            kind: 'COMPLETION',
+            systemCategory: 'COLLECTED_BY_CUSTOMER',
+            internalName: 'Collected by the customer',
+            stockDisposition: null,
+            liabilityParty: null,
+            customerRefund: null,
+            allowedFulfillmentModes: null,
+            customerTexts: {},
+            status: 'ACTIVE',
+            version: 1,
+            updatedAt: new Date().toISOString(),
+          },
+          {
+            id: 'reason-b',
+            kind: 'COMPLETION',
+            systemCategory: 'LEFT_AT_DOOR',
+            internalName: 'Left at the door',
+            stockDisposition: null,
+            liabilityParty: null,
+            customerRefund: null,
+            allowedFulfillmentModes: null,
+            customerTexts: {},
+            status: 'ACTIVE',
+            version: 1,
+            updatedAt: new Date().toISOString(),
+          },
+        ]),
+    });
+    const harness = await RouterTestingHarness.create('/orders?tab=delivering');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="order-row-action-COMPLETE"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(complete).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="order-queue-complete-dialog"]')).not.toBeNull();
+
+    (
+      host.querySelector('[data-testid="order-outcome-reason-option-reason-b"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="order-outcome-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(complete).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 2, 'reason-b');
+  });
+
+  /**
+   * H2 fetch-before-open race, the COMPLETE-row twin of the CANCEL-row test
+   * above (`binds the reasoned cancel dialog to the row most recently
+   * clicked...`): `startCompletion` awaits `referenceDataApi.list` and then
+   * writes the shared `dialog`/`completionReasons` signals (or auto-submits).
+   * Two COMPLETE clicks on two different rows race their independent,
+   * uncached reference-data fetches — whichever resolves last must not
+   * silently steal the dialog from (or auto-submit) the row the operator
+   * most recently clicked.
+   */
+  it('binds the completion dialog to the row most recently clicked, not whichever reference-data fetch resolves last', async () => {
+    let resolveOrderA: ((reasons: readonly ReasonResponse[]) => void) | undefined;
+    let resolveOrderB: ((reasons: readonly ReasonResponse[]) => void) | undefined;
+    const list = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<readonly ReasonResponse[]>((resolve) => {
+            resolveOrderA = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<readonly ReasonResponse[]>((resolve) => {
+            resolveOrderB = resolve;
+          }),
+      );
+
+    const complete = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-B',
+        status: 'COMPLETED',
+        version: 6,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+    const twoReasons: readonly ReasonResponse[] = [
+      {
+        id: 'reason-a',
+        kind: 'COMPLETION',
+        systemCategory: 'COLLECTED_BY_CUSTOMER',
+        internalName: 'Collected by the customer',
+        stockDisposition: null,
+        liabilityParty: null,
+        customerRefund: null,
+        allowedFulfillmentModes: null,
+        customerTexts: {},
+        status: 'ACTIVE',
+        version: 1,
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: 'reason-b',
+        kind: 'COMPLETION',
+        systemCategory: 'LEFT_AT_DOOR',
+        internalName: 'Left at the door',
+        stockDisposition: null,
+        liabilityParty: null,
+        customerRefund: null,
+        allowedFulfillmentModes: null,
+        customerTexts: {},
+        status: 'ACTIVE',
+        version: 1,
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+    configureWithActions(
+      [
+        order({
+          orderId: 'order-A',
+          status: 'FULFILLING',
+          version: 2,
+          actions: [{ action: 'COMPLETE' }],
+        }),
+        order({
+          orderId: 'order-B',
+          status: 'FULFILLING',
+          version: 6,
+          actions: [{ action: 'COMPLETE' }],
+        }),
+      ],
+      { complete },
+      undefined,
+      { list },
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=delivering');
+    await flushMicrotasks();
+
+    const host = harness.routeNativeElement!;
+    const completeButtons = host.querySelectorAll('[data-testid="order-row-action-COMPLETE"]');
+    expect(completeButtons).toHaveLength(2);
+
+    // Operator clicks order-A's Complete, then — before that round trip
+    // returns — order-B's.
+    (completeButtons[0] as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (completeButtons[1] as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    // Ordinary network jitter: the FIRST-clicked row's fetch (order-A)
+    // resolves LAST, after the second-clicked row's (order-B) already did.
+    expect(resolveOrderB).toBeDefined();
+    resolveOrderB!(twoReasons);
+    await flushMicrotasks();
+    expect(resolveOrderA).toBeDefined();
+    resolveOrderA!(twoReasons);
+    await flushMicrotasks();
+
+    (
+      host.querySelector('[data-testid="order-outcome-reason-option-reason-b"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="order-outcome-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    // The dialog must still target order-B — the row the operator most
+    // recently clicked — not order-A, whose superseded fetch merely
+    // resolved later.
+    expect(complete).toHaveBeenCalledWith(FAKE_SCOPE, 'order-B', 6, 'reason-b');
   });
 });

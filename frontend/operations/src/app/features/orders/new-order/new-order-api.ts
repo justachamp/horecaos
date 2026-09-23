@@ -27,6 +27,19 @@ export interface CustomerLookupCandidate {
   readonly recentOrderCount: number;
 }
 
+/**
+ * Row 1.3a: `OperationsCustomerController.CreateCustomerRequest`. Distinct
+ * from `customers-api.ts`'s own `CreateCustomerRequest` — that one carries
+ * `brandId` in the body because `CustomersApi.create` posts to the
+ * tenant-scoped `CustomerController`; this one's `brandId` is already in the
+ * URL, because `LOCATION_STAFF`/`LOCATION_MANAGER` can only ever reach a
+ * location-scoped path (see `OperationsCustomerController`'s own doc).
+ */
+export interface CreateCustomerRequest {
+  readonly phone: string;
+  readonly displayName?: string | null;
+}
+
 // -------------------------------------------------------- §5.5 menu and basket
 
 /**
@@ -126,6 +139,16 @@ export interface DestinationRequest {
  * `OperationsOrderController.PlaceOrderRequest`. `paymentMethodCode` is
  * checked against the operator channel's own matrix, never hard-coded to
  * cash (wave P14; see `OperatorOrderingService`'s own doc).
+ *
+ * @property requestedFor row 1.3d: an ISO instant to promise instead of now,
+ *   or absent for an ordinary immediate order.
+ * @property overrideOutOfHours row 1.3d: true once the operator has already
+ *   been shown `BRANCH_CLOSED_AT_REQUESTED_TIME_CONFIRM` and chosen to place
+ *   the order anyway. Sending it on the first attempt is harmless — the
+ *   backend only reads it when the branch turns out to be closed at
+ *   `requestedFor` — but `new-order-page.ts` only sets it true on the
+ *   confirmed resubmit, so a stray false-positive warning is never silently
+ *   skipped.
  */
 export interface PlaceOrderRequest {
   readonly customerAccountId: string;
@@ -135,6 +158,36 @@ export interface PlaceOrderRequest {
   readonly destination?: DestinationRequest | null;
   readonly paymentMethodCode: string;
   readonly promoCode?: string | null;
+  readonly requestedFor?: string | null;
+  readonly overrideOutOfHours?: boolean;
+}
+
+// -------------------------------------------------------- §5.6 delivery fee preview
+
+/**
+ * `DeliveryFeeController.DeliveryFeeView`, the fields the composer's running
+ * total needs — the rest (`minBasketMinor`, `distanceMeters`, evidence-shaped
+ * fields) belong to the storefront's own fuller cart display, not a phone
+ * order's one-line estimate.
+ */
+export interface DeliveryFeeQuote {
+  readonly available: boolean;
+  readonly feeMinor: number | null;
+  readonly reasonCode: string | null;
+}
+
+/**
+ * `DeliveryFeeController.DeliveryFeeQuoteRequest` — the point and basket to
+ * price delivery for, sent as the POST body since 2026-09-21 (audit
+ * follow-up (b)): the point used to be a query-string parameter, which put a
+ * customer's coordinate in the URL (ADR 0029). See {@link
+ * NewOrderApi.deliveryFeeQuote}.
+ */
+interface DeliveryFeeQuoteRequest {
+  readonly lat: number;
+  readonly lon: number;
+  readonly currency: string;
+  readonly subtotalMinor: number;
 }
 
 /** `OperationsOrderController.PlaceOrderResponse`. */
@@ -159,12 +212,15 @@ export interface PlaceOrderResult {
  * critic's named case for HK: with no `expectedVersion` to make a stale
  * retry fail loudly, a fresh `Idempotency-Key` per call was the only thing
  * standing between a lost response and a second, independent order for the
- * same basket. {@link placeOrder} and {@link aggregatorEntry} now hold one
- * `IntentCommandRegistry` each (this service is `providedIn: 'root'`, so it
- * outlives the component across the lifetime of one operator's draft): a
- * retried call with an unchanged request body reuses the held key, a body
- * that differs (the operator edited the form) mints a fresh one, and a
- * successful response forgets the held command so the next order — even an
+ * same basket — and the identical shape applies to {@link createCustomer}'s
+ * create-on-miss, which likewise inserts unconditionally with no natural
+ * conflict to reject a duplicate. {@link placeOrder}, {@link aggregatorEntry}
+ * and {@link createCustomer} each hold their own `IntentCommandRegistry`
+ * (this service is `providedIn: 'root'`, so it outlives the component across
+ * the lifetime of one operator's draft): a retried call with an unchanged
+ * request body reuses the held key, a body that differs (the operator edited
+ * the form) mints a fresh one, and a successful response forgets the held
+ * command so the next order — even an
  * accidental repeat of the same basket — gets its own key.
  */
 @Injectable({ providedIn: 'root' })
@@ -172,6 +228,7 @@ export class NewOrderApi {
   private readonly api = inject(ApiClient);
   private readonly placeOrderIntents = new IntentCommandRegistry<PlaceOrderRequest>();
   private readonly aggregatorEntryIntents = new IntentCommandRegistry<AggregatorOrderRequest>();
+  private readonly createCustomerIntents = new IntentCommandRegistry<CreateCustomerRequest>();
 
   /** orders.md §5.3: a `POST` with the phone in the body, never a query string. */
   async lookupCustomerByPhone(
@@ -262,6 +319,77 @@ export class NewOrderApi {
         )
         .pipe(tap(() => this.aggregatorEntryIntents.forget('draft'))),
     );
+  }
+
+  /**
+   * Row 1.3a: create-on-miss, through the location-scoped endpoint
+   * `LOCATION_STAFF`/`LOCATION_MANAGER` can actually reach —
+   * `OperationsCustomerController#create`, not `CustomersApi.create`, which
+   * 403s for this screen's own persona. See that controller's own doc.
+   *
+   * Held on {@link createCustomerIntents} like {@link placeOrder} and {@link
+   * aggregatorEntry} above, for the identical reason (batch 8 review 2,
+   * finding b-new-order): `CustomerIdentityService.createAccountWithoutPrincipal`
+   * inserts unconditionally, with no phone-uniqueness check, so a retry that
+   * minted a fresh `Idempotency-Key` per call created a second, duplicate
+   * customer account for the same phone whenever the first response was lost.
+   */
+  async createCustomer(scope: LocationScope, request: CreateCustomerRequest): Promise<string> {
+    const intent = this.createCustomerIntents.next('draft', request);
+    const response = await firstValueFrom(
+      this.api
+        .post<CreateCustomerRequest, { id: string }>(
+          operationsPaths.orderIntakeCustomers(scope),
+          intent,
+        )
+        .pipe(tap(() => this.createCustomerIntents.forget('draft'))),
+    );
+    return response.id;
+  }
+
+  /**
+   * Row 1.3's delivery fee estimate — the same unauthenticated preview
+   * `ui-cart.service.ts`'s own `refreshDeliveryFee` calls for the storefront's
+   * cart, reused here rather than a second delivery-fee client. Best effort
+   * and never bound to the order: the fee this shows is a preview for the
+   * caller on the phone, and the fee that actually settles is resolved fresh,
+   * inside the checkout transaction, from the destination
+   * `OperatorOrderingService.place` sets — not from this read.
+   *
+   * `POST` with the point in the body since 2026-09-21 (audit follow-up
+   * (b)): `DeliveryFeeController.quote` no longer maps `GET`, and a query
+   * string would put the customer's coordinate on the wire and in browser
+   * history (ADR 0029). The endpoint writes nothing and needs neither a
+   * capability nor a stable `Idempotency-Key` (see its own doc), so a fresh
+   * key per call via the plain {@link command} helper is correct here, unlike
+   * {@link createCustomer} above.
+   */
+  async deliveryFeeQuote(
+    scope: LocationScope,
+    point: { lat: number; lon: number },
+    currency: string,
+    subtotalMinor: number,
+  ): Promise<DeliveryFeeQuote> {
+    const result = await firstValueFrom(
+      this.api.post<
+        DeliveryFeeQuoteRequest,
+        {
+          outcome: string;
+          reasonCode: string | null;
+          available: boolean;
+          feeMinor: number | null;
+          currency: string;
+        }
+      >(
+        catalogPaths.deliveryFee(toBrandScope(scope), scope.locationId),
+        command({ lat: point.lat, lon: point.lon, currency, subtotalMinor }),
+      ),
+    );
+    return {
+      available: result.available,
+      feeMinor: result.feeMinor,
+      reasonCode: result.reasonCode,
+    };
   }
 
   /**

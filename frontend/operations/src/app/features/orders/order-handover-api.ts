@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, catchError, map, of, throwError } from 'rxjs';
+import { Observable, catchError, map, of, tap, throwError } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
-import { command } from '../../core/api/idempotency';
+import { IntentCommandRegistry } from '../../core/api/idempotency';
 import { LocationScope, marketplacePaths } from '../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 
@@ -40,6 +40,24 @@ export class OrderHandoverApi {
   private readonly api = inject(ApiClient);
 
   /**
+   * Neither {@link verify} nor {@link bypass} carries `expectedVersion` — the
+   * challenge settles by its own compare-and-set, not the order's aggregate
+   * version — so nothing else guarded a double submission before this
+   * (2026-09-21 audit follow-up (a)). {@link verify} matters most: it
+   * "consumes one attempt whether or not the code matches" per its own doc,
+   * so a lost-response retry that minted a fresh key used to burn a second
+   * attempt off a customer's limited budget for a code that may already have
+   * verified. Held per order, forgotten on a settled response, so a
+   * genuinely new entry (a different code, or the same code retyped after
+   * seeing the first one rejected) still consumes its own attempt.
+   */
+  private readonly verifyIntents = new IntentCommandRegistry<{ code: string }>();
+  private readonly bypassIntents = new IntentCommandRegistry<{
+    reasonCode: string;
+    supervisorName: string;
+  }>();
+
+  /**
    * The challenge's current state, or `null` when this order was never
    * issued one (a fulfilment path with no handover proof configured, the
    * server's `404`) — the panel renders nothing in that case rather than an
@@ -62,10 +80,10 @@ export class OrderHandoverApi {
    * set, not by the order's aggregate version.
    */
   verify(scope: LocationScope, orderId: string, code: string): Observable<HandoverVerification> {
-    return this.api.post<{ code: string }, HandoverVerification>(
-      marketplacePaths.handoverVerifications(scope, orderId),
-      command({ code }),
-    );
+    const intent = this.verifyIntents.next(orderId, { code });
+    return this.api
+      .post<{ code: string }, HandoverVerification>(marketplacePaths.handoverVerifications(scope, orderId), intent)
+      .pipe(tap(() => this.verifyIntents.forget(orderId)));
   }
 
   /** The audited supervisor override — requires `MARKETPLACE_HANDOVER_BYPASS`, never `ORDER_ADVANCE`. */
@@ -75,9 +93,12 @@ export class OrderHandoverApi {
     reasonCode: string,
     supervisorName: string,
   ): Observable<void> {
-    return this.api.post<{ reasonCode: string; supervisorName: string }, void>(
-      marketplacePaths.handoverBypasses(scope, orderId),
-      command({ reasonCode, supervisorName }),
-    );
+    const intent = this.bypassIntents.next(orderId, { reasonCode, supervisorName });
+    return this.api
+      .post<{ reasonCode: string; supervisorName: string }, void>(
+        marketplacePaths.handoverBypasses(scope, orderId),
+        intent,
+      )
+      .pipe(tap(() => this.bypassIntents.forget(orderId)));
   }
 }

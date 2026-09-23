@@ -857,6 +857,7 @@ public class JdbcReportingStore {
         params.put("lateCount", row.lateCount());
         params.put("distinctCustomers", row.distinctCustomers());
         params.put("newCustomers", row.newCustomers());
+        params.put("deliveryFee", row.deliveryFeeSom());
 
         jdbc.sql("""
                 INSERT INTO reporting.agg_branch_day (
@@ -864,13 +865,13 @@ public class JdbcReportingStore {
                     fulfilment_type, boundary_version, metric_calculation_version, order_count,
                     cancelled_count, gross_som, discount_som, net_som, refunded_som,
                     avg_seconds_total, promised_count, late_count, distinct_customers,
-                    new_customers)
+                    new_customers, delivery_fee_som)
                 VALUES (
                     :tenantId, :businessDate, :locationId, :legalEntityId, :channelCode,
                     :fulfilmentType, :boundaryVersion, :calculationVersion, :orderCount,
                     :cancelledCount, :gross, :discount, :net, :refunded,
                     :avgSecondsTotal, :promisedCount, :lateCount, :distinctCustomers,
-                    :newCustomers)
+                    :newCustomers, :deliveryFee)
                 """).params(params).update();
     }
 
@@ -1275,7 +1276,7 @@ public class JdbcReportingStore {
                        fulfilment_type, boundary_version, metric_calculation_version, order_count,
                        cancelled_count, gross_som, discount_som, net_som, refunded_som,
                        avg_seconds_total, promised_count, late_count, distinct_customers,
-                       new_customers
+                       new_customers, delivery_fee_som
                   FROM reporting.agg_branch_day
                  WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
                  ORDER BY business_date, location_id, channel_code, fulfilment_type
@@ -1711,7 +1712,12 @@ public class JdbcReportingStore {
      * rather than being folded into {@code /queries}.
      */
     public List<OutcomeRow> readOrderOutcomes(
-            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<String> channelCodes) {
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> channelCodes,
+            List<UUID> legalEntityIds) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -1726,6 +1732,10 @@ public class JdbcReportingStore {
         if (!channelCodes.isEmpty()) {
             filter.append(" AND channel_code IN (:channels)");
             params.put("channels", channelCodes);
+        }
+        if (!legalEntityIds.isEmpty()) {
+            filter.append(" AND legal_entity_id IN (:legalEntities)");
+            params.put("legalEntities", legalEntityIds);
         }
 
         return jdbc.sql("""
@@ -3264,7 +3274,8 @@ public class JdbcReportingStore {
                 row.getInt("promised_count"),
                 row.getInt("late_count"),
                 row.getInt("distinct_customers"),
-                row.getInt("new_customers"));
+                row.getInt("new_customers"),
+                row.getLong("delivery_fee_som"));
     }
 
     private static @Nullable Instant instantOrNull(ResultSet row, String column) throws SQLException {

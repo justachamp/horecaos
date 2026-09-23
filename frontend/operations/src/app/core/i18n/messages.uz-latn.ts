@@ -190,8 +190,17 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.column.time': 'Vaqt',
   'orders.column.type': 'Turi / kanal',
   'orders.column.total': 'Summa',
+  'orders.column.fee': 'Yetkazib berish',
+  'orders.column.payment': 'Toʻlov',
   'orders.column.status': 'Holat',
   'orders.column.actions': 'Amallar',
+
+  'orders.paymentStatus.PENDING': 'Toʻlov kutilmoqda',
+  'orders.paymentStatus.AUTHORIZED': 'Avtorizatsiya qilingan',
+  'orders.paymentStatus.CAPTURED': 'Toʻlandi',
+  'orders.paymentStatus.FAILED': 'Toʻlov oʻtmadi',
+  'orders.paymentStatus.VOIDED': 'Bekor qilindi',
+  'orders.paymentStatus.REFUNDED': 'Qaytarildi',
 
   'orders.action.approve': 'Qabul qilish',
   'orders.action.reject': 'Rad etish',
@@ -713,6 +722,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.nav.integrations': 'Integratsiyalar',
   'settings.nav.referenceData': 'Maʻlumotnoma maʻlumotlari',
   'settings.nav.catalogBaseSettings': 'Katalogning bazaviy sozlamalari',
+  'settings.nav.commentPresets': 'Taomga izoh presetlari',
   'settings.nav.deliveryPolicy': 'Yetkazib berish siyosati',
 
   'settings.home.title': 'Sozlamalar',
@@ -757,6 +767,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.home.description.orderPolicy': 'Har bir buyurtma solishtiriladigan qoidalar toʻplami.',
   'settings.home.description.catalogBaseSettings':
     'Butun kompaniya uchun qoldiq logikasi va QR/kiosk narxlash almashtirgichlari.',
+  'settings.home.description.commentPresets':
+    'Mahsulot erkin matn oʻrniga qatorda taklif qiladigan, oshxona uchun kodlangan koʻrsatmalar.',
   'settings.home.description.deliveryPolicy':
     'Zonadan tashqaridagi manzillar, kuryer nimani koʻradi va qila oladi, GPS boʻyicha tekshiruvlar.',
   'settings.home.description.paymentMethods': 'Tenantning oʻz toʻlov usullari roʻyxati.',
@@ -1067,6 +1079,40 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.catalog.qrKioskPricePlane.body':
     'QR va kiosk kanallarini qoʻlda tuzilgan alohida narx rejasi oʻrniga avtomatik ravishda zal narx rejasiga yoʻnaltiradi.',
   'settings.catalog.qrKioskPricePlane.field': 'QR va kiosk zal narxlarida sotadi',
+
+  // Qator 2.1b: taomga izoh presetlari
+  'settings.commentPresets.title': 'Taomga izoh presetlari',
+  'settings.commentPresets.lead':
+    'Erkin matn oʻrniga qator olib yuradigan, oshxona uchun kodlangan koʻrsatma ("piyozsiz", "yaxshi qovurish").',
+  'settings.commentPresets.tenantWideNote': 'Ushbu tenantning barcha brendlari uchun umumiy.',
+  'settings.commentPresets.empty': 'Hali presetlar roʻyxatdan oʻtkazilmagan.',
+  'settings.commentPresets.status.active': 'Faol',
+  'settings.commentPresets.status.archived': 'Arxivlangan',
+  'settings.commentPresets.table.code': 'Kod',
+  'settings.commentPresets.table.labelRu': 'Yorliq (ru)',
+  'settings.commentPresets.table.labelUz': 'Yorliq (uz)',
+  'settings.commentPresets.table.labelEn': 'Yorliq (en)',
+  'settings.commentPresets.table.posModifierCode': 'Kassa modifikatori',
+  'settings.commentPresets.table.sortOrder': 'Tartib',
+  'settings.commentPresets.table.status': 'Holat',
+  'settings.commentPresets.edit': 'Tahrirlash',
+  'settings.commentPresets.edit.submit': 'Saqlash',
+  'settings.commentPresets.edit.submitting': 'Saqlanmoqda…',
+  'settings.commentPresets.cancel': 'Bekor qilish',
+  'settings.commentPresets.create.title': 'Presetni roʻyxatdan oʻtkazish',
+  'settings.commentPresets.create.code': 'Kod',
+  'settings.commentPresets.create.codeHint':
+    'Faqat bosh harflar, raqamlar, "_" va "-". Mijozga hech qachon koʻrsatilmaydi.',
+  'settings.commentPresets.create.labelRu': 'Yorliq (ru)',
+  'settings.commentPresets.create.labelUz': 'Yorliq (uz)',
+  'settings.commentPresets.create.labelEn': 'Yorliq (en)',
+  'settings.commentPresets.create.posModifierCode': 'Kassa modifikatori kodi',
+  'settings.commentPresets.create.posModifierCodeHint':
+    'Ixtiyoriy. Kassaga eksport modifikator kutgan joyda bu presetni aylantiradigan kodlangan qiymat.',
+  'settings.commentPresets.create.sortOrder': 'Tartib',
+  'settings.commentPresets.create.submit': 'Roʻyxatdan oʻtkazish',
+  'settings.commentPresets.create.submitting': 'Roʻyxatdan oʻtkazilmoqda…',
+  'settings.commentPresets.create.incomplete': 'Kod va barcha uchta yorliq talab qilinadi.',
 
   // 10.7 Fiskalizatsiya
   'settings.fiscalization.title': 'Fiskalizatsiya',
@@ -1791,6 +1837,37 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.import.detail.applyItems.column.action': 'Amal',
   'catalog.import.detail.applyItems.column.status': 'Holati',
   'catalog.import.detail.applyItems.column.reason': 'Sabab',
+  'catalog.import.tab.file': 'CSV import',
+  'catalog.import.file.title': 'Mahsulotlarni CSV fayldan import qilish',
+  'catalog.import.file.downloadTemplate': 'Shablonni yuklab olish',
+  'catalog.import.file.downloadExport': 'Joriy katalogni eksport qilish',
+  'catalog.import.file.catalog': 'Katalog',
+  'catalog.import.file.noCatalog.title': 'Hali katalog yoʻq',
+  'catalog.import.file.noCatalog':
+    'Bu brendda hali katalog yoʻq. Avval uni Mahsulotlar boʻlimida yarating.',
+  'catalog.import.file.noLocation':
+    'Brend biriktirilmagan. Menejerdan brend biriktirishni soʻrang.',
+  'catalog.import.file.previewColumn.productCode': 'Mahsulot kodi',
+  'catalog.import.file.previewColumn.productName': 'Nomi',
+  'catalog.import.file.previewColumn.categoryCode': 'Kategoriya',
+  'catalog.import.file.previewColumn.sku': 'SKU',
+  'catalog.import.file.previewColumn.price': 'Narx',
+  'catalog.import.file.previewColumn.status': 'Holati',
+  'catalog.import.file.outcome.CREATED': 'Yaratildi',
+  'catalog.import.file.outcome.UPDATED': 'Yangilandi',
+  'catalog.import.file.outcome.SKIPPED': 'Oʻzgarmadi',
+  'catalog.import.file.outcome.ERROR': 'Xatolik',
+  'catalog.import.file.error.MISSING_PRODUCT_CODE': 'Bu qatorda mahsulot kodi yoʻq',
+  'catalog.import.file.error.MISSING_PRODUCT_NAME': 'Bu qatorda mahsulot nomi yoʻq',
+  'catalog.import.file.error.INVALID_STATUS': 'Holati DRAFT, ACTIVE yoki ARCHIVED boʻlishi kerak',
+  'catalog.import.file.error.INVALID_PRICE':
+    'Narx miqdori va valyutasi birga koʻrsatilishi, va miqdor manfiy boʻlmagan butun son boʻlishi kerak',
+  'catalog.import.file.error.PRICE_REFUSED':
+    'Narxlash bu qatorni rad etdi - brendning import narxlar kitobini tekshiring',
+  'catalog.import.file.error.DUPLICATE_SKU':
+    'Bu SKU boshqa mahsulot tomonidan allaqachon ishlatilgan',
+  'catalog.import.file.error.IMAGE_FETCH_FAILED': 'Rasm havolasi orqali rasm yuklab boʻlmadi',
+  'catalog.import.file.error.OTHER': 'Import qilib boʻlmadi',
 
   'catalog.status.DRAFT': 'Qoralama',
   'catalog.status.ACTIVE': 'Faol',
@@ -1880,6 +1957,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.tab.availability': 'Mavjudlik',
   'catalog.editor.tab.schedule': 'Sotuv jadvali',
   'catalog.editor.tab.recommendations': 'Tavsiya etilgan tovarlar',
+  'catalog.editor.tab.commentPresets': 'Tayyor izohlar',
   'catalog.editor.tab.history': 'Tarix',
   'catalog.editor.locale.label': 'Tahrirlash tili',
   'catalog.editor.save': 'Saqlash',
@@ -1973,6 +2051,18 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.recommendations.detach': 'Oʻchirish',
   'catalog.editor.recommendations.targetLabel': 'Tavsiya qilinadigan variant ID',
   'catalog.editor.recommendations.attach': 'Qoʻshish',
+  'catalog.editor.commentPresets.hint':
+    'Ushbu mahsulot uchun qatorda tenantning qaysi tayyor oshxona koʻrsatmalarini belgilash mumkinligi. Yangi presetlar Sozlamalar → Tayyor mahsulot izohlarida roʻyxatga olinadi.',
+  'catalog.editor.commentPresets.loading': 'Tayyor izohlar yuklanmoqda…',
+  'catalog.editor.commentPresets.empty': 'Hali birorta tayyor izoh biriktirilmagan',
+  'catalog.editor.commentPresets.column.preset': 'Preset',
+  'catalog.editor.commentPresets.column.posModifierCode': 'POS modifikatori',
+  'catalog.editor.commentPresets.detach': 'Oʻchirish',
+  'catalog.editor.commentPresets.pickerLabel': 'Preset biriktirish',
+  'catalog.editor.commentPresets.pickerPlaceholder': 'Preset tanlang…',
+  'catalog.editor.commentPresets.attach': 'Biriktirish',
+  'catalog.editor.commentPresets.noneAvailable':
+    'Barcha faol presetlar allaqachon shu mahsulotga biriktirilgan.',
   'catalog.editor.history.scope':
     'Faqat shu filialdagi mavjudlik oʻzgarishlari — mahsulot, narx va modifikator tahrirlari hali audit qilinmaydi.',
   'catalog.editor.history.loading': 'Yuklanmoqda…',
@@ -3639,6 +3729,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.overview.funnel.title': 'Buyurtmalar natijasi',
   'reports.overview.funnel.completed': 'Yakunlangan',
   'reports.overview.funnel.notCompleted': 'Yakunlanmagan',
+  'reports.overview.funnel.stage.total': 'Jami buyurtmalar',
+  'reports.overview.funnel.stage.onTime': 'Vaqtida',
+  'reports.overview.funnel.stage.late': 'Kechikish',
   'reports.overview.funnel.status': 'Holat',
   'reports.overview.funnel.reason': 'Sabab',
   'reports.overview.funnel.reasonUnknown': 'qayd etilmagan',
@@ -3719,6 +3812,13 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.orders.summary.branch': 'Filial',
   'reports.orders.summary.channel': 'Kanal',
   'reports.orders.summary.value': 'Qiymat',
+  'reports.orders.summary.report1.title': 'Svodka 1',
+  'reports.orders.summary.report2.title': 'Svodka 2',
+  'reports.orders.summary.orderType': 'Buyurtma turi',
+  'reports.orders.summary.count': 'Buyurtmalar soni',
+  'reports.orders.summary.sum': 'Summa',
+  'reports.orders.summary.sumWithDelivery': 'Yetkazib berish bilan summa',
+  'reports.orders.summary.total': 'Jami',
 
   // ------------------------------------------------------- Marketing (§6)
 
@@ -5116,12 +5216,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.basket.unavailable': 'Endi mavjud emas — davom etish uchun olib tashlang',
   'orders.newOrder.order.title': 'Buyurtma',
   'orders.newOrder.order.fulfillmentMode': 'Turi',
-  'orders.newOrder.order.deliveryComingLater':
-    'Yetkazib berish uchun manzil kerak — keyingi toʻlqinda',
   'orders.newOrder.order.payment': 'Toʻlov',
-  'orders.newOrder.order.paymentCashOnly': 'Hozircha faqat naqd (ADR 0039)',
   'orders.newOrder.order.total': 'Jami',
   'orders.newOrder.order.totalPending': 'Har bir taom narxi aniqlangach hisoblanadi',
+  'orders.newOrder.order.totalWithDelivery': 'Yetkazib berish bilan jami',
   'orders.newOrder.order.submit': 'Yaratish',
   'orders.newOrder.order.submitting': 'Yaratilmoqda…',
   'orders.newOrder.order.cancel': 'Bekor qilish',
@@ -5132,6 +5230,17 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.order.promoCode': 'Promokod',
   'orders.newOrder.order.cashTendered': 'Berilgan pul',
   'orders.newOrder.order.changeDue': 'Qaytim',
+  'orders.newOrder.order.deliveryFee': 'Yetkazib berish narxi',
+  'orders.newOrder.order.deliveryFeeCalculating': 'Hisoblanmoqda…',
+  'orders.newOrder.order.deliveryFeeUnavailable': 'Bu manzil uchun mavjud emas',
+  'orders.newOrder.order.preOrder.toggle': 'Keyinroqqa buyurtma',
+  'orders.newOrder.order.preOrder.time': 'Vaʻda qilingan vaqt',
+  'orders.newOrder.order.preOrder.mustBeFuture': 'Hali oʻtmagan vaqtni tanlang',
+  'orders.newOrder.order.preOrder.confirmOutOfHours':
+    'Filial soʻralgan vaqtda yopiq. Baribir buyurtma qilinsinmi?',
+  'orders.newOrder.order.preOrder.confirmSubmit': 'Baribir yaratish',
+  'orders.newOrder.order.preOrder.closedNoOverride':
+    'Bu filial yopiq vaqtga buyurtma qabul qilmaydi. Boshqa vaqt tanlang.',
 
   // wave P14: §5.4 manzil paneli (1.3b qatori)
   'orders.newOrder.address.title': 'Manzil',

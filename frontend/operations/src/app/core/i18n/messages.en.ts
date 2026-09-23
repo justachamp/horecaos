@@ -200,8 +200,17 @@ export const messagesEn = {
   'orders.column.time': 'Time',
   'orders.column.type': 'Type / channel',
   'orders.column.total': 'Total',
+  'orders.column.fee': 'Delivery fee',
+  'orders.column.payment': 'Payment',
   'orders.column.status': 'Status',
   'orders.column.actions': 'Actions',
+
+  'orders.paymentStatus.PENDING': 'Pending',
+  'orders.paymentStatus.AUTHORIZED': 'Authorized',
+  'orders.paymentStatus.CAPTURED': 'Paid',
+  'orders.paymentStatus.FAILED': 'Payment failed',
+  'orders.paymentStatus.VOIDED': 'Voided',
+  'orders.paymentStatus.REFUNDED': 'Refunded',
 
   'orders.action.approve': 'Accept',
   'orders.action.reject': 'Reject',
@@ -733,6 +742,7 @@ export const messagesEn = {
   'settings.nav.integrations': 'Integrations',
   'settings.nav.referenceData': 'Reference data',
   'settings.nav.catalogBaseSettings': 'Catalog base settings',
+  'settings.nav.commentPresets': 'Preset product comments',
   'settings.nav.deliveryPolicy': 'Delivery policy',
 
   'settings.home.title': 'Settings',
@@ -777,6 +787,8 @@ export const messagesEn = {
   'settings.home.description.orderPolicy': 'The rulebook every order is measured against.',
   'settings.home.description.catalogBaseSettings':
     'Company-wide stock logic and QR/kiosk pricing switches.',
+  'settings.home.description.commentPresets':
+    'Coded kitchen instructions a product can offer on a line, instead of free text.',
   'settings.home.description.deliveryPolicy':
     'Out-of-zone addresses, what the courier sees and may do, and GPS action checks.',
   'settings.home.description.paymentMethods': "The tenant's own list of ways a customer can pay.",
@@ -1083,6 +1095,40 @@ export const messagesEn = {
   'settings.catalog.qrKioskPricePlane.body':
     'Points the QR and kiosk channels at the hall price plane automatically instead of requiring one authored by hand.',
   'settings.catalog.qrKioskPricePlane.field': 'QR and kiosk take hall prices',
+
+  // Row 2.1b: preset product comments
+  'settings.commentPresets.title': 'Preset product comments',
+  'settings.commentPresets.lead':
+    'A coded kitchen instruction ("no onions", "well done") a kitchen line can carry instead of free text.',
+  'settings.commentPresets.tenantWideNote': 'Shared by every brand this tenant runs.',
+  'settings.commentPresets.empty': 'No presets registered yet.',
+  'settings.commentPresets.status.active': 'Active',
+  'settings.commentPresets.status.archived': 'Archived',
+  'settings.commentPresets.table.code': 'Code',
+  'settings.commentPresets.table.labelRu': 'Label (ru)',
+  'settings.commentPresets.table.labelUz': 'Label (uz)',
+  'settings.commentPresets.table.labelEn': 'Label (en)',
+  'settings.commentPresets.table.posModifierCode': 'POS modifier',
+  'settings.commentPresets.table.sortOrder': 'Order',
+  'settings.commentPresets.table.status': 'Status',
+  'settings.commentPresets.edit': 'Edit',
+  'settings.commentPresets.edit.submit': 'Save',
+  'settings.commentPresets.edit.submitting': 'Saving…',
+  'settings.commentPresets.cancel': 'Cancel',
+  'settings.commentPresets.create.title': 'Register a preset',
+  'settings.commentPresets.create.code': 'Code',
+  'settings.commentPresets.create.codeHint':
+    'Uppercase letters, digits, "_" and "-" only. Never shown to a customer.',
+  'settings.commentPresets.create.labelRu': 'Label (ru)',
+  'settings.commentPresets.create.labelUz': 'Label (uz)',
+  'settings.commentPresets.create.labelEn': 'Label (en)',
+  'settings.commentPresets.create.posModifierCode': 'POS modifier code',
+  'settings.commentPresets.create.posModifierCodeHint':
+    'Optional. The coded value a POS export maps this preset to where it expects a modifier.',
+  'settings.commentPresets.create.sortOrder': 'Order',
+  'settings.commentPresets.create.submit': 'Register',
+  'settings.commentPresets.create.submitting': 'Registering…',
+  'settings.commentPresets.create.incomplete': 'A code and all three labels are required.',
 
   // 10.7 Fiscalization
   'settings.fiscalization.title': 'Fiscalization',
@@ -1803,6 +1849,35 @@ export const messagesEn = {
   'catalog.import.detail.applyItems.column.action': 'Action',
   'catalog.import.detail.applyItems.column.status': 'Status',
   'catalog.import.detail.applyItems.column.reason': 'Reason',
+  'catalog.import.tab.file': 'CSV import',
+  'catalog.import.file.title': 'Import products from a CSV file',
+  'catalog.import.file.downloadTemplate': 'Download template',
+  'catalog.import.file.downloadExport': 'Export current catalog',
+  'catalog.import.file.catalog': 'Catalog',
+  'catalog.import.file.noCatalog.title': 'No catalog yet',
+  'catalog.import.file.noCatalog':
+    'This brand has no catalog yet. Create one under Products first.',
+  'catalog.import.file.noLocation': 'No brand is assigned. Ask a manager to assign you one.',
+  'catalog.import.file.previewColumn.productCode': 'Product code',
+  'catalog.import.file.previewColumn.productName': 'Name',
+  'catalog.import.file.previewColumn.categoryCode': 'Category',
+  'catalog.import.file.previewColumn.sku': 'SKU',
+  'catalog.import.file.previewColumn.price': 'Price',
+  'catalog.import.file.previewColumn.status': 'Status',
+  'catalog.import.file.outcome.CREATED': 'Created',
+  'catalog.import.file.outcome.UPDATED': 'Updated',
+  'catalog.import.file.outcome.SKIPPED': 'Unchanged',
+  'catalog.import.file.outcome.ERROR': 'Error',
+  'catalog.import.file.error.MISSING_PRODUCT_CODE': 'No product code in this row',
+  'catalog.import.file.error.MISSING_PRODUCT_NAME': 'No product name in this row',
+  'catalog.import.file.error.INVALID_STATUS': 'Status must be DRAFT, ACTIVE or ARCHIVED',
+  'catalog.import.file.error.INVALID_PRICE':
+    'Price amount and currency must both be set, and the amount must be a non-negative whole number',
+  'catalog.import.file.error.PRICE_REFUSED':
+    'Pricing refused this row - check the brand import price book',
+  'catalog.import.file.error.DUPLICATE_SKU': 'This SKU is already used by a different product',
+  'catalog.import.file.error.IMAGE_FETCH_FAILED': 'The image URL could not be fetched as an image',
+  'catalog.import.file.error.OTHER': 'Could not be imported',
 
   'catalog.status.DRAFT': 'Draft',
   'catalog.status.ACTIVE': 'Active',
@@ -1892,6 +1967,7 @@ export const messagesEn = {
   'catalog.editor.tab.availability': 'Availability',
   'catalog.editor.tab.schedule': 'Sale schedule',
   'catalog.editor.tab.recommendations': 'Recommended products',
+  'catalog.editor.tab.commentPresets': 'Preset comments',
   'catalog.editor.tab.history': 'History',
   'catalog.editor.locale.label': 'Editing language',
   'catalog.editor.save': 'Save',
@@ -1985,6 +2061,18 @@ export const messagesEn = {
   'catalog.editor.recommendations.detach': 'Remove',
   'catalog.editor.recommendations.targetLabel': 'Variant ID to recommend',
   'catalog.editor.recommendations.attach': 'Attach',
+  'catalog.editor.commentPresets.hint':
+    'Which of the tenant’s preset kitchen instructions a line for this product may carry. Register new presets under Settings → Preset product comments.',
+  'catalog.editor.commentPresets.loading': 'Loading preset comments…',
+  'catalog.editor.commentPresets.empty': 'No preset comments attached yet',
+  'catalog.editor.commentPresets.column.preset': 'Preset',
+  'catalog.editor.commentPresets.column.posModifierCode': 'POS modifier',
+  'catalog.editor.commentPresets.detach': 'Remove',
+  'catalog.editor.commentPresets.pickerLabel': 'Attach a preset',
+  'catalog.editor.commentPresets.pickerPlaceholder': 'Choose a preset…',
+  'catalog.editor.commentPresets.attach': 'Attach',
+  'catalog.editor.commentPresets.noneAvailable':
+    'Every active preset is already attached to this product.',
   'catalog.editor.history.scope':
     'Availability changes at this location only — product, price, and modifier edits are not audited yet.',
   'catalog.editor.history.loading': 'Loading…',
@@ -3644,6 +3732,9 @@ export const messagesEn = {
   'reports.overview.funnel.title': 'Outcome',
   'reports.overview.funnel.completed': 'Completed',
   'reports.overview.funnel.notCompleted': 'Not completed',
+  'reports.overview.funnel.stage.total': 'Total orders',
+  'reports.overview.funnel.stage.onTime': 'On time',
+  'reports.overview.funnel.stage.late': 'Late',
   'reports.overview.funnel.status': 'Status',
   'reports.overview.funnel.reason': 'Reason',
   'reports.overview.funnel.reasonUnknown': 'not recorded',
@@ -3723,6 +3814,13 @@ export const messagesEn = {
   'reports.orders.summary.branch': 'Branch',
   'reports.orders.summary.channel': 'Channel',
   'reports.orders.summary.value': 'Value',
+  'reports.orders.summary.report1.title': 'Summary 1',
+  'reports.orders.summary.report2.title': 'Summary 2',
+  'reports.orders.summary.orderType': 'Order type',
+  'reports.orders.summary.count': 'Order count',
+  'reports.orders.summary.sum': 'Sum',
+  'reports.orders.summary.sumWithDelivery': 'Sum incl. delivery',
+  'reports.orders.summary.total': 'Total',
 
   // ------------------------------------------------------- Marketing (§6)
 
@@ -5100,11 +5198,10 @@ export const messagesEn = {
   'orders.newOrder.basket.unavailable': 'No longer available — remove it to continue',
   'orders.newOrder.order.title': 'Order',
   'orders.newOrder.order.fulfillmentMode': 'Type',
-  'orders.newOrder.order.deliveryComingLater': 'Delivery needs an address — coming in a later wave',
   'orders.newOrder.order.payment': 'Payment',
-  'orders.newOrder.order.paymentCashOnly': 'Cash only, this release (ADR 0039)',
   'orders.newOrder.order.total': 'Total',
   'orders.newOrder.order.totalPending': 'Priced once every item has a price on file',
+  'orders.newOrder.order.totalWithDelivery': 'Total incl. delivery',
   'orders.newOrder.order.submit': 'Create',
   'orders.newOrder.order.submitting': 'Creating…',
   'orders.newOrder.order.cancel': 'Cancel',
@@ -5115,6 +5212,17 @@ export const messagesEn = {
   'orders.newOrder.order.promoCode': 'Promo code',
   'orders.newOrder.order.cashTendered': 'Cash tendered',
   'orders.newOrder.order.changeDue': 'Change due',
+  'orders.newOrder.order.deliveryFee': 'Delivery fee',
+  'orders.newOrder.order.deliveryFeeCalculating': 'Calculating…',
+  'orders.newOrder.order.deliveryFeeUnavailable': 'Not available for this address',
+  'orders.newOrder.order.preOrder.toggle': 'For later',
+  'orders.newOrder.order.preOrder.time': 'Promised time',
+  'orders.newOrder.order.preOrder.mustBeFuture': 'Pick a time that has not passed yet',
+  'orders.newOrder.order.preOrder.confirmOutOfHours':
+    'This branch is closed at the requested time. Place the order anyway?',
+  'orders.newOrder.order.preOrder.confirmSubmit': 'Place anyway',
+  'orders.newOrder.order.preOrder.closedNoOverride':
+    'This branch does not take pre-orders into a closed slot. Pick a different time.',
 
   // wave P14: §5.4 the address pane (row 1.3b)
   'orders.newOrder.address.title': 'Address',

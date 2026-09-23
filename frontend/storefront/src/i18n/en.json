@@ -160,6 +160,7 @@
     "rateDelivery": "Rate delivery quality, it helps us improve our service.",
     "supportNote": "If you have any issues, you can always contact our support center",
     "orderDetails": "Order details",
+    "pickupBranch": "Pickup branch",
     "delivered": "Delivered",
     "cancelledStatus": "Cancelled",
     "loadError": "Orders failed to load.",

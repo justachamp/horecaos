@@ -91,8 +91,10 @@ describe('NewOrderPage', () => {
   let newOrderApi: {
     menu: ReturnType<typeof vi.fn>;
     lookupCustomerByPhone: ReturnType<typeof vi.fn>;
+    createCustomer: ReturnType<typeof vi.fn>;
     searchItems: ReturnType<typeof vi.fn>;
     placeOrder: ReturnType<typeof vi.fn>;
+    deliveryFeeQuote: ReturnType<typeof vi.fn>;
     aggregatorEntry: ReturnType<typeof vi.fn>;
     recordCallProvenance: ReturnType<typeof vi.fn>;
   };
@@ -128,8 +130,12 @@ describe('NewOrderPage', () => {
     newOrderApi = {
       menu: vi.fn().mockResolvedValue(MENU),
       lookupCustomerByPhone: vi.fn().mockResolvedValue([]),
+      createCustomer: vi.fn().mockResolvedValue('acct-new'),
       searchItems: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
       placeOrder: vi.fn(),
+      deliveryFeeQuote: vi
+        .fn()
+        .mockResolvedValue({ available: true, feeMinor: 15_000, reasonCode: null }),
       aggregatorEntry: vi.fn(),
       recordCallProvenance: vi.fn().mockResolvedValue(undefined),
       ...overrides,
@@ -393,6 +399,32 @@ describe('NewOrderPage', () => {
     expect(fixture.componentInstance['customerCandidates']()).toEqual([candidate()]);
   });
 
+  // ------------------------------------------------------------- create-on-miss (1.3a)
+
+  it('creates a customer through the location-scoped endpoint, not the tenant-scoped one', async () => {
+    const create = vi
+      .fn()
+      .mockRejectedValue(new Error('customersApi.create must not be called from here'));
+    await render({ createCustomer: vi.fn().mockResolvedValue('acct-new') }, { create });
+
+    fixture.componentInstance['openCreateDialog']();
+    await fixture.componentInstance['onCreateSubmit']({
+      phone: '+998907654321',
+      displayName: 'Nodira',
+    });
+
+    expect(newOrderApi.createCustomer).toHaveBeenCalledWith(SCOPE, {
+      phone: '+998907654321',
+      displayName: 'Nodira',
+    });
+    expect(create).not.toHaveBeenCalled();
+    expect(fixture.componentInstance['selectedCustomer']()).toEqual({
+      accountId: 'acct-new',
+      label: 'Nodira',
+    });
+    expect(fixture.componentInstance['createDialogOpen']()).toBe(false);
+  });
+
   // --------------------------------------------------------- §5.4 address pane (1.3b)
 
   it('choosing a saved address sends its id as the delivery destination', async () => {
@@ -553,6 +585,62 @@ describe('NewOrderPage', () => {
     );
   });
 
+  // ---------------------------------------------------------- delivery fee preview (row 1.3)
+
+  it('previews the delivery fee for a geocoded address, debounced', async () => {
+    await render(
+      {},
+      {
+        revealAddresses: vi
+          .fn()
+          .mockResolvedValue([address({ id: 'addr-geo', latitude: 41.31, longitude: 69.28 })]),
+      },
+    );
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+
+    // Fake timers from here on — the effect's own debounce runs on the
+    // signal write below, before this test ever calls flushMicrotasks
+    // (which needs real timers), so switching later would let the address
+    // load's own settling race a real 400ms timer this test never controls.
+    vi.useFakeTimers();
+    fixture.componentInstance['setFulfillmentMode']('DELIVERY');
+    // Settles loadAddresses()'s own promise chain — advanceTimersByTimeAsync
+    // flushes microtasks as it goes, unlike a bare await.
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+    expect(newOrderApi.deliveryFeeQuote).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(400);
+    fixture.detectChanges();
+
+    expect(newOrderApi.deliveryFeeQuote).toHaveBeenCalledWith(
+      SCOPE,
+      { lat: 41.31, lon: 69.28 },
+      'UZS',
+      30_000,
+    );
+    const host: HTMLElement = fixture.nativeElement;
+    expect(host.querySelector('[data-testid="new-order-delivery-fee"]')?.textContent).toContain(
+      '15',
+    );
+  });
+
+  it('shows no delivery fee preview for an address with no coordinate', async () => {
+    await render(
+      {},
+      { revealAddresses: vi.fn().mockResolvedValue([address({ id: 'addr-blind' })]) },
+    );
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.componentInstance['setFulfillmentMode']('DELIVERY');
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(newOrderApi.deliveryFeeQuote).not.toHaveBeenCalled();
+    expect(fixture.componentInstance['formattedDeliveryFee']()).toBe('—');
+  });
+
   // ----------------------------------------------------------- §5.6 promo, payment (1.3e)
 
   it('threads a typed promo code into the place-order request', async () => {
@@ -606,6 +694,123 @@ describe('NewOrderPage', () => {
     fixture.detectChanges();
 
     expect(fixture.componentInstance['paymentMethods']()).toEqual(['CASH', 'CLICK']);
+  });
+
+  // ------------------------------------------------------------- pre-order time (row 1.3d)
+
+  it('submits requestedFor as an ISO instant only once «Позже» is enabled', async () => {
+    const placeOrder = vi.fn().mockResolvedValue({
+      orderId: 'order-1',
+      publicOrderNumber: '#0001',
+      status: 'CONFIRMED',
+      version: 1,
+      outcome: 'PLACED',
+      warnings: [],
+    });
+    await render({ placeOrder });
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.componentInstance['togglePreOrder']();
+    fixture.componentInstance['setRequestedForLocal']('2099-06-01T15:00');
+    fixture.detectChanges();
+
+    await fixture.componentInstance['submit']();
+
+    const [, request] = placeOrder.mock.calls[0];
+    expect(request.requestedFor).toBe(new Date('2099-06-01T15:00').toISOString());
+    expect(request.overrideOutOfHours).toBe(false);
+  });
+
+  it('cannot submit a pre-order with no time chosen', async () => {
+    await render({});
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.componentInstance['togglePreOrder']();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance['canSubmit']()).toBe(false);
+  });
+
+  it('a requested time already in the past is refused inline, before any request is sent', async () => {
+    const placeOrder = vi.fn();
+    await render({ placeOrder });
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.componentInstance['togglePreOrder']();
+    fixture.componentInstance['setRequestedForLocal']('2020-01-01T10:00');
+    fixture.detectChanges();
+
+    await fixture.componentInstance['submit']();
+
+    expect(placeOrder).not.toHaveBeenCalled();
+    expect(fixture.componentInstance['requestedForError']()).toBe(
+      TestBed.inject(I18n).t('orders.newOrder.order.preOrder.mustBeFuture'),
+    );
+  });
+
+  it('a closed-branch refusal the server allows overriding becomes a confirmation, not a blocking error', async () => {
+    const refusal = new ApiError(
+      ApiErrorCode.RESOURCE_CONFLICT,
+      409,
+      { status: 409, reason: 'BRANCH_CLOSED_AT_REQUESTED_TIME_CONFIRM' },
+      null,
+    );
+    const placeOrder = vi.fn().mockRejectedValueOnce(refusal).mockResolvedValueOnce({
+      orderId: 'order-1',
+      publicOrderNumber: '#0001',
+      status: 'CONFIRMED',
+      version: 1,
+      outcome: 'PLACED',
+      warnings: [],
+    });
+    await render({ placeOrder });
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.componentInstance['togglePreOrder']();
+    fixture.componentInstance['setRequestedForLocal']('2099-06-01T03:00');
+    fixture.detectChanges();
+
+    await fixture.componentInstance['submit']();
+
+    expect(fixture.componentInstance['outOfHoursConfirmReason']()).not.toBeNull();
+    expect(fixture.componentInstance['submitError']()).toBeNull();
+    expect(placeOrder).toHaveBeenCalledTimes(1);
+    expect(placeOrder.mock.calls[0][1].overrideOutOfHours).toBe(false);
+
+    // The operator presses the same submit button again — now a confirmation.
+    await fixture.componentInstance['submit']();
+
+    expect(placeOrder).toHaveBeenCalledTimes(2);
+    expect(placeOrder.mock.calls[1][1].overrideOutOfHours).toBe(true);
+    expect(fixture.componentInstance['outOfHoursConfirmReason']()).toBeNull();
+  });
+
+  it('a branch whose own policy refuses pre-orders into a closed slot shows a blocking error, never a confirmation', async () => {
+    const refusal = new ApiError(
+      ApiErrorCode.RESOURCE_CONFLICT,
+      409,
+      { status: 409, reason: 'BRANCH_CLOSED_AT_REQUESTED_TIME' },
+      null,
+    );
+    const placeOrder = vi.fn().mockRejectedValue(refusal);
+    await render({ placeOrder });
+
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.componentInstance['togglePreOrder']();
+    fixture.componentInstance['setRequestedForLocal']('2099-06-01T03:00');
+    fixture.detectChanges();
+
+    await fixture.componentInstance['submit']();
+
+    expect(fixture.componentInstance['outOfHoursConfirmReason']()).toBeNull();
+    expect(fixture.componentInstance['submitError']()).toBe(
+      TestBed.inject(I18n).t('orders.newOrder.order.preOrder.closedNoOverride'),
+    );
   });
 
   // ------------------------------------------------------------------- «Повторить» (1.3f)

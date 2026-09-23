@@ -638,11 +638,15 @@ export class UiCartService {
         this.deliveryFeeQuote.set(null);
         return;
       }
-      const view = await this.api.get<DeliveryFeeView>(
+      // POST since 2026-09-21 (audit follow-up (b)): the point travels in the
+      // body, not the query string (ADR 0029) -- `anonymous: true` because
+      // this preview still has no principal, same as before.
+      const view = await this.api.mutate<DeliveryFeeView>(
+        'POST',
         `/storefront/tenants/${this.config.tenantId}/brands/${this.config.brandId}` +
           `/locations/${cart.locationId}/delivery-fee`,
         {
-          query: {
+          body: {
             lat: address.latitude,
             lon: address.longitude,
             currency: cart.currency,

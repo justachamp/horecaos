@@ -303,6 +303,158 @@ class KitchenExecutionTests {
                 .isInstanceOf(ApiException.class);
     }
 
+    @Test
+    @DisplayName("gap map row 4.2g: a node with no rule at either layer answers empty, not an error")
+    void findRoutingRuleAnswersEmptyWhenNothingRoutesTheNode() {
+        KitchenStationService.RoutingRuleDetail detail = stationService.findRoutingRule(
+                TENANT, BRAND, branch, new KitchenStationService.NodeAddress(null, burger.productId(), null));
+
+        assertThat(detail.brandRule()).isEmpty();
+        assertThat(detail.locationRule()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("gap map row 4.2g: the product editor's read sees exactly the rule route() wrote, "
+            + "at both layers when both are set")
+    void findRoutingRuleReturnsWhatWasWritten() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        locationRule(null, burger.productId(), null, coldStation);
+
+        KitchenStationService.RoutingRuleDetail detail = stationService.findRoutingRule(
+                TENANT, BRAND, branch, new KitchenStationService.NodeAddress(null, burger.productId(), null));
+
+        assertThat(detail.brandRule()).isPresent();
+        assertThat(detail.brandRule().orElseThrow().stationRole()).isEqualTo(StationRole.GRILL);
+        assertThat(detail.locationRule()).isPresent();
+        assertThat(detail.locationRule().orElseThrow().stationId()).isEqualTo(coldStation);
+    }
+
+    @Test
+    @DisplayName("a lookup naming zero or two catalogue nodes is refused, the same rule route() writes under")
+    void findRoutingRuleRequiresExactlyOneNode() {
+        Throwable none = catchThrowable(() -> stationService.findRoutingRule(
+                TENANT, BRAND, branch, new KitchenStationService.NodeAddress(null, null, null)));
+        Throwable both = catchThrowable(() -> stationService.findRoutingRule(
+                TENANT,
+                BRAND,
+                branch,
+                new KitchenStationService.NodeAddress(burger.variantId(), burger.productId(), null)));
+
+        assertThat(((ApiException) none).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
+        assertThat(((ApiException) both).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("gap map row 4.2g: changing an already-routed product's department updates the "
+            + "existing rule instead of the second POST's 409")
+    void changingABrandRuleUpdatesItsRoleRatherThanConflicting() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        KitchenStationService.RoutingRuleDetail before = stationService.findRoutingRule(
+                TENANT, BRAND, branch, new KitchenStationService.NodeAddress(null, burger.productId(), null));
+        JdbcKitchenStore.BrandRoutingRuleRow existing = before.brandRule().orElseThrow();
+
+        KitchenStationService.UpdatedRoutingRule updated =
+                stationService.updateRoutingRule(new KitchenStationService.RoutingRuleEdit(
+                        TENANT, BRAND, branch, existing.id(), StationRole.COLD, null, existing.version()));
+
+        assertThat(updated.layer()).isEqualTo("BRAND");
+        KitchenStationService.RoutingRuleDetail after = stationService.findRoutingRule(
+                TENANT, BRAND, branch, new KitchenStationService.NodeAddress(null, burger.productId(), null));
+        assertThat(after.brandRule().orElseThrow().stationRole())
+                .as("the picker's \"change\" actually changed the department rather than colliding "
+                        + "with the row it meant to replace")
+                .isEqualTo(StationRole.COLD);
+    }
+
+    @Test
+    @DisplayName("changing a location rule's station works the same way, on the location layer")
+    void changingALocationRuleUpdatesItsStation() {
+        locationRule(null, burger.productId(), null, grillStation);
+        JdbcKitchenStore.LocationRoutingRuleRow existing = stationService
+                .findRoutingRule(
+                        TENANT, BRAND, branch, new KitchenStationService.NodeAddress(null, burger.productId(), null))
+                .locationRule()
+                .orElseThrow();
+
+        stationService.updateRoutingRule(new KitchenStationService.RoutingRuleEdit(
+                TENANT, BRAND, branch, existing.id(), null, coldStation, existing.version()));
+
+        assertThat(stationService
+                        .findRoutingRule(
+                                TENANT,
+                                BRAND,
+                                branch,
+                                new KitchenStationService.NodeAddress(null, burger.productId(), null))
+                        .locationRule()
+                        .orElseThrow()
+                        .stationId())
+                .isEqualTo(coldStation);
+    }
+
+    @Test
+    @DisplayName("editing a routing rule at the wrong version is refused rather than silently overwriting "
+            + "a concurrent change")
+    void updatingARoutingRuleAtTheWrongVersionIsRefused() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        JdbcKitchenStore.BrandRoutingRuleRow existing = stationService
+                .findRoutingRule(
+                        TENANT, BRAND, branch, new KitchenStationService.NodeAddress(null, burger.productId(), null))
+                .brandRule()
+                .orElseThrow();
+
+        Throwable failure =
+                catchThrowable(() -> stationService.updateRoutingRule(new KitchenStationService.RoutingRuleEdit(
+                        TENANT, BRAND, branch, existing.id(), StationRole.COLD, null, existing.version() + 1)));
+
+        assertThat(failure).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.STALE_VERSION);
+    }
+
+    @Test
+    @DisplayName("a routing rule edit naming both a role and a station, or neither, is refused")
+    void updatingARoutingRuleNeedsExactlyOneTarget() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        JdbcKitchenStore.BrandRoutingRuleRow existing = stationService
+                .findRoutingRule(
+                        TENANT, BRAND, branch, new KitchenStationService.NodeAddress(null, burger.productId(), null))
+                .brandRule()
+                .orElseThrow();
+
+        Throwable neither =
+                catchThrowable(() -> stationService.updateRoutingRule(new KitchenStationService.RoutingRuleEdit(
+                        TENANT, BRAND, branch, existing.id(), null, null, existing.version())));
+        Throwable both =
+                catchThrowable(() -> stationService.updateRoutingRule(new KitchenStationService.RoutingRuleEdit(
+                        TENANT, BRAND, branch, existing.id(), StationRole.COLD, grillStation, existing.version())));
+
+        assertThat(((ApiException) neither).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
+        assertThat(((ApiException) both).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("a location rule at a sibling branch cannot be edited from this branch's path")
+    void updatingALocationRuleAtAnotherBranchIsNotFound() {
+        StationRow siblingGrill = stationService.create(new KitchenStationService.NewStation(
+                TENANT, BRAND, siblingBranch, "GRILL", StationRole.GRILL, "Гриль", "Gril", "Grill", 1, true));
+        stationService.route(new KitchenStationService.NewRoutingRule(
+                TENANT, BRAND, siblingBranch, null, burger.productId(), null, null, siblingGrill.id()));
+        JdbcKitchenStore.LocationRoutingRuleRow existing = stationService
+                .findRoutingRule(
+                        TENANT,
+                        BRAND,
+                        siblingBranch,
+                        new KitchenStationService.NodeAddress(null, burger.productId(), null))
+                .locationRule()
+                .orElseThrow();
+
+        Throwable failure =
+                catchThrowable(() -> stationService.updateRoutingRule(new KitchenStationService.RoutingRuleEdit(
+                        TENANT, BRAND, branch, existing.id(), null, coldStation, existing.version())));
+
+        assertThat(failure).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
     // --------------------------------------------------------- throughput ceilings
 
     @Test

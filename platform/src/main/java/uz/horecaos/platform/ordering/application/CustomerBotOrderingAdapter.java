@@ -306,7 +306,9 @@ public class CustomerBotOrderingAdapter implements CustomerBotOrderingPort {
                 0L,
                 "CUSTOMER",
                 customerAccountId.toString(),
-                null));
+                null,
+                null,
+                false));
 
         if (!result.created()) {
             return new Checkout(Checkout.Result.REFUSED, null, result.rejectionCode());

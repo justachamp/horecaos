@@ -1,0 +1,240 @@
+<div class="comment-presets">
+  <h1 class="q-title">{{ 'settings.commentPresets.title' | t }}</h1>
+  <p class="q-body-sm lead">{{ 'settings.commentPresets.lead' | t }}</p>
+
+  @if (loading()) {
+    <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+  } @else if (lastError(); as message) {
+    <p class="q-body-sm error" role="alert">{{ message }}</p>
+  } @else {
+    <p class="q-caption tenant-wide-note">{{ 'settings.commentPresets.tenantWideNote' | t }}</p>
+
+    <section class="card">
+      @if (sortedPresets().length === 0) {
+        <p class="q-body-sm" data-testid="comment-presets-empty">
+          {{ 'settings.commentPresets.empty' | t }}
+        </p>
+      } @else {
+        <table class="comment-presets__table" data-testid="comment-presets-table">
+          <thead>
+            <tr>
+              <th>{{ 'settings.commentPresets.table.code' | t }}</th>
+              <th>{{ 'settings.commentPresets.table.labelRu' | t }}</th>
+              <th>{{ 'settings.commentPresets.table.labelUz' | t }}</th>
+              <th>{{ 'settings.commentPresets.table.labelEn' | t }}</th>
+              <th>{{ 'settings.commentPresets.table.posModifierCode' | t }}</th>
+              <th>{{ 'settings.commentPresets.table.sortOrder' | t }}</th>
+              <th>{{ 'settings.commentPresets.table.status' | t }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (preset of sortedPresets(); track preset.presetId) {
+              @if (isEditing(preset)) {
+                <tr data-testid="comment-preset-edit-row">
+                  <td class="q-mono">{{ preset.code }}</td>
+                  <td>
+                    <input
+                      type="text"
+                      [value]="editLabelRu()"
+                      (input)="editLabelRu.set($any($event.target).value)"
+                      data-testid="comment-preset-edit-labelRu"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      [value]="editLabelUz()"
+                      (input)="editLabelUz.set($any($event.target).value)"
+                      data-testid="comment-preset-edit-labelUz"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      [value]="editLabelEn()"
+                      (input)="editLabelEn.set($any($event.target).value)"
+                      data-testid="comment-preset-edit-labelEn"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      [value]="editPosModifierCode()"
+                      (input)="editPosModifierCode.set($any($event.target).value)"
+                      data-testid="comment-preset-edit-posModifierCode"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      [value]="editSortOrder()"
+                      (input)="editSortOrder.set(+$any($event.target).value)"
+                      data-testid="comment-preset-edit-sortOrder"
+                    />
+                  </td>
+                  <td>
+                    <select
+                      [value]="editStatus()"
+                      (change)="editStatus.set($any($event.target).value)"
+                      data-testid="comment-preset-edit-status"
+                    >
+                      @for (status of statuses; track status) {
+                        <option [value]="status">{{ statusLabel(status) }}</option>
+                      }
+                    </select>
+                  </td>
+                  <td class="comment-presets__row-actions">
+                    <button
+                      type="button"
+                      class="primary"
+                      [disabled]="editSubmitting() || !editValid()"
+                      (click)="submitEdit(preset)"
+                      data-testid="comment-preset-edit-save"
+                    >
+                      {{
+                        editSubmitting()
+                          ? ('settings.commentPresets.edit.submitting' | t)
+                          : ('settings.commentPresets.edit.submit' | t)
+                      }}
+                    </button>
+                    <button
+                      type="button"
+                      (click)="cancelEdit()"
+                      data-testid="comment-preset-edit-cancel"
+                    >
+                      {{ 'settings.commentPresets.cancel' | t }}
+                    </button>
+                  </td>
+                </tr>
+                @if (editError(); as message) {
+                  <tr>
+                    <td
+                      colspan="8"
+                      class="comment-presets__error"
+                      data-testid="comment-preset-edit-error"
+                    >
+                      {{ message }}
+                    </td>
+                  </tr>
+                }
+              } @else {
+                <tr [class.comment-presets__row--archived]="preset.status === 'ARCHIVED'">
+                  <td class="q-mono">{{ preset.code }}</td>
+                  <td>{{ preset.labelRu }}</td>
+                  <td>{{ preset.labelUz }}</td>
+                  <td>{{ preset.labelEn }}</td>
+                  <td class="q-mono">{{ preset.posModifierCode || '—' }}</td>
+                  <td class="q-tnum">{{ preset.sortOrder }}</td>
+                  <td>{{ statusLabel(preset.status) }}</td>
+                  <td class="comment-presets__row-actions">
+                    <button
+                      type="button"
+                      (click)="startEdit(preset)"
+                      data-testid="comment-preset-row-edit"
+                    >
+                      {{ 'settings.commentPresets.edit' | t }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+
+    <section class="card">
+      <h2 class="q-subhead">{{ 'settings.commentPresets.create.title' | t }}</h2>
+      <form class="comment-presets__form" (submit)="$event.preventDefault(); submit()">
+        <label class="comment-presets__field">
+          <span class="q-caption">{{ 'settings.commentPresets.create.code' | t }}</span>
+          <input
+            type="text"
+            [value]="formCode()"
+            (input)="formCode.set($any($event.target).value.toUpperCase())"
+            data-testid="comment-preset-form-code"
+          />
+        </label>
+        <p class="q-caption">{{ 'settings.commentPresets.create.codeHint' | t }}</p>
+
+        <label class="comment-presets__field">
+          <span class="q-caption">{{ 'settings.commentPresets.create.labelRu' | t }}</span>
+          <input
+            type="text"
+            [value]="formLabelRu()"
+            (input)="formLabelRu.set($any($event.target).value)"
+            data-testid="comment-preset-form-labelRu"
+          />
+        </label>
+
+        <label class="comment-presets__field">
+          <span class="q-caption">{{ 'settings.commentPresets.create.labelUz' | t }}</span>
+          <input
+            type="text"
+            [value]="formLabelUz()"
+            (input)="formLabelUz.set($any($event.target).value)"
+            data-testid="comment-preset-form-labelUz"
+          />
+        </label>
+
+        <label class="comment-presets__field">
+          <span class="q-caption">{{ 'settings.commentPresets.create.labelEn' | t }}</span>
+          <input
+            type="text"
+            [value]="formLabelEn()"
+            (input)="formLabelEn.set($any($event.target).value)"
+            data-testid="comment-preset-form-labelEn"
+          />
+        </label>
+
+        <label class="comment-presets__field">
+          <span class="q-caption">{{ 'settings.commentPresets.create.posModifierCode' | t }}</span>
+          <input
+            type="text"
+            [value]="formPosModifierCode()"
+            (input)="formPosModifierCode.set($any($event.target).value)"
+            data-testid="comment-preset-form-posModifierCode"
+          />
+        </label>
+        <p class="q-caption">{{ 'settings.commentPresets.create.posModifierCodeHint' | t }}</p>
+
+        <label class="comment-presets__field">
+          <span class="q-caption">{{ 'settings.commentPresets.create.sortOrder' | t }}</span>
+          <input
+            type="number"
+            [value]="formSortOrder()"
+            (input)="formSortOrder.set(+$any($event.target).value)"
+            data-testid="comment-preset-form-sortOrder"
+          />
+        </label>
+
+        @if (formTouched() && !formValid()) {
+          <p class="q-caption comment-presets__error">
+            {{ 'settings.commentPresets.create.incomplete' | t }}
+          </p>
+        }
+        @if (formError()) {
+          <p class="q-caption comment-presets__error" data-testid="comment-preset-form-error">
+            {{ formError() }}
+          </p>
+        }
+
+        <button
+          type="submit"
+          class="primary"
+          [disabled]="formSubmitting()"
+          data-testid="comment-preset-form-submit"
+        >
+          {{
+            formSubmitting()
+              ? ('settings.commentPresets.create.submitting' | t)
+              : ('settings.commentPresets.create.submit' | t)
+          }}
+        </button>
+      </form>
+    </section>
+  }
+</div>

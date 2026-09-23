@@ -1161,6 +1161,70 @@ public class JdbcCatalogStore {
                 .optional();
     }
 
+    /**
+     * One product by its brand-unique {@code code} (row 4.5b: a catalog
+     * import's row identity). {@code uq_product_code} scopes a code to the
+     * brand, not to one catalog, matching {@code catalog.products}' own
+     * "brand-owned rather than catalog-owned" comment — a product code an
+     * import names is looked up the same way regardless of which of the
+     * brand's catalogs the run targets.
+     */
+    public Optional<Product> productByCode(UUID tenantId, UUID brandId, String code) {
+        return jdbc.sql("""
+                SELECT * FROM catalog.products
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND code = :code
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("code", code)
+                .query(JdbcCatalogStore::mapProduct)
+                .optional();
+    }
+
+    /** One category by its {@code (catalog, code)}-unique code (row 4.5b: a catalog import's category identity). */
+    public Optional<Category> categoryByCode(UUID tenantId, UUID brandId, UUID catalogId, String code) {
+        return jdbc.sql("""
+                SELECT * FROM catalog.categories
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND catalog_id = :catalogId AND code = :code
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("catalogId", catalogId)
+                .param("code", code)
+                .query(JdbcCatalogStore::mapCategory)
+                .optional();
+    }
+
+    /** The variant already using this brand-unique SKU, if any (row 4.5b's own pre-write collision check against {@code uq_variant_sku}). */
+    public Optional<Variant> variantBySku(UUID tenantId, UUID brandId, String sku) {
+        return jdbc.sql("""
+                SELECT * FROM catalog.variants
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND sku = :sku
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("sku", sku)
+                .query(JdbcCatalogStore::mapVariant)
+                .optional();
+    }
+
+    /** Whether {@code productId} already sits in {@code categoryId} (row 4.5b's own SKIP-vs-UPDATE diff). */
+    public boolean productInCategory(UUID tenantId, UUID brandId, UUID categoryId, UUID productId) {
+        return Boolean.TRUE.equals(jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM catalog.category_products
+                    WHERE tenant_id = :tenantId AND brand_id = :brandId
+                      AND category_id = :categoryId AND product_id = :productId
+                )
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("categoryId", categoryId)
+                .param("productId", productId)
+                .query(Boolean.class)
+                .single());
+    }
+
     /** Which catalogs carry this product (a product may sit in more than one). */
     public List<UUID> catalogsForProduct(UUID tenantId, UUID brandId, UUID productId) {
         return jdbc.sql("""

@@ -45,6 +45,12 @@ import {
 import { PricingApi } from './pricing-api';
 import { MediaApi } from './media-api';
 import { InventoryApi } from './inventory-api';
+import {
+  AttachPresetRequest,
+  ProductCommentPresetsApi,
+  ProductPresetResponse,
+} from './product-comment-presets-api';
+import { CommentPresetsApi, PresetResponse } from '../settings/comment-presets/comment-presets-api';
 
 const STATUSES: readonly CatalogStatus[] = ['DRAFT', 'ACTIVE', 'ARCHIVED'];
 
@@ -57,6 +63,7 @@ type EditorTab =
   | 'AVAILABILITY'
   | 'SCHEDULE'
   | 'RECOMMENDATIONS'
+  | 'COMMENT_PRESETS'
   | 'HISTORY';
 
 const TABS: readonly EditorTab[] = [
@@ -68,6 +75,7 @@ const TABS: readonly EditorTab[] = [
   'AVAILABILITY',
   'SCHEDULE',
   'RECOMMENDATIONS',
+  'COMMENT_PRESETS',
   'HISTORY',
 ];
 const TAB_LABEL: Readonly<Record<EditorTab, MessageKey>> = {
@@ -79,6 +87,7 @@ const TAB_LABEL: Readonly<Record<EditorTab, MessageKey>> = {
   AVAILABILITY: 'catalog.editor.tab.availability',
   SCHEDULE: 'catalog.editor.tab.schedule',
   RECOMMENDATIONS: 'catalog.editor.tab.recommendations',
+  COMMENT_PRESETS: 'catalog.editor.tab.commentPresets',
   HISTORY: 'catalog.editor.tab.history',
 };
 
@@ -202,6 +211,8 @@ export class ProductEditorPage implements OnInit {
   private readonly inventoryApi = inject(InventoryApi);
   private readonly activityLogApi = inject(ActivityLogApi);
   private readonly kitchenApi = inject(CapacityApi);
+  private readonly productCommentPresetsApi = inject(ProductCommentPresetsApi);
+  private readonly commentPresetsApi = inject(CommentPresetsApi);
   private readonly brand = inject(CurrentBrand);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
@@ -267,6 +278,15 @@ export class ProductEditorPage implements OnInit {
   protected readonly kitchenRoleSelection = signal('');
   protected readonly kitchenSaving = signal(false);
   protected readonly kitchenNotice = signal<string | null>(null);
+  /**
+   * The brand rule's own id and version once one exists, so `saveKitchenDepartment`
+   * can tell "nothing routed yet" (create) from "already routed, change it"
+   * (the optimistic-locked update) — the residual half of row 4.2g:
+   * `KitchenStationController` had no `GET`, so this always read blank before.
+   */
+  protected readonly kitchenRuleId = signal<string | null>(null);
+  protected readonly kitchenRuleVersion = signal<number | null>(null);
+  protected readonly kitchenRuleLoading = signal(false);
 
   /** Row 4.2g's per-item sale schedule — the product's default variant, at the current location. */
   protected readonly scheduleLoading = signal(false);
@@ -291,6 +311,23 @@ export class ProductEditorPage implements OnInit {
    */
   protected readonly eligibleTargetVariantIds = signal<ReadonlySet<string>>(new Set());
 
+  /** Row 2.1b's product-scoped half — which of the tenant's preset kitchen instructions this product's line may carry. */
+  protected readonly commentPresetsLoading = signal(false);
+  protected readonly commentPresetsLoaded = signal(false);
+  protected readonly attachedCommentPresets = signal<readonly ProductPresetResponse[]>([]);
+  /** The tenant's own vocabulary ({@link CommentPresetsApi}, settings screen), so the picker below can offer it. */
+  protected readonly tenantCommentPresets = signal<readonly PresetResponse[]>([]);
+  protected readonly commentPresetSaving = signal(false);
+  protected readonly commentPresetNotice = signal<string | null>(null);
+
+  /** Active tenant presets not yet attached to this product — what the picker offers. */
+  protected readonly availableCommentPresets = computed(() => {
+    const attached = new Set(this.attachedCommentPresets().map((p) => p.presetId));
+    return this.tenantCommentPresets().filter(
+      (p) => p.status === 'ACTIVE' && !attached.has(p.presetId),
+    );
+  });
+
   async ngOnInit(): Promise<void> {
     this.editingLocale.set(toCatalogLocale(this.i18n.locale()));
     await this.brand.ensureLoaded();
@@ -311,6 +348,7 @@ export class ProductEditorPage implements OnInit {
       );
       void this.loadReadiness(product);
       void this.loadPrices(product);
+      void this.loadKitchenRouting(product);
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) {
         this.notFound.set(true);
@@ -391,6 +429,9 @@ export class ProductEditorPage implements OnInit {
     }
     if (tab === 'RECOMMENDATIONS' && !this.recommendationsLoaded()) {
       void this.loadRecommendations();
+    }
+    if (tab === 'COMMENT_PRESETS' && !this.commentPresetsLoaded()) {
+      void this.loadCommentPresets();
     }
   }
 
@@ -1145,15 +1186,52 @@ export class ProductEditorPage implements OnInit {
   // ------------------------------------------------------------ Row 4.2g — Kitchen department (Tab 1)
 
   /**
-   * Pure wiring over `KitchenStationController.route` — the endpoint already
-   * existed, and the only thing missing was a caller. Writes the brand layer
-   * (a station role, never a specific station: the location resolves that
-   * role to its own station at every branch), matching ADR 0041's own
-   * two-layer design. `CurrentLocation`'s scope supplies the URL's
-   * `locationId` even though the rule this writes is brand-wide — the
+   * `KitchenStationController.routingRuleFor` — the read this picker never
+   * had: before it, the select always opened blank and a second save 409d,
+   * because nothing ever told the editor a product was already routed.
+   * Reads the brand layer only, matching {@link saveKitchenDepartment}'s own
+   * scope: this picker never writes a location-specific station.
+   */
+  private async loadKitchenRouting(product: ProductDetail): Promise<void> {
+    await this.location.ensureLoaded();
+    const locationScope = this.location.scope();
+    if (!locationScope) {
+      return;
+    }
+    this.kitchenRuleLoading.set(true);
+    try {
+      const detail = await this.kitchenApi.findRouting(locationScope, {
+        productId: product.productId,
+      });
+      const brandRule = detail.brandRule;
+      this.kitchenRuleId.set(brandRule?.ruleId ?? null);
+      this.kitchenRuleVersion.set(brandRule?.version ?? null);
+      this.kitchenRoleSelection.set(brandRule?.stationRole ?? '');
+    } catch {
+      // The picker degrades to "nothing known yet" — the same blank state it
+      // always showed before this read existed — rather than blocking the
+      // rest of the BASIC tab on one rail.
+      this.kitchenRuleId.set(null);
+      this.kitchenRuleVersion.set(null);
+    } finally {
+      this.kitchenRuleLoading.set(false);
+    }
+  }
+
+  /**
+   * Wiring over `KitchenStationController.route`/`updateRoute`. Writes the
+   * brand layer (a station role, never a specific station: the location
+   * resolves that role to its own station at every branch), matching ADR
+   * 0041's own two-layer design. `CurrentLocation`'s scope supplies the
+   * URL's `locationId` even though the rule this writes is brand-wide — the
    * controller's own doc names this as the safe direction, since a
    * location-scoped grant satisfies a brand-scoped requirement's downward
    * cover.
+   *
+   * <p>Creates when {@link loadKitchenRouting} found nothing, and otherwise
+   * changes the existing rule with the version it was read at — the "second
+   * save 409s" residue {@link loadKitchenRouting}'s own doc names, closed
+   * here rather than left as a picker that can only ever be set once.
    */
   protected async saveKitchenDepartment(role: string): Promise<void> {
     const brandScope = this.brand.scope();
@@ -1166,9 +1244,24 @@ export class ProductEditorPage implements OnInit {
     this.kitchenSaving.set(true);
     this.kitchenNotice.set(null);
     try {
-      await firstValueFrom(
-        this.kitchenApi.route(locationScope, { productId: product.productId, stationRole: role }),
-      );
+      const ruleId = this.kitchenRuleId();
+      const expectedVersion = this.kitchenRuleVersion();
+      const result =
+        ruleId !== null && expectedVersion !== null
+          ? await firstValueFrom(
+              this.kitchenApi.updateRoute(locationScope, ruleId, {
+                stationRole: role,
+                expectedVersion,
+              }),
+            )
+          : await firstValueFrom(
+              this.kitchenApi.route(locationScope, {
+                productId: product.productId,
+                stationRole: role,
+              }),
+            );
+      this.kitchenRuleId.set(result.ruleId);
+      this.kitchenRuleVersion.set(result.version);
       this.kitchenNotice.set(this.i18n.t('catalog.editor.saved'));
     } catch (error) {
       this.kitchenNotice.set(
@@ -1392,6 +1485,107 @@ export class ProductEditorPage implements OnInit {
       this.handleSaveError(error);
     } finally {
       this.recommendationSaving.set(false);
+    }
+  }
+
+  // -------------------------------------------------------- Row 2.1b — Preset comments
+
+  /**
+   * Both halves this tab needs: every preset attached to this product
+   * ({@link ProductCommentPresetsApi.list}, brand-scoped), and the tenant's
+   * whole vocabulary ({@link CommentPresetsApi.list}, tenant-scoped) so
+   * {@link availableCommentPresets} can offer what is not yet attached.
+   * Best-effort on the vocabulary read alone: a denied or failed fetch of it
+   * leaves the picker empty rather than blocking the management list above,
+   * which does not depend on it — the identical shape {@link
+   * loadEligibleRecommendations} already uses for its own secondary read.
+   */
+  private async loadCommentPresets(): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    if (!scope || !product) {
+      return;
+    }
+    this.commentPresetsLoading.set(true);
+    try {
+      const attached = await firstValueFrom(
+        this.productCommentPresetsApi.list(scope, product.productId),
+      );
+      this.attachedCommentPresets.set(attached);
+      this.commentPresetsLoaded.set(true);
+      try {
+        this.tenantCommentPresets.set(await this.commentPresetsApi.list(scope.tenantId));
+      } catch {
+        this.tenantCommentPresets.set([]);
+      }
+    } catch (error) {
+      this.handleSaveError(error);
+    } finally {
+      this.commentPresetsLoading.set(false);
+    }
+  }
+
+  /** A preset's label in this editor's own {@link editingLocale} — presets carry one label per locale directly (`labelRu`/`labelUz`/`labelEn`), not the `translations` map every other entity here uses. */
+  protected localizedPresetLabel(preset: {
+    readonly labelRu: string;
+    readonly labelUz: string;
+    readonly labelEn: string;
+  }): string {
+    switch (this.editingLocale()) {
+      case 'uz':
+        return preset.labelUz;
+      case 'en':
+        return preset.labelEn;
+      default:
+        return preset.labelRu;
+    }
+  }
+
+  /** Attaches the preset the picker's `<select>` currently names, or re-sorts it if already attached — the same call. */
+  protected async attachCommentPreset(presetId: string): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    if (!scope || !product || !presetId) {
+      return;
+    }
+    const request: AttachPresetRequest = {
+      presetId,
+      sortOrder: this.attachedCommentPresets().length,
+    };
+    this.commentPresetSaving.set(true);
+    this.commentPresetNotice.set(null);
+    try {
+      await firstValueFrom(this.productCommentPresetsApi.attach(scope, product.productId, request));
+      await this.loadCommentPresets();
+    } catch (error) {
+      this.commentPresetNotice.set(
+        error instanceof ApiError
+          ? describeApiError(error, (key, values) => this.i18n.t(key, values))
+          : this.i18n.t('error.unknown.noReference'),
+      );
+    } finally {
+      this.commentPresetSaving.set(false);
+    }
+  }
+
+  protected async detachCommentPreset(item: ProductPresetResponse): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    if (!scope || !product) {
+      return;
+    }
+    this.commentPresetSaving.set(true);
+    try {
+      await firstValueFrom(
+        this.productCommentPresetsApi.detach(scope, product.productId, item.presetId),
+      );
+      this.attachedCommentPresets.set(
+        this.attachedCommentPresets().filter((p) => p.presetId !== item.presetId),
+      );
+    } catch (error) {
+      this.handleSaveError(error);
+    } finally {
+      this.commentPresetSaving.set(false);
     }
   }
 

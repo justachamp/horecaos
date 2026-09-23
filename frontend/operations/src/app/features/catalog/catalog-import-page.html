@@ -8,7 +8,94 @@
       <q-inline-alert severity="error" [text]="message" />
     }
 
-    @if (bindingOptions().length === 0) {
+    <nav class="q-catalog-import-page__tabs" role="tablist">
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="activeTab() === 'runs'"
+        [class.active]="activeTab() === 'runs'"
+        (click)="selectTab('runs')"
+      >
+        {{ 'catalog.import.tab.runs' | t }}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="activeTab() === 'mapping'"
+        [class.active]="activeTab() === 'mapping'"
+        (click)="selectTab('mapping')"
+      >
+        {{ 'catalog.import.tab.mapping' | t }}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="activeTab() === 'file'"
+        [class.active]="activeTab() === 'file'"
+        (click)="selectTab('file')"
+        data-testid="q-catalog-import-tab-file"
+      >
+        {{ 'catalog.import.tab.file' | t }}
+      </button>
+    </nav>
+
+    @if (activeTab() === 'file') {
+      <section class="q-catalog-import-page__file" data-testid="q-catalog-import-file-section">
+        @if (fileError(); as message) {
+          <q-inline-alert severity="error" [text]="message" />
+        }
+
+        @if (catalogsLoading()) {
+          <p class="q-body-sm q-ink-muted">{{ 'catalog.import.loading' | t }}</p>
+        } @else if (catalogOptions().length === 0) {
+          <q-empty-state
+            titleKey="catalog.import.file.noCatalog.title"
+            bodyKey="catalog.import.file.noCatalog"
+          />
+        } @else {
+          <div class="q-catalog-import-page__file-toolbar">
+            @if (catalogOptions().length > 1) {
+              <label class="q-body-sm" for="q-catalog-import-catalog">{{
+                'catalog.import.file.catalog' | t
+              }}</label>
+              <select
+                id="q-catalog-import-catalog"
+                [value]="selectedCatalogId()"
+                (change)="selectCatalog($any($event.target).value)"
+              >
+                @for (option of catalogOptions(); track option.catalogId) {
+                  <option [value]="option.catalogId">{{ option.name }}</option>
+                }
+              </select>
+            }
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="templateDownloading()"
+              (click)="downloadTemplate()"
+              data-testid="q-catalog-import-download-template"
+            >
+              {{ 'catalog.import.file.downloadTemplate' | t }}
+            </button>
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="exportDownloading()"
+              (click)="downloadExport()"
+              data-testid="q-catalog-import-download-export"
+            >
+              {{ 'catalog.import.file.downloadExport' | t }}
+            </button>
+          </div>
+
+          <q-import-wizard
+            [title]="'catalog.import.file.title' | t"
+            [adapter]="fileImportAdapter"
+            (completed)="onFileImportCompleted()"
+          />
+        }
+      </section>
+    } @else if (bindingOptions().length === 0) {
       <q-empty-state
         titleKey="catalog.import.noBindings.title"
         bodyKey="catalog.import.noBindings.body"
@@ -28,27 +115,6 @@
           }
         </select>
       </div>
-
-      <nav class="q-catalog-import-page__tabs" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          [attr.aria-selected]="activeTab() === 'runs'"
-          [class.active]="activeTab() === 'runs'"
-          (click)="selectTab('runs')"
-        >
-          {{ 'catalog.import.tab.runs' | t }}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          [attr.aria-selected]="activeTab() === 'mapping'"
-          [class.active]="activeTab() === 'mapping'"
-          (click)="selectTab('mapping')"
-        >
-          {{ 'catalog.import.tab.mapping' | t }}
-        </button>
-      </nav>
 
       @if (activeTab() === 'runs') {
         <section class="q-catalog-import-page__start">

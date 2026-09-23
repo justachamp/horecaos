@@ -55,6 +55,43 @@ export interface RoutingRuleResponse {
   readonly ruleId: string;
   /** `BRAND` or `LOCATION`. */
   readonly layer: string;
+  readonly version: number;
+}
+
+/** The one catalogue node a routing lookup or edit addresses — exactly one field set. */
+export interface RoutingRuleNode {
+  readonly variantId?: string | null;
+  readonly productId?: string | null;
+  readonly categoryId?: string | null;
+}
+
+/**
+ * One layer's current rule for a node — `KitchenStationController.RoutingRuleView`.
+ * `stationRole` is set for a `BRAND` rule, `stationId` for a `LOCATION` one.
+ */
+export interface RoutingRuleView {
+  readonly ruleId: string;
+  readonly layer: string;
+  readonly stationRole?: string | null;
+  readonly stationId?: string | null;
+  readonly version: number;
+}
+
+/**
+ * Both layers' answer for one node (gap map row 4.2g) — either may be
+ * absent, and `GET` answers `null` for one rather than omitting the key, so
+ * the product editor can always tell "no rule" from "hasn't loaded yet".
+ */
+export interface RoutingRuleDetailResponse {
+  readonly brandRule: RoutingRuleView | null;
+  readonly locationRule: RoutingRuleView | null;
+}
+
+/** Changes an already-routed node: names a role (brand layer) or a station (location layer), never both. */
+export interface UpdateRoutingRule {
+  readonly stationRole?: string | null;
+  readonly stationId?: string | null;
+  readonly expectedVersion: number;
 }
 
 /**
@@ -130,6 +167,43 @@ export class CapacityApi {
   route(scope: LocationScope, body: NewRoutingRule): Observable<RoutingRuleResponse> {
     return this.api.post<NewRoutingRule, RoutingRuleResponse>(
       operationsPaths.kitchenRoutingRules(scope),
+      command(body),
+    );
+  }
+
+  /**
+   * Both layers' current rule for one node (gap map row 4.2g) — what the
+   * product editor's station picker needs before it can show a product's
+   * current department instead of an always-blank picker.
+   */
+  async findRouting(
+    scope: LocationScope,
+    node: RoutingRuleNode,
+  ): Promise<RoutingRuleDetailResponse> {
+    const result = await firstValueFrom(
+      this.api.get<RoutingRuleDetailResponse>(operationsPaths.kitchenRoutingRules(scope), {
+        params: {
+          variantId: node.variantId ?? undefined,
+          productId: node.productId ?? undefined,
+          categoryId: node.categoryId ?? undefined,
+        },
+      }),
+    );
+    return result.value ?? { brandRule: null, locationRule: null };
+  }
+
+  /**
+   * Changes an already-routed node's department — the other half of row
+   * 4.2g: {@link route} only ever inserts, so a second save for an
+   * already-routed product used to 409 with no way to actually change it.
+   */
+  updateRoute(
+    scope: LocationScope,
+    ruleId: string,
+    body: UpdateRoutingRule,
+  ): Observable<RoutingRuleResponse> {
+    return this.api.put<UpdateRoutingRule, RoutingRuleResponse>(
+      operationsPaths.kitchenRoutingRule(scope, ruleId),
       command(body),
     );
   }

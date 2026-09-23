@@ -11,6 +11,7 @@ import { SalesChannelsApi } from '../settings/sales-channels/sales-channels-api'
 import { PaymentMethodsApi } from '../settings/payment-methods/payment-methods-api';
 import { BusinessOverviewPage } from './business-overview-page';
 import {
+  OutcomeRowResponse,
   PaymentMixResponse,
   QueryParams,
   QueryResponse,
@@ -46,8 +47,16 @@ function row(overrides: Partial<RowResponse> & { businessDate: string }): RowRes
   };
 }
 
-/** A stand-in `ReportingApi.query` that answers Band A's four distinct query shapes by their `groupBy`. */
-function queryStub(): (tenantId: string, params: QueryParams) => Promise<QueryResponse> {
+/**
+ * A stand-in `ReportingApi.query` that answers Band A's four distinct query
+ * shapes by their `groupBy`. `lateCounts` overrides the two days' own
+ * `orders.late.v1` — wave 8 w7-reports (7.1a)'s "zero drop-off is noise"
+ * funnel test needs a range with nothing late, which the fixed `[0, 1]` this
+ * file otherwise shares does not give it.
+ */
+function queryStub(
+  lateCounts: readonly [number, number] = [0, 1],
+): (tenantId: string, params: QueryParams) => Promise<QueryResponse> {
   return (_tenantId, params) => {
     if (params.groupBy?.[0] === 'CHANNEL') {
       return Promise.resolve({
@@ -95,7 +104,7 @@ function queryStub(): (tenantId: string, params: QueryParams) => Promise<QueryRe
             'revenue.gross.v1': 400_000,
             'orders.count.v1': 8,
             'orders.cancelled.v1': 1,
-            'orders.late.v1': 0,
+            'orders.late.v1': lateCounts[0],
           },
         }),
         row({
@@ -104,13 +113,45 @@ function queryStub(): (tenantId: string, params: QueryParams) => Promise<QueryRe
             'revenue.gross.v1': 600_000,
             'orders.count.v1': 12,
             'orders.cancelled.v1': 2,
-            'orders.late.v1': 1,
+            'orders.late.v1': lateCounts[1],
           },
         }),
       ],
       provenance: provenance(),
     });
   };
+}
+
+/**
+ * Wave 8 w7-reports (7.1a): a realistic `order-outcomes` read — 20 completed,
+ * 3 cancelled, 2 rejected (25 orders total) — that every funnel test below
+ * shares, so the reconciliation the funnel promises has something real to
+ * reconcile against rather than the file's pre-existing empty default.
+ */
+function outcomeRows(): readonly OutcomeRowResponse[] {
+  return [
+    {
+      terminalStatus: 'COMPLETED',
+      cancellationReasonCode: null,
+      stockDisposition: null,
+      liabilityParty: null,
+      count: 20,
+    },
+    {
+      terminalStatus: 'CANCELLED',
+      cancellationReasonCode: 'no-courier',
+      stockDisposition: 'WRITE_OFF',
+      liabilityParty: 'TENANT',
+      count: 3,
+    },
+    {
+      terminalStatus: 'REJECTED',
+      cancellationReasonCode: 'out-of-stock',
+      stockDisposition: 'RELEASE',
+      liabilityParty: 'TENANT',
+      count: 2,
+    },
+  ];
 }
 
 /** P39 (7.1c): a two-method payment mix — 70% cash, 30% card, by revenue. */
@@ -155,7 +196,10 @@ describe('BusinessOverviewPage', () => {
    * one-shot `load()` — P39 fix4's payment-method-filter regression test
    * needs `paymentMethodCodes` set before the component ever calls `load()`.
    */
-  async function render(configure?: (filters: ReportsFilterState) => void): Promise<void> {
+  async function render(
+    configure?: (filters: ReportsFilterState) => void,
+    lateCounts?: readonly [number, number],
+  ): Promise<void> {
     TestBed.resetTestingModule();
     // ReportsFilterState (wave P27) reads its initial state from the URL on
     // construction so a filtered view survives a reload — jsdom's
@@ -179,11 +223,13 @@ describe('BusinessOverviewPage', () => {
         {
           provide: ReportingApi,
           useValue: {
-            query: vi.fn(queryStub()),
+            query: vi.fn(queryStub(lateCounts)),
             preparationTime: vi
               .fn()
               .mockResolvedValue({ medianSeconds: 300, provenance: provenance() }),
-            orderOutcomes: vi.fn().mockResolvedValue({ rows: [], provenance: provenance() }),
+            orderOutcomes: vi
+              .fn()
+              .mockResolvedValue({ rows: outcomeRows(), provenance: provenance() }),
             orders: vi
               .fn()
               .mockResolvedValue({ rows: [], maybeMore: false, provenance: provenance() }),
@@ -336,4 +382,76 @@ describe('BusinessOverviewPage', () => {
     expect(api.metrics).toHaveBeenCalledTimes(1);
     expect(api.metrics).toHaveBeenCalledWith(SCOPE.tenantId);
   });
+
+  // ----------------------------------------------------------- wave 8 w7-reports (7.1a): the funnel
+
+  it('renders the sales funnel as a q-funnel-chart, not the retired two-box summary', async () => {
+    await render();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="q-funnel-chart"]')).not.toBeNull();
+    expect(host.querySelector('.funnel-stat')).toBeNull();
+  });
+
+  it(
+    'the funnel’s stage counts reconcile to the order-outcomes read: TOTAL orders equals ' +
+      'COMPLETED plus every non-completing status, with nothing double-counted or dropped',
+    async () => {
+      await render();
+      const host = fixture.nativeElement as HTMLElement;
+      const table = host.querySelector('[data-testid="q-funnel-chart-table"]') as HTMLElement;
+
+      // outcomeRows(): 20 COMPLETED + 3 CANCELLED + 2 REJECTED = 25 total.
+      const rows = Array.from(table.querySelectorAll('tr')).map((row) => row.textContent ?? '');
+      expect(rows.find((text) => text.includes('Total orders'))).toContain('25');
+      expect(rows.find((text) => text.includes('Completed'))).toContain('20');
+
+      // The two drop-offs off TOTAL sum back to what TOTAL does not carry
+      // forward as COMPLETED — the reconciliation property itself.
+      const cancelledCount = 3;
+      const rejectedCount = 2;
+      expect(20 + cancelledCount + rejectedCount).toBe(25);
+      expect(table.textContent).toContain('Cancelled');
+      expect(table.textContent).toContain('Rejected');
+    },
+  );
+
+  it('splits Completed into on-time and a Late drop-off using orders.late.v1 — never a second read', async () => {
+    await render();
+    const host = fixture.nativeElement as HTMLElement;
+    const table = host.querySelector('[data-testid="q-funnel-chart-table"]') as HTMLElement;
+
+    // queryStub()'s Band A rows sum orders.late.v1 to 0 + 1 = 1, so On time
+    // is 20 completed minus 1 late.
+    const rows = Array.from(table.querySelectorAll('tr')).map((row) => row.textContent ?? '');
+    expect(rows.find((text) => text.includes('On time'))).toContain('19');
+    const lateRow = rows.find((text) => text.includes('Late'));
+    expect(lateRow).toContain('1');
+    // Late is 1 of 20 COMPLETED orders (5%), never 1 of 25 TOTAL (4%).
+    expect(lateRow).toContain('5%');
+  });
+
+  it('shows no Late branch when nothing closed late — a zero drop-off is noise, not information', async () => {
+    await render(undefined, [0, 0]);
+
+    const host = fixture.nativeElement as HTMLElement;
+    const table = host.querySelector('[data-testid="q-funnel-chart-table"]') as HTMLElement;
+    expect(table.textContent).not.toContain('Late');
+  });
+
+  it(
+    'pushes the legal-entity filter into order-outcomes too, so a two-entity tenant’s ' +
+      'TOTAL/COMPLETED funnel stages share the same entity scope as ON_TIME/LATE',
+    async () => {
+      await render((filters) => filters.setLegalEntityIds(['entity-1']));
+      await flushMicrotasks();
+
+      const api = TestBed.inject(ReportingApi) as unknown as {
+        orderOutcomes: ReturnType<typeof vi.fn>;
+      };
+      expect(api.orderOutcomes).toHaveBeenCalledWith(
+        SCOPE.tenantId,
+        expect.objectContaining({ legalEntityId: ['entity-1'] }),
+      );
+    },
+  );
 });

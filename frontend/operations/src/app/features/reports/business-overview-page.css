@@ -152,31 +152,20 @@
 }
 
 /* Band D: funnel + branches */
-.funnel-summary {
-  display: flex;
-  gap: 24px;
-  margin-bottom: 16px;
-}
-
-.funnel-stat {
+.funnel-summary__order-log-link {
+  display: block;
   padding: 0;
+  margin: 8px 0 16px;
   border: none;
   background: transparent;
   text-align: left;
   font-family: inherit;
-}
-
-.funnel-stat--link {
+  color: var(--q-ink-subtle);
   cursor: pointer;
 }
 
-.funnel-stat--link:hover .funnel-stat__value {
+.funnel-summary__order-log-link:hover {
   text-decoration: underline;
-}
-
-.funnel-stat__label {
-  margin-top: 4px;
-  color: var(--q-ink-subtle);
 }
 
 .outcome-table,

@@ -14,6 +14,7 @@ import { NotificationService } from '../../services/notification.service';
 import { NavigationHistoryService } from '../../services/navigation-history.service';
 import { TranslateService } from '../../services/translate.service';
 import { UiCartService } from '../../services/ui-cart.service';
+import { LocationProfileService, type LocationProfile } from '../../services/location-profile.service';
 
 class FakeTranslateService {
   get(key: string): string {
@@ -74,15 +75,29 @@ function plan(
   };
 }
 
+function branch(overrides: Partial<LocationProfile> = {}): LocationProfile {
+  return {
+    displayName: 'Central kitchen',
+    addressLine: '1 Demo Street',
+    district: 'Shaykhontohur',
+    city: 'Tashkent',
+    ...overrides,
+  };
+}
+
 function setUp(
   orderId: string | null,
   detail: ApiOrderDetail,
   reorderPlan$: Observable<ReorderPlanResponse> = of(plan('READY')),
+  locationProfile: LocationProfile | null = null,
 ) {
   const cartAdd = vi.fn(async () => {});
   const ordersService = {
     getOrderDetail: vi.fn(() => of(detail)),
     getReorderPlan: vi.fn(() => reorderPlan$),
+  };
+  const locationProfileService = {
+    profile: vi.fn(() => Promise.resolve(locationProfile)),
   };
   TestBed.configureTestingModule({
     imports: [OrderDetailComponent],
@@ -97,6 +112,7 @@ function setUp(
       { provide: NavigationHistoryService, useValue: { back: vi.fn() } },
       { provide: TranslateService, useClass: FakeTranslateService },
       { provide: UiCartService, useValue: { add: cartAdd } },
+      { provide: LocationProfileService, useValue: locationProfileService },
     ],
   });
   const fixture = TestBed.createComponent(OrderDetailComponent);
@@ -105,6 +121,7 @@ function setUp(
     comp: fixture.componentInstance,
     ordersService,
     cartAdd,
+    locationProfileService,
     router: TestBed.inject(Router),
   };
 }
@@ -164,6 +181,63 @@ describe('OrderDetailComponent: the placed order reconciles total against subtot
     fixture.detectChanges();
 
     expect(comp.order()?.tax).toBeUndefined();
+  });
+});
+
+describe('OrderDetailComponent: names the pickup branch (2026-09-21 audit follow-up (d))', () => {
+  it("asks for and shows the branch's name and address on a PICKUP order", async () => {
+    const { fixture, comp, locationProfileService } = setUp(
+      'o1',
+      apiOrderDetail({ fulfillmentMode: 'PICKUP', locationId: 'loc-1' }),
+      of(plan('READY')),
+      branch({ displayName: 'Central kitchen', addressLine: '1 Demo Street', district: 'Shaykhontohur', city: 'Tashkent' }),
+    );
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(locationProfileService.profile).toHaveBeenCalledWith('loc-1');
+    expect(comp.pickupBranch()?.displayName).toBe('Central kitchen');
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Central kitchen');
+    expect(text).toContain('1 Demo Street');
+  });
+
+  it('never asks for a branch on a DELIVERY order', async () => {
+    const { fixture, locationProfileService } = setUp(
+      'o1',
+      apiOrderDetail({ fulfillmentMode: 'DELIVERY', locationId: 'loc-1' }),
+    );
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(locationProfileService.profile).not.toHaveBeenCalled();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).not.toContain('orders.pickupBranch');
+  });
+
+  it('shows nothing extra when the branch cannot be resolved, rather than a placeholder', async () => {
+    const { fixture, comp } = setUp(
+      'o1',
+      apiOrderDetail({ fulfillmentMode: 'PICKUP', locationId: 'loc-1' }),
+      of(plan('READY')),
+      null,
+    );
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(comp.pickupBranch()).toBeNull();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).not.toContain('orders.pickupBranch');
   });
 });
 

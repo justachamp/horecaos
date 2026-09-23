@@ -91,6 +91,23 @@ public record OrderPromise(
     }
 
     /**
+     * A promise the caller chose rather than one this class derived (row 1.3d,
+     * ADR 0019's "Scheduled/pre-order semantics").
+     *
+     * <p>No preparation or travel component: a requested instant is not built
+     * from a duration, so there is nothing to decompose it into and {@code
+     * ck_order_promise_components} refuses a {@code SCHEDULED_SLOT} row that
+     * carries one. The instant itself is validated against the branch's own
+     * hours before checkout ever reaches this factory ({@code
+     * CheckoutEligibilityGuard}); this constructor trusts that already happened
+     * and only shapes the record.
+     */
+    public static OrderPromise scheduled(Instant requestedFor) {
+        Objects.requireNonNull(requestedFor, "A scheduled promise needs a requested instant");
+        return new OrderPromise(requestedFor, PromiseBasis.SCHEDULED_SLOT, null, null);
+    }
+
+    /**
      * A promise built by adding a preparation estimate, and optionally travel, to
      * the moment of checkout.
      *

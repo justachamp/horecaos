@@ -2,15 +2,27 @@ import { OrderActionResponse } from './order-actions';
 
 /**
  * Mirrors `OrderSummaryResponse` in `OperationsOrderController.java` — the
- * entire wire shape `GET /api/v1/tenants/{t}/brands/{b}/locations/{l}/orders`
- * returns today, newest first, and the summary embedded in
- * `OrderDetailResponse.summary`.
+ * entire wire shape `GET .../orders/board` (wave P04, ADR 0102) returns per
+ * row, cursor-paged, and the summary embedded in `OrderDetailResponse.summary`.
+ * The legacy `GET .../orders` this superseded returned a strict subset of the
+ * same fields; every field below is present on both, so this interface still
+ * mirrors either response, not just the board's.
  *
- * This is far short of `docs/operations-spec/orders.md` §2.5's default
- * column set: no branch name, no customer, no line summary, no payment
- * projection, no courier, no process state. `order-queue.ts` documents
- * exactly which columns render because the data exists and which are
- * withheld because it does not — never fabricated client-side.
+ * Still short of `docs/operations-spec/orders.md` §2.5's default column set —
+ * **no branch name** (`/board` is already scoped to one location; §2.5's own
+ * rule auto-hides that column for a single-location tenant), **no decrypted
+ * customer name or phone** (§2.5 column 7 reads `order_customer_snapshots`,
+ * a table this response deliberately does not join — ADR 0029 PERSONAL data
+ * belongs behind an audited reveal, not a list row every `ORDER_READ` holder
+ * can page through; `customerAccountId`/`guestReferenceHash` below are the
+ * opaque identifiers this response carries instead), **no line summary**
+ * (`order_lines`, a per-order query this list read does not make), and
+ * **no courier** (§2.5 column 12: `fulfillment.shipments.courier_id` is
+ * built but, in its own words, "not read by ordering" — the ordering module
+ * does not join the fulfilment module's assignment table into this
+ * projection). `order-queue.ts` documents exactly which columns render
+ * because the data exists and which are withheld because it does not — never
+ * fabricated client-side.
  */
 export interface OrderSummaryResponse {
   readonly orderId: string;
@@ -48,7 +60,9 @@ export interface OrderSummaryResponse {
    * from the applied promotions. §1.3's five-row money-panel rule
    * (`subtotal + tax + fee − discount = total`) needs both; see
    * `order-money.ts` and `order-detail-pane.html`'s Деньги section for where
-   * they render.
+   * they render. Also §2.5's "behind the picker" Доставка/Скидка columns on
+   * the board (`order-queue.ts`'s `formatFee`) — `0` for a pickup/dine-in
+   * order or nothing discounted, never negative, never omitted.
    */
   readonly feeMinor: number;
   readonly discountMinor: number;
@@ -60,4 +74,27 @@ export interface OrderSummaryResponse {
    * that the same as empty, never as "unknown, so show everything".
    */
   readonly actions?: readonly OrderActionResponse[];
+
+  /**
+   * `ordering.orders.promise_basis` (ADR 0036) — how `promisedAt` was
+   * decided. Not yet read by any column here; carried for a future reader
+   * rather than dropped on the floor.
+   */
+  readonly promiseBasis?: string | null;
+  /**
+   * §2.5 column 10 (Оплата) — `ordering.orders.payment_status_projection`.
+   * See `order-payment-status.ts` for the seven values and the `NOT_REQUIRED`
+   * dash rule.
+   */
+  readonly paymentStatusProjection?: string | null;
+  /** Set for a signed-in customer's order; null for a guest — see {@link guestReferenceHash}. Never a name or phone (ADR 0029). */
+  readonly customerAccountId?: string | null;
+  /** Set for a guest order in place of {@link customerAccountId}. An opaque hash, never the raw phone (ADR 0029). */
+  readonly guestReferenceHash?: string | null;
+  /** §2.5's "behind the picker" Создал column — who took the order. */
+  readonly createdByActorType?: string | null;
+  readonly createdByActorId?: string | null;
+  /** §2.5's "behind the picker" Принял column — who accepted it, once decided. */
+  readonly acceptedByActorType?: string | null;
+  readonly acceptedByActorId?: string | null;
 }

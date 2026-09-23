@@ -121,10 +121,85 @@ class LocalFixtureStorefrontTests {
                 .andExpect(jsonPath("$.available").value(true))
                 .andExpect(jsonPath("$.preparationMinutes").value(20));
 
-        mvc.perform(get(LOCATION_PATH + "/delivery-fee?lat=41.3120&lon=69.2410&currency=UZS&subtotalMinor=100000"))
+        // POST since 2026-09-21 (audit follow-up (b)): the point travels in the
+        // body, not the query string (ADR 0029).
+        mvc.perform(post(LOCATION_PATH + "/delivery-fee")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lat\":41.3120,\"lon\":69.2410,\"currency\":\"UZS\",\"subtotalMinor\":100000}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.available").value(true))
                 .andExpect(jsonPath("$.currency").value("UZS"));
+    }
+
+    /**
+     * 2026-09-21 audit follow-up (b): the coordinate moved from the query
+     * string into the body. A {@code GET} against the same path -- what every
+     * caller sent before this change -- must not silently keep working with
+     * the point exposed in a proxy log; it has to fail loudly instead.
+     *
+     * <p>401, not 405: {@code SecurityConfiguration}'s explicit storefront
+     * allowlist now names only {@code POST} for this path (see its own
+     * comment), so an anonymous {@code GET} is refused by the security chain
+     * before {@code DispatcherServlet} ever gets to notice the method does
+     * not match a mapping.
+     */
+    @Test
+    void deliveryFeeNoLongerAcceptsTheOldGetWithACoordinateInTheQueryString() throws Exception {
+        // SecurityConfiguration permits this path unauthenticated regardless of
+        // method, so the request reaches the dispatcher -- which now maps only
+        // POST here (batch 8's audit follow-up (b)) and answers 405, not 401.
+        // Either way the old GET-with-coordinate form no longer works.
+        mvc.perform(get(LOCATION_PATH + "/delivery-fee?lat=41.3120&lon=69.2410&currency=UZS"))
+                .andExpect(status().isMethodNotAllowed());
+    }
+
+    /**
+     * {@code subtotalMinor} is boxed on the request body ({@code
+     * DeliveryFeeController.DeliveryFeeQuoteRequest}) and must stay optional:
+     * the preview is asked before there is always a priced cart to quote a
+     * subtotal from, and Jackson 3 refuses a missing primitive outright.
+     */
+    @Test
+    void deliveryFeeDefaultsAnOmittedSubtotalToZeroRatherThanRefusingTheBody() throws Exception {
+        mvc.perform(post(LOCATION_PATH + "/delivery-fee")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lat\":41.3120,\"lon\":69.2410,\"currency\":\"UZS\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.available").value(true));
+    }
+
+    /**
+     * 2026-09-21 audit follow-up (d): a pickup order's detail names {@code
+     * locationId} but the storefront had nothing to turn it into a branch name
+     * and address.
+     */
+    @Test
+    void profileNamesTheBranchACustomerAlreadyKnowsTheIdOf() throws Exception {
+        // Served by StorefrontLocationProfileController -- the location id is
+        // already in the URL, so LocationProfile echoes no id of its own, only
+        // the displayName/address fields (batch 8 integration note). Unlike
+        // the earlier draft of this test, the real StorefrontLocationProfile
+        // -Query.LocationProfile also carries latitude/longitude -- every
+        // field here is one `tenant.locations` already treats as published
+        // (that class's own doc), and the pickup search beside it already
+        // returns a branch's coordinate for its own map pin, so this is no
+        // new disclosure.
+        mvc.perform(get(LOCATION_PATH + "/profile"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayName").value("Central kitchen"))
+                .andExpect(jsonPath("$.addressLine").value("1 Demo Street"))
+                .andExpect(jsonPath("$.district").value("Shaykhontohur"))
+                .andExpect(jsonPath("$.city").value("Tashkent"));
+    }
+
+    @Test
+    void profileAnswersNotFoundForALocationThatDoesNotExist() throws Exception {
+        String path = "/api/v1/storefront/tenants/10000000-0000-0000-0000-000000000001/brands/"
+                + "10000000-0000-0000-0000-000000000002/locations/" + UUID.randomUUID() + "/profile";
+
+        mvc.perform(get(path))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
     }
 
     @Test

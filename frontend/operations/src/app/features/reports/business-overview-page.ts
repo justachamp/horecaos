@@ -16,6 +16,7 @@ import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { DonutChart } from '../../shared/ui/charts/donut-chart';
+import { FunnelChart, FunnelDropOff, FunnelStage } from '../../shared/ui/charts/funnel-chart';
 import { KpiTile, KpiTileFormula, deltaOf } from '../../shared/ui/charts/kpi-tile';
 import { LineChart } from '../../shared/ui/charts/line-chart';
 import { StackedBarChart } from '../../shared/ui/charts/stacked-bar-chart';
@@ -151,7 +152,7 @@ type LoadState = 'loading' | 'ready' | 'denied' | 'error';
  */
 @Component({
   selector: 'q-business-overview-page',
-  imports: [TPipe, ProvenanceBanner, KpiTile, DonutChart, StackedBarChart, LineChart],
+  imports: [TPipe, ProvenanceBanner, KpiTile, DonutChart, StackedBarChart, LineChart, FunnelChart],
   templateUrl: './business-overview-page.html',
   styleUrl: './business-overview-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -179,6 +180,8 @@ export class BusinessOverviewPage implements OnInit {
   protected readonly paymentMix = signal<readonly MixRow[]>([]);
   protected readonly outcomes = signal<readonly OutcomeRow[]>([]);
   protected readonly completedCount = signal(0);
+  /** Wave 8 w7-reports (7.1a): orders.late.v1 over the same period — the funnel's own «Опоздание» branch. */
+  protected readonly lateOrderCount = signal(0);
   protected readonly branches = signal<readonly BranchRow[]>([]);
   protected readonly multiLocation = signal(false);
 
@@ -193,6 +196,62 @@ export class BusinessOverviewPage implements OnInit {
   protected readonly outcomeTotalCount = computed(() =>
     this.outcomes().reduce((sum, row) => sum + row.count, 0),
   );
+
+  /**
+   * Wave 8 w7-reports (7.1a): «Воронка по финальному статусу»
+   * (statistics.md §2.1 Band D) — Всего заказов → Завершено → Вовремя, with
+   * every non-completing terminal status and the late share as labelled
+   * drop-offs (`funnelDropOffs`) rather than further stages of the main
+   * path. `completedCount` and `outcomeTotalCount` both come off the same
+   * `GET .../order-outcomes` read (`loadOutcomes`), so `total` here is
+   * exactly the read's own row sum — the reconciliation `business-overview-
+   * page.spec.ts` proves.
+   */
+  protected readonly funnelStages = computed<readonly FunnelStage[]>(() => {
+    const completed = this.completedCount();
+    const total = completed + this.outcomeTotalCount();
+    const onTime = Math.max(0, completed - this.lateOrderCount());
+    return [
+      { key: 'TOTAL', label: this.i18n.t('reports.overview.funnel.stage.total'), value: total },
+      {
+        key: 'COMPLETED',
+        label: this.i18n.t('reports.overview.funnel.completed'),
+        value: completed,
+      },
+      { key: 'ON_TIME', label: this.i18n.t('reports.overview.funnel.stage.onTime'), value: onTime },
+    ];
+  });
+
+  /**
+   * One branch per non-completing terminal status (summed across its own
+   * cancellation reasons — the detail table below keeps the per-reason cut)
+   * off TOTAL, plus one branch off COMPLETED for orders that closed late.
+   * `outcomes()` is already narrowed to `CANCELLING_STATUSES` by {@link
+   * loadOutcomes}, so grouping it by `status` alone, with no further filter,
+   * is exactly the funnel's drop-off set.
+   */
+  protected readonly funnelDropOffs = computed<readonly FunnelDropOff[]>(() => {
+    const byStatus = new Map<string, number>();
+    for (const row of this.outcomes()) {
+      byStatus.set(row.status, (byStatus.get(row.status) ?? 0) + row.count);
+    }
+    const dropOffs: FunnelDropOff[] = [...byStatus.entries()].map(([status, count]) => ({
+      key: status,
+      label: this.statusLabel(status),
+      value: count,
+      fromStageKey: 'TOTAL',
+    }));
+    const late = this.lateOrderCount();
+    if (late > 0) {
+      dropOffs.push({
+        key: 'LATE',
+        label: this.i18n.t('reports.overview.funnel.stage.late'),
+        value: late,
+        fromStageKey: 'COMPLETED',
+      });
+    }
+    return dropOffs;
+  });
 
   protected readonly revenueTrend = computed<readonly ChartSeries[]>(() => [
     dailySeriesToChart(
@@ -439,6 +498,10 @@ export class BusinessOverviewPage implements OnInit {
     const current = sumTotal(currentQuery.rows, sumCodes);
     const previous = sumTotal(comparisonQuery.rows, sumCodes);
     const provisional = new Set(currentQuery.provenance.provisionalMetrics);
+    // Wave 8 w7-reports (7.1a): orders.late.v1 is already fetched for the
+    // "Опоздания" tile above — the funnel's on-time/late split reuses the
+    // same figure rather than a second query.
+    this.lateOrderCount.set(current['orders.late.v1']);
 
     const avgCheck = deriveAverageCheck(current['revenue.gross.v1'], current['orders.count.v1']);
     const avgCheckPrevious = deriveAverageCheck(
@@ -608,6 +671,7 @@ export class BusinessOverviewPage implements OnInit {
       to: range.to,
       locationId: slice.locationId,
       channelCode: slice.channelCode,
+      legalEntityId: slice.legalEntityId,
     });
     const total = result.rows.reduce((sum, row) => sum + row.count, 0);
     const completed = result.rows

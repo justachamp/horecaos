@@ -215,6 +215,21 @@ export const catalogPaths = {
     return `/api/v1/storefront${tenantBrand(scope)}/locations/${encodeURIComponent(locationId)}/menu`;
   },
 
+  /**
+   * `DeliveryFeeController.quote` (ADR 0037) — the same unauthenticated
+   * `/api/v1/storefront/**` preview `ui-cart.service.ts` already calls for the
+   * storefront's own delivery cart, reused here for row 1.3's New order
+   * composer rather than a second delivery-fee client. `POST` since
+   * 2026-09-21 (audit follow-up (b)): `lat`, `lon`, `currency` and
+   * `subtotalMinor` travel in the JSON body, never as query params — a query
+   * string would put the customer's coordinate on the wire (ADR 0029). See
+   * {@link NewOrderApi.deliveryFeeQuote} for why this needs a real
+   * coordinate — a saved address with no pin has nothing to ask this about.
+   */
+  deliveryFee(scope: BrandScope, locationId: string): string {
+    return `/api/v1/storefront${tenantBrand(scope)}/locations/${encodeURIComponent(locationId)}/delivery-fee`;
+  },
+
   // -------------------------------------------------- P21 row actions and the fiscal workbench
 
   /** Duplicates a product — its variants, translations, catalog/category placement, modifier groups and media. */
@@ -262,6 +277,33 @@ export const catalogPaths = {
   /** Detach one recommendation. */
   recommendation(scope: BrandScope, productId: string, targetVariantId: string): string {
     return `${this.recommendations(scope, productId)}/${encodeURIComponent(targetVariantId)}`;
+  },
+
+  // -------------------------------------------------- row 4.5b: CSV/Excel import and export
+
+  /** The empty CSV import template, `text/csv` (`CatalogImportController#template`). */
+  importTemplate(scope: BrandScope): string {
+    return `${this.base(scope)}/imports/template`;
+  },
+
+  /** The brand's catalog filled into the same template, `text/csv`. Query param `catalogId`. */
+  importExport(scope: BrandScope): string {
+    return `${this.base(scope)}/export`;
+  },
+
+  /** Queue a run (`POST`, query param `dryRun`) / this brand's run history (`GET`). */
+  imports(scope: BrandScope): string {
+    return `${this.base(scope)}/imports`;
+  },
+
+  /** One import run's status and progress. */
+  importRun(scope: BrandScope, runId: string): string {
+    return `${this.imports(scope)}/${encodeURIComponent(runId)}`;
+  },
+
+  /** One import run's per-row report. */
+  importRunRows(scope: BrandScope, runId: string): string {
+    return `${this.importRun(scope, runId)}/rows`;
   },
 } as const;
 

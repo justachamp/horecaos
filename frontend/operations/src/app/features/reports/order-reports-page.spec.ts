@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
-import { LocationsApi } from '../settings/locations/locations-api';
-import { SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
+import { LocationView, LocationsApi } from '../settings/locations/locations-api';
+import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { OrderReportsPage } from './order-reports-page';
 import { ReportsFilterState } from './reports-filter-state';
 import {
@@ -73,6 +73,32 @@ function ordersResponse(rows: readonly OrderRowResponse[], maybeMore = false): O
   return { rows, maybeMore, provenance: provenance() };
 }
 
+/** One `/queries` row behind «Сводка» — wave 8 w7-reports (7.2c)'s own summary-tab fixture. */
+function summaryRow(overrides: {
+  readonly locationId: string;
+  readonly channelCode: string;
+  readonly fulfilmentType: string;
+  readonly legalEntityId: string | null;
+  readonly grossSom: number;
+  readonly netSom: number;
+  readonly deliveryFeeSom: number;
+  readonly orderCount: number;
+}): import('./reporting-api').RowResponse {
+  return {
+    businessDate: '2026-09-10',
+    locationId: overrides.locationId,
+    channelCode: overrides.channelCode,
+    fulfilmentType: overrides.fulfilmentType,
+    legalEntityId: overrides.legalEntityId,
+    values: {
+      'revenue.gross.v1': overrides.grossSom,
+      'revenue.net.v1': overrides.netSom,
+      'delivery_fee.v1': overrides.deliveryFeeSom,
+      'orders.count.v1': overrides.orderCount,
+    },
+  };
+}
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -93,6 +119,8 @@ describe('OrderReportsPage', () => {
     readonly queryMock?: ReturnType<typeof vi.fn>;
     readonly configure?: (filters: ReportsFilterState) => void;
     readonly initialTab?: 'stages' | 'commercial' | 'daily' | 'summary' | 'late';
+    readonly locations?: readonly LocationView[];
+    readonly channels?: readonly ChannelView[];
   }): Promise<void> {
     TestBed.resetTestingModule();
     // ReportsFilterState (wave P27) reads its initial state from the URL on
@@ -120,8 +148,14 @@ describe('OrderReportsPage', () => {
           },
         },
         { provide: ReportingApi, useValue: { orders: ordersSpy, query: querySpy } },
-        { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
-        { provide: SalesChannelsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
+        {
+          provide: LocationsApi,
+          useValue: { list: vi.fn().mockResolvedValue(options?.locations ?? []) },
+        },
+        {
+          provide: SalesChannelsApi,
+          useValue: { list: vi.fn().mockResolvedValue(options?.channels ?? []) },
+        },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -232,4 +266,166 @@ describe('OrderReportsPage', () => {
     expect(moneyCall).toBeDefined();
     expect((moneyCall![1] as QueryParams).groupBy).toContain('LEGAL_ENTITY');
   });
+
+  // ----------------------------------------------------------- wave 8 w7-reports (7.2c): «Сводка»
+
+  const LOCATIONS: readonly LocationView[] = [
+    {
+      id: 'loc-1',
+      tenantId: 't1',
+      brandId: 'b1',
+      code: 'chilanzar',
+      slug: 'chilanzar',
+      displayName: 'Chilanzar',
+      timezone: 'Asia/Tashkent',
+      status: 'ACTIVE',
+      addressLine: null,
+      district: null,
+      city: null,
+      landmark: null,
+      contactPhone: null,
+      latitude: null,
+      longitude: null,
+      coordinateSource: 'NOT_GEOCODED',
+    },
+  ];
+  const CHANNELS: readonly ChannelView[] = [
+    {
+      id: 'ch-1',
+      code: 'TELEGRAM',
+      systemType: 'BOT',
+      displayName: 'Telegram',
+      status: 'ACTIVE',
+      pricePlaneChannelId: null,
+      externallyPriced: false,
+      guestOrdersAllowed: true,
+      providerInstallationId: null,
+      version: 1,
+      locationCount: 1,
+      enabledPaymentMethodCount: 1,
+      enabledFulfillmentModes: ['DELIVERY'],
+    },
+  ];
+
+  it('«Сводка 1» requests delivery_fee.v1 alongside gross/net, and shows the fee-exclusive column reconciling against it', async () => {
+    const queryMock = vi.fn().mockResolvedValue({
+      rows: [
+        summaryRow({
+          locationId: 'loc-1',
+          channelCode: 'TELEGRAM',
+          fulfilmentType: 'DELIVERY',
+          legalEntityId: 'entity-a',
+          grossSom: 1_000_000,
+          netSom: 900_000,
+          deliveryFeeSom: 150_000,
+          orderCount: 10,
+        }),
+      ],
+      provenance: provenance(),
+    } satisfies QueryResponse);
+
+    await render({ queryMock, initialTab: 'summary', locations: LOCATIONS, channels: CHANNELS });
+
+    const summaryCall = querySpy.mock.calls.find((call: unknown[]) =>
+      (call[1] as QueryParams).metric.includes('delivery_fee.v1'),
+    );
+    expect(summaryCall).toBeDefined();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const report1 = host.querySelector('.report1-table') as HTMLElement;
+    // Сумма (excl. delivery) = 1 000 000 − 150 000 = 850 000.
+    expect(report1.textContent).toMatch(/850[\s ]000/);
+    // Сумма с учётом доставки = revenue.gross.v1 itself = 1 000 000.
+    expect(report1.textContent).toMatch(/1[\s ]000[\s ]000/);
+    // Итого = revenue.net.v1 = 900 000.
+    expect(report1.textContent).toMatch(/900[\s ]000/);
+  });
+
+  it('«Сводка 2» renders the true branch×channel grid, not the retired flat (branch, channel) list', async () => {
+    const queryMock = vi.fn().mockResolvedValue({
+      rows: [
+        summaryRow({
+          locationId: 'loc-1',
+          channelCode: 'TELEGRAM',
+          fulfilmentType: 'DELIVERY',
+          legalEntityId: 'entity-a',
+          grossSom: 500_000,
+          netSom: 480_000,
+          deliveryFeeSom: 50_000,
+          orderCount: 5,
+        }),
+      ],
+      provenance: provenance(),
+    } satisfies QueryResponse);
+
+    await render({ queryMock, initialTab: 'summary', locations: LOCATIONS, channels: CHANNELS });
+
+    const host = fixture.nativeElement as HTMLElement;
+    const grid = host.querySelector('[data-testid="summary-grid"]') as HTMLElement;
+    expect(grid).not.toBeNull();
+    // A real grid: the channel name is a COLUMN header, not a second row cell.
+    const headerRow = grid.querySelector('thead tr') as HTMLElement;
+    expect(headerRow.textContent).toContain('Telegram');
+    const bodyRow = grid.querySelector('tbody tr') as HTMLElement;
+    expect(bodyRow.textContent).toContain('Chilanzar');
+    expect(bodyRow.textContent).toMatch(/500[\s ]000/);
+  });
+
+  it(
+    'folds a two-legal-entity tenant’s rows into one correct grid cell and one correct «Сводка 1» ' +
+      'row, never throwing and never combining the entities into a stored total (ADR 0038)',
+    async () => {
+      const queryMock = vi.fn().mockResolvedValue({
+        rows: [
+          summaryRow({
+            locationId: 'loc-1',
+            channelCode: 'TELEGRAM',
+            fulfilmentType: 'DELIVERY',
+            legalEntityId: 'entity-a',
+            grossSom: 700_000,
+            netSom: 650_000,
+            deliveryFeeSom: 100_000,
+            orderCount: 7,
+          }),
+          summaryRow({
+            locationId: 'loc-1',
+            channelCode: 'TELEGRAM',
+            fulfilmentType: 'DELIVERY',
+            legalEntityId: 'entity-b',
+            grossSom: 300_000,
+            netSom: 280_000,
+            deliveryFeeSom: 40_000,
+            orderCount: 3,
+          }),
+        ],
+        provenance: provenance(),
+      } satisfies QueryResponse);
+
+      await render({ queryMock, initialTab: 'summary', locations: LOCATIONS, channels: CHANNELS });
+
+      // The request itself never combines entities server-side — it always
+      // names LEGAL_ENTITY, the only thing that keeps the two rows above
+      // legal (ADR 0038) rather than one refused CombinedEntityTotalException.
+      const summaryCall = querySpy.mock.calls.find((call: unknown[]) =>
+        (call[1] as QueryParams).metric.includes('delivery_fee.v1'),
+      );
+      expect((summaryCall![1] as QueryParams).groupBy).toContain('LEGAL_ENTITY');
+
+      const host = fixture.nativeElement as HTMLElement;
+
+      // The grid folds both entities' rows into the one (branch, channel)
+      // cell that both share — 700 000 + 300 000 = 1 000 000 — client-side,
+      // the same transparent fold ADR 0038 allows (never a server total).
+      const grid = host.querySelector('[data-testid="summary-grid"]') as HTMLElement;
+      const bodyRow = grid.querySelector('tbody tr') as HTMLElement;
+      expect(bodyRow.textContent).toMatch(/1[\s ]000[\s ]000/);
+
+      // «Сводка 1»'s DELIVERY row reconciles the same way: 10 orders,
+      // 860 000 fee-exclusive (1 000 000 gross − 140 000 fee), 930 000 net.
+      const report1 = host.querySelector('.report1-table') as HTMLElement;
+      expect(report1.textContent).toContain('10');
+      expect(report1.textContent).toMatch(/860[\s ]000/);
+      expect(report1.textContent).toMatch(/930[\s ]000/);
+    },
+  );
 });

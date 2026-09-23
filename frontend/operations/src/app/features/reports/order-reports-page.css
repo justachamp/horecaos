@@ -92,13 +92,15 @@
 }
 
 .daily-table,
-.pivot-table {
+.pivot-table,
+.report1-table {
   width: 100%;
   border-collapse: collapse;
 }
 
 .daily-table th,
-.pivot-table th {
+.pivot-table th,
+.report1-table th {
   text-align: left;
   padding: 8px 10px;
   border-bottom: 1px solid var(--q-hairline);
@@ -107,13 +109,15 @@
 }
 
 .daily-table td,
-.pivot-table td {
+.pivot-table td,
+.report1-table td {
   padding: 6px 10px;
   border-bottom: 1px solid var(--q-hairline);
 }
 
 .daily-table__num,
-.pivot-table__num {
+.pivot-table__num,
+.report1-table__num {
   text-align: right;
 }
 
@@ -121,6 +125,24 @@
   padding: 24px 10px;
   text-align: center;
   color: var(--q-ink-muted);
+}
+
+.report1-table {
+  margin-bottom: 24px;
+}
+
+.report1-table__total-row td {
+  font-weight: 600;
+  border-top: 1px solid var(--q-hairline);
+}
+
+.pivot-table__total-col {
+  border-left: 1px solid var(--q-hairline);
+}
+
+.pivot-table__total-row td {
+  font-weight: 600;
+  border-top: 2px solid var(--q-hairline);
 }
 
 .pivot-controls {

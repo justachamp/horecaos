@@ -15,6 +15,8 @@ import { CatalogApi } from './catalog-api';
 import { InventoryApi } from './inventory-api';
 import { MediaApi } from './media-api';
 import { PricingApi } from './pricing-api';
+import { ProductCommentPresetsApi } from './product-comment-presets-api';
+import { CommentPresetsApi } from '../settings/comment-presets/comment-presets-api';
 import { ProductDetail, ValidationReport } from './catalog-domain';
 import { ProductEditorPage } from './product-editor-page';
 
@@ -61,6 +63,8 @@ function configure(
   activityLogApi: Partial<ActivityLogApi> = {},
   mediaApi: Partial<MediaApi> = {},
   capacityApi: Partial<CapacityApi> = {},
+  productCommentPresetsApi: Partial<ProductCommentPresetsApi> = {},
+  commentPresetsApi: Partial<CommentPresetsApi> = {},
 ): void {
   TestBed.configureTestingModule({
     providers: [
@@ -110,8 +114,23 @@ function configure(
       {
         provide: CapacityApi,
         useValue: {
-          route: () => of({ ruleId: 'rule-1', layer: 'BRAND' }),
+          route: () => of({ ruleId: 'rule-1', layer: 'BRAND', version: 1 }),
+          findRouting: () => Promise.resolve({ brandRule: null, locationRule: null }),
           ...capacityApi,
+        },
+      },
+      {
+        provide: ProductCommentPresetsApi,
+        useValue: {
+          list: () => of([]),
+          ...productCommentPresetsApi,
+        },
+      },
+      {
+        provide: CommentPresetsApi,
+        useValue: {
+          list: () => Promise.resolve([]),
+          ...commentPresetsApi,
         },
       },
     ],
@@ -649,7 +668,7 @@ describe('ProductEditorPage', () => {
   });
 
   it('writes a brand-layer kitchen routing rule for this product — pure wiring over the existing endpoint', async () => {
-    const route = vi.fn().mockReturnValue(of({ ruleId: 'rule-1', layer: 'BRAND' }));
+    const route = vi.fn().mockReturnValue(of({ ruleId: 'rule-1', layer: 'BRAND', version: 1 }));
     configure({ productDetail: () => of(productDetail()) }, {}, {}, { route });
 
     const harness = await RouterTestingHarness.create('/catalog/products/product-1');
@@ -670,6 +689,69 @@ describe('ProductEditorPage', () => {
       stationRole: 'GRILL',
     });
   });
+
+  it('gap map row 4.2g: shows a product’s already-routed department instead of an always-blank picker', async () => {
+    const findRouting = vi.fn().mockResolvedValue({
+      brandRule: { ruleId: 'rule-1', layer: 'BRAND', stationRole: 'GRILL', version: 3 },
+      locationRule: null,
+    });
+    configure({ productDetail: () => of(productDetail()) }, {}, {}, { findRouting });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    harness.detectChanges();
+
+    expect(findRouting).toHaveBeenCalledWith(LOCATION_SCOPE, { productId: 'product-1' });
+    // The picker's own bound signal, not the native <select>'s DOM `.value` —
+    // this is the unit under test (loadKitchenRouting prefilling the picker
+    // from the read this row adds), independent of whether a bare `[value]`
+    // binding on a plain <select> happens to repaint in this test runner's
+    // DOM implementation once the option list already exists.
+    const instance = harness.routeDebugElement!.componentInstance as unknown as {
+      kitchenRoleSelection: () => string;
+    };
+    expect(instance.kitchenRoleSelection()).toBe('GRILL');
+  });
+
+  it(
+    'gap map row 4.2g: changing an already-routed product’s department calls the update, not ' +
+      'the create that used to 409 on a second save',
+    async () => {
+      const findRouting = vi.fn().mockResolvedValue({
+        brandRule: { ruleId: 'rule-1', layer: 'BRAND', stationRole: 'GRILL', version: 3 },
+        locationRule: null,
+      });
+      const route = vi.fn();
+      const updateRoute = vi
+        .fn()
+        .mockReturnValue(of({ ruleId: 'rule-1', layer: 'BRAND', version: 4 }));
+      configure(
+        { productDetail: () => of(productDetail()) },
+        {},
+        {},
+        { findRouting, route, updateRoute },
+      );
+
+      const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+      await flushMicrotasks();
+      const host = harness.routeNativeElement!;
+
+      const select = host.querySelector(
+        '[data-testid="editor-kitchen-role-select"]',
+      ) as HTMLSelectElement;
+      select.value = 'COLD';
+      select.dispatchEvent(new Event('change'));
+      harness.detectChanges();
+      (host.querySelector('[data-testid="editor-save-kitchen-role"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+
+      expect(updateRoute).toHaveBeenCalledWith(LOCATION_SCOPE, 'rule-1', {
+        stationRole: 'COLD',
+        expectedVersion: 3,
+      });
+      expect(route).not.toHaveBeenCalled();
+    },
+  );
 
   it('no longer shows the stale "not built" caption over the kitchen department picker', async () => {
     configure({ productDetail: () => of(productDetail()) });
@@ -859,5 +941,203 @@ describe('ProductEditorPage', () => {
     // This suite runs in 'ru' (see configure()'s TestBed.inject(I18n).setLocale('ru')).
     expect(eligibleCells[0].textContent).toContain('Да');
     expect(eligibleCells[1].textContent).toContain('Пока нет');
+  });
+
+  // ---------------------------------------------- Row 2.1b — Preset comments
+
+  it('attaches a preset comment picked from the tenant vocabulary, and never offers an already-attached one', async () => {
+    const attach = vi.fn().mockReturnValue(
+      of({
+        presetId: 'preset-1',
+        code: 'NO_ONION',
+        labelRu: 'Без лука',
+        labelUz: 'Piyozsiz',
+        labelEn: 'No onion',
+        posModifierCode: null,
+        sortOrder: 0,
+        status: 'ACTIVE',
+      }),
+    );
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(of([]))
+      .mockReturnValueOnce(
+        of([
+          {
+            presetId: 'preset-1',
+            code: 'NO_ONION',
+            labelRu: 'Без лука',
+            labelUz: 'Piyozsiz',
+            labelEn: 'No onion',
+            posModifierCode: null,
+            sortOrder: 0,
+            status: 'ACTIVE',
+          },
+        ]),
+      );
+    configure(
+      { productDetail: () => of(productDetail()) },
+      {},
+      {},
+      {},
+      { list, attach },
+      {
+        list: () =>
+          Promise.resolve([
+            {
+              presetId: 'preset-1',
+              code: 'NO_ONION',
+              labelRu: 'Без лука',
+              labelUz: 'Piyozsiz',
+              labelEn: 'No onion',
+              posModifierCode: null,
+              sortOrder: 0,
+              status: 'ACTIVE',
+              version: 1,
+            },
+            {
+              presetId: 'preset-2',
+              code: 'EXTRA_SPICY',
+              labelRu: 'Поострее',
+              labelUz: 'Achchiqroq',
+              labelEn: 'Extra spicy',
+              posModifierCode: null,
+              sortOrder: 1,
+              status: 'ACTIVE',
+              version: 1,
+            },
+          ]),
+      },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-COMMENT_PRESETS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    // preset-1 is already attached in the (second) list() response the
+    // reload below will see — but at the moment the picker is first
+    // rendered, nothing is attached yet, so both presets are offered.
+    const options = [
+      ...host.querySelectorAll('[data-testid="editor-comment-preset-picker"] option'),
+    ] as HTMLOptionElement[];
+    expect(options.map((o) => o.value)).toEqual(['', 'preset-1', 'preset-2']);
+
+    const select = host.querySelector(
+      '[data-testid="editor-comment-preset-picker"]',
+    ) as HTMLSelectElement;
+    select.value = 'preset-1';
+    select.dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="editor-comment-preset-attach"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(attach).toHaveBeenCalledWith(BRAND_SCOPE, 'product-1', {
+      presetId: 'preset-1',
+      sortOrder: 0,
+    });
+    // After the reload, preset-1 is attached, so the picker offers only preset-2.
+    const optionsAfter = [
+      ...host.querySelectorAll('[data-testid="editor-comment-preset-picker"] option'),
+    ] as HTMLOptionElement[];
+    expect(optionsAfter.map((o) => o.value)).toEqual(['', 'preset-2']);
+    expect(host.querySelector('.editor__table')?.textContent).toContain('Без лука');
+  });
+
+  it('detaches a preset comment — idempotent, and disappears from the management list immediately', async () => {
+    const detach = vi.fn().mockReturnValue(of(undefined));
+    configure(
+      { productDetail: () => of(productDetail()) },
+      {},
+      {},
+      {},
+      {
+        list: () =>
+          of([
+            {
+              presetId: 'preset-1',
+              code: 'NO_ONION',
+              labelRu: 'Без лука',
+              labelUz: 'Piyozsiz',
+              labelEn: 'No onion',
+              posModifierCode: 'MOD-9',
+              sortOrder: 0,
+              status: 'ACTIVE',
+            },
+          ]),
+        detach,
+      },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-COMMENT_PRESETS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(
+      host.querySelector('[data-testid="editor-comment-preset-pos-modifier"]')?.textContent,
+    ).toContain('MOD-9');
+
+    (
+      host.querySelector('[data-testid="editor-comment-preset-detach"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(detach).toHaveBeenCalledWith(BRAND_SCOPE, 'product-1', 'preset-1');
+    expect(host.querySelector('[data-testid="editor-comment-preset-detach"]')).toBeNull();
+  });
+
+  it('a caller refused catalog.author on attach sees the same inline notice recommendations use, not a thrown error', async () => {
+    const attach = vi
+      .fn()
+      .mockReturnValue(
+        throwError(() => new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null)),
+      );
+    configure(
+      { productDetail: () => of(productDetail()) },
+      {},
+      {},
+      {},
+      { attach },
+      {
+        list: () =>
+          Promise.resolve([
+            {
+              presetId: 'preset-1',
+              code: 'NO_ONION',
+              labelRu: 'Без лука',
+              labelUz: 'Piyozsiz',
+              labelEn: 'No onion',
+              posModifierCode: null,
+              sortOrder: 0,
+              status: 'ACTIVE',
+              version: 1,
+            },
+          ]),
+      },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-COMMENT_PRESETS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const select = host.querySelector(
+      '[data-testid="editor-comment-preset-picker"]',
+    ) as HTMLSelectElement;
+    select.value = 'preset-1';
+    select.dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="editor-comment-preset-attach"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(host.querySelector('.editor__section')?.textContent).toContain(
+      'У этой учётной записи нет прав на это действие.',
+    );
   });
 });

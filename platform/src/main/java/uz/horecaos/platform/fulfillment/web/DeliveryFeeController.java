@@ -3,15 +3,15 @@ package uz.horecaos.platform.fulfillment.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
-import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeQuery;
@@ -33,12 +33,12 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * with the resolver only most of the time is worse than no simulator, because it
  * is believed.
  *
- * <p>ADR 0037 spells the simulator as {@code POST .../simulate}. It is a
- * {@code GET} here because it writes nothing and decides nothing, and because the
- * ADR's own serviceability endpoint already carries a point in the query string.
- * A {@code POST} would additionally have to declare itself mutating to satisfy the
- * ADR 0031 build gate and would then demand an idempotency key to protect a write
- * that does not happen.
+ * <p>ADR 0037 spells the simulator as {@code POST .../simulate}, and {@link
+ * #quote} matches it since 2026-09-21: both write nothing and decide nothing,
+ * and both are {@code POST} anyway, because that is the only way to keep the
+ * point they take out of a URL (ADR 0029). {@link #quote}'s own javadoc has
+ * the rest of that story -- it used to be the one holdout {@code GET}, kept
+ * that way for exactly the reason this paragraph used to give.
  */
 @RestController
 @Tag(name = "Delivery fee", description = "What delivery costs here, and the evidence for it")
@@ -62,12 +62,22 @@ public class DeliveryFeeController {
      * sees before they have an account. It writes nothing, so a customer dragging a
      * pin around a map does not leave a resolution row per pixel.
      *
-     * <p>Browse may cache for 30 seconds under ADR 0033. Checkout does not read
-     * this endpoint and never a cached answer: it re-resolves inside its own
-     * transaction, because a zone retired five minutes ago must not still be
-     * selling.
+     * <p>{@code POST} rather than {@code GET} (2026-09-21 audit follow-up (b)):
+     * the point was a query-string parameter until this change, which put a
+     * customer's coordinate in the URL -- logged by every proxy on the way in,
+     * kept in browser history, and the exact ADR 0029 shape this platform
+     * refuses everywhere else. The 30-second public cache a {@code GET} would
+     * have allowed goes with it; a {@code POST} response is not cached by an
+     * intermediary regardless of the header, so none is set here, and the
+     * simulator this shares its resolver with was already unaffected -- it was
+     * always ADR 0037's own {@code POST .../simulate} that gave the whole
+     * endpoint its "why not a POST" javadoc in the first place, answered here:
+     * a write-shaped verb on a handler that writes nothing needs neither a
+     * capability declaration nor an idempotency key, and {@code
+     * EndpointCapabilityDeclarationTests.isDeliveryFeePreviewEndpoint} records
+     * why rather than leaving the exemption to be found later as a violation.
      */
-    @GetMapping("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}" + "/locations/{locationId}/delivery-fee")
+    @PostMapping("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}" + "/locations/{locationId}/delivery-fee")
     @Operation(
             summary = "Resolve the delivery fee for one point",
             description = "Returns one fee, or one stable refusal code and no fee. An address "
@@ -78,26 +88,35 @@ public class DeliveryFeeController {
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
-            @RequestParam double lat,
-            @RequestParam double lon,
-            @RequestParam String currency,
-            @RequestParam(defaultValue = "0") long subtotalMinor) {
+            @RequestBody DeliveryFeeQuoteRequest body) {
 
         DeliveryFeeResolution resolution = resolver.simulate(new DeliveryFeeQuery(
                 tenantId,
                 brandId,
                 locationId,
                 null,
-                new GeoPoint(lat, lon),
-                currency,
-                subtotalMinor,
+                new GeoPoint(body.lat(), body.lon()),
+                body.currency(),
+                body.subtotalMinor() == null ? 0 : body.subtotalMinor(),
                 PricingAuthority.HORECAOS,
                 clock.instant()));
 
-        return ResponseEntity.ok()
-                .cacheControl(CacheControl.maxAge(Duration.ofSeconds(30)).cachePublic())
-                .body(DeliveryFeeView.of(resolution));
+        return ResponseEntity.ok().body(DeliveryFeeView.of(resolution));
     }
+
+    /**
+     * The point and basket to price delivery for.
+     *
+     * @param subtotalMinor boxed and defaults to 0 when absent -- Jackson 3
+     *     refuses a missing primitive outright, and a basket total is
+     *     genuinely optional here: this is asked before there may even be a
+     *     priced cart.
+     */
+    public record DeliveryFeeQuoteRequest(
+            double lat,
+            double lon,
+            String currency,
+            @Nullable Long subtotalMinor) {}
 
     /**
      * "What would this cost from Chilonzor at 19:00."

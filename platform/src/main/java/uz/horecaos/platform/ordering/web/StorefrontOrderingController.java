@@ -427,7 +427,11 @@ public class StorefrontOrderingController {
                 body.redeemFromBalanceMinor() == null ? 0L : body.redeemFromBalanceMinor(),
                 "CUSTOMER",
                 currentActor.get().subject(),
-                null));
+                null,
+                // Row 1.3d's requested-time picker is the operator order-intake
+                // screen's own (ADR 0039); a customer's own checkout never sends one.
+                null,
+                false));
 
         if (result.outcome() == CheckoutService.CheckoutResult.Outcome.REJECTED) {
             // A settled business answer, and a conflict rather than a fault: the
@@ -684,8 +688,20 @@ public class StorefrontOrderingController {
             // controller — @NotBlank refuses it at binding — and mapped anyway,
             // because the service's refusal is the one that must hold for every
             // surface and a default of CONFLICT would misdescribe it.
-            case "GUEST_CANNOT_REDEEM", "REDEMPTION_INVALID", "REDEMPTION_EXCEEDS_ORDER", "PAYMENT_METHOD_REQUIRED" ->
-                ErrorCode.VALIDATION_FAILED;
+            // Row 1.3d: a requested time that is not in the future. Nothing about
+            // the branch or the cart is what refuses this — the value itself is
+            // malformed for what it claims to be, the same class of answer as the
+            // three redemption codes beside it.
+            case "GUEST_CANNOT_REDEEM",
+                    "REDEMPTION_INVALID",
+                    "REDEMPTION_EXCEEDS_ORDER",
+                    "PAYMENT_METHOD_REQUIRED",
+                    "REQUESTED_TIME_IN_PAST" -> ErrorCode.VALIDATION_FAILED;
+            // Row 1.3d's other two rejection codes — a well-formed requested time
+            // this branch will not honour right now, either never
+            // (acceptsScheduledOrders) or not without the operator's explicit
+            // confirmation — fall through to CONFLICT below, the same as
+            // NOT_SERVICEABLE does.
             default -> ErrorCode.RESOURCE_CONFLICT;
         };
     }
@@ -1000,9 +1016,20 @@ public class StorefrontOrderingController {
             String outcome,
             List<String> warnings) {}
 
+    /**
+     * @param locationId the branch this order was placed at. Additive (2026-09-22
+     *     audit follow-up): a customer's order detail could not name the pickup
+     *     branch without it, since nothing on this response pointed back at a
+     *     location for {@code GET .../locations/{id}/profile} to resolve
+     * @param fulfillmentMode {@code DELIVERY}, {@code PICKUP} or {@code DINE_IN} —
+     *     carried for the same reason as {@code locationId}: the screen decides
+     *     whether to show a doorstep or a branch from this, not from guessing
+     */
     public record OrderResponse(
             UUID orderId,
             String publicOrderNumber,
+            UUID locationId,
+            String fulfillmentMode,
             String status,
             String currency,
             long subtotalMinor,
@@ -1020,6 +1047,8 @@ public class StorefrontOrderingController {
             return new OrderResponse(
                     order.orderId(),
                     order.publicOrderNumber(),
+                    order.locationId(),
+                    order.fulfillmentMode().name(),
                     order.status().name(),
                     order.currency(),
                     order.subtotalMinor(),

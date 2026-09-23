@@ -780,13 +780,18 @@ public class ReportQueryService {
      */
     @Transactional(readOnly = true)
     public OutcomeResult orderOutcomes(
-            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<String> channelCodes) {
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> channelCodes,
+            List<UUID> legalEntityIds) {
 
         validateRange(from, to);
         refuseMixedBoundaryRegime(tenantId, from, to);
 
         List<JdbcReportingStore.OutcomeRow> rows =
-                store.readOrderOutcomes(tenantId, from, to, locationIds, channelCodes);
+                store.readOrderOutcomes(tenantId, from, to, locationIds, channelCodes, legalEntityIds);
         return new OutcomeResult(rows, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
     }
 
@@ -1498,6 +1503,7 @@ public class ReportQueryService {
         private int cancelled;
         private int late;
         private int promised;
+        private long deliveryFee;
 
         void add(BranchDayAggregate row) {
             gross += row.grossSom();
@@ -1507,6 +1513,7 @@ public class ReportQueryService {
             cancelled += row.cancelledCount();
             late += row.lateCount();
             promised += row.promisedCount();
+            deliveryFee += row.deliveryFeeSom();
         }
 
         @Nullable
@@ -1522,6 +1529,9 @@ public class ReportQueryService {
                 case "orders.late.v1" -> (long) late;
                 // Wave T06 (7.3): the on-time percentage's own denominator.
                 case "orders.promised.v1" -> (long) promised;
+                // Wave 8 w7-reports (7.2c): already part of gross above — this
+                // is the fee's own total, for a report that wants both figures.
+                case "delivery_fee.v1" -> deliveryFee;
                 default ->
                     throw new IllegalStateException("The registry declares %s but this build cannot compute it"
                             .formatted(metric.id().code()));

@@ -104,6 +104,31 @@ class OrderPromiseTests {
         assertThat(promise.promisedAt()).isEqualTo(Instant.parse("2026-08-22T14:29:00Z"));
     }
 
+    // ------------------------------------------------- row 1.3d: a chosen slot
+
+    @Test
+    void scheduledCarriesTheRequestedInstantAsIsWithNoComponents() {
+        Instant requestedFor = Instant.parse("2026-08-22T19:00:00Z");
+        OrderPromise promise = OrderPromise.scheduled(requestedFor);
+
+        assertThat(promise.basis()).isEqualTo(PromiseBasis.SCHEDULED_SLOT);
+        assertThat(promise.promisedAt()).isEqualTo(requestedFor);
+        assertThat(promise.prepMinutes()).isNull();
+        assertThat(promise.travelMinutes()).isNull();
+        assertThat(promise.basis().isDerivedFromDuration()).isFalse();
+    }
+
+    @Test
+    void aScheduledSlotIsLateExactlyLikeAnyOtherPromise() {
+        Instant requestedFor = Instant.parse("2026-08-22T19:00:00Z");
+        OrderPromise promise = OrderPromise.scheduled(requestedFor);
+
+        assertThat(promise.lateAt(requestedFor.minusSeconds(1), OrderStatus.PREPARING))
+                .isFalse();
+        assertThat(promise.lateAt(requestedFor.plusSeconds(1), OrderStatus.PREPARING))
+                .isTrue();
+    }
+
     @Test
     void refusesABasisAndATimeThatDisagree() {
         assertThatIllegalArgumentException()

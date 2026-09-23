@@ -447,6 +447,15 @@ class CheckoutOrderWriter {
     private OrderPromise promise(
             CheckoutCommand command, CartRow cart, Set<UUID> variantIds, Serviceability decision, Instant now) {
 
+        // Row 1.3d: the caller chose a time and CheckoutEligibilityGuard already
+        // validated it against the branch's own hours (and, when it was outside
+        // them, that either the branch's own policy or an explicit operator
+        // override let it through anyway). Nothing here is derived, which is the
+        // whole distinction PromiseBasis.SCHEDULED_SLOT exists to record.
+        if (command.requestedFor() != null) {
+            return OrderPromise.scheduled(command.requestedFor());
+        }
+
         Duration slowestItem = catalog.longestPreparationOverride(
                         command.tenantId(), command.brandId(), cart.locationId(), variantIds)
                 .orElse(null);

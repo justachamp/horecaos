@@ -216,9 +216,12 @@ public class SchedulingConfiguration {
      * "Forecasting" section's gap — {@code forecast_run}/{@code
      * fact_forecast} (V0367) had no production caller until this wave gave
      * {@code ForecastService} one, the same shape {@code DayCloseScheduler}
-     * gave {@code DayCloseService} in wave 6.
+     * gave {@code DayCloseService} in wave 6. Batch 8 added the last one so
+     * far: {@code CatalogImportRunWorker.processQueuedRuns}, which drains
+     * {@code catalog.import_runs} (row 4.5b) the identical way {@code
+     * CustomerImportRunWorker} already drains its own import queue.
      */
-    static final int DEFAULT_POOL_SIZE = 65;
+    static final int DEFAULT_POOL_SIZE = 66;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

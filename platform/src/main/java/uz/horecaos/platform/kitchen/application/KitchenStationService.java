@@ -1,8 +1,11 @@
 package uz.horecaos.platform.kitchen.application;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DuplicateKeyException;
@@ -275,6 +278,75 @@ public class KitchenStationService {
     }
 
     /**
+     * The rule or rules already routing one catalogue node, at both layers
+     * (gap map row 4.2g): what the product editor's station picker needs
+     * before it can show a product's current department instead of an
+     * always-blank picker that 409s on a second save.
+     */
+    public RoutingRuleDetail findRoutingRule(UUID tenantId, UUID brandId, UUID locationId, NodeAddress node) {
+        requireOneNode(node);
+        return new RoutingRuleDetail(
+                stations.findBrandRoutingRule(tenantId, brandId, node.variantId(), node.productId(), node.categoryId()),
+                stations.findLocationRoutingRule(
+                        tenantId, locationId, node.variantId(), node.productId(), node.categoryId()));
+    }
+
+    /**
+     * Changes an already-routed node's station role (brand layer) or station
+     * (location layer) — the other half of gap map row 4.2g: {@link #route}
+     * only ever inserts, so a second save for an already-routed product used
+     * to 409 with no way to actually change the department.
+     */
+    @Transactional
+    public UpdatedRoutingRule updateRoutingRule(RoutingRuleEdit command) {
+        if ((command.stationId() == null) == (command.stationRole() == null)) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "An edit names a station (the location layer) or a role (the brand layer), "
+                            + "never both and never neither");
+        }
+        Instant now = clock.instant();
+
+        if (command.stationRole() != null) {
+            var existing = stations.findBrandRoutingRuleById(command.tenantId(), command.ruleId())
+                    .filter(rule -> rule.brandId().equals(command.brandId()))
+                    .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such routing rule"));
+            if (existing.version() != command.expectedVersion()) {
+                throw ApiException.staleVersion(command.expectedVersion(), existing.version());
+            }
+            int newVersion = stations.updateBrandRoutingRule(
+                            command.tenantId(), existing.id(), command.stationRole(), command.expectedVersion(), now)
+                    .orElseThrow(() -> new ApiException(
+                            ErrorCode.RESOURCE_CONFLICT, "This rule was changed while this edit was being made"));
+            return new UpdatedRoutingRule(existing.id(), "BRAND", newVersion);
+        }
+
+        UUID stationId = Objects.requireNonNull(command.stationId(), "checked by the exclusive-or guard above");
+        var existing = stations.findLocationRoutingRuleById(command.tenantId(), command.ruleId())
+                .filter(rule -> rule.locationId().equals(command.locationId()))
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such routing rule"));
+        if (existing.version() != command.expectedVersion()) {
+            throw ApiException.staleVersion(command.expectedVersion(), existing.version());
+        }
+        int newVersion = stations.updateLocationRoutingRule(
+                        command.tenantId(), existing.id(), stationId, command.expectedVersion(), now)
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_CONFLICT, "This rule was changed while this edit was being made"));
+        return new UpdatedRoutingRule(existing.id(), "LOCATION", newVersion);
+    }
+
+    private void requireOneNode(NodeAddress node) {
+        if ((node.variantId() == null ? 0 : 1)
+                        + (node.productId() == null ? 0 : 1)
+                        + (node.categoryId() == null ? 0 : 1)
+                != 1) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "A routing lookup addresses exactly one of a variant, a product, or a category");
+        }
+    }
+
+    /**
      * One station this location actually has.
      *
      * @param fallback whether unroutable lines land here. Exactly one station per
@@ -336,4 +408,35 @@ public class KitchenStationService {
             @Nullable UUID categoryId,
             @Nullable StationRole stationRole,
             @Nullable UUID stationId) {}
+
+    /** The one catalogue node a routing lookup or edit addresses — exactly one field non-null. */
+    public record NodeAddress(
+            @Nullable UUID variantId,
+            @Nullable UUID productId,
+            @Nullable UUID categoryId) {}
+
+    /**
+     * Both layers' answer for one node (gap map row 4.2g) — either may be
+     * absent, and both can be present at once when a branch overrides a
+     * brand-wide rule for itself.
+     */
+    public record RoutingRuleDetail(
+            Optional<JdbcKitchenStore.BrandRoutingRuleRow> brandRule,
+            Optional<JdbcKitchenStore.LocationRoutingRuleRow> locationRule) {}
+
+    /**
+     * Changes one already-routed node — brand layer via {@code stationRole},
+     * location layer via {@code stationId}, exactly one set, mirroring
+     * {@link NewRoutingRule}'s own contract.
+     */
+    public record RoutingRuleEdit(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID ruleId,
+            @Nullable StationRole stationRole,
+            @Nullable UUID stationId,
+            int expectedVersion) {}
+
+    public record UpdatedRoutingRule(UUID ruleId, String layer, int version) {}
 }

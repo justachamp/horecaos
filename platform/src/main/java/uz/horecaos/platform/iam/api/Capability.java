@@ -660,6 +660,23 @@ public enum Capability {
     MARKETPLACE_ORDER_RECEIVE("marketplace.order.receive", "marketplace", "order.receive"),
 
     /**
+     * ADR 0040, gap map row {@code 10.9d}: an aggregator reporting that its
+     * own shift opened or closed for a branch it is bound to.
+     *
+     * <p>Held by the identical machine principal {@link #MARKETPLACE_ORDER_RECEIVE}
+     * is, and for the same reason — a shift ping is inbound from the
+     * aggregator, not a HorecaOS decision, so the principal that may report
+     * it is the installation's own confidential client, scoped to the
+     * bindings that installation holds. Deliberately its own capability
+     * rather than folded into order receipt: a partner whose order-push
+     * credential leaks says nothing about whether it may also toggle a
+     * branch's shift-notification state, and the two blast radii should
+     * stay separable even though today's rollout binds them to the same
+     * client.
+     */
+    MARKETPLACE_SHIFT_RECEIVE("marketplace.shift.receive", "marketplace", "shift.receive"),
+
+    /**
      * ADR 0040: HorecaOS pushing a menu or an availability change out to a partner
      * that will not pull one.
      *
@@ -735,6 +752,28 @@ public enum Capability {
 
     CUSTOMER_READ("customer.read", "customer", "read"),
     CUSTOMER_MANAGE("customer.manage", "customer", "manage"),
+    /**
+     * Row 1.3a: opening an account by hand from the phone (ADR 0039's
+     * {@code CustomerController.createManually}) — never edits one, never
+     * reveals PII, never blacklists or merges. Split out of {@link
+     * #CUSTOMER_MANAGE} rather than granting that wider capability to the New
+     * order screen's own persona: {@link PlatformRole#LOCATION_STAFF}'s own
+     * comment is explicit that {@code CUSTOMER_MANAGE} and {@code
+     * CUSTOMER_PII_REVEAL} stay off that bundle on purpose, "so a phone-order
+     * operator sees a masked lookup card and never a raw contact value" — and
+     * {@code CUSTOMER_MANAGE} would undo exactly that by also handing over
+     * blacklisting, merging and profile edits on every other customer. What a
+     * call-centre operator needs to finish taking an order from a caller who
+     * has never ordered before is the one write {@link
+     * uz.horecaos.platform.customers.web.CustomerController#createManually}
+     * performs, so that is the whole of what this capability grants. Every
+     * role that already holds {@code CUSTOMER_MANAGE} holds this one too, so
+     * changing {@code createManually}'s declared capability from the wider
+     * one to this narrower one changes nothing for {@link
+     * PlatformRole#TENANT_OWNER}, {@link PlatformRole#TENANT_ADMIN} or
+     * {@link PlatformRole#SUPPORT_AGENT}.
+     */
+    CUSTOMER_CREATE("customer.create", "customer", "create"),
     /**
      * Reveals a customer's decrypted contact details or address (ADR 0029).
      * Separate from CUSTOMER_READ because seeing that a customer exists and
