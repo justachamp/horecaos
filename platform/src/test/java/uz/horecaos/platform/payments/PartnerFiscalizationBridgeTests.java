@@ -283,7 +283,8 @@ class PartnerFiscalizationBridgeTests {
         serviceUnderTest.submit(document, binding, CLOCK.instant());
 
         assertThat(jdbc.sql("""
-                        SELECT direction, last_failure_code, last_success_at IS NOT NULL AS has_success
+                        SELECT direction, last_failure_code, last_success_at IS NOT NULL AS has_success,
+                               alert_state
                         FROM integration.provider_activity_watermarks
                         WHERE tenant_id = :tenantId AND binding_id = :bindingId
                         """)
@@ -292,9 +293,18 @@ class PartnerFiscalizationBridgeTests {
                         .query((row, number) -> Map.of(
                                 "direction", row.getString("direction"),
                                 "failureCode", row.getString("last_failure_code"),
-                                "hasSuccess", row.getBoolean("has_success")))
+                                "hasSuccess", row.getBoolean("has_success"),
+                                "alertState", row.getString("alert_state")))
                         .list())
-                .containsExactly(Map.of("direction", "OUTBOUND", "failureCode", "FISCAL-RULE-7", "hasSuccess", false));
+                .containsExactly(Map.of(
+                        "direction", "OUTBOUND",
+                        "failureCode", "FISCAL-RULE-7",
+                        "hasSuccess", false,
+                        // A binding whose only evidence ever recorded is a failure must not
+                        // read as HEALTHY: last_success_at is null forever on this row, so
+                        // JdbcPartnerStore#markStale's sweep (gated on last_success_at IS NOT
+                        // NULL) can never promote it out of a false HEALTHY later.
+                        "alertState", "STALE"));
     }
 
     private static FiscalReceiptPort scriptedClickReceiptPort(FiscalSubmission answer) {
