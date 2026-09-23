@@ -1204,6 +1204,72 @@ describe('OrderDetailPane: cancel past CONFIRMED uses a registry reason, never f
   });
 });
 
+describe('OrderDetailPane: the override dialog restores an earlier status (ADR 0019 amendment, ADR 0110, wave 9 row 1.1h)', () => {
+  function readyWithOverride(): OrderDetailResponse {
+    return detail({
+      summary: {
+        ...detail().summary,
+        status: 'READY',
+        actions: [{ action: 'OVERRIDE', targetStatus: 'PREPARING' }],
+      },
+    });
+  }
+
+  it('fetches active CANCELLATION reasons and names the target status in the title, never a free-text field', async () => {
+    const list = vi.fn().mockResolvedValue([reason()]);
+    configure({
+      get: apiGet({ value: readyWithOverride(), version: 3 }),
+      referenceDataApi: { list },
+    });
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(list).toHaveBeenCalledWith(FAKE_SCOPE, 'CANCELLATION');
+    expect(host.querySelector('[data-testid="order-outcome-reason-dialog"]')).not.toBeNull();
+    expect(host.querySelector('.outcome-dialog__title')?.textContent).toContain('Preparing');
+    expect(host.querySelector('[data-testid="order-reason-dialog"]')).toBeNull();
+  });
+
+  it('submits the mandatory registry reason with the target status the clicked action named and the expected version', async () => {
+    const override = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'PREPARING',
+        version: 4,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+    configure({
+      get: apiGet({ value: readyWithOverride(), version: 3 }),
+      actionsApi: { override },
+      referenceDataApi: { list: () => Promise.resolve([reason()]) },
+    });
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    (
+      host.querySelector('[data-testid="order-outcome-reason-option-reason-1"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    (
+      host.querySelector('[data-testid="order-outcome-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(override).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'PREPARING', 3, 'reason-1');
+  });
+});
+
 describe('OrderDetailPane: completion names the fulfilment mode’s own reason (§4.6, row 1.2j)', () => {
   it('completes without a dialog when exactly one reason is valid for the mode', async () => {
     const complete = vi.fn().mockReturnValue(

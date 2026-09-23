@@ -1116,6 +1116,19 @@
       (dismiss)="onDialogDismiss()"
     />
   }
+  @if (dialog() === 'override') {
+    <q-order-outcome-reason-dialog
+      titleKey="orders.dialog.override.title"
+      [titleValues]="overrideTitleValues()"
+      confirmLabelKey="orders.action.override.confirm"
+      [reasons]="outcomeReasons()"
+      [showConsequences]="true"
+      [noteEnabled]="false"
+      [busy]="busy()"
+      (confirm)="onOverrideDialogConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
   @if (dialog() === 'reject') {
     <q-order-reject-reason-dialog
       [reasons]="rejectReasons()"

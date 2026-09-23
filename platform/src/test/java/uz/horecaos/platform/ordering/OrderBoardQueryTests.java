@@ -55,6 +55,16 @@ class OrderBoardQueryTests {
     private static final UUID OTHER_BRAND = UUID.fromString("018f6f4e-3000-7000-8000-0000000000b2");
     private static final UUID OTHER_TENANT_LOCATION = UUID.fromString("018f6f4e-3000-7000-8000-0000000000b3");
 
+    /**
+     * ADR 0026/0040 fixture for the {@code origin} filter: a {@code MARKETPLACE}
+     * installation bound to {@link #TENANT}'s own {@link #BRAND}/{@link
+     * #LOCATION}, so a {@code MARKETPLACE}-origin order fixture has a real
+     * {@code marketplace_binding_id} to name — {@code
+     * ordering.assert_marketplace_binding} (V0038) refuses one that does not
+     * resolve to a {@code MARKETPLACE}-category installation.
+     */
+    private static final UUID MARKETPLACE_BINDING = UUID.fromString("018f6f4e-3000-7000-8000-0000000000c1");
+
     /** Every fixture order is placed relative to this, newest last. */
     private static final Instant NOON = Instant.parse("2026-09-10T12:00:00Z");
 
@@ -95,6 +105,7 @@ class OrderBoardQueryTests {
 
         store = new JdbcOrderStore(jdbc);
         seedTenancy();
+        seedMarketplaceBinding();
     }
 
     // ------------------------------------------------------------- the filters
@@ -127,6 +138,22 @@ class OrderBoardQueryTests {
                 .doesNotContain(web);
         assertThat(idsOf(query().channelCode("WEB"))).containsExactly(web);
         assertThat(idsOf(query().channelCode("NOT_A_CHANNEL"))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("the origin filter separates aggregator orders from the tenant's own channels")
+    void theOriginFilterSeparatesAggregatorOrdersFromHorecaosOnes() {
+        // Wave 9, gap map row 1.1c: the toolbar's «Источник» toggle, bound to
+        // `ordering.orders.origin` (V0038, ADR 0040) rather than to a specific
+        // aggregator binding.
+        UUID ours = insertOrder(order("O-1"));
+        UUID aggregator = insertOrder(order("O-2").origin("MARKETPLACE"));
+
+        assertThat(idsOf(query().origin("HORECAOS"))).containsExactly(ours).doesNotContain(aggregator);
+        assertThat(idsOf(query().origin("MARKETPLACE")))
+                .containsExactly(aggregator)
+                .doesNotContain(ours);
+        assertThat(idsOf(query())).containsExactlyInAnyOrder(ours, aggregator);
     }
 
     @Test
@@ -280,7 +307,8 @@ class OrderBoardQueryTests {
                 null,
                 null,
                 null,
-                "WLT-200");
+                "WLT-200",
+                null);
         assertThat(store.listForLocation(theirBoard, null, null, 50).stream()
                         .map(row -> row.order().orderId())
                         .toList())
@@ -442,6 +470,18 @@ class OrderBoardQueryTests {
         assertThat(one.fingerprint()).isNotEqualTo(other.fingerprint());
     }
 
+    @Test
+    @DisplayName("the origin filter is part of the cursor's fingerprint too")
+    void theFingerprintCoversTheOriginFilter() {
+        OrderListQuery horecaos = query().origin("HORECAOS").build();
+        OrderListQuery marketplace = query().origin("MARKETPLACE").build();
+        OrderListQuery unfiltered = query().build();
+
+        assertThat(horecaos.fingerprint())
+                .isNotEqualTo(marketplace.fingerprint())
+                .isNotEqualTo(unfiltered.fingerprint());
+    }
+
     // ------------------------------------------------------- the derived flag
 
     @Test
@@ -552,6 +592,7 @@ class OrderBoardQueryTests {
         private @Nullable String paymentMethodCode;
         private @Nullable String createdByActorId;
         private @Nullable String reference;
+        private @Nullable String origin;
 
         QueryBuilder statuses(String... values) {
             this.statuses = List.of(values);
@@ -598,6 +639,11 @@ class OrderBoardQueryTests {
             return this;
         }
 
+        QueryBuilder origin(String value) {
+            this.origin = value;
+            return this;
+        }
+
         OrderListQuery build() {
             return new OrderListQuery(
                     TENANT,
@@ -611,7 +657,8 @@ class OrderBoardQueryTests {
                     courierId,
                     paymentMethodCode,
                     createdByActorId,
-                    reference);
+                    reference,
+                    origin);
         }
     }
 
@@ -629,6 +676,7 @@ class OrderBoardQueryTests {
         private String channelCode = "TELEGRAM";
         private @Nullable String createdByActorId;
         private boolean confirmed;
+        private String origin = "HORECAOS";
 
         private OrderSpec(String seed) {
             this.seed = seed;
@@ -668,6 +716,11 @@ class OrderBoardQueryTests {
             this.confirmed = true;
             return this;
         }
+
+        OrderSpec origin(String value) {
+            this.origin = value;
+            return this;
+        }
     }
 
     private UUID insertOrder(OrderSpec spec) {
@@ -680,44 +733,52 @@ class OrderBoardQueryTests {
 
     private UUID insertOrder(UUID tenantId, UUID brandId, UUID locationId, OrderSpec spec) {
         UUID orderId = derived("order:" + tenantId + spec.seed);
-        UUID cartId = derived("cart:" + tenantId + spec.seed);
-        UUID quoteId = derived("quote:" + tenantId + spec.seed);
+        // A MARKETPLACE-origin order has no HorecaOS cart or quote behind it —
+        // ck_order_cart_matches_origin and ck_order_quote_matches_authority
+        // (V0038) refuse one that carries either, so neither row is inserted
+        // and both FKs on the order itself go null rather than pointing at a
+        // fabricated cart/quote nobody ever opened.
+        boolean marketplace = "MARKETPLACE".equals(spec.origin);
+        @Nullable UUID cartId = marketplace ? null : derived("cart:" + tenantId + spec.seed);
+        @Nullable UUID quoteId = marketplace ? null : derived("quote:" + tenantId + spec.seed);
 
-        jdbc.sql("""
-                INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
-                    customer_account_id, fulfillment_mode, currency, status, expires_at,
-                    converted_order_id)
-                VALUES (:id, :t, :b, :loc, :ch, :cust, :mode, 'UZS', 'CONVERTED', :expires, :orderId)
-                """)
-                .param("id", cartId)
-                .param("t", tenantId)
-                .param("b", brandId)
-                .param("loc", locationId)
-                .param("ch", channelOf(tenantId))
-                .param("cust", customerOf(tenantId))
-                .param("mode", spec.mode)
-                .param("expires", spec.createdAt.atOffset(ZoneOffset.UTC))
-                .param("orderId", orderId)
-                .update();
+        if (!marketplace) {
+            jdbc.sql("""
+                    INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
+                        customer_account_id, fulfillment_mode, currency, status, expires_at,
+                        converted_order_id)
+                    VALUES (:id, :t, :b, :loc, :ch, :cust, :mode, 'UZS', 'CONVERTED', :expires, :orderId)
+                    """)
+                    .param("id", cartId)
+                    .param("t", tenantId)
+                    .param("b", brandId)
+                    .param("loc", locationId)
+                    .param("ch", channelOf(tenantId))
+                    .param("cust", customerOf(tenantId))
+                    .param("mode", spec.mode)
+                    .param("expires", spec.createdAt.atOffset(ZoneOffset.UTC))
+                    .param("orderId", orderId)
+                    .update();
 
-        jdbc.sql("""
-                INSERT INTO pricing.quotes (id, tenant_id, brand_id, location_id,
-                    customer_account_id, currency, status, catalog_publication_id,
-                    calculation_version, context_hash, subtotal_minor, tax_minor, fee_minor,
-                    discount_minor, total_minor, expires_at, accepted_at)
-                VALUES (:id, :t, :b, :loc, :cust, 'UZS', 'ACCEPTED', :pub, 1, :hash,
-                    100000, 0, 2000, 1000, 101000, :expires, :accepted)
-                """)
-                .param("id", quoteId)
-                .param("t", tenantId)
-                .param("b", brandId)
-                .param("loc", locationId)
-                .param("cust", customerOf(tenantId))
-                .param("pub", publicationOf(tenantId))
-                .param("hash", "hash-" + orderId)
-                .param("expires", spec.createdAt.atOffset(ZoneOffset.UTC))
-                .param("accepted", spec.createdAt.atOffset(ZoneOffset.UTC))
-                .update();
+            jdbc.sql("""
+                    INSERT INTO pricing.quotes (id, tenant_id, brand_id, location_id,
+                        customer_account_id, currency, status, catalog_publication_id,
+                        calculation_version, context_hash, subtotal_minor, tax_minor, fee_minor,
+                        discount_minor, total_minor, expires_at, accepted_at)
+                    VALUES (:id, :t, :b, :loc, :cust, 'UZS', 'ACCEPTED', :pub, 1, :hash,
+                        100000, 0, 2000, 1000, 101000, :expires, :accepted)
+                    """)
+                    .param("id", quoteId)
+                    .param("t", tenantId)
+                    .param("b", brandId)
+                    .param("loc", locationId)
+                    .param("cust", customerOf(tenantId))
+                    .param("pub", publicationOf(tenantId))
+                    .param("hash", "hash-" + orderId)
+                    .param("expires", spec.createdAt.atOffset(ZoneOffset.UTC))
+                    .param("accepted", spec.createdAt.atOffset(ZoneOffset.UTC))
+                    .update();
+        }
 
         jdbc.sql("""
                 INSERT INTO ordering.orders (id, public_order_number, tenant_id, brand_id,
@@ -728,7 +789,8 @@ class OrderBoardQueryTests {
                     pricing_context_hash, catalog_publication_id, cart_id, idempotency_key,
                     promised_at, promise_basis, promise_prep_minutes, version, created_at,
                     confirmed_at, created_by_actor_type, created_by_actor_id,
-                    accepted_by_actor_type, accepted_by_actor_id, accepted_at)
+                    accepted_by_actor_type, accepted_by_actor_id, accepted_at,
+                    origin, pricing_authority, marketplace_binding_id)
                 VALUES (:id, :number, :t, :b, :loc, :ch, :channelCode, :cust,
                     :mode, 'AUTO_CONFIRM', 'NONE',
                     :status, 'NOT_REQUIRED', 'UZS', 100000, 0,
@@ -736,7 +798,8 @@ class OrderBoardQueryTests {
                     :hash, :pub, :cart, :key,
                     :promisedAt, 'PREPARATION_BAND', 35, 1, :createdAt,
                     :confirmedAt, 'USER', :createdBy,
-                    'USER', 'manager-1', :createdAt)
+                    'USER', 'manager-1', :createdAt,
+                    :origin, :pricingAuthority, :marketplaceBinding)
                 """)
                 .param("id", orderId)
                 .param("number", spec.seed)
@@ -749,8 +812,8 @@ class OrderBoardQueryTests {
                 .param("mode", spec.mode)
                 .param("status", spec.status)
                 .param("quote", quoteId)
-                .param("hash", "hash-" + orderId)
-                .param("pub", publicationOf(tenantId))
+                .param("hash", marketplace ? null : "hash-" + orderId)
+                .param("pub", marketplace ? null : publicationOf(tenantId))
                 .param("cart", cartId)
                 .param("key", "idem-" + orderId)
                 .param("promisedAt", spec.createdAt.plusSeconds(2100).atOffset(ZoneOffset.UTC))
@@ -759,6 +822,9 @@ class OrderBoardQueryTests {
                         "confirmedAt",
                         spec.confirmed ? spec.createdAt.plusSeconds(60).atOffset(ZoneOffset.UTC) : null)
                 .param("createdBy", spec.createdByActorId == null ? "operator-1" : spec.createdByActorId)
+                .param("origin", spec.origin)
+                .param("pricingAuthority", marketplace ? "EXTERNAL" : "HORECAOS")
+                .param("marketplaceBinding", marketplace ? MARKETPLACE_BINDING : null)
                 .update();
 
         return orderId;
@@ -925,6 +991,49 @@ class OrderBoardQueryTests {
                 .param("t", tenantId)
                 .param("b", brandId)
                 .param("cat", catalogId)
+                .update();
+    }
+
+    /**
+     * One {@code MARKETPLACE}-category installation, bound to {@link #TENANT}'s
+     * own {@link #BRAND}/{@link #LOCATION} — the fixture {@link
+     * #MARKETPLACE_BINDING} names, mirroring the shape {@code
+     * AggregatorOrderIntakeServiceTests} already proves the real intake path
+     * against. Platform-owned reference data ({@code provider_environments})
+     * is inserted {@code ON CONFLICT DO NOTHING}, the same idempotent pattern
+     * that test uses.
+     */
+    private void seedMarketplaceBinding() {
+        jdbc.sql("""
+                        INSERT INTO integration.provider_environments (
+                            code, provider_category, provider_type, base_url, is_production,
+                            egress_allowlist)
+                        VALUES ('board-tests-marketplace-env', 'MARKETPLACE', 'YANDEX_EDA',
+                                'https://example.test', false, 'example.test')
+                        ON CONFLICT (code) DO NOTHING
+                        """).update();
+
+        UUID installationId = derived("marketplace-installation:" + TENANT);
+        jdbc.sql("""
+                        INSERT INTO integration.installations (
+                            id, tenant_id, provider_category, provider_type, environment_code,
+                            display_name, status)
+                        VALUES (:id, :t, 'MARKETPLACE', 'YANDEX_EDA', 'board-tests-marketplace-env',
+                                'Yandex Eda', 'ACTIVE')
+                        """).param("id", installationId).param("t", TENANT).update();
+
+        jdbc.sql("""
+                        INSERT INTO integration.bindings (
+                            id, tenant_id, installation_id, brand_id, location_id, status,
+                            effective_from)
+                        VALUES (:id, :t, :installationId, :b, :loc, 'ACTIVE', :now)
+                        """)
+                .param("id", MARKETPLACE_BINDING)
+                .param("t", TENANT)
+                .param("installationId", installationId)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("now", NOON.atOffset(ZoneOffset.UTC))
                 .update();
     }
 
