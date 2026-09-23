@@ -196,6 +196,11 @@ export const settingsPaths = {
     return `${this.salesChannel(scope, channelId)}/locations`;
   },
 
+  /** Row 10.4a: a channel's own social links, whole-set replace like the other matrices. */
+  salesChannelSocialLinks(scope: LocationScope, channelId: string): string {
+    return `${this.salesChannel(scope, channelId)}/social-links`;
+  },
+
   salesChannelArchive(scope: LocationScope, channelId: string): string {
     return `${this.salesChannel(scope, channelId)}/archive`;
   },

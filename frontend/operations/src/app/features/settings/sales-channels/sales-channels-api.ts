@@ -24,6 +24,18 @@ export interface ChannelView {
   readonly enabledPaymentMethodCount: number;
   /** 10.4a "Типы получения", enabled only. */
   readonly enabledFulfillmentModes: readonly string[];
+  /**
+   * 10.4a's own presentation set: a code-owned icon identifier, null until
+   * set. Optional here (not on the server, which always sends it) so the
+   * many `ChannelView` fixtures elsewhere in this app that predate row
+   * 10.4a and do not care about presentation do not all need updating for
+   * an additive field.
+   */
+  readonly icon?: string | null;
+  /** Six-digit hex (#rrggbb), null until set. */
+  readonly brandColorPrimary?: string | null;
+  /** Six-digit hex (#rrggbb), null until set. */
+  readonly brandColorSecondary?: string | null;
 }
 
 export interface UpdateChannelRequest {
@@ -32,13 +44,33 @@ export interface UpdateChannelRequest {
   readonly externallyPriced: boolean;
   readonly guestOrdersAllowed: boolean;
   readonly providerInstallationId?: string | null;
+  /** Row 10.4a. Omitted or null clears the field -- this request fully replaces, never patches. */
+  readonly icon?: string | null;
+  readonly brandColorPrimary?: string | null;
+  readonly brandColorSecondary?: string | null;
 }
+
+/** ADR 0036's own closed vocabulary for a channel's social links (row 10.4a). */
+export const CHANNEL_SOCIAL_PLATFORMS: readonly string[] = [
+  'TELEGRAM',
+  'INSTAGRAM',
+  'FACEBOOK',
+  'YOUTUBE',
+  'TIKTOK',
+  'WEBSITE',
+];
 
 /** Mirrors uz.horecaos.platform.tenancy.application.SalesChannelService.ChannelMatrices. */
 export interface ChannelMatrices {
   readonly paymentMethods: Readonly<Record<string, boolean>>;
   readonly fulfillmentModes: Readonly<Record<string, boolean>>;
   readonly locationIds: readonly string[];
+  /**
+   * Row 10.4a: platform → destination URL, in display order. Optional for
+   * the same reason `ChannelView.icon` is: additive, and the existing
+   * `ChannelMatrices` fixtures elsewhere predate it.
+   */
+  readonly socialLinks?: Readonly<Record<string, string>>;
 }
 
 export interface CreateChannelRequest {
@@ -134,6 +166,23 @@ export class SalesChannelsApi {
         'PUT',
         settingsPaths.salesChannelLocations(scope, channelId),
         command({ locationIds }),
+        { params: { expectedVersion } },
+      ),
+    );
+  }
+
+  /** Row 10.4a. Whole-set PUT, the same discipline as {@link replacePaymentMethods}. */
+  async replaceSocialLinks(
+    scope: LocationScope,
+    channelId: string,
+    links: Readonly<Record<string, string>>,
+    expectedVersion: number,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.api.send<Readonly<Record<string, string>>, void>(
+        'PUT',
+        settingsPaths.salesChannelSocialLinks(scope, channelId),
+        command(links),
         { params: { expectedVersion } },
       ),
     );
