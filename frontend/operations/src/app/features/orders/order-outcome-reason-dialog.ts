@@ -55,6 +55,15 @@ export class OrderOutcomeReasonDialog {
   private readonly i18n = inject(I18n);
 
   readonly titleKey = input.required<MessageKey>();
+  /**
+   * Interpolation values for {@link titleKey} — the override dialog's own
+   * caller (wave 9, gap map row `1.1h`) is the first to need one, to state
+   * which status the order is being moved back to without a per-target title
+   * key for every compensating edge {@code OrderStateMachine} might ever
+   * declare. `undefined` for every other caller, exactly `TPipe`'s own
+   * `values` parameter default.
+   */
+  readonly titleValues = input<Readonly<Record<string, string | number>> | undefined>(undefined);
   readonly confirmLabelKey = input.required<MessageKey>();
   readonly reasons = input.required<readonly ReasonResponse[]>();
   /** True for `Отменить` (§4.5's consequences block); false for `Завершить` (§4.6 has none). */

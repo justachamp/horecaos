@@ -150,12 +150,16 @@ interface OrderRow {
  * `'cancel-reason'` is the registry-reasoned picker H2 adds for `CONFIRMED`
  * onward — see {@link requiresCancellationReason}. `'complete'` is the
  * completion-reason picker {@link startCompletion} opens when more than one
- * `COMPLETION` reason is eligible for the order's fulfilment mode.
+ * `COMPLETION` reason is eligible for the order's fulfilment mode. `'override'`
+ * is the compensating-transition picker (wave 9, gap map row `1.1h`) — its own
+ * `targetStatus` is the one the clicked `actions[]` entry already named, since
+ * this dialog only ever asks for the mandatory registry reason.
  */
 interface RowDialogState {
   readonly orderId: string;
-  readonly kind: 'reject' | 'cancel' | 'cancel-reason' | 'complete';
+  readonly kind: 'reject' | 'cancel' | 'cancel-reason' | 'complete' | 'override';
   readonly version: number;
+  readonly targetStatus?: string;
 }
 
 /**
@@ -726,6 +730,12 @@ export class OrderQueue implements OnInit {
     void this.refresh();
   }
 
+  /** «Источник» (wave 9, gap map row `1.1c`): `HORECAOS` vs `MARKETPLACE` — see `order-queue-filter-state.ts`'s own doc for why this is not the same control as Канал. */
+  protected onOriginChange(origin: string): void {
+    this.filterState.update({ origin: origin ? (origin as OrderQueueFilters['origin']) : null });
+    void this.refresh();
+  }
+
   protected onFulfillmentModeChange(mode: string): void {
     this.filterState.update({
       fulfillmentMode: mode ? (mode as OrderQueueFilters['fulfillmentMode']) : null,
@@ -762,6 +772,8 @@ export class OrderQueue implements OnInit {
       this.filterState.update({ mineOnly: false });
     } else if (chipId === 'paymentMethod') {
       this.filterState.update({ paymentMethodCode: null });
+    } else if (chipId === 'origin') {
+      this.filterState.update({ origin: null });
     }
     void this.refresh();
   }
@@ -778,7 +790,19 @@ export class OrderQueue implements OnInit {
         label: this.paymentMethodLabel(filters.paymentMethodCode),
       });
     }
+    if (filters.origin) {
+      chips.push({ id: 'origin', label: this.originLabel(filters.origin) });
+    }
     return chips;
+  }
+
+  protected originLabel(origin: 'HORECAOS' | 'MARKETPLACE'): string {
+    switch (origin) {
+      case 'HORECAOS':
+        return this.i18n.t('orders.queue.filter.origin.HORECAOS');
+      case 'MARKETPLACE':
+        return this.i18n.t('orders.queue.filter.origin.MARKETPLACE');
+    }
   }
 
   protected paymentMethodLabel(code: string): string {
@@ -1194,6 +1218,15 @@ export class OrderQueue implements OnInit {
         // when a real choice exists.
         void this.startCompletion(order.orderId, version, order.fulfillmentMode ?? null, scope);
         return;
+      case 'OVERRIDE':
+        // §0.2/§11.3, wave 9 row 1.1h: the clicked entry already names the
+        // one compensating edge it offers (OrderActionsPolicy never emits
+        // more than one OVERRIDE entry per status today) — the dialog only
+        // asks for the mandatory registry reason, never a target of its own.
+        if (action.targetStatus) {
+          void this.openOverrideDialog(order.orderId, version, action.targetStatus, scope);
+        }
+        return;
       case 'AMEND':
         // The amendment submenu's five dialogs live on the order detail pane
         // (wave P10), not the row — the same reason `order-detail-pane.ts`
@@ -1283,6 +1316,40 @@ export class OrderQueue implements OnInit {
   }
 
   /**
+   * Fetch-before-open (wave 9 row `1.1h`), the same H2 rule {@link
+   * openCancelReasonDialog} follows: `POST .../state-overrides` reuses the
+   * `CANCELLATION` registry for its mandatory `reasonId` — see
+   * `OperationsOrderController.StateOverrideRequest`'s own doc — so this
+   * shares {@link cancelReasons} rather than fetching a dedicated list that
+   * would be identical to it.
+   */
+  private async openOverrideDialog(
+    orderId: string,
+    version: number,
+    targetStatus: string,
+    scope: LocationScope,
+  ): Promise<void> {
+    const requestId = (this.dialogRequestId += 1);
+    try {
+      const reasons = await this.referenceDataApi.list(scope, 'CANCELLATION');
+      if (requestId !== this.dialogRequestId) {
+        return; // superseded by a newer dialog-open click (H2)
+      }
+      this.cancelReasons.set(reasons);
+      this.dialog.set({ orderId, kind: 'override', version, targetStatus });
+    } catch (error) {
+      if (requestId !== this.dialogRequestId) {
+        return;
+      }
+      if (error instanceof ApiError) {
+        this.actionNotice.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
    * §4.6: resolves how many `COMPLETION` reasons the tenant's registry has
    * active for this order's fulfilment mode, and only asks when there is a
    * real choice — mirrors `order-detail-pane.ts`'s own `startCompletion`
@@ -1359,6 +1426,25 @@ export class OrderQueue implements OnInit {
     void this.submitCompletion(state.orderId, state.version, submission.reasonId).finally(() =>
       this.dialog.set(null),
     );
+  }
+
+  /** §0.2/§11.3, wave 9 row `1.1h`: `POST .../state-overrides`, with the target {@link openOverrideDialog} captured and the operator's chosen registry reason. */
+  protected onOverrideDialogConfirm(submission: OutcomeReasonSubmission): void {
+    const state = this.dialog();
+    const scope = this.location.scope();
+    if (!state || !scope || state.kind !== 'override' || !state.targetStatus) {
+      return;
+    }
+
+    void this.submitStateMutation(
+      state.orderId,
+      this.actionsApi.override(scope, state.orderId, state.targetStatus, state.version, submission.reasonId),
+    ).finally(() => this.dialog.set(null));
+  }
+
+  /** The override dialog's title interpolation — the status it is about to restore, in this operator's own language. */
+  protected overrideTitleValues(): Readonly<Record<string, string>> {
+    return { status: this.statusLabel(this.dialog()?.targetStatus ?? '') };
   }
 
   protected dialogBusy(): boolean {

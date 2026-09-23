@@ -1,6 +1,6 @@
 <div class="outcome-dialog__backdrop" data-testid="order-outcome-reason-dialog">
   <div class="outcome-dialog" role="dialog" aria-modal="true" [attr.aria-label]="titleKey() | t">
-    <h2 class="q-emphasis outcome-dialog__title">{{ titleKey() | t }}</h2>
+    <h2 class="q-emphasis outcome-dialog__title">{{ titleKey() | t: titleValues() }}</h2>
 
     <fieldset class="outcome-dialog__field" [attr.aria-invalid]="reasonMissing() ? 'true' : null">
       <legend class="q-body-sm">{{ 'orders.dialog.reasonCode.label' | t }}</legend>

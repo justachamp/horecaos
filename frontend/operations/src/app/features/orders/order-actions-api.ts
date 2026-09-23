@@ -102,6 +102,10 @@ export class OrderActionsApi {
     note?: string;
   }>();
   private readonly completeIntents = new IntentCommandRegistry<{ reasonId?: string }>();
+  private readonly overrideIntents = new IntentCommandRegistry<{
+    targetStatus: string;
+    reasonId: string;
+  }>();
 
   /**
    * `Принять` (§4.3). No `If-Match`: the decision endpoint is settled by
@@ -256,6 +260,37 @@ export class OrderActionsApi {
         { expectedVersion },
       )
       .pipe(tap(() => this.completeIntents.forget(intentId)));
+  }
+
+  /**
+   * A compensating transition that restores an earlier status (ADR 0019
+   * amendment, ADR 0110, wave 9 gap map `1.1h`) — `POST .../state-overrides`,
+   * gated on `ORDER_STATE_OVERRIDE` rather than `ORDER_ADVANCE`.
+   * `targetStatus` is the one the clicked `actions[]` entry already named
+   * (`OrderActionsPolicy` never offers more than one compensating edge per
+   * status today, and the console never invents a target of its own — see
+   * `order-detail-pane.ts`'s `onActionClick` OVERRIDE case); `reasonId` is
+   * mandatory, a registry reason from `GET .../order-outcome-reasons?kind=
+   * CANCELLATION` — the same kind {@link cancelWithReason} reads, since
+   * `StateOverrideRequest.reasonId` reuses it rather than a dedicated kind
+   * (see that record's own Java doc).
+   */
+  override(
+    scope: LocationScope,
+    orderId: string,
+    targetStatus: string,
+    expectedVersion: number,
+    reasonId: string,
+  ): Observable<DecisionResponse> {
+    const intentId = versionedIntentId(orderId, expectedVersion);
+    const intent = this.overrideIntents.next(intentId, { targetStatus, reasonId });
+    return this.api
+      .post<{ targetStatus: string; reasonId: string }, DecisionResponse>(
+        operationsPaths.orderStateOverrides(scope, orderId),
+        intent,
+        { expectedVersion },
+      )
+      .pipe(tap(() => this.overrideIntents.forget(intentId)));
   }
 }
 

@@ -147,6 +147,19 @@
             <option [value]="code">{{ paymentMethodLabel(code) }}</option>
           }
         </select>
+
+        <!-- «Источник» (wave 9, gap map row 1.1c): ordering.orders.origin, distinct from Канал — see order-queue-filter-state.ts's own doc. -->
+        <select
+          class="order-queue__select"
+          [value]="filters().origin ?? ''"
+          (change)="onOriginChange($any($event.target).value)"
+          [attr.aria-label]="'orders.queue.filter.origin.label' | t"
+          data-testid="order-queue-filter-origin"
+        >
+          <option value="">{{ 'orders.queue.filter.origin.all' | t }}</option>
+          <option value="HORECAOS">{{ 'orders.queue.filter.origin.HORECAOS' | t }}</option>
+          <option value="MARKETPLACE">{{ 'orders.queue.filter.origin.MARKETPLACE' | t }}</option>
+        </select>
       </ng-container>
     </q-filter-bar>
   }
@@ -469,6 +482,20 @@
       (confirm)="onCompletionDialogConfirm($event)"
       (dismiss)="onDialogDismiss()"
       data-testid="order-queue-complete-dialog"
+    />
+  }
+  @if (dialog()?.kind === 'override') {
+    <q-order-outcome-reason-dialog
+      titleKey="orders.dialog.override.title"
+      [titleValues]="overrideTitleValues()"
+      confirmLabelKey="orders.action.override.confirm"
+      [reasons]="cancelReasons()"
+      [showConsequences]="true"
+      [noteEnabled]="false"
+      [busy]="dialogBusy()"
+      (confirm)="onOverrideDialogConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+      data-testid="order-queue-override-dialog"
     />
   }
 

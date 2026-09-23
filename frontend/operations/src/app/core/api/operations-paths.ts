@@ -269,6 +269,17 @@ export const operationsPaths = {
   },
 
   /**
+   * A compensating transition that restores an earlier status (ADR 0019
+   * amendment, ADR 0110, wave 9 gap map `1.1h`) — `OperationsOrderController
+   * .stateOverride`, gated on `ORDER_STATE_OVERRIDE` rather than
+   * `ORDER_ADVANCE` and carrying a mandatory registry reason. Mutation: key
+   * and `If-Match`.
+   */
+  orderStateOverrides(scope: LocationScope, orderId: string): string {
+    return `${this.order(scope, orderId)}/state-overrides`;
+  },
+
+  /**
    * The resolved `ordering.lateness` policy (ADR 0030, orders.md §2.7, wave
    * P06) — the one source the order board and the kitchen ticket queue both
    * read instead of each hard-coding its own thresholds. On the ADR 0031

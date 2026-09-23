@@ -93,6 +93,15 @@ describe('OrderActionsApi', () => {
     request.flush({});
   });
 
+  it('overrides with the target status the caller resolved, a mandatory reasonId, and If-Match', () => {
+    api.override(SCOPE, 'o1', 'PREPARING', 4, 'reason-override-1').subscribe();
+    const request = http.expectOne(`${BASE}/state-overrides`);
+
+    expect(request.request.body).toEqual({ targetStatus: 'PREPARING', reasonId: 'reason-override-1' });
+    expect(request.request.headers.get('If-Match')).toBe('W/"4"');
+    request.flush({});
+  });
+
   // ---------------------------------------------------------- Idempotency-Key stability
   //
   // HK: an operator's manual retry of the SAME intent (a lost response to a
@@ -263,6 +272,26 @@ describe('OrderActionsApi', () => {
 
     api.complete(SCOPE, 'o1', 5, 'reason-1').subscribe();
     const second = http.expectOne(`${BASE}/completion`);
+    expect(second.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+    second.flush({});
+  });
+
+  it('mints a fresh Idempotency-Key for override() once expectedVersion is corrected after a STALE_VERSION 409', () => {
+    api.override(SCOPE, 'o1', 'PREPARING', 4, 'reason-override-1').subscribe({
+      error: () => {
+        /* expected: the row was stale */
+      },
+    });
+    const first = http.expectOne(`${BASE}/state-overrides`);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+    first.flush(
+      { status: 409, code: 'STALE_VERSION', title: 'Stale version' },
+      { status: 409, statusText: 'Conflict' },
+    );
+
+    // Same target and reason — only the corrected version differs.
+    api.override(SCOPE, 'o1', 'PREPARING', 5, 'reason-override-1').subscribe();
+    const second = http.expectOne(`${BASE}/state-overrides`);
     expect(second.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
     second.flush({});
   });

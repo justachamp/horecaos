@@ -146,6 +146,28 @@ describe('OrderQueueFilterState', () => {
     });
   });
 
+  it('boardQueryParams: passes origin («Источник», wave 9 row 1.1c) straight through', () => {
+    expect(
+      boardQueryParams({ ...EMPTY_ORDER_QUEUE_FILTERS, origin: 'MARKETPLACE' }, null),
+    ).toEqual({ origin: 'MARKETPLACE' });
+    expect(boardQueryParams({ ...EMPTY_ORDER_QUEUE_FILTERS, origin: 'HORECAOS' }, null)).toEqual({
+      origin: 'HORECAOS',
+    });
+  });
+
+  it('origin counts toward hasActive and survives a reload like the other filters', () => {
+    const state = service();
+    state.loadForTab('all');
+    state.update({ origin: 'MARKETPLACE' });
+    expect(state.hasActive()).toBe(true);
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({});
+    const fresh = TestBed.inject(OrderQueueFilterState);
+    fresh.loadForTab('all');
+    expect(fresh.current().origin).toBe('MARKETPLACE');
+  });
+
   it('never throws when localStorage is unavailable, and simply does not persist', () => {
     const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
     Object.defineProperty(globalThis, 'localStorage', {
