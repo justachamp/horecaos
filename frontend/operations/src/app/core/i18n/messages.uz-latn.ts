@@ -192,6 +192,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.column.total': 'Summa',
   'orders.column.fee': 'Yetkazib berish',
   'orders.column.payment': 'Toʻlov',
+  'orders.column.courier': 'Kuryer',
   'orders.column.status': 'Holat',
   'orders.column.actions': 'Amallar',
 
@@ -207,6 +208,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.action.cancel': 'Bekor qilish',
   'orders.action.complete': 'Yakunlash',
   'orders.action.amend': 'Oʻzgartirish',
+  'orders.action.assignCourier': 'Kuryer tayinlash',
   'orders.action.advance.PREPARING': 'Oshxonaga',
   'orders.action.advance.READY': 'Tayyor',
   'orders.action.advance.FULFILLING': 'Yetkazishga',

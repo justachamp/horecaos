@@ -202,6 +202,7 @@ export const messagesEn = {
   'orders.column.total': 'Total',
   'orders.column.fee': 'Delivery fee',
   'orders.column.payment': 'Payment',
+  'orders.column.courier': 'Courier',
   'orders.column.status': 'Status',
   'orders.column.actions': 'Actions',
 
@@ -217,6 +218,7 @@ export const messagesEn = {
   'orders.action.cancel': 'Cancel',
   'orders.action.complete': 'Complete',
   'orders.action.amend': 'Amend',
+  'orders.action.assignCourier': 'Assign courier',
   'orders.action.advance.PREPARING': 'Send to kitchen',
   'orders.action.advance.READY': 'Ready',
   'orders.action.advance.FULFILLING': 'Send out for delivery',

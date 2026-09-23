@@ -42,6 +42,7 @@ import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.application.CustomerBlacklistService;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalTerminalStore;
+import uz.horecaos.platform.fulfillment.api.ActiveCourierAssignmentsPort;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
 import uz.horecaos.platform.fulfillment.application.DeliveryTariffService;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService;
@@ -505,6 +506,7 @@ class CartCheckoutAndOrderTests {
                 orderStore,
                 processStore,
                 UNWIRED_PAYMENTS,
+                NO_COURIER_ASSIGNMENTS,
                 protection,
                 objectMapper,
                 new JdbcAuditRecorder(jdbc, objectMapper),
@@ -5433,6 +5435,9 @@ class CartCheckoutAndOrderTests {
     }
 
     // ----------------------------------------------------------- fixtures
+
+    /** No order in this suite has a courier assigned; nothing here exercises the board's Курьер column. */
+    private static final ActiveCourierAssignmentsPort NO_COURIER_ASSIGNMENTS = (tenantId, orderIds) -> Map.of();
 
     private static final PaymentIntentPort UNWIRED_PAYMENTS = new PaymentIntentPort() {
         @Override

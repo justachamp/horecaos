@@ -190,6 +190,7 @@ export const messagesRu: MessageCatalogue = {
   'orders.column.total': 'Сумма',
   'orders.column.fee': 'Доставка',
   'orders.column.payment': 'Оплата',
+  'orders.column.courier': 'Курьер',
   'orders.column.status': 'Статус',
   'orders.column.actions': 'Действия',
 
@@ -205,6 +206,7 @@ export const messagesRu: MessageCatalogue = {
   'orders.action.cancel': 'Отменить',
   'orders.action.complete': 'Завершить',
   'orders.action.amend': 'Изменить',
+  'orders.action.assignCourier': 'Назначить курьера',
   'orders.action.advance.PREPARING': 'На кухню',
   'orders.action.advance.READY': 'Готов',
   'orders.action.advance.FULFILLING': 'На доставку',

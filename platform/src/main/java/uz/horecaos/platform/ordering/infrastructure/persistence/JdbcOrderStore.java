@@ -1127,7 +1127,8 @@ public class JdbcOrderStore {
                 .param("beforeCreatedAt", utcOrNull(beforeCreatedAt))
                 .param("beforeId", beforeId == null ? null : beforeId.toString())
                 .param("limit", limit)
-                .query((row, number) -> new OrderBoardRow(mapOrder(row, number), row.getString("process_attention")))
+                .query((row, number) ->
+                        new OrderBoardRow(mapOrder(row, number), row.getString("process_attention"), null))
                 .list();
     }
 
@@ -2195,8 +2196,24 @@ public class JdbcOrderStore {
      *                         will be retried, null when neither. The worse of
      *                         the two wins, decided here rather than by whoever
      *                         renders it
+     * @param courierId        the in-house courier carrying this order's active
+     *                         shipment, or null for an order with none (gap map
+     *                         row 1.1). Always null as this class constructs the
+     *                         row — {@code fulfillment.shipments} is not this
+     *                         store's to join — and filled in afterward by
+     *                         {@link uz.horecaos.platform.ordering.application.OrderQueryService#forLocation}
+     *                         through {@link uz.horecaos.platform.fulfillment.api.ActiveCourierAssignmentsPort}
      */
-    public record OrderBoardRow(OrderRow order, @Nullable String processAttention) {}
+    public record OrderBoardRow(
+            OrderRow order,
+            @Nullable String processAttention,
+            @Nullable UUID courierId) {
+
+        /** {@link #courierId} filled in, once the caller has resolved it through the port. */
+        public OrderBoardRow withCourierId(@Nullable UUID resolvedCourierId) {
+            return new OrderBoardRow(order, processAttention, resolvedCourierId);
+        }
+    }
 
     /**
      * The order board's filter set (ADR 0102, orders.md §2.4).

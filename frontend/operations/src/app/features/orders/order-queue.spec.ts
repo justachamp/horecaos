@@ -7,6 +7,7 @@ import { from, of, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClient } from '../../core/api/api-client';
+import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { CurrentTenant } from '../../core/auth/current-tenant';
 import { SessionCapabilities } from '../../core/auth/session-capabilities';
@@ -683,6 +684,31 @@ describe('OrderQueue: row actions render exactly from actions[] (§2.9, §4.2)',
     // `queryParamsHandling: 'preserve'` (order-queue.ts's own `openOrder`):
     // the tab the operator was on survives the round trip to the order and
     // back, the same as every other row-open path.
+    expect(TestBed.inject(Location).path()).toBe('/orders/order-1?tab=preparing');
+  });
+
+  it('ASSIGN_COURIER opens the order rather than a picker of its own — the control lives on the detail pane (gap map 1.1e)', async () => {
+    configureWithActions(
+      [
+        order({
+          orderId: 'order-1',
+          status: 'CONFIRMED',
+          fulfillmentMode: 'DELIVERY',
+          actions: [{ action: 'ASSIGN_COURIER' }],
+        }),
+      ],
+      {},
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+
+    (
+      harness.routeNativeElement!.querySelector(
+        '[data-testid="order-row-action-ASSIGN_COURIER"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
     expect(TestBed.inject(Location).path()).toBe('/orders/order-1?tab=preparing');
   });
 
@@ -2332,5 +2358,97 @@ describe('OrderQueue: COMPLETE row action (orders.md §4.6, row 1.1e)', () => {
     // recently clicked — not order-A, whose superseded fetch merely
     // resolved later.
     expect(complete).toHaveBeenCalledWith(FAKE_SCOPE, 'order-B', 6, 'reason-b');
+  });
+});
+
+/**
+ * Gap map row 1.1: the Курьер column resolves `courierId` against the
+ * roster the toolbar's own filter already fetches. `CouriersApi` is
+ * overridden directly here rather than through {@link configureWithActions}'s
+ * shared `ApiClient.get` stub, which answers the board fetch — the same
+ * separation {@link configureForBulk}'s own doc gives for `OrderBulkActionsApi`.
+ */
+describe('OrderQueue: the Курьер column resolves courierId against the roster (gap map 1.1)', () => {
+  const ROSTER: readonly RosterEntryResponse[] = [
+    {
+      courierId: 'courier-1',
+      displayReference: 'К-042',
+      status: 'ACTIVE',
+      courierTypeId: 'type-1',
+      courierTypeName: 'Bike',
+      vehicleClass: 'BIKE',
+      activeAssignments: 1,
+      concurrencyCeiling: 3,
+    },
+  ];
+
+  function configureWithCourier(
+    orders: readonly OrderSummaryResponse[],
+    roster: ReturnType<typeof vi.fn>,
+  ): void {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: 'orders', component: OrderQueue }]),
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal(FAKE_SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        { provide: ApiClient, useValue: { get: ordersResponse(orders) } },
+        { provide: OrderCounts, useValue: { forOrders: () => Promise.resolve(zeroTabCounts()) } },
+        { provide: RejectReasonsApi, useValue: stubRejectReasons() },
+        {
+          provide: LatenessPolicyApi,
+          useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+        },
+        { provide: CouriersApi, useValue: { roster } },
+      ],
+    });
+    TestBed.inject(I18n).setLocale('en');
+  }
+
+  it('renders a dash for an order with no courier assigned, without fetching the roster', async () => {
+    const roster = vi.fn().mockResolvedValue(ROSTER);
+    configureWithCourier([order({ orderId: 'order-1', fulfillmentMode: 'PICKUP' })], roster);
+    const harness = await RouterTestingHarness.create('/orders?tab=new');
+    await flushMicrotasks();
+
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="order-row-courier"]')?.textContent?.trim(),
+    ).toBe('—');
+    // Nothing on this page has a courierId, so there was nothing to resolve.
+    expect(roster).not.toHaveBeenCalled();
+  });
+
+  it('resolves an assigned courierId to its roster display reference', async () => {
+    const roster = vi.fn().mockResolvedValue(ROSTER);
+    configureWithCourier(
+      [order({ orderId: 'order-1', fulfillmentMode: 'DELIVERY', courierId: 'courier-1' })],
+      roster,
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=new');
+    await flushMicrotasks();
+
+    expect(roster).toHaveBeenCalledWith(FAKE_SCOPE.tenantId);
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="order-row-courier"]')?.textContent?.trim(),
+    ).toBe('К-042');
+  });
+
+  it('falls back to the raw courierId when the roster has no matching entry', async () => {
+    const roster = vi.fn().mockResolvedValue([]);
+    configureWithCourier(
+      [order({ orderId: 'order-1', fulfillmentMode: 'DELIVERY', courierId: 'courier-unknown' })],
+      roster,
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=new');
+    await flushMicrotasks();
+
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="order-row-courier"]')?.textContent?.trim(),
+    ).toBe('courier-unknown');
   });
 });

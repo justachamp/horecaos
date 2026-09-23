@@ -274,6 +274,7 @@
             <th class="order-queue__num-col">{{ 'orders.column.total' | t }}</th>
             <th class="order-queue__num-col">{{ 'orders.column.fee' | t }}</th>
             <th>{{ 'orders.column.payment' | t }}</th>
+            <th>{{ 'orders.column.courier' | t }}</th>
             <th>{{ 'orders.column.status' | t }}</th>
             <th class="order-queue__actions-col">
               <span class="q-visually-hidden">{{ 'orders.column.actions' | t }}</span>
@@ -329,6 +330,7 @@
                 {{ formatFee(row.order) }}
               </td>
               <td data-testid="order-row-payment-status">{{ paymentStatusLabel(row.order) }}</td>
+              <td data-testid="order-row-courier">{{ courierLabel(row.order) }}</td>
               <td>
                 <!-- Status and lateness in one object rather than two visual
                      systems on opposite sides of the row (ADR 0101, X.15). The

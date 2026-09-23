@@ -198,13 +198,14 @@ interface RowDialogState {
  * `OrderBulkActionService`'s own doc says changes nothing at all).
  *
  * **Columns, reduced to the wire.** `OrderSummaryResponse` — see
- * `order-summary.ts` — is short of §2.5's default set: no branch, no
- * customer, no line summary, no payment projection, no courier. What renders
- * here is a selection checkbox, severity rail, order number + severity
- * caption, time, type/channel, total, and status. `Филиал` is additionally
- * out of place for a different reason: this endpoint is already scoped to
- * one location, which is the spec's own condition for auto-hiding that
- * column.
+ * `order-summary.ts` — is still short of §2.5's default set: no branch, no
+ * customer, no line summary. What renders here is a selection checkbox,
+ * severity rail, order number + severity caption, time, type/channel, total,
+ * delivery fee, payment status, courier (gap map row 1.1: resolved against
+ * the same roster the toolbar's own Курьер filter fetches), and status.
+ * `Филиал` is additionally out of place for a different reason: this
+ * endpoint is already scoped to one location, which is the spec's own
+ * condition for auto-hiding that column.
  */
 @Component({
   selector: 'q-order-queue',
@@ -295,7 +296,14 @@ export class OrderQueue implements OnInit {
   protected readonly channelOptions = signal<readonly string[]>([]);
   private readonly observedChannelCodes = new Set<string>();
 
-  /** §2.4's Курьер: fetched once, lazily, on first interaction with the control — see {@link ensureCourierRosterLoaded}. */
+  /**
+   * §2.4's Курьер filter, and gap map row 1.1's Курьер column: fetched once
+   * per location, lazily — on first focus of the filter control (see {@link
+   * ensureCourierRosterLoaded}), or as soon as {@link refresh} sees a row
+   * that actually needs one to resolve (see {@link refresh}'s own call to
+   * {@link ensureCourierRosterLoaded}) — never at start-up unconditionally,
+   * for a location whose board never shows an assigned courier at all.
+   */
   protected readonly courierRoster = signal<readonly RosterEntryResponse[]>([]);
   private courierRosterRequested = false;
 
@@ -476,6 +484,14 @@ export class OrderQueue implements OnInit {
       this.denied.set(false);
       this.serviceStatus.set(deriveServiceStatus(orders, now, this.latenessPolicy), now);
       this.observeChannelCodes(orders);
+      // Gap map row 1.1: the Курьер column needs the roster to resolve a
+      // courierId this page actually carries — fetched here rather than
+      // unconditionally at start-up, so a location whose board never shows
+      // an assigned courier never spends the request. Idempotent against
+      // the filter control's own first-focus fetch (courierRosterRequested).
+      if (orders.some((candidate) => candidate.courierId)) {
+        this.ensureCourierRosterLoaded();
+      }
       this.selectedIds.update((current) =>
         pruneSelection(current, new Set(orders.map((order) => order.orderId))),
       );
@@ -647,6 +663,23 @@ export class OrderQueue implements OnInit {
   /** §2.5 column 10 (Оплата). */
   protected paymentStatusLabel(order: OrderSummaryResponse): string {
     return paymentStatusProjectionLabel(order.paymentStatusProjection, (key) => this.i18n.t(key));
+  }
+
+  /**
+   * §2.5 column 12 (Курьер), gap map row 1.1: `courierId` resolved against
+   * the roster this page already fetches for the toolbar's own filter —
+   * exactly the client-side join `order-detail-pane.ts`'s
+   * `courierDisplayReference` performs, and `formatFee`'s own dash for "no
+   * value" rather than an empty cell.
+   */
+  protected courierLabel(order: OrderSummaryResponse): string {
+    if (!order.courierId) {
+      return '—';
+    }
+    return (
+      this.courierRoster().find((courier) => courier.courierId === order.courierId)?.displayReference ??
+      order.courierId
+    );
   }
 
   protected formatUpdatedAt(): string | null {
@@ -1234,6 +1267,19 @@ export class OrderQueue implements OnInit {
         // using the simpler entry. Opening the order is a real, working
         // action rather than the silent no-op the `default` case below would
         // otherwise give a code `ORDER_AMEND` already reaches five roles for.
+        this.openOrder(order.orderId);
+        return;
+      case 'ASSIGN_COURIER':
+        // Gap map row 1.1e: the same treatment AMEND already gets, for the
+        // same reason. The assign/unassign control (§1.2e) already lives on
+        // the order detail pane, fetches the plan it needs
+        // (`OrderDeliveryApi.delivery`) and posts to the existing
+        // `DispatchController` manual-assignment endpoint — duplicating a
+        // second picker here would be a second implementation of the same
+        // compare-and-set to keep in sync, not a new capability. Opening the
+        // order wires this row action to that existing control rather than
+        // leaving `ASSIGN_COURIER` a declared-but-inert code the way it was
+        // before this wave.
         this.openOrder(order.orderId);
         return;
       default:
