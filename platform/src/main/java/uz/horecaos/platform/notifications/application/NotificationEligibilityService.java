@@ -206,7 +206,25 @@ public class NotificationEligibilityService {
                     .orElse(MessageLocale.FALLBACK);
         }
 
-        var resolution = templates.resolve(row.tenantId(), row.brandId(), row.templateKey(), channel, locale);
+        // Gap-map row 10.9a: a message about an order can pick the variant
+        // keyed to how it leaves the location and which channel it arrived
+        // on. A narrow, second read rather than widening `summary` above —
+        // see OrderDirectory.notificationContext's own doc for why — and
+        // read only when this message is actually about an order: an
+        // operations-audience alert or a pre-resolved campaign send has
+        // neither dimension to offer, and resolve() below already treats
+        // null as "match the wildcard row only", never as "match anything".
+        OrderDirectory.NotificationContext notificationContext = summary == null
+                ? null
+                : orders.notificationContext(row.tenantId(), row.subjectId()).orElse(null);
+        var resolution = templates.resolve(
+                row.tenantId(),
+                row.brandId(),
+                row.templateKey(),
+                channel,
+                locale,
+                notificationContext == null ? null : notificationContext.fulfillmentMode(),
+                notificationContext == null ? null : notificationContext.channelSource());
         var template = resolution.template();
         var version = resolution.version();
         if (template == null || version == null) {

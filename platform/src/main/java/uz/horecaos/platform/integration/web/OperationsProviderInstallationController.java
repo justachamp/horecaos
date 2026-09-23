@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.integration.provider.ProviderCapabilityReconciliationService;
@@ -86,6 +87,14 @@ public class OperationsProviderInstallationController {
     List<ProviderInstallationController.BindingView> bindings(
             @PathVariable UUID tenantId, @PathVariable UUID installationId) {
         return delegate.bindings(tenantId, installationId);
+    }
+
+    @GetMapping("/branches/effective-bindings")
+    @RequiresCapability(Capability.INTEGRATION_INSTALLATION_MANAGE)
+    @Operation(summary = "The effective installation per branch, per capability (gap-map row 10.8a)")
+    List<ProviderInstallationController.EffectiveBindingView> effectiveBindings(
+            @PathVariable UUID tenantId, @RequestParam UUID brandId) {
+        return delegate.effectiveBindings(tenantId, brandId);
     }
 
     @PostMapping

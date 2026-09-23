@@ -6,6 +6,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
 
 /**
  * The small read another module needs about an order (ADR 0019, consumed by
@@ -31,6 +33,29 @@ public interface OrderDirectory {
      *         same answer as "it does not exist" and deliberately so
      */
     Optional<OrderSummary> summary(UUID tenantId, UUID orderId);
+
+    /**
+     * The two dimensions a notification template variant resolves by
+     * (ADR 0036, gap-map row {@code 10.9a}): how the order leaves the
+     * location, and which channel it arrived on. A third, narrower read
+     * alongside {@link #summary} rather than two more fields widening that
+     * record — the same reasoning {@link #ordersNearingApprovalDeadline} and
+     * {@link #recentForCustomer} already give for staying out of it: a
+     * consumer that only needs to pick a template variant has no business
+     * reading money, lines or notes, and widening {@code OrderSummary} would
+     * touch every one of its existing constructors instead of adding one.
+     *
+     * <p>Defaulted to empty for the same reason those two are: the several
+     * hand-written {@code OrderDirectory} test doubles that predate this row
+     * need no mechanical implementation of a read they never exercise.
+     *
+     * @return empty when no order of that id belongs to this tenant
+     */
+    default Optional<NotificationContext> notificationContext(UUID tenantId, UUID orderId) {
+        return Optional.empty();
+    }
+
+    record NotificationContext(FulfillmentMode fulfillmentMode, SalesChannelSystemType channelSource) {}
 
     /**
      * Orders whose approval deadline falls inside {@code (now, now + within]} —
