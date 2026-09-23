@@ -302,10 +302,23 @@ public class JdbcReportingStore {
                        -- the is_preorder subquery this class's own header
                        -- already documents as an accepted exception. Null for
                        -- PICKUP/DINE_IN, which never has a plan.
+                       --
+                       -- `confirmed_at` alone never actually breaks a tie: it
+                       -- is the order's own confirmation instant, snapshotted
+                       -- onto every plan for that order, so two plans for the
+                       -- same order always share it. `created_at DESC` is the
+                       -- real tiebreak, matching what the comment above always
+                       -- claimed ("most recently created") and the same
+                       -- deterministic-secondary-key discipline
+                       -- JdbcOrderCrmLogStore's own courier lookup uses
+                       -- (`assigned_at DESC NULLS LAST, created_at DESC`) for
+                       -- the identical reason: an untied ORDER BY ... LIMIT 1
+                       -- is whatever order Postgres's plan happens to return
+                       -- tied rows in, not a promise about which one you get.
                        (SELECT dp.distance_meters
                           FROM fulfillment.delivery_plans dp
                          WHERE dp.tenant_id = o.tenant_id AND dp.order_id = o.id
-                         ORDER BY dp.confirmed_at DESC
+                         ORDER BY dp.confirmed_at DESC, dp.created_at DESC
                          LIMIT 1) AS delivery_distance_meters
                   FROM ordering.orders o
                   LEFT JOIN ordering.order_outcomes oo
