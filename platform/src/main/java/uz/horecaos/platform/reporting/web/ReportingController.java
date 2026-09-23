@@ -245,6 +245,24 @@ public class ReportingController {
                 new MedianResponse(result.medianSeconds(), ProvenanceResponse.of(result.provenance())));
     }
 
+    @GetMapping("/delivery-distance")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "Mean resolved delivery distance for the overview's distance tile (7.1)",
+            description = "delivery_distance.average.v1 — the mean of reporting.fact_order."
+                    + "delivery_distance_meters over delivery orders closed in range. Null when "
+                    + "nothing in range resolved a distance, which is not a zero-metre delivery.")
+    public ResponseEntity<DistanceResponse> deliveryDistance(
+            @PathVariable UUID tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId) {
+
+        var result = queries.deliveryDistance(tenantId, from, to, orEmpty(locationId));
+        return ResponseEntity.ok(
+                new DistanceResponse(result.averageMeters(), ProvenanceResponse.of(result.provenance())));
+    }
+
     @GetMapping("/cancellation-reasons")
     @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
     @Operation(
@@ -760,6 +778,9 @@ public class ReportingController {
             List<BucketResponse> buckets, List<LocationMedianResponse> medians, ProvenanceResponse provenance) {}
 
     public record MedianResponse(@Nullable Integer medianSeconds, ProvenanceResponse provenance) {}
+
+    /** Wave 9 w4-reports-distance-crm (7.1): {@code delivery_distance.average.v1} — see {@link #deliveryDistance}. */
+    public record DistanceResponse(@Nullable Integer averageMeters, ProvenanceResponse provenance) {}
 
     /** Wave T06 (7.3): one branch's median preparation time — see {@link #preparationTimeByLocation}. */
     public record LocationMedianResponse(

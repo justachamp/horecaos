@@ -78,6 +78,12 @@ public class ReportQueryService {
                             metric.id().code().startsWith("payment_mix")
                                     ? "GET .../reporting/payment-mix"
                                     : "GET .../reporting/sla-buckets");
+                // Wave 9 w4-reports-distance-crm (7.1): delivery_distance.average.v1
+                // is sourced from fact_order directly, the same physical-read
+                // reasoning MEDIAN's own case above already gives.
+                case AVERAGE ->
+                    throw new ReportingRefusals.NonScalarMetricException(
+                            metric.id().code(), "GET .../reporting/delivery-distance");
                 default -> {}
             }
         }
@@ -623,6 +629,25 @@ public class ReportQueryService {
         return new MedianResult(
                 median,
                 provenance(tenantId, List.of(MetricRegistry.require(metricCode)), businessDays.boundaryFor(tenantId)));
+    }
+
+    /**
+     * Wave 9 w4-reports-distance-crm (7.1): the overview's distance KPI tile —
+     * {@code delivery_distance.average.v1}. Its own endpoint on the same
+     * footing as {@link #fulfilmentTime}: a mean over {@code fact_order}
+     * directly, which the typed {@link #run} pipeline (pre-aggregated {@code
+     * agg_branch_day}) cannot answer.
+     */
+    @Transactional(readOnly = true)
+    public DistanceResult deliveryDistance(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        validateRange(from, to);
+        Integer averageMeters = store.averageDeliveryDistanceMeters(tenantId, from, to, locationIds);
+        return new DistanceResult(
+                averageMeters,
+                provenance(
+                        tenantId,
+                        List.of(MetricRegistry.require("delivery_distance.average.v1")),
+                        businessDays.boundaryFor(tenantId)));
     }
 
     /** Wave P27 (7.1a): resolves a cancellation reason code to its tenant-chosen label. */
@@ -1372,6 +1397,9 @@ public class ReportQueryService {
     }
 
     public record MedianResult(@Nullable Integer medianSeconds, Provenance provenance) {}
+
+    /** Wave 9 w4-reports-distance-crm (7.1): {@code delivery_distance.average.v1} — see {@link #deliveryDistance}. */
+    public record DistanceResult(@Nullable Integer averageMeters, Provenance provenance) {}
 
     /** Wave T06 (7.3): every branch's median preparation time from one query — see {@link #preparationTimeByLocation}. */
     public record LocationMedianResult(List<JdbcReportingStore.LocationMedianRow> rows, Provenance provenance) {}

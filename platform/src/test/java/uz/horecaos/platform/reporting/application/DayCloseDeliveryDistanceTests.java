@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
@@ -49,6 +50,8 @@ class DayCloseDeliveryDistanceTests {
     private DayCloseService close;
     private UUID branch;
     private UUID courierId;
+    private UUID channelId;
+    private UUID publicationId;
 
     @BeforeAll
     static void startDatabase() {
@@ -92,6 +95,44 @@ class DayCloseDeliveryDistanceTests {
 
         seedTenancy();
         courierId = seedCourier();
+        seedCatalog();
+    }
+
+    /**
+     * The channel and published catalog every {@link #seedOrder} call reuses.
+     * Seeded once per test, not once per order: {@code sales_channels.code}
+     * and {@code catalogs.code} are unique per tenant, and a test that seeds
+     * several orders (the averaging test below) would otherwise collide on
+     * its second call.
+     */
+    private void seedCatalog() {
+        channelId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name, status)
+                VALUES (:id, :tenantId, 'STOREFRONT', 'WEB', 'Storefront', 'ACTIVE')
+                """).param("id", channelId).param("tenantId", TENANT).update();
+
+        UUID catalogId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
+                VALUES (:id, :tenantId, :brandId, 'MAIN', 'Main menu', 'ACTIVE')
+                """)
+                .param("id", catalogId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
+
+        publicationId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel, status,
+                    content_hash, activated_at)
+                VALUES (:id, :tenantId, :brandId, :catalogId, 'STOREFRONT', 'PUBLISHED', 'hash', now())
+                """)
+                .param("id", publicationId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .update();
     }
 
     /**
@@ -213,6 +254,35 @@ class DayCloseDeliveryDistanceTests {
         assertThat(distance).isNull();
     }
 
+    @Test
+    @DisplayName("averageDeliveryDistanceMeters means only delivery orders that resolved a distance")
+    void averageDeliveryDistanceExcludesPickupAndUnresolvedOrders() {
+        UUID delivery1 = seedOrder("DELIVERY");
+        UUID plan1 = UUID.randomUUID();
+        seedDeliveryPlan(delivery1, plan1, 4_000, "ROUTING");
+        seedShipment(delivery1, plan1);
+
+        UUID delivery2 = seedOrder("DELIVERY");
+        UUID plan2 = UUID.randomUUID();
+        seedDeliveryPlan(delivery2, plan2, 6_000, "ROUTING");
+        seedShipment(delivery2, plan2);
+
+        // Never counted: a pickup order (no plan at all) and a delivery order
+        // whose plan resolved no distance. If either leaked in, the mean below
+        // would not land on the exact midpoint of the two resolved deliveries.
+        seedOrder("PICKUP");
+        UUID unresolvedDelivery = seedOrder("DELIVERY");
+        UUID unresolvedPlan = UUID.randomUUID();
+        seedDeliveryPlan(unresolvedDelivery, unresolvedPlan, null, null);
+        seedShipment(unresolvedDelivery, unresolvedPlan);
+
+        close.close(TENANT, DAY);
+
+        Integer average = store.averageDeliveryDistanceMeters(TENANT, DAY, DAY, List.of());
+
+        assertThat(average).isEqualTo(5_000);
+    }
+
     // --------------------------------------------------------------- fixture
 
     private void seedTenancy() {
@@ -289,32 +359,7 @@ class DayCloseDeliveryDistanceTests {
         UUID orderId = UUID.randomUUID();
         UUID quoteId = UUID.randomUUID();
         UUID cartId = UUID.randomUUID();
-        UUID catalogId = UUID.randomUUID();
-        UUID publicationId = UUID.randomUUID();
-        UUID channelId = UUID.randomUUID();
 
-        jdbc.sql("""
-                INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name, status)
-                VALUES (:id, :tenantId, 'STOREFRONT', 'WEB', 'Storefront', 'ACTIVE')
-                """).param("id", channelId).param("tenantId", TENANT).update();
-        jdbc.sql("""
-                INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
-                VALUES (:id, :tenantId, :brandId, 'MAIN', 'Main menu', 'ACTIVE')
-                """)
-                .param("id", catalogId)
-                .param("tenantId", TENANT)
-                .param("brandId", BRAND)
-                .update();
-        jdbc.sql("""
-                INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel, status,
-                    content_hash, activated_at)
-                VALUES (:id, :tenantId, :brandId, :catalogId, 'STOREFRONT', 'PUBLISHED', 'hash', now())
-                """)
-                .param("id", publicationId)
-                .param("tenantId", TENANT)
-                .param("brandId", BRAND)
-                .param("catalogId", catalogId)
-                .update();
         jdbc.sql("""
                 INSERT INTO pricing.quotes (id, tenant_id, brand_id, location_id, currency,
                     catalog_publication_id, calculation_version, context_hash, subtotal_minor, tax_minor,
