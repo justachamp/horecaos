@@ -1880,6 +1880,8 @@ export const messagesRu: MessageCatalogue = {
   'catalog.menuSets.bindings.channel': 'Канал',
   'catalog.menuSets.bindings.allChannels': 'Все каналы (по умолчанию)',
   'catalog.menuSets.bindings.bind': 'Привязать',
+  'catalog.menuSets.bindings.notActiveWarning':
+    'Это меню ещё не ACTIVE, поэтому его нельзя привязать к филиалу. Сначала активируйте его.',
   'catalog.menuSets.create.title': 'Новое меню',
   'catalog.menuSets.create.name': 'Название',
   'catalog.menuSets.copy.title': 'Копировать «{name}»',

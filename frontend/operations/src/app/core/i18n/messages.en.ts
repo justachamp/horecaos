@@ -1906,6 +1906,8 @@ export const messagesEn = {
   'catalog.menuSets.bindings.channel': 'Channel',
   'catalog.menuSets.bindings.allChannels': 'All channels (default)',
   'catalog.menuSets.bindings.bind': 'Bind',
+  'catalog.menuSets.bindings.notActiveWarning':
+    'This menu is not ACTIVE yet, so it cannot be bound to a branch. Activate it first.',
   'catalog.menuSets.create.title': 'New menu',
   'catalog.menuSets.create.name': 'Name',
   'catalog.menuSets.copy.title': 'Copy "{name}"',

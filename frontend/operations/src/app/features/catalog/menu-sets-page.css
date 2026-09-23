@@ -36,6 +36,10 @@
   color: var(--q-danger, #c0392b);
 }
 
+.menu-sets__warning {
+  color: var(--q-warning, #b8860b);
+}
+
 .menu-sets__layout {
   display: grid;
   grid-template-columns: minmax(280px, 420px) 1fr;

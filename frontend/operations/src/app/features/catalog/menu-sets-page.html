@@ -239,12 +239,17 @@
               <button
                 type="button"
                 class="menu-sets__bind-submit"
-                [disabled]="binding() || !bindLocationId()"
+                [disabled]="binding() || !bindLocationId() || menu.status !== 'ACTIVE'"
                 (click)="submitBind()"
                 data-testid="menu-sets-bind-submit"
               >
                 {{ 'catalog.menuSets.bindings.bind' | t }}
               </button>
+              @if (menu.status !== 'ACTIVE') {
+                <p class="q-caption menu-sets__warning" data-testid="menu-sets-bind-not-active">
+                  {{ 'catalog.menuSets.bindings.notActiveWarning' | t }}
+                </p>
+              }
               @if (bindError()) {
                 <p class="q-caption menu-sets__error">{{ bindError() }}</p>
               }

@@ -1895,6 +1895,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.menuSets.bindings.channel': 'Kanal',
   'catalog.menuSets.bindings.allChannels': 'Barcha kanallar (asosiy)',
   'catalog.menuSets.bindings.bind': 'Bogʻlash',
+  'catalog.menuSets.bindings.notActiveWarning':
+    'Bu menyu hali ACTIVE emas, shuning uchun uni filialga bogʻlab boʻlmaydi. Avval uni faollashtiring.',
   'catalog.menuSets.create.title': 'Yangi menyu',
   'catalog.menuSets.create.name': 'Nomi',
   'catalog.menuSets.copy.title': '"{name}" nusxasi',
