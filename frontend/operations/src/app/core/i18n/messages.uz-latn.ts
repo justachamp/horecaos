@@ -2348,6 +2348,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.taxProfile.submit': 'Saqlash',
   'catalog.taxProfile.saving': 'Saqlanmoqda…',
   'catalog.taxProfile.saved': 'Saqlandi: {code} — {rate}% {mode}',
+  'catalog.taxProfile.noneYet': 'Hech bir yurisdiksiya uchun QQS stavkasi hali belgilanmagan.',
+  'catalog.taxProfile.existingRow': '{code} — {rate}% {mode}',
+  'catalog.taxProfile.inForceLoading': 'Joriy stavka yuklanmoqda…',
+  'catalog.taxProfile.inForce': 'Hozir amalda: {code} — {rate}% {mode}',
+  'catalog.taxProfile.inForceNone': '{code} uchun stavka hali belgilanmagan.',
 
   'catalog.priceBulk.title': 'Narxlarni ommaviy oʻzgartirish',
   'catalog.priceBulk.loading': 'Tanlov yuklanmoqda',

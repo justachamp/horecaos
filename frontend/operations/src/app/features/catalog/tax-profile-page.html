@@ -13,6 +13,30 @@
       </div>
     }
 
+    @if (existingProfiles().length > 0) {
+      <ul class="tax-profile__existing" data-testid="tax-profile-existing-list">
+        @for (profile of existingProfiles(); track profile.jurisdictionCode) {
+          <li>
+            <button
+              type="button"
+              class="tax-profile__existing-item"
+              (click)="selectJurisdiction(profile.jurisdictionCode)"
+              [attr.data-testid]="'tax-profile-existing-' + profile.jurisdictionCode"
+            >
+              {{
+                'catalog.taxProfile.existingRow'
+                  | t: { code: profile.jurisdictionCode, mode: profile.mode, rate: profile.rateBasisPoints / 100 }
+              }}
+            </button>
+          </li>
+        }
+      </ul>
+    } @else if (!listLoading()) {
+      <p class="q-body-sm tax-profile__none" data-testid="tax-profile-none-yet">
+        {{ 'catalog.taxProfile.noneYet' | t }}
+      </p>
+    }
+
     <form class="tax-profile__form" (submit)="$event.preventDefault(); submit()">
       <label class="tax-profile__field">
         {{ 'catalog.taxProfile.jurisdictionCode' | t }}
@@ -21,9 +45,27 @@
           maxlength="16"
           [value]="jurisdictionCode()"
           (input)="jurisdictionCode.set($any($event.target).value)"
+          (blur)="loadInForce()"
           data-testid="tax-profile-jurisdiction"
         />
       </label>
+
+      @if (inForceLoading()) {
+        <p class="q-body-sm tax-profile__in-force" data-testid="tax-profile-in-force-loading">
+          {{ 'catalog.taxProfile.inForceLoading' | t }}
+        </p>
+      } @else if (inForce(); as profile) {
+        <p class="q-body-sm tax-profile__in-force" data-testid="tax-profile-in-force">
+          {{
+            'catalog.taxProfile.inForce'
+              | t: { code: profile.jurisdictionCode, mode: profile.mode, rate: profile.rateBasisPoints / 100 }
+          }}
+        </p>
+      } @else if (inForce() === null) {
+        <p class="q-body-sm tax-profile__in-force" data-testid="tax-profile-in-force-none">
+          {{ 'catalog.taxProfile.inForceNone' | t: { code: jurisdictionCode().trim().toUpperCase() } }}
+        </p>
+      }
 
       <div class="tax-profile__mode" role="radiogroup">
         <button

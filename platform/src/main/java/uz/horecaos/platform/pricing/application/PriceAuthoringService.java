@@ -2,6 +2,7 @@ package uz.horecaos.platform.pricing.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -344,6 +345,19 @@ public class PriceAuthoringService {
     @Transactional(readOnly = true)
     public Optional<TaxProfile> taxProfile(UUID tenantId, UUID brandId, String jurisdictionCode) {
         return store.findTaxProfileHeader(tenantId, brandId, jurisdictionCode).map(TaxProfile::of);
+    }
+
+    /**
+     * Every jurisdiction this brand currently has a VAT rate in force for
+     * (gap map row {@code 4.8a}) — until this existed {@link #setTaxProfile}
+     * was write-only and an operator could overwrite a jurisdiction's rate
+     * without ever seeing what was already in force.
+     */
+    @Transactional(readOnly = true)
+    public List<TaxProfile> taxProfiles(UUID tenantId, UUID brandId) {
+        return store.taxProfilesForBrand(tenantId, brandId).stream()
+                .map(TaxProfile::of)
+                .toList();
     }
 
     /**

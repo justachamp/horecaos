@@ -2328,6 +2328,11 @@ export const messagesRu: MessageCatalogue = {
   'catalog.taxProfile.submit': 'Сохранить',
   'catalog.taxProfile.saving': 'Сохранение…',
   'catalog.taxProfile.saved': 'Сохранено: {code} — {rate}% {mode}',
+  'catalog.taxProfile.noneYet': 'Для юрисдикций ещё не задана ставка НДС.',
+  'catalog.taxProfile.existingRow': '{code} — {rate}% {mode}',
+  'catalog.taxProfile.inForceLoading': 'Загрузка текущей ставки…',
+  'catalog.taxProfile.inForce': 'Сейчас действует: {code} — {rate}% {mode}',
+  'catalog.taxProfile.inForceNone': 'Для {code} ставка ещё не задана.',
 
   'catalog.priceBulk.title': 'Массовое изменение цен',
   'catalog.priceBulk.loading': 'Загрузка выборки',

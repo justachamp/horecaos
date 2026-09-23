@@ -2355,6 +2355,11 @@ export const messagesEn = {
   'catalog.taxProfile.submit': 'Save',
   'catalog.taxProfile.saving': 'Saving…',
   'catalog.taxProfile.saved': 'Saved: {code} is {rate}% {mode}',
+  'catalog.taxProfile.noneYet': 'No jurisdiction has a VAT rate set yet.',
+  'catalog.taxProfile.existingRow': '{code} — {rate}% {mode}',
+  'catalog.taxProfile.inForceLoading': 'Loading the current rate…',
+  'catalog.taxProfile.inForce': 'Currently in force: {code} is {rate}% {mode}',
+  'catalog.taxProfile.inForceNone': 'No rate is set yet for {code}.',
 
   'catalog.priceBulk.title': 'Bulk price change',
   'catalog.priceBulk.loading': 'Loading the selection',
