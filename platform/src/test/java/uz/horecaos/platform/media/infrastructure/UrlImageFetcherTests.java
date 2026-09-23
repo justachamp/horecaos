@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -89,6 +91,102 @@ class UrlImageFetcherTests {
         UrlImageFetcher fetcher = new UrlImageFetcher();
 
         assertRefusedFast(fetcher, URI.create("http://169.254.169.254/computeMetadata/v1/"));
+    }
+
+    @Test
+    void refusesAnIPv6UniqueLocalAddress() throws UnknownHostException {
+        // RFC 4193 fc00::/7 -- IPv6's own analogue of RFC1918 private space,
+        // and what AWS's IPv6 IMDSv2 endpoint (fd00:ec2::254) uses.
+        // InetAddress#isSiteLocalAddress() only recognizes the deprecated,
+        // narrower fec0::/10 range and returns false for both halves of
+        // fc00::/7 -- verified directly below against the live JDK, not
+        // merely asserted -- so it is not covered by the check that already
+        // stops 10.0.0.0/8. Built from raw bytes rather than a URI/fetch
+        // round trip so the assertion is not at the mercy of whether this
+        // sandbox happens to have (or lack) a route to an IPv6 address --
+        // only the address-classification logic itself is under test.
+        UrlImageFetcher fetcher = new UrlImageFetcher();
+
+        InetAddress uniqueLocal =
+                InetAddress.getByAddress(new byte[] {(byte) 0xfc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1});
+        InetAddress awsIpv6Imds = InetAddress.getByAddress(
+                new byte[] {(byte) 0xfd, 0, (byte) 0xec, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0x54});
+
+        assertThat(uniqueLocal.isSiteLocalAddress())
+                .as("the JDK's own site-local check does not recognize fc00::/7")
+                .isFalse();
+        assertThat(fetcher.isAllowed(uniqueLocal)).as("fc00::1 must be refused").isFalse();
+        assertThat(fetcher.isAllowed(awsIpv6Imds))
+                .as("AWS's IPv6 IMDS address fd00:ec2::254 must be refused")
+                .isFalse();
+    }
+
+    @Test
+    void refusesAnIPv4MappedIPv6MetadataAddress() throws UnknownHostException {
+        // ::ffff:169.254.169.254 -- the IPv4-mapped IPv6 form of the cloud
+        // metadata address, built byte-for-byte rather than parsed from text
+        // so the assertion holds regardless of whether InetAddress.getByName
+        // itself already normalizes that literal to a plain Inet4Address on
+        // this JDK.
+        UrlImageFetcher fetcher = new UrlImageFetcher();
+
+        byte[] mapped = new byte[16];
+        mapped[10] = (byte) 0xff;
+        mapped[11] = (byte) 0xff;
+        mapped[12] = (byte) 169;
+        mapped[13] = (byte) 254;
+        mapped[14] = (byte) 169;
+        mapped[15] = (byte) 254;
+        InetAddress ipv4MappedMetadata = InetAddress.getByAddress(mapped);
+
+        assertThat(fetcher.isAllowed(ipv4MappedMetadata))
+                .as("the IPv4-mapped IPv6 form of 169.254.169.254 must be refused, same as the IPv4 address itself")
+                .isFalse();
+    }
+
+    @Test
+    void refusesAnIPv4MappedIPv6PrivateAddressEvenWhenNotRecognizedAsLinkLocalOrSiteLocal()
+            throws UnknownHostException {
+        // A guard against a narrower fix that only special-cases the
+        // metadata address: any embedded private/loopback IPv4 address must
+        // be refused once unwrapped, not just 169.254.169.254.
+        UrlImageFetcher loopbackAllowingFetcher = new UrlImageFetcher(true);
+        UrlImageFetcher fetcher = new UrlImageFetcher();
+
+        InetAddress mappedLoopback = ipv4Mapped(127, 0, 0, 1);
+        InetAddress mappedPrivate = ipv4Mapped(10, 0, 0, 5);
+
+        assertThat(fetcher.isAllowed(mappedLoopback))
+                .as("mapped loopback refused by default")
+                .isFalse();
+        assertThat(loopbackAllowingFetcher.isAllowed(mappedLoopback))
+                .as("mapped loopback allowed only under the test constructor, exactly like a plain IPv4 loopback")
+                .isTrue();
+        assertThat(fetcher.isAllowed(mappedPrivate))
+                .as("mapped private address refused")
+                .isFalse();
+    }
+
+    @Test
+    void allowsAnOrdinaryPublicIPv4AndIPv6Address() throws UnknownHostException {
+        UrlImageFetcher fetcher = new UrlImageFetcher();
+
+        assertThat(fetcher.isAllowed(InetAddress.getByAddress(new byte[] {8, 8, 8, 8})))
+                .isTrue();
+        assertThat(fetcher.isAllowed(InetAddress.getByAddress(
+                        new byte[] {0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x11, 0x11})))
+                .isTrue();
+    }
+
+    private static InetAddress ipv4Mapped(int a, int b, int c, int d) throws UnknownHostException {
+        byte[] mapped = new byte[16];
+        mapped[10] = (byte) 0xff;
+        mapped[11] = (byte) 0xff;
+        mapped[12] = (byte) a;
+        mapped[13] = (byte) b;
+        mapped[14] = (byte) c;
+        mapped[15] = (byte) d;
+        return InetAddress.getByAddress(mapped);
     }
 
     @Test

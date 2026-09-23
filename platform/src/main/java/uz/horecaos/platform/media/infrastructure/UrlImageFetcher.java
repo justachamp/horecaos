@@ -3,6 +3,7 @@ package uz.horecaos.platform.media.infrastructure;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -213,9 +214,15 @@ public class UrlImageFetcher {
      * Resolves {@code uri}'s host and rejects it unless every resolved
      * address is ordinarily routable on the public internet -- not loopback,
      * link-local (this range covers the cloud metadata endpoint,
-     * 169.254.169.254), site-local/private, wildcard, or multicast. A host
-     * that resolves to no address, or does not resolve at all, is rejected
-     * rather than treated as passing.
+     * 169.254.169.254), site-local/private, wildcard, multicast, or an IPv6
+     * unique-local address (RFC 4193, {@code fc00::/7} -- see {@link
+     * #isAllowed}). A host that resolves to no address, or does not resolve
+     * at all, is rejected rather than treated as passing. Resolve-then-check:
+     * every address {@code getAllByName} hands back for this hostname is
+     * checked, and the fetch is refused if even one of them is disallowed --
+     * a hostname is not required to resolve to only one address, and a
+     * multi-answer response naming both a public and a private address must
+     * not let the private one through.
      */
     private boolean isPubliclyRoutable(URI uri) {
         String host = uri.getHost();
@@ -232,19 +239,86 @@ public class UrlImageFetcher {
             return false;
         }
         for (InetAddress address : addresses) {
-            if (address.isLoopbackAddress()) {
-                if (!allowLoopbackForTests) {
-                    return false;
-                }
-                continue;
-            }
-            if (address.isLinkLocalAddress()
-                    || address.isSiteLocalAddress()
-                    || address.isAnyLocalAddress()
-                    || address.isMulticastAddress()) {
+            if (!isAllowed(address)) {
                 return false;
             }
         }
         return true;
+    }
+
+    /**
+     * True only for an address ordinarily routable on the public internet.
+     *
+     * <p>Split out from {@link #isPubliclyRoutable} so each resolved address
+     * -- including one recovered from an IPv4-mapped IPv6 wrapper below --
+     * goes through the identical set of checks, and so the classification
+     * itself is unit-testable against hand-built addresses without a live
+     * DNS resolution or socket connection standing between the test and the
+     * range it means to exercise.
+     */
+    boolean isAllowed(InetAddress address) {
+        if (address.isLoopbackAddress()) {
+            return allowLoopbackForTests;
+        }
+        if (isBlockedRange(address)) {
+            return false;
+        }
+        if (address instanceof Inet6Address v6) {
+            byte[] bytes = v6.getAddress();
+            if (isUniqueLocal(bytes)) {
+                // RFC 4193 fc00::/7 -- IPv6's own private-address space,
+                // which includes AWS's IPv6 IMDSv2 endpoint (fd00:ec2::254).
+                // InetAddress#isSiteLocalAddress() only recognizes the
+                // deprecated, narrower fec0::/10 range and returns false for
+                // this one, so it needs its own check.
+                return false;
+            }
+            Optional<InetAddress> embeddedIpv4 = embeddedIpv4(bytes);
+            if (embeddedIpv4.isPresent()) {
+                // Belt-and-suspenders: the JDK documents that an IPv4-mapped
+                // IPv6 literal (::ffff:a.b.c.d) is normalized to a plain
+                // Inet4Address by getByName/getAllByName, so this path is
+                // not known to be reachable today -- but that normalization
+                // is a documented convenience, not a contract this class
+                // should depend on for a security check, so a raw
+                // Inet6Address carrying an IPv4-mapped payload is unwrapped
+                // and re-checked against every IPv4 rule above (including
+                // loopback) rather than trusted as "not IPv4, so not
+                // private."
+                return isAllowed(embeddedIpv4.get());
+            }
+        }
+        return true;
+    }
+
+    private static boolean isBlockedRange(InetAddress address) {
+        return address.isLinkLocalAddress()
+                || address.isSiteLocalAddress()
+                || address.isAnyLocalAddress()
+                || address.isMulticastAddress();
+    }
+
+    /** RFC 4193: the two top bits of the first byte are {@code 1}, i.e. the byte is {@code 0xFC} or {@code 0xFD}. */
+    private static boolean isUniqueLocal(byte[] v6) {
+        return (v6[0] & 0xFE) == 0xFC;
+    }
+
+    /** The embedded IPv4 address of an {@code ::ffff:0:0/96} IPv4-mapped IPv6 address, or empty when {@code v6} is not one. */
+    private static Optional<InetAddress> embeddedIpv4(byte[] v6) {
+        for (int i = 0; i < 10; i++) {
+            if (v6[i] != 0) {
+                return Optional.empty();
+            }
+        }
+        if ((v6[10] & 0xFF) != 0xFF || (v6[11] & 0xFF) != 0xFF) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(InetAddress.getByAddress(java.util.Arrays.copyOfRange(v6, 12, 16)));
+        } catch (UnknownHostException impossible) {
+            // getByAddress only validates array length (4 or 16); a 4-byte
+            // array is always accepted.
+            throw new IllegalStateException(impossible);
+        }
     }
 }
