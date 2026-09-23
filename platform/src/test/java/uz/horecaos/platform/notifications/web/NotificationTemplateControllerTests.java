@@ -156,6 +156,26 @@ class NotificationTemplateControllerTests {
     }
 
     @Test
+    @DisplayName("a template's fulfilment mode and channel source (10.9a) round-trip through create and list")
+    void fulfillmentModeAndChannelSourceRoundTripThroughListUnswapped() {
+        UUID templateId = createSmsTemplate("ORDER_CONFIRMED", FulfillmentMode.DELIVERY, SalesChannelSystemType.WEB);
+
+        NotificationTemplateController.TemplateResponse found =
+                Objects.requireNonNull(controller.list(tenantId, brandId).getBody()).stream()
+                        .filter(row -> templateId.equals(row.id()))
+                        .findFirst()
+                        .orElseThrow();
+
+        // Both DTO fields are plain @Nullable String (TemplateRow stores the
+        // enum names as strings), so a transposition between them in either
+        // the controller's create() wiring or its list() mapping would
+        // compile silently — this pins the two values apart so such a swap
+        // fails a test instead of only showing up as a wrong console filter.
+        assertThat(found.fulfillmentMode()).isEqualTo(FulfillmentMode.DELIVERY.name());
+        assertThat(found.channelSource()).isEqualTo(SalesChannelSystemType.WEB.name());
+    }
+
+    @Test
     @DisplayName("the versions list (X.27) reads back every version a create-only editor could never see again")
     void allVersionsAreReadable() {
         UUID templateId = createSmsTemplate("ORDER_CONFIRMED");
