@@ -351,6 +351,68 @@ describe('OrderReportsPage', () => {
     ).toBe('—');
   });
 
+  // ------------------------------------------ wave 10 w5-reports-exports (X.18/7.2a)
+
+  it('wires q-data-table\'s column chooser onto «Заказы», scoped and persisted per branch', async () => {
+    localStorage.clear();
+    await render({
+      ordersMock: vi.fn().mockResolvedValue(ordersResponse([orderRow({ orderId: 'order-x18' })])),
+      initialTab: 'commercial',
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    // The channel column starts visible.
+    expect(host.querySelector('[data-testid="dt-col-channel"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="dt-cell-channel"]')?.textContent).toContain(
+      'TELEGRAM',
+    );
+
+    (host.querySelector('[data-testid="dt-chooser-toggle"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="dt-chooser-item-channel"]') as HTMLInputElement).click();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="dt-col-channel"]')).toBeNull();
+    expect(host.querySelector('[data-testid="dt-cell-channel"]')).toBeNull();
+    // Still on screen, per-branch scoped rather than lost: t1:b1:l1 is SCOPE folded into the storage key.
+    expect(
+      localStorage.getItem(
+        'q-data-table.filters.t1:b1:l1::reports.orders.commercial.hiddenColumns',
+      ),
+    ).toBe('["channel"]');
+  });
+
+  it('wires q-data-table\'s saved views onto «Заказы» — a named view persists with no PII in its payload', async () => {
+    localStorage.clear();
+    await render({
+      ordersMock: vi.fn().mockResolvedValue(ordersResponse([orderRow({ orderId: 'order-x18b' })])),
+      initialTab: 'commercial',
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    (host.querySelector('[data-testid="dt-views-toggle"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const nameInput = host.querySelector('[data-testid="dt-view-name-input"]') as HTMLInputElement;
+    nameInput.value = 'моя смена';
+    nameInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="dt-view-save"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const stored = localStorage.getItem('q-data-table.views.t1:b1:l1::reports.orders.commercial');
+    expect(stored).not.toBeNull();
+    const views = JSON.parse(stored ?? '[]') as readonly {
+      id: string;
+      name: string;
+      filters: unknown;
+    }[];
+    expect(views).toHaveLength(1);
+    expect(views[0].name).toBe('моя смена');
+    // The saved payload is the table's own filter model, never a customer/order field — no PII.
+    expect(JSON.stringify(views[0])).not.toContain('Nodira');
+    expect(host.querySelector('[data-testid="dt-view-' + views[0].id + '"]')).toBeTruthy();
+  });
+
   it('always groups the daily/summary money queries by LEGAL_ENTITY (ADR 0038)', async () => {
     await render({ initialTab: 'daily' });
 
