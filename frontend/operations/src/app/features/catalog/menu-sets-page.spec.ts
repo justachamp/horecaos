@@ -183,6 +183,10 @@ describe('MenuSetsPage', () => {
 
   it('binds the selected menu to a chosen branch', async () => {
     const apis = stubApis({
+      // bindToBranch refuses anything but ACTIVE (a fresh menu starts DRAFT).
+      menus: {
+        list: vi.fn().mockResolvedValue([{ ...MAIN_MENU, status: 'ACTIVE' }]),
+      },
       locations: {
         list: vi
           .fn()
@@ -225,5 +229,26 @@ describe('MenuSetsPage', () => {
     await flushMicrotasks();
 
     expect(apis.menus.bind).toHaveBeenCalledWith(SCOPE, 'loc-1', 'menu-1', null);
+  });
+
+  it('disables binding a still-DRAFT menu and shows a warning instead of letting it bind silently', async () => {
+    // MAIN_MENU's default status is DRAFT -- the state every menu starts in.
+    const apis = stubApis({});
+    await render(SCOPE, apis);
+    const host = fixture.nativeElement as HTMLElement;
+
+    (host.querySelector('[data-testid="menu-sets-select-menu-1"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const submit = host.querySelector(
+      '[data-testid="menu-sets-bind-submit"]',
+    ) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    expect(host.querySelector('[data-testid="menu-sets-bind-not-active"]')).toBeTruthy();
+
+    submit.click();
+    await flushMicrotasks();
+    expect(apis.menus.bind).not.toHaveBeenCalled();
   });
 });

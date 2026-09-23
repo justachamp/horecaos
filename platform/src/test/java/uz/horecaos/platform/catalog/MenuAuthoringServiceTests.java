@@ -270,6 +270,19 @@ class MenuAuthoringServiceTests {
                 .containsExactly(burger.defaultVariantId());
     }
 
+    @Test
+    @DisplayName("filtered select-all mints RFC 9562 v7 row ids (ADR 0076), never a random v4 id")
+    void filteredSelectAllMintsV7Ids() {
+        MenuRow menu = menus.createMenu(TENANT, BRAND, "Main menu", ACTOR_SUBJECT);
+        createProduct("BURGER", "Burger");
+        createProduct("PIZZA", "Pizza");
+
+        int added = menus.addByFilter(TENANT, BRAND, menu.id(), null, null, "AVAILABLE", LOCALE, ACTOR_SUBJECT);
+
+        assertThat(added).isEqualTo(2);
+        assertThat(menuItemIds(menu.id())).extracting(UUID::version).containsOnly(7);
+    }
+
     // -------------------------------------------------------------------- copy
 
     @Test
@@ -296,13 +309,25 @@ class MenuAuthoringServiceTests {
         assertThat(menus.listItems(TENANT, BRAND, copy.id())).hasSize(1);
     }
 
+    @Test
+    @DisplayName("copying a menu mints RFC 9562 v7 row ids for the copied rows (ADR 0076), never a random v4 id")
+    void copyingMintsV7Ids() {
+        MenuRow source = menus.createMenu(TENANT, BRAND, "Main menu", ACTOR_SUBJECT);
+        var burger = createProduct("BURGER", "Burger");
+        menus.addItem(TENANT, BRAND, source.id(), burger.defaultVariantId(), 0, "AVAILABLE", ACTOR_SUBJECT);
+
+        MenuRow copy = menus.copyMenu(TENANT, BRAND, source.id(), "Copy", ACTOR_SUBJECT);
+
+        assertThat(menuItemIds(copy.id())).extracting(UUID::version).containsOnly(7);
+    }
+
     // ------------------------------------------------------------------ binding
 
     @Test
     @DisplayName("binding a menu as a branch's default, then binding a second menu, replaces the first")
     void bindingReplacesTheDefault() {
-        MenuRow first = menus.createMenu(TENANT, BRAND, "First menu", ACTOR_SUBJECT);
-        MenuRow second = menus.createMenu(TENANT, BRAND, "Second menu", ACTOR_SUBJECT);
+        MenuRow first = activate(menus.createMenu(TENANT, BRAND, "First menu", ACTOR_SUBJECT));
+        MenuRow second = activate(menus.createMenu(TENANT, BRAND, "Second menu", ACTOR_SUBJECT));
 
         menus.bindToBranch(TENANT, BRAND, LOCATION, null, first.id(), ACTOR_SUBJECT);
         menus.bindToBranch(TENANT, BRAND, LOCATION, null, second.id(), ACTOR_SUBJECT);
@@ -316,8 +341,8 @@ class MenuAuthoringServiceTests {
     @Test
     @DisplayName("a channel-specific binding coexists with the branch's default binding")
     void channelBindingCoexistsWithDefault() {
-        MenuRow defaultMenu = menus.createMenu(TENANT, BRAND, "Default menu", ACTOR_SUBJECT);
-        MenuRow deliveryMenu = menus.createMenu(TENANT, BRAND, "Delivery-only menu", ACTOR_SUBJECT);
+        MenuRow defaultMenu = activate(menus.createMenu(TENANT, BRAND, "Default menu", ACTOR_SUBJECT));
+        MenuRow deliveryMenu = activate(menus.createMenu(TENANT, BRAND, "Delivery-only menu", ACTOR_SUBJECT));
 
         menus.bindToBranch(TENANT, BRAND, LOCATION, null, defaultMenu.id(), ACTOR_SUBJECT);
         menus.bindToBranch(TENANT, BRAND, LOCATION, channelId, deliveryMenu.id(), ACTOR_SUBJECT);
@@ -332,8 +357,8 @@ class MenuAuthoringServiceTests {
     @Test
     @DisplayName("binding an archived menu to a branch is refused")
     void bindingAnArchivedMenuIsRefused() {
-        MenuRow menu = menus.createMenu(TENANT, BRAND, "Retired menu", ACTOR_SUBJECT);
-        menus.updateMenu(TENANT, BRAND, menu.id(), menu.name(), "ARCHIVED", 1, ACTOR_SUBJECT);
+        MenuRow menu = activate(menus.createMenu(TENANT, BRAND, "Retired menu", ACTOR_SUBJECT));
+        menus.updateMenu(TENANT, BRAND, menu.id(), menu.name(), "ARCHIVED", menu.version(), ACTOR_SUBJECT);
 
         Throwable failure =
                 catchThrowable(() -> menus.bindToBranch(TENANT, BRAND, LOCATION, null, menu.id(), ACTOR_SUBJECT));
@@ -343,9 +368,24 @@ class MenuAuthoringServiceTests {
     }
 
     @Test
+    @DisplayName("binding a still-DRAFT menu to a branch is refused -- a fresh menu is not customer-facing "
+            + "until an operator activates it")
+    void bindingADraftMenuIsRefused() {
+        MenuRow menu = menus.createMenu(TENANT, BRAND, "Unfinished menu", ACTOR_SUBJECT);
+        assertThat(menu.status()).isEqualTo("DRAFT");
+
+        Throwable failure =
+                catchThrowable(() -> menus.bindToBranch(TENANT, BRAND, LOCATION, null, menu.id(), ACTOR_SUBJECT));
+
+        assertThat(failure).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
+        assertThat(menus.listBindings(TENANT, BRAND)).isEmpty();
+    }
+
+    @Test
     @DisplayName("unbinding is idempotent and leaves the branch's other scope untouched")
     void unbindingIsIdempotentAndScoped() {
-        MenuRow menu = menus.createMenu(TENANT, BRAND, "Main menu", ACTOR_SUBJECT);
+        MenuRow menu = activate(menus.createMenu(TENANT, BRAND, "Main menu", ACTOR_SUBJECT));
         menus.bindToBranch(TENANT, BRAND, LOCATION, null, menu.id(), ACTOR_SUBJECT);
         menus.bindToBranch(TENANT, BRAND, LOCATION, channelId, menu.id(), ACTOR_SUBJECT);
 
@@ -360,7 +400,7 @@ class MenuAuthoringServiceTests {
     @Test
     @DisplayName("a bind and an unbind each record an audit fact; a no-op unbind records nothing")
     void bindAndUnbindAreAudited() {
-        MenuRow menu = menus.createMenu(TENANT, BRAND, "Main menu", ACTOR_SUBJECT);
+        MenuRow menu = activate(menus.createMenu(TENANT, BRAND, "Main menu", ACTOR_SUBJECT));
         List<AuditFact> audited = new java.util.ArrayList<>();
         MenuAuthoringService capturing = new MenuAuthoringService(
                 menuStore, catalogStore, new JdbcSalesChannelStore(jdbc), audited::add, Clock.systemUTC());
@@ -378,6 +418,21 @@ class MenuAuthoringServiceTests {
     }
 
     // ------------------------------------------------------------------------ fixture
+
+    /** A freshly created menu is DRAFT; bindToBranch refuses anything but ACTIVE. */
+    private MenuRow activate(MenuRow menu) {
+        return menus.updateMenu(TENANT, BRAND, menu.id(), menu.name(), "ACTIVE", menu.version(), ACTOR_SUBJECT);
+    }
+
+    /** The raw {@code catalog.menu_items.id} values for a menu, to prove their UUID version (ADR 0076). */
+    private List<UUID> menuItemIds(UUID menuId) {
+        return jdbc.sql("SELECT id FROM catalog.menu_items WHERE tenant_id = :t AND brand_id = :b AND menu_id = :m")
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("m", menuId)
+                .query(UUID.class)
+                .list();
+    }
 
     private CatalogAuthoringService.ProductCreated createProduct(String code, String name) {
         return authoring.createProduct(
