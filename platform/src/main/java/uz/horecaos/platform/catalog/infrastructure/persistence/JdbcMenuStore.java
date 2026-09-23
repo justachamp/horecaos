@@ -171,16 +171,20 @@ public class JdbcMenuStore {
     /**
      * The filtered select-all gesture: every active variant of this brand
      * matching an optional category and/or a case-insensitive product-name-
-     * or-SKU search, added to the menu in one statement — never one round
-     * trip per matched product. Already-present variants are re-sorted to
-     * the end of the current membership rather than duplicated or skipped,
-     * so a second, broader filter pass after a first narrow one still adds
-     * only what is missing.
+     * or-SKU search, added to the menu in one read plus one write — never
+     * one round trip per matched product. Already-present variants are
+     * re-sorted to the end of the current membership rather than duplicated
+     * or skipped, so a second, broader filter pass after a first narrow one
+     * still adds only what is missing.
      *
      * <p>Sort order starts after the menu's current highest position, in
      * match order (product id, then variant id) — a deterministic order a
      * repeated call reproduces exactly, which matters for a test proving the
-     * count is stable across a re-run.
+     * count is stable across a re-run. The match and its target sort order
+     * are computed in one SELECT; each matched row's id is then minted in
+     * Java with {@link Ids#newId()} (ADR 0076 — a new row's primary key is
+     * RFC 9562 v7, never SQL's {@code gen_random_uuid()}) and the whole
+     * batch written with a single multi-row {@code INSERT}.
      *
      * @param categoryId restricts to products placed in this category; {@code null} for every category
      * @param search     matches product name (this locale) or SKU, case-insensitively; {@code null} for no filter
@@ -195,7 +199,7 @@ public class JdbcMenuStore {
             String availabilityDefault,
             String locale) {
         String searchPattern = search == null || search.isBlank() ? null : "%" + search.trim() + "%";
-        return jdbc.sql("""
+        List<MatchedItem> matched = jdbc.sql("""
                 WITH base AS (
                     SELECT mi.variant_id, mi.sort_order
                     FROM catalog.menu_items mi
@@ -204,7 +208,7 @@ public class JdbcMenuStore {
                 start AS (
                     SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM base
                 ),
-                matched AS (
+                candidates AS (
                     SELECT v.id AS variant_id,
                            ROW_NUMBER() OVER (ORDER BY p.id, v.id) - 1 AS rank
                     FROM catalog.variants v
@@ -223,49 +227,115 @@ public class JdbcMenuStore {
                       AND (CAST(:search AS varchar) IS NULL
                            OR t.name ILIKE :search OR v.sku ILIKE :search)
                 )
-                INSERT INTO catalog.menu_items (
-                    id, tenant_id, brand_id, menu_id, variant_id, sort_order, availability_default,
-                    version, created_at, updated_at)
-                SELECT gen_random_uuid(), :tenantId, :brandId, :menuId, matched.variant_id,
-                       start.next_order + matched.rank, :availabilityDefault, 1, now(), now()
-                FROM matched, start
-                ON CONFLICT (menu_id, variant_id) DO UPDATE
-                SET availability_default = EXCLUDED.availability_default,
-                    version = catalog.menu_items.version + 1,
-                    updated_at = now()
+                SELECT candidates.variant_id, start.next_order + candidates.rank AS sort_order
+                FROM candidates, start
+                ORDER BY candidates.rank
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("menuId", menuId)
                 .param("categoryId", categoryId)
                 .param("search", searchPattern)
-                .param("availabilityDefault", availabilityDefault)
                 .param("locale", locale)
-                .update();
+                .query((row, number) ->
+                        new MatchedItem(row.getObject("variant_id", UUID.class), row.getInt("sort_order")))
+                .list();
+        if (matched.isEmpty()) {
+            return 0;
+        }
+
+        StringBuilder sql = new StringBuilder("INSERT INTO catalog.menu_items ("
+                + "id, tenant_id, brand_id, menu_id, variant_id, sort_order, availability_default, "
+                + "version, created_at, updated_at) VALUES ");
+        for (int i = 0; i < matched.size(); i++) {
+            if (i > 0) {
+                sql.append(", ");
+            }
+            sql.append("(:id")
+                    .append(i)
+                    .append(", :tenantId, :brandId, :menuId, :variantId")
+                    .append(i)
+                    .append(", :sortOrder")
+                    .append(i)
+                    .append(", :availabilityDefault, 1, now(), now())");
+        }
+        sql.append("""
+                 ON CONFLICT (menu_id, variant_id) DO UPDATE
+                SET availability_default = EXCLUDED.availability_default,
+                    version = catalog.menu_items.version + 1,
+                    updated_at = now()
+                """);
+        JdbcClient.StatementSpec spec = jdbc.sql(sql.toString())
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("menuId", menuId)
+                .param("availabilityDefault", availabilityDefault);
+        for (int i = 0; i < matched.size(); i++) {
+            spec = spec.param("id" + i, Ids.newId())
+                    .param("variantId" + i, matched.get(i).variantId())
+                    .param("sortOrder" + i, matched.get(i).sortOrder());
+        }
+        return spec.update();
     }
 
     /**
-     * Copies every membership row from one menu to another, in one statement
-     * — {@code MenuAuthoringService.copyMenu}'s "new menu with the same
+     * Copies every membership row from one menu to another —
+     * {@code MenuAuthoringService.copyMenu}'s "new menu with the same
      * membership". The target menu must already exist and carry no
      * membership of its own (a freshly created menu always does), since this
-     * is a plain insert rather than an upsert.
+     * is a plain insert rather than an upsert. One read of the source
+     * membership, then a single multi-row {@code INSERT} — never one round
+     * trip per copied row — with each copied row's id minted in Java by
+     * {@link Ids#newId()} (ADR 0076: a new row's primary key is RFC 9562 v7,
+     * never SQL's {@code gen_random_uuid()}).
      */
     public int copyMembership(UUID tenantId, UUID brandId, UUID sourceMenuId, UUID targetMenuId) {
-        return jdbc.sql("""
-                INSERT INTO catalog.menu_items (
-                    id, tenant_id, brand_id, menu_id, variant_id, sort_order, availability_default,
-                    version, created_at, updated_at)
-                SELECT gen_random_uuid(), tenant_id, brand_id, :targetMenuId, variant_id, sort_order,
-                       availability_default, 1, now(), now()
+        List<CopiedItem> source = jdbc.sql("""
+                SELECT variant_id, sort_order, availability_default
                 FROM catalog.menu_items
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND menu_id = :sourceMenuId
+                ORDER BY sort_order, variant_id
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("sourceMenuId", sourceMenuId)
-                .param("targetMenuId", targetMenuId)
-                .update();
+                .query((row, number) -> new CopiedItem(
+                        row.getObject("variant_id", UUID.class),
+                        row.getInt("sort_order"),
+                        row.getString("availability_default")))
+                .list();
+        if (source.isEmpty()) {
+            return 0;
+        }
+
+        StringBuilder sql = new StringBuilder("INSERT INTO catalog.menu_items ("
+                + "id, tenant_id, brand_id, menu_id, variant_id, sort_order, availability_default, "
+                + "version, created_at, updated_at) VALUES ");
+        for (int i = 0; i < source.size(); i++) {
+            if (i > 0) {
+                sql.append(", ");
+            }
+            sql.append("(:id")
+                    .append(i)
+                    .append(", :tenantId, :brandId, :targetMenuId, :variantId")
+                    .append(i)
+                    .append(", :sortOrder")
+                    .append(i)
+                    .append(", :availabilityDefault")
+                    .append(i)
+                    .append(", 1, now(), now())");
+        }
+        JdbcClient.StatementSpec spec = jdbc.sql(sql.toString())
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("targetMenuId", targetMenuId);
+        for (int i = 0; i < source.size(); i++) {
+            spec = spec.param("id" + i, Ids.newId())
+                    .param("variantId" + i, source.get(i).variantId())
+                    .param("sortOrder" + i, source.get(i).sortOrder())
+                    .param("availabilityDefault" + i, source.get(i).availabilityDefault());
+        }
+        return spec.update();
     }
 
     // ------------------------------------------------------------- bindings
@@ -484,4 +554,10 @@ public class JdbcMenuStore {
             UUID menuId,
             String menuName,
             int version) {}
+
+    /** One row {@link #addByFilter} matched, with the sort position it is to land at. */
+    private record MatchedItem(UUID variantId, int sortOrder) {}
+
+    /** One row {@link #copyMembership} is carrying over from the source menu. */
+    private record CopiedItem(UUID variantId, int sortOrder, String availabilityDefault) {}
 }

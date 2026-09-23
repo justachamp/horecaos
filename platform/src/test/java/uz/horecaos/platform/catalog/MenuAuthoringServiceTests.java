@@ -270,6 +270,19 @@ class MenuAuthoringServiceTests {
                 .containsExactly(burger.defaultVariantId());
     }
 
+    @Test
+    @DisplayName("filtered select-all mints RFC 9562 v7 row ids (ADR 0076), never a random v4 id")
+    void filteredSelectAllMintsV7Ids() {
+        MenuRow menu = menus.createMenu(TENANT, BRAND, "Main menu", ACTOR_SUBJECT);
+        createProduct("BURGER", "Burger");
+        createProduct("PIZZA", "Pizza");
+
+        int added = menus.addByFilter(TENANT, BRAND, menu.id(), null, null, "AVAILABLE", LOCALE, ACTOR_SUBJECT);
+
+        assertThat(added).isEqualTo(2);
+        assertThat(menuItemIds(menu.id())).extracting(UUID::version).containsOnly(7);
+    }
+
     // -------------------------------------------------------------------- copy
 
     @Test
@@ -294,6 +307,18 @@ class MenuAuthoringServiceTests {
         menus.removeItem(TENANT, BRAND, copy.id(), burger.defaultVariantId(), ACTOR_SUBJECT);
         assertThat(menus.listItems(TENANT, BRAND, source.id())).hasSize(2);
         assertThat(menus.listItems(TENANT, BRAND, copy.id())).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("copying a menu mints RFC 9562 v7 row ids for the copied rows (ADR 0076), never a random v4 id")
+    void copyingMintsV7Ids() {
+        MenuRow source = menus.createMenu(TENANT, BRAND, "Main menu", ACTOR_SUBJECT);
+        var burger = createProduct("BURGER", "Burger");
+        menus.addItem(TENANT, BRAND, source.id(), burger.defaultVariantId(), 0, "AVAILABLE", ACTOR_SUBJECT);
+
+        MenuRow copy = menus.copyMenu(TENANT, BRAND, source.id(), "Copy", ACTOR_SUBJECT);
+
+        assertThat(menuItemIds(copy.id())).extracting(UUID::version).containsOnly(7);
     }
 
     // ------------------------------------------------------------------ binding
@@ -397,6 +422,16 @@ class MenuAuthoringServiceTests {
     /** A freshly created menu is DRAFT; bindToBranch refuses anything but ACTIVE. */
     private MenuRow activate(MenuRow menu) {
         return menus.updateMenu(TENANT, BRAND, menu.id(), menu.name(), "ACTIVE", menu.version(), ACTOR_SUBJECT);
+    }
+
+    /** The raw {@code catalog.menu_items.id} values for a menu, to prove their UUID version (ADR 0076). */
+    private List<UUID> menuItemIds(UUID menuId) {
+        return jdbc.sql("SELECT id FROM catalog.menu_items WHERE tenant_id = :t AND brand_id = :b AND menu_id = :m")
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("m", menuId)
+                .query(UUID.class)
+                .list();
     }
 
     private CatalogAuthoringService.ProductCreated createProduct(String code, String name) {
