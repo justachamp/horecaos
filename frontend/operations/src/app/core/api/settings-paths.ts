@@ -415,6 +415,19 @@ export const settingsPaths = {
   },
 
   /**
+   * `OperationsProviderInstallationController.effectiveBindings` — gap-map
+   * row 10.8a's per-branch install model, surfaced: for every location of a
+   * brand, which installation actually handles each capability there,
+   * whether bound to the branch itself or inherited from the brand's own
+   * default. `brandId` travels as a query parameter (`{ params: { brandId } }`
+   * on the call), the same shape {@link legalEntityActivate}'s own
+   * `expectedVersion` uses, rather than a second path segment.
+   */
+  integrationBranchesEffectiveBindings(scope: LocationScope): string {
+    return `${this.integrationInstallations(scope)}/branches/effective-bindings`;
+  },
+
+  /**
    * `OperationsProviderInstallationController.activateBinding` — ADR 0106,
    * gap-map row 10.8a. The controller's own doc says a binding is created
    * SUSPENDED (see {@link integrationInstallationBindings}'s POST); before

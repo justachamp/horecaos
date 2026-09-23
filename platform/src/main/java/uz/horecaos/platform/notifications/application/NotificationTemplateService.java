@@ -22,6 +22,8 @@ import uz.horecaos.platform.notifications.domain.TemplateRenderer;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore.TemplateRow;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore.VersionRow;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
 
 /**
  * Authoring, approving, and resolving template wording (ADR 0020).
@@ -53,14 +55,10 @@ public class NotificationTemplateService {
     }
 
     /**
-     * Registers a template.
-     *
-     * @param brandId null for the tenant's default wording, set for a brand that
-     *                words it differently
-     * @param consentPurpose the ADR 0015 purpose this template needs. Required for
-     *                       an optional or marketing class and refused for the
-     *                       others, because a receipt gated on a promotional
-     *                       opt-in is the failure this parameter prevents
+     * Registers a template with no variant dimension — every fulfilment mode,
+     * every channel source. Delegates to the eight-argument overload below
+     * with both null, so every caller that predates gap-map row {@code
+     * 10.9a} is unaffected.
      */
     @Transactional
     public UUID createTemplate(
@@ -70,6 +68,37 @@ public class NotificationTemplateService {
             NotificationClass notificationClass,
             NotificationChannel channel,
             @Nullable String consentPurpose) {
+        return createTemplate(tenantId, brandId, templateKey, notificationClass, channel, consentPurpose, null, null);
+    }
+
+    /**
+     * Registers a template.
+     *
+     * @param brandId null for the tenant's default wording, set for a brand that
+     *                words it differently
+     * @param consentPurpose the ADR 0015 purpose this template needs. Required for
+     *                       an optional or marketing class and refused for the
+     *                       others, because a receipt gated on a promotional
+     *                       opt-in is the failure this parameter prevents
+     * @param fulfillmentMode null for every fulfilment mode (a wildcard), set to
+     *                        narrow this wording to one of delivery, pickup or
+     *                        dine-in (gap-map row 10.9a) — a second variant for
+     *                        the same key, brand and channel is a distinct
+     *                        template row, not a field on an existing one
+     * @param channelSource null for every channel, set to narrow this wording to
+     *                      one inbound channel (storefront, Telegram, a call
+     *                      centre, an aggregator…)
+     */
+    @Transactional
+    public UUID createTemplate(
+            UUID tenantId,
+            @Nullable UUID brandId,
+            String templateKey,
+            NotificationClass notificationClass,
+            NotificationChannel channel,
+            @Nullable String consentPurpose,
+            @Nullable FulfillmentMode fulfillmentMode,
+            @Nullable SalesChannelSystemType channelSource) {
 
         if (notificationClass.requiresConsent() && (consentPurpose == null || consentPurpose.isBlank())) {
             throw new IllegalArgumentException(notificationClass + " needs a consent purpose to check against");
@@ -91,6 +120,8 @@ public class NotificationTemplateService {
                 notificationClass.name(),
                 channel.name(),
                 consentPurpose,
+                fulfillmentMode == null ? null : fulfillmentMode.name(),
+                channelSource == null ? null : channelSource.name(),
                 clock.instant());
         return id;
     }
@@ -206,18 +237,48 @@ public class NotificationTemplateService {
     // -------------------------------------------------------------- resolution
 
     /**
+     * The wording this message will use, or the reason there is none — with no
+     * fulfilment mode or channel source to narrow by. Delegates to the seven
+     * -argument overload below with both null, for a caller with no order to
+     * ask ({@code CampaignTelegramDeliveryService}'s audience-wide send).
+     */
+    @Transactional(readOnly = true)
+    public Resolution resolve(
+            UUID tenantId, UUID brandId, String templateKey, NotificationChannel channel, MessageLocale locale) {
+        return resolve(tenantId, brandId, templateKey, channel, locale, null, null);
+    }
+
+    /**
      * The wording this message will use, or the reason there is none.
      *
      * <p>Two lookups rather than one join, so the caller can tell "this tenant has
      * no confirmation template" from "it has one, but not in the language this
      * customer reads". Those are different problems for the tenant and a join
      * returns the same empty result for both.
+     *
+     * @param fulfillmentMode gap-map row 10.9a: the order's own fulfilment mode,
+     *                        when this message is about one, so the most specific
+     *                        variant resolves ahead of the tenant or brand default
+     * @param channelSource the order's own inbound channel, under the same
+     *                       condition
      */
     @Transactional(readOnly = true)
     public Resolution resolve(
-            UUID tenantId, UUID brandId, String templateKey, NotificationChannel channel, MessageLocale locale) {
+            UUID tenantId,
+            UUID brandId,
+            String templateKey,
+            NotificationChannel channel,
+            MessageLocale locale,
+            @Nullable FulfillmentMode fulfillmentMode,
+            @Nullable SalesChannelSystemType channelSource) {
 
-        Optional<TemplateRow> template = templates.activeTemplate(tenantId, brandId, templateKey, channel.name());
+        Optional<TemplateRow> template = templates.activeTemplate(
+                tenantId,
+                brandId,
+                templateKey,
+                channel.name(),
+                fulfillmentMode == null ? null : fulfillmentMode.name(),
+                channelSource == null ? null : channelSource.name());
         if (template.isEmpty()) {
             return Resolution.noTemplate();
         }

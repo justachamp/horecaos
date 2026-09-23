@@ -17,6 +17,10 @@ export interface TemplateResponse {
   readonly status: string;
   readonly activeVersion: number | null;
   readonly version: number;
+  /** Gap-map row 10.9a: null resolves for every fulfilment mode. */
+  readonly fulfillmentMode: string | null;
+  /** Gap-map row 10.9a: null resolves for every channel source. */
+  readonly channelSource: string | null;
 }
 
 export interface CreateTemplateRequest {
@@ -24,7 +28,25 @@ export interface CreateTemplateRequest {
   readonly notificationClass: string;
   readonly channel: string;
   readonly consentPurpose?: string;
+  readonly fulfillmentMode?: string | null;
+  readonly channelSource?: string | null;
 }
+
+/** `uz.horecaos.platform.tenancy.api.FulfillmentMode` (ADR 0036). */
+export const FULFILLMENT_MODES: readonly string[] = ['DELIVERY', 'PICKUP', 'DINE_IN'];
+
+/** `uz.horecaos.platform.tenancy.api.SalesChannelSystemType` (ADR 0036). */
+export const CHANNEL_SOURCES: readonly string[] = [
+  'WEB',
+  'IOS',
+  'ANDROID',
+  'TELEGRAM',
+  'KIOSK',
+  'QR_TABLE',
+  'CALL_CENTRE',
+  'AGGREGATOR',
+  'POS',
+];
 
 export interface Wording {
   readonly subject?: string;
@@ -174,7 +196,9 @@ export class NotificationsApi {
   /** Every version of a template, grouped by version number, newest first. */
   async versions(scope: LocationScope, templateId: string): Promise<readonly VersionGroup[]> {
     const result = await firstValueFrom(
-      this.api.get<readonly WordingResponse[]>(settingsPaths.notificationTemplateVersions(scope, templateId)),
+      this.api.get<readonly WordingResponse[]>(
+        settingsPaths.notificationTemplateVersions(scope, templateId),
+      ),
     );
     return groupByVersion(result.value ?? []);
   }
@@ -194,7 +218,9 @@ export class NotificationsApi {
 
   async variableCatalogue(scope: LocationScope): Promise<readonly VariableCatalogueEntry[]> {
     const result = await firstValueFrom(
-      this.api.get<readonly VariableCatalogueEntry[]>(settingsPaths.notificationVariableCatalogue(scope)),
+      this.api.get<readonly VariableCatalogueEntry[]>(
+        settingsPaths.notificationVariableCatalogue(scope),
+      ),
     );
     return result.value ?? [];
   }
@@ -217,7 +243,9 @@ export class NotificationsApi {
 
   async routingEventClasses(scope: LocationScope): Promise<readonly EventClassOption[]> {
     const result = await firstValueFrom(
-      this.api.get<readonly EventClassOption[]>(settingsPaths.notificationRoutingEventClasses(scope)),
+      this.api.get<readonly EventClassOption[]>(
+        settingsPaths.notificationRoutingEventClasses(scope),
+      ),
     );
     return result.value ?? [];
   }
@@ -243,7 +271,11 @@ export class NotificationsApi {
     );
   }
 
-  async changeRoutingTopic(scope: LocationScope, bindingId: string, topicId: number | null): Promise<void> {
+  async changeRoutingTopic(
+    scope: LocationScope,
+    bindingId: string,
+    topicId: number | null,
+  ): Promise<void> {
     await firstValueFrom(
       this.api.post<{ topicId: number | null }, void>(
         settingsPaths.notificationRoutingTopic(scope, bindingId),
@@ -254,7 +286,10 @@ export class NotificationsApi {
 
   async unbindRouting(scope: LocationScope, bindingId: string): Promise<void> {
     await firstValueFrom(
-      this.api.post<null, void>(settingsPaths.notificationRoutingUnbind(scope, bindingId), command(null)),
+      this.api.post<null, void>(
+        settingsPaths.notificationRoutingUnbind(scope, bindingId),
+        command(null),
+      ),
     );
   }
 }

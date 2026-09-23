@@ -21,6 +21,8 @@ const TEMPLATE: TemplateResponse = {
   status: 'ACTIVE',
   activeVersion: 1,
   version: 1,
+  fulfillmentMode: null,
+  channelSource: null,
 };
 
 const PENDING_VERSION: VersionGroup = {
@@ -86,8 +88,16 @@ describe('NotificationsPage', () => {
       version: vi.fn().mockResolvedValue([]),
       variableCatalogue: vi.fn().mockResolvedValue([]),
       activate: vi.fn().mockResolvedValue(undefined),
-      addVersion: vi.fn().mockResolvedValue({ templateId: 'template-2', versionNumber: 1, awaitsProviderReview: false }),
-      testSend: vi.fn().mockResolvedValue({ status: 'ACCEPTED', providerStatus: null, errorCode: null }),
+      addVersion: vi
+        .fn()
+        .mockResolvedValue({
+          templateId: 'template-2',
+          versionNumber: 1,
+          awaitsProviderReview: false,
+        }),
+      testSend: vi
+        .fn()
+        .mockResolvedValue({ status: 'ACCEPTED', providerStatus: null, errorCode: null }),
       routingBindings: vi.fn().mockResolvedValue([]),
       routingEventClasses: vi.fn().mockResolvedValue([]),
       setRoutingSubscription: vi.fn().mockResolvedValue(undefined),
@@ -222,6 +232,8 @@ describe('NotificationsPage', () => {
       templateKey: 'CANCELLED',
       notificationClass: 'TRANSACTIONAL_REQUIRED',
       channel: 'SMS',
+      fulfillmentMode: null,
+      channelSource: null,
     });
     // The old behaviour hard-coded variablesSchema: {} inside this same call;
     // now there is no addVersion call at all from the create step — authoring
@@ -232,18 +244,66 @@ describe('NotificationsPage', () => {
     ).toBeTruthy();
   });
 
+  it('creating a template variant sends the chosen fulfilment mode and channel source (gap-map row 10.9a)', async () => {
+    const toggle = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).find((button) => button.textContent?.includes('New template')) as HTMLButtonElement;
+    toggle.click();
+    fixture.detectChanges();
+
+    const setInput = (id: string, value: string) => {
+      const el = fixture.nativeElement.querySelector(id) as HTMLInputElement;
+      el.value = value;
+      el.dispatchEvent(new Event('input'));
+    };
+    const setSelect = (id: string, value: string) => {
+      const el = fixture.nativeElement.querySelector(id) as HTMLSelectElement;
+      el.value = value;
+      el.dispatchEvent(new Event('change'));
+    };
+    setInput('#template-key', 'CONFIRMED');
+    setSelect('#template-fulfilment-mode', 'DINE_IN');
+    setSelect('#template-channel-source', 'QR_TABLE');
+    fixture.detectChanges();
+
+    const submit = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+    ).find((button) => button.textContent?.includes('Create')) as HTMLButtonElement;
+    submit.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.create).toHaveBeenCalledWith(SCOPE, {
+      templateKey: 'CONFIRMED',
+      notificationClass: 'TRANSACTIONAL_REQUIRED',
+      channel: 'SMS',
+      fulfillmentMode: 'DINE_IN',
+      channelSource: 'QR_TABLE',
+    });
+  });
+
+  it('labels a variant row by its fulfilment mode and channel source, and a wildcard row "Any"', () => {
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    // TEMPLATE itself is a wildcard row (both null).
+    expect(text).toContain('Any');
+  });
+
   it('renders the moderation column and warns before activating a PENDING version (gap map row 10.9c)', async () => {
     api.versions.mockResolvedValue([PENDING_VERSION]);
-    await (fixture.componentInstance as unknown as { openVersions(t: TemplateResponse): Promise<void> })
-      .openVersions(TEMPLATE);
+    await (
+      fixture.componentInstance as unknown as { openVersions(t: TemplateResponse): Promise<void> }
+    ).openVersions(TEMPLATE);
     fixture.detectChanges();
     await flushMicrotasks();
     fixture.detectChanges();
 
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Awaiting gateway');
 
-    (fixture.componentInstance as unknown as { onVersionRowAction(id: string, g: VersionGroup): void })
-      .onVersionRowAction('activate', PENDING_VERSION);
+    (
+      fixture.componentInstance as unknown as {
+        onVersionRowAction(id: string, g: VersionGroup): void;
+      }
+    ).onVersionRowAction('activate', PENDING_VERSION);
     fixture.detectChanges();
 
     const dialog = (fixture.nativeElement as HTMLElement).querySelector('q-confirm-dialog');

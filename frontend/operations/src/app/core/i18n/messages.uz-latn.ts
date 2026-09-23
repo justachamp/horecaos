@@ -814,6 +814,24 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.installations.column.lastRotated': 'Oxirgi yangilanish',
   'settings.integrations.installations.column.actions': 'Amallar',
 
+  'settings.integrations.branches.title': 'Filiallar',
+  'settings.integrations.branches.empty': 'Hozircha hech qaysi filialga provayder bogʻlanmagan.',
+  'settings.integrations.branches.bindAction': 'Filialga bogʻlash',
+  'settings.integrations.branches.column.branch': 'Filial',
+  'settings.integrations.branches.column.capability': 'Imkoniyat',
+  'settings.integrations.branches.column.installation': 'Provayder',
+  'settings.integrations.branches.column.source': 'Manba',
+  'settings.integrations.branches.source.branch': 'Ushbu filial',
+  'settings.integrations.branches.source.brand': 'Brend boʻyicha andoza',
+  'settings.integrations.branches.bindDialog.title': 'Provayderni filialga bogʻlash',
+  'settings.integrations.branches.bindDialog.lead':
+    'Filial darajasidagi bogʻlanish faqat shu filial uchun brend andozasini bekor qiladi.',
+  'settings.integrations.branches.bindDialog.installation': 'Provayder',
+  'settings.integrations.branches.bindDialog.branch': 'Filial',
+  'settings.integrations.branches.bindDialog.cancel': 'Bekor qilish',
+  'settings.integrations.branches.bindDialog.submit': 'Bogʻlash',
+  'settings.integrations.branches.bindDialog.submitting': 'Bogʻlanmoqda…',
+
   'settings.integrations.merchantBindings.title': 'Sotuvchi bogʻlanishlari',
   'settings.integrations.merchantBindings.empty': 'Hali merchant hisobi roʻyxatdan oʻtkazilmagan.',
   'settings.integrations.merchantBindings.column.provider': 'Provayder',
@@ -1258,6 +1276,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.field.activateImmediately': 'Bu versiyani darhol faollashtirish',
   'settings.notifications.field.channel.hint':
     'Bugun faqat SMS va Telegram haqiqatda yuboradi. Email va Push sxema hamda shablon kalitida eʻlon qilingan, lekin ularni hech qanday adapter yetkazmaydi.',
+  'settings.notifications.field.variant': 'Variant',
+  'settings.notifications.field.fulfilmentMode': 'Bajarish usuli',
+  'settings.notifications.field.channelSource': 'Kanal manbasi',
+  'settings.notifications.field.variant.any': 'Har qanday',
+  'settings.notifications.field.variant.hint':
+    'Andoza matn uchun ikkalasini ham "Har qanday" holida qoldiring. Variant faqat unga mos buyurtma uchun ishlaydi; eng aniq mos kelgan gʻalaba qozonadi, kamroq aniq matn esa zaxira boʻlib qoladi.',
   'settings.notifications.empty': 'Hali shablonlar yoʻq.',
   'settings.notifications.action.rowMenu': 'Amallar',
   'settings.notifications.action.versions': 'Versiyalar',

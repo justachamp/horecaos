@@ -49,7 +49,9 @@
       />
       {{ 'settings.notifications.field.aggregatorShiftNotifications' | t }}
     </label>
-    <p class="q-caption hint">{{ 'settings.notifications.field.aggregatorShiftNotifications.hint' | t }}</p>
+    <p class="q-caption hint">
+      {{ 'settings.notifications.field.aggregatorShiftNotifications.hint' | t }}
+    </p>
   </section>
 
   <div class="toolbar">
@@ -99,10 +101,52 @@
         [disabled]="createSubmitting()"
       >
         @for (option of channels; track option) {
-          <option [value]="option">{{ option }}@if (!wiredChannels.has(option)) { ⚠ }</option>
+          <option [value]="option">
+            {{ option }}
+            @if (!wiredChannels.has(option)) {
+              ⚠
+            }
+          </option>
         }
       </select>
       <p class="q-caption hint">{{ 'settings.notifications.field.channel.hint' | t }}</p>
+
+      <!-- Gap-map row 10.9a: one template key, kept to (fulfilment mode ×
+           channel source) as separate rows rather than one field the
+           renderer would have to branch on — "any" (the default) resolves
+           only when no more specific row matches. -->
+      <label class="q-caption" for="template-fulfilment-mode">{{
+        'settings.notifications.field.fulfilmentMode' | t
+      }}</label>
+      <select
+        id="template-fulfilment-mode"
+        class="q-body field"
+        [value]="newFulfilmentMode()"
+        (change)="newFulfilmentMode.set($any($event.target).value)"
+        [disabled]="createSubmitting()"
+      >
+        <option value="">{{ 'settings.notifications.field.variant.any' | t }}</option>
+        @for (option of fulfilmentModes; track option) {
+          <option [value]="option">{{ option }}</option>
+        }
+      </select>
+
+      <label class="q-caption" for="template-channel-source">{{
+        'settings.notifications.field.channelSource' | t
+      }}</label>
+      <select
+        id="template-channel-source"
+        class="q-body field"
+        [value]="newChannelSource()"
+        (change)="newChannelSource.set($any($event.target).value)"
+        [disabled]="createSubmitting()"
+      >
+        <option value="">{{ 'settings.notifications.field.variant.any' | t }}</option>
+        @for (option of channelSources; track option) {
+          <option [value]="option">{{ option }}</option>
+        }
+      </select>
+      <p class="q-caption hint">{{ 'settings.notifications.field.variant.hint' | t }}</p>
 
       @if (createError(); as message) {
         <p class="q-body-sm error" role="alert">{{ message }}</p>
@@ -139,6 +183,7 @@
         <th class="q-caption">{{ 'settings.notifications.field.templateKey' | t }}</th>
         <th class="q-caption">{{ 'settings.notifications.field.notificationClass' | t }}</th>
         <th class="q-caption">{{ 'settings.notifications.field.channel' | t }}</th>
+        <th class="q-caption">{{ 'settings.notifications.field.variant' | t }}</th>
         <th class="q-caption">{{ 'settings.notifications.field.status' | t }}</th>
         <th class="q-caption">{{ 'settings.notifications.field.activeVersion' | t }}</th>
         <th class="q-caption"></th>
@@ -150,8 +195,12 @@
           <td class="q-body-sm q-mono">{{ template.templateKey }}</td>
           <td class="q-body-sm">{{ template.notificationClass }}</td>
           <td class="q-body-sm">
-            {{ template.channel }}@if (!wiredChannels.has(template.channel)) { ⚠ }
+            {{ template.channel }}
+            @if (!wiredChannels.has(template.channel)) {
+              ⚠
+            }
           </td>
+          <td class="q-body-sm">{{ variantLabel(template) }}</td>
           <td class="q-body-sm">
             <span class="status-badge">{{ template.status }}</span>
           </td>
@@ -168,7 +217,7 @@
         </tr>
       } @empty {
         <tr>
-          <td class="q-body-sm empty" colspan="6">{{ 'settings.notifications.empty' | t }}</td>
+          <td class="q-body-sm empty" colspan="7">{{ 'settings.notifications.empty' | t }}</td>
         </tr>
       }
     </tbody>
@@ -232,7 +281,8 @@
                   {{
                     binding.topicId === null
                       ? ('settings.notifications.routing.topic.flat' | t)
-                      : ('settings.notifications.routing.topic.numbered' | t: { topic: binding.topicId })
+                      : ('settings.notifications.routing.topic.numbered'
+                        | t: { topic: binding.topicId })
                   }}
                 </button>
               }
@@ -240,11 +290,17 @@
             <td class="q-body-sm">
               @if (binding.retiredAt) {
                 <q-status-pill
-                  [label]="'settings.notifications.routing.status.retired' | t: { reason: binding.retiredReason ?? '—' }"
+                  [label]="
+                    'settings.notifications.routing.status.retired'
+                      | t: { reason: binding.retiredReason ?? '—' }
+                  "
                   tone="none"
                 />
               } @else {
-                <q-status-pill [label]="'settings.notifications.routing.status.ACTIVE' | t" tone="success" />
+                <q-status-pill
+                  [label]="'settings.notifications.routing.status.ACTIVE' | t"
+                  tone="success"
+                />
               }
             </td>
             <td class="q-body-sm events-cell">
@@ -268,7 +324,9 @@
           </tr>
         } @empty {
           <tr>
-            <td class="q-body-sm empty" colspan="6">{{ 'settings.notifications.routing.empty' | t }}</td>
+            <td class="q-body-sm empty" colspan="6">
+              {{ 'settings.notifications.routing.empty' | t }}
+            </td>
           </tr>
         }
       </tbody>
@@ -277,7 +335,10 @@
 }
 
 @if (drawerMode() === 'versions' && selectedTemplate(); as template) {
-  <q-drawer [title]="'settings.notifications.drawer.versionsTitle' | t: { key: template.templateKey }" (dismiss)="closeDrawer()">
+  <q-drawer
+    [title]="'settings.notifications.drawer.versionsTitle' | t: { key: template.templateKey }"
+    (dismiss)="closeDrawer()"
+  >
     <div class="toolbar">
       <button type="button" class="q-body primary" (click)="startNewVersion()">
         {{ 'settings.notifications.action.newVersion' | t }}
@@ -304,7 +365,9 @@
           @for (group of versions(); track group.versionNumber) {
             <tr>
               <td class="q-body-sm q-tnum">{{ group.versionNumber }}</td>
-              <td class="q-body-sm"><q-status-pill [label]="group.status" [tone]="statusTone(group.status)" /></td>
+              <td class="q-body-sm">
+                <q-status-pill [label]="group.status" [tone]="statusTone(group.status)" />
+              </td>
               <td class="q-body-sm">
                 @for (tag of localeTags; track tag) {
                   <span
@@ -333,7 +396,9 @@
             </tr>
           } @empty {
             <tr>
-              <td class="q-body-sm empty" colspan="6">{{ 'settings.notifications.versions.empty' | t }}</td>
+              <td class="q-body-sm empty" colspan="6">
+                {{ 'settings.notifications.versions.empty' | t }}
+              </td>
             </tr>
           }
         </tbody>
@@ -343,7 +408,9 @@
     @if (testSendTarget(); as target) {
       <div class="form test-send">
         <h3 class="q-subhead">{{ 'settings.notifications.testSend.title' | t }}</h3>
-        <label class="q-caption" for="test-send-locale">{{ 'settings.notifications.testSend.locale' | t }}</label>
+        <label class="q-caption" for="test-send-locale">{{
+          'settings.notifications.testSend.locale' | t
+        }}</label>
         <select
           id="test-send-locale"
           class="q-body field"
@@ -374,7 +441,12 @@
         }
 
         <div class="form__actions">
-          <button type="button" class="q-body secondary" (click)="closeTestSend()" [disabled]="testSendSubmitting()">
+          <button
+            type="button"
+            class="q-body secondary"
+            (click)="closeTestSend()"
+            [disabled]="testSendSubmitting()"
+          >
             {{ 'settings.notifications.action.close' | t }}
           </button>
           <button
@@ -416,7 +488,8 @@
     [title]="'settings.notifications.activate.confirm.title' | t"
     [body]="
       activateWithheldState()
-        ? ('settings.notifications.activate.confirm.bodyWithheld' | t: { state: moderationLabel(worstModeration(group)) })
+        ? ('settings.notifications.activate.confirm.bodyWithheld'
+          | t: { state: moderationLabel(worstModeration(group)) })
         : ('settings.notifications.activate.confirm.body' | t)
     "
     [confirmLabel]="'settings.notifications.activate.confirm.confirm' | t"

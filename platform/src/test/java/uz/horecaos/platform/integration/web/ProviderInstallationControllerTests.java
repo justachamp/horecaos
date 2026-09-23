@@ -353,6 +353,59 @@ class ProviderInstallationControllerTests {
                 .isEmpty();
     }
 
+    /**
+     * Gap-map row 10.8a: the resolver already prefers a location binding over
+     * its brand's (proven at the store layer by {@code
+     * JdbcProviderInstallationLookupTests.aLocationBindingWinsOverItsBrand});
+     * this is the same precedence, over HTTP, for the per-branch hub read.
+     */
+    @Test
+    void effectiveBindingsPrefersALocationBindingOverTheBrandDefault() {
+        UUID location = location("branch-one");
+        UUID brandInstallation = installation("sms-one");
+        UUID locationInstallation = installation("sms-two");
+        UUID brandBinding = activeBinding(brandInstallation, null);
+        UUID locationBinding = activeBinding(locationInstallation, location);
+        primaryCapability(brandBinding, "SEND_SMS");
+        primaryCapability(locationBinding, "SEND_SMS");
+
+        assertThat(controller.effectiveBindings(TENANT, BRAND)).singleElement().satisfies(view -> {
+            assertThat(view.locationId()).isEqualTo(location);
+            assertThat(view.capabilityCode()).isEqualTo("SEND_SMS");
+            assertThat(view.installationId())
+                    .as("the location's own binding wins, not the brand default")
+                    .isEqualTo(locationInstallation);
+            assertThat(view.bindingId()).isEqualTo(locationBinding);
+            assertThat(view.locationScoped()).isTrue();
+        });
+    }
+
+    @Test
+    void effectiveBindingsFallsBackToTheBrandDefaultWhenNoLocationBindingExists() {
+        UUID location = location("branch-two");
+        UUID brandInstallation = installation("sms-three");
+        UUID brandBinding = activeBinding(brandInstallation, null);
+        primaryCapability(brandBinding, "SEND_SMS");
+
+        assertThat(controller.effectiveBindings(TENANT, BRAND)).singleElement().satisfies(view -> {
+            assertThat(view.locationId()).isEqualTo(location);
+            assertThat(view.installationId()).isEqualTo(brandInstallation);
+            assertThat(view.bindingId()).isEqualTo(brandBinding);
+            assertThat(view.locationScoped())
+                    .as("inherited from the brand's own default, not bound to this branch")
+                    .isFalse();
+        });
+    }
+
+    @Test
+    void effectiveBindingsOmitsABranchWithNothingBoundAtEitherScope() {
+        location("branch-three");
+
+        assertThat(controller.effectiveBindings(TENANT, BRAND))
+                .as("no installation at brand or location scope means no row, not a null one")
+                .isEmpty();
+    }
+
     private UUID installation(String code) {
         jdbc.sql("""
                 INSERT INTO integration.provider_environments
@@ -411,6 +464,26 @@ class ProviderInstallationControllerTests {
         return id;
     }
 
+    /** An ACTIVE binding {@code effectiveBindings} can resolve, at the brand ({@code location} null) or a branch. */
+    private UUID activeBinding(UUID installation, @Nullable UUID location) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO integration.bindings
+                    (id, tenant_id, installation_id, brand_id, location_id, status)
+                VALUES (:id, :tenantId, :installationId, :brandId, :locationId, 'ACTIVE')
+                """)
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("installationId", installation)
+                .param("brandId", BRAND)
+                .param("locationId", location)
+                .update();
+        jdbc.sql("UPDATE integration.installations SET status = 'ACTIVE' WHERE id = :id")
+                .param("id", installation)
+                .update();
+        return id;
+    }
+
     private void capability(UUID binding, String code) {
         jdbc.sql("""
                 INSERT INTO integration.binding_capabilities
@@ -421,6 +494,36 @@ class ProviderInstallationControllerTests {
                 .param("tenantId", TENANT)
                 .param("code", code)
                 .update();
+    }
+
+    /** A primary, enabled capability — what {@code effectiveBindings} requires to resolve at all. */
+    private void primaryCapability(UUID binding, String code) {
+        jdbc.sql("""
+                INSERT INTO integration.binding_capabilities
+                    (binding_id, tenant_id, capability_code, enabled, is_primary)
+                VALUES (:bindingId, :tenantId, :code, true, true)
+                """)
+                .param("bindingId", binding)
+                .param("tenantId", TENANT)
+                .param("code", code)
+                .update();
+    }
+
+    private UUID location(String code) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.locations
+                    (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, :code, :slug, :displayName, 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("code", code.toUpperCase(java.util.Locale.ROOT))
+                .param("slug", code)
+                .param("displayName", code)
+                .update();
+        return id;
     }
 
     private void successfulPreflight(UUID installation, String snapshot) {

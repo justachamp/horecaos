@@ -32,6 +32,8 @@ import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
 import uz.horecaos.platform.notifications.domain.NotificationVariableCatalog;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore.VersionRow;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -101,7 +103,9 @@ public class NotificationTemplateController {
                         row.consentPurpose(),
                         row.status(),
                         row.activeVersion(),
-                        row.version()))
+                        row.version(),
+                        row.fulfillmentMode(),
+                        row.channelSource()))
                 .toList());
     }
 
@@ -129,7 +133,9 @@ public class NotificationTemplateController {
                     request.templateKey(),
                     request.notificationClass(),
                     request.channel(),
-                    request.consentPurpose())));
+                    request.consentPurpose(),
+                    request.fulfillmentMode(),
+                    request.channelSource())));
         } catch (IllegalArgumentException refused) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, refused.getMessage());
         }
@@ -284,11 +290,20 @@ public class NotificationTemplateController {
                         : row.providerReviewUpdatedAt().toString());
     }
 
+    /**
+     * @param fulfillmentMode gap-map row 10.9a: null for every fulfilment mode,
+     *                        set to create a variant that only resolves for
+     *                        delivery, pickup or dine-in orders
+     * @param channelSource null for every channel source, set to create a
+     *                      variant scoped to one inbound channel
+     */
     public record CreateTemplateRequest(
             @NotBlank @Size(max = 64) String templateKey,
             @NotNull NotificationClass notificationClass,
             @NotNull NotificationChannel channel,
-            @Nullable @Size(max = 64) String consentPurpose) {}
+            @Nullable @Size(max = 64) String consentPurpose,
+            @Nullable FulfillmentMode fulfillmentMode,
+            @Nullable SalesChannelSystemType channelSource) {}
 
     /**
      * One version's draft wording, submitted in every locale at once.
@@ -343,6 +358,11 @@ public class NotificationTemplateController {
             @Nullable String providerReviewNote,
             @Nullable String providerReviewUpdatedAt) {}
 
+    /**
+     * @param fulfillmentMode gap-map row 10.9a: null when this row resolves for
+     *                        every fulfilment mode
+     * @param channelSource null when this row resolves for every channel source
+     */
     public record TemplateResponse(
             UUID id,
             @Nullable UUID brandId,
@@ -352,7 +372,9 @@ public class NotificationTemplateController {
             @Nullable String consentPurpose,
             String status,
             @Nullable Integer activeVersion,
-            int version) {}
+            int version,
+            @Nullable String fulfillmentMode,
+            @Nullable String channelSource) {}
 
     /** One class's merge variables, for the editor's VariableChip picker. */
     public record VariableCatalogueEntry(String notificationClass, List<VariableCatalogueVariable> variables) {}

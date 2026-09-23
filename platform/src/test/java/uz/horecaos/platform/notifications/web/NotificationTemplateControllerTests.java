@@ -33,6 +33,8 @@ import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
 import uz.horecaos.platform.web.api.ApiException;
 
 /**
@@ -339,12 +341,22 @@ class NotificationTemplateControllerTests {
     // ------------------------------------------------------------- fixtures
 
     private UUID createSmsTemplate(String key) {
+        return createSmsTemplate(key, null, null);
+    }
+
+    private UUID createSmsTemplate(
+            String key, @Nullable FulfillmentMode fulfillmentMode, @Nullable SalesChannelSystemType channelSource) {
         return Objects.requireNonNull(controller
                         .create(
                                 tenantId,
                                 brandId,
                                 new NotificationTemplateController.CreateTemplateRequest(
-                                        key, NotificationClass.TRANSACTIONAL_REQUIRED, NotificationChannel.SMS, null))
+                                        key,
+                                        NotificationClass.TRANSACTIONAL_REQUIRED,
+                                        NotificationChannel.SMS,
+                                        null,
+                                        fulfillmentMode,
+                                        channelSource))
                         .getBody())
                 .id();
     }

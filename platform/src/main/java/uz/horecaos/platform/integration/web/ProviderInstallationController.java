@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
@@ -751,6 +752,71 @@ public class ProviderInstallationController {
                 .list();
     }
 
+    /**
+     * The per-branch install model row {@code 10.8a} asks for, surfaced: for
+     * every branch of this brand, and every capability bound there or
+     * inherited from the brand, which installation actually handles it.
+     *
+     * <p>The IA (10.8, 3.3) and ADR 0030 both frame this as tenant-default
+     * overridden per branch; {@code ProviderInstallationLookup.primaryBinding}
+     * already resolves exactly that precedence, one scope and capability at a
+     * time (proven by {@code JdbcProviderInstallationLookupTests.
+     * aLocationBindingWinsOverItsBrand}). This is the same specificity rule —
+     * a location binding outranks its brand's, narrower priority breaks a tie
+     * — run once across every branch and capability at once, because the hub
+     * has to show a whole brand's worth of branches in one screen rather than
+     * ask once per branch per capability.
+     *
+     * <p>{@code DISTINCT ON} plus the {@code ORDER BY} is the whole
+     * precedence rule, the same shape {@link #bindings} and {@code
+     * JdbcProviderInstallationLookup}'s own {@code candidates()} query take:
+     * one statement decides the winner rather than a read followed by
+     * in-memory comparison.
+     */
+    @GetMapping("/branches/effective-bindings")
+    @RequiresCapability(Capability.INTEGRATION_INSTALLATION_MANAGE)
+    @Operation(
+            summary = "The effective installation per branch, per capability (gap-map row 10.8a)",
+            description = "For every location of the given brand: the installation that would "
+                    + "actually handle each capability bound there, whether bound directly to the "
+                    + "location or inherited from the brand's own default. A branch with no row for "
+                    + "a capability has nothing bound at either scope.")
+    List<EffectiveBindingView> effectiveBindings(@PathVariable UUID tenantId, @RequestParam UUID brandId) {
+        return jdbc.sql("""
+                SELECT DISTINCT ON (loc.id, bc.capability_code)
+                       loc.id AS location_id, bc.capability_code,
+                       i.provider_category, i.provider_type,
+                       i.id AS installation_id, i.display_name AS installation_display_name,
+                       b.id AS binding_id, (b.location_id IS NOT NULL) AS location_scoped
+                  FROM tenant.locations loc
+                  JOIN integration.bindings b
+                    ON b.tenant_id = loc.tenant_id
+                   AND (b.location_id = loc.id OR (b.location_id IS NULL AND b.brand_id = loc.brand_id))
+                  JOIN integration.installations i
+                    ON i.id = b.installation_id AND i.tenant_id = b.tenant_id
+                  JOIN integration.binding_capabilities bc
+                    ON bc.binding_id = b.id AND bc.tenant_id = b.tenant_id
+                 WHERE loc.tenant_id = :tenantId AND loc.brand_id = :brandId
+                   AND b.status = 'ACTIVE' AND i.status = 'ACTIVE'
+                   AND bc.enabled AND bc.is_primary
+                   AND b.effective_from <= :now AND (b.effective_until IS NULL OR b.effective_until > :now)
+                 ORDER BY loc.id, bc.capability_code, (b.location_id IS NOT NULL) DESC, b.priority ASC
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("now", OffsetDateTime.now(ZoneOffset.UTC))
+                .query((rs, n) -> new EffectiveBindingView(
+                        rs.getObject("location_id", UUID.class),
+                        rs.getString("capability_code"),
+                        rs.getString("provider_category"),
+                        rs.getString("provider_type"),
+                        rs.getObject("installation_id", UUID.class),
+                        rs.getString("installation_display_name"),
+                        rs.getObject("binding_id", UUID.class),
+                        rs.getBoolean("location_scoped")))
+                .list();
+    }
+
     @PostMapping("/{installationId}/bindings/{bindingId}/activate")
     @RequiresCapability(value = Capability.INTEGRATION_BINDING_ACTIVATE, mutating = true)
     @Operation(
@@ -1124,6 +1190,26 @@ public class ProviderInstallationController {
             int priority,
             OffsetDateTime effectiveFrom,
             @Nullable OffsetDateTime effectiveUntil) {}
+
+    /**
+     * One branch, one capability, one resolved winner (gap-map row 10.8a).
+     *
+     * @param locationScoped true when {@code bindingId} is bound directly to
+     *                       this branch, false when it is inherited from the
+     *                       brand's own default — the "tenant-default
+     *                       overridden per branch" distinction the hub's own
+     *                       screen has to make visible rather than leave an
+     *                       operator to infer from two separate reads
+     */
+    public record EffectiveBindingView(
+            UUID locationId,
+            String capabilityCode,
+            String providerCategory,
+            String providerType,
+            UUID installationId,
+            String installationDisplayName,
+            UUID bindingId,
+            boolean locationScoped) {}
 
     /** Never carries a secret value, only its reference. */
     public record InstallationView(

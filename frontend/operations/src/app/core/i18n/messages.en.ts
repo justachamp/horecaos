@@ -834,6 +834,24 @@ export const messagesEn = {
   'settings.integrations.installations.column.lastRotated': 'Last rotated',
   'settings.integrations.installations.column.actions': 'Actions',
 
+  'settings.integrations.branches.title': 'Branches',
+  'settings.integrations.branches.empty': 'No installation is bound to any branch yet.',
+  'settings.integrations.branches.bindAction': 'Bind to a branch',
+  'settings.integrations.branches.column.branch': 'Branch',
+  'settings.integrations.branches.column.capability': 'Capability',
+  'settings.integrations.branches.column.installation': 'Installation',
+  'settings.integrations.branches.column.source': 'Source',
+  'settings.integrations.branches.source.branch': 'This branch',
+  'settings.integrations.branches.source.brand': 'Brand default',
+  'settings.integrations.branches.bindDialog.title': 'Bind an installation to a branch',
+  'settings.integrations.branches.bindDialog.lead':
+    'A branch binding overrides the brand default for that branch alone.',
+  'settings.integrations.branches.bindDialog.installation': 'Installation',
+  'settings.integrations.branches.bindDialog.branch': 'Branch',
+  'settings.integrations.branches.bindDialog.cancel': 'Cancel',
+  'settings.integrations.branches.bindDialog.submit': 'Bind',
+  'settings.integrations.branches.bindDialog.submitting': 'Binding…',
+
   'settings.integrations.merchantBindings.title': 'Merchant bindings',
   'settings.integrations.merchantBindings.empty': 'No merchant accounts registered yet.',
   'settings.integrations.merchantBindings.column.provider': 'Provider',
@@ -1274,6 +1292,12 @@ export const messagesEn = {
   'settings.notifications.field.activateImmediately': 'Activate this version immediately',
   'settings.notifications.field.channel.hint':
     'Only SMS and Telegram actually send today. Email and Push are declared so the schema and template key carry a channel, but no adapter delivers them yet.',
+  'settings.notifications.field.variant': 'Variant',
+  'settings.notifications.field.fulfilmentMode': 'Fulfilment mode',
+  'settings.notifications.field.channelSource': 'Channel source',
+  'settings.notifications.field.variant.any': 'Any',
+  'settings.notifications.field.variant.hint':
+    'Leave both as "Any" for the default wording. A variant only resolves for an order that matches it; the most specific match wins and a less specific wording is still the fallback.',
   'settings.notifications.empty': 'No templates yet.',
   'settings.notifications.action.rowMenu': 'Actions',
   'settings.notifications.action.versions': 'Versions',
