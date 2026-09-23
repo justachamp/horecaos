@@ -5,9 +5,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
 
 /**
  * {@link OrderDirectory} over the order store (ADR 0019).
@@ -20,9 +23,11 @@ import uz.horecaos.platform.ordering.api.OrderDirectory;
 public class JdbcOrderDirectory implements OrderDirectory {
 
     private final JdbcOrderStore orders;
+    private final JdbcClient jdbc;
 
-    public JdbcOrderDirectory(JdbcOrderStore orders) {
+    public JdbcOrderDirectory(JdbcOrderStore orders, JdbcClient jdbc) {
         this.orders = orders;
+        this.jdbc = jdbc;
     }
 
     @Override
@@ -41,6 +46,29 @@ public class JdbcOrderDirectory implements OrderDirectory {
                         order.currency(),
                         order.totalMinor(),
                         order.version()));
+    }
+
+    /**
+     * Joins straight to {@code tenant.sales_channels} rather than through a
+     * tenancy port, the same posture {@code JdbcTemplateStore.smsWordingAwaitsGateway}
+     * already takes for a cross-schema read this small: the rule needs one
+     * column ({@code system_type}), not tenancy's own types.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<NotificationContext> notificationContext(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT o.fulfillment_mode, c.system_type
+                  FROM ordering.orders o
+                  JOIN tenant.sales_channels c ON c.tenant_id = o.tenant_id AND c.id = o.channel_id
+                 WHERE o.tenant_id = :tenantId AND o.id = :orderId
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> new NotificationContext(
+                        FulfillmentMode.valueOf(row.getString("fulfillment_mode")),
+                        SalesChannelSystemType.require(row.getString("system_type"))))
+                .optional();
     }
 
     @Override

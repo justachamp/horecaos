@@ -38,28 +38,95 @@ public class JdbcTemplateStore {
     // ------------------------------------------------------------------ reads
 
     /**
-     * The template that applies here, brand override first.
-     *
-     * <p>{@code ORDER BY brand_id NULLS LAST} is the whole precedence rule. The
-     * brand predicate is an OR rather than two queries so the choice is made by
-     * one statement, and a brand id belonging to another tenant still matches
-     * nothing because the tenant predicate is applied first.
+     * The template that applies here, brand override first, with no variant
+     * dimension asked for. Delegates to the six-argument overload below with
+     * both null — matching every caller that predates gap-map row {@code
+     * 10.9a} and has no fulfilment mode or channel source to narrow by (a
+     * campaign message, for one: {@code CampaignTelegramDeliveryService}
+     * resolves an audience-wide wording, never an order's own).
      */
     public Optional<TemplateRow> activeTemplate(UUID tenantId, UUID brandId, String templateKey, String channel) {
+        return activeTemplate(tenantId, brandId, templateKey, channel, null, null);
+    }
+
+    /**
+     * The template that applies here, most specific variant first.
+     *
+     * <p>Four independent dimensions, each nullable meaning "any": brand,
+     * fulfilment mode, and channel source all narrow a tenant-wide default,
+     * exactly as brand alone used to. The predicate for each is an OR against
+     * NULL rather than a separate query per combination, so the choice is
+     * still made by one statement, and a brand id belonging to another tenant
+     * still matches nothing because the tenant predicate is applied first.
+     *
+     * <p>{@code ORDER BY} sums how many of the three optional dimensions this
+     * row pins down and ranks the highest total first — the same "narrowest
+     * scope wins" rule {@code JdbcProviderInstallationLookup.specificity()}
+     * applies to a provider binding's brand-vs-location scope, generalised to
+     * three dimensions instead of two. A caller that passes null for
+     * {@code fulfillmentMode} or {@code channelSource} (nothing is known, not
+     * "this order has none") can still only match a row that is itself null
+     * on that dimension — passing null never accidentally selects a
+     * variant-specific row it did not ask for.
+     *
+     * <p><strong>Tie-break between equally specific rows on different
+     * dimensions is a side effect of column order, not a product rule.</strong>
+     * A fulfilment-mode-only variant (specificity 1) and a channel-source-only
+     * variant (specificity 1) can both match the same order — a delivery order
+     * placed on the storefront, say — and {@code fulfillment_mode NULLS LAST}
+     * is listed before {@code channel_source NULLS LAST}, so the fulfilment
+     * variant always wins that tie, silently, with no way for an operator to
+     * ask for the other one instead. No ADR decides which dimension should
+     * take precedence, so this is documented and pinned by {@code
+     * TemplateVariantResolutionTests
+     * .aFulfilmentOnlyVariantOutranksAChannelOnlyVariantOfEqualSpecificity}
+     * rather than changed here; reordering these two lines is a real,
+     * deliberate precedence change and that test will catch it.
+     *
+     * @param fulfillmentMode null when the message is not about an order, or
+     *                        its fulfilment mode is not known to the caller
+     * @param channelSource null under the same conditions
+     */
+    public Optional<TemplateRow> activeTemplate(
+            UUID tenantId,
+            UUID brandId,
+            String templateKey,
+            String channel,
+            @Nullable String fulfillmentMode,
+            @Nullable String channelSource) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("brandId", brandId);
         parameters.put("key", templateKey);
         parameters.put("channel", channel);
+        parameters.put("fulfillmentMode", fulfillmentMode);
+        parameters.put("channelSource", channelSource);
 
         return jdbc.sql("""
                 SELECT id, tenant_id, brand_id, template_key, notification_class, channel,
-                       consent_purpose, status, active_version, version
+                       consent_purpose, status, active_version, version, fulfillment_mode, channel_source
                 FROM notifications.templates
                 WHERE tenant_id = :tenantId AND template_key = :key AND channel = :channel
                   AND status = 'ACTIVE'
                   AND (brand_id = :brandId OR brand_id IS NULL)
-                ORDER BY brand_id NULLS LAST
+                  AND (fulfillment_mode = CAST(:fulfillmentMode AS varchar) OR fulfillment_mode IS NULL)
+                  AND (channel_source = CAST(:channelSource AS varchar) OR channel_source IS NULL)
+                  -- CAST pins the bind's SQL type: an untyped NULL parameter here
+                  -- (fulfillmentMode/channelSource both nullable, and null is the
+                  -- common case for a non-order message) otherwise leaves the
+                  -- driver unable to infer one, the same reason JdbcOrderStore's
+                  -- own optional fulfilment-mode filter already casts.
+                ORDER BY
+                    (CASE WHEN brand_id IS NOT NULL THEN 1 ELSE 0 END
+                     + CASE WHEN fulfillment_mode IS NOT NULL THEN 1 ELSE 0 END
+                     + CASE WHEN channel_source IS NOT NULL THEN 1 ELSE 0 END) DESC,
+                    brand_id NULLS LAST,
+                    -- Below the specificity sum, this column order is itself the
+                    -- tiebreak between two equally-specific rows on different
+                    -- dimensions: fulfilment_mode beats channel_source whenever
+                    -- both match. See this method's own doc comment.
+                    fulfillment_mode NULLS LAST,
+                    channel_source NULLS LAST
                 LIMIT 1
                 """)
                 .params(parameters)
@@ -70,7 +137,7 @@ public class JdbcTemplateStore {
     public Optional<TemplateRow> template(UUID tenantId, UUID templateId) {
         return jdbc.sql("""
                 SELECT id, tenant_id, brand_id, template_key, notification_class, channel,
-                       consent_purpose, status, active_version, version
+                       consent_purpose, status, active_version, version, fulfillment_mode, channel_source
                 FROM notifications.templates
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
@@ -87,10 +154,10 @@ public class JdbcTemplateStore {
 
         return jdbc.sql("""
                 SELECT id, tenant_id, brand_id, template_key, notification_class, channel,
-                       consent_purpose, status, active_version, version
+                       consent_purpose, status, active_version, version, fulfillment_mode, channel_source
                 FROM notifications.templates
                 WHERE tenant_id = :tenantId AND (brand_id = :brandId OR brand_id IS NULL)
-                ORDER BY template_key, channel, brand_id NULLS LAST
+                ORDER BY template_key, channel, brand_id NULLS LAST, fulfillment_mode NULLS LAST, channel_source NULLS LAST
                 """)
                 .params(parameters)
                 .query(JdbcTemplateStore::templateRow)
@@ -185,6 +252,8 @@ public class JdbcTemplateStore {
             String notificationClass,
             String channel,
             @Nullable String consentPurpose,
+            @Nullable String fulfillmentMode,
+            @Nullable String channelSource,
             Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", id);
@@ -194,14 +263,16 @@ public class JdbcTemplateStore {
         parameters.put("class", notificationClass);
         parameters.put("channel", channel);
         parameters.put("purpose", consentPurpose);
+        parameters.put("fulfillmentMode", fulfillmentMode);
+        parameters.put("channelSource", channelSource);
         parameters.put("now", utc(now));
 
         jdbc.sql("""
                 INSERT INTO notifications.templates (
                     id, tenant_id, brand_id, template_key, notification_class, channel,
-                    consent_purpose, status, created_at, updated_at)
+                    consent_purpose, fulfillment_mode, channel_source, status, created_at, updated_at)
                 VALUES (:id, :tenantId, :brandId, :key, :class, :channel,
-                    :purpose, 'DRAFT', :now, :now)
+                    :purpose, :fulfillmentMode, :channelSource, 'DRAFT', :now, :now)
                 """).params(parameters).update();
     }
 
@@ -395,7 +466,9 @@ public class JdbcTemplateStore {
                 // would then try to resolve. A template awaiting its first
                 // activation is exactly this case.
                 row.getObject("active_version", Integer.class),
-                row.getInt("version"));
+                row.getInt("version"),
+                row.getString("fulfillment_mode"),
+                row.getString("channel_source"));
     }
 
     private static VersionRow versionRow(java.sql.ResultSet row, int number) throws java.sql.SQLException {
@@ -438,11 +511,20 @@ public class JdbcTemplateStore {
             @Nullable String consentPurpose,
             String status,
             @Nullable Integer activeVersion,
-            int version) {
+            int version,
+            /** Null matches every fulfilment mode (gap-map row 10.9a). */
+            @Nullable String fulfillmentMode,
+            /** Null matches every channel source (gap-map row 10.9a). */
+            @Nullable String channelSource) {
 
         /** Whether this row is the tenant's default rather than a brand's override. */
         public boolean isTenantWide() {
             return brandId == null;
+        }
+
+        /** Whether this row narrows by fulfilment mode, channel source, or both. */
+        public boolean isVariant() {
+            return fulfillmentMode != null || channelSource != null;
         }
     }
 

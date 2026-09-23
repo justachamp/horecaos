@@ -82,6 +82,27 @@ export class IntegrationsApi {
     return result.value ?? [];
   }
 
+  /**
+   * ADR 0106, gap-map row 10.8a: the per-branch install model — tenant
+   * default overridden per branch — surfaced. For every location of a brand,
+   * which installation actually resolves each capability there, whether the
+   * winning binding is bound to that branch or inherited from the brand's
+   * own default (mirrors `ProviderInstallationLookup`'s own location-over
+   * -brand precedence, run across a whole brand's branches at once).
+   */
+  async effectiveBindings(
+    scope: LocationScope,
+    brandId: string,
+  ): Promise<readonly EffectiveBindingView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly EffectiveBindingView[]>(
+        settingsPaths.integrationBranchesEffectiveBindings(scope),
+        { params: { brandId } },
+      ),
+    );
+    return result.value ?? [];
+  }
+
   async activateBinding(
     scope: LocationScope,
     installationId: string,
@@ -562,6 +583,19 @@ export interface BindingView {
   readonly priority: number;
   readonly effectiveFrom: string;
   readonly effectiveUntil: string | null;
+}
+
+/** Mirrors `ProviderInstallationController.EffectiveBindingView` (gap-map row 10.8a). */
+export interface EffectiveBindingView {
+  readonly locationId: string;
+  readonly capabilityCode: string;
+  readonly providerCategory: string;
+  readonly providerType: string;
+  readonly installationId: string;
+  readonly installationDisplayName: string;
+  readonly bindingId: string;
+  /** True when bound directly to this branch; false when inherited from the brand's own default. */
+  readonly locationScoped: boolean;
 }
 
 /** Mirrors ProviderCapabilityReconciliationService.Reconciliation. */

@@ -69,7 +69,15 @@ public record MetricDefinition(
         COUNT_DISTINCT,
         RATIO,
         MEDIAN,
-        DISTRIBUTION
+        DISTRIBUTION,
+        /**
+         * Wave 9 w4-reports-distance-crm (7.1): a mean over a filtered slice of
+         * {@code fact_order} directly, the same "cannot be composed from
+         * per-slice figures over {@code agg_branch_day}" reasoning {@link
+         * #MEDIAN} already documents — its own endpoint, never {@code
+         * /queries}.
+         */
+        AVERAGE
     }
 
     /**
@@ -92,7 +100,8 @@ public record MetricDefinition(
         COUNT,
         SECONDS,
         MINUTES,
-        BASIS_POINTS
+        BASIS_POINTS,
+        METERS
     }
 
     public MetricDefinition {

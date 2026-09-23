@@ -8,6 +8,7 @@ import { I18n } from '../../core/i18n/i18n';
 import { LocationView, LocationsApi } from '../settings/locations/locations-api';
 import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { OrderReportsPage } from './order-reports-page';
+import { CrmLogListResponse, CrmLogRowResponse, OrderCrmLogApi } from './order-crm-log-api';
 import { ReportsFilterState } from './reports-filter-state';
 import {
   OrderListResponse,
@@ -73,6 +74,26 @@ function ordersResponse(rows: readonly OrderRowResponse[], maybeMore = false): O
   return { rows, maybeMore, provenance: provenance() };
 }
 
+/** Wave 9 w4-reports-distance-crm (7.2a): one CRM row, the shape `GET /orders/crm-log` returns. */
+function crmRow(overrides: Partial<CrmLogRowResponse> = {}): CrmLogRowResponse {
+  return {
+    orderId: '018f6f4e-0000-7000-8000-000000000001',
+    occurredAt: '2026-09-10T08:00:00Z',
+    locationId: 'loc-1',
+    customerType: 'ACCOUNT',
+    anonymized: false,
+    customerName: 'Nodira Yusupova',
+    customerPhone: '+998 90 ••• •• 11',
+    operatorPrincipalId: 'keycloak-operator-1',
+    courierDisplayReference: 'K-021',
+    ...overrides,
+  };
+}
+
+function crmLogResponse(rows: readonly CrmLogRowResponse[], maybeMore = false): CrmLogListResponse {
+  return { rows, maybeMore };
+}
+
 /** One `/queries` row behind «Сводка» — wave 8 w7-reports (7.2c)'s own summary-tab fixture. */
 function summaryRow(overrides: {
   readonly locationId: string;
@@ -108,6 +129,7 @@ describe('OrderReportsPage', () => {
   let fixture: ComponentFixture<OrderReportsPage>;
   let ordersSpy: ReturnType<typeof vi.fn>;
   let querySpy: ReturnType<typeof vi.fn>;
+  let crmLogSpy: ReturnType<typeof vi.fn>;
 
   /**
    * `ordersMock`/`queryMock` let a test install its own multi-call sequence
@@ -117,6 +139,7 @@ describe('OrderReportsPage', () => {
   async function render(options?: {
     readonly ordersMock?: ReturnType<typeof vi.fn>;
     readonly queryMock?: ReturnType<typeof vi.fn>;
+    readonly crmLogMock?: ReturnType<typeof vi.fn>;
     readonly configure?: (filters: ReportsFilterState) => void;
     readonly initialTab?: 'stages' | 'commercial' | 'daily' | 'summary' | 'late';
     readonly locations?: readonly LocationView[];
@@ -133,6 +156,11 @@ describe('OrderReportsPage', () => {
     querySpy =
       options?.queryMock ??
       vi.fn().mockResolvedValue({ rows: [], provenance: provenance() } satisfies QueryResponse);
+    // Wave 9 w4-reports-distance-crm (7.2a): defaults to no CRM rows so every
+    // pre-existing test in this file (none of which knows about the CRM
+    // columns) sees the same `—` cells `order-rows-table.spec.ts` already
+    // covers, rather than a real, unmocked HTTP call.
+    crmLogSpy = options?.crmLogMock ?? vi.fn().mockResolvedValue(crmLogResponse([]));
 
     await TestBed.configureTestingModule({
       imports: [OrderReportsPage],
@@ -148,6 +176,7 @@ describe('OrderReportsPage', () => {
           },
         },
         { provide: ReportingApi, useValue: { orders: ordersSpy, query: querySpy } },
+        { provide: OrderCrmLogApi, useValue: { log: crmLogSpy } },
         {
           provide: LocationsApi,
           useValue: { list: vi.fn().mockResolvedValue(options?.locations ?? []) },
@@ -255,6 +284,71 @@ describe('OrderReportsPage', () => {
     const host = fixture.nativeElement as HTMLElement;
     expect(host.textContent).toContain('0001');
     expect(host.textContent).toContain('0002');
+  });
+
+  // ---------------------------------- wave 9 w4-reports-distance-crm (7.2a)
+
+  it('joins the CRM read (customer/operator/courier) onto «Заказы» by orderId, never fetched for the other tabs', async () => {
+    const order = orderRow({ orderId: 'order-crm-1' });
+    const crmLogMock = vi
+      .fn()
+      .mockResolvedValue(crmLogResponse([crmRow({ orderId: 'order-crm-1' })]));
+
+    await render({
+      ordersMock: vi.fn().mockResolvedValue(ordersResponse([order])),
+      crmLogMock,
+      initialTab: 'commercial',
+    });
+
+    expect(crmLogMock).toHaveBeenCalledWith(
+      SCOPE.tenantId,
+      expect.objectContaining({ from: expect.any(String), to: expect.any(String) }),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="order-row-customer"]')?.textContent).toContain(
+      'Nodira Yusupova',
+    );
+    expect(host.querySelector('[data-testid="order-row-courier"]')?.textContent?.trim()).toBe(
+      'K-021',
+    );
+
+    // «Этапы» never calls the CRM read at all — it has no customer/operator/
+    // courier columns (STAGE_COLUMNS), and the CRM log is a second, audited
+    // read that should not fire for a tab that never renders it.
+    crmLogMock.mockClear();
+    internals().selectTab('stages');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    expect(crmLogMock).not.toHaveBeenCalled();
+  });
+
+  it('clears a stale CRM row rather than showing it against a different order after a filter change', async () => {
+    const first = orderRow({ orderId: 'order-crm-a' });
+    const crmLogMock = vi
+      .fn()
+      .mockResolvedValueOnce(crmLogResponse([crmRow({ orderId: 'order-crm-a' })]))
+      .mockResolvedValueOnce(crmLogResponse([]));
+
+    await render({
+      ordersMock: vi.fn().mockResolvedValue(ordersResponse([first])),
+      crmLogMock,
+      initialTab: 'commercial',
+    });
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="order-row-customer"]')
+        ?.textContent,
+    ).toContain('Nodira Yusupova');
+
+    TestBed.inject(ReportsFilterState).setLocationIds(['loc-9']);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement)
+        .querySelector('[data-testid="order-row-customer"]')
+        ?.textContent?.trim(),
+    ).toBe('—');
   });
 
   it('always groups the daily/summary money queries by LEGAL_ENTITY (ADR 0038)', async () => {

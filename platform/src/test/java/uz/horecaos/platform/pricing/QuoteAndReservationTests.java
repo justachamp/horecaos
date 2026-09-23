@@ -130,6 +130,33 @@ class QuoteAndReservationTests {
         seedPricing();
     }
 
+    /**
+     * A second {@code QuoteService} over the same tables but a different
+     * {@code ConfigurationResolver}, for the {@code catalog.qr_kiosk_price_plane}
+     * tests that need the switch on — {@link #quotes} keeps the code default
+     * (off) so every other test in this suite is unaffected.
+     */
+    private QuoteService quotesWithConfiguration(uz.horecaos.platform.tenancy.api.ConfigurationResolver configuration) {
+        var deliveryFees = new uz.horecaos.platform.fulfillment.application.DeliveryFeeResolver(
+                new uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore(jdbc),
+                new uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryTariffStore(jdbc),
+                new uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryFeeResolutionStore(
+                        jdbc, JsonMapper.builder().build()),
+                (origin, destination, installationId) -> java.util.Optional.empty(),
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+        var promoCodeStore = new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build());
+        return new QuoteService(
+                pricingStore,
+                new PricingEngine(),
+                new JdbcCatalogPricingContext(jdbc, "uz"),
+                channelStore,
+                deliveryFees,
+                promoCodeStore,
+                new PromoCodeEligibilityService(promoCodeStore),
+                clock,
+                configuration);
+    }
+
     @Test
     @DisplayName("a cart is priced at the menu price with VAT inside it")
     void aCartIsPricedInclusiveOfVat() {
@@ -225,6 +252,103 @@ class QuoteAndReservationTests {
                         .single())
                 .as("the plane is followed, not copied: QR still has no assignment of its own")
                 .isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "catalog.qr_kiosk_price_plane off: a QR channel with no price plane of its own " + "still prices as itself")
+    void qrWithNoPricePlaneAndSwitchOffPricesAsItself() {
+        UUID hallBook = seedPriceBook("HALL_MENU", 0);
+        seedAssignment(hallBook, "CHANNEL", seedChannel("HALL", "POS", null), 0);
+        seedPrice(hallBook, "VARIANT", burgerVariant, 61_000L);
+        seedChannel("QR2", "QR_TABLE", null);
+        seedPublication("QR2");
+
+        // The suite's default `quotes` uses a FakeConfigurationResolver with no
+        // overrides, so `catalog.qr_kiosk_price_plane` resolves to its off code
+        // default. Gap map row 4.4d's own trap: the key existing must not by
+        // itself change behaviour for a tenant who never turned it on.
+        assertThat(quotes.quote(cart(Map.of(burgerVariant, 1), "QR2")).total().minor())
+                .as("no channel-scoped assignment of its own, so the brand book still wins")
+                .isEqualTo(50_000L);
+    }
+
+    @Test
+    @DisplayName("catalog.qr_kiosk_price_plane on: a QR channel with no price plane of its own "
+            + "takes the tenant's single hall (POS) channel's prices")
+    void qrWithNoPricePlaneAndSwitchOnTakesTheHallsPrices() {
+        UUID hallBook = seedPriceBook("HALL_MENU", 0);
+        seedAssignment(hallBook, "CHANNEL", seedChannel("HALL", "POS", null), 0);
+        seedPrice(hallBook, "VARIANT", burgerVariant, 61_000L);
+        UUID qr = seedChannel("QR3", "QR_TABLE", null);
+        seedPublication("QR3");
+
+        var quotesWithSwitchOn =
+                quotesWithConfiguration(new FakeConfigurationResolver(Map.of("catalog.qr_kiosk_price_plane", true)));
+
+        assertThat(quotesWithSwitchOn
+                        .quote(cart(Map.of(burgerVariant, 1), "QR3"))
+                        .total()
+                        .minor())
+                .as("no manual price_plane_channel_id was ever set on QR3 — the switch alone did this")
+                .isEqualTo(61_000L);
+        assertThat(jdbc.sql("SELECT price_plane_channel_id FROM tenant.sales_channels WHERE id = :id")
+                        .param("id", qr)
+                        .query(UUID.class)
+                        .optional())
+                .as("the substitution is resolved at read time and never written back to the row")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("catalog.qr_kiosk_price_plane on: a manual price_plane_channel_id still outranks the switch")
+    void aManualOverrideOutranksTheSwitch() {
+        UUID hallBook = seedPriceBook("HALL_MENU", 0);
+        UUID hall = seedChannel("HALL", "POS", null);
+        seedAssignment(hallBook, "CHANNEL", hall, 0);
+        seedPrice(hallBook, "VARIANT", burgerVariant, 61_000L);
+
+        UUID aggregatorChannel = seedChannel("AGGREGATOR", "AGGREGATOR", null);
+        UUID aggregatorBook = seedPriceBook("AGGREGATOR_MENU", 0);
+        seedAssignment(aggregatorBook, "CHANNEL", aggregatorChannel, 0);
+        seedPrice(aggregatorBook, "VARIANT", burgerVariant, 77_000L);
+
+        // QR5 was pointed at the aggregator by hand, before this switch existed
+        // — an operator's own choice, which the switch must not second-guess
+        // even though QR5 is exactly the kind of channel it otherwise defaults.
+        seedChannel("QR5", "QR_TABLE", aggregatorChannel);
+        seedPublication("QR5");
+
+        var quotesWithSwitchOn =
+                quotesWithConfiguration(new FakeConfigurationResolver(Map.of("catalog.qr_kiosk_price_plane", true)));
+
+        assertThat(quotesWithSwitchOn
+                        .quote(cart(Map.of(burgerVariant, 1), "QR5"))
+                        .total()
+                        .minor())
+                .as("QR5 has a price plane of its own (the aggregator), so the hall default never applies")
+                .isEqualTo(77_000L);
+    }
+
+    @Test
+    @DisplayName("catalog.qr_kiosk_price_plane on: two active POS channels name no unambiguous hall")
+    void twoPosChannelsNameNoHall() {
+        UUID hallBook = seedPriceBook("HALL_MENU", 0);
+        seedAssignment(hallBook, "CHANNEL", seedChannel("HALL_A", "POS", null), 0);
+        seedChannel("HALL_B", "POS", null);
+        seedPrice(hallBook, "VARIANT", burgerVariant, 61_000L);
+        seedChannel("QR4", "QR_TABLE", null);
+        seedPublication("QR4");
+
+        var quotesWithSwitchOn =
+                quotesWithConfiguration(new FakeConfigurationResolver(Map.of("catalog.qr_kiosk_price_plane", true)));
+
+        assertThat(quotesWithSwitchOn
+                        .quote(cart(Map.of(burgerVariant, 1), "QR4"))
+                        .total()
+                        .minor())
+                .as("HALL_A and HALL_B name no single hall, so QR4 still prices as itself")
+                .isEqualTo(50_000L);
     }
 
     @Test

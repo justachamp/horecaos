@@ -40,6 +40,7 @@ const READINESS_CODE_KEYS: Readonly<Record<string, MessageKey>> = {
   NO_DELIVERY_ZONE: 'settings.home.readiness.code.NO_DELIVERY_ZONE',
   NO_DELIVERY_TARIFF: 'settings.home.readiness.code.NO_DELIVERY_TARIFF',
   POS_BINDING_UNHEALTHY: 'settings.home.readiness.code.POS_BINDING_UNHEALTHY',
+  NO_ACTIVE_BRAND: 'settings.home.readiness.code.NO_ACTIVE_BRAND',
   NO_PUBLISHED_MENU: 'settings.home.readiness.code.NO_PUBLISHED_MENU',
   NO_AVAILABLE_ITEM: 'settings.home.readiness.code.NO_AVAILABLE_ITEM',
   MEDIA_NOT_AVAILABLE: 'settings.home.readiness.code.MEDIA_NOT_AVAILABLE',
@@ -47,18 +48,26 @@ const READINESS_CODE_KEYS: Readonly<Record<string, MessageKey>> = {
 
 /**
  * Where a finding deep-links to. A location-scoped finding always wins (more
- * specific than any code-keyed guess); a couple of tenant/brand-scoped codes
- * still have an obvious door even with no location attached.
+ * specific than any code-keyed guess); a handful of tenant/brand-scoped codes
+ * still have an obvious door even with no location attached — wave 9 adds the
+ * catalogue readiness codes now that `CatalogReadinessValidate` names every
+ * offending brand instead of stopping at the first (gap map row 10.0).
  */
 function readinessLink(finding: ValidationResult): readonly string[] | null {
   if (finding.locationId) {
     return ['/settings/locations', finding.locationId];
   }
-  if (finding.errorCode === 'NO_BRAND' || finding.errorCode === 'NO_LOCATION') {
+  if (finding.errorCode === 'NO_BRAND' || finding.errorCode === 'NO_ACTIVE_BRAND') {
+    return ['/settings/brand'];
+  }
+  if (finding.errorCode === 'NO_LOCATION') {
     return ['/settings/locations'];
   }
   if (finding.errorCode === 'POS_BINDING_UNHEALTHY') {
     return ['/settings/integrations'];
+  }
+  if (finding.errorCode === 'NO_PUBLISHED_MENU' || finding.errorCode === 'NO_AVAILABLE_ITEM') {
+    return ['/catalog/publication'];
   }
   return null;
 }

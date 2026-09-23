@@ -25,6 +25,14 @@ import { MessageKey } from '../../core/i18n/messages.en';
  * a real handler; `order-detail-pane.ts`'s `onActionClick` opens
  * `q-order-amend-menu`, and `order-queue.ts`'s opens the order itself, since
  * the menu's five dialogs live on the detail pane, not the row.
+ *
+ * `OVERRIDE` (ADR 0019 amendment, ADR 0110, wave 9 gap map `1.1h`) restores an
+ * earlier status through `POST .../state-overrides` — a compensating edge
+ * (`READY -> PREPARING`, `FULFILLING -> READY`), never a literal reversal.
+ * Distinct from `ADVANCE` the same way `CANCEL` already is: its own
+ * capability (`ORDER_STATE_OVERRIDE`), its own dialog, and a mandatory
+ * registry reason with no reasonless path. `targetStatus` names the status it
+ * restores, exactly as it does for `ADVANCE`.
  */
 export const ORDER_ACTION_CODES = [
   'APPROVE',
@@ -33,6 +41,7 @@ export const ORDER_ACTION_CODES = [
   'CANCEL',
   'COMPLETE',
   'AMEND',
+  'OVERRIDE',
 ] as const;
 export type OrderActionCode = (typeof ORDER_ACTION_CODES)[number];
 
@@ -76,6 +85,18 @@ const ADVANCE_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
 };
 
 /**
+ * `OVERRIDE`'s own button word, by the target it restores — distinct from
+ * {@link ADVANCE_LABEL_KEYS} even where the target status is the same one
+ * (`READY`), because "На кухню" (send forward) and "Вернуть на кухню" (send
+ * back) are different instructions to an operator holding two different
+ * capabilities.
+ */
+const OVERRIDE_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
+  PREPARING: 'orders.action.override.PREPARING',
+  READY: 'orders.action.override.READY',
+};
+
+/**
  * The label for one `actions[]` entry.
  *
  * `ADVANCE` is not one label: §2.9/§4.11 name it by what the *target* status
@@ -107,6 +128,11 @@ export function actionLabel(
         : translate('orders.action.advance.completedPickup');
     case 'AMEND':
       return translate('orders.action.amend');
+    case 'OVERRIDE': {
+      const target = action.targetStatus ?? '';
+      const key = OVERRIDE_LABEL_KEYS[target];
+      return key ? translate(key) : translate('orders.action.override.generic', { status: statusLabel(target) });
+    }
     case 'ADVANCE': {
       const target = action.targetStatus ?? '';
       if (target === 'COMPLETED') {

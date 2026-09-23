@@ -215,7 +215,7 @@ public class OperationsOrderController {
             @RequestParam(defaultValue = "100") @jakarta.validation.constraints.Max(500) int limit) {
 
         JdbcOrderStore.OrderListQuery query =
-                boardQuery(tenantId, brandId, locationId, status, null, null, null, null, null, null, null, null);
+                boardQuery(tenantId, brandId, locationId, status, null, null, null, null, null, null, null, null, null);
         Set<Capability> granted = grantedOrderActionCapabilities(tenantId, brandId, locationId);
         return ResponseEntity.ok(orderQuery.forLocation(query, null, limit).stream()
                 .map(row -> OrderSummaryResponse.of(row, granted))
@@ -236,7 +236,12 @@ public class OperationsOrderController {
                     + "query — it is a filter, not the tenant-wide search of orders.md §2.8, "
                     + "which needs an endpoint at its own scope: nothing here reaches past this "
                     + "location. It is not a phone lookup either: a phone number goes in a POST "
-                    + "body, never a query string (orders.md §2.8, ADR 0029). Keyset-paginated "
+                    + "body, never a query string (orders.md §2.8, ADR 0029). `origin` narrows to "
+                    + "how the order arrived — `HORECAOS` for the tenant's own channels or "
+                    + "`MARKETPLACE` for anything recorded under an aggregator's own binding "
+                    + "(ADR 0040, wave 9 row `1.1c`) — the coarse «Источник» toggle orders.md §2.4 "
+                    + "names; picking one specific aggregator binding when a tenant runs several "
+                    + "is not yet a filter here. Keyset-paginated "
                     + "(ADR 0031): pass the previous page's `nextCursor` back as `cursor`. "
                     + "Changing a filter invalidates the cursor — start the list again — because "
                     + "a window cut for one filter set says nothing about another.")
@@ -253,6 +258,7 @@ public class OperationsOrderController {
             @RequestParam(required = false) @Nullable String paymentMethodCode,
             @RequestParam(required = false) @Nullable String createdByActorId,
             @RequestParam(required = false) @Nullable String reference,
+            @RequestParam(required = false) @Nullable String origin,
             @RequestParam(required = false) @Nullable String cursor,
             @RequestParam(required = false) @Nullable Integer limit) {
 
@@ -268,7 +274,8 @@ public class OperationsOrderController {
                 courierId,
                 paymentMethodCode,
                 createdByActorId,
-                reference);
+                reference,
+                origin);
 
         String filterHash = filterHashOf(query);
         @Nullable UUID cursorOrderId = null;
@@ -316,12 +323,14 @@ public class OperationsOrderController {
             @Nullable UUID courierId,
             @Nullable String paymentMethodCode,
             @Nullable String createdByActorId,
-            @Nullable String reference) {
+            @Nullable String reference,
+            @Nullable String origin) {
 
         List<String> statuses = status == null ? List.of() : status;
         statuses.forEach(OperationsOrderController::requireKnownStatus);
         requireKnownFulfillmentMode(fulfillmentMode);
         requireSearchableReference(reference);
+        requireKnownOrigin(origin);
 
         return new JdbcOrderStore.OrderListQuery(
                 tenantId,
@@ -335,7 +344,8 @@ public class OperationsOrderController {
                 courierId,
                 paymentMethodCode,
                 createdByActorId,
-                reference);
+                reference,
+                origin == null ? null : origin.toUpperCase(Locale.ROOT));
     }
 
     /**
@@ -370,6 +380,22 @@ public class OperationsOrderController {
             // Dropping an unknown mode would answer "no orders" for a typo, which
             // reads to an operator as a branch that has stopped taking delivery.
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown fulfillment mode \"%s\"".formatted(mode));
+        }
+    }
+
+    /**
+     * `ordering.orders.origin`'s own two values (V0038, ADR 0040) — dropping an
+     * unknown one would silently answer "no orders" for a typo, exactly the
+     * failure {@link #requireKnownFulfillmentMode} already refuses for its own
+     * parameter.
+     */
+    private static void requireKnownOrigin(@Nullable String origin) {
+        if (origin == null) {
+            return;
+        }
+        String normalised = origin.toUpperCase(Locale.ROOT);
+        if (!normalised.equals("HORECAOS") && !normalised.equals("MARKETPLACE")) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown order origin \"%s\"".formatted(origin));
         }
     }
 
@@ -2115,8 +2141,10 @@ public class OperationsOrderController {
      *
      * @param action       the code the client matches on; see {@link
      *                     uz.horecaos.platform.ordering.application.OrderActionCode}
-     * @param targetStatus the status {@code ADVANCE} would move the order to.
-     *                     Null for every other action
+     * @param targetStatus the status {@code ADVANCE} would move the order to,
+     *                     or the status {@code OVERRIDE} would restore it to
+     *                     (ADR 0019 amendment, ADR 0110, wave P41). Null for
+     *                     every other action
      */
     public record OrderActionResponse(
             String action, @Nullable String targetStatus) {

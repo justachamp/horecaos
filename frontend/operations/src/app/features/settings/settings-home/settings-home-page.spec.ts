@@ -151,6 +151,70 @@ describe('SettingsHomePage', () => {
     expect(link.getAttribute('href')).toBe('/settings/locations/loc-1');
   });
 
+  it('counts every offending brand as its own row for a brand-scoped check (wave 9: catalog readiness)', async () => {
+    const outcome: ValidationOutcome = {
+      allPassed: false,
+      checks: [
+        {
+          stepKey: 'CATALOG_READINESS_VALIDATE',
+          passed: false,
+          errorCode: 'NO_PUBLISHED_MENU',
+          detail: 'Brand MAIN has no PUBLISHED catalog publication on STOREFRONT',
+          locationId: null,
+        },
+        {
+          stepKey: 'CATALOG_READINESS_VALIDATE',
+          passed: false,
+          errorCode: 'NO_PUBLISHED_MENU',
+          detail: 'Brand SECOND has no PUBLISHED catalog publication on STOREFRONT',
+          locationId: null,
+        },
+      ],
+    };
+    const fixture = await render({ validate: () => Promise.resolve(outcome) });
+
+    const rows = fixture.nativeElement.querySelectorAll('.readiness__row');
+    expect(rows.length).toBe(2);
+  });
+
+  it('deep-links a brand-scoped catalog finding into the publication screen', async () => {
+    const outcome: ValidationOutcome = {
+      allPassed: false,
+      checks: [
+        {
+          stepKey: 'CATALOG_READINESS_VALIDATE',
+          passed: false,
+          errorCode: 'NO_PUBLISHED_MENU',
+          detail: 'Brand MAIN has no PUBLISHED catalog publication on STOREFRONT',
+          locationId: null,
+        },
+      ],
+    };
+    const fixture = await render({ validate: () => Promise.resolve(outcome) });
+
+    const link: HTMLAnchorElement = fixture.nativeElement.querySelector('.readiness__row a');
+    expect(link.getAttribute('href')).toBe('/catalog/publication');
+  });
+
+  it('deep-links "no brand able to sell" into the brand profile screen', async () => {
+    const outcome: ValidationOutcome = {
+      allPassed: false,
+      checks: [
+        {
+          stepKey: 'CATALOG_READINESS_VALIDATE',
+          passed: false,
+          errorCode: 'NO_ACTIVE_BRAND',
+          detail: 'The tenant has no brand able to sell, now or once activated',
+          locationId: null,
+        },
+      ],
+    };
+    const fixture = await render({ validate: () => Promise.resolve(outcome) });
+
+    const link: HTMLAnchorElement = fixture.nativeElement.querySelector('.readiness__row a');
+    expect(link.getAttribute('href')).toBe('/settings/brand');
+  });
+
   it('renders the denied state on a 403 from the readiness check', async () => {
     const fixture = await render({
       validate: () => Promise.reject(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null)),

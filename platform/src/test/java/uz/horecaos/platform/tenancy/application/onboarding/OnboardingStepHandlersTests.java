@@ -244,6 +244,36 @@ class OnboardingStepHandlersTests {
         assertThat(result.errorCode()).isEqualTo("NO_DELIVERY_ZONE");
     }
 
+    /**
+     * Wave 9, gap map row 10.0: the settings readiness panel needs every
+     * offending location, not only the first one the loop happened to reach
+     * — mirrors {@code paymentConfigurationNamesEveryOffendingLocationRatherThanOnlyTheFirst}
+     * for the delivery step's own {@code return}-inside-a-loop the same fix replaced.
+     */
+    @Test
+    void deliveryConfigurationNamesEveryOffendingLocationRatherThanOnlyTheFirst() {
+        enableFulfillmentMode(channelId, "DELIVERY");
+        UUID secondLocationId = insertSecondLocation("OTHER01");
+        UUID secondChannelId = insertChannel("OTHER-STOREFRONT", "WEB");
+        bindChannelToLocation(secondChannelId, secondLocationId);
+        enableFulfillmentMode(secondChannelId, "DELIVERY");
+
+        StepResult result = deliveryHandler().execute(context());
+
+        assertThat(result.outcome()).isEqualTo(StepResult.Outcome.FAILED);
+        @SuppressWarnings("unchecked")
+        List<StepResult.Finding> findings =
+                (List<StepResult.Finding>) result.result().get(StepResult.FINDINGS_KEY);
+        assertThat(findings)
+                .as("both locations offer delivery with no zone bound, and both must be named")
+                .hasSize(2)
+                .extracting(StepResult.Finding::errorCode)
+                .containsOnly("NO_DELIVERY_ZONE");
+        assertThat(findings)
+                .extracting(StepResult.Finding::locationId)
+                .containsExactlyInAnyOrder(locationId, secondLocationId);
+    }
+
     @Test
     void deliveryConfigurationFailsWhenTheBoundZoneNamesNoTariffAndNoneResolves() {
         enableFulfillmentMode(channelId, "DELIVERY");
@@ -308,6 +338,34 @@ class OnboardingStepHandlersTests {
         assertThat(result.errorCode()).isEqualTo("POS_BINDING_UNHEALTHY");
     }
 
+    /**
+     * Wave 9, gap map row 10.0: the settings readiness panel needs every
+     * offending binding, not only the first — mirrors
+     * {@code paymentConfigurationNamesEveryOffendingLocationRatherThanOnlyTheFirst}
+     * for the POS step's own {@code return}-inside-a-loop the same fix replaced.
+     */
+    @Test
+    void posBindingsNamesEveryUnhealthyBindingRatherThanOnlyTheFirst() {
+        insertPosBinding("ACTIVE", "ACTIVE", "FAILED");
+        insertPosBinding("SUSPENDED", "ACTIVE", "SUCCEEDED");
+
+        StepResult result = posHandler().execute(context());
+
+        assertThat(result.outcome()).isEqualTo(StepResult.Outcome.FAILED);
+        @SuppressWarnings("unchecked")
+        List<StepResult.Finding> findings =
+                (List<StepResult.Finding>) result.result().get(StepResult.FINDINGS_KEY);
+        assertThat(findings)
+                .as("both configured bindings are unhealthy, and both must be named")
+                .hasSize(2)
+                .extracting(StepResult.Finding::errorCode)
+                .containsOnly("POS_BINDING_UNHEALTHY");
+        assertThat(findings)
+                .as("a POS binding is tenant/brand-scoped, never location-scoped")
+                .extracting(StepResult.Finding::locationId)
+                .containsOnlyNulls();
+    }
+
     @Test
     void posBindingsPassesWhenAConfiguredBindingIsHealthy() {
         insertPosBinding("ACTIVE", "ACTIVE", "SUCCEEDED");
@@ -340,6 +398,33 @@ class OnboardingStepHandlersTests {
 
         assertThat(result.outcome()).isEqualTo(StepResult.Outcome.FAILED);
         assertThat(result.errorCode()).isEqualTo("NO_AVAILABLE_ITEM");
+    }
+
+    /**
+     * Wave 9, gap map row 10.0: the settings readiness panel needs every
+     * offending brand, not only the first — mirrors
+     * {@code paymentConfigurationNamesEveryOffendingLocationRatherThanOnlyTheFirst}
+     * for the catalog step's own {@code return}-inside-a-loop the same fix replaced.
+     */
+    @Test
+    void catalogReadinessNamesEveryOffendingBrandRatherThanOnlyTheFirst() {
+        insertSecondBrand("SECOND", "ACTIVE");
+
+        StepResult result = catalogHandler().execute(context());
+
+        assertThat(result.outcome()).isEqualTo(StepResult.Outcome.FAILED);
+        @SuppressWarnings("unchecked")
+        List<StepResult.Finding> findings =
+                (List<StepResult.Finding>) result.result().get(StepResult.FINDINGS_KEY);
+        assertThat(findings)
+                .as("both active brands have no published menu, and both must be named")
+                .hasSize(2)
+                .extracting(StepResult.Finding::errorCode)
+                .containsOnly("NO_PUBLISHED_MENU");
+        assertThat(findings)
+                .as("this check is brand-scoped, never location-scoped")
+                .extracting(StepResult.Finding::locationId)
+                .containsOnlyNulls();
     }
 
     @Test

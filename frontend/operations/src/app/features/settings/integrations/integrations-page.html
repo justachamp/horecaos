@@ -77,6 +77,52 @@
     </table>
   </section>
 
+  <!-- ADR 0106, gap-map row 10.8a: the per-branch install model — tenant
+       default overridden per branch — surfaced, and the console can bind an
+       existing installation to a branch, not only right after connecting
+       one. -->
+  <section class="panel">
+    <div class="panel-header">
+      <h2 class="q-subhead">{{ i18n.t('settings.integrations.branches.title') }}</h2>
+      <button type="button" class="q-body primary" (click)="openBindToBranch()">
+        {{ i18n.t('settings.integrations.branches.bindAction') }}
+      </button>
+    </div>
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ i18n.t('settings.integrations.branches.column.branch') }}</th>
+          <th class="q-caption">
+            {{ i18n.t('settings.integrations.branches.column.capability') }}
+          </th>
+          <th class="q-caption">
+            {{ i18n.t('settings.integrations.branches.column.installation') }}
+          </th>
+          <th class="q-caption">{{ i18n.t('settings.integrations.branches.column.source') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (branch of branchRows(); track branch.locationId) {
+          @for (row of branch.rows; track row.bindingId + row.capabilityCode) {
+            <tr>
+              <td class="q-body-sm">{{ branch.locationName }}</td>
+              <td class="q-body-sm">{{ row.capabilityCode }}</td>
+              <td class="q-body-sm">{{ row.providerType }} · {{ row.installationDisplayName }}</td>
+              <td class="q-body-sm">{{ sourceLabel(row) }}</td>
+            </tr>
+          }
+        } @empty {
+          <tr>
+            <td class="q-body-sm empty" colspan="4">
+              {{ i18n.t('settings.integrations.branches.empty') }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
   <section class="panel">
     <div class="panel-header">
       <h2 class="q-subhead">{{ i18n.t('settings.integrations.merchantBindings.title') }}</h2>
@@ -184,6 +230,92 @@
     (confirm)="onRotateConfirm($event)"
     (cancel)="rotating.set(null)"
   />
+}
+
+@if (showBindToBranch()) {
+  <div class="backdrop" (click)="closeBindToBranch()">
+    <div
+      class="dialog"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="i18n.t('settings.integrations.branches.bindDialog.title')"
+      (click)="$event.stopPropagation()"
+    >
+      <h2 class="q-subhead title">
+        {{ i18n.t('settings.integrations.branches.bindDialog.title') }}
+      </h2>
+      <p class="q-body-sm lead">{{ i18n.t('settings.integrations.branches.bindDialog.lead') }}</p>
+
+      @if (bindableInstallations().length === 0) {
+        <p class="q-body-sm error" role="alert">
+          {{ i18n.t('settings.integrations.branches.bindDialog.noneEligible') }}
+        </p>
+      } @else if (bindableInstallations().length < installations().length) {
+        <p class="q-body-sm lead">
+          {{ i18n.t('settings.integrations.branches.bindDialog.someExcluded') }}
+        </p>
+      }
+
+      <label class="q-caption field-label" for="bind-to-branch-installation">
+        {{ i18n.t('settings.integrations.branches.bindDialog.installation') }}
+      </label>
+      <select
+        id="bind-to-branch-installation"
+        class="q-body field"
+        [value]="bindToBranchInstallationId()"
+        (change)="bindToBranchInstallationId.set($any($event.target).value)"
+        [disabled]="bindToBranchSubmitting() || bindableInstallations().length === 0"
+      >
+        @for (installation of bindableInstallations(); track installation.id) {
+          <option [value]="installation.id">
+            {{ installation.category }} · {{ installation.providerType }}
+          </option>
+        }
+      </select>
+
+      <label class="q-caption field-label" for="bind-to-branch-location">
+        {{ i18n.t('settings.integrations.branches.bindDialog.branch') }}
+      </label>
+      <select
+        id="bind-to-branch-location"
+        class="q-body field"
+        [value]="bindToBranchLocationId()"
+        (change)="bindToBranchLocationId.set($any($event.target).value)"
+        [disabled]="bindToBranchSubmitting()"
+      >
+        @for (loc of locations(); track loc.id) {
+          <option [value]="loc.id">{{ loc.displayName }}</option>
+        }
+      </select>
+
+      @if (bindToBranchError(); as message) {
+        <p class="q-body-sm error" role="alert">{{ message }}</p>
+      }
+
+      <div class="actions">
+        <button
+          type="button"
+          class="q-body secondary"
+          (click)="closeBindToBranch()"
+          [disabled]="bindToBranchSubmitting()"
+        >
+          {{ i18n.t('settings.integrations.branches.bindDialog.cancel') }}
+        </button>
+        <button
+          type="button"
+          class="q-body primary"
+          (click)="submitBindToBranch()"
+          [disabled]="!canSubmitBindToBranch()"
+        >
+          {{
+            bindToBranchSubmitting()
+              ? i18n.t('settings.integrations.branches.bindDialog.submitting')
+              : i18n.t('settings.integrations.branches.bindDialog.submit')
+          }}
+        </button>
+      </div>
+    </div>
+  </div>
 }
 
 @if (detailInstallation(); as installation) {

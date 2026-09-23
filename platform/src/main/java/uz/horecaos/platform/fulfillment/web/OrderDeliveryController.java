@@ -2,6 +2,9 @@ package uz.horecaos.platform.fulfillment.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -10,9 +13,18 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.fulfillment.application.ManualExternalBookingService;
+import uz.horecaos.platform.fulfillment.application.ManualExternalBookingService.BookOutcome;
+import uz.horecaos.platform.fulfillment.application.ManualExternalBookingService.Decision;
+import uz.horecaos.platform.fulfillment.application.ManualExternalBookingService.QuoteResult;
+import uz.horecaos.platform.fulfillment.application.ServiceZoneService.DeliveryResourceNotFoundException;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryPlan;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryQuote;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourceType;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmentStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmentStore.Shipment;
@@ -21,6 +33,7 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryE
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryExceptionStore.OpenException;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore;
 import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -46,6 +59,15 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  *
  * <p>Deliberately no customer name or address here either — the same
  * {@code DispatchController} decision, for the same reason.
+ *
+ * <p>Gap map rows 1.2e/2.1c: {@link #externalCourier} is the same order-keyed
+ * seam extended to the Millenium pattern's own quote/accept services
+ * ({@link ManualExternalBookingService}, gap map row 1.2f) — one path the
+ * order detail pane and the KDS pass both call, resolving the plan from
+ * {@code orderId} here instead of each screen resolving {@code planId} its
+ * own way (the order detail pane from this class's own {@link #delivery}
+ * read; the KDS pass, before this, only through {@code DispatchController}'s
+ * whole branch queue joined client-side by {@code orderId}).
  */
 @RestController
 @RequestMapping("/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}")
@@ -56,16 +78,22 @@ public class OrderDeliveryController {
     private final JdbcAssignmentStore assignments;
     private final JdbcDeliveryCostSubsidyStore subsidies;
     private final JdbcDeliveryExceptionStore exceptions;
+    private final ManualExternalBookingService externalBooking;
+    private final CurrentActor currentActor;
 
     public OrderDeliveryController(
             JdbcDeliveryPlanStore plans,
             JdbcAssignmentStore assignments,
             JdbcDeliveryCostSubsidyStore subsidies,
-            JdbcDeliveryExceptionStore exceptions) {
+            JdbcDeliveryExceptionStore exceptions,
+            ManualExternalBookingService externalBooking,
+            CurrentActor currentActor) {
         this.plans = plans;
         this.assignments = assignments;
         this.subsidies = subsidies;
         this.exceptions = exceptions;
+        this.externalBooking = externalBooking;
+        this.currentActor = currentActor;
     }
 
     @GetMapping("/delivery")
@@ -100,7 +128,132 @@ public class OrderDeliveryController {
                 OrderDeliveryResponse.of(plan, shipment.orElse(null), providerCostMinor, courierEtaAt, openExceptions));
     }
 
+    @PostMapping("/external-courier")
+    @RequiresCapability(value = Capability.DELIVERY_MANUAL_ASSIGN, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Request an external courier for this order (gap map rows 1.2e/2.1c)",
+            description = "One order-keyed action over the Millenium pattern's own quote/accept "
+                    + "services (ManualExternalBookingService, gap map row 1.2f), so the order "
+                    + "detail pane and the KDS pass share one path instead of each resolving "
+                    + "planId a different way. Omit quoteId to price one partner (phase QUOTED); "
+                    + "once QUOTED, call again with that quoteId and a decision to accept or "
+                    + "abandon it (phase BOOKED). The price booked is always the one "
+                    + "fulfillment.delivery_quotes recorded under quoteId, never a figure this "
+                    + "request carries.")
+    public ResponseEntity<ExternalCourierResponse> externalCourier(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID orderId,
+            @Valid @RequestBody ExternalCourierRequest body) {
+        try {
+            DeliveryPlan plan = plans.findByOrder(tenantId, orderId)
+                    .filter(found -> found.locationId().equals(locationId))
+                    .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such delivery plan"));
+
+            if (body.quoteId() == null) {
+                QuoteResult result = externalBooking.quote(tenantId, brandId, locationId, plan.id(), body.bindingId());
+                return ResponseEntity.ok(ExternalCourierResponse.quoted(result));
+            }
+            if (body.decision() == null) {
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, "decision is required once quoteId is set");
+            }
+            if (body.reasonCode() == null || body.reasonCode().isBlank()) {
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, "reasonCode is required once quoteId is set");
+            }
+            BookOutcome outcome = externalBooking.book(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    plan.id(),
+                    body.bindingId(),
+                    body.quoteId(),
+                    body.decision(),
+                    body.reasonCode(),
+                    actor());
+            return ResponseEntity.ok(ExternalCourierResponse.booked(outcome));
+        } catch (DeliveryResourceNotFoundException missing) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
+        }
+    }
+
+    private ActorRef actor() {
+        return ActorRef.user(currentActor.get().subject(), null);
+    }
+
     // --------------------------------------------------------------- payloads
+
+    /**
+     * {@code reasonCode} is required only once {@code quoteId} is set (the
+     * BOOK phase) -- validated in the controller body, not by {@code
+     * @NotBlank} here, because the QUOTE phase (no {@code quoteId}) is priced
+     * before any reason for booking exists, and every real frontend caller
+     * (the order detail pane and the KDS pass, via {@code
+     * OrderDeliveryApi.requestExternalCourierQuote}) omits it on that call.
+     * Mirrors {@code DispatchController}'s own split
+     * {@code ExternalQuoteRequest}/{@code ExternalBookRequest}.
+     */
+    public record ExternalCourierRequest(
+            @NotNull UUID bindingId,
+            @Nullable UUID quoteId,
+            @Nullable Decision decision,
+            @Nullable @Size(max = 64) String reasonCode) {}
+
+    /**
+     * @param phase  {@code QUOTED} when this call priced a partner; {@code
+     *               BOOKED} when it settled a decision on a quote already
+     *               recorded. Exactly one of {@link #quoted}/{@link #booked}
+     *               is set, matching {@code phase}.
+     */
+    public record ExternalCourierResponse(
+            String phase,
+            @Nullable QuotedState quoted,
+            @Nullable BookedState booked) {
+
+        static ExternalCourierResponse quoted(QuoteResult result) {
+            DeliveryQuote quote = result.quote();
+            Long priceMinor = quote == null ? null : quote.priceMinor();
+            QuotedState state = new QuotedState(
+                    result.priced(),
+                    quote == null ? null : quote.id(),
+                    result.providerType(),
+                    priceMinor,
+                    quote == null ? null : quote.currency(),
+                    result.customerFeeMinor(),
+                    priceMinor == null ? null : priceMinor - result.customerFeeMinor(),
+                    result.failureCode());
+            return new ExternalCourierResponse("QUOTED", state, null);
+        }
+
+        static ExternalCourierResponse booked(BookOutcome outcome) {
+            BookedState state = new BookedState(
+                    outcome.applied(),
+                    outcome.abandoned(),
+                    outcome.planVersion(),
+                    outcome.shipmentId(),
+                    outcome.reason());
+            return new ExternalCourierResponse("BOOKED", null, state);
+        }
+
+        /** Mirrors {@code DispatchController.ExternalQuoteResponse} — see that record's own doc for each field. */
+        public record QuotedState(
+                boolean priced,
+                @Nullable UUID quoteId,
+                @Nullable String providerType,
+                @Nullable Long priceMinor,
+                @Nullable String currency,
+                long customerDeliveryFeeMinor,
+                @Nullable Long deltaMinor,
+                @Nullable String failureCode) {}
+
+        /** Mirrors {@code DispatchController.ExternalBookResponse} — see that record's own doc for each field. */
+        public record BookedState(
+                boolean applied,
+                boolean abandoned,
+                @Nullable Integer planVersion,
+                @Nullable UUID shipmentId,
+                @Nullable String reason) {}
+    }
 
     public record OrderDeliveryResponse(
             UUID planId,

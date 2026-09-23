@@ -93,12 +93,29 @@
           <dd class="q-body">{{ value.telegramHandle ? '@' + value.telegramHandle : '—' }}</dd>
         </div>
         <div class="field">
-          <dt class="q-caption">{{ 'settings.brandProfile.field.logoAssetId' | t }}</dt>
-          <dd class="q-body q-mono">{{ value.logoAssetId ?? '—' }}</dd>
+          <dt class="q-caption">{{ 'settings.brandProfile.field.logo' | t }}</dt>
+          <dd class="q-body">
+            @if (logoPreviewUrl(); as url) {
+              <img [src]="url" alt="" class="media-preview" data-testid="brand-logo-preview" />
+            } @else {
+              <span class="ink-subtle">—</span>
+            }
+          </dd>
         </div>
         <div class="field">
-          <dt class="q-caption">{{ 'settings.brandProfile.field.bannerAssetId' | t }}</dt>
-          <dd class="q-body q-mono">{{ value.bannerAssetId ?? '—' }}</dd>
+          <dt class="q-caption">{{ 'settings.brandProfile.field.banner' | t }}</dt>
+          <dd class="q-body">
+            @if (bannerPreviewUrl(); as url) {
+              <img
+                [src]="url"
+                alt=""
+                class="media-preview media-preview--banner"
+                data-testid="brand-banner-preview"
+              />
+            } @else {
+              <span class="ink-subtle">—</span>
+            }
+          </dd>
         </div>
       </dl>
 
@@ -152,30 +169,42 @@
           placeholder="oshxona_bot"
         />
 
-        <label class="q-caption" for="brand-logo">{{
-          'settings.brandProfile.field.logoAssetId' | t
-        }}</label>
-        <input
-          id="brand-logo"
-          class="q-body field q-mono"
-          type="text"
-          [value]="draftLogoAssetId()"
-          (input)="draftLogoAssetId.set($any($event.target).value)"
-          [disabled]="profileSaving()"
-        />
+        <span class="q-caption">{{ 'settings.brandProfile.field.logo' | t }}</span>
+        <div class="media-editor">
+          @if (logoPreviewUrl(); as url) {
+            <img [src]="url" alt="" class="media-preview" data-testid="brand-logo-preview" />
+          }
+          <q-media-uploader
+            [aspectRatios]="['1:1']"
+            [accept]="'image/jpeg,image/png,image/webp'"
+            [uploading]="uploadingLogo()"
+            (cropped)="uploadLogo($event)"
+            (selected)="uploadLogo($event)"
+            (rejected)="onMediaRejected($event)"
+            data-testid="brand-logo-uploader"
+          />
+        </div>
 
-        <label class="q-caption" for="brand-banner">{{
-          'settings.brandProfile.field.bannerAssetId' | t
-        }}</label>
-        <input
-          id="brand-banner"
-          class="q-body field q-mono"
-          type="text"
-          [value]="draftBannerAssetId()"
-          (input)="draftBannerAssetId.set($any($event.target).value)"
-          [disabled]="profileSaving()"
-        />
-        <p class="q-caption media-note">{{ 'settings.brandProfile.mediaNote' | t }}</p>
+        <span class="q-caption">{{ 'settings.brandProfile.field.banner' | t }}</span>
+        <div class="media-editor">
+          @if (bannerPreviewUrl(); as url) {
+            <img
+              [src]="url"
+              alt=""
+              class="media-preview media-preview--banner"
+              data-testid="brand-banner-preview"
+            />
+          }
+          <q-media-uploader
+            [aspectRatios]="['3:1']"
+            [accept]="'image/jpeg,image/png,image/webp'"
+            [uploading]="uploadingBanner()"
+            (cropped)="uploadBanner($event)"
+            (selected)="uploadBanner($event)"
+            (rejected)="onMediaRejected($event)"
+            data-testid="brand-banner-uploader"
+          />
+        </div>
 
         <h3 class="q-subhead locales-title">{{ 'settings.brandProfile.locales.title' | t }}</h3>
         <p class="q-caption">{{ 'settings.brandProfile.locales.hint' | t }}</p>

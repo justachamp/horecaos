@@ -109,6 +109,35 @@ export const settingsPaths = {
     return `${this.locations(scope)}/service-states`;
   },
 
+  /**
+   * `OperationsBrandController.bulkChangeServiceState`, wave 9 — the same
+   * batched-read path as {@link locationsServiceStates}, `POST`ed to instead
+   * of `GET`: the branch list's bulk close/open bar over several locations
+   * at once, reusing the single-location write's own request shape.
+   */
+  locationsServiceStatesBulk(scope: LocationScope): string {
+    return this.locationsServiceStates(scope);
+  },
+
+  /**
+   * `OperationsBrandController.locationLegalEntities`, wave 9 — every
+   * location's own assigned legal entity, batched, for the branch list's INN
+   * filter. The same batched-over-a-brand shape {@link locationsServiceStates}
+   * already uses for the state column.
+   */
+  locationsLegalEntities(scope: LocationScope): string {
+    return `${this.locations(scope)}/legal-entities`;
+  },
+
+  /**
+   * `OperationsBrandController.locationChannels`, wave 9 — every location's
+   * own active sales-channel codes, batched, for the branch list's channel
+   * filter.
+   */
+  locationsChannels(scope: LocationScope): string {
+    return `${this.locations(scope)}/channels`;
+  },
+
   /** `LocationServiceOperationsController.profile` — one branch's own fields. */
   location(scope: LocationScope): string {
     return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/locations/${enc(scope.locationId)}`;
@@ -194,6 +223,11 @@ export const settingsPaths = {
 
   salesChannelLocations(scope: LocationScope, channelId: string): string {
     return `${this.salesChannel(scope, channelId)}/locations`;
+  },
+
+  /** Row 10.4a: a channel's own social links, whole-set replace like the other matrices. */
+  salesChannelSocialLinks(scope: LocationScope, channelId: string): string {
+    return `${this.salesChannel(scope, channelId)}/social-links`;
   },
 
   salesChannelArchive(scope: LocationScope, channelId: string): string {
@@ -378,6 +412,19 @@ export const settingsPaths = {
    */
   integrationInstallationBindings(scope: LocationScope, installationId: string): string {
     return `${this.integrationInstallations(scope)}/${enc(installationId)}/bindings`;
+  },
+
+  /**
+   * `OperationsProviderInstallationController.effectiveBindings` — gap-map
+   * row 10.8a's per-branch install model, surfaced: for every location of a
+   * brand, which installation actually handles each capability there,
+   * whether bound to the branch itself or inherited from the brand's own
+   * default. `brandId` travels as a query parameter (`{ params: { brandId } }`
+   * on the call), the same shape {@link legalEntityActivate}'s own
+   * `expectedVersion` uses, rather than a second path segment.
+   */
+  integrationBranchesEffectiveBindings(scope: LocationScope): string {
+    return `${this.integrationInstallations(scope)}/branches/effective-bindings`;
   },
 
   /**

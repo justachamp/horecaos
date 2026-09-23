@@ -11,7 +11,12 @@ import { FiscalizationApi, LegalEntityView } from '../fiscalization/fiscalizatio
 import { LocationsApi, LocationView } from '../locations/locations-api';
 import { ConnectProviderPanel } from './connect-provider-panel';
 import { IntegrationsPage } from './integrations-page';
-import { InstallationView, IntegrationsApi, MerchantBindingView } from './integrations-api';
+import {
+  EffectiveBindingView,
+  InstallationView,
+  IntegrationsApi,
+  MerchantBindingView,
+} from './integrations-api';
 import { RegisterMerchantBindingPanel } from './register-merchant-binding-panel';
 import { RotateSecretDialog } from './rotate-secret-dialog';
 
@@ -107,6 +112,22 @@ const CLICK_INSTALLATION: InstallationView = {
   secretReference: null,
 };
 
+/**
+ * A category with a real backend capability catalogue (`PosCapability`) —
+ * see `CAPABILITY_CATALOGUED_CATEGORIES` in integrations-page.ts. Binding one
+ * of these through the branch-binding dialog with the empty capabilities it
+ * sends for NOTIFICATION/PAYMENT would create a binding that can never
+ * appear in `effectiveBindings` (an INNER JOIN against
+ * `integration.binding_capabilities` on the backend), so the dialog must not
+ * offer it.
+ */
+const POS_INSTALLATION: InstallationView = {
+  ...INSTALLATION,
+  id: 'inst-pos',
+  category: 'POS',
+  providerType: 'CLOPOS',
+};
+
 const BINDING: MerchantBindingView = {
   id: 'binding-1',
   legalEntityId: 'legal-1',
@@ -125,6 +146,17 @@ const BINDING: MerchantBindingView = {
   effectiveUntil: null,
   version: 1,
   lastSecretRotatedAt: '2026-08-01T10:00:00Z',
+};
+
+const EFFECTIVE_BINDING: EffectiveBindingView = {
+  locationId: 'location-1',
+  capabilityCode: 'SEND_TELEGRAM',
+  providerCategory: 'NOTIFICATION',
+  providerType: 'TELEGRAM_BOT_API',
+  installationId: 'inst-1',
+  installationDisplayName: 'Pilot bot',
+  bindingId: 'binding-branch-1',
+  locationScoped: true,
 };
 
 class FakeIntegrationsApi {
@@ -154,6 +186,7 @@ class FakeIntegrationsApi {
   readonly bindInstallation = vi
     .fn()
     .mockResolvedValue({ bindingId: 'binding-new', status: 'SUSPENDED' });
+  readonly effectiveBindings = vi.fn().mockResolvedValue([EFFECTIVE_BINDING]);
 
   // ADR 0106: `LivenessPanel` and `FailureInboxPanel` are self-contained and
   // load their own data on construction, unconditionally once the page's own
@@ -580,5 +613,176 @@ describe('IntegrationsPage', () => {
     await flushMicrotasks();
 
     expect(api.archiveMerchantBinding).not.toHaveBeenCalled();
+  });
+
+  // -------------------------------------------------------- 10.8a branches
+
+  it('surfaces the effective installation per branch, and which scope it came from', () => {
+    expect(api.effectiveBindings).toHaveBeenCalledWith(SCOPE, 'brand-1');
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Chilonzor branch');
+    expect(text).toContain('SEND_TELEGRAM');
+    expect(text).toContain('This branch');
+  });
+
+  it('shows the brand-default label for a branch with no override of its own', async () => {
+    api.effectiveBindings.mockResolvedValue([{ ...EFFECTIVE_BINDING, locationScoped: false }]);
+
+    await TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [IntegrationsPage],
+      providers: [
+        { provide: IntegrationsApi, useValue: api },
+        { provide: FiscalizationApi, useValue: fiscalizationApi },
+        { provide: BrandProfileApi, useValue: brandsApi },
+        { provide: LocationsApi, useValue: locationsApi },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(IntegrationsPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Brand default');
+  });
+
+  it('binds an existing installation to a branch and reloads the branches table', async () => {
+    const bindButton = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).find((candidate) => candidate.textContent?.includes('Bind to a branch')) as HTMLButtonElement;
+    bindButton.click();
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'Bind an installation to a branch',
+    );
+
+    api.effectiveBindings.mockClear();
+    const page = fixture.componentInstance;
+    (page as unknown as { submitBindToBranch(): Promise<void> }).submitBindToBranch();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.bindInstallation).toHaveBeenCalledWith(SCOPE, 'inst-1', {
+      brandId: 'brand-1',
+      locationId: 'location-1',
+      capabilities: [],
+      primaryCapabilities: [],
+    });
+    // The table's own source of truth is re-read rather than assumed from
+    // the write's own response — bindInstallation returns only an id and a
+    // status, never the branch/capability shape effectiveBindings resolves.
+    expect(api.effectiveBindings).toHaveBeenCalledWith(SCOPE, 'brand-1');
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain(
+      'Bind an installation to a branch',
+    );
+  });
+
+  it('reports the failure and keeps the dialog open when binding to a branch is refused', async () => {
+    api.bindInstallation.mockRejectedValueOnce(new Error('refused'));
+    const bindButton = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).find((candidate) => candidate.textContent?.includes('Bind to a branch')) as HTMLButtonElement;
+    bindButton.click();
+    fixture.detectChanges();
+
+    const page = fixture.componentInstance;
+    (page as unknown as { submitBindToBranch(): Promise<void> }).submitBindToBranch();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'Bind an installation to a branch',
+    );
+  });
+
+  it('never offers a POS/delivery installation in the bind-to-branch picker, since it would bind with no capabilities', async () => {
+    api.listInstallations.mockResolvedValue([INSTALLATION, CLICK_INSTALLATION, POS_INSTALLATION]);
+
+    await TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [IntegrationsPage],
+      providers: [
+        { provide: IntegrationsApi, useValue: api },
+        { provide: FiscalizationApi, useValue: fiscalizationApi },
+        { provide: BrandProfileApi, useValue: brandsApi },
+        { provide: LocationsApi, useValue: locationsApi },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    const posFixture = TestBed.createComponent(IntegrationsPage);
+    posFixture.detectChanges();
+    await flushMicrotasks();
+    posFixture.detectChanges();
+
+    const bindButton = Array.from(
+      (posFixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).find((candidate) => candidate.textContent?.includes('Bind to a branch')) as HTMLButtonElement;
+    bindButton.click();
+    posFixture.detectChanges();
+
+    const options = Array.from(
+      posFixture.nativeElement.querySelectorAll('#bind-to-branch-installation option'),
+    ) as HTMLOptionElement[];
+    expect(options.map((option) => option.value)).toEqual(['inst-1', 'inst-2']);
+    expect(options.some((option) => option.value === 'inst-pos')).toBe(false);
+    expect((posFixture.nativeElement as HTMLElement).textContent).toContain(
+      'POS and delivery installations are not listed here',
+    );
+
+    const posPage = posFixture.componentInstance;
+    (posPage as unknown as { submitBindToBranch(): Promise<void> }).submitBindToBranch();
+    await flushMicrotasks();
+    posFixture.detectChanges();
+
+    expect(api.bindInstallation).not.toHaveBeenCalledWith(
+      SCOPE,
+      'inst-pos',
+      expect.anything(),
+    );
+  });
+
+  it('disables the bind-to-branch dialog when every installation needs capabilities it cannot assign', async () => {
+    api.listInstallations.mockResolvedValue([POS_INSTALLATION]);
+
+    await TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [IntegrationsPage],
+      providers: [
+        { provide: IntegrationsApi, useValue: api },
+        { provide: FiscalizationApi, useValue: fiscalizationApi },
+        { provide: BrandProfileApi, useValue: brandsApi },
+        { provide: LocationsApi, useValue: locationsApi },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    const onlyPosFixture = TestBed.createComponent(IntegrationsPage);
+    onlyPosFixture.detectChanges();
+    await flushMicrotasks();
+    onlyPosFixture.detectChanges();
+
+    const bindButton = Array.from(
+      (onlyPosFixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).find((candidate) => candidate.textContent?.includes('Bind to a branch')) as HTMLButtonElement;
+    bindButton.click();
+    onlyPosFixture.detectChanges();
+
+    expect((onlyPosFixture.nativeElement as HTMLElement).textContent).toContain(
+      'None of your installations can be bound from this dialog yet',
+    );
+    const submitButton = Array.from(
+      (onlyPosFixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).find((candidate) => candidate.textContent?.trim() === 'Bind') as HTMLButtonElement;
+    expect(submitButton.disabled).toBe(true);
+
+    api.bindInstallation.mockClear();
+    const onlyPosPage = onlyPosFixture.componentInstance;
+    (onlyPosPage as unknown as { submitBindToBranch(): Promise<void> }).submitBindToBranch();
+    await flushMicrotasks();
+    expect(api.bindInstallation).not.toHaveBeenCalled();
   });
 });

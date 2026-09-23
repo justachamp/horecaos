@@ -32,7 +32,7 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
     private static final String CHANNEL_COLUMNS = """
             id, tenant_id, code, system_type, display_name, status,
             price_plane_channel_id, externally_priced, guest_orders_allowed,
-            provider_installation_id, version
+            provider_installation_id, icon, brand_color_primary, brand_color_secondary, version
             """;
 
     private final JdbcClient jdbc;
@@ -65,6 +65,21 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 .optional();
     }
 
+    /**
+     * @see SalesChannelLookup#hallChannelId(UUID)
+     */
+    @Override
+    public Optional<UUID> hallChannelId(UUID tenantId) {
+        List<UUID> posChannels =
+                jdbc.sql("""
+                SELECT id FROM tenant.sales_channels
+                WHERE tenant_id = :tenantId AND system_type = 'POS' AND status = 'ACTIVE'
+                ORDER BY id
+                LIMIT 2
+                """).param("tenantId", tenantId).query(UUID.class).list();
+        return posChannels.size() == 1 ? Optional.of(posChannels.getFirst()) : Optional.empty();
+    }
+
     public List<SalesChannel> listForTenant(UUID tenantId) {
         return jdbc.sql("SELECT " + CHANNEL_COLUMNS + """
                 FROM tenant.sales_channels
@@ -81,10 +96,12 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 INSERT INTO tenant.sales_channels (
                     id, tenant_id, code, system_type, display_name, status,
                     price_plane_channel_id, externally_priced, guest_orders_allowed,
-                    provider_installation_id, version, created_at, updated_at)
+                    provider_installation_id, icon, brand_color_primary, brand_color_secondary,
+                    version, created_at, updated_at)
                 VALUES (:id, :tenantId, :code, :systemType, :displayName, :status,
                     :pricePlane, :externallyPriced, :guestOrdersAllowed,
-                    :installationId, :version, :now, :now)
+                    :installationId, :icon, :brandColorPrimary, :brandColorSecondary,
+                    :version, :now, :now)
                 """)
                 .param("id", channel.id())
                 .param("tenantId", channel.tenantId())
@@ -96,6 +113,9 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 .param("externallyPriced", channel.externallyPriced())
                 .param("guestOrdersAllowed", channel.guestOrdersAllowed())
                 .param("installationId", channel.providerInstallationId())
+                .param("icon", channel.icon())
+                .param("brandColorPrimary", channel.brandColorPrimary())
+                .param("brandColorSecondary", channel.brandColorSecondary())
                 .param("version", channel.version())
                 .param("now", timestamp(now))
                 .update();
@@ -119,13 +139,18 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
             boolean externallyPriced,
             boolean guestOrdersAllowed,
             @Nullable UUID providerInstallationId,
+            @Nullable String icon,
+            @Nullable String brandColorPrimary,
+            @Nullable String brandColorSecondary,
             int expectedVersion,
             Instant now) {
         return jdbc.sql("""
                 UPDATE tenant.sales_channels
                 SET display_name = :displayName, price_plane_channel_id = :pricePlane,
                     externally_priced = :externallyPriced, guest_orders_allowed = :guestOrdersAllowed,
-                    provider_installation_id = :installationId, version = version + 1, updated_at = :now
+                    provider_installation_id = :installationId, icon = :icon,
+                    brand_color_primary = :brandColorPrimary, brand_color_secondary = :brandColorSecondary,
+                    version = version + 1, updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :channelId AND version = :expectedVersion
                 """)
                         .param("tenantId", tenantId)
@@ -135,6 +160,9 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                         .param("externallyPriced", externallyPriced)
                         .param("guestOrdersAllowed", guestOrdersAllowed)
                         .param("installationId", providerInstallationId)
+                        .param("icon", icon)
+                        .param("brandColorPrimary", brandColorPrimary)
+                        .param("brandColorSecondary", brandColorSecondary)
                         .param("expectedVersion", expectedVersion)
                         .param("now", timestamp(now))
                         .update()
@@ -187,6 +215,35 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 .forEach(entry -> modes.computeIfAbsent(entry.getKey(), key -> new ArrayList<>())
                         .add(entry.getValue()));
         return modes;
+    }
+
+    /**
+     * Every active location's own set of active channel codes, batched over a
+     * whole brand (Settings 10.2a branch list's channel filter) — the same
+     * batched-over-a-brand shape {@code ServiceScheduleService#statesForBrand}
+     * already uses for the branch list's state column, so the channel filter
+     * does not call {@link #locations} once per channel per row.
+     */
+    public Map<UUID, List<String>> activeChannelCodesByLocation(UUID tenantId, UUID brandId) {
+        Map<UUID, List<String>> codes = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT scl.location_id, sc.code
+                  FROM tenant.sales_channel_locations scl
+                  JOIN tenant.sales_channels sc
+                    ON sc.tenant_id = scl.tenant_id AND sc.id = scl.channel_id
+                  JOIN tenant.locations l
+                    ON l.tenant_id = scl.tenant_id AND l.id = scl.location_id
+                 WHERE scl.tenant_id = :tenantId AND l.brand_id = :brandId
+                   AND scl.status = 'ACTIVE' AND sc.status = 'ACTIVE'
+                 ORDER BY scl.location_id, sc.code
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> Map.entry(row.getObject("location_id", UUID.class), row.getString("code")))
+                .list()
+                .forEach(entry -> codes.computeIfAbsent(entry.getKey(), key -> new ArrayList<>())
+                        .add(entry.getValue()));
+        return codes;
     }
 
     /**
@@ -363,6 +420,60 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 .list();
     }
 
+    /** A channel's own social links, platform → URL, in display order (row 10.4a, V0385). */
+    public Map<String, String> socialLinks(UUID tenantId, UUID channelId) {
+        Map<String, String> links = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT platform, url FROM tenant.channel_social_links
+                WHERE tenant_id = :tenantId AND channel_id = :channelId
+                ORDER BY sort_order, platform
+                """)
+                .param("tenantId", tenantId)
+                .param("channelId", channelId)
+                .query((row, number) -> Map.entry(row.getString("platform"), row.getString("url")))
+                .list()
+                .forEach(entry -> links.put(entry.getKey(), entry.getValue()));
+        return links;
+    }
+
+    /**
+     * Replaces a channel's social links wholesale under its expected version —
+     * the same {@code bumpVersion}-then-delete-then-reinsert shape {@link
+     * #replacePaymentMethods} and {@link #replaceFulfillmentModes} use.
+     *
+     * <p>{@code sort_order} is the position each entry is iterated in, which
+     * for a {@link LinkedHashMap} built from a JSON request body is the order
+     * the caller sent — this is what turns "an ordered list of links" into
+     * the map shape every other matrix here already uses.
+     */
+    public boolean replaceSocialLinks(
+            UUID tenantId, UUID channelId, Map<String, String> links, int expectedVersion, Instant now) {
+
+        if (!bumpVersion(tenantId, channelId, expectedVersion, now)) {
+            return false;
+        }
+        jdbc.sql("DELETE FROM tenant.channel_social_links " + "WHERE tenant_id = :tenantId AND channel_id = :channelId")
+                .param("tenantId", tenantId)
+                .param("channelId", channelId)
+                .update();
+        int sortOrder = 0;
+        for (Map.Entry<String, String> entry : links.entrySet()) {
+            jdbc.sql("""
+                    INSERT INTO tenant.channel_social_links (
+                        tenant_id, channel_id, platform, url, sort_order, created_at, updated_at)
+                    VALUES (:tenantId, :channelId, :platform, :url, :sortOrder, :now, :now)
+                    """)
+                    .param("tenantId", tenantId)
+                    .param("channelId", channelId)
+                    .param("platform", entry.getKey())
+                    .param("url", entry.getValue())
+                    .param("sortOrder", sortOrder++)
+                    .param("now", timestamp(now))
+                    .update();
+        }
+        return true;
+    }
+
     /**
      * Whether any other channel takes its prices from this one.
      *
@@ -392,6 +503,17 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
         }
         if (message.contains("fk_sales_channel_price_plane")) {
             return new IllegalArgumentException("That price plane channel does not belong to this tenant");
+        }
+        // Defense in depth for row 10.4a's social links: SalesChannelService
+        // already validates the platform and the https prefix before ever
+        // reaching this statement, so these two should be unreachable through
+        // the application — but a row written outside it hits the same
+        // ck_channel_social_platform/ck_channel_social_url V0385 declares.
+        if (message.contains("ck_channel_social_platform")) {
+            return new IllegalArgumentException("That is not a recognised social platform");
+        }
+        if (message.contains("ck_channel_social_url")) {
+            return new IllegalArgumentException("A social link must be an https URL");
         }
         // V0175: payment_method_code is a foreign key onto this tenant's own
         // payments.payment_methods registry (ADR 0038). Before this branch existed
@@ -432,6 +554,9 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 row.getBoolean("externally_priced"),
                 row.getBoolean("guest_orders_allowed"),
                 row.getObject("provider_installation_id", UUID.class),
+                row.getString("icon"),
+                row.getString("brand_color_primary"),
+                row.getString("brand_color_secondary"),
                 row.getInt("version"));
     }
 

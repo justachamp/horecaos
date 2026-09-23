@@ -118,6 +118,15 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
     }
 
     /**
+     * {@code catalog.qr_kiosk_price_plane}, resolved the shared way — see
+     * {@link QrKioskHallPricing#resolve} — for the actual cart a customer
+     * checks out with.
+     */
+    private UUID resolvePricingChannelId(UUID tenantId, SalesChannel channel) {
+        return QrKioskHallPricing.resolve(tenantId, channel, channels, configuration);
+    }
+
+    /**
      * Prices a cart.
      *
      * <p>An idempotency key returns the existing quote rather than a second one,
@@ -141,7 +150,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         // An unregistered channel code resolves to no channel rather than to a
         // default one, so a typo cannot quietly price against the storefront.
         var channel = channels.byCode(request.tenantId(), request.channel());
-        UUID pricingChannelId = channel.map(SalesChannel::pricingChannelId).orElse(null);
+        UUID pricingChannelId = channel.map(resolved -> resolvePricingChannelId(request.tenantId(), resolved))
+                .orElse(null);
 
         var publication = catalog.activePublicationId(request.tenantId(), request.brandId(), request.channel())
                 .orElseThrow(() -> new NoPublishedMenuException(request.brandId()));

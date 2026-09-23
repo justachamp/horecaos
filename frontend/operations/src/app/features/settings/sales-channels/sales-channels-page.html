@@ -283,6 +283,102 @@
                         <option [value]="installation.id">{{ installation.displayName }}</option>
                       }
                     </select>
+
+                    <label class="q-caption" [attr.for]="'edit-icon-' + channel.id">{{
+                      'settings.salesChannels.field.icon' | t
+                    }}</label>
+                    <input
+                      [id]="'edit-icon-' + channel.id"
+                      class="q-body field"
+                      type="text"
+                      [value]="editIcon()"
+                      (input)="editIcon.set($any($event.target).value)"
+                      data-testid="edit-icon"
+                    />
+
+                    <span class="q-caption">{{ 'settings.salesChannels.field.brandColorPrimary' | t }}</span>
+                    <div class="color-row">
+                      <q-color-input
+                        [value]="editBrandColorPrimary() || '#000000'"
+                        [ariaLabel]="'settings.salesChannels.field.brandColorPrimary' | t"
+                        (valueChange)="setBrandColorPrimary($event)"
+                        data-testid="edit-color-primary"
+                      />
+                      @if (editBrandColorPrimary()) {
+                        <button type="button" class="q-body-sm link" (click)="clearBrandColorPrimary()">
+                          {{ 'settings.salesChannels.field.color.clear' | t }}
+                        </button>
+                      }
+                    </div>
+
+                    <span class="q-caption">{{ 'settings.salesChannels.field.brandColorSecondary' | t }}</span>
+                    <div class="color-row">
+                      <q-color-input
+                        [value]="editBrandColorSecondary() || '#000000'"
+                        [ariaLabel]="'settings.salesChannels.field.brandColorSecondary' | t"
+                        (valueChange)="setBrandColorSecondary($event)"
+                        data-testid="edit-color-secondary"
+                      />
+                      @if (editBrandColorSecondary()) {
+                        <button type="button" class="q-body-sm link" (click)="clearBrandColorSecondary()">
+                          {{ 'settings.salesChannels.field.color.clear' | t }}
+                        </button>
+                      }
+                    </div>
+                  </div>
+
+                  <div class="edit__social-links">
+                    <h3 class="q-caption matrix__label">
+                      {{ 'settings.salesChannels.field.socialLinks' | t }}
+                    </h3>
+                    @for (row of editSocialLinks(); track row.platform) {
+                      <div class="social-row" data-testid="social-link-row">
+                        <span class="q-body-sm social-row__platform">{{ row.platform }}</span>
+                        <span class="q-body-sm q-mono social-row__url">{{ row.url }}</span>
+                        <button
+                          type="button"
+                          class="q-body-sm link"
+                          (click)="removeSocialLink(row.platform)"
+                          data-testid="social-link-remove"
+                        >
+                          {{ 'settings.salesChannels.field.socialLinks.remove' | t }}
+                        </button>
+                      </div>
+                    } @empty {
+                      <p class="q-caption ink-subtle">
+                        {{ 'settings.salesChannels.field.socialLinks.empty' | t }}
+                      </p>
+                    }
+                    @if (availableSocialPlatforms().length > 0) {
+                      <div class="social-row social-row--new">
+                        <select
+                          class="q-body-sm field"
+                          [value]="newSocialPlatform()"
+                          (change)="newSocialPlatform.set($any($event.target).value)"
+                          data-testid="social-link-platform"
+                        >
+                          @for (platform of availableSocialPlatforms(); track platform) {
+                            <option [value]="platform">{{ platform }}</option>
+                          }
+                        </select>
+                        <input
+                          class="q-body-sm field social-row__url"
+                          type="url"
+                          placeholder="https://…"
+                          [value]="newSocialUrl()"
+                          (input)="newSocialUrl.set($any($event.target).value)"
+                          data-testid="social-link-url"
+                        />
+                        <button
+                          type="button"
+                          class="q-body-sm secondary"
+                          (click)="addSocialLink()"
+                          data-testid="social-link-add"
+                        >
+                          {{ 'settings.salesChannels.field.socialLinks.add' | t }}
+                        </button>
+                      </div>
+                    }
                   </div>
 
                   <div class="edit__locations">

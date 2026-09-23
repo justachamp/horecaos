@@ -8,6 +8,7 @@ import { formatMoney } from '../../core/format/money';
 import { orderStatusLabel } from '../orders/order-status';
 import { REPORTS_PLACEHOLDER_TIME_ZONE } from './reports-filter-state';
 import { formatCount, formatSecondsDuration, formatSignedMinutes } from './report-formatting';
+import { CrmLogRowResponse } from './order-crm-log-api';
 import { OrderRowResponse } from './reporting-api';
 
 /** Which columns one of 7.2's three order-grain tabs shows. */
@@ -30,7 +31,10 @@ export type OrderTableColumn =
   | 'deliveryFee'
   | 'net'
   | 'items'
-  | 'occurredAt';
+  | 'occurredAt'
+  | 'customer'
+  | 'operator'
+  | 'courier';
 
 const SEVERITY_RED_SECONDS = 60 * 60;
 const SEVERITY_AMBER_SECONDS = 30 * 60;
@@ -74,9 +78,64 @@ export class OrderRowsTable {
   readonly emptyMessageKey = input<MessageKey>('reports.empty.period');
   /** Wave P27 (7.2a): locationId -> display name, for the `branch` column. Empty when the caller has none. */
   readonly locationNames = input<ReadonlyMap<string, string>>(new Map());
+  /**
+   * Wave 9 w4-reports-distance-crm (7.2a): orderId -> the CRM half of this
+   * same row (`GET /orders/crm-log`), joined here rather than in SQL —
+   * `order-reports-page.ts`'s own doc explains why. Empty when the caller has
+   * not fetched it (every tab but «Заказы»), in which case `customer`/
+   * `operator`/`courier` render `—` rather than an error.
+   */
+  readonly crmByOrderId = input<ReadonlyMap<string, CrmLogRowResponse>>(new Map());
 
   protected hasColumn(column: OrderTableColumn): boolean {
     return this.columns().includes(column);
+  }
+
+  private crmRow(row: OrderRowResponse): CrmLogRowResponse | undefined {
+    return this.crmByOrderId().get(row.orderId);
+  }
+
+  /**
+   * «Клиент»: the account's or guest's name in full — never masked (orders.md
+   * §1.5, §3.7). A `GUEST` order has no account and is always labelled
+   * "Guest". An `ACCOUNT` order with no `customerName` (the snapshot row
+   * predates the snapshot feature, or was otherwise never written) falls back
+   * to "Customer account", never "Guest" — collapsing the two would mislead
+   * an operator into treating a real account holder as anonymous.
+   */
+  protected customerLabel(row: OrderRowResponse): string {
+    const crm = this.crmRow(row);
+    if (!crm) {
+      return '—';
+    }
+    if (crm.customerType === 'GUEST') {
+      return this.i18n.t('reports.orders.column.customer.guest');
+    }
+    return crm.customerName ?? this.i18n.t('reports.orders.column.customer.account');
+  }
+
+  /** The masked phone beside the name — already masked server-side, never the plaintext. */
+  protected customerPhone(row: OrderRowResponse): string {
+    return this.crmRow(row)?.customerPhone ?? '—';
+  }
+
+  /**
+   * «Оператор»: a staff Keycloak subject, or `channel:CODE` for a machine
+   * channel (`OperatorAttribution`'s own scheme, reimplemented on the
+   * `ordering` side for the CRM log). No staff name until the staff-identity
+   * ADR lands, the same limitation `operator-leaderboard`'s own column states.
+   */
+  protected operatorLabel(row: OrderRowResponse): string {
+    const operator = this.crmRow(row)?.operatorPrincipalId;
+    if (!operator) {
+      return '—';
+    }
+    return operator.startsWith('channel:') ? operator.slice('channel:'.length) : operator;
+  }
+
+  /** «Курьер»: the non-PII handle ("K-014"), never a decrypted name — see `OrderCrmLogController`'s own doc. */
+  protected courierLabel(row: OrderRowResponse): string {
+    return this.crmRow(row)?.courierDisplayReference ?? '—';
   }
 
   /** Wave P27 (7.2a): the public order number when the fact carries one — never eight characters of a UUID again. */

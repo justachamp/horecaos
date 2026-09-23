@@ -41,11 +41,32 @@ class MetricRegistryTests {
                 "customers.value.v1",
                 "customers.basket_depth.v1",
                 "customers.ltv.v1",
-                "revenue.new_vs_returning.v1");
+                "revenue.new_vs_returning.v1",
+                "delivery_distance.average.v1");
 
         assertThat(named)
                 .allSatisfy(
                         code -> assertThat(MetricRegistry.find(code)).as(code).isPresent());
+    }
+
+    /**
+     * Wave 9 w4-reports-distance-crm (7.1): the overview's distance tile is
+     * an average sourced from {@code fact_order} directly, on the same
+     * footing as the elapsed-time tiles beside it — never the typed {@code
+     * /queries} pipeline, which reads pre-aggregated {@code agg_branch_day}.
+     */
+    @Test
+    void deliveryDistanceAverageIsItsOwnEndpointNotComposedFromDayAggregates() {
+        MetricDefinition distance = MetricRegistry.require("delivery_distance.average.v1");
+
+        assertThat(distance.aggregation()).isEqualTo(MetricDefinition.Aggregation.AVERAGE);
+        assertThat(distance.unit()).isEqualTo(MetricDefinition.MetricUnit.METERS);
+        assertThat(distance.currencyRule()).isEqualTo(MetricDefinition.CurrencyRule.NONE);
+        assertThat(distance.sourceAvailable()).isTrue();
+        assertThat(distance.sourceFact()).contains("fact_order.delivery_distance_meters");
+        assertThat(distance.definition()).isNotBlank();
+        assertThat(distance.inclusion()).isNotBlank();
+        assertThat(distance.exclusion()).isNotBlank();
     }
 
     /**

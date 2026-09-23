@@ -12,18 +12,26 @@ export interface OrderQueueDateRange {
  * The board's own toolbar filters (orders.md §2.4, wave P07), narrowed to
  * what `GET .../orders/board` (wave P04, ADR 0102) actually reads:
  *
- * - **Филиал** is not a field here. `/board` is already scoped to one
- *   location by its own URL, and switching branches is `CurrentLocation`'s
- *   own picker in the shell — a second "branch filter" inside this toolbar
- *   would either duplicate that control or silently do nothing, and neither
- *   is what an operator narrowing "this shift, this channel" expects.
- * - **Канал** stands in for both "aggregator" and "source": `channelCode` is
- *   the one channel predicate `/board` accepts, and the channel row already
- *   *is* the aggregator (Wolt, Yandex Eats, the tenant's own site) — a
- *   second, separate `marketplace_binding_id` filter is not read by ordering
- *   yet (orders.md §2.4's own "not read by ordering — ADR 0040" note) and is
- *   not offered here rather than fabricated against an endpoint that ignores
- *   it.
+ * - **Филиал** is still not a field here, and for a structural reason wave 9
+ *   did not remove: `/board`'s path already names one `locationId`, so there
+ *   is no second branch to filter *among* inside one call to it — a "branch"
+ *   parameter on an endpoint that only ever answers for the branch its own
+ *   URL names would either be ignored or duplicate `CurrentLocation`'s own
+ *   shell picker. Answering it for real needs a brand-scoped, paginated
+ *   board — a new endpoint at a wider `ORDER_READ` scope, the same reason
+ *   `OperationsBrandOrderController` exists beside `OperationsOrderController`
+ *   for the live board's counters — which is a decision this wave's own gap
+ *   map row does not make for us; see wave 9's `notDone`.
+ * - **Канал** is `channelCode`, and **Источник** (wave 9, gap map `1.1c`) is
+ *   the new, coarser `origin` predicate beside it: `HORECAOS` for the
+ *   tenant's own channels, `MARKETPLACE` for anything an aggregator pushed
+ *   or an operator keyed in on one's behalf (ADR 0040). The two answer
+ *   different questions and are not one control — a tenant can run several
+ *   `MARKETPLACE` channels (Wolt, Yandex Eats) that `channelCode` already
+ *   tells apart, and `origin` is what "aggregator orders, whichever one"
+ *   answers in one click instead of one per channel. Picking a single
+ *   aggregator *binding* when a tenant runs two installations of the same
+ *   provider is narrower than `origin` reaches and is not offered here.
  * - **Оплата** (payment *status*) has no board predicate at all yet — only
  *   **Способ оплаты** (payment *method*, `paymentMethodCode`) does. This
  *   toolbar's "payment type" filter is the method, matching what the
@@ -35,6 +43,8 @@ export interface OrderQueueDateRange {
 export interface OrderQueueFilters {
   readonly dateRange: OrderQueueDateRange | null;
   readonly channelCode: string | null;
+  /** «Источник» (wave 9, gap map `1.1c`) — `ordering.orders.origin` (V0038, ADR 0040). */
+  readonly origin: 'HORECAOS' | 'MARKETPLACE' | null;
   readonly fulfillmentMode: 'DELIVERY' | 'PICKUP' | 'DINE_IN' | null;
   readonly courierId: string | null;
   readonly paymentMethodCode: string | null;
@@ -46,6 +56,7 @@ export interface OrderQueueFilters {
 export const EMPTY_ORDER_QUEUE_FILTERS: OrderQueueFilters = {
   dateRange: null,
   channelCode: null,
+  origin: null,
   fulfillmentMode: null,
   courierId: null,
   paymentMethodCode: null,
@@ -60,6 +71,7 @@ export function hasActiveFilters(filters: OrderQueueFilters): boolean {
   return (
     filters.dateRange !== null ||
     filters.channelCode !== null ||
+    filters.origin !== null ||
     filters.fulfillmentMode !== null ||
     filters.courierId !== null ||
     filters.paymentMethodCode !== null ||
@@ -101,6 +113,9 @@ export function boardQueryParams(
   }
   if (filters.channelCode) {
     params['channelCode'] = filters.channelCode;
+  }
+  if (filters.origin) {
+    params['origin'] = filters.origin;
   }
   if (filters.fulfillmentMode) {
     params['fulfillmentMode'] = filters.fulfillmentMode;

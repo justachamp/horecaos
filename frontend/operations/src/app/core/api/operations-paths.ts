@@ -196,6 +196,17 @@ export const operationsPaths = {
   },
 
   /**
+   * Request an external courier for this order (`OrderDeliveryController
+   * .externalCourier`, gap map rows 1.2e/2.1c) — the order-keyed path the
+   * order detail pane and the KDS pass both call, over the same Millenium
+   * pattern quote/accept services `dispatchExternalQuote`/`dispatchExternalBook`
+   * expose per `planId` (gap map row 1.2f). Mutation: key required.
+   */
+  orderExternalCourier(scope: LocationScope, orderId: string): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/orders/${encodeURIComponent(orderId)}/external-courier`;
+  },
+
+  /**
    * Every revision of this order (ADR 0039, wave P09/gap map `1.2p`) — the
    * append-only chain `orderQuery.revisions` already serves and no screen has
    * read before now.
@@ -266,6 +277,17 @@ export const operationsPaths = {
   /** Move a confirmed order along the kitchen path. Mutation: key and `If-Match`. */
   orderStateActions(scope: LocationScope, orderId: string): string {
     return `${this.order(scope, orderId)}/state-actions`;
+  },
+
+  /**
+   * A compensating transition that restores an earlier status (ADR 0019
+   * amendment, ADR 0110, wave 9 gap map `1.1h`) — `OperationsOrderController
+   * .stateOverride`, gated on `ORDER_STATE_OVERRIDE` rather than
+   * `ORDER_ADVANCE` and carrying a mandatory registry reason. Mutation: key
+   * and `If-Match`.
+   */
+  orderStateOverrides(scope: LocationScope, orderId: string): string {
+    return `${this.order(scope, orderId)}/state-overrides`;
   },
 
   /**

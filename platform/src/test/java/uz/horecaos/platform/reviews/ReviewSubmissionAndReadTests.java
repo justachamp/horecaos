@@ -103,7 +103,7 @@ class ReviewSubmissionAndReadTests {
 
         reviewStore = new JdbcReviewStore(jdbc);
         JdbcOrderStore orderStore = new JdbcOrderStore(jdbc);
-        orderDirectory = new JdbcOrderDirectory(orderStore);
+        orderDirectory = new JdbcOrderDirectory(orderStore, jdbc);
 
         SecretResolver secrets = new EnvironmentSecretResolver(
                 Map.of("horecaos.secrets.data_encryption.platform.kek", "a-test-key-encryption-key")::get, CLOCK);

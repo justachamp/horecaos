@@ -84,11 +84,12 @@ class OperationsOrderBoardReferenceValidationTests {
                 UUID.class,
                 String.class,
                 String.class,
+                String.class,
                 String.class);
         method.setAccessible(true);
         try {
             return method.invoke(
-                    null, TENANT, BRAND, LOCATION, null, null, null, null, null, null, null, null, reference);
+                    null, TENANT, BRAND, LOCATION, null, null, null, null, null, null, null, null, reference, null);
         } catch (InvocationTargetException wrapped) {
             switch (wrapped.getCause()) {
                 case RuntimeException runtime -> throw runtime;

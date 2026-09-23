@@ -73,6 +73,7 @@ class ChannelAndServiceabilityEventOutboxTests {
     private static final UUID OTHER_TENANT = UUID.randomUUID();
     private static final UUID BRAND = UUID.randomUUID();
     private static final UUID LOCATION = UUID.randomUUID();
+    private static final UUID LOCATION_2 = UUID.randomUUID();
 
     private static TestDatabase.Handle db;
     private static DriverManagerDataSource dataSource;
@@ -112,6 +113,15 @@ class ChannelAndServiceabilityEventOutboxTests {
                 VALUES (:id, :tenantId, :brandId, 'MAIN01', 'main-01', 'Branch', 'Asia/Tashkent', 'ACTIVE', 0)
                 """)
                 .param("id", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
+        jdbc.sql("""
+                INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
+                    timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, 'MAIN02', 'main-02', 'Branch 2', 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", LOCATION_2)
                 .param("tenantId", TENANT)
                 .param("brandId", BRAND)
                 .update();
@@ -262,6 +272,44 @@ class ChannelAndServiceabilityEventOutboxTests {
         assertThat(event).containsEntry("tenantId", TENANT).containsEntry("aggregateId", LOCATION);
         assertPayloadValidatesAgainstSchema("LocationServiceStateChanged", payloadOf(event));
         assertThat((String) event.get("payload")).contains("FORCE_CLOSED").contains("FRYER_DOWN");
+    }
+
+    /**
+     * {@code changeServiceStateBulk} carries no {@code @Transactional} of its own and
+     * calls {@code this.changeServiceState(...)} as a plain in-class call — a
+     * self-invocation that bypasses the Spring AOP proxy {@code @Transactional} on
+     * {@code changeServiceState} depends on. With no transaction ever actually opened,
+     * {@code TenancyOutboxEventListener.append} (a {@code BEFORE_COMMIT}
+     * {@code @TransactionalEventListener}) has nothing to attach to and is never
+     * invoked, so the bulk close/open bar's per-location writes commit while every
+     * {@code LocationServiceStateChanged} they should have produced is silently
+     * dropped — unlike the exact same change made one location at a time through
+     * {@link #locationServiceStateChangedCommitsWithTheAuditFact}'s own path.
+     */
+    @Test
+    @DisplayName("changeServiceStateBulk commits a LocationServiceStateChanged for every location it applies")
+    void changeServiceStateBulkCommitsAnEventForEveryLocation() {
+        ServiceScheduleService schedules = context.getBean(ServiceScheduleService.class);
+
+        List<ServiceScheduleService.BulkStateChangeOutcome> outcomes = schedules.changeServiceStateBulk(
+                TENANT,
+                BRAND,
+                List.of(LOCATION, LOCATION_2),
+                new ServiceScheduleService.ChangeServiceStateCommand(
+                        ServiceMode.FORCE_CLOSED, "FRYER_DOWN", "The fryer failed", null));
+
+        assertThat(outcomes)
+                .extracting(ServiceScheduleService.BulkStateChangeOutcome::applied)
+                .containsExactly(true, true);
+
+        assertThat(outboxEventsFor(LOCATION))
+                .as("the first location's manual override must still reach the outbox through the bulk path")
+                .extracting(row -> row.get("eventType"))
+                .containsExactly("LocationServiceStateChanged");
+        assertThat(outboxEventsFor(LOCATION_2))
+                .as("the second location's manual override must still reach the outbox through the bulk path")
+                .extracting(row -> row.get("eventType"))
+                .containsExactly("LocationServiceStateChanged");
     }
 
     @Test
@@ -420,8 +468,9 @@ class ChannelAndServiceabilityEventOutboxTests {
                 AuditRecorder audit,
                 CurrentActor currentActor,
                 Clock clock,
-                ApplicationEventPublisher events) {
-            return new ServiceScheduleService(store, audit, currentActor, clock, events);
+                ApplicationEventPublisher events,
+                org.springframework.beans.factory.ObjectProvider<ServiceScheduleService> self) {
+            return new ServiceScheduleService(store, audit, currentActor, clock, events, self);
         }
     }
 }

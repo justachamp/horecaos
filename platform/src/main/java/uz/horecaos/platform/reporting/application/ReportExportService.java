@@ -14,6 +14,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.apache.commons.csv.CSVFormat;
@@ -38,6 +39,7 @@ import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.media.api.ObjectStorage;
+import uz.horecaos.platform.ordering.api.OrderCrmLogExportPort;
 import uz.horecaos.platform.reporting.domain.ReportExportDefinition;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportExportStore;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportExportStore.ClaimedExport;
@@ -56,9 +58,9 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * claims one row and produces its artefact; see that class's own doc for why this and not a batch
  * loop.
  *
- * <p>Only {@link ReportExportRegistry#CUSTOMER_DIRECTORY} is wired today — see that class's own
- * doc for why a second report is one more {@code case} here rather than a pluggable abstraction
- * built for a catalogue of one.
+ * <p>{@link ReportExportRegistry#CUSTOMER_DIRECTORY} and {@link ReportExportRegistry#ORDER_CRM_LOG}
+ * are wired — see that class's own doc for why the next report is one more {@code case} in
+ * {@link #run} rather than a pluggable abstraction.
  */
 @Service
 public class ReportExportService {
@@ -79,6 +81,7 @@ public class ReportExportService {
 
     private final JdbcReportExportStore store;
     private final CustomerDirectoryExportPort customerDirectory;
+    private final OrderCrmLogExportPort orderCrmLog;
     private final FieldProtection protection;
     private final AuditRecorder audit;
     private final ObjectStorage storage;
@@ -90,6 +93,7 @@ public class ReportExportService {
     public ReportExportService(
             JdbcReportExportStore store,
             CustomerDirectoryExportPort customerDirectory,
+            OrderCrmLogExportPort orderCrmLog,
             FieldProtection protection,
             AuditRecorder audit,
             ObjectStorage storage,
@@ -99,6 +103,7 @@ public class ReportExportService {
             @Value("${horecaos.reporting.exports.bucket:${horecaos.media.bucket:horecaos-media}}") String bucket) {
         this.store = store;
         this.customerDirectory = customerDirectory;
+        this.orderCrmLog = orderCrmLog;
         this.protection = protection;
         this.audit = audit;
         this.storage = storage;
@@ -109,9 +114,9 @@ public class ReportExportService {
     }
 
     /**
-     * Queues an export. The PII omission is decided here, once, from {@code holdsPiiCapability} —
-     * the caller's own {@code customer.pii.export} check — and stored as {@code
-     * effective_columns}/{@code includes_pii_columns} so nothing later has to re-ask.
+     * Queues a {@link ReportExportRegistry#CUSTOMER_DIRECTORY} export — see the full overload for
+     * the shared doc. Kept as its own method rather than defaulting {@code from}/{@code to}/{@code
+     * locationIds} at every call site.
      *
      * @throws ApiException {@code VALIDATION_FAILED} for an unknown report key or column
      */
@@ -125,6 +130,46 @@ public class ReportExportService {
             String purpose,
             String requestedBySubject,
             boolean holdsPiiCapability) {
+        return requestExport(
+                tenantId,
+                reportKey,
+                requestedColumns,
+                status,
+                query,
+                null,
+                null,
+                List.of(),
+                purpose,
+                requestedBySubject,
+                holdsPiiCapability);
+    }
+
+    /**
+     * Queues an export. The PII omission is decided here, once, from {@code holdsPiiCapability} —
+     * the caller's own {@code customer.pii.export} check — and stored as {@code
+     * effective_columns}/{@code includes_pii_columns} so nothing later has to re-ask.
+     *
+     * @param from        {@link ReportExportRegistry#ORDER_CRM_LOG}'s own required range start;
+     *                    ignored by every other report
+     * @param to          {@link ReportExportRegistry#ORDER_CRM_LOG}'s own required range end
+     * @param locationIds {@link ReportExportRegistry#ORDER_CRM_LOG}'s own optional branch filter;
+     *                    empty means every branch the caller's tenant-wide grant already covers
+     * @throws ApiException {@code VALIDATION_FAILED} for an unknown report key or column, or for
+     *                       {@code ORDER_CRM_LOG} with no range
+     */
+    @Transactional
+    public UUID requestExport(
+            UUID tenantId,
+            String reportKey,
+            List<String> requestedColumns,
+            @Nullable String status,
+            @Nullable String query,
+            @Nullable Instant from,
+            @Nullable Instant to,
+            List<UUID> locationIds,
+            String purpose,
+            String requestedBySubject,
+            boolean holdsPiiCapability) {
 
         ReportExportDefinition definition = ReportExportRegistry.find(reportKey)
                 .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown report key"));
@@ -133,10 +178,13 @@ public class ReportExportService {
                 throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown export column: " + column);
             }
         }
+        if (ReportExportRegistry.ORDER_CRM_LOG.equals(reportKey) && (from == null || to == null)) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "ORDER_CRM_LOG requires both from and to");
+        }
 
         List<String> effectiveColumns = definition.effectiveColumns(requestedColumns, holdsPiiCapability);
         boolean includesPii = effectiveColumns.stream().anyMatch(definition::isPiiColumn);
-        int rowQuota = rowQuotaFor(includesPii);
+        int rowQuota = rowQuotaFor(reportKey, includesPii);
 
         UUID id = Ids.newId();
         Instant now = clock.instant();
@@ -156,6 +204,15 @@ public class ReportExportService {
             filters.put("status", status);
         }
         filters.put("hadSearchQuery", hasSearchQuery);
+        if (from != null) {
+            filters.put("from", from.toString());
+        }
+        if (to != null) {
+            filters.put("to", to.toString());
+        }
+        if (!locationIds.isEmpty()) {
+            filters.put("locationIds", locationIds.stream().map(UUID::toString).toList());
+        }
 
         store.insertQueued(
                 id,
@@ -174,8 +231,13 @@ public class ReportExportService {
         return id;
     }
 
-    private static int rowQuotaFor(boolean includesPii) {
-        return includesPii ? CustomerDirectoryExportPort.PII_ROW_LIMIT : DEFAULT_ROW_QUOTA;
+    private static int rowQuotaFor(String reportKey, boolean includesPii) {
+        if (!includesPii) {
+            return DEFAULT_ROW_QUOTA;
+        }
+        return ReportExportRegistry.ORDER_CRM_LOG.equals(reportKey)
+                ? OrderCrmLogExportPort.PII_ROW_LIMIT
+                : CustomerDirectoryExportPort.PII_ROW_LIMIT;
     }
 
     /**
@@ -204,6 +266,50 @@ public class ReportExportService {
     }
 
     private void run(ClaimedExport job) {
+        ExportOutcome outcome =
+                switch (job.reportKey()) {
+                    case ReportExportRegistry.CUSTOMER_DIRECTORY -> runCustomerDirectory(job);
+                    case ReportExportRegistry.ORDER_CRM_LOG -> runOrderCrmLog(job);
+                    default ->
+                        throw new IllegalStateException(
+                                "No export source registered for report key " + job.reportKey());
+                };
+
+        byte[] csv = writeCsv(job.effectiveColumns(), outcome.rows());
+        String objectKey = "tenants/%s/report-exports/%s.csv".formatted(job.tenantId(), job.id());
+        storage.put(bucket, objectKey, "text/csv", csv);
+        String checksum = sha256Base64(csv);
+
+        Instant now = clock.instant();
+        int rowCount = outcome.rows().size();
+        boolean truncated = outcome.truncated();
+        transactions.executeWithoutResult(status2 -> {
+            store.completeExport(
+                    job.id(), bucket, objectKey, "text/csv", csv.length, checksum, rowCount, truncated, now);
+            audit.record(AuditFact.of("report.export.completed", AuditClass.SECURITY)
+                    .by(ActorRef.user(job.requestedBySubject(), null))
+                    .at(ResourceScope.tenant(job.tenantId()))
+                    .target("report_export", job.id())
+                    .because(job.purpose())
+                    .changed(Map.of(
+                            "reportKey",
+                            job.reportKey(),
+                            "rowCount",
+                            rowCount,
+                            "truncated",
+                            truncated,
+                            "piiColumnGroup",
+                            job.includesPiiColumns() ? "INCLUDED" : "EXCLUDED",
+                            "filters",
+                            job.filters()))
+                    .correlatedBy(job.id().toString())
+                    .occurredAt(now)
+                    .build());
+        });
+        log.info("Report export {} completed: {} row(s), truncated={}", job.id(), rowCount, truncated);
+    }
+
+    private ExportOutcome runCustomerDirectory(ClaimedExport job) {
         String query = job.encryptedQuery() == null
                 ? null
                 : protection.reveal(
@@ -212,11 +318,6 @@ public class ReportExportService {
                         new RecordRef(QUERY_TABLE, QUERY_COLUMN, job.id()),
                         REVEAL_PURPOSE);
         String status = (String) job.filters().get("status");
-
-        // Only ReportExportRegistry.CUSTOMER_DIRECTORY is wired — see this class's own doc.
-        if (!ReportExportRegistry.CUSTOMER_DIRECTORY.equals(job.reportKey())) {
-            throw new IllegalStateException("No export source registered for report key " + job.reportKey());
-        }
 
         CustomerDirectoryExportPort.ExportBundle bundle = customerDirectory.export(
                 job.tenantId(),
@@ -230,33 +331,32 @@ public class ReportExportService {
         List<Map<String, String>> rows = bundle.rows().stream()
                 .map(row -> rowAsColumns(row, job.effectiveColumns()))
                 .toList();
+        return new ExportOutcome(rows, bundle.truncated());
+    }
 
-        byte[] csv = writeCsv(job.effectiveColumns(), rows);
-        String objectKey = "tenants/%s/report-exports/%s.csv".formatted(job.tenantId(), job.id());
-        storage.put(bucket, objectKey, "text/csv", csv);
-        String checksum = sha256Base64(csv);
+    /**
+     * Wave 9 w4-reports-distance-crm (7.2a): the console order log's own audited PII egress —
+     * {@link OrderCrmLogExportPort}, never {@code reporting.fact_order}. {@code from}/{@code to}
+     * are required at queue time ({@link #requestExport}'s own guard), so an absent value here
+     * means a row this class itself never wrote, not a caller's mistake.
+     */
+    private ExportOutcome runOrderCrmLog(ClaimedExport job) {
+        Instant from = Instant.parse(
+                (String) Objects.requireNonNull(job.filters().get("from"), "ORDER_CRM_LOG queued with no from"));
+        Instant to = Instant.parse(
+                (String) Objects.requireNonNull(job.filters().get("to"), "ORDER_CRM_LOG queued with no to"));
+        @SuppressWarnings("unchecked")
+        List<String> storedLocationIds = (List<String>) job.filters().getOrDefault("locationIds", List.of());
+        List<UUID> locationIds =
+                storedLocationIds.stream().map(UUID::fromString).toList();
 
-        Instant now = clock.instant();
-        int rowCount = rows.size();
-        transactions.executeWithoutResult(status2 -> {
-            store.completeExport(
-                    job.id(), bucket, objectKey, "text/csv", csv.length, checksum, rowCount, bundle.truncated(), now);
-            audit.record(AuditFact.of("report.export.completed", AuditClass.SECURITY)
-                    .by(ActorRef.user(job.requestedBySubject(), null))
-                    .at(ResourceScope.tenant(job.tenantId()))
-                    .target("report_export", job.id())
-                    .because(job.purpose())
-                    .changed(Map.of(
-                            "reportKey", job.reportKey(),
-                            "rowCount", rowCount,
-                            "truncated", bundle.truncated(),
-                            "piiColumnGroup", job.includesPiiColumns() ? "INCLUDED" : "EXCLUDED",
-                            "filters", job.filters()))
-                    .correlatedBy(job.id().toString())
-                    .occurredAt(now)
-                    .build());
-        });
-        log.info("Report export {} completed: {} row(s), truncated={}", job.id(), rowCount, bundle.truncated());
+        OrderCrmLogExportPort.ExportBundle bundle =
+                orderCrmLog.export(job.tenantId(), from, to, locationIds, job.includesPiiColumns(), job.rowQuota());
+
+        List<Map<String, String>> rows = bundle.rows().stream()
+                .map(row -> crmLogRowAsColumns(row, job.effectiveColumns()))
+                .toList();
+        return new ExportOutcome(rows, bundle.truncated());
     }
 
     private static Map<String, String> rowAsColumns(
@@ -275,6 +375,31 @@ public class ReportExportService {
         }
         return values;
     }
+
+    private static Map<String, String> crmLogRowAsColumns(
+            OrderCrmLogExportPort.ExportedRow row, List<String> effectiveColumns) {
+        Map<String, String> values = new LinkedHashMap<>();
+        for (String column : effectiveColumns) {
+            values.put(
+                    column,
+                    switch (column) {
+                        case "orderId" -> row.orderId().toString();
+                        case "occurredAt" -> row.occurredAt().toString();
+                        case "locationId" -> row.locationId().toString();
+                        case "customerType" -> row.customerType();
+                        case "customerName" -> row.customerName() == null ? "" : row.customerName();
+                        case "customerPhone" -> row.customerPhone() == null ? "" : row.customerPhone();
+                        case "operatorPrincipalId" -> row.operatorPrincipalId();
+                        case "courierDisplayReference" ->
+                            row.courierDisplayReference() == null ? "" : row.courierDisplayReference();
+                        default -> "";
+                    });
+        }
+        return values;
+    }
+
+    /** One report's produced rows, in wire form, and whether the row quota cut it short. */
+    private record ExportOutcome(List<Map<String, String>> rows, boolean truncated) {}
 
     private static byte[] writeCsv(List<String> columns, List<Map<String, String>> rows) {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();

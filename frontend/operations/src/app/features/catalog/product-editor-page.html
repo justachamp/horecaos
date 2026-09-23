@@ -440,12 +440,34 @@
             }
             @case ('PHOTOS') {
               <div class="editor__section">
-                @if (product.media.length === 0) {
-                  <p class="q-caption">{{ 'catalog.editor.photos.empty' | t }}</p>
+                <label class="editor__photo-channel-picker">
+                  <span class="q-body-sm">{{ 'catalog.editor.photos.channel.label' | t }}</span>
+                  <select
+                    [value]="selectedPhotoChannel()"
+                    (change)="setPhotoChannel($any($event.target).value)"
+                    data-testid="editor-photo-channel-select"
+                  >
+                    <option [value]="allChannelsCode">
+                      {{ 'catalog.editor.photos.channel.all' | t }}
+                    </option>
+                    @for (channel of photoChannels(); track channel.id) {
+                      <option [value]="channel.code">{{ channel.displayName }}</option>
+                    }
+                  </select>
+                </label>
+                @if (selectedChannelPhotos().length === 0) {
+                  <p class="q-caption">
+                    {{
+                      (selectedPhotoChannel() === allChannelsCode
+                        ? 'catalog.editor.photos.empty'
+                        : 'catalog.editor.photos.channel.empty'
+                      ) | t
+                    }}
+                  </p>
                 } @else {
                   <div class="editor__photo-grid">
                     @for (
-                      item of product.media;
+                      item of selectedChannelPhotos();
                       track item.mediaAssetId + item.role + item.channelCode;
                       let i = $index, count = $count
                     ) {
@@ -500,6 +522,9 @@
                     }
                   </div>
                 }
+                <p class="q-caption" data-testid="editor-photo-channel-hint">
+                  {{ 'catalog.editor.photos.channel.hint' | t }}
+                </p>
                 <q-media-uploader
                   [uploading]="uploadingPhoto()"
                   (cropped)="uploadPhoto($event)"

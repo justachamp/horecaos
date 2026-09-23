@@ -358,7 +358,7 @@ class CartCheckoutAndOrderTests {
                 redemption,
                 new uz.horecaos.platform.payments.settlement.HeldTenderProgress(
                         settlementStore,
-                        new JdbcOrderDirectory(new JdbcOrderStore(jdbc)),
+                        new JdbcOrderDirectory(new JdbcOrderStore(jdbc), jdbc),
                         intentStore,
                         paymentAttemptStore,
                         clock),
@@ -494,7 +494,7 @@ class CartCheckoutAndOrderTests {
         remedies = new OrderRemedyService(
                 new JdbcRemedyStore(jdbc),
                 settlements,
-                new JdbcOrderDirectory(orderStore),
+                new JdbcOrderDirectory(orderStore, jdbc),
                 (tenantId, orderId) -> deliveryFeeBasis,
                 ALWAYS_APPROVES,
                 new JdbcAuditRecorder(jdbc, objectMapper),
@@ -2218,7 +2218,7 @@ class CartCheckoutAndOrderTests {
 
         return new PaymentIntentService(
                 intentStore,
-                new JdbcOrderDirectory(orderStore),
+                new JdbcOrderDirectory(orderStore, jdbc),
                 sellers,
                 bindings,
                 calendar,
@@ -5376,7 +5376,7 @@ class CartCheckoutAndOrderTests {
                                 .listForLocation(
                                         new JdbcOrderStore.OrderListQuery(
                                                 TENANT, BRAND, LOCATION, List.of(), null, null, null, null, null, null,
-                                                null, null),
+                                                null, null, null),
                                         null,
                                         null,
                                         10)

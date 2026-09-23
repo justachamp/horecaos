@@ -11,6 +11,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.tenancy.api.ChannelAvailabilityChanged;
+import uz.horecaos.platform.tenancy.api.ChannelSocialPlatform;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelActivated;
@@ -67,6 +68,14 @@ public class SalesChannelService {
                 command.externallyPriced(),
                 command.guestOrdersAllowed(),
                 command.providerInstallationId(),
+                // Icon, colours and social links are row 10.4a's presentation
+                // set -- an edit-time concern, corrected through #update and
+                // #replaceSocialLinks, the same way the location, payment and
+                // fulfilment matrices are configured after creation rather
+                // than at it.
+                null,
+                null,
+                null,
                 1);
         try {
             store.insert(channel, clock.instant());
@@ -112,6 +121,18 @@ public class SalesChannelService {
                 .toList();
     }
 
+    /**
+     * Every active location's own set of active channel codes, batched over a
+     * whole brand (Settings 10.2a branch list's channel filter) — a thin
+     * passthrough to {@link JdbcSalesChannelStore#activeChannelCodesByLocation},
+     * the same shape {@link ServiceScheduleService}'s own reads section uses
+     * for {@code statesForBrand}.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, List<String>> activeChannelCodesByLocation(UUID tenantId, UUID brandId) {
+        return store.activeChannelCodesByLocation(tenantId, brandId);
+    }
+
     @Transactional(readOnly = true)
     public SalesChannel require(UUID tenantId, UUID channelId) {
         return store.byId(tenantId, channelId)
@@ -133,6 +154,8 @@ public class SalesChannelService {
             throw new IllegalArgumentException("A channel cannot take its prices from itself");
         }
         UUID pricePlaneChannelId = validatedPricePlane(tenantId, command.pricePlaneChannelId());
+        validatedHexColor(command.brandColorPrimary());
+        validatedHexColor(command.brandColorSecondary());
         try {
             if (!store.update(
                     tenantId,
@@ -142,6 +165,9 @@ public class SalesChannelService {
                     command.externallyPriced(),
                     command.guestOrdersAllowed(),
                     command.providerInstallationId(),
+                    command.icon(),
+                    command.brandColorPrimary(),
+                    command.brandColorSecondary(),
                     expectedVersion,
                     clock.instant())) {
                 throw new TenantResourceConflictException("The channel changed since it was read");
@@ -160,6 +186,9 @@ public class SalesChannelService {
                 command.externallyPriced(),
                 command.guestOrdersAllowed(),
                 command.providerInstallationId(),
+                command.icon(),
+                command.brandColorPrimary(),
+                command.brandColorSecondary(),
                 expectedVersion + 1);
     }
 
@@ -204,6 +233,9 @@ public class SalesChannelService {
                 channel.externallyPriced(),
                 channel.guestOrdersAllowed(),
                 channel.providerInstallationId(),
+                channel.icon(),
+                channel.brandColorPrimary(),
+                channel.brandColorSecondary(),
                 expectedVersion + 1);
     }
 
@@ -238,6 +270,9 @@ public class SalesChannelService {
                 channel.externallyPriced(),
                 channel.guestOrdersAllowed(),
                 channel.providerInstallationId(),
+                channel.icon(),
+                channel.brandColorPrimary(),
+                channel.brandColorSecondary(),
                 newVersion);
     }
 
@@ -295,6 +330,41 @@ public class SalesChannelService {
     }
 
     /**
+     * Replaces a channel's social links wholesale — row 10.4a's own field,
+     * never built before this wave. Whole-set and never per-link, the same
+     * discipline {@link #replacePaymentMethods} and {@link #replaceLocations}
+     * already use.
+     *
+     * <p>Never publishes {@link ChannelAvailabilityChanged}: a social link is
+     * presentation, not something the serviceability resolver or a report
+     * reads, so nothing downstream needs telling.
+     *
+     * @param links platform → destination URL. The platform is validated
+     *     against {@link ChannelSocialPlatform}'s closed set and the URL
+     *     against ADR 0036's own https-only rule before either ever reaches
+     *     the database; {@code ck_channel_social_platform}/{@code
+     *     ck_channel_social_url} in migration V0385 are the same rule again,
+     *     for a row written outside this application.
+     */
+    @Transactional
+    public void replaceSocialLinks(UUID tenantId, UUID channelId, Map<String, String> links, int expectedVersion) {
+        require(tenantId, channelId);
+        links.forEach((platform, url) -> {
+            ChannelSocialPlatform.require(platform);
+            if (url == null || !url.regionMatches(true, 0, "https://", 0, "https://".length())) {
+                throw new IllegalArgumentException("Social link for \"%s\" must be an https URL".formatted(platform));
+            }
+        });
+        try {
+            if (!store.replaceSocialLinks(tenantId, channelId, links, expectedVersion, clock.instant())) {
+                throw new TenantResourceConflictException("The channel changed since it was read");
+            }
+        } catch (DataIntegrityViolationException violation) {
+            throw JdbcSalesChannelStore.explain(violation);
+        }
+    }
+
+    /**
      * {@code bumpVersion} inside each {@code replace*} store call above moved
      * the channel from {@code expectedVersion} to exactly one past it on
      * success — the same arithmetic {@code archive} above does by hand, because
@@ -317,7 +387,8 @@ public class SalesChannelService {
         return new ChannelMatrices(
                 store.paymentMethods(tenantId, channelId),
                 store.fulfillmentModes(tenantId, channelId),
-                store.locations(tenantId, channelId));
+                store.locations(tenantId, channelId),
+                store.socialLinks(tenantId, channelId));
     }
 
     /**
@@ -341,6 +412,20 @@ public class SalesChannelService {
         return plane.id();
     }
 
+    private static final java.util.regex.Pattern HEX_COLOR = java.util.regex.Pattern.compile("^#[0-9a-fA-F]{6}$");
+
+    /**
+     * The same shape {@code q-color-input} (row X.32) emits and migration
+     * V0385's {@code ck_sales_channel_brand_color_*} checks re-assert at the
+     * database. Validated here too so a malformed value is refused with a
+     * legible message rather than the raw constraint violation.
+     */
+    private static void validatedHexColor(@Nullable String hex) {
+        if (hex != null && !HEX_COLOR.matcher(hex).matches()) {
+            throw new IllegalArgumentException("\"%s\" is not a six-digit hex colour (#rrggbb)".formatted(hex));
+        }
+    }
+
     public record CreateChannelCommand(
             String code,
             String systemType,
@@ -350,18 +435,30 @@ public class SalesChannelService {
             boolean guestOrdersAllowed,
             @Nullable UUID providerInstallationId) {}
 
-    /** {@code code} and {@code systemType} are absent: see {@link #update}'s own doc for why. */
+    /**
+     * {@code code} and {@code systemType} are absent: see {@link #update}'s
+     * own doc for why. {@code icon}/{@code brandColorPrimary}/{@code
+     * brandColorSecondary} are row 10.4a's presentation fields, added
+     * alongside the rest of a channel's own editable fields rather than as a
+     * fourth matrix — there is exactly one of each per channel, unlike
+     * payment methods, fulfilment modes or social links.
+     */
     public record UpdateChannelCommand(
             String displayName,
             @Nullable UUID pricePlaneChannelId,
             boolean externallyPriced,
             boolean guestOrdersAllowed,
-            @Nullable UUID providerInstallationId) {}
+            @Nullable UUID providerInstallationId,
+            @Nullable String icon,
+            @Nullable String brandColorPrimary,
+            @Nullable String brandColorSecondary) {}
 
+    /** {@code socialLinks} is platform → URL, in display order (row 10.4a). */
     public record ChannelMatrices(
             Map<String, Boolean> paymentMethods,
             Map<FulfillmentMode, Boolean> fulfillmentModes,
-            List<UUID> locationIds) {}
+            List<UUID> locationIds,
+            Map<String, String> socialLinks) {}
 
     /** {@link #listSummaries}'s row: the channel plus the three counts 10.4a's table needs. */
     public record ChannelRegistrySummary(

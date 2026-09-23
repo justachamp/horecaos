@@ -3,7 +3,23 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { I18n } from '../../core/i18n/i18n';
 import { OrderRowsTable, OrderTableColumn } from './order-rows-table';
+import { CrmLogRowResponse } from './order-crm-log-api';
 import { OrderRowResponse } from './reporting-api';
+
+function crmRow(overrides: Partial<CrmLogRowResponse> = {}): CrmLogRowResponse {
+  return {
+    orderId: '018f6f4e-0000-7000-8000-000000000001',
+    occurredAt: '2026-08-21T08:00:00Z',
+    locationId: 'loc-1',
+    customerType: 'ACCOUNT',
+    anonymized: false,
+    customerName: 'Alisher Karimov',
+    customerPhone: '+998 90 ••• •• 42',
+    operatorPrincipalId: 'keycloak-subject-1',
+    courierDisplayReference: 'K-014',
+    ...overrides,
+  };
+}
 
 function row(overrides: Partial<OrderRowResponse> = {}): OrderRowResponse {
   return {
@@ -39,12 +55,16 @@ function render(
   rows: readonly OrderRowResponse[],
   columns: readonly OrderTableColumn[],
   locationNames?: ReadonlyMap<string, string>,
+  crmByOrderId?: ReadonlyMap<string, CrmLogRowResponse>,
 ) {
   const fixture = TestBed.createComponent(OrderRowsTable);
   fixture.componentRef.setInput('rows', rows);
   fixture.componentRef.setInput('columns', columns);
   if (locationNames) {
     fixture.componentRef.setInput('locationNames', locationNames);
+  }
+  if (crmByOrderId) {
+    fixture.componentRef.setInput('crmByOrderId', crmByOrderId);
   }
   fixture.detectChanges();
   return fixture;
@@ -157,5 +177,74 @@ describe('OrderRowsTable', () => {
 
     const without = render([row({ isPreorder: false })], ['orderId', 'preorder']);
     expect(without.nativeElement.querySelector('[data-testid="order-row-preorder"]')).toBeNull();
+  });
+
+  // ---------------------------------- wave 9 w4-reports-distance-crm (7.2a)
+
+  it('renders the customer name, masked phone, operator and courier from the joined CRM row', () => {
+    const fixture = render(
+      [row()],
+      ['orderId', 'customer', 'operator', 'courier'],
+      undefined,
+      new Map([[row().orderId, crmRow()]]),
+    );
+    const html = fixture.nativeElement as HTMLElement;
+    expect(html.querySelector('[data-testid="order-row-customer"]')?.textContent).toContain(
+      'Alisher Karimov',
+    );
+    expect(html.querySelector('[data-testid="order-row-customer"]')?.textContent).toContain(
+      '+998 90 ••• •• 42',
+    );
+    expect(html.querySelector('[data-testid="order-row-operator"]')?.textContent?.trim()).toBe(
+      'keycloak-subject-1',
+    );
+    expect(html.querySelector('[data-testid="order-row-courier"]')?.textContent?.trim()).toBe(
+      'K-014',
+    );
+  });
+
+  it('renders — for customer/operator/courier when the CRM row has not been fetched for this order', () => {
+    const fixture = render([row()], ['orderId', 'customer', 'operator', 'courier']);
+    const html = fixture.nativeElement as HTMLElement;
+    expect(html.querySelector('[data-testid="order-row-customer"]')?.textContent?.trim()).toBe('—');
+    expect(html.querySelector('[data-testid="order-row-operator"]')?.textContent?.trim()).toBe('—');
+    expect(html.querySelector('[data-testid="order-row-courier"]')?.textContent?.trim()).toBe('—');
+  });
+
+  it('shows "Guest" rather than a name for a guest order, and strips the "channel:" prefix off a pseudo-operator', () => {
+    const fixture = render(
+      [row()],
+      ['orderId', 'customer', 'operator'],
+      undefined,
+      new Map([
+        [
+          row().orderId,
+          crmRow({ customerType: 'GUEST', customerName: null, operatorPrincipalId: 'channel:BOT' }),
+        ],
+      ]),
+    );
+    const html = fixture.nativeElement as HTMLElement;
+    expect(html.querySelector('[data-testid="order-row-customer"]')?.textContent).toContain(
+      'Guest',
+    );
+    expect(html.querySelector('[data-testid="order-row-operator"]')?.textContent?.trim()).toBe(
+      'BOT',
+    );
+  });
+
+  it('never labels an ACCOUNT customer with no snapshot name as "Guest"', () => {
+    const fixture = render(
+      [row()],
+      ['orderId', 'customer'],
+      undefined,
+      new Map([
+        [row().orderId, crmRow({ customerType: 'ACCOUNT', customerName: null })],
+      ]),
+    );
+    const text = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="order-row-customer"]',
+    )?.textContent;
+    expect(text).not.toContain('Guest');
+    expect(text).toContain('Customer account');
   });
 });

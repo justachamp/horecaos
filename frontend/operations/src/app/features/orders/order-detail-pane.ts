@@ -119,6 +119,7 @@ type DialogKind =
   | 'reject'
   | 'cancel'
   | 'complete'
+  | 'override'
   | 'amendMenu'
   | 'kitchenNote'
   | 'courierNote'
@@ -345,6 +346,14 @@ export class OrderDetailPane {
    * at once, so one signal is enough.
    */
   protected readonly outcomeReasons = signal<readonly ReasonResponse[]>([]);
+  /**
+   * The status an `OVERRIDE` click asked to restore — captured from the
+   * clicked `actions[]` entry at open time (§0.2/§11.3, wave 9 row `1.1h`),
+   * since {@link OutcomeReasonSubmission} carries only the reason and this
+   * dialog never lets the operator choose a target of its own; see {@link
+   * onActionClick}'s `OVERRIDE` case.
+   */
+  protected readonly pendingOverrideTarget = signal<string | null>(null);
   protected readonly headerOverflowOpen = signal(false);
   private readonly decisionIds = new DecisionIdRegistry();
 
@@ -793,6 +802,15 @@ export class OrderDetailPane {
           );
         }
         return;
+      case 'OVERRIDE':
+        // §0.2/§11.3, wave 9 row 1.1h: the clicked entry already names the one
+        // compensating edge it offers (OrderActionsPolicy never emits more
+        // than one OVERRIDE entry per status today) — the dialog only asks
+        // for the mandatory registry reason, never a target of its own.
+        if (action.targetStatus) {
+          void this.openOverrideDialog(action.targetStatus);
+        }
+        return;
       case 'AMEND':
         // orders.md §4.4: opens the amendment submenu. Wave P10 is the console
         // that can finally render and click this — see
@@ -1061,6 +1079,32 @@ export class OrderDetailPane {
   }
 
   /**
+   * Fetch-before-open (wave 9 row `1.1h`), the same rule {@link
+   * openCancelDialog} follows: `POST .../state-overrides` reuses the
+   * `CANCELLATION` registry for its mandatory `reasonId` — see
+   * `OperationsOrderController.StateOverrideRequest`'s own doc — so this
+   * reads the identical list {@link openCancelDialog} does rather than a
+   * dedicated one that does not exist yet.
+   */
+  private async openOverrideDialog(targetStatus: string): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      this.outcomeReasons.set(await this.referenceDataApi.list(scope, 'CANCELLATION'));
+      this.pendingOverrideTarget.set(targetStatus);
+      this.dialog.set('override');
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.notice.set(this.errorMessage(error));
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
    * §4.6: "where exactly one reason is valid for the order's mode... the
    * action completes without a dialog." Fetches the tenant's active
    * `COMPLETION` reasons, narrows them to this order's fulfilment mode, and
@@ -1113,6 +1157,7 @@ export class OrderDetailPane {
 
   protected onDialogDismiss(): void {
     this.dialog.set(null);
+    this.pendingOverrideTarget.set(null);
   }
 
   protected onCancelDialogConfirm(submission: OutcomeReasonSubmission): void {
@@ -1138,6 +1183,30 @@ export class OrderDetailPane {
 
   protected onCompletionDialogConfirm(submission: OutcomeReasonSubmission): void {
     void this.submitCompletion(submission.reasonId).finally(() => this.dialog.set(null));
+  }
+
+  /** §0.2/§11.3, wave 9 row `1.1h`: `POST .../state-overrides`, with the target {@link openOverrideDialog} captured and the operator's chosen registry reason. */
+  protected onOverrideDialogConfirm(submission: OutcomeReasonSubmission): void {
+    const detail = this.order();
+    const scope = this.location.scope();
+    const target = this.pendingOverrideTarget();
+    if (!detail || !scope || !target) {
+      return;
+    }
+    const orderId = detail.value.summary.orderId;
+    const version = detail.value.summary.version ?? 0;
+
+    void this.submitStateMutation(
+      this.actionsApi.override(scope, orderId, target, version, submission.reasonId),
+    ).finally(() => {
+      this.dialog.set(null);
+      this.pendingOverrideTarget.set(null);
+    });
+  }
+
+  /** The override dialog's title interpolation — the status it is about to restore, in this operator's own language. */
+  protected overrideTitleValues(): Readonly<Record<string, string>> {
+    return { status: this.statusLabel(this.pendingOverrideTarget() ?? '') };
   }
 
   protected onRejectDialogConfirm(submission: OrderRejectSubmission): void {
@@ -1441,6 +1510,18 @@ export class OrderDetailPane {
     return key ? this.i18n.t(key) : stage;
   }
 
+  /**
+   * `ShipmentStatus`'s own six values (gap map rows 1.2e/2.1c) — distinct
+   * from {@link deliveryStageLabel}, which only covers the three the
+   * timeline's `q-steps` renders as milestones; this one is for the § Курьер
+   * panel's external-partner state line, which needs every status including
+   * `PENDING`/`PICKUP_PENDING`/`CANCELLED`.
+   */
+  protected shipmentStatusLabel(status: string): string {
+    const key = SHIPMENT_STATUS_LABEL_KEYS[status];
+    return key ? this.i18n.t(key) : status;
+  }
+
   /** `formatDuration`'s own `hour`/`minute` units, applied to the gap between two ISO instants — the production/delivery lanes' own "elapsed durations between stages". */
   protected formatElapsed(fromIso: string, toIso: string): string {
     const minutes = (new Date(toIso).getTime() - new Date(fromIso).getTime()) / 60_000;
@@ -1608,12 +1689,19 @@ export class OrderDetailPane {
   protected async requestExternalQuote(bindingId: string): Promise<void> {
     const scope = this.location.scope();
     const plan = this.delivery();
-    if (!scope || !plan) {
+    const orderId = this.order()?.value.summary.orderId;
+    if (!scope || !plan || !orderId) {
       return;
     }
     this.externalCourierBusy.set(true);
     try {
-      this.externalQuote.set(await this.dispatchApi.externalQuote(scope, plan.planId, bindingId));
+      // Order-keyed (gap map rows 1.2e/2.1c) rather than `dispatchApi
+      // .externalQuote(scope, plan.planId, ...)` -- the same path the KDS
+      // pass now calls, so both screens share one server-side plan
+      // resolution instead of each carrying its own.
+      this.externalQuote.set(
+        await this.deliveryApi.requestExternalCourierQuote(scope, orderId, bindingId),
+      );
     } catch (error) {
       this.noticeFromRevealError(error);
     } finally {
@@ -1642,9 +1730,10 @@ export class OrderDetailPane {
     }
     this.externalCourierBusy.set(true);
     try {
-      const result = await this.dispatchApi.externalBook(
+      // Same order-keyed path {@link requestExternalQuote} switched to.
+      const result = await this.deliveryApi.decideExternalCourier(
         scope,
-        plan.planId,
+        orderId,
         submission.bindingId,
         submission.quoteId,
         decision,
@@ -1758,6 +1847,16 @@ const DELIVERY_STAGE_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> =
   ASSIGNED: 'orders.detail.timeline.delivery.ASSIGNED',
   PICKED_UP: 'orders.detail.timeline.delivery.PICKED_UP',
   DELIVERED: 'orders.detail.timeline.delivery.DELIVERED',
+};
+
+/** `ShipmentStatus`'s own six values (gap map rows 1.2e/2.1c) — see {@link OrderDetailPane.shipmentStatusLabel}. */
+const SHIPMENT_STATUS_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
+  PENDING: 'orders.detail.courier.status.PENDING',
+  ASSIGNED: 'orders.detail.courier.status.ASSIGNED',
+  PICKUP_PENDING: 'orders.detail.courier.status.PICKUP_PENDING',
+  PICKED_UP: 'orders.detail.courier.status.PICKED_UP',
+  DELIVERED: 'orders.detail.courier.status.DELIVERED',
+  CANCELLED: 'orders.detail.courier.status.CANCELLED',
 };
 
 const TRIGGER_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {

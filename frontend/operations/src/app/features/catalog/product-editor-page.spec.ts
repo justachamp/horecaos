@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { of, throwError } from 'rxjs';
@@ -9,6 +10,7 @@ import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
+import { MediaUploader } from '../../shared/ui/media-uploader';
 import { CapacityApi } from '../kitchen/capacity-api';
 import { ActivityLogApi } from '../staff/activity-log-api';
 import { CatalogApi } from './catalog-api';
@@ -17,6 +19,7 @@ import { MediaApi } from './media-api';
 import { PricingApi } from './pricing-api';
 import { ProductCommentPresetsApi } from './product-comment-presets-api';
 import { CommentPresetsApi } from '../settings/comment-presets/comment-presets-api';
+import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { ProductDetail, ValidationReport } from './catalog-domain';
 import { ProductEditorPage } from './product-editor-page';
 
@@ -65,6 +68,7 @@ function configure(
   capacityApi: Partial<CapacityApi> = {},
   productCommentPresetsApi: Partial<ProductCommentPresetsApi> = {},
   commentPresetsApi: Partial<CommentPresetsApi> = {},
+  salesChannelsApi: Partial<SalesChannelsApi> = {},
 ): void {
   TestBed.configureTestingModule({
     providers: [
@@ -131,6 +135,13 @@ function configure(
         useValue: {
           list: () => Promise.resolve([]),
           ...commentPresetsApi,
+        },
+      },
+      {
+        provide: SalesChannelsApi,
+        useValue: {
+          list: () => Promise.resolve([]),
+          ...salesChannelsApi,
         },
       },
     ],
@@ -593,6 +604,284 @@ describe('ProductEditorPage', () => {
       'ALL',
     );
     expect(host.querySelector('[data-testid="editor-photo-tile"]')).toBeNull();
+  });
+
+  function channel(overrides: Partial<ChannelView> = {}): ChannelView {
+    return {
+      id: 'channel-1',
+      code: 'UZUM',
+      systemType: 'AGGREGATOR',
+      displayName: 'Uzum Tezkor',
+      status: 'ACTIVE',
+      pricePlaneChannelId: null,
+      externallyPriced: true,
+      guestOrdersAllowed: true,
+      providerInstallationId: null,
+      version: 1,
+      locationCount: 1,
+      enabledPaymentMethodCount: 1,
+      enabledFulfillmentModes: ['DELIVERY'],
+      ...overrides,
+    };
+  }
+
+  it('lists the tenant’s active sales channels as the photo picker’s own options — gap map row 4.2f', async () => {
+    configure(
+      { productDetail: () => of(productDetail()) },
+      {},
+      { downloadUrl: () => of('https://cdn.example/thumb.jpg') },
+      {},
+      {},
+      {},
+      { list: () => Promise.resolve([channel(), channel({ id: 'c2', code: 'YANDEX', displayName: 'Yandex Eda' })]) },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-PHOTOS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const options = Array.from(
+      host.querySelectorAll('[data-testid="editor-photo-channel-select"] option'),
+    ).map((option) => option.textContent?.trim());
+    expect(options).toEqual(['Универсальное (все каналы)', 'Uzum Tezkor', 'Yandex Eda']);
+  });
+
+  it('an archived or inactive channel is not offered on the photo picker', async () => {
+    configure(
+      { productDetail: () => of(productDetail()) },
+      {},
+      { downloadUrl: () => of('https://cdn.example/thumb.jpg') },
+      {},
+      {},
+      {},
+      {
+        list: () =>
+          Promise.resolve([
+            channel(),
+            channel({ id: 'c2', code: 'GONE', displayName: 'Retired channel', status: 'ARCHIVED' }),
+          ]),
+      },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-PHOTOS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const options = Array.from(
+      host.querySelectorAll('[data-testid="editor-photo-channel-select"] option'),
+    ).map((option) => option.textContent?.trim());
+    expect(options).toEqual(['Универсальное (все каналы)', 'Uzum Tezkor']);
+  });
+
+  it('choosing a channel scopes the grid to that channel’s own override gallery, gap map row 4.2f', async () => {
+    configure(
+      {
+        productDetail: () =>
+          of(
+            productDetail({
+              media: [
+                { mediaAssetId: 'asset-universal', role: 'PRIMARY', sortOrder: 0, channelCode: 'ALL' },
+                { mediaAssetId: 'asset-uzum', role: 'PRIMARY', sortOrder: 0, channelCode: 'UZUM' },
+              ],
+            }),
+          ),
+      },
+      {},
+      { downloadUrl: () => of('https://cdn.example/thumb.jpg') },
+      {},
+      {},
+      {},
+      { list: () => Promise.resolve([channel()]) },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-PHOTOS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    // The default selection (universal) shows only the universal photo.
+    expect(host.querySelectorAll('[data-testid="editor-photo-tile"]').length).toBe(1);
+
+    const select = host.querySelector<HTMLSelectElement>(
+      '[data-testid="editor-photo-channel-select"]',
+    )!;
+    select.value = 'UZUM';
+    select.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+
+    const tiles = host.querySelectorAll('[data-testid="editor-photo-tile"]');
+    expect(tiles.length).toBe(1);
+    expect(host.querySelector('.editor__photo-image')?.getAttribute('src')).toBe(
+      'https://cdn.example/thumb.jpg',
+    );
+  });
+
+  it('uploads to the channel selected above — not the universal gallery — when one is picked', async () => {
+    const attachMedia = vi.fn().mockReturnValue(of(undefined));
+    const upload = vi.fn().mockReturnValue(of({ assetId: 'asset-new', status: 'AVAILABLE' }));
+    configure(
+      {
+        productDetail: () =>
+          of(
+            productDetail({
+              media: [
+                { mediaAssetId: 'asset-universal', role: 'PRIMARY', sortOrder: 0, channelCode: 'ALL' },
+              ],
+            }),
+          ),
+        attachMedia,
+      },
+      {},
+      { downloadUrl: () => of('https://cdn.example/thumb.jpg'), upload },
+      {},
+      {},
+      {},
+      { list: () => Promise.resolve([channel()]) },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-PHOTOS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const select = host.querySelector<HTMLSelectElement>(
+      '[data-testid="editor-photo-channel-select"]',
+    )!;
+    select.value = 'UZUM';
+    select.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+
+    const uploader = harness.routeDebugElement!.query(By.directive(MediaUploader))
+      .componentInstance as MediaUploader;
+    uploader.selected.emit(new File(['x'], 'a.jpg', { type: 'image/jpeg' }));
+    await flushMicrotasks();
+
+    expect(attachMedia).toHaveBeenCalledWith(BRAND_SCOPE, 'PRODUCT', 'product-1', 'asset-new', {
+      role: 'PRIMARY',
+      sortOrder: 0,
+      channel: 'UZUM',
+    });
+    // UZUM's own gallery was empty, so its first photo is PRIMARY, independent
+    // of the universal gallery already having one.
+    expect(host.querySelectorAll('[data-testid="editor-photo-tile"]').length).toBe(1);
+  });
+
+  it('reordering one channel’s own gallery never re-attaches a different channel’s photo', async () => {
+    const attachMedia = vi.fn().mockReturnValue(of(undefined));
+    configure(
+      {
+        productDetail: () =>
+          of(
+            productDetail({
+              media: [
+                { mediaAssetId: 'universal-1', role: 'PRIMARY', sortOrder: 0, channelCode: 'ALL' },
+                { mediaAssetId: 'uzum-1', role: 'PRIMARY', sortOrder: 0, channelCode: 'UZUM' },
+                { mediaAssetId: 'uzum-2', role: 'GALLERY', sortOrder: 1, channelCode: 'UZUM' },
+              ],
+            }),
+          ),
+        attachMedia,
+      },
+      {},
+      { downloadUrl: () => of('https://cdn.example/thumb.jpg') },
+      {},
+      {},
+      {},
+      { list: () => Promise.resolve([channel()]) },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-PHOTOS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const select = host.querySelector<HTMLSelectElement>(
+      '[data-testid="editor-photo-channel-select"]',
+    )!;
+    select.value = 'UZUM';
+    select.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+
+    (host.querySelector('[data-testid="editor-photo-move-down"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    // Only UZUM's two photos are re-attached — the universal photo, which
+    // was never part of this gallery, is left completely untouched.
+    expect(attachMedia).toHaveBeenCalledTimes(2);
+    expect(attachMedia).not.toHaveBeenCalledWith(
+      BRAND_SCOPE,
+      'PRODUCT',
+      'product-1',
+      'universal-1',
+      expect.anything(),
+    );
+  });
+
+  it('detaching one channel’s override leaves another channel’s relation for the same asset and role alone', async () => {
+    // The same photo re-uploaded verbatim under two different channels would
+    // collide on (mediaAssetId, role) alone — exactly what catalog.media_relations'
+    // own primary key since V0223 says is two distinct rows, not one. Detaching
+    // the universal copy must not also remove UZUM's.
+    const detachMedia = vi.fn().mockReturnValue(of(undefined));
+    configure(
+      {
+        productDetail: () =>
+          of(
+            productDetail({
+              media: [
+                { mediaAssetId: 'shared-asset', role: 'PRIMARY', sortOrder: 0, channelCode: 'ALL' },
+                { mediaAssetId: 'shared-asset', role: 'PRIMARY', sortOrder: 0, channelCode: 'UZUM' },
+              ],
+            }),
+          ),
+        detachMedia,
+      },
+      {},
+      { downloadUrl: () => of('https://cdn.example/thumb.jpg') },
+      {},
+      {},
+      {},
+      { list: () => Promise.resolve([channel()]) },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-PHOTOS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    // The default (universal) selection shows exactly the ALL relation.
+    (host.querySelector('[data-testid="editor-photo-detach"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(detachMedia).toHaveBeenCalledWith(
+      BRAND_SCOPE,
+      'PRODUCT',
+      'product-1',
+      'shared-asset',
+      'PRIMARY',
+      'ALL',
+    );
+    expect(detachMedia).toHaveBeenCalledTimes(1);
+
+    const select = host.querySelector<HTMLSelectElement>(
+      '[data-testid="editor-photo-channel-select"]',
+    )!;
+    select.value = 'UZUM';
+    select.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+
+    // UZUM's own relation for the very same asset and role survived the
+    // universal one's detach — the pre-fix code matched on (mediaAssetId,
+    // role) alone and would have dropped both from local state at once.
+    expect(host.querySelectorAll('[data-testid="editor-photo-tile"]').length).toBe(1);
   });
 
   it('saves marking, excise, alcohol % and age gate — fields the domain always carried with no control anywhere', async () => {

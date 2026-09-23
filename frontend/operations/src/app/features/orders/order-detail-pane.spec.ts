@@ -1204,6 +1204,72 @@ describe('OrderDetailPane: cancel past CONFIRMED uses a registry reason, never f
   });
 });
 
+describe('OrderDetailPane: the override dialog restores an earlier status (ADR 0019 amendment, ADR 0110, wave 9 row 1.1h)', () => {
+  function readyWithOverride(): OrderDetailResponse {
+    return detail({
+      summary: {
+        ...detail().summary,
+        status: 'READY',
+        actions: [{ action: 'OVERRIDE', targetStatus: 'PREPARING' }],
+      },
+    });
+  }
+
+  it('fetches active CANCELLATION reasons and names the target status in the title, never a free-text field', async () => {
+    const list = vi.fn().mockResolvedValue([reason()]);
+    configure({
+      get: apiGet({ value: readyWithOverride(), version: 3 }),
+      referenceDataApi: { list },
+    });
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(list).toHaveBeenCalledWith(FAKE_SCOPE, 'CANCELLATION');
+    expect(host.querySelector('[data-testid="order-outcome-reason-dialog"]')).not.toBeNull();
+    expect(host.querySelector('.outcome-dialog__title')?.textContent).toContain('Preparing');
+    expect(host.querySelector('[data-testid="order-reason-dialog"]')).toBeNull();
+  });
+
+  it('submits the mandatory registry reason with the target status the clicked action named and the expected version', async () => {
+    const override = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'PREPARING',
+        version: 4,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+    configure({
+      get: apiGet({ value: readyWithOverride(), version: 3 }),
+      actionsApi: { override },
+      referenceDataApi: { list: () => Promise.resolve([reason()]) },
+    });
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    (
+      host.querySelector('[data-testid="order-outcome-reason-option-reason-1"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    (
+      host.querySelector('[data-testid="order-outcome-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(override).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'PREPARING', 3, 'reason-1');
+  });
+});
+
 describe('OrderDetailPane: completion names the fulfilment mode’s own reason (§4.6, row 1.2j)', () => {
   it('completes without a dialog when exactly one reason is valid for the mode', async () => {
     const complete = vi.fn().mockReturnValue(
@@ -1725,6 +1791,104 @@ describe('OrderDetailPane: assign/unassign courier (wave P11, row 1.2e)', () => 
     expect(
       fixture.nativeElement.querySelector('[data-testid="order-detail-courier-unassign"]'),
     ).toBeNull();
+  });
+});
+
+describe('OrderDetailPane: call an external courier (gap map rows 1.2e/2.1c)', () => {
+  it('requests a quote and accepts it through the order-keyed path OrderDeliveryController.externalCourier exposes, not the plan-keyed DispatchController route', async () => {
+    const externalPartners = vi
+      .fn()
+      .mockResolvedValue([{ bindingId: 'binding-1', providerType: 'YANDEX', supportsHold: false }]);
+    const requestExternalCourierQuote = vi.fn().mockResolvedValue({
+      priced: true,
+      quoteId: 'quote-1',
+      bindingId: 'binding-1',
+      providerType: 'YANDEX',
+      priceMinor: 12_000,
+      currency: 'UZS',
+      customerDeliveryFeeMinor: 12_000,
+      deltaMinor: 0,
+    });
+    const decideExternalCourier = vi
+      .fn()
+      .mockResolvedValue({
+        applied: true,
+        abandoned: false,
+        planVersion: 3,
+        shipmentId: 'shipment-1',
+      });
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () => Promise.resolve(deliveryResponse()),
+        requestExternalCourierQuote,
+        decideExternalCourier,
+      },
+      dispatchApi: { externalPartners },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-external-courier"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // The partner picker is still the plan-keyed read (row 1.2f) -- only
+    // quote/accept moved to the order-keyed path this wave built.
+    expect(externalPartners).toHaveBeenCalledWith(FAKE_SCOPE, 'plan-1');
+
+    (host.querySelector('[data-testid="external-courier-quote"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(requestExternalCourierQuote).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'binding-1');
+
+    (host.querySelector('[data-testid="external-courier-accept"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(decideExternalCourier).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'order-1',
+      'binding-1',
+      'quote-1',
+      'ACCEPT',
+      expect.any(String),
+    );
+    expect(host.querySelector('[data-testid="external-courier-dialog"]')).toBeNull();
+  });
+
+  it("renders the provider's booking state instead of claiming no courier is assigned once an external partner carries the plan", async () => {
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () =>
+          Promise.resolve(
+            deliveryResponse({
+              shipment: {
+                shipmentId: 'shipment-1',
+                status: 'PICKED_UP',
+                sourceType: 'PARTNER',
+                providerBindingId: 'binding-1',
+                version: 2,
+              },
+            }),
+          ),
+      },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const state = host.querySelector('[data-testid="order-detail-courier-external"]');
+    expect(state).not.toBeNull();
+    expect(state?.textContent).toContain('External partner');
+    expect(state?.textContent).toContain('Picked up');
+    // Never the misleading "no courier" line a `courierId`-only check would show.
+    expect(host.textContent).not.toContain('No courier assigned');
+    // «Вызвать курьера» is only offered while nobody carries the plan yet (row 1.2f).
+    expect(host.querySelector('[data-testid="order-detail-external-courier"]')).toBeNull();
   });
 });
 

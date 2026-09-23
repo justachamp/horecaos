@@ -48,4 +48,22 @@ public interface SalesChannelLookup {
     default Optional<UUID> pricingChannelId(UUID tenantId, UUID channelId) {
         return byId(tenantId, channelId).map(SalesChannel::pricingChannelId);
     }
+
+    /**
+     * The tenant's single active {@code POS} channel — gap map row
+     * {@code 4.4d}'s "hall": ADR 0036's own vocabulary correction is that
+     * dine-in is a fulfilment mode, never a channel, and {@code POS} is the
+     * waiter-entered channel that carries it (its own javadoc maps ADR 0047's
+     * {@code DINE_IN_POS} onto it). There is no reserved code or flag marking
+     * one channel "the" hall, so this asks the registry directly rather than
+     * guessing by code.
+     *
+     * @return empty when the tenant has registered zero or more than one
+     *         active {@code POS} channel — neither state names an
+     *         unambiguous hall, so a caller falls back to today's behaviour
+     *         rather than pricing against a guess
+     */
+    default Optional<UUID> hallChannelId(UUID tenantId) {
+        return Optional.empty();
+    }
 }

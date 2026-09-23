@@ -75,6 +75,9 @@ public final class MetricRegistry {
      */
     private static final LocalDate W7_DELIVERY_FEE = LocalDate.of(2026, 9, 22);
 
+    /** Wave 9 w4-reports-distance-crm (7.1, V0387): when {@code fact_order.delivery_distance_meters} started being written. */
+    private static final LocalDate W9_DELIVERY_DISTANCE = LocalDate.of(2026, 9, 23);
+
     private static final Map<String, MetricDefinition> BY_CODE = index(List.of(
             new MetricDefinition(
                     new MetricId("revenue.gross", 1),
@@ -727,7 +730,40 @@ public final class MetricRegistry {
                             + "aggregate is never silently recomputed. A range that crosses that "
                             + "date understates the fee-exclusive figure derived from this metric "
                             + "for its earlier days.",
-                    W7_DELIVERY_FEE)));
+                    W7_DELIVERY_FEE),
+            // Wave 9 w4-reports-distance-crm (7.1): the overview's distance
+            // KPI tile. fact_order.delivery_distance_meters (V0387) is the
+            // resolved delivery leg's distance (ADR 0037), snapshotted at
+            // close time from fulfillment.delivery_plans — a registry entry
+            // over a column this same migration introduces, on the same
+            // footing delivery_time.median.v1's own comment already gives:
+            // an average cannot be composed from agg_branch_day's per-slice
+            // rows, so this is its own endpoint (GET .../reporting/delivery-distance)
+            // rather than /queries.
+            new MetricDefinition(
+                    new MetricId("delivery_distance.average", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_order.delivery_distance_meters, fulfilment_type = 'DELIVERY'",
+                    true,
+                    Aggregation.AVERAGE,
+                    "CLOSED_DELIVERY_ORDERS_WITH_A_RESOLVED_DISTANCE",
+                    CurrencyRule.NONE,
+                    "Whole metres, rounded to the nearest",
+                    MetricUnit.METERS,
+                    "Mean resolved delivery distance across delivery orders closed in the "
+                            + "requested range and location — the distance ADR 0037's delivery-fee "
+                            + "tariff priced the leg on, a great-circle radius or a routed distance "
+                            + "depending on the tariff's own distance mode, never the courier's "
+                            + "travelled GPS track.",
+                    "Delivery orders whose plan resolved a distance.",
+                    "Pickup and dine-in orders, which have no delivery leg; a delivery order "
+                            + "whose plan never resolved a distance, or that closed before V0387.",
+                    "Not applicable: a refund does not change how far the order travelled.",
+                    "Null rather than zero when nothing in range resolved a distance — a zero "
+                            + "would read as a delivery next door. A row closed before V0387 "
+                            + "(2026-09-23) and never recut is simply absent from this average, the "
+                            + "same backfill gap delivery_fee.v1 discloses for agg_branch_day.",
+                    W9_DELIVERY_DISTANCE)));
 
     private MetricRegistry() {}
 

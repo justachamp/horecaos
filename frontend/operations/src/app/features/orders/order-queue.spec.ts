@@ -1080,6 +1080,71 @@ describe('OrderQueue: reasoned cancel from CONFIRMED onward (H2)', () => {
  * `actions[]` showed two visually identical buttons, one of them a silent
  * no-op.
  */
+describe('OrderQueue: the override dialog restores an earlier status from the row menu (ADR 0019 amendment, ADR 0110, wave 9 row 1.1h)', () => {
+  it('fetches active CANCELLATION reasons and opens the registry picker, never the free-text dialog', async () => {
+    const list = vi.fn().mockResolvedValue(FAKE_CANCEL_REASONS);
+    configureWithActions(
+      [
+        order({
+          orderId: 'order-1',
+          status: 'READY',
+          actions: [{ action: 'OVERRIDE', targetStatus: 'PREPARING' }],
+        }),
+      ],
+      {},
+      stubRejectReasons(),
+      { list },
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="order-row-action-OVERRIDE"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(list).toHaveBeenCalledWith(FAKE_SCOPE, 'CANCELLATION');
+    expect(host.querySelector('[data-testid="order-queue-override-dialog"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="order-reason-dialog"]')).toBeNull();
+  });
+
+  it('calls actionsApi.override with the target status the clicked action named, the mandatory reasonId and the row’s expected version', async () => {
+    const override = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'PREPARING',
+        version: 3,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+    configureWithActions([
+      order({
+        orderId: 'order-1',
+        status: 'READY',
+        version: 2,
+        actions: [{ action: 'OVERRIDE', targetStatus: 'PREPARING' }],
+      }),
+    ], { override });
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="order-row-action-OVERRIDE"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    (
+      host.querySelector('[data-testid="order-outcome-reason-option-reason-1"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="order-outcome-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(override).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'PREPARING', 2, 'reason-1');
+  });
+});
+
 describe('OrderQueue: no dead completion button (H3)', () => {
   it('renders exactly one completion control when the server pairs ADVANCE(COMPLETED) with COMPLETE', async () => {
     configureWithActions(
@@ -1365,6 +1430,55 @@ describe('OrderQueue: toolbar filters (orders.md §2.4, wave P07)', () => {
       '[data-testid="order-queue-filter-search"]',
     ) as HTMLInputElement;
     expect(restored.value).toBe('');
+  });
+
+  it('sends the source select as the board’s origin parameter (wave 9, gap map row 1.1c)', async () => {
+    const getOrders = ordersResponse([]);
+    configure(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    // «Источник» lives behind §2.4's "⋯ ещё" secondary row, beside «Способ оплаты».
+    (host.querySelector('[data-testid="q-filter-bar-more"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const select = host.querySelector(
+      '[data-testid="order-queue-filter-origin"]',
+    ) as HTMLSelectElement;
+    select.value = 'MARKETPLACE';
+    select.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+
+    const lastCall = getOrders.mock.calls.at(-1)!;
+    expect(lastCall[1].params.origin).toBe('MARKETPLACE');
+  });
+
+  it('shows a removable chip for the source filter, and removing it clears origin and refetches', async () => {
+    const getOrders = ordersResponse([]);
+    configure(getOrders);
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="q-filter-bar-more"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    const select = host.querySelector(
+      '[data-testid="order-queue-filter-origin"]',
+    ) as HTMLSelectElement;
+    select.value = 'MARKETPLACE';
+    select.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+
+    const chip = host.querySelector(
+      '[data-testid="q-filter-bar-chip-origin"]',
+    ) as HTMLButtonElement;
+    expect(chip?.textContent).toContain('Aggregator');
+    chip.click();
+    await flushMicrotasks();
+
+    const lastCall = getOrders.mock.calls.at(-1)!;
+    expect(lastCall[1].params.origin).toBeUndefined();
   });
 });
 

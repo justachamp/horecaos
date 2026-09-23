@@ -33,6 +33,8 @@ import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
 import uz.horecaos.platform.web.api.ApiException;
 
 /**
@@ -151,6 +153,26 @@ class NotificationTemplateControllerTests {
         // The defect this wave fixes: the page used to save {} regardless of
         // what an author typed. The stored schema now round-trips on GET.
         assertThat(ru.variablesSchema()).containsExactly(Map.entry("code", "string"));
+    }
+
+    @Test
+    @DisplayName("a template's fulfilment mode and channel source (10.9a) round-trip through create and list")
+    void fulfillmentModeAndChannelSourceRoundTripThroughListUnswapped() {
+        UUID templateId = createSmsTemplate("ORDER_CONFIRMED", FulfillmentMode.DELIVERY, SalesChannelSystemType.WEB);
+
+        NotificationTemplateController.TemplateResponse found =
+                Objects.requireNonNull(controller.list(tenantId, brandId).getBody()).stream()
+                        .filter(row -> templateId.equals(row.id()))
+                        .findFirst()
+                        .orElseThrow();
+
+        // Both DTO fields are plain @Nullable String (TemplateRow stores the
+        // enum names as strings), so a transposition between them in either
+        // the controller's create() wiring or its list() mapping would
+        // compile silently — this pins the two values apart so such a swap
+        // fails a test instead of only showing up as a wrong console filter.
+        assertThat(found.fulfillmentMode()).isEqualTo(FulfillmentMode.DELIVERY.name());
+        assertThat(found.channelSource()).isEqualTo(SalesChannelSystemType.WEB.name());
     }
 
     @Test
@@ -339,12 +361,22 @@ class NotificationTemplateControllerTests {
     // ------------------------------------------------------------- fixtures
 
     private UUID createSmsTemplate(String key) {
+        return createSmsTemplate(key, null, null);
+    }
+
+    private UUID createSmsTemplate(
+            String key, @Nullable FulfillmentMode fulfillmentMode, @Nullable SalesChannelSystemType channelSource) {
         return Objects.requireNonNull(controller
                         .create(
                                 tenantId,
                                 brandId,
                                 new NotificationTemplateController.CreateTemplateRequest(
-                                        key, NotificationClass.TRANSACTIONAL_REQUIRED, NotificationChannel.SMS, null))
+                                        key,
+                                        NotificationClass.TRANSACTIONAL_REQUIRED,
+                                        NotificationChannel.SMS,
+                                        null,
+                                        fulfillmentMode,
+                                        channelSource))
                         .getBody())
                 .id();
     }

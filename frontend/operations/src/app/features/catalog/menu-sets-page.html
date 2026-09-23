@@ -1,0 +1,328 @@
+<div class="menu-sets">
+  <div class="menu-sets__header">
+    <div>
+      <h2 class="q-emphasis">{{ 'catalog.menuSets.title' | t }}</h2>
+      <p class="q-caption menu-sets__note">{{ 'catalog.menuSets.note' | t }}</p>
+    </div>
+    <button
+      type="button"
+      class="menu-sets__create-button q-body-sm"
+      (click)="openCreate()"
+      data-testid="menu-sets-create-button"
+    >
+      {{ 'catalog.menuSets.create.trigger' | t }}
+    </button>
+  </div>
+
+  @if (!firstLoadComplete()) {
+    <p class="q-body-sm menu-sets__status">{{ 'catalog.menuSets.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm menu-sets__status" data-testid="menu-sets-denied">
+      {{ 'catalog.menuSets.denied' | t }}
+    </p>
+  } @else {
+    @if (lastError()) {
+      <p class="q-body-sm menu-sets__error" data-testid="menu-sets-error">{{ lastError() }}</p>
+    }
+
+    <div class="menu-sets__layout">
+      <div class="menu-sets__list">
+        @if (menus().length === 0) {
+          <p class="q-body-sm menu-sets__empty" data-testid="menu-sets-empty">
+            {{ 'catalog.menuSets.empty' | t }}
+          </p>
+        } @else {
+          <table class="menu-sets__table" data-testid="menu-sets-table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'catalog.menuSets.table.name' | t }}</th>
+                <th class="q-caption">{{ 'catalog.menuSets.table.status' | t }}</th>
+                <th class="q-caption"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (menu of menus(); track menu.menuId) {
+                <tr
+                  class="menu-sets__row"
+                  [class.menu-sets__row--selected]="selectedMenuId() === menu.menuId"
+                  [attr.data-testid]="'menu-sets-row-' + menu.menuId"
+                >
+                  <td class="q-body-sm">
+                    <button
+                      type="button"
+                      class="menu-sets__select-button"
+                      (click)="select(menu.menuId)"
+                      [attr.data-testid]="'menu-sets-select-' + menu.menuId"
+                    >
+                      {{ menu.name }}
+                    </button>
+                  </td>
+                  <td class="q-body-sm">{{ statusLabel(menu.status) }}</td>
+                  <td class="q-body-sm">
+                    <button
+                      type="button"
+                      class="menu-sets__copy-button"
+                      (click)="openCopy(menu)"
+                      [attr.data-testid]="'menu-sets-copy-' + menu.menuId"
+                    >
+                      {{ 'catalog.menuSets.copy.trigger' | t }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+
+      @if (selectedMenu(); as menu) {
+        <div class="menu-sets__detail" data-testid="menu-sets-detail">
+          <h3 class="q-emphasis">{{ menu.name }}</h3>
+
+          <section class="menu-sets__section">
+            <h4 class="q-body-sm menu-sets__section-title">
+              {{ 'catalog.menuSets.items.title' | t }}
+            </h4>
+            @if (itemsLoading()) {
+              <p class="q-caption">{{ 'catalog.menuSets.loading' | t }}</p>
+            } @else if (items().length === 0) {
+              <p class="q-caption" data-testid="menu-sets-items-empty">
+                {{ 'catalog.menuSets.items.empty' | t }}
+              </p>
+            } @else {
+              <ul class="menu-sets__item-list" data-testid="menu-sets-item-list">
+                @for (item of items(); track item.variantId) {
+                  <li class="menu-sets__item">
+                    <span class="q-body-sm">{{ item.productName }}</span>
+                    @if (item.sku) {
+                      <span class="q-caption menu-sets__item-sku">{{ item.sku }}</span>
+                    }
+                    <span class="q-caption">{{ item.availabilityDefault }}</span>
+                    <button
+                      type="button"
+                      class="menu-sets__remove-button"
+                      (click)="removeItem(item.variantId)"
+                      [attr.data-testid]="'menu-sets-remove-item-' + item.variantId"
+                    >
+                      {{ 'catalog.menuSets.items.remove' | t }}
+                    </button>
+                  </li>
+                }
+              </ul>
+            }
+          </section>
+
+          <section class="menu-sets__section">
+            <h4 class="q-body-sm menu-sets__section-title">
+              {{ 'catalog.menuSets.addByFilter.title' | t }}
+            </h4>
+            <div class="menu-sets__filter-form">
+              <label class="menu-sets__field">
+                <span class="q-caption">{{ 'catalog.menuSets.addByFilter.category' | t }}</span>
+                <select
+                  [value]="filterCategoryId()"
+                  (change)="setFilterCategoryId($any($event.target).value)"
+                  data-testid="menu-sets-filter-category"
+                >
+                  <option value="">{{ 'catalog.menuSets.addByFilter.anyCategory' | t }}</option>
+                  @for (category of categories(); track category.categoryId) {
+                    <option [value]="category.categoryId">{{ category.name }}</option>
+                  }
+                </select>
+              </label>
+              <label class="menu-sets__field">
+                <span class="q-caption">{{ 'catalog.menuSets.addByFilter.search' | t }}</span>
+                <input
+                  type="search"
+                  [value]="filterSearch()"
+                  (input)="setFilterSearch($any($event.target).value)"
+                  data-testid="menu-sets-filter-search"
+                />
+              </label>
+              <label class="menu-sets__field">
+                <span class="q-caption">{{ 'catalog.menuSets.addByFilter.availability' | t }}</span>
+                <select
+                  [value]="filterAvailability()"
+                  (change)="setFilterAvailability($any($event.target).value)"
+                  data-testid="menu-sets-filter-availability"
+                >
+                  <option value="AVAILABLE">
+                    {{ 'catalog.menuSets.availability.AVAILABLE' | t }}
+                  </option>
+                  <option value="UNAVAILABLE">
+                    {{ 'catalog.menuSets.availability.UNAVAILABLE' | t }}
+                  </option>
+                  <option value="HIDDEN">{{ 'catalog.menuSets.availability.HIDDEN' | t }}</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                class="menu-sets__filter-submit"
+                [disabled]="addingByFilter()"
+                (click)="submitAddByFilter()"
+                data-testid="menu-sets-filter-submit"
+              >
+                {{ 'catalog.menuSets.addByFilter.submit' | t }}
+              </button>
+              @if (addByFilterResult(); as count) {
+                <p class="q-caption" data-testid="menu-sets-filter-result">
+                  {{ 'catalog.menuSets.addByFilter.result' | t: { count: count } }}
+                </p>
+              } @else if (addByFilterResult() === 0) {
+                <p class="q-caption" data-testid="menu-sets-filter-result">
+                  {{ 'catalog.menuSets.addByFilter.result' | t: { count: 0 } }}
+                </p>
+              }
+              @if (addByFilterError()) {
+                <p class="q-caption menu-sets__error">{{ addByFilterError() }}</p>
+              }
+            </div>
+          </section>
+
+          <section class="menu-sets__section">
+            <h4 class="q-body-sm menu-sets__section-title">
+              {{ 'catalog.menuSets.bindings.title' | t }}
+            </h4>
+            @if (selectedBindings().length === 0) {
+              <p class="q-caption" data-testid="menu-sets-bindings-empty">
+                {{ 'catalog.menuSets.bindings.empty' | t }}
+              </p>
+            } @else {
+              <ul class="menu-sets__binding-list" data-testid="menu-sets-binding-list">
+                @for (
+                  binding of selectedBindings();
+                  track binding.locationId + (binding.channelId ?? '')
+                ) {
+                  <li class="menu-sets__binding">
+                    <span class="q-body-sm">{{ binding.locationName }}</span>
+                    <span class="q-caption">{{ channelName(binding.channelId) }}</span>
+                    <button
+                      type="button"
+                      class="menu-sets__unbind-button"
+                      (click)="unbind(binding)"
+                      data-testid="menu-sets-unbind-button"
+                    >
+                      {{ 'catalog.menuSets.bindings.unbind' | t }}
+                    </button>
+                  </li>
+                }
+              </ul>
+            }
+
+            <div class="menu-sets__bind-form">
+              <label class="menu-sets__field">
+                <span class="q-caption">{{ 'catalog.menuSets.bindings.branch' | t }}</span>
+                <select
+                  [value]="bindLocationId()"
+                  (change)="setBindLocationId($any($event.target).value)"
+                  data-testid="menu-sets-bind-location"
+                >
+                  <option value="">{{ 'catalog.menuSets.bindings.choose' | t }}</option>
+                  @for (location of locations(); track location.id) {
+                    <option [value]="location.id">{{ location.displayName }}</option>
+                  }
+                </select>
+              </label>
+              <label class="menu-sets__field">
+                <span class="q-caption">{{ 'catalog.menuSets.bindings.channel' | t }}</span>
+                <select
+                  [value]="bindChannelId()"
+                  (change)="setBindChannelId($any($event.target).value)"
+                  data-testid="menu-sets-bind-channel"
+                >
+                  <option value="">{{ 'catalog.menuSets.bindings.allChannels' | t }}</option>
+                  @for (channel of channels(); track channel.id) {
+                    <option [value]="channel.id">{{ channel.displayName }}</option>
+                  }
+                </select>
+              </label>
+              <button
+                type="button"
+                class="menu-sets__bind-submit"
+                [disabled]="binding() || !bindLocationId() || menu.status !== 'ACTIVE'"
+                (click)="submitBind()"
+                data-testid="menu-sets-bind-submit"
+              >
+                {{ 'catalog.menuSets.bindings.bind' | t }}
+              </button>
+              @if (menu.status !== 'ACTIVE') {
+                <p class="q-caption menu-sets__warning" data-testid="menu-sets-bind-not-active">
+                  {{ 'catalog.menuSets.bindings.notActiveWarning' | t }}
+                </p>
+              }
+              @if (bindError()) {
+                <p class="q-caption menu-sets__error">{{ bindError() }}</p>
+              }
+            </div>
+          </section>
+        </div>
+      }
+    </div>
+  }
+
+  @if (createOpen()) {
+    <div class="menu-sets__modal-backdrop" data-testid="menu-sets-create-dialog">
+      <div class="menu-sets__modal" role="dialog" aria-modal="true">
+        <h3 class="q-emphasis">{{ 'catalog.menuSets.create.title' | t }}</h3>
+        <label class="menu-sets__field">
+          <span class="q-caption">{{ 'catalog.menuSets.create.name' | t }}</span>
+          <input
+            type="text"
+            [value]="createName()"
+            (input)="setCreateName($any($event.target).value)"
+            data-testid="menu-sets-create-name"
+          />
+        </label>
+        @if (createError()) {
+          <p class="q-caption menu-sets__error">{{ createError() }}</p>
+        }
+        <div class="menu-sets__modal-actions">
+          <button type="button" (click)="closeCreate()" [disabled]="creating()">
+            {{ 'catalog.menuSets.dialog.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            [disabled]="creating() || !createName().trim()"
+            (click)="submitCreate()"
+            data-testid="menu-sets-create-confirm"
+          >
+            {{ 'catalog.menuSets.dialog.confirm' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (copyTarget(); as source) {
+    <div class="menu-sets__modal-backdrop" data-testid="menu-sets-copy-dialog">
+      <div class="menu-sets__modal" role="dialog" aria-modal="true">
+        <h3 class="q-emphasis">{{ 'catalog.menuSets.copy.title' | t: { name: source.name } }}</h3>
+        <label class="menu-sets__field">
+          <span class="q-caption">{{ 'catalog.menuSets.create.name' | t }}</span>
+          <input
+            type="text"
+            [value]="copyName()"
+            (input)="setCopyName($any($event.target).value)"
+            data-testid="menu-sets-copy-name"
+          />
+        </label>
+        @if (copyError()) {
+          <p class="q-caption menu-sets__error">{{ copyError() }}</p>
+        }
+        <div class="menu-sets__modal-actions">
+          <button type="button" (click)="closeCopy()" [disabled]="copying()">
+            {{ 'catalog.menuSets.dialog.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            [disabled]="copying() || !copyName().trim()"
+            (click)="submitCopy()"
+            data-testid="menu-sets-copy-confirm"
+          >
+            {{ 'catalog.menuSets.dialog.confirm' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

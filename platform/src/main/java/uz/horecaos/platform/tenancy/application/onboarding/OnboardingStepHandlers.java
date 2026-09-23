@@ -556,6 +556,13 @@ public final class OnboardingStepHandlers {
             TenantId tenantId = new TenantId(context.tenantId());
             var now = clock.instant().atOffset(java.time.ZoneOffset.UTC);
 
+            // Every offending location is collected rather than returning on
+            // the first (wave 9, gap map row 10.0, mirroring
+            // PaymentConfigurationValidate's own reshape from wave P31): a
+            // chain with three branches missing a delivery zone used to see
+            // only the first one named, fix it, run the dry run again, and be
+            // told about the second.
+            List<StepResult.Finding> findings = new ArrayList<>();
             for (Location location : allLocations(tenants, tenantId)) {
                 UUID locationId = location.id().value();
                 if (!anyChannelOffersDelivery(context.tenantId(), locationId)) {
@@ -565,10 +572,13 @@ public final class OnboardingStepHandlers {
 
                 List<UUID> zoneTariffIds = boundDeliveryZoneTariffIds(context.tenantId(), locationId, now);
                 if (zoneTariffIds.isEmpty()) {
-                    return StepResult.failed(
+                    findings.add(new StepResult.Finding(
                             "NO_DELIVERY_ZONE",
                             "Location %s offers delivery but has no active delivery zone bound"
-                                    .formatted(location.code()));
+                                    .formatted(location.code()),
+                            locationId));
+                    // No zone to resolve a tariff against.
+                    continue;
                 }
 
                 boolean tariffResolved = zoneTariffIds.stream().anyMatch(java.util.Objects::nonNull)
@@ -578,12 +588,16 @@ public final class OnboardingStepHandlers {
                                 .isPresent();
 
                 if (!tariffResolved) {
-                    return StepResult.failed(
+                    findings.add(new StepResult.Finding(
                             "NO_DELIVERY_TARIFF",
                             ("Location %s has a delivery zone but no tariff resolves for it "
                                             + "(zone, location, or brand default)")
-                                    .formatted(location.code()));
+                                    .formatted(location.code()),
+                            locationId));
                 }
+            }
+            if (!findings.isEmpty()) {
+                return StepResult.failedWithFindings(findings);
             }
             return StepResult.completed(Map.of(), null);
         }
@@ -693,20 +707,32 @@ public final class OnboardingStepHandlers {
                             row.getString("last_connection_status")))
                     .list();
 
+            // Every offending binding is collected rather than returning on
+            // the first (wave 9, gap map row 10.0, mirroring
+            // PaymentConfigurationValidate's own reshape from wave P31): two
+            // unhealthy POS bindings used to see only the first one named.
+            // No locationId — a POS binding is tenant/brand-scoped, never
+            // location-scoped, so every finding here carries null, exactly
+            // like the single-result shape this replaces.
+            List<StepResult.Finding> findings = new ArrayList<>();
             for (PosBindingHealth binding : bindings) {
                 boolean healthy = "ACTIVE".equals(binding.bindingStatus())
                         && "ACTIVE".equals(binding.installationStatus())
                         && !"FAILED".equals(binding.lastConnectionStatus());
                 if (!healthy) {
-                    return StepResult.failed(
+                    findings.add(new StepResult.Finding(
                             "POS_BINDING_UNHEALTHY",
                             "%s POS binding is configured but not healthy (binding=%s, installation=%s, lastConnection=%s)"
                                     .formatted(
                                             binding.providerType(),
                                             binding.bindingStatus(),
                                             binding.installationStatus(),
-                                            binding.lastConnectionStatus()));
+                                            binding.lastConnectionStatus()),
+                            null));
                 }
+            }
+            if (!findings.isEmpty()) {
+                return StepResult.failedWithFindings(findings);
             }
             return StepResult.completed(Map.of("bindings", bindings.size()), null);
         }
@@ -785,19 +811,33 @@ public final class OnboardingStepHandlers {
                     .map(brand -> "%s:%s".formatted(brand.code(), brand.status()))
                     .toList();
 
+            // Every offending brand is collected rather than returning on the
+            // first (wave 9, gap map row 10.0, mirroring
+            // PaymentConfigurationValidate's own reshape from wave P31): two
+            // sellable brands with no published menu used to see only the
+            // first one named. No locationId — this check is brand-scoped,
+            // never location-scoped, so every finding here carries null.
+            List<StepResult.Finding> findings = new ArrayList<>();
             for (Brand brand : activeBrands) {
                 UUID brandId = brand.id().value();
                 if (!published(context.tenantId(), brandId)) {
-                    return StepResult.failed(
+                    findings.add(new StepResult.Finding(
                             "NO_PUBLISHED_MENU",
                             "Brand %s has no PUBLISHED catalog publication on %s"
-                                    .formatted(brand.code(), STOREFRONT_CHANNEL));
+                                    .formatted(brand.code(), STOREFRONT_CHANNEL),
+                            null));
+                    // No published menu to check for an available item.
+                    continue;
                 }
                 if (!anyAvailableItem(context.tenantId(), brandId)) {
-                    return StepResult.failed(
+                    findings.add(new StepResult.Finding(
                             "NO_AVAILABLE_ITEM",
-                            "Brand %s has a published menu with no item available to order".formatted(brand.code()));
+                            "Brand %s has a published menu with no item available to order".formatted(brand.code()),
+                            null));
                 }
+            }
+            if (!findings.isEmpty()) {
+                return StepResult.failedWithFindings(findings);
             }
             return StepResult.completed(Map.of("skippedBrands", skippedBrands), null);
         }

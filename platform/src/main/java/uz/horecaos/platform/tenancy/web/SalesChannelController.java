@@ -113,7 +113,10 @@ public class SalesChannelController {
                         body.pricePlaneChannelId(),
                         body.externallyPriced(),
                         body.guestOrdersAllowed(),
-                        body.providerInstallationId()),
+                        body.providerInstallationId(),
+                        body.icon(),
+                        body.brandColorPrimary(),
+                        body.brandColorSecondary()),
                 expectedVersion));
     }
 
@@ -188,6 +191,23 @@ public class SalesChannelController {
         return ResponseEntity.noContent().build();
     }
 
+    @PutMapping("/{channelId}/social-links")
+    @RequiresCapability(value = Capability.CHANNEL_MANAGE, mutating = true)
+    @Operation(
+            summary = "Replace the channel's social links",
+            description = "Whole set, never per-link -- the same discipline the payment-method, "
+                    + "fulfilment-mode and location matrices already use. Key is the platform, "
+                    + "a checked vocabulary (ADR 0036); value is the destination URL, https only. "
+                    + "Entry order in the request body becomes display order.")
+    public ResponseEntity<Void> replaceSocialLinks(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID channelId,
+            @RequestParam int expectedVersion,
+            @RequestBody Map<String, String> links) {
+        channels.replaceSocialLinks(tenantId, channelId, links, expectedVersion);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/{channelId}/archive")
     @RequiresCapability(value = Capability.CHANNEL_MANAGE, mutating = true)
     @Operation(
@@ -217,7 +237,14 @@ public class SalesChannelController {
             UUID pricePlaneChannelId,
             boolean externallyPriced,
             boolean guestOrdersAllowed,
-            UUID providerInstallationId) {}
+            UUID providerInstallationId,
+
+            // Row 10.4a: a channel's own presentation. All three optional --
+            // omitted or null clears the field, the same full-replace reading
+            // every other field on this request already has.
+            @Size(max = 64) String icon,
+            @Pattern(regexp = "^#[0-9a-fA-F]{6}$") String brandColorPrimary,
+            @Pattern(regexp = "^#[0-9a-fA-F]{6}$") String brandColorSecondary) {}
 
     /**
      * What a control-plane screen shows.
@@ -228,6 +255,9 @@ public class SalesChannelController {
      *                                   the location matrix
      * @param enabledPaymentMethodCount  10.4a "Способы оплаты"
      * @param enabledFulfillmentModes    10.4a "Типы получения", enabled only
+     * @param icon                       10.4a's own presentation field, null until set
+     * @param brandColorPrimary          six-digit hex (#rrggbb), null until set
+     * @param brandColorSecondary        six-digit hex (#rrggbb), null until set
      */
     public record ChannelView(
             UUID id,
@@ -242,7 +272,10 @@ public class SalesChannelController {
             int version,
             int locationCount,
             int enabledPaymentMethodCount,
-            List<String> enabledFulfillmentModes) {
+            List<String> enabledFulfillmentModes,
+            @Nullable String icon,
+            @Nullable String brandColorPrimary,
+            @Nullable String brandColorSecondary) {
 
         static ChannelView of(SalesChannel channel) {
             return new ChannelView(
@@ -258,7 +291,10 @@ public class SalesChannelController {
                     channel.version(),
                     0,
                     0,
-                    List.of());
+                    List.of(),
+                    channel.icon(),
+                    channel.brandColorPrimary(),
+                    channel.brandColorSecondary());
         }
 
         static ChannelView of(SalesChannelService.ChannelRegistrySummary summary) {
@@ -276,7 +312,10 @@ public class SalesChannelController {
                     channel.version(),
                     summary.locationCount(),
                     summary.enabledPaymentMethodCount(),
-                    summary.enabledFulfillmentModes().stream().map(Enum::name).toList());
+                    summary.enabledFulfillmentModes().stream().map(Enum::name).toList(),
+                    channel.icon(),
+                    channel.brandColorPrimary(),
+                    channel.brandColorSecondary());
         }
     }
 }

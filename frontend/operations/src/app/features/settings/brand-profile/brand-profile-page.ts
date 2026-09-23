@@ -1,9 +1,18 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  WritableSignal,
+  inject,
+  signal,
+} from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { MediaUploader } from '../../../shared/ui/media-uploader';
+import { MediaApi } from '../../catalog/media-api';
 import { describeApiError } from '../../orders/order-errors';
 import {
   BrandLocaleCode,
@@ -33,10 +42,17 @@ const KNOWN_LOCALES: readonly BrandLocaleCode[] = ['ru', 'uz-Latn', 'en'];
  * are) goes through `TenantControlPlaneController.reviseBrand`, requires
  * `If-Match` against the brand's version, and is the identity correction two
  * people could race on. **The profile** — contact phone, Telegram handle,
- * logo, banner (as already-uploaded media asset ids; this screen has no
- * uploader yet, named below rather than pretended away) and the 10.12
- * supported-locale set — goes through the new `.../profile` endpoint and
- * carries no version of its own.
+ * logo, banner and the 10.12 supported-locale set — goes through the new
+ * `.../profile` endpoint and carries no version of its own.
+ *
+ * Row `10.1`/`X.12`: logo and banner go through the real `q-media-uploader`
+ * (aspect-ratio crop, size caps) product photos already use, rather than an
+ * operator pasting a raw asset UUID. The write contract this screen has
+ * always had is unchanged — `updateProfile` still carries `logoAssetId`/
+ * `bannerAssetId` as strings — only how that id is obtained moved from a
+ * text field to an upload. Both slots crop to `1:1` first (a square brand
+ * mark and a wide banner are different shapes, but `q-media-uploader`'s own
+ * ratio picker is how a banner reaches `3:1` without a second component).
  *
  * The language editor is a fixed three-row grid over `KNOWN_LOCALES` rather
  * than a free-text list: the console has an editor for exactly ru/uz-Latn/en
@@ -44,13 +60,14 @@ const KNOWN_LOCALES: readonly BrandLocaleCode[] = ['ru', 'uz-Latn', 'en'];
  */
 @Component({
   selector: 'q-brand-profile-page',
-  imports: [TPipe],
+  imports: [TPipe, MediaUploader],
   templateUrl: './brand-profile-page.html',
   styleUrl: './brand-profile-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class BrandProfilePage {
   private readonly api = inject(BrandProfileApi);
+  private readonly mediaApi = inject(MediaApi);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
 
@@ -74,6 +91,12 @@ export class BrandProfilePage {
   protected readonly draftLocales = signal<readonly LocaleDraft[]>([]);
   protected readonly profileSaving = signal(false);
   protected readonly profileError = signal<string | null>(null);
+
+  /** `MediaAssetService.downloadUrl` thumbnails for the current logo/banner, best-effort like `product-editor-page`'s own photo grid. */
+  protected readonly logoPreviewUrl = signal<string | null>(null);
+  protected readonly bannerPreviewUrl = signal<string | null>(null);
+  protected readonly uploadingLogo = signal(false);
+  protected readonly uploadingBanner = signal(false);
 
   constructor() {
     void this.load();
@@ -213,11 +236,70 @@ export class BrandProfilePage {
       const updated = await this.api.updateProfile(scope, request);
       this.brand.set(updated);
       this.editingProfile.set(false);
+      void this.loadMediaPreviews(updated);
     } catch (error) {
       this.profileError.set(this.describe(error));
     } finally {
       this.profileSaving.set(false);
     }
+  }
+
+  // --------------------------------------------------------- logo/banner
+
+  /**
+   * `q-media-uploader` already cropped the file client-side; this is the
+   * same request→PUT-bytes→finalize round trip `product-editor-page`'s
+   * `uploadPhoto` drives, just against `BRAND` rather than the product's own
+   * media relations — a brand mark has no `catalog.media_relations` row to
+   * attach, so the finalized asset id is the whole write.
+   */
+  protected async uploadLogo(file: File): Promise<void> {
+    await this.uploadBrandMedia(file, this.draftLogoAssetId, this.logoPreviewUrl, this.uploadingLogo);
+  }
+
+  protected async uploadBanner(file: File): Promise<void> {
+    await this.uploadBrandMedia(file, this.draftBannerAssetId, this.bannerPreviewUrl, this.uploadingBanner);
+  }
+
+  private async uploadBrandMedia(
+    file: File,
+    assetId: WritableSignal<string>,
+    previewUrl: WritableSignal<string | null>,
+    uploading: WritableSignal<boolean>,
+  ): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope || uploading()) {
+      return;
+    }
+    uploading.set(true);
+    this.profileError.set(null);
+    try {
+      const asset = await firstValueFrom(
+        this.mediaApi.upload(scope.tenantId, 'BRAND', scope.brandId, 'PUBLIC', file),
+      );
+      assetId.set(asset.assetId);
+      // The bytes are already on the client — an instant preview from them
+      // beats waiting on a thumbnail derivative that may not have rendered
+      // yet (`MediaApi.downloadUrl`'s own trap, product-editor-page's doc).
+      const previous = previewUrl();
+      if (previous) {
+        URL.revokeObjectURL(previous);
+      }
+      previewUrl.set(URL.createObjectURL(file));
+    } catch (error) {
+      this.profileError.set(this.describe(error));
+    } finally {
+      uploading.set(false);
+    }
+  }
+
+  /** `q-media-uploader` rejected the file client-side — before any network call. */
+  protected onMediaRejected(reason: string): void {
+    this.profileError.set(
+      this.i18n.t(
+        reason === 'tooLarge' ? 'ui.mediaUploader.tooLarge' : 'ui.mediaUploader.unsupportedType',
+      ),
+    );
   }
 
   // --------------------------------------------------------------- load
@@ -232,7 +314,9 @@ export class BrandProfilePage {
       return;
     }
     try {
-      this.brand.set(await this.api.getBrand(scope));
+      const brand = await this.api.getBrand(scope);
+      this.brand.set(brand);
+      void this.loadMediaPreviews(brand);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);
@@ -243,6 +327,38 @@ export class BrandProfilePage {
       }
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  /**
+   * Thumbnails for the current logo/banner — the same "show the current
+   * image" gap row `10.1` names, `MediaAssetService.downloadUrl` for a
+   * rendition. Best-effort like `product-editor-page`'s own photo grid: an
+   * asset whose thumbnail has not rendered yet, or that this brand no
+   * longer owns, leaves that slot on its empty state rather than blocking
+   * the rest of the screen.
+   */
+  private async loadMediaPreviews(brand: BrandView): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    const [logo, banner] = await Promise.all([
+      this.downloadUrlOrNull(scope.tenantId, brand.logoAssetId),
+      this.downloadUrlOrNull(scope.tenantId, brand.bannerAssetId),
+    ]);
+    this.logoPreviewUrl.set(logo);
+    this.bannerPreviewUrl.set(banner);
+  }
+
+  private async downloadUrlOrNull(tenantId: string, assetId: string | null): Promise<string | null> {
+    if (!assetId) {
+      return null;
+    }
+    try {
+      return await firstValueFrom(this.mediaApi.downloadUrl(tenantId, assetId, 'THUMBNAIL'));
+    } catch {
+      return null;
     }
   }
 
