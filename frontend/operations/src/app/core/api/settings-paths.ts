@@ -191,6 +191,11 @@ export const settingsPaths = {
     return `${this.brandServiceSchedules(scope)}/${enc(scheduleId)}/exceptions`;
   },
 
+  /** `ServiceScheduleController.deleteException` (row 10.2c) — `date` is an ISO `yyyy-MM-dd`. */
+  scheduleException(scope: LocationScope, scheduleId: string, date: string): string {
+    return `${this.scheduleExceptions(scope, scheduleId)}/${enc(date)}`;
+  },
+
   // ---------------------------------------------------------- 10.3 Order policy
 
   /** `OrderAcceptancePolicyController` (control-plane surface). */

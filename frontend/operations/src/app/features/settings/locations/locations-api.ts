@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
+import { parseETag } from '../../../core/api/aggregate-version';
 import { ApiClient } from '../../../core/api/api-client';
 import { command } from '../../../core/api/idempotency';
 import { LocationScope } from '../../../core/api/operations-paths';
@@ -68,6 +69,8 @@ export interface ModeBindingView {
   readonly sharedWithLocationCount: number;
   readonly rules: readonly RuleView[];
   readonly exceptions: readonly ExceptionView[];
+  /** The bound schedule's own version — the `If-Match` token {@link LocationsApi.deleteScheduleException} needs. */
+  readonly scheduleVersion: number;
 }
 
 export interface BandView {
@@ -181,6 +184,8 @@ export interface ScheduleSummaryView {
   readonly name: string;
   readonly acceptsScheduledOrders: boolean;
   readonly boundLocationCount: number;
+  /** The schedule's own version — the `If-Match` token {@link deleteScheduleException} needs. */
+  readonly version: number;
 }
 
 export interface RuleRequest {
@@ -232,6 +237,9 @@ export interface BandRequest {
  * replaceScheduleRules}, {@link upsertScheduleException}, {@link
  * bindSchedule} and {@link replacePreparationBands} — the writes {@link
  * serviceSummary} already had a reader for but nothing on this screen called.
+ * A later pass on the same row adds {@link deleteScheduleException}, closing
+ * the one gap that wave left: a row removed from the grid was hidden, not
+ * deleted.
  */
 @Injectable({ providedIn: 'root' })
 export class LocationsApi {
@@ -365,14 +373,7 @@ export class LocationsApi {
     );
   }
 
-  /**
-   * `ServiceScheduleController.upsertException` — one dated exception per
-   * call, upsert by date. There is no delete: a row removed locally from
-   * `q-schedule-grid`'s draft and then saved stays exactly as it was on the
-   * server until it is edited back over, not deleted (see
-   * `location-detail-pane.ts`'s `saveExceptions` for where that is spelled
-   * out to the operator).
-   */
+  /** `ServiceScheduleController.upsertException` — one dated exception per call, upsert by date. */
   async upsertScheduleException(
     scope: LocationScope,
     scheduleId: string,
@@ -385,6 +386,38 @@ export class LocationsApi {
         command(exception),
       ),
     );
+  }
+
+  /**
+   * `ServiceScheduleController.deleteException` (row 10.2c) — actually
+   * removes a dated exception, rather than only ever hiding it in the
+   * grid's local draft. `If-Match` carries the owning schedule's version,
+   * since an exception has none of its own; the response's `ETag` carries
+   * the version this delete produced, for the caller's next write in the
+   * same save (see `location-detail-pane.ts`'s `saveHours`, which deletes
+   * every removed row before it PUTs the rest).
+   *
+   * @returns the schedule's new version
+   */
+  async deleteScheduleException(
+    scope: LocationScope,
+    scheduleId: string,
+    date: string,
+    expectedVersion: number,
+  ): Promise<number> {
+    const response = await firstValueFrom(
+      this.api.send<null, void>(
+        'DELETE',
+        settingsPaths.scheduleException(scope, scheduleId, date),
+        command(null),
+        { expectedVersion },
+      ),
+    );
+    const version = parseETag(response.headers.get('ETag'));
+    if (version === null) {
+      throw new Error('DELETE .../exceptions/{date} did not return an ETag with the new version');
+    }
+    return version;
   }
 
   /** `LocationServiceOperationsController.bindSchedule` — rebinds one fulfilment mode. */

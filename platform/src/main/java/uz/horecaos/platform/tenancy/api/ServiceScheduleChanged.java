@@ -8,7 +8,8 @@ import java.util.UUID;
  * A named opening timetable changed shape (ADR 0036).
  *
  * <p>Fired by {@code ServiceScheduleService.createSchedule}, {@code
- * replaceRules}, {@code closeForDay} and {@code shortenDay} — the operations
+ * replaceRules}, {@code closeForDay}, {@code shortenDay} and {@code
+ * deleteException} — the operations
  * that change what the schedule itself means, as opposed to
  * {@code ServiceScheduleService.bind}, which only changes which location
  * follows it. Because a shared schedule governs every location bound to it
@@ -25,7 +26,8 @@ public record ServiceScheduleChanged(
     public enum ChangeKind {
         CREATED,
         RULES_REPLACED,
-        EXCEPTION_UPSERTED
+        EXCEPTION_UPSERTED,
+        EXCEPTION_DELETED
     }
 
     public ServiceScheduleChanged {

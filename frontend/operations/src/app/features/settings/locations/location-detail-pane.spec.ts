@@ -50,6 +50,7 @@ const SUMMARY: ServiceSummaryResponse = {
       sharedWithLocationCount: 3,
       rules: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '23:00' }],
       exceptions: [],
+      scheduleVersion: 4,
     },
   ],
   preparationBands: [
@@ -76,8 +77,20 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 const SCHEDULES: readonly ScheduleSummaryView[] = [
-  { id: 'schedule-1', name: 'Standard hours', acceptsScheduledOrders: true, boundLocationCount: 3 },
-  { id: 'schedule-2', name: 'Ramadan hours', acceptsScheduledOrders: true, boundLocationCount: 1 },
+  {
+    id: 'schedule-1',
+    name: 'Standard hours',
+    acceptsScheduledOrders: true,
+    boundLocationCount: 3,
+    version: 4,
+  },
+  {
+    id: 'schedule-2',
+    name: 'Ramadan hours',
+    acceptsScheduledOrders: true,
+    boundLocationCount: 1,
+    version: 1,
+  },
 ];
 
 describe('LocationDetailPane', () => {
@@ -91,6 +104,7 @@ describe('LocationDetailPane', () => {
     listSchedules: ReturnType<typeof vi.fn>;
     replaceScheduleRules: ReturnType<typeof vi.fn>;
     upsertScheduleException: ReturnType<typeof vi.fn>;
+    deleteScheduleException: ReturnType<typeof vi.fn>;
     bindSchedule: ReturnType<typeof vi.fn>;
     replacePreparationBands: ReturnType<typeof vi.fn>;
   };
@@ -105,6 +119,7 @@ describe('LocationDetailPane', () => {
       listSchedules: vi.fn().mockResolvedValue(SCHEDULES),
       replaceScheduleRules: vi.fn().mockResolvedValue(undefined),
       upsertScheduleException: vi.fn().mockResolvedValue(undefined),
+      deleteScheduleException: vi.fn().mockResolvedValue(5),
       bindSchedule: vi.fn().mockResolvedValue(undefined),
       replacePreparationBands: vi.fn().mockResolvedValue(undefined),
     };
@@ -343,6 +358,111 @@ describe('LocationDetailPane', () => {
 
     expect(api.upsertScheduleException).not.toHaveBeenCalled();
     expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
+  });
+
+  // Row 10.2c: `ServiceScheduleController.deleteException` closed the gap
+  // where a row taken out of the grid's local draft was hidden rather than
+  // deleted. These two prove the console actually calls it, with the
+  // schedule's own version as `If-Match`.
+
+  it('deletes an exception removed from the grid, using the bound schedule’s version as If-Match', async () => {
+    api.serviceSummary.mockResolvedValueOnce({
+      ...SUMMARY,
+      bindings: [
+        {
+          ...SUMMARY.bindings[0],
+          exceptions: [{ date: '2026-12-31', closedAllDay: true, opensAt: null, closesAt: null }],
+        },
+      ],
+    });
+    const fresh = TestBed.createComponent(LocationDetailPane);
+    fresh.componentRef.setInput('locationId', 'location-1');
+    fresh.detectChanges();
+    await flushMicrotasks();
+    fresh.detectChanges();
+
+    const tabs = fresh.nativeElement.querySelectorAll('.tab');
+    (tabs[1] as HTMLButtonElement).click();
+    fresh.detectChanges();
+    (
+      fresh.nativeElement.querySelector('[data-testid="edit-hours-DELIVERY"]') as HTMLButtonElement
+    ).click();
+    fresh.detectChanges();
+    (
+      fresh.nativeElement.querySelector(
+        '[data-testid="q-schedule-grid-remove-exception"]',
+      ) as HTMLButtonElement
+    ).click();
+    fresh.detectChanges();
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    (
+      fresh.nativeElement.querySelector('[data-testid="save-hours"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(api.deleteScheduleException).toHaveBeenCalledWith(SCOPE, 'schedule-1', '2026-12-31', 4);
+    // Re-reads the summary after the save so the grid reflects the delete —
+    // the same refresh every other saveHours path in this suite relies on.
+    expect(api.serviceSummary).toHaveBeenCalledTimes(3);
+    confirmSpy.mockRestore();
+  });
+
+  it('sends the second delete in one save with the version the first delete returned', async () => {
+    api.serviceSummary.mockResolvedValueOnce({
+      ...SUMMARY,
+      bindings: [
+        {
+          ...SUMMARY.bindings[0],
+          exceptions: [
+            { date: '2026-12-25', closedAllDay: true, opensAt: null, closesAt: null },
+            { date: '2026-12-31', closedAllDay: true, opensAt: null, closesAt: null },
+          ],
+        },
+      ],
+    });
+    api.deleteScheduleException.mockResolvedValueOnce(5).mockResolvedValueOnce(6);
+    const fresh = TestBed.createComponent(LocationDetailPane);
+    fresh.componentRef.setInput('locationId', 'location-1');
+    fresh.detectChanges();
+    await flushMicrotasks();
+    fresh.detectChanges();
+
+    const tabs = fresh.nativeElement.querySelectorAll('.tab');
+    (tabs[1] as HTMLButtonElement).click();
+    fresh.detectChanges();
+    (
+      fresh.nativeElement.querySelector('[data-testid="edit-hours-DELIVERY"]') as HTMLButtonElement
+    ).click();
+    fresh.detectChanges();
+    for (const button of Array.from(
+      fresh.nativeElement.querySelectorAll('[data-testid="q-schedule-grid-remove-exception"]'),
+    )) {
+      (button as HTMLButtonElement).click();
+      fresh.detectChanges();
+    }
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    (
+      fresh.nativeElement.querySelector('[data-testid="save-hours"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(api.deleteScheduleException).toHaveBeenNthCalledWith(
+      1,
+      SCOPE,
+      'schedule-1',
+      '2026-12-25',
+      4,
+    );
+    expect(api.deleteScheduleException).toHaveBeenNthCalledWith(
+      2,
+      SCOPE,
+      'schedule-1',
+      '2026-12-31',
+      5,
+    );
+    confirmSpy.mockRestore();
   });
 
   it('rebinds a fulfilment mode to a different timetable from the picker', async () => {

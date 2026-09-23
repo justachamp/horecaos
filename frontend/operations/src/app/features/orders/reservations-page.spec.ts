@@ -108,6 +108,7 @@ function dineInBinding(overrides: Partial<ModeBindingView> = {}): ModeBindingVie
     sharedWithLocationCount: 1,
     rules: [],
     exceptions: [],
+    scheduleVersion: 1,
     ...overrides,
   };
 }
