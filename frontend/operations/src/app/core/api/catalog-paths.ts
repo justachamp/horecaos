@@ -305,6 +305,48 @@ export const catalogPaths = {
   importRunRows(scope: BrandScope, runId: string): string {
     return `${this.importRun(scope, runId)}/rows`;
   },
+
+  // -------------------------------------------------- row 4.4a: named menus
+
+  /** The brand's named menus (row 4.4a) — a copyable, bindable assortment, distinct from the `menus` per-location matrix screen (4.4). Same path for `GET` (list) and `POST` (create). */
+  menuSets(scope: BrandScope): string {
+    return `${this.base(scope)}/menus`;
+  },
+
+  /** One named menu. Same path for `PUT` (rename/archive/reactivate, whole-record with `expectedVersion`). */
+  menuSet(scope: BrandScope, menuId: string): string {
+    return `${this.menuSets(scope)}/${encodeURIComponent(menuId)}`;
+  },
+
+  /** Copies a menu — a new menu, in DRAFT, with the same membership. */
+  copyMenuSet(scope: BrandScope, menuId: string): string {
+    return `${this.menuSet(scope, menuId)}/copy`;
+  },
+
+  /** A menu's membership, in sort order. */
+  menuSetItems(scope: BrandScope, menuId: string): string {
+    return `${this.menuSet(scope, menuId)}/items`;
+  },
+
+  /** Adds (or re-sorts/re-defaults) one variant on a menu. Same path for `DELETE`. */
+  menuSetItem(scope: BrandScope, menuId: string, variantId: string): string {
+    return `${this.menuSetItems(scope, menuId)}/${encodeURIComponent(variantId)}`;
+  },
+
+  /** The filtered select-all gesture: category and/or search resolve to a membership write in one call. */
+  menuSetBulkAddByFilter(scope: BrandScope, menuId: string): string {
+    return `${this.menuSetItems(scope, menuId)}/bulk-add-by-filter`;
+  },
+
+  /** Every branch's current menu binding, one row per (branch, channel scope). */
+  menuSetBindings(scope: BrandScope): string {
+    return `${this.menuSets(scope)}/bindings`;
+  },
+
+  /** Binds (or unbinds, `DELETE` with an optional `channelId` query param) a menu to one branch. */
+  menuSetBinding(scope: BrandScope, locationId: string): string {
+    return `${this.menuSetBindings(scope)}/locations/${encodeURIComponent(locationId)}`;
+  },
 } as const;
 
 export const pricingPaths = {

@@ -627,6 +627,15 @@ export const routes: Routes = [
             path: 'menus',
             loadComponent: () => import('./features/catalog/menus-page').then((m) => m.MenusPage),
           },
+          // Row 4.4a — the named Menu entity: a copyable, bindable assortment,
+          // distinct from the per-location offering matrix at 'menus' above
+          // (row 4.4). A different path segment on purpose, so as not to
+          // collide with that already-built, unrelated screen.
+          {
+            path: 'menu-sets',
+            loadComponent: () =>
+              import('./features/catalog/menu-sets-page').then((m) => m.MenuSetsPage),
+          },
           // catalog.md §4.11 (Import: Excel and POS), wave P24 (gap-map rows
           // 4.5a/10.8b/X.24): the POS half only — run history, the start form
           // with its import-language and price-re-import choices, per-item
