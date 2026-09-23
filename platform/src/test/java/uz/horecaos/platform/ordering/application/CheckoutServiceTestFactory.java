@@ -61,7 +61,8 @@ public final class CheckoutServiceTestFactory {
             ApplicationEventPublisher events,
             Clock clock,
             CustomerBlacklistPort blacklist,
-            ConfigurationResolver configuration) {
+            ConfigurationResolver configuration,
+            CartSaleWindowRules saleWindows) {
         return new CheckoutService(
                 new CheckoutAttemptLedger(attempts, orders, carts, payments, settlements),
                 new CheckoutEligibilityGuard(
@@ -75,7 +76,9 @@ public final class CheckoutServiceTestFactory {
                         quotes,
                         catalog,
                         blacklist,
-                        configuration),
+                        configuration,
+                        tenancy,
+                        saleWindows),
                 new CheckoutReservationStep(inventory, capacity, quotes, promoCodes),
                 new CheckoutOrderWriter(
                         orders,

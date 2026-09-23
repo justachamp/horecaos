@@ -644,7 +644,11 @@ public class StorefrontOrderingController {
                             "CODE_NOT_YET_ACTIVE",
                             "CODE_EXPIRED",
                             "REDEMPTION_LIMIT_REACHED",
-                            "PER_CUSTOMER_LIMIT_REACHED" -> ErrorCode.RESOURCE_CONFLICT;
+                            "PER_CUSTOMER_LIMIT_REACHED",
+                            // Row 4.2g: a well-formed line against an item whose own
+                            // schedule currently refuses it — nothing in the request
+                            // is wrong, the same shape as NOT_SERVICEABLE beside it.
+                            "ITEM_OUT_OF_SALE_WINDOW" -> ErrorCode.RESOURCE_CONFLICT;
                     default -> ErrorCode.VALIDATION_FAILED;
                 };
         return new ApiException(code, refused.getMessage(), java.util.Map.of("reason", refused.code()));

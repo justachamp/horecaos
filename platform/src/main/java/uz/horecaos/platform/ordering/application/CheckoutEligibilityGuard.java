@@ -1,6 +1,7 @@
 package uz.horecaos.platform.ordering.application;
 
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -52,6 +53,8 @@ class CheckoutEligibilityGuard {
     private final OrderCatalogSnapshot catalog;
     private final CustomerBlacklistPort blacklist;
     private final ConfigurationResolver configuration;
+    private final OrderingTenantContext tenancy;
+    private final CartSaleWindowRules saleWindows;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     CheckoutEligibilityGuard(
@@ -65,7 +68,9 @@ class CheckoutEligibilityGuard {
             QuoteAcceptancePort quotes,
             OrderCatalogSnapshot catalog,
             CustomerBlacklistPort blacklist,
-            ConfigurationResolver configuration) {
+            ConfigurationResolver configuration,
+            OrderingTenantContext tenancy,
+            CartSaleWindowRules saleWindows) {
         this.carts = carts;
         this.cartService = cartService;
         this.channels = channels;
@@ -77,6 +82,8 @@ class CheckoutEligibilityGuard {
         this.catalog = catalog;
         this.blacklist = blacklist;
         this.configuration = configuration;
+        this.tenancy = tenancy;
+        this.saleWindows = saleWindows;
     }
 
     /** Every fact a validated checkout needs downstream, gathered in one read-only pass. */
@@ -168,6 +175,21 @@ class CheckoutEligibilityGuard {
         List<CartLineRow> cartLines = cartService.lines(command.tenantId(), command.cartId());
         if (cartLines.isEmpty()) {
             return Result.rejected("CART_EMPTY", "An empty cart cannot be checked out");
+        }
+
+        // Row 4.2g, re-checked a third time: putLine and price both already
+        // refused a line outside its window, but a schedule can move between
+        // pricing and this checkout call, and a stale quote must not commit an
+        // order the kitchen was told to stop making.
+        ZoneId zone = tenancy.timezoneOf(command.tenantId(), cart.locationId()).orElse(null);
+        if (zone != null) {
+            for (CartLineRow line : cartLines) {
+                if (!saleWindows.isOnSaleAt(command.tenantId(), cart.locationId(), line.variantId(), zone, now)) {
+                    return Result.rejected(
+                            "ITEM_OUT_OF_SALE_WINDOW",
+                            "Variant " + line.variantId() + " is outside its sale window right now");
+                }
+            }
         }
 
         // The quote must be the one bound to this cart. A client naming any quote

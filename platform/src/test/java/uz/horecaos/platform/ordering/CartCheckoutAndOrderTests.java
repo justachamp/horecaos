@@ -212,6 +212,7 @@ class CartCheckoutAndOrderTests {
     private uz.horecaos.platform.ordering.infrastructure.JdbcDeliveryOrderPort deliveryOrders;
     private java.util.function.Function<PaymentIntentPort, CheckoutService> checkoutWith;
     private JdbcPaymentIntentStore intentStore;
+    private uz.horecaos.platform.ordering.application.CartSaleWindowRules saleWindowRules;
     private JdbcPaymentAttemptStore paymentAttemptStore;
     private JdbcFiscalDocumentStore fiscalStore;
     private JdbcSettlementStore settlementStore;
@@ -441,6 +442,11 @@ class CartCheckoutAndOrderTests {
                         (keyCode, scope) -> {}));
 
         orderingConfig = new MutableConfigurationResolver();
+        // Row 4.2g: the real per-item sale window read, over the real
+        // catalog.item_sale_windows table, for the same reason serviceability
+        // above is real — whether an item is inside its own schedule is exactly
+        // the property this suite's sale-window tests exist to check.
+        saleWindowRules = new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcCartSaleWindowRules(jdbc);
         carts = new CartService(
                 cartStore,
                 channelStore,
@@ -455,7 +461,8 @@ class CartCheckoutAndOrderTests {
                 clock,
                 customerBlacklist,
                 new PromoCodeEligibilityService(promoCodeStore),
-                new FakeConfigurationResolver());
+                new FakeConfigurationResolver(),
+                saleWindowRules);
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
         paymentProcess = new OrderPaymentProcess(processStore, objectMapper);
         orderState = new OrderStateService(
@@ -558,7 +565,8 @@ class CartCheckoutAndOrderTests {
                 published,
                 clock,
                 customerBlacklist,
-                orderingConfig);
+                orderingConfig,
+                saleWindowRules);
 
         checkout = checkoutWith.apply(UNWIRED_PAYMENTS);
         // ADR 0075's port over the same services, so a bot repeat and a
@@ -1282,6 +1290,50 @@ class CartCheckoutAndOrderTests {
                 null)));
 
         assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("MODIFIER_NOT_OFFERED");
+    }
+
+    /**
+     * Row 4.2g: {@code CatalogAuthoringService#isOnSaleNow} had no caller in
+     * ordering before this test. Named so the New Order screen and the
+     * storefront can show the operator or the customer exactly why, rather
+     * than a generic validation failure.
+     */
+    @Test
+    @DisplayName("row 4.2g: adding a variant outside its own sale window is refused")
+    void addingAVariantOutsideItsSaleWindowIsRefused() {
+        seedOutOfWindowSchedule(burgerVariant);
+        var cart = openCart();
+
+        var refused = catchThrowable(() -> tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "a", burgerVariant, 1, List.of(), null)));
+
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("ITEM_OUT_OF_SALE_WINDOW");
+    }
+
+    /**
+     * "Flagged, not silently dropped": a line added while its item was
+     * unrestricted must not vanish from the total the moment the schedule
+     * moves on without it — the cart still holds it, and pricing refuses by
+     * name rather than pricing the basket as if the line were never there.
+     */
+    @Test
+    @DisplayName("row 4.2g: a line whose item left its window is flagged at pricing, not dropped")
+    void aLineThatLeftItsWindowIsFlaggedAtPricingNotDropped() {
+        UUID cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+
+        // The schedule changes after the line was added, exactly as an
+        // operator editing a window mid-service would.
+        seedOutOfWindowSchedule(burgerVariant);
+
+        var refused = catchThrowable(() -> tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart))));
+
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("ITEM_OUT_OF_SALE_WINDOW");
+        // Still in the basket — refusing pricing is not the same as removing
+        // the line the refusal is about.
+        assertThat(carts.lines(TENANT, cart))
+                .extracting(JdbcCartStore.CartLineRow::lineKey)
+                .containsExactly("a");
     }
 
     @Test
@@ -2352,6 +2404,23 @@ class CartCheckoutAndOrderTests {
 
         assertThat(refused.rejectionCode()).isEqualTo("NOT_SERVICEABLE");
         assertThat(refused.rejectionDetail()).isEqualTo("MANUALLY_CLOSED");
+        assertThat(countOrders()).isZero();
+    }
+
+    @Test
+    @DisplayName("row 4.2g: a schedule that ends between pricing and checkout refuses at checkout too")
+    void aScheduleThatEndsBetweenPricingAndCheckoutRefusesAtCheckout() {
+        var cart = readyCart();
+
+        // Re-checked here for the same reason serviceability is: putLine and
+        // price both already refused this at add time, but nothing stops a
+        // manager from editing the schedule in the gap between an accepted
+        // quote and the checkout call that spends it.
+        seedOutOfWindowSchedule(burgerVariant);
+
+        var refused = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-out-of-window")));
+
+        assertThat(refused.rejectionCode()).isEqualTo("ITEM_OUT_OF_SALE_WINDOW");
         assertThat(countOrders()).isZero();
     }
 
@@ -6574,6 +6643,26 @@ class CartCheckoutAndOrderTests {
                 .update();
         productIdByCode.put(code, productId);
         return variantId;
+    }
+
+    /**
+     * Row 4.2g: a weekly window that excludes {@link #NOW}. {@code
+     * Asia/Tashkent} (this suite's own {@code insertLocation}) is UTC+5, so
+     * {@code NOW} ("2026-08-21T07:00:00Z", a Friday) reads as Friday noon
+     * local — a 13:00-14:00 Friday window therefore never covers it.
+     */
+    private void seedOutOfWindowSchedule(UUID variantId) {
+        jdbc.sql("""
+                INSERT INTO catalog.item_sale_windows (
+                    id, tenant_id, brand_id, location_id, variant_id, day_of_week, opens_at, closes_at)
+                VALUES (:id, :tenantId, :brandId, :locationId, :variantId, 5, '13:00', '14:00')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("variantId", variantId)
+                .update();
     }
 
     private void seedPricingAndStock() {

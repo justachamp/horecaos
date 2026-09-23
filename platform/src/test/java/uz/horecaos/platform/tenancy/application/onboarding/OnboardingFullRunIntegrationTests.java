@@ -548,7 +548,9 @@ class OnboardingFullRunIntegrationTests {
                         new JdbcPricingStore(jdbc, JsonMapper.builder().build()),
                         new JdbcSalesChannelStore(jdbc),
                         CLOCK),
-                new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore(jdbc));
+                new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore(jdbc),
+                new uz.horecaos.platform.catalog.infrastructure.tenancy.JdbcCatalogTenantContext(jdbc),
+                CLOCK);
     }
 
     private uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore catalogStore() {

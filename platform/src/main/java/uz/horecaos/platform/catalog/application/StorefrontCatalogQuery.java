@@ -1,5 +1,8 @@
 package uz.horecaos.platform.catalog.application;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +18,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.LocationOffering;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
+import uz.horecaos.platform.catalog.domain.ItemSaleSchedule;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
 
@@ -50,11 +54,20 @@ public class StorefrontCatalogQuery {
     private final JdbcCatalogStore store;
     private final MenuPriceLookup prices;
     private final JdbcMenuStore menus;
+    private final CatalogTenantContext tenantContext;
+    private final Clock clock;
 
-    public StorefrontCatalogQuery(JdbcCatalogStore store, MenuPriceLookup prices, JdbcMenuStore menus) {
+    public StorefrontCatalogQuery(
+            JdbcCatalogStore store,
+            MenuPriceLookup prices,
+            JdbcMenuStore menus,
+            CatalogTenantContext tenantContext,
+            Clock clock) {
         this.store = store;
         this.prices = prices;
         this.menus = menus;
+        this.tenantContext = tenantContext;
+        this.clock = clock;
     }
 
     /**
@@ -87,13 +100,20 @@ public class StorefrontCatalogQuery {
         Set<UUID> channelExcludedVariantIds =
                 store.channelExcludedVariantIds(tenantId, brandId, channelCode, locationId);
 
+        // Row 4.2g: marked here, live, for the identical reason offeringByVariant
+        // and channelExcludedVariantIds are read live rather than from the
+        // publication — an item's own sale schedule can end mid-service and a
+        // customer must stop being offered it at once, not after a republish.
+        Set<UUID> outOfWindowVariantIds = outOfWindowVariantIds(tenantId, locationId);
+
         List<PublicationItem> categoryItems = store.publicationItems(publication, EntityType.CATEGORY);
         List<PublicationItem> productItems = store.publicationItems(publication, EntityType.PRODUCT);
         List<PublicationItem> groupItems = store.publicationItems(publication, EntityType.MODIFIER_GROUP);
 
         List<MenuProduct> products = new ArrayList<>();
         for (PublicationItem item : productItems) {
-            List<MenuVariant> variants = variantsOf(item, offeringByVariant, channelExcludedVariantIds);
+            List<MenuVariant> variants =
+                    variantsOf(item, offeringByVariant, channelExcludedVariantIds, outOfWindowVariantIds);
             if (variants.isEmpty()) {
                 // Not offered at this location at all. Absent rather than shown
                 // as unavailable: the location genuinely does not sell it.
@@ -203,7 +223,10 @@ public class StorefrontCatalogQuery {
 
     @SuppressWarnings("unchecked")
     private static List<MenuVariant> variantsOf(
-            PublicationItem item, Map<UUID, OfferingStatus> offeringByVariant, Set<UUID> channelExcludedVariantIds) {
+            PublicationItem item,
+            Map<UUID, OfferingStatus> offeringByVariant,
+            Set<UUID> channelExcludedVariantIds,
+            Set<UUID> outOfWindowVariantIds) {
 
         Object raw = item.content().get("variants");
         if (!(raw instanceof List<?> list)) {
@@ -238,10 +261,42 @@ public class StorefrontCatalogQuery {
                     // Shown but not orderable, which is what a customer needs to
                     // see rather than an item that silently vanished.
                     offering == OfferingStatus.AVAILABLE,
+                    // Row 4.2g: shown, but not orderable right now, distinct from
+                    // an 86'd dish — the storefront tells the two states apart.
+                    !outOfWindowVariantIds.contains(variantId),
                     // Attached after the whole menu is read; see menuFor.
                     null));
         }
         return variants;
+    }
+
+    /**
+     * Row 4.2g: every variant at this location whose own sale schedule does
+     * not include the current local moment, read live.
+     *
+     * <p>Empty, rather than refusing the whole menu read, when this tenant's
+     * location id does not resolve to a zone — the same "unaffected by
+     * default" guarantee {@code CartSaleWindowRules}' own callers rely on,
+     * applied here to a read instead of a refusal.
+     */
+    private Set<UUID> outOfWindowVariantIds(UUID tenantId, UUID locationId) {
+        Optional<ZoneId> zone = tenantContext.timezoneOf(tenantId, locationId);
+        if (zone.isEmpty()) {
+            return Set.of();
+        }
+        Map<UUID, List<ItemSaleSchedule.Window>> windowsByVariant =
+                store.itemSaleWindowsForLocation(tenantId, locationId);
+        if (windowsByVariant.isEmpty()) {
+            return Set.of();
+        }
+        LocalDateTime local = LocalDateTime.ofInstant(clock.instant(), zone.get());
+        Set<UUID> outOfWindow = new java.util.HashSet<>();
+        windowsByVariant.forEach((variantId, windows) -> {
+            if (!new ItemSaleSchedule(windows).isOnSaleAt(local)) {
+                outOfWindow.add(variantId);
+            }
+        });
+        return outOfWindow;
     }
 
     @SuppressWarnings("unchecked")
@@ -451,6 +506,11 @@ public class StorefrontCatalogQuery {
      *
      * @param sku null when the variant has none; never the string "null"
      * @param orderable false means shown as sold out rather than hidden
+     * @param onSaleNow row 4.2g: false means this variant has its own sale
+     *     schedule and the current moment falls outside every window on it —
+     *     shown, distinct from {@code orderable}, so a customer can tell "sold
+     *     out today" from "not on the menu right now, try again during
+     *     breakfast hours" apart. Always true for a variant with no schedule.
      * @param amountMinor null when this variant has no active price. Not zero:
      *     an unpriced variant is a menu that is not finished, and showing it as
      *     free is how a brand sells a dish for nothing.
@@ -461,10 +521,11 @@ public class StorefrontCatalogQuery {
             @Nullable String unitCode,
             boolean isDefault,
             boolean orderable,
+            boolean onSaleNow,
             @Nullable Long amountMinor) {
 
         MenuVariant withPrice(@Nullable Long price) {
-            return new MenuVariant(variantId, sku, unitCode, isDefault, orderable, price);
+            return new MenuVariant(variantId, sku, unitCode, isDefault, orderable, onSaleNow, price);
         }
     }
 

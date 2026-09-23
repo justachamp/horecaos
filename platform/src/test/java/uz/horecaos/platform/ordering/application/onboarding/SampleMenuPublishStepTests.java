@@ -736,7 +736,9 @@ class SampleMenuPublishStepTests {
         return new StorefrontCatalogQuery(
                 catalogStore(),
                 new PricingMenuPriceLookup(pricingStore(), new JdbcSalesChannelStore(jdbc), CLOCK),
-                new JdbcMenuStore(jdbc));
+                new JdbcMenuStore(jdbc),
+                new uz.horecaos.platform.catalog.infrastructure.tenancy.JdbcCatalogTenantContext(jdbc),
+                CLOCK);
     }
 
     private OnboardingStepHandlers.CatalogReadinessValidate catalogReadiness() {

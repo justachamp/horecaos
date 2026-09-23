@@ -3,6 +3,7 @@ package uz.horecaos.platform.ordering.application;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -108,6 +109,7 @@ public class CartService {
     private final CustomerBlacklistPort blacklist;
     private final PromoCodeQueryPort promoCodes;
     private final ConfigurationResolver configuration;
+    private final CartSaleWindowRules saleWindows;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public CartService(
@@ -123,7 +125,8 @@ public class CartService {
             Clock clock,
             CustomerBlacklistPort blacklist,
             PromoCodeQueryPort promoCodes,
-            ConfigurationResolver configuration) {
+            ConfigurationResolver configuration,
+            CartSaleWindowRules saleWindows) {
         this.carts = carts;
         this.channels = channels;
         this.menu = menu;
@@ -137,6 +140,7 @@ public class CartService {
         this.blacklist = blacklist;
         this.promoCodes = promoCodes;
         this.configuration = configuration;
+        this.saleWindows = saleWindows;
     }
 
     /**
@@ -265,6 +269,7 @@ public class CartService {
         CartRow cart = requireEditable(tenantId, brandId, callerAccountId, cartId);
         requireSelectionRules(tenantId, brandId, cart, variantId, modifierOptionIds);
         Instant now = clock.instant();
+        requireOnSaleNow(tenantId, cart, variantId, now);
 
         UUID lineId = lines(tenantId, cartId).stream()
                 .filter(line -> line.lineKey().equals(lineKey))
@@ -525,6 +530,15 @@ public class CartService {
         List<CartLineRow> lines = lines(tenantId, cartId);
         if (lines.isEmpty()) {
             throw new CartRefusedException("CART_EMPTY", "An empty cart has nothing to price");
+        }
+        // Row 4.2g: re-checked here, not only at putLine. A line added inside its
+        // window is flagged rather than silently dropped once the schedule moves
+        // on without it — the refusal below names the line, exactly as
+        // requireSelectionRules' own doc says a menu-state refusal belongs at
+        // pricing, where it can.
+        Instant priceNow = clock.instant();
+        for (CartLineRow line : lines) {
+            requireOnSaleNow(tenantId, cart, line.variantId(), priceNow);
         }
 
         SalesChannel channel = channels.byId(tenantId, cart.channelId())
@@ -818,6 +832,22 @@ public class CartService {
      */
     private static boolean ownedBy(CartRow cart, UUID callerAccountId) {
         return callerAccountId != null && callerAccountId.equals(cart.customerAccountId());
+    }
+
+    /**
+     * Row 4.2g: refuses a variant outside its own per-item sale schedule.
+     *
+     * <p>Named {@code ITEM_OUT_OF_SALE_WINDOW} so the storefront and the New
+     * Order screen can show the customer or operator exactly why this dish is
+     * refused, rather than a generic validation failure.
+     */
+    private void requireOnSaleNow(UUID tenantId, CartRow cart, UUID variantId, Instant at) {
+        ZoneId zone = tenancy.timezoneOf(tenantId, cart.locationId())
+                .orElseThrow(() -> new IllegalStateException("Location " + cart.locationId() + " has no timezone"));
+        if (!saleWindows.isOnSaleAt(tenantId, cart.locationId(), variantId, zone, at)) {
+            throw new CartRefusedException(
+                    "ITEM_OUT_OF_SALE_WINDOW", "Variant " + variantId + " is outside its sale window right now");
+        }
     }
 
     /**
