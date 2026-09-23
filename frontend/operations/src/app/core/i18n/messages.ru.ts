@@ -818,6 +818,10 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.branches.bindDialog.lead':
     'Привязка на уровне филиала переопределяет значение бренда по умолчанию только для этого филиала.',
   'settings.integrations.branches.bindDialog.installation': 'Провайдер',
+  'settings.integrations.branches.bindDialog.someExcluded':
+    'POS-системы и службы доставки здесь не показаны — им нужны отдельные возможности, которые это окно пока не может назначить.',
+  'settings.integrations.branches.bindDialog.noneEligible':
+    'Ни один из ваших провайдеров пока нельзя привязать через это окно. POS-системам и службам доставки нужны отдельные возможности, которые это окно пока не может назначить.',
   'settings.integrations.branches.bindDialog.branch': 'Филиал',
   'settings.integrations.branches.bindDialog.cancel': 'Отмена',
   'settings.integrations.branches.bindDialog.submit': 'Привязать',

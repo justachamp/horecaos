@@ -30,6 +30,21 @@ import { RotateSecretDialog, RotateSecretSubmission } from './rotate-secret-dial
 /** The one provider type the platform can verify a rotated credential against (ADR 0065, wave 13). */
 const VERIFIABLE_PROVIDER_TYPE = 'TELEGRAM_BOT_API';
 
+/**
+ * Categories with a real backend capability catalogue (`PosCapability`,
+ * `DeliveryCapability`) that neither this screen nor {@link
+ * IntegrationsApi.bindInstallation}'s caller has a picker for. Binding one of
+ * these with the empty `capabilities`/`primaryCapabilities` the connect
+ * drawer sends for PAYMENT/NOTIFICATION (which truly have no catalogue) would
+ * not be a narrower binding — `integration.bindings` requires an INNER JOIN
+ * against `integration.binding_capabilities` to appear in {@link
+ * IntegrationsApi.effectiveBindings} at all, so a capability-less binding can
+ * never resolve, activated or not, and would never surface in the branches
+ * table this dialog just fed. Excluded here rather than silently created
+ * broken; see {@link bindableInstallations}.
+ */
+const CAPABILITY_CATALOGUED_CATEGORIES: ReadonlySet<string> = new Set(['POS', 'DELIVERY']);
+
 const STATUS_KEYS: Readonly<Record<string, MessageKey>> = {
   DRAFT: 'settings.integrations.status.DRAFT',
   ACTIVE: 'settings.integrations.status.ACTIVE',
@@ -181,6 +196,18 @@ export class IntegrationsPage {
   protected readonly bindToBranchInstallationId = signal<string | null>(null);
   protected readonly bindToBranchLocationId = signal<string | null>(null);
 
+  /**
+   * {@link installations} minus the categories in {@link
+   * CAPABILITY_CATALOGUED_CATEGORIES} — what {@link submitBindToBranch} may
+   * actually offer, since it has no picker to fill a real capability
+   * catalogue and an empty one is a dead binding for those categories.
+   */
+  protected readonly bindableInstallations = computed(() =>
+    this.installations().filter(
+      (installation) => !CAPABILITY_CATALOGUED_CATEGORIES.has(installation.category),
+    ),
+  );
+
   /** One row per branch that has at least one resolved capability, branch name resolved for display. */
   protected readonly branchRows = computed(() => {
     const names = this.scopeNames();
@@ -214,7 +241,7 @@ export class IntegrationsPage {
 
   protected openBindToBranch(): void {
     this.bindToBranchError.set(null);
-    this.bindToBranchInstallationId.set(this.installations()[0]?.id ?? null);
+    this.bindToBranchInstallationId.set(this.bindableInstallations()[0]?.id ?? null);
     this.bindToBranchLocationId.set(this.locations()[0]?.id ?? null);
     this.showBindToBranch.set(true);
   }

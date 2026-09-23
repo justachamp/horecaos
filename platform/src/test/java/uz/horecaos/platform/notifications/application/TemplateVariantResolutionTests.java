@@ -106,6 +106,25 @@ class TemplateVariantResolutionTests {
     }
 
     @Test
+    @DisplayName(
+            "of two equally-specific single-dimension variants, the fulfilment-mode one wins over the channel-source one")
+    void aFulfilmentOnlyVariantOutranksAChannelOnlyVariantOfEqualSpecificity() {
+        activate(null, null, SalesChannelSystemType.WEB, "Storefront wording");
+        activate(null, FulfillmentMode.DELIVERY, null, "Delivery wording");
+        // ^ order deliberately mixed: creation order must not decide the winner.
+
+        // A delivery order placed on the storefront matches both rows (each
+        // pins down exactly one of the two dimensions), so this is a genuine
+        // tie on specificity. JdbcTemplateStore.activeTemplate's ORDER BY
+        // lists fulfillment_mode before channel_source, so the fulfilment
+        // variant wins — not because an ADR says fulfilment should outrank
+        // channel, but because of that column order. Pinned here so a
+        // reordering of those two ORDER BY columns is a visible, deliberate
+        // change rather than a silent one.
+        assertBody(resolve(FulfillmentMode.DELIVERY, SalesChannelSystemType.WEB), "Delivery wording");
+    }
+
+    @Test
     @DisplayName("a brand override still outranks a same-specificity tenant-wide variant")
     void aBrandOverrideOutranksATenantWideVariantOfEqualSpecificity() {
         activate(null, FulfillmentMode.DINE_IN, null, "Tenant dine-in");
