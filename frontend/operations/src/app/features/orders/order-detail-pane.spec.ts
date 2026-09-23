@@ -928,6 +928,42 @@ describe('OrderDetailPane: the whole OutcomeResponse, not the 13-of-19 slice (ro
     );
   });
 
+  it('gap map 9.2d: prefers the resolved display name over the raw actor id', async () => {
+    const attributed = detail({
+      createdByActorType: 'USER',
+      createdByActorId: 'operator-7',
+      createdByDisplayName: 'Шахзод Каримов',
+      acceptedByActorType: 'USER',
+      acceptedByActorId: 'operator-9',
+      acceptedByDisplayName: 'Дилноза Юсупова',
+      acceptedAt: '2026-08-30T09:02:00Z',
+    });
+    configure({ get: apiGet({ value: attributed, version: 3 }) });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const createdBy = host.querySelector('[data-testid="order-detail-created-by"]')?.textContent;
+    expect(createdBy).toContain('Шахзод Каримов');
+    expect(createdBy).not.toContain('operator-7');
+    const acceptedBy = host.querySelector('[data-testid="order-detail-accepted-by"]')?.textContent;
+    expect(acceptedBy).toContain('Дилноза Юсупова');
+    expect(acceptedBy).not.toContain('operator-9');
+  });
+
+  it('9.2d: falls back to the raw type/id pair when no display name was resolved', async () => {
+    const attributed = detail({
+      createdByActorType: 'USER',
+      createdByActorId: 'operator-7',
+      createdByDisplayName: null,
+    });
+    configure({ get: apiGet({ value: attributed, version: 3 }) });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-created-by"]')?.textContent,
+    ).toContain('operator-7');
+  });
+
   it('renders an honest "not yet accepted" rather than a blank cell', async () => {
     const unaccepted = detail({
       acceptedByActorType: null,

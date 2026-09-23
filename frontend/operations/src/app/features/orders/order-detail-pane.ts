@@ -1817,16 +1817,23 @@ export class OrderDetailPane {
   }
 
   /**
-   * `createdByActorType`/`acceptedByActorType` name a bare wire tag with no
-   * resolvable display name behind it — same limitation the commercial
-   * timeline's own doc comment names for `actorType` — so this renders the
-   * type and the raw id together rather than pretending a name exists.
-   * Machine principals (`"SYSTEM"`) carry no id and render as the type alone.
+   * Gap map row 9.2d: prefers the server-resolved `displayName` (`StaffDisplayNames`)
+   * over the raw `${actorType} · ${actorId}` pair this pane showed before —
+   * an operator or a manager, not a UUID, took or accepted the order. Falls
+   * back to the type/id pair for a non-`"USER"` actor (a machine principal
+   * has no Keycloak identity to resolve) or a subject with no name on file,
+   * the same limitation the commercial timeline's own doc comment names for
+   * `actorType`. Machine principals (`"SYSTEM"`) carry no id and render as
+   * the type alone.
    */
   protected actorDisplay(
     actorType: string | null | undefined,
     actorId: string | null | undefined,
+    displayName?: string | null,
   ): string | null {
+    if (displayName) {
+      return displayName;
+    }
     if (!actorType) {
       return null;
     }
