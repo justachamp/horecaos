@@ -69,6 +69,20 @@ public class JdbcTemplateStore {
      * on that dimension — passing null never accidentally selects a
      * variant-specific row it did not ask for.
      *
+     * <p><strong>Tie-break between equally specific rows on different
+     * dimensions is a side effect of column order, not a product rule.</strong>
+     * A fulfilment-mode-only variant (specificity 1) and a channel-source-only
+     * variant (specificity 1) can both match the same order — a delivery order
+     * placed on the storefront, say — and {@code fulfillment_mode NULLS LAST}
+     * is listed before {@code channel_source NULLS LAST}, so the fulfilment
+     * variant always wins that tie, silently, with no way for an operator to
+     * ask for the other one instead. No ADR decides which dimension should
+     * take precedence, so this is documented and pinned by {@code
+     * TemplateVariantResolutionTests
+     * .aFulfilmentOnlyVariantOutranksAChannelOnlyVariantOfEqualSpecificity}
+     * rather than changed here; reordering these two lines is a real,
+     * deliberate precedence change and that test will catch it.
+     *
      * @param fulfillmentMode null when the message is not about an order, or
      *                        its fulfilment mode is not known to the caller
      * @param channelSource null under the same conditions
@@ -107,6 +121,10 @@ public class JdbcTemplateStore {
                      + CASE WHEN fulfillment_mode IS NOT NULL THEN 1 ELSE 0 END
                      + CASE WHEN channel_source IS NOT NULL THEN 1 ELSE 0 END) DESC,
                     brand_id NULLS LAST,
+                    -- Below the specificity sum, this column order is itself the
+                    -- tiebreak between two equally-specific rows on different
+                    -- dimensions: fulfilment_mode beats channel_source whenever
+                    -- both match. See this method's own doc comment.
                     fulfillment_mode NULLS LAST,
                     channel_source NULLS LAST
                 LIMIT 1
