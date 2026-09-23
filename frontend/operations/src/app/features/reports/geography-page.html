@@ -73,12 +73,19 @@
               </div>
               <div class="geography__histogram">
                 <h3 class="q-body-sm">{{ 'reports.geography.histogram.distance.title' | t }}</h3>
-                <p
-                  class="q-body-sm geography__unavailable"
-                  data-testid="geography-distance-unavailable"
-                >
-                  {{ 'reports.geography.histogram.distance.unavailable' | t }}
-                </p>
+                <q-histogram-chart
+                  [buckets]="distanceBuckets()"
+                  [ariaLabel]="'reports.geography.histogram.distance.title' | t"
+                  [valueFormatter]="formatCount"
+                  data-testid="geography-distance-histogram"
+                />
+                @if (distanceBucketDefinitions().length > 0) {
+                  <p class="q-caption geography__histogram-formula" data-testid="geography-distance-formula">
+                    @for (definition of distanceBucketDefinitions(); track definition.code; let last = $last) {
+                      {{ distanceBucketRangeLabel(definition) }}{{ last ? '' : ' · ' }}
+                    }
+                  </p>
+                }
               </div>
             </div>
           }

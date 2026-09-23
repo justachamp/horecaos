@@ -151,6 +151,29 @@ export interface MedianResponse {
   readonly provenance: ProvenanceResponse;
 }
 
+/** Row 7.10b (wave 10 w5-reports-exports): one distance bucket's delivery count — mirrors `ReportingController.DistanceBucketResponse`. */
+export interface DistanceBucketResponse {
+  readonly bucketCode: string;
+  readonly deliveryCount: number;
+}
+
+export interface DistanceBucketsResponse {
+  readonly buckets: readonly DistanceBucketResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/** Row 7.10b: one bucket's published definition, in meters — mirrors `ReportingController.DistanceBucketDefinitionResponse`. */
+export interface DistanceBucketDefinitionResponse {
+  readonly code: string;
+  readonly fromMeters: number;
+  readonly toMetersExclusive: number | null;
+}
+
+export interface DistanceBucketSetResponse {
+  readonly version: number;
+  readonly buckets: readonly DistanceBucketDefinitionResponse[];
+}
+
 /** Wave 9 w4-reports-distance-crm (7.1): delivery_distance.average.v1 — see {@link ReportingApi.deliveryDistance}. */
 export interface DistanceResponse {
   readonly averageMeters: number | null;
@@ -707,6 +730,24 @@ export class ReportingApi {
       this.api.get<SlaResponse>(reportsPaths.slaBuckets(tenantId), {
         params: { from: params.from, to: params.to, locationId: params.locationId },
       }),
+    );
+    return result.value;
+  }
+
+  /** Row 7.10b: the geography page's distance histogram — live over reporting.fact_delivery. */
+  async distanceBuckets(tenantId: string, params: RangeParams): Promise<DistanceBucketsResponse> {
+    const result = await firstValueFrom(
+      this.api.get<DistanceBucketsResponse>(reportsPaths.distanceBuckets(tenantId), {
+        params: { from: params.from, to: params.to, locationId: params.locationId },
+      }),
+    );
+    return result.value;
+  }
+
+  /** Row 7.10b: the published bucket boundaries and version — the distance histogram's own formula panel. */
+  async distanceBucketSet(tenantId: string): Promise<DistanceBucketSetResponse> {
+    const result = await firstValueFrom(
+      this.api.get<DistanceBucketSetResponse>(reportsPaths.distanceBucketSet(tenantId)),
     );
     return result.value;
   }
