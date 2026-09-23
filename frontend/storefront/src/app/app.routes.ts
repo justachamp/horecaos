@@ -17,6 +17,7 @@ import { AuthLoginComponent } from './pages/auth/auth-login/auth-login.component
 import { AuthCodeComponent } from './pages/auth/auth-code/auth-code.component';
 import { CategoryItemsComponent } from './pages/category-items/category-items.component';
 import { TermsOfConditionsComponent } from './pages/terms/terms-of-conditions.component';
+import { ChannelPageComponent } from './pages/channel-page/channel-page.component';
 import { SearchComponent } from './pages/search/search.component';
 
 export const routes: Routes = [
@@ -94,5 +95,10 @@ export const routes: Routes = [
   { path: 'search', component: SearchComponent },
   { path: 'product/:id', component: ProductComponent },
   { path: 'terms', component: TermsOfConditionsComponent },
+  // Row 10.5: a channel's own static pages (about/contacts/delivery-terms/
+  // privacy-offer), published from the operations console's channel setup
+  // hub. An unrecognised slug renders the same not-found state as one the
+  // channel has never published -- see ChannelPageComponent's own doc.
+  { path: 'pages/:slug', component: ChannelPageComponent },
   { path: '**', redirectTo: 'home' },
 ];
