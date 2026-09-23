@@ -15,6 +15,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -62,10 +63,30 @@ public class ServiceScheduleService {
     private final Clock clock;
     private final ApplicationEventPublisher events;
 
+    /**
+     * Resolves this same bean's Spring AOP proxy, lazily, so {@link
+     * #changeServiceStateBulk} can call {@link #changeServiceState} <em>through
+     * the proxy</em> instead of as a plain in-class self-invocation. A direct
+     * {@code this.changeServiceState(...)} call never passes through the proxy
+     * that {@code @Transactional} is woven onto, so no transaction would open
+     * and {@code TenancyOutboxEventListener}'s {@code BEFORE_COMMIT} listener
+     * would never fire for a bulk-applied change — see {@code
+     * ChannelAndServiceabilityEventOutboxTests
+     * #changeServiceStateBulkCommitsAnEventForEveryLocation}. Resolved lazily
+     * (never in the constructor) because eagerly resolving it during bean
+     * creation would race the container's own registration of this bean. Null
+     * when this instance was built outside a Spring container (see the 4-arg
+     * constructor), where there is no proxy to resolve in the first place.
+     */
+    private final @Nullable ObjectProvider<ServiceScheduleService> self;
+
     /** See {@code SalesChannelService}'s matching overload for why this exists. */
     public ServiceScheduleService(
             JdbcServiceabilityStore store, AuditRecorder audit, CurrentActor currentActor, Clock clock) {
-        this(store, audit, currentActor, clock, event -> {});
+        // No self-proxy outside a Spring container: nothing here is ever
+        // AOP-proxied when constructed this way, so `changeServiceStateBulk`
+        // falls back to a plain `this` call -- see the `self` field's doc.
+        this(store, audit, currentActor, clock, event -> {}, null);
     }
 
     @Autowired
@@ -74,12 +95,14 @@ public class ServiceScheduleService {
             AuditRecorder audit,
             CurrentActor currentActor,
             Clock clock,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events,
+            @Nullable ObjectProvider<ServiceScheduleService> self) {
         this.store = store;
         this.audit = audit;
         this.currentActor = currentActor;
         this.clock = clock;
         this.events = events;
+        this.self = self;
     }
 
     // ------------------------------------------------------------------- reads
@@ -316,7 +339,13 @@ public class ServiceScheduleService {
                 continue;
             }
             try {
-                changeServiceState(tenantId, brandId, locationId, command);
+                // Through the proxy (see the `self` field's own doc), so this
+                // location's write actually opens the real transaction
+                // `changeServiceState`'s `@Transactional` promises -- a plain
+                // `this.changeServiceState(...)` self-invocation would bypass it
+                // and silently drop the outbox event every time.
+                ServiceScheduleService proxied = self == null ? this : self.getIfAvailable(() -> this);
+                proxied.changeServiceState(tenantId, brandId, locationId, command);
                 outcomes.add(new BulkStateChangeOutcome(locationId, true, null));
             } catch (IllegalArgumentException invalid) {
                 outcomes.add(new BulkStateChangeOutcome(locationId, false, "VALIDATION_FAILED"));
