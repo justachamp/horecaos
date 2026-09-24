@@ -487,6 +487,34 @@ class ReportingControllerCapabilityHttpTests {
                 .isLessThan(body.indexOf(PIZZA.toString()));
     }
 
+    /**
+     * A cursor field that does not match the active {@code sort} used to be silently accepted:
+     * {@code afterQuantity} stayed {@code null} while {@code sort=QUANTITY_DESC}, the generated
+     * {@code HAVING (sum(l.quantity), variant_id) < (NULL, :afterVariantId)} tuple compared
+     * against SQL NULL for every row, and the store returned an empty page that looked like "no
+     * more results" instead of a rejected malformed request.
+     */
+    @Test
+    void variantSalesRefusesACursorFieldThatDoesNotMatchTheActiveSort() throws Exception {
+        insertVariantSalesLine(PIZZA, "Пицца Маргарита", 5, 40_000L);
+        insertVariantSalesLine(SALAD, "Салат Цезарь", 3, 10_000L);
+
+        MvcResult refused = mvc.perform(get(REPORTING + "/variant-sales")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01")
+                        .queryParam("sort", "QUANTITY_DESC")
+                        // afterRevenueSom/afterVariantId without the afterQuantity QUANTITY_DESC needs.
+                        .queryParam("afterRevenueSom", "40000")
+                        .queryParam("afterVariantId", PIZZA.toString()))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus())
+                .as("a rejected malformed request, not a silent empty page")
+                .isEqualTo(400);
+        assertThat(refused.getResponse().getContentAsString()).contains("VALIDATION_FAILED");
+    }
+
     @Test
     void variantSalesRefusesAnUnknownSort() throws Exception {
         MvcResult refused = mvc.perform(get(REPORTING + "/variant-sales")

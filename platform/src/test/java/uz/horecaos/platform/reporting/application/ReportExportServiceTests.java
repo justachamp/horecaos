@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -666,14 +667,25 @@ class ReportExportServiceTests {
      */
     private void insertAggBranchDay(
             LocalDate businessDate, String channelCode, String fulfilmentType, int orderCount, long grossSom) {
+        insertAggBranchDay(businessDate, channelCode, fulfilmentType, orderCount, grossSom, null);
+    }
+
+    /** Overload naming the fiscal identity, for the two-legal-entity fold coverage below. */
+    private void insertAggBranchDay(
+            LocalDate businessDate,
+            String channelCode,
+            String fulfilmentType,
+            int orderCount,
+            long grossSom,
+            @Nullable UUID legalEntityId) {
         jdbc.sql("""
                         INSERT INTO reporting.agg_branch_day (
-                            tenant_id, business_date, location_id, channel_code, fulfilment_type,
+                            tenant_id, business_date, location_id, legal_entity_id, channel_code, fulfilment_type,
                             boundary_version, metric_calculation_version, order_count, cancelled_count,
                             gross_som, discount_som, net_som, refunded_som, promised_count, late_count,
                             distinct_customers, new_customers)
                         VALUES (
-                            :tenantId, :businessDate, :locationId, :channelCode, :fulfilmentType,
+                            :tenantId, :businessDate, :locationId, :legalEntityId, :channelCode, :fulfilmentType,
                             1, 1, :orderCount, 0,
                             :gross, 0, :gross, 0, 0, 0,
                             0, 0)
@@ -681,11 +693,56 @@ class ReportExportServiceTests {
                 .param("tenantId", TENANT)
                 .param("businessDate", businessDate)
                 .param("locationId", locationId)
+                .param("legalEntityId", legalEntityId)
                 .param("channelCode", channelCode)
                 .param("fulfilmentType", fulfilmentType)
                 .param("orderCount", orderCount)
                 .param("gross", grossSom)
                 .update();
+    }
+
+    /**
+     * ADR 0038: a location reassigned from one legal entity to another partway through the
+     * exported range (an effective-dated, supported operation on {@code
+     * tenant.location_fiscal_assignments}) must never have its two taxpayers' revenue folded into
+     * one branch/channel/fulfilment row with no entity column to tell them apart — the same rule
+     * {@link ReportQueryService#run}'s own {@code CombinedEntityTotalException} already enforces
+     * for every other money read. Refusing the export (and writing nothing) beats a wrong number
+     * that reconciles to neither taxpayer's filing.
+     */
+    @Test
+    @DisplayName("ORDER_REPORT_SUMMARY refuses rather than silently sum money across two legal entities "
+            + "folded into the same branch/channel/fulfilment bucket")
+    void orderReportSummaryRefusesToMixTwoLegalEntitiesInOneBucket() {
+        UUID entityA = UUID.randomUUID();
+        UUID entityB = UUID.randomUUID();
+        insertAggBranchDay(LocalDate.of(2026, 9, 10), "TELEGRAM", "DELIVERY", 1, 100_000L, entityA);
+        insertAggBranchDay(LocalDate.of(2026, 9, 11), "TELEGRAM", "DELIVERY", 1, 50_000L, entityB);
+
+        UUID id = service.requestExport(
+                TENANT,
+                ReportExportRegistry.ORDER_REPORT_SUMMARY,
+                List.of("locationId", "channelCode", "fulfilmentType", "orderCount", "grossSom"),
+                null,
+                null,
+                Instant.parse("2026-09-01T00:00:00Z"),
+                Instant.parse("2026-09-30T00:00:00Z"),
+                List.of(),
+                "order-report-summary-two-entities-test",
+                SUBJECT,
+                false);
+
+        assertThat(service.processNextQueued()).isTrue();
+
+        ReportExportService.ExportStatusView view =
+                service.status(TENANT, id, false).orElseThrow();
+        assertThat(view.status())
+                .as("a wrong combined figure is worse than no figure (ADR 0038) -- the export must "
+                        + "fail rather than silently sum entity A's and entity B's revenue into one row")
+                .isEqualTo("FAILED");
+        assertThat(storage.puts)
+                .as("nothing combining two taxpayers' money may reach the object store")
+                .isEmpty();
     }
 
     @Test
