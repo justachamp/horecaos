@@ -71,6 +71,7 @@ public class CourierSettlementService {
     private final AuditRecorder audit;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final AdjustmentRuleEvaluator adjustmentRules;
 
     public CourierSettlementService(
             JdbcCourierLedgerStore ledger,
@@ -79,7 +80,8 @@ public class CourierSettlementService {
             ApprovalService approvals,
             AuditRecorder audit,
             ObjectMapper objectMapper,
-            Clock clock) {
+            Clock clock,
+            AdjustmentRuleEvaluator adjustmentRules) {
         this.ledger = ledger;
         this.couriers = couriers;
         this.costLines = costLines;
@@ -87,6 +89,7 @@ public class CourierSettlementService {
         this.audit = audit;
         this.objectMapper = objectMapper;
         this.clock = clock;
+        this.adjustmentRules = adjustmentRules;
     }
 
     /**
@@ -108,8 +111,25 @@ public class CourierSettlementService {
                             + "changes a figure somebody has already been paid against");
         }
 
-        List<LedgerEntryRow> entries = ledger.entriesOf(tenantId, periodId);
         List<EarningRow> earnings = ledger.earningsOf(tenantId, periodId);
+
+        // ADR 0108 (gap map row 3.4c): a SETTLEMENT_PERIOD-window rule must
+        // fire before entries/totals are read below, or a bonus/penalty it
+        // posts would be silently excluded from the very statement it was
+        // supposed to affect -- see AdjustmentRuleEvaluator's own class doc,
+        // which named this exact sequencing as the reason it was built but
+        // not yet wired. A period carries no location of its own, so this
+        // attributes the evaluation to the courier's most recent delivery in
+        // the period (earningsOf is ordered by delivered_at); a period with
+        // no deliveries has nothing a DELIVERED_VOLUME/LATE_DELIVERY/rate
+        // basis could hold against in any case, so it is skipped rather than
+        // attributed to an invented branch.
+        if (!earnings.isEmpty()) {
+            UUID mostRecentDeliveryLocationId = earnings.getLast().locationId();
+            adjustmentRules.evaluatePeriodClose(tenantId, period, mostRecentDeliveryLocationId);
+        }
+
+        List<LedgerEntryRow> entries = ledger.entriesOf(tenantId, periodId);
         PeriodTotals totals = ledger.computeTotals(tenantId, periodId);
         EngagementRow engagement = couriers.findEngagement(tenantId, period.engagementId())
                 .orElseThrow(() ->

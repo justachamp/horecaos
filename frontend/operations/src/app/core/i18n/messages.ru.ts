@@ -2803,6 +2803,17 @@ export const messagesRu: MessageCatalogue = {
   'delivery.dispatch.status.COMPLETED': 'Завершён',
   'delivery.dispatch.status.MANUAL_ACTION_REQUIRED': 'Требует внимания',
   'delivery.dispatch.status.CANCELLED': 'Отменён',
+  'delivery.dispatch.action.cancelShipment': 'Отменить доставку',
+  'delivery.dispatch.cancelShipment.confirmTitle': 'Отменить эту доставку?',
+  'delivery.dispatch.cancelShipment.confirmBody':
+    'Если её ведёт партнёр, он будет уведомлён. Это действие необратимо.',
+  'delivery.dispatch.cancelShipment.confirm': 'Отменить доставку',
+  'delivery.dispatch.cancelShipment.keep': 'Оставить',
+  'delivery.dispatch.bulk.selected': 'Выбрано: {count}',
+  'delivery.dispatch.bulk.courierPlaceholder': 'Выберите курьера',
+  'delivery.dispatch.bulk.assign': 'Назначить',
+  'delivery.dispatch.bulk.clear': 'Снять выбор',
+  'delivery.dispatch.bulk.result': 'Назначено: {applied}, не удалось: {failed}',
 
   'delivery.zones.title': 'Зоны доставки',
   'delivery.zones.loading': 'Загрузка зон',

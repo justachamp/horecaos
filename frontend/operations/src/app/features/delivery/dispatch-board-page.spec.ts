@@ -109,6 +109,10 @@ describe('DispatchBoardPage', () => {
     assign: ReturnType<typeof vi.fn>;
     unassign: ReturnType<typeof vi.fn>;
     exceptions: ReturnType<typeof vi.fn>;
+    externalPartners: ReturnType<typeof vi.fn>;
+    externalQuote: ReturnType<typeof vi.fn>;
+    externalBook: ReturnType<typeof vi.fn>;
+    cancelShipment: ReturnType<typeof vi.fn>;
   };
 
   async function render(
@@ -120,6 +124,10 @@ describe('DispatchBoardPage', () => {
       assign: vi.fn(),
       unassign: vi.fn(),
       exceptions: vi.fn().mockResolvedValue([]),
+      externalPartners: vi.fn().mockResolvedValue([]),
+      externalQuote: vi.fn(),
+      externalBook: vi.fn(),
+      cancelShipment: vi.fn(),
     };
     await TestBed.configureTestingModule({
       imports: [DispatchBoardPage],
@@ -253,15 +261,15 @@ describe('DispatchBoardPage', () => {
 
     const suspendedColumn = host.querySelector('[data-column-id="courier-2"]');
     expect(suspendedColumn?.classList.contains('q-board-column--ineligible')).toBe(true);
-    expect(suspendedColumn?.querySelector('[data-testid="board-column-ineligible"]')?.textContent).toContain(
-      'Suspended (compliance)',
-    );
+    expect(
+      suspendedColumn?.querySelector('[data-testid="board-column-ineligible"]')?.textContent,
+    ).toContain('Suspended (compliance)');
 
     const lapsedColumn = host.querySelector('[data-column-id="courier-3"]');
     expect(lapsedColumn?.classList.contains('q-board-column--ineligible')).toBe(true);
-    expect(lapsedColumn?.querySelector('[data-testid="board-column-ineligible"]')?.textContent).toContain(
-      'Compliance document lapsed',
-    );
+    expect(
+      lapsedColumn?.querySelector('[data-testid="board-column-ineligible"]')?.textContent,
+    ).toContain('Compliance document lapsed');
   });
 
   it('manually unassigns a carried plan and shows the refusal reason when the compare-and-set loses', async () => {
@@ -281,5 +289,233 @@ describe('DispatchBoardPage', () => {
 
     expect(dispatchApi.unassign).toHaveBeenCalledWith(SCOPE, 'plan-2', 1, 'OPERATIONS_UNASSIGN');
     expect(host.textContent).toContain('STALE_VERSION');
+  });
+
+  // ---------------------------------------------------------- gap map row 1.2f
+
+  it('offers «Вызвать курьера» on an unassigned pool card, over the plan-keyed DispatchApi path', async () => {
+    await render();
+    const host = fixture.nativeElement as HTMLElement;
+    // `render()` builds `dispatchApi` fresh with empty defaults -- every
+    // per-test mock behaviour is configured after it returns, exactly like
+    // the exceptions test above configures `dispatchApi.exceptions`.
+    dispatchApi.externalPartners.mockResolvedValue([
+      { bindingId: 'binding-1', providerType: 'YANDEX', supportsHold: false },
+    ]);
+    dispatchApi.externalQuote.mockResolvedValue({
+      priced: true,
+      quoteId: 'quote-1',
+      bindingId: 'binding-1',
+      providerType: 'YANDEX',
+      priceMinor: 12_000,
+      currency: 'UZS',
+      customerDeliveryFeeMinor: 12_000,
+      deltaMinor: 0,
+    });
+    dispatchApi.externalBook.mockResolvedValue({
+      applied: true,
+      abandoned: false,
+      planVersion: 2,
+      shipmentId: 'shipment-9',
+    });
+
+    (
+      host.querySelector('[data-testid="dispatch-card-external-courier"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(dispatchApi.externalPartners).toHaveBeenCalledWith(SCOPE, 'plan-1');
+    expect(host.querySelector('[data-testid="external-courier-dialog"]')).not.toBeNull();
+
+    (host.querySelector('[data-testid="external-courier-quote"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(dispatchApi.externalQuote).toHaveBeenCalledWith(SCOPE, 'plan-1', 'binding-1');
+
+    (host.querySelector('[data-testid="external-courier-accept"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(dispatchApi.externalBook).toHaveBeenCalledWith(
+      SCOPE,
+      'plan-1',
+      'binding-1',
+      'quote-1',
+      'ACCEPT',
+      'OPERATIONS_DISPATCH_EXTERNAL_BOOKING_ACCEPT',
+    );
+    expect(host.querySelector('[data-testid="external-courier-dialog"]')).toBeNull();
+  });
+
+  it("renders a PARTNER shipment's own booking state on its card", async () => {
+    const partnerPlan: PlanQueueResponse = {
+      ...CARRIED_PLAN,
+      planId: 'plan-4',
+      shipment: {
+        shipmentId: 'shipment-4',
+        status: 'PICKED_UP',
+        sourceType: 'PARTNER',
+        courierId: null,
+        providerBindingId: 'binding-1',
+        version: 2,
+      },
+    };
+    await render([partnerPlan]);
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="dispatch-card-provider"]')?.textContent).toContain(
+      'Picked up',
+    );
+  });
+
+  // ---------------------------------------------------------- gap map row 1.2g
+
+  it('cancels a carried shipment through DispatchApi against the shipment id and version', async () => {
+    await render([CARRIED_PLAN]);
+    dispatchApi.cancelShipment.mockResolvedValue({ applied: true, outcome: 'INTERNAL_CANCELLED' });
+    const host = fixture.nativeElement as HTMLElement;
+
+    (
+      host.querySelector('[data-testid="dispatch-card-cancel-shipment"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="dispatch-cancel-shipment-dialog"]')).not.toBeNull();
+
+    (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(dispatchApi.cancelShipment).toHaveBeenCalledWith(
+      SCOPE,
+      'shipment-1',
+      1,
+      'OPERATIONS_DISPATCH_SHIPMENT_CANCEL',
+    );
+    expect(host.querySelector('[data-testid="dispatch-cancel-shipment-dialog"]')).toBeNull();
+  });
+
+  it('surfaces a refused cancel (ALREADY_DELIVERED) as a notice, never a thrown error', async () => {
+    await render([CARRIED_PLAN]);
+    dispatchApi.cancelShipment.mockResolvedValue({
+      applied: false,
+      conflictReason: 'ALREADY_DELIVERED',
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    (
+      host.querySelector('[data-testid="dispatch-card-cancel-shipment"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.textContent).toContain('ALREADY_DELIVERED');
+  });
+
+  it('offers no cancel-shipment action once the shipment is already CANCELLED', async () => {
+    const cancelledPlan: PlanQueueResponse = {
+      ...CARRIED_PLAN,
+      shipment: { ...CARRIED_PLAN.shipment!, status: 'CANCELLED' },
+    };
+    await render([cancelledPlan]);
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="dispatch-card-cancel-shipment"]')).toBeNull();
+  });
+
+  // ---------------------------------------------------------- gap map row 3.1
+
+  it('selects several unassigned pool cards and bulk-assigns them to one courier, with per-item outcomes', async () => {
+    const secondUnassigned: PlanQueueResponse = {
+      ...UNASSIGNED_PLAN,
+      planId: 'plan-5',
+      version: 1,
+    };
+    await render([UNASSIGNED_PLAN, secondUnassigned]);
+    dispatchApi.assign.mockImplementation((_scope, planId: string) =>
+      Promise.resolve(
+        planId === 'plan-5'
+          ? {
+              applied: false,
+              planStatus: 'WAITING_TO_SOURCE',
+              planVersion: 1,
+              reason: 'STALE_VERSION',
+            }
+          : { applied: true, planStatus: 'ASSIGNED', planVersion: 2 },
+      ),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    const checkboxes = host.querySelectorAll<HTMLInputElement>(
+      '[data-testid="dispatch-card-select"]',
+    );
+    expect(checkboxes).toHaveLength(2);
+    checkboxes[0].click();
+    checkboxes[1].click();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="dispatch-bulk-bar"]')?.textContent).toContain('2');
+
+    const select = host.querySelector<HTMLSelectElement>(
+      '[data-testid="dispatch-bulk-courier-select"]',
+    )!;
+    select.value = 'courier-1';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    (host.querySelector('[data-testid="dispatch-bulk-assign"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(dispatchApi.assign).toHaveBeenCalledWith(
+      SCOPE,
+      'plan-1',
+      'courier-1',
+      1,
+      'OPERATIONS_DISPATCH_BULK_ASSIGN',
+    );
+    expect(dispatchApi.assign).toHaveBeenCalledWith(
+      SCOPE,
+      'plan-5',
+      'courier-1',
+      1,
+      'OPERATIONS_DISPATCH_BULK_ASSIGN',
+    );
+    expect(host.querySelector('[data-testid="dispatch-bulk-result"]')?.textContent).toContain('1');
+    // The selection clears once submitted, whatever each item's own outcome.
+    expect(host.querySelector('[data-testid="dispatch-bulk-bar"]')).toBeNull();
+  });
+
+  it('the bulk-assign button stays disabled until both a selection and a courier are chosen', async () => {
+    await render([UNASSIGNED_PLAN]);
+    const host = fixture.nativeElement as HTMLElement;
+
+    (host.querySelector('[data-testid="dispatch-card-select"]') as HTMLInputElement).click();
+    fixture.detectChanges();
+
+    expect(
+      (host.querySelector('[data-testid="dispatch-bulk-assign"]') as HTMLButtonElement).disabled,
+    ).toBe(true);
+
+    const select = host.querySelector<HTMLSelectElement>(
+      '[data-testid="dispatch-bulk-courier-select"]',
+    )!;
+    select.value = 'courier-1';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(
+      (host.querySelector('[data-testid="dispatch-bulk-assign"]') as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  it('offers no bulk-select checkbox on a carried card, but does on an unassigned MANUAL_ACTION_REQUIRED one (the same eligibility drag-assign already uses)', async () => {
+    await render([CARRIED_PLAN, MANUAL_ACTION_PLAN]);
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelectorAll('[data-testid="dispatch-card-select"]')).toHaveLength(1);
   });
 });

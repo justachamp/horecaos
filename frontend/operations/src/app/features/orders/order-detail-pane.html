@@ -861,6 +861,20 @@
                 {{ 'orders.dialog.externalCourier.title' | t }}
               </button>
             }
+
+            <!-- The dedicated, provider-notifying cancel (gap map row 1.2g) --
+                 distinct from unassign, which never tells a PARTNER
+                 shipment's provider anything. -->
+            @if (canCancelShipment()) {
+              <button
+                type="button"
+                class="pane__reveal-link pane__reveal-link--destructive"
+                (click)="openShipmentCancelDialog()"
+                data-testid="order-detail-shipment-cancel"
+              >
+                {{ 'delivery.dispatch.action.cancelShipment' | t }}
+              </button>
+            }
           </div>
         }
       </section>
@@ -1291,6 +1305,19 @@
       [busy]="busy()"
       (confirm)="onAmendConfirmDialogConfirm($event)"
       (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'shipmentCancel') {
+    <q-confirm-dialog
+      [title]="'delivery.dispatch.cancelShipment.confirmTitle' | t"
+      [body]="'delivery.dispatch.cancelShipment.confirmBody' | t"
+      [confirmLabel]="'delivery.dispatch.cancelShipment.confirm' | t"
+      [cancelLabel]="'delivery.dispatch.cancelShipment.keep' | t"
+      tone="destructive"
+      [busy]="shipmentCancelBusy()"
+      (confirm)="confirmShipmentCancel()"
+      (cancel)="onDialogDismiss()"
+      data-testid="order-detail-shipment-cancel-dialog"
     />
   }
 </div>

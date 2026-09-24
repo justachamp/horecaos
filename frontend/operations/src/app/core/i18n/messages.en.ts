@@ -2835,6 +2835,17 @@ export const messagesEn = {
   'delivery.dispatch.status.COMPLETED': 'Completed',
   'delivery.dispatch.status.MANUAL_ACTION_REQUIRED': 'Needs attention',
   'delivery.dispatch.status.CANCELLED': 'Cancelled',
+  'delivery.dispatch.action.cancelShipment': 'Cancel shipment',
+  'delivery.dispatch.cancelShipment.confirmTitle': 'Cancel this shipment?',
+  'delivery.dispatch.cancelShipment.confirmBody':
+    'The provider is notified where one is carrying it. This cannot be undone.',
+  'delivery.dispatch.cancelShipment.confirm': 'Cancel shipment',
+  'delivery.dispatch.cancelShipment.keep': 'Keep it',
+  'delivery.dispatch.bulk.selected': '{count} selected',
+  'delivery.dispatch.bulk.courierPlaceholder': 'Choose a courier',
+  'delivery.dispatch.bulk.assign': 'Assign',
+  'delivery.dispatch.bulk.clear': 'Clear selection',
+  'delivery.dispatch.bulk.result': 'Assigned {applied}, failed {failed}',
 
   'delivery.zones.title': 'Delivery zones',
   'delivery.zones.loading': 'Loading zones',

@@ -2825,6 +2825,17 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.dispatch.status.COMPLETED': 'Yakunlangan',
   'delivery.dispatch.status.MANUAL_ACTION_REQUIRED': 'Eʻtibor talab qiladi',
   'delivery.dispatch.status.CANCELLED': 'Bekor qilingan',
+  'delivery.dispatch.action.cancelShipment': 'Yetkazishni bekor qilish',
+  'delivery.dispatch.cancelShipment.confirmTitle': 'Bu yetkazishni bekor qilasizmi?',
+  'delivery.dispatch.cancelShipment.confirmBody':
+    "Agar uni hamkor olib borayotgan bo'lsa, u xabardor qilinadi. Bu amalni qaytarib bo'lmaydi.",
+  'delivery.dispatch.cancelShipment.confirm': 'Yetkazishni bekor qilish',
+  'delivery.dispatch.cancelShipment.keep': 'Bekor qilmaslik',
+  'delivery.dispatch.bulk.selected': 'Tanlangan: {count}',
+  'delivery.dispatch.bulk.courierPlaceholder': 'Kuryerni tanlang',
+  'delivery.dispatch.bulk.assign': 'Tayinlash',
+  'delivery.dispatch.bulk.clear': 'Tanlovni bekor qilish',
+  'delivery.dispatch.bulk.result': 'Tayinlandi: {applied}, bajarilmadi: {failed}',
 
   'delivery.zones.title': 'Yetkazib berish zonalari',
   'delivery.zones.loading': 'Zonalar yuklanmoqda',

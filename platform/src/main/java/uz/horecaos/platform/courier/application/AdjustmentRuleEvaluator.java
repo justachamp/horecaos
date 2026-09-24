@@ -54,14 +54,12 @@ import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.
  * where {@code creditShiftEarning} already runs) and from {@link
  * CourierShiftService#approveHours}, so a {@code SHIFT}-window rule fires the
  * same moment paid seconds become final. {@link #evaluatePeriodClose} is
- * built and tested the same way but is <em>not</em> called from {@link
- * CourierSettlementService#close} this wave — that close method reads {@code
- * entriesOf}/{@code earningsOf}/{@code computeTotals} and then hashes the
- * result, and a rule posted after that read would be silently excluded from
- * the very statement it was supposed to affect. Wiring it correctly means
- * moving the evaluation before that read, which touches the statement-hash
- * sequencing this wave chose not to disturb; ADR 0108 records the exact call
- * site as an open input rather than leaving it unmentioned.
+ * called from {@link CourierSettlementService#close} (gap map row 3.4c) —
+ * <em>before</em> that method's own {@code entriesOf}/{@code computeTotals}
+ * read, which is what keeps a rule posted here from being silently excluded
+ * from the very statement it was supposed to affect; that close method's own
+ * doc names the earnings-ordered heuristic it uses to attribute the
+ * evaluation to a branch, since a settlement period carries none of its own.
  *
  * <p>Every posted entry is idempotent on {@code "rule:" + reasonCode + ":" +
  * windowId} (the shift id, or the period id), so a shift closed twice by a
@@ -109,10 +107,10 @@ public class AdjustmentRuleEvaluator {
 
     /**
      * Every {@code SETTLEMENT_PERIOD}-window, {@code SETTLEMENT_PERIOD_CLOSE}-trigger
-     * rule this period's outcome may satisfy.
-     *
-     * <p>Built and tested, and deliberately not called from {@code
-     * CourierSettlementService.close} this wave — see this class's own doc.
+     * rule this period's outcome may satisfy. Called from {@link
+     * CourierSettlementService#close} — see this class's own doc for the
+     * sequencing that makes a posted rule land inside the statement it
+     * closes.
      */
     @Transactional
     public List<CourierAdjustmentService.Outcome> evaluatePeriodClose(
