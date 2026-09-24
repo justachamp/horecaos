@@ -1368,6 +1368,61 @@ class OrderAmendmentAndOutcomeTests {
                 .isEqualTo(AmendmentStatus.PRICED);
     }
 
+    /**
+     * Before this test, every {@code changeDeliveryAddress(...)} call in this
+     * class tripped {@code repriceFor}'s pickup-order guard or (the two
+     * tests above) produced a synthetic decrease -- never reached a real
+     * ADR 0037 zone re-quote that <em>raises</em> the total, never asserted
+     * {@code fiscal_correction_required}, and never applied one at all.
+     */
+    @Test
+    @DisplayName("CHANGE_DELIVERY_ADDRESS re-quotes the real ADR 0037 zone fee, marks the revision for "
+            + "fiscal correction, and needs the customer's agreement to apply")
+    void changeDeliveryAddressRepricesAndAppliesWithAFiscalCorrectionMarker() {
+        seedDeliveryZone(30_000L);
+        // A base total with no delivery fee baked in at all, so moving into
+        // the zone is a genuine increase, not the decrease the two tests
+        // above already cover.
+        UUID orderId = seedDeliveryOrderForReprice("idem-address-increase-1", 100_000L);
+        long before = orderStore.find(TENANT, orderId).orElseThrow().totalMinor();
+
+        var proposed = proposeOnly(orderId, "k-address-increase-1", changeAddressIntoZoneCommand());
+        assertThat(proposed.amendment().deltaTotalMinor()).isPositive();
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().totalMinor())
+                .as("PRICED is not APPLIED -- nothing about the order has moved yet")
+                .isEqualTo(before);
+
+        int amendmentVersion = amendmentStore
+                .find(TENANT, proposed.amendment().id())
+                .orElseThrow()
+                .version();
+        int orderVersion = orderStore.find(TENANT, orderId).orElseThrow().version();
+        // apply()'s own guard: an increase needs the customer's recorded
+        // agreement first, exactly like every other repricing command.
+        assertThatThrownBy(() -> tx(() -> amendments.apply(
+                        TENANT, orderId, proposed.amendment().id(), orderVersion, "USER", "sharif", "reason", null)))
+                .isInstanceOf(OrderAmendmentService.CustomerConfirmationRequiredException.class);
+
+        tx(() -> amendments.attestConfirmation(TENANT, proposed.amendment().id(), amendmentVersion, "sharif", "PHONE"));
+        var applied = tx(() -> amendments.apply(
+                TENANT, orderId, proposed.amendment().id(), orderVersion, "USER", "sharif", "reason", null));
+        assertThat(applied.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+
+        var order = orderStore.find(TENANT, orderId).orElseThrow();
+        assertThat(order.totalMinor()).isGreaterThan(before);
+
+        var revisions = orderStore.revisions(TENANT, orderId);
+        assertThat(revisions).hasSize(2);
+        var appliedRevision = revisions.stream()
+                .filter(row -> row.revision() == 2)
+                .findFirst()
+                .orElseThrow();
+        assertThat(appliedRevision.fiscalCorrectionRequired())
+                .as("a repriced revision always needs a fiscal correction (ADR 0039)")
+                .isTrue();
+        assertThat(appliedRevision.deltaTotalMinor()).isPositive();
+    }
+
     @Test
     @DisplayName("ADD_LINES reprices, reserves the added stock, and needs the customer's agreement first")
     void addLinesRepricesReservesAndNeedsConfirmation() {
