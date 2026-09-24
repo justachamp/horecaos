@@ -433,15 +433,16 @@ public class ReportingController {
             @RequestParam(required = false) String afterProductName,
             @RequestParam(required = false) UUID afterVariantId) {
 
+        JdbcReportingStore.VariantSalesSort parsedSort = variantSalesSort(sort);
         var result = queries.variantSales(
                 tenantId,
                 from,
                 to,
                 orEmpty(locationId),
                 orEmpty(fulfilmentType),
-                variantSalesSort(sort),
+                parsedSort,
                 clampVariantLimit(limit),
-                variantSalesCursor(afterQuantity, afterRevenueSom, afterProductName, afterVariantId));
+                variantSalesCursor(parsedSort, afterQuantity, afterRevenueSom, afterProductName, afterVariantId));
         return ResponseEntity.ok(new VariantSalesListResponse(
                 result.rows().stream().map(VariantSalesRowResponse::of).toList(),
                 result.maybeMore(),
@@ -457,8 +458,17 @@ public class ReportingController {
         }
     }
 
-    /** wave 10 w5-reports-exports (7.7): the previous page's last row, in whichever field the active sort names -- absent means no cursor (the first page). */
+    /**
+     * wave 10 w5-reports-exports (7.7): the previous page's last row, in whichever field the
+     * active sort names -- absent means no cursor (the first page).
+     *
+     * <p>The field matching {@code sort} is required, not merely accepted: the store's {@code
+     * HAVING} tuple comparison binds it directly, and a null there makes every row's comparison
+     * evaluate to SQL {@code NULL} rather than true or false, which silently returns an empty
+     * page instead of failing the malformed request loudly.
+     */
     private static JdbcReportingStore.@Nullable VariantSalesCursor variantSalesCursor(
+            JdbcReportingStore.VariantSalesSort sort,
             @Nullable Integer afterQuantity,
             @Nullable Long afterRevenueSom,
             @Nullable String afterProductName,
@@ -471,6 +481,18 @@ public class ReportingController {
                     ErrorCode.VALIDATION_FAILED,
                     "afterVariantId is required alongside any after* cursor field",
                     Map.of());
+        }
+        boolean sortFieldPresent =
+                switch (sort) {
+                    case QUANTITY_DESC -> afterQuantity != null;
+                    case REVENUE_DESC -> afterRevenueSom != null;
+                    case NAME_ASC -> afterProductName != null;
+                };
+        if (!sortFieldPresent) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "the after* field matching sort=%s is required".formatted(sort),
+                    Map.of("sort", sort.name()));
         }
         return new JdbcReportingStore.VariantSalesCursor(
                 afterQuantity, afterRevenueSom, afterProductName, afterVariantId);
