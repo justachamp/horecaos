@@ -250,10 +250,6 @@
         <p class="q-body-sm error" role="alert">
           {{ i18n.t('settings.integrations.branches.bindDialog.noneEligible') }}
         </p>
-      } @else if (bindableInstallations().length < installations().length) {
-        <p class="q-body-sm lead">
-          {{ i18n.t('settings.integrations.branches.bindDialog.someExcluded') }}
-        </p>
       }
 
       <label class="q-caption field-label" for="bind-to-branch-installation">
@@ -263,7 +259,7 @@
         id="bind-to-branch-installation"
         class="q-body field"
         [value]="bindToBranchInstallationId()"
-        (change)="bindToBranchInstallationId.set($any($event.target).value)"
+        (change)="onBindToBranchInstallationChange($any($event.target).value)"
         [disabled]="bindToBranchSubmitting() || bindableInstallations().length === 0"
       >
         @for (installation of bindableInstallations(); track installation.id) {
@@ -272,6 +268,35 @@
           </option>
         }
       </select>
+
+      @if (bindToBranchNeedsCapabilityPicker()) {
+        <fieldset class="capability-picker">
+          <legend class="q-caption field-label">
+            {{ i18n.t('settings.integrations.branches.bindDialog.capabilities') }}
+          </legend>
+          @if (bindToBranchCatalogueLoading()) {
+            <p class="q-body-sm lead">
+              {{ i18n.t('settings.integrations.branches.bindDialog.capabilitiesLoading') }}
+            </p>
+          } @else if (bindToBranchCatalogue().length === 0) {
+            <p class="q-body-sm error" role="alert">
+              {{ i18n.t('settings.integrations.branches.bindDialog.capabilitiesNone') }}
+            </p>
+          } @else {
+            @for (capability of bindToBranchCatalogue(); track capability) {
+              <label class="q-body-sm capability-option">
+                <input
+                  type="checkbox"
+                  [checked]="selectedCapabilities().has(capability)"
+                  [disabled]="bindToBranchSubmitting()"
+                  (change)="toggleBindToBranchCapability(capability, $any($event.target).checked)"
+                />
+                {{ capability }}
+              </label>
+            }
+          }
+        </fieldset>
+      }
 
       <label class="q-caption field-label" for="bind-to-branch-location">
         {{ i18n.t('settings.integrations.branches.bindDialog.branch') }}

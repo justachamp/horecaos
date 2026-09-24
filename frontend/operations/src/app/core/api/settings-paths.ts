@@ -483,6 +483,20 @@ export const settingsPaths = {
   },
 
   /**
+   * `OperationsProviderInstallationController.capabilityCatalogue` — gap-map
+   * row 10.8a's fix path: the vendor ceiling this installation's own
+   * provider declares, before any reconciliation has run. Backs the
+   * branch-binding dialog's own capability-assignment picker, which
+   * defaults to every capability this read returns.
+   */
+  integrationInstallationCapabilityCatalogue(
+    scope: LocationScope,
+    installationId: string,
+  ): string {
+    return `${this.integrationInstallations(scope)}/${enc(installationId)}/capability-catalogue`;
+  },
+
+  /**
    * `OperationsProviderInstallationController.settings`/`updateSettings` —
    * ADR 0106, gap-map row 10.8a. Today's one field is Clopos's own
    * order-acceptance toggle (Q7); refused for any other provider type, so

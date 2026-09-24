@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 
 import { TPipe } from '../../core/i18n/t.pipe';
 import { Combobox, ComboboxOption } from './combobox';
@@ -84,6 +92,15 @@ export class MappingPane {
   /** True while a link/unlink/bulk-auto-match request is in flight. */
   readonly busy = input<boolean>(false);
   readonly errorMessage = input<string | null>(null);
+  /**
+   * Gap-map row 1.2i's fix path: a HorecaOS id to pre-select the moment it
+   * appears among {@link horecaosCandidates} — a console deep link from a
+   * `LINE_UNMAPPED`/`MODIFIER_UNMAPPED` refusal lands here with the offending
+   * item already chosen, rather than an operator hunting a dual list by hand.
+   * Harmless when it never appears (a stale link, or the item was mapped
+   * since): the pane simply never auto-selects anything.
+   */
+  readonly focusHorecaosId = input<string | null>(null);
 
   readonly link = output<MappingPaneLinkIntent>();
   readonly unlink = output<MappingPaneRow>();
@@ -97,6 +114,35 @@ export class MappingPane {
   protected readonly rightQuery = signal('');
   protected readonly selectedLeft = signal<ComboboxOption | null>(null);
   protected readonly selectedRight = signal<ComboboxOption | null>(null);
+
+  /** Which {@link focusHorecaosId} value has already been auto-selected, so a later manual deselect is never overridden. */
+  private appliedFocusHorecaosId: string | null = null;
+
+  constructor() {
+    // Auto-selects the left (HorecaOS) side the moment focusHorecaosId names
+    // a candidate that has actually loaded -- horecaosCandidates() arrives
+    // asynchronously from the caller, so this cannot be done once at
+    // construction. allowSignalWrites: true for the same reason
+    // connect-provider-panel.ts's own constructor effects need it: a
+    // reactive read driving a signal write outside a template binding.
+    effect(
+      () => {
+        const focusId = this.focusHorecaosId();
+        if (focusId === null || focusId === this.appliedFocusHorecaosId) {
+          return;
+        }
+        const candidate = this.horecaosCandidates().find((entry) => entry.id === focusId);
+        if (candidate === undefined) {
+          return;
+        }
+        this.appliedFocusHorecaosId = focusId;
+        const label = candidate.name ?? candidate.id;
+        this.selectedLeft.set({ id: candidate.id, label });
+        this.leftQuery.set(label);
+      },
+      { allowSignalWrites: true },
+    );
+  }
 
   protected readonly leftOptions = computed<readonly ComboboxOption[]>(() =>
     filterCandidates(this.horecaosCandidates(), this.leftQuery()).map((candidate) => ({

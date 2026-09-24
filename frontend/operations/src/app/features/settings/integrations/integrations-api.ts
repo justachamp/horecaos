@@ -148,6 +148,24 @@ export class IntegrationsApi {
     );
   }
 
+  /**
+   * ADR 0106, gap-map row 10.8a: the vendor ceiling one installation's own
+   * provider declares — empty for a category with no wired catalogue or no
+   * adapter for this installation's provider type, never a guess. Backs the
+   * "Bind to a branch" dialog's own capability-assignment picker.
+   */
+  async capabilityCatalogue(
+    scope: LocationScope,
+    installationId: string,
+  ): Promise<CapabilityCatalogueView> {
+    const result = await firstValueFrom(
+      this.api.get<CapabilityCatalogueView>(
+        settingsPaths.integrationInstallationCapabilityCatalogue(scope, installationId),
+      ),
+    );
+    return result.value;
+  }
+
   /** Refused server-side for any installation whose `providerType` is not `clopos`. */
   async getInstallationSettings(
     scope: LocationScope,
@@ -596,6 +614,15 @@ export interface EffectiveBindingView {
   readonly bindingId: string;
   /** True when bound directly to this branch; false when inherited from the brand's own default. */
   readonly locationScoped: boolean;
+}
+
+/** Mirrors `ProviderInstallationController.CapabilityCatalogueView` (gap-map row 10.8a). */
+export interface CapabilityCatalogueView {
+  readonly installationId: string;
+  readonly category: string;
+  readonly providerType: string;
+  /** Empty when this build has no catalogue for the category, or no adapter for the provider type — never a loading state. */
+  readonly capabilities: readonly string[];
 }
 
 /** Mirrors ProviderCapabilityReconciliationService.Reconciliation. */

@@ -6,9 +6,21 @@ import { command } from '../../core/api/idempotency';
 import { CursorState, Page } from '../../core/api/page';
 import { TenantScope, posPaths } from '../../core/api/pos-paths';
 
-/** The six pairings the mapping pane offers — `MappingEntityType`. */
+/**
+ * The pairings the mapping pane offers — `MappingEntityType`. `VARIANT` and
+ * `MODIFIER` are gap-map row 1.2i's fix path: the exact granularity a POS
+ * export's own `LINE_UNMAPPED`/`MODIFIER_UNMAPPED` refusal names, one level
+ * finer than `PRODUCT` (the sync engine's `VARIANT_PARENT`).
+ */
 export type MappingEntityType =
-  'PRODUCT' | 'PAYMENT_TYPE' | 'DISCOUNT' | 'COURIER' | 'CANCELLATION_REASON' | 'CHANNEL_POS_CODE';
+  | 'PRODUCT'
+  | 'PAYMENT_TYPE'
+  | 'DISCOUNT'
+  | 'COURIER'
+  | 'CANCELLATION_REASON'
+  | 'CHANNEL_POS_CODE'
+  | 'VARIANT'
+  | 'MODIFIER';
 
 /** `provider_entity_mappings.status`. */
 export type MappingStatus = 'PROPOSED' | 'ACTIVE' | 'CONFLICTED' | 'RETIRED';

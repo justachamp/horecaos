@@ -20,7 +20,7 @@ import { TPipe } from '../../core/i18n/t.pipe';
 import { ActorChip } from '../../shared/ui/actor-chip';
 import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
 import { LocalizedFieldGroup } from '../../shared/ui/localized-field-group';
-import { MediaUploader } from '../../shared/ui/media-uploader';
+import { MediaUploader, mediaUploaderRejectionMessageKey } from '../../shared/ui/media-uploader';
 import { ScheduleGrid } from '../../shared/ui/schedule-grid';
 import { describeApiError } from '../orders/order-errors';
 import { ActivityLogApi, AuditEventView } from '../staff/activity-log-api';
@@ -1052,11 +1052,7 @@ export class ProductEditorPage implements OnInit {
 
   /** `q-media-uploader` rejected the file client-side — before any network call. */
   protected onPhotoRejected(reason: string): void {
-    this.saveNotice.set(
-      this.i18n.t(
-        reason === 'tooLarge' ? 'ui.mediaUploader.tooLarge' : 'ui.mediaUploader.unsupportedType',
-      ),
-    );
+    this.saveNotice.set(this.i18n.t(mediaUploaderRejectionMessageKey(reason)));
   }
 
   /**

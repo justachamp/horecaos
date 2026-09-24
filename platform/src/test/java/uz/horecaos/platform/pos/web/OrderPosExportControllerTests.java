@@ -88,6 +88,7 @@ class OrderPosExportControllerTests {
     private OrderPosExportController controller;
     private PosOrderExportService exportService;
     private JdbcPosExportStore exportStore;
+    private StubProviderEntityMappingLookup mappingLookup;
 
     @BeforeAll
     static void startDatabase() {
@@ -119,10 +120,11 @@ class OrderPosExportControllerTests {
         exportStore = new JdbcPosExportStore(jdbc);
         var json = JsonMapper.builder().build();
         TransactionTemplate unitOfWork = new TransactionTemplate(new DataSourceTransactionManager(db.dataSource()));
+        mappingLookup = new StubProviderEntityMappingLookup();
         exportService = new PosOrderExportService(
                 new PosAdapterRegistry(List.of(adapter)),
                 installations,
-                new StubProviderEntityMappingLookup(),
+                mappingLookup,
                 new JdbcPosBindingConfiguration(jdbc, json),
                 exportStore,
                 new JdbcPosCapabilityStore(jdbc, json),
@@ -259,6 +261,64 @@ class OrderPosExportControllerTests {
         var export = Objects.requireNonNull(response.export());
         assertThat(export.state()).isEqualTo("REJECTED");
         assertThat(export.lastErrorCode()).isEqualTo("MODIFIER_UNMAPPED");
+    }
+
+    @Test
+    @DisplayName(
+            "a LINE_UNMAPPED refusal's read carries the live-unmapped variant id, for the console's deep link into the mapping screen (row 1.2i)")
+    void readCarriesTheUnmappedVariantForTheDeepLink() {
+        UUID orderId = insertConfirmedOrder("A-3012");
+        mappingLookup.mapped = false;
+        controller.push(TENANT, orderId, new OrderPosExportController.PushRequest("Operator retry"));
+
+        var response =
+                Objects.requireNonNull(controller.forOrder(TENANT, orderId).getBody());
+
+        var export = Objects.requireNonNull(response.export());
+        assertThat(export.lastErrorCode()).isEqualTo("LINE_UNMAPPED");
+        assertThat(export.unmappedEntityType()).isEqualTo("VARIANT");
+        assertThat(export.unmappedHorecaosEntityId()).isEqualTo(VARIANT);
+    }
+
+    @Test
+    @DisplayName(
+            "an adapter-reported LINE_UNMAPPED carries no deep-link target once the mapping resolves again live (row 1.2i)")
+    void noDeepLinkTargetOnceTheMappingHasSinceBeenFixed() {
+        UUID orderId = insertConfirmedOrder("A-3013");
+        // Simulates the till itself refusing with LINE_UNMAPPED even though
+        // this platform's own mapping resolves -- readsAFailedExportsErrorHonestly's
+        // own scenario. The live re-check must not invent a target from a
+        // stale attempt when every line and modifier resolves right now.
+        adapter.failNextExportWith(ProviderOutcome.rejected("LINE_UNMAPPED", "no provider mapping"));
+        controller.push(TENANT, orderId, new OrderPosExportController.PushRequest("Operator retry"));
+
+        var response =
+                Objects.requireNonNull(controller.forOrder(TENANT, orderId).getBody());
+
+        var export = Objects.requireNonNull(response.export());
+        assertThat(export.lastErrorCode()).isEqualTo("LINE_UNMAPPED");
+        assertThat(export.unmappedEntityType()).isNull();
+        assertThat(export.unmappedHorecaosEntityId()).isNull();
+    }
+
+    @Test
+    @DisplayName(
+            "a settled, non-mapping error carries no deep-link target regardless of the live mapping state (row 1.2i)")
+    void noDeepLinkTargetForAnUnrelatedErrorCode() {
+        UUID orderId = insertConfirmedOrder("A-3014");
+        // mappingLookup stays mapped=true: an unrelated error code must never
+        // trigger the live re-check at all, so this proves unmappedEntityFor's
+        // own gate rather than a coincidence of the mapping already resolving.
+        adapter.failNextExportWith(ProviderOutcome.rejected("CLOPOS_REFUSED", "till refused"));
+        controller.push(TENANT, orderId, new OrderPosExportController.PushRequest("Operator retry"));
+
+        var response =
+                Objects.requireNonNull(controller.forOrder(TENANT, orderId).getBody());
+
+        var export = Objects.requireNonNull(response.export());
+        assertThat(export.lastErrorCode()).isEqualTo("CLOPOS_REFUSED");
+        assertThat(export.unmappedEntityType()).isNull();
+        assertThat(export.unmappedHorecaosEntityId()).isNull();
     }
 
     @Test
@@ -700,9 +760,12 @@ class OrderPosExportControllerTests {
 
     private static final class StubProviderEntityMappingLookup implements ProviderEntityMappingLookup {
 
+        /** Toggled false to simulate {@code VARIANT}'s own mapping never having been made. */
+        private boolean mapped = true;
+
         @Override
         public Optional<String> externalIdFor(UUID bindingId, String entityType, UUID horecaosEntityId) {
-            return Optional.of("ext-" + horecaosEntityId);
+            return mapped ? Optional.of("ext-" + horecaosEntityId) : Optional.empty();
         }
 
         @Override

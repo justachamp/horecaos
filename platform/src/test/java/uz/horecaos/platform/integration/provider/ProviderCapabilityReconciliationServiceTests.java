@@ -174,6 +174,32 @@ class ProviderCapabilityReconciliationServiceTests {
                 .isEqualTo("The configured secret reference could not be resolved");
     }
 
+    /**
+     * Gap-map row 10.8a's fix path: {@link
+     * ProviderCapabilityReconciliationService#declaredCapabilities} is the
+     * branch-binding dialog's own capability-assignment picker's data source,
+     * and unlike {@link #reconcile} it never refuses POS -- a catalogue for
+     * that category is exactly what closes the row's own gap.
+     */
+    @Test
+    void declaredCapabilitiesReadsTheMatchingCategorysCatalogue() {
+        assertThat(reconciliation.declaredCapabilities(ProviderCategory.NOTIFICATION, "GENERIC_SMS"))
+                .containsExactly("SEND_SMS");
+    }
+
+    @Test
+    void declaredCapabilitiesIsEmptyForAnUnknownProviderTypeInAWiredCategory() {
+        assertThat(reconciliation.declaredCapabilities(ProviderCategory.NOTIFICATION, "SOME_OTHER_SMS_VENDOR"))
+                .isEmpty();
+    }
+
+    @Test
+    void declaredCapabilitiesIsEmptyForACategoryWithNoCatalogueAtAllRatherThanThrowing() {
+        assertThat(reconciliation.declaredCapabilities(ProviderCategory.POS, "clopos"))
+                .as("this fixture wires no POS catalogue -- never a refusal the way reconcile() itself is for POS")
+                .isEmpty();
+    }
+
     private UUID installation() {
         jdbc.sql("""
                 INSERT INTO integration.provider_environments

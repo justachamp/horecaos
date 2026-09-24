@@ -572,6 +572,7 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.posExport.action.push.submit': 'Отправить',
   'orders.detail.posExport.action.push.submitting': 'Отправка…',
   'orders.detail.posExport.action.push.notSendable': 'Нельзя отправить повторно в этом состоянии',
+  'orders.detail.posExport.action.fixMapping': 'Исправить сопоставление',
 
   'orders.severity.blocked': 'требуется вмешательство',
   'orders.severity.approvalDeadline': 'подтвердить за {mmss}',
@@ -868,10 +869,12 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.branches.bindDialog.lead':
     'Привязка на уровне филиала переопределяет значение бренда по умолчанию только для этого филиала.',
   'settings.integrations.branches.bindDialog.installation': 'Провайдер',
-  'settings.integrations.branches.bindDialog.someExcluded':
-    'POS-системы и службы доставки здесь не показаны — им нужны отдельные возможности, которые это окно пока не может назначить.',
   'settings.integrations.branches.bindDialog.noneEligible':
-    'Ни один из ваших провайдеров пока нельзя привязать через это окно. POS-системам и службам доставки нужны отдельные возможности, которые это окно пока не может назначить.',
+    'Сначала подключите провайдера — пока привязывать нечего.',
+  'settings.integrations.branches.bindDialog.capabilities': 'Возможности для привязки',
+  'settings.integrations.branches.bindDialog.capabilitiesLoading': 'Загрузка возможностей провайдера…',
+  'settings.integrations.branches.bindDialog.capabilitiesNone':
+    'Этот провайдер не объявляет ни одной возможности в этой сборке, поэтому его нельзя привязать через это окно.',
   'settings.integrations.branches.bindDialog.branch': 'Филиал',
   'settings.integrations.branches.bindDialog.cancel': 'Отмена',
   'settings.integrations.branches.bindDialog.submit': 'Привязать',
@@ -5552,6 +5555,7 @@ export const messagesRu: MessageCatalogue = {
   'ui.mediaUploader.browse': 'Выбрать файл',
   'ui.mediaUploader.tooLarge': 'Файл больше допустимого размера',
   'ui.mediaUploader.unsupportedType': 'Этот тип файла здесь не принимается',
+  'ui.mediaUploader.videoNotSupported': 'Видео пока не поддерживается — выберите, пожалуйста, фото',
   'ui.mediaUploader.ratio': 'Соотношение сторон',
   'ui.mediaUploader.zoom': 'Масштаб',
   'ui.mediaUploader.confirm': 'Применить кадрирование',

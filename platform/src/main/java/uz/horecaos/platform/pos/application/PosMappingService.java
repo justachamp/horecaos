@@ -248,6 +248,12 @@ public class PosMappingService {
                 notSourced(
                         "No provider in this build discovers a channel/category code list; add the mapping by typing "
                                 + "the provider's own code.");
+            case VARIANT ->
+                notSourced("No provider in this build discovers a per-variant list at this granularity; add the "
+                        + "mapping by typing the provider's own product code.");
+            case MODIFIER ->
+                notSourced("No provider in this build discovers a modifier list; add the mapping by typing the "
+                        + "provider's own modifier code.");
         };
     }
 
@@ -292,6 +298,8 @@ public class PosMappingService {
             case COURIER -> mappings.unmappedCouriers(tenantId, binding.bindingId());
             case CANCELLATION_REASON -> mappings.unmappedCancellationReasons(tenantId, binding.bindingId());
             case CHANNEL_POS_CODE -> mappings.unmappedSalesChannels(tenantId, binding.bindingId());
+            case VARIANT -> mappings.unmappedVariants(tenantId, binding.bindingId(), binding.brandId(), "uz-UZ");
+            case MODIFIER -> mappings.unmappedModifierOptions(tenantId, binding.bindingId(), binding.brandId());
         };
     }
 

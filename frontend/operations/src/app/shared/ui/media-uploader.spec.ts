@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { MediaUploader } from './media-uploader';
+import { MediaUploader, mediaUploaderRejectionMessageKey } from './media-uploader';
 
 function render(): ReturnType<typeof TestBed.createComponent<MediaUploader>> {
   const fixture = TestBed.createComponent(MediaUploader);
@@ -72,20 +72,53 @@ describe('MediaUploader', () => {
     expect(host.querySelectorAll('[data-testid^="uploader-ratio-"]').length).toBe(4);
   });
 
-  it('passes a video straight through as selected, with no crop step', () => {
+  it('refuses a video client-side rather than passing it through to an image-only pipeline (row X.12)', () => {
     const fixture = render();
-    let emitted: File | undefined;
-    fixture.componentInstance.selected.subscribe((f) => (emitted = f));
+    let reason: string | undefined;
+    let selectedEmitted = false;
+    fixture.componentInstance.rejected.subscribe((r) => (reason = r));
+    fixture.componentInstance.selected.subscribe(() => (selectedEmitted = true));
     const video = new File(['x'], 'a.mp4', { type: 'video/mp4' });
 
     fixture.componentInstance['onFileInput'](fileList([video]));
     fixture.detectChanges();
 
-    expect(emitted?.name).toBe('a.mp4');
+    expect(reason).toBe('videoNotSupported');
+    expect(selectedEmitted).toBe(false);
     expect(fixture.componentInstance['cropping']()).toBe(false);
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('[data-testid="uploader-crop-box"]'),
     ).toBeNull();
+  });
+
+  it('still lists video in the file picker\'s own accept attribute, so a video is selectable and this refusal is what an operator sees (row X.12)', () => {
+    const fixture = render();
+
+    expect(fileInput(fixture).accept).toContain('video/mp4');
+  });
+
+  it('refuses a webm video the same way as mp4', () => {
+    const fixture = render();
+    let reason: string | undefined;
+    fixture.componentInstance.rejected.subscribe((r) => (reason = r));
+    const video = new File(['x'], 'a.webm', { type: 'video/webm' });
+
+    fixture.componentInstance['onFileInput'](fileList([video]));
+
+    expect(reason).toBe('videoNotSupported');
+  });
+
+  it('still passes a non-image, non-video type through unmodified when a caller widens accept() beyond the default', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('accept', 'image/jpeg,application/pdf');
+    fixture.detectChanges();
+    let emitted: File | undefined;
+    fixture.componentInstance.selected.subscribe((f) => (emitted = f));
+    const pdf = new File(['x'], 'a.pdf', { type: 'application/pdf' });
+
+    fixture.componentInstance['onFileInput'](fileList([pdf]));
+
+    expect(emitted?.name).toBe('a.pdf');
   });
 
   it('cancel leaves crop mode without emitting a cropped file', () => {
@@ -135,5 +168,23 @@ describe('MediaUploader', () => {
 
     const bar = (fixture.nativeElement as HTMLElement).querySelector('.uploader__progress-bar');
     expect(bar?.className).toContain('uploader__progress-bar--indeterminate');
+  });
+});
+
+describe('mediaUploaderRejectionMessageKey (row X.12)', () => {
+  it('maps videoNotSupported to its own clear sentence, not the generic unsupported-type one', () => {
+    expect(mediaUploaderRejectionMessageKey('videoNotSupported')).toBe(
+      'ui.mediaUploader.videoNotSupported',
+    );
+  });
+
+  it('maps tooLarge and falls back to unsupportedType for anything else', () => {
+    expect(mediaUploaderRejectionMessageKey('tooLarge')).toBe('ui.mediaUploader.tooLarge');
+    expect(mediaUploaderRejectionMessageKey('unsupportedType')).toBe(
+      'ui.mediaUploader.unsupportedType',
+    );
+    expect(mediaUploaderRejectionMessageKey('something-unrecognized')).toBe(
+      'ui.mediaUploader.unsupportedType',
+    );
   });
 });

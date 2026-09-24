@@ -7,6 +7,7 @@ import {
   input,
   signal,
 } from '@angular/core';
+import { Router } from '@angular/router';
 import { Observable, firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
@@ -233,6 +234,7 @@ export class OrderDetailPane {
   private readonly posExportApi = inject(OrderPosExportApi);
   private readonly newOrderApi = inject(NewOrderApi);
   private readonly channelsApi = inject(SalesChannelsApi);
+  private readonly router = inject(Router);
   private readonly i18n = inject(I18n);
 
   /** Bound from the route parameter by `withComponentInputBinding()`. */
@@ -692,6 +694,37 @@ export class OrderDetailPane {
   protected posExportShowsReassurance(): boolean {
     const state = this.posExport()?.export?.state;
     return state !== undefined && !posExportReachedTheTill(state);
+  }
+
+  /**
+   * Gap-map row 1.2i's fix path: true exactly when the read named a
+   * currently-unmapped variant or modifier to pre-select on the ADR 0012
+   * mapping screen -- never merely because {@link
+   * OrderPosExportApi.PosExportView.lastErrorCode} names a mapping gap,
+   * since the live re-check behind it may have found nothing left unmapped.
+   */
+  protected posExportHasMappingDeepLink(): boolean {
+    const exportView = this.posExport()?.export;
+    return (
+      exportView !== undefined &&
+      exportView !== null &&
+      exportView.unmappedEntityType !== null &&
+      exportView.unmappedHorecaosEntityId !== null
+    );
+  }
+
+  /** Opens the ADR 0012 mapping screen with the offending item already chosen -- see `MappingPane.focusHorecaosId`. */
+  protected openPosExportMapping(): void {
+    const exportView = this.posExport()?.export;
+    if (!exportView || exportView.unmappedEntityType === null || exportView.unmappedHorecaosEntityId === null) {
+      return;
+    }
+    void this.router.navigate(['/catalog/import'], {
+      queryParams: {
+        entityType: exportView.unmappedEntityType,
+        focusHorecaosId: exportView.unmappedHorecaosEntityId,
+      },
+    });
   }
 
   protected openPosExportPush(): void {

@@ -851,7 +851,14 @@ export class InstallationDetailPanel {
         return this.i18n.t('settings.integrations.detail.mapping.entityType.CANCELLATION_REASON');
       case 'CHANNEL_POS_CODE':
         return this.i18n.t('settings.integrations.detail.mapping.entityType.CHANNEL_POS_CODE');
+      // Never actually reached from this screen -- MAPPING_ENTITY_TYPES above
+      // lists neither, the same as its own pre-existing PRODUCT case (owned
+      // by catalog-import-page.ts's «Соответствия» tab, gap-map rows
+      // 4.5a/10.8b). VARIANT/MODIFIER are that same screen's own row 1.2i
+      // fix-path pairings; kept exhaustive here only so this switch compiles.
       case 'PRODUCT':
+      case 'VARIANT':
+      case 'MODIFIER':
         return entityType;
     }
   }

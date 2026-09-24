@@ -406,6 +406,73 @@ class ProviderInstallationControllerTests {
                 .isEmpty();
     }
 
+    /**
+     * Gap-map row 10.8a's fix path, HTTP-level: the branch-binding dialog's
+     * capability-assignment picker reads this to default to "every
+     * capability the installation's provider declares" for a POS
+     * installation -- built against a fresh controller wired with a real
+     * {@link uz.horecaos.platform.integration.provider.JdbcProviderInstallationLookup}
+     * and a real {@link uz.horecaos.platform.pos.infrastructure.PosProviderCapabilityCatalog}
+     * rather than the class's own shared {@code controller}, whose {@link
+     * #UNUSED_INSTALLATIONS} throws on the installation lookup this endpoint
+     * needs.
+     */
+    @Test
+    void capabilityCatalogueReturnsThePosAdaptersDeclaredCeilingSorted() {
+        UUID installation = fakePosInstallation("fake-pos-catalogue-test");
+        ProviderInstallationController withRealInstallationLookup = new ProviderInstallationController(
+                jdbc,
+                fact -> {},
+                () -> new AuthenticatedActor("operator", Set.of(), Map.of()),
+                CLOCK,
+                new ProviderCapabilityReconciliationService(
+                        jdbc,
+                        List.of(new uz.horecaos.platform.pos.infrastructure.PosProviderCapabilityCatalog(
+                                List.of(new uz.horecaos.platform.pos.FakePosAdapter()))),
+                        UNUSED_SECRETS,
+                        new ObjectMapper(),
+                        CLOCK),
+                new uz.horecaos.platform.integration.provider.JdbcProviderInstallationLookup(
+                        jdbc, CLOCK, new uz.horecaos.platform.integration.provider.JdbcProviderEnvironmentLookup(jdbc)),
+                UNUSED_SECRETS,
+                new TelegramBotApiClient(new ObjectMapper()),
+                new SecretIngressGateway(UNUSED_WRITER, "test"),
+                UNUSED_WEBHOOK_REGISTRATION);
+
+        var view = java.util.Objects.requireNonNull(withRealInstallationLookup
+                .capabilityCatalogue(TENANT, installation)
+                .getBody());
+
+        assertThat(view.category()).isEqualTo(uz.horecaos.platform.integration.api.provider.ProviderCategory.POS);
+        assertThat(view.providerType()).isEqualTo(uz.horecaos.platform.pos.FakePosAdapter.PROVIDER_TYPE);
+        assertThat(view.capabilities())
+                .as("every capability the fake adapter declares, before any reconciliation has run")
+                .containsExactlyInAnyOrderElementsOf(
+                        java.util.Arrays.stream(uz.horecaos.platform.pos.api.PosCapability.values())
+                                .map(uz.horecaos.platform.pos.api.PosCapability::code)
+                                .toList())
+                .isSorted();
+    }
+
+    @Test
+    void capabilityCatalogueIsA404ForAnUnknownInstallation() {
+        ProviderInstallationController withRealInstallationLookup = new ProviderInstallationController(
+                jdbc,
+                fact -> {},
+                () -> new AuthenticatedActor("operator", Set.of(), Map.of()),
+                CLOCK,
+                new ProviderCapabilityReconciliationService(jdbc, List.of(), UNUSED_SECRETS, new ObjectMapper(), CLOCK),
+                new uz.horecaos.platform.integration.provider.JdbcProviderInstallationLookup(
+                        jdbc, CLOCK, new uz.horecaos.platform.integration.provider.JdbcProviderEnvironmentLookup(jdbc)),
+                UNUSED_SECRETS,
+                new TelegramBotApiClient(new ObjectMapper()),
+                new SecretIngressGateway(UNUSED_WRITER, "test"),
+                UNUSED_WEBHOOK_REGISTRATION);
+
+        assertThatThrownBy(() -> withRealInstallationLookup.capabilityCatalogue(TENANT, UUID.randomUUID()))
+                .isInstanceOf(ApiException.class);
+    }
+
     private UUID installation(String code) {
         jdbc.sql("""
                 INSERT INTO integration.provider_environments
@@ -444,6 +511,37 @@ class ProviderInstallationControllerTests {
                 """)
                 .param("id", id)
                 .param("tenantId", TENANT)
+                .param("environment", code)
+                .update();
+        return id;
+    }
+
+    /**
+     * A POS installation of provider type {@link uz.horecaos.platform.pos.FakePosAdapter#PROVIDER_TYPE} --
+     * unlike {@link #cloposInstallation}, this one matches an adapter a test
+     * actually wires into {@link uz.horecaos.platform.pos.infrastructure.PosProviderCapabilityCatalog},
+     * so {@code capabilityCatalogue} has a real, non-empty declaration to find.
+     */
+    private UUID fakePosInstallation(String code) {
+        jdbc.sql("""
+                INSERT INTO integration.provider_environments
+                    (code, provider_category, provider_type, base_url, is_production, egress_allowlist)
+                VALUES (:code, 'POS', :providerType, 'https://fake-pos.example', false, 'fake-pos.example')
+                """)
+                .param("code", code)
+                .param("providerType", uz.horecaos.platform.pos.FakePosAdapter.PROVIDER_TYPE)
+                .update();
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO integration.installations
+                    (id, tenant_id, provider_category, provider_type, environment_code,
+                     display_name, status, secret_reference)
+                VALUES (:id, :tenantId, 'POS', :providerType, :environment,
+                        'Test fake POS', 'DRAFT', 'horecaos:test:provider_pos:tenant:fake')
+                """)
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("providerType", uz.horecaos.platform.pos.FakePosAdapter.PROVIDER_TYPE)
                 .param("environment", code)
                 .update();
         return id;
