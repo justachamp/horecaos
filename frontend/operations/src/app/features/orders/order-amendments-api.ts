@@ -312,9 +312,19 @@ export class OrderAmendmentsApi {
 
   /**
    * Records the customer's recorded agreement to an amendment that raised the
-   * total (§4.4). None of the five commands above ever needs this — all take
-   * `PRICED -> APPLIED` directly — but the path is real and this is its one
-   * caller today, ready for the first financial command that does.
+   * total, or — for a pure ADR 0027 approval-pending amendment with no
+   * increase — simply attempts the only apply path that exists (§4.4). None
+   * of the five original commands ever needed this — all take
+   * `PRICED -> APPLIED` directly — but the path was always real, and wave 10
+   * is its first real caller: `q-order-amendment-confirm-dialog`, for every
+   * repricing financial command (`ADD_LINES`, `CHANGE_LINE_QUANTITY`,
+   * `CHANGE_DELIVERY_ADDRESS`) and the history table's own RESOLVE action.
+   *
+   * Returns `AmendmentResponse`, not `void`: wave 10's endpoint also applies
+   * the amendment in the same call once attested (`OperationsOrderController
+   * .confirmAmendment`'s own doc), and the caller needs the result to reload
+   * against — this type was `Observable<void>` until wave 10 gave the
+   * endpoint its first real reader.
    */
   confirm(
     scope: LocationScope,
@@ -322,8 +332,8 @@ export class OrderAmendmentsApi {
     amendmentId: string,
     expectedVersion: number,
     channel: string,
-  ): Observable<void> {
-    return this.api.post<{ channel: string }, void>(
+  ): Observable<AmendmentResponse> {
+    return this.api.post<{ channel: string }, AmendmentResponse>(
       operationsPaths.orderAmendmentConfirmation(scope, orderId, amendmentId),
       command({ channel }),
       { expectedVersion },

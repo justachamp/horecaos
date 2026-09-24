@@ -7,6 +7,7 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
+import { SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
 import { DispatchApi, DispatchResponse } from '../delivery/dispatch-api';
 import { KitchenApi, KitchenEventsResponse } from '../kitchen/kitchen-api';
@@ -23,6 +24,7 @@ import {
   RevisionResponse,
 } from './order-detail';
 import { OrderHandoverApi } from './order-handover-api';
+import { NewOrderApi } from './new-order/new-order-api';
 import { OrderPosExportApi, OrderPosExportView, PosExportView } from './order-pos-export-api';
 import { RejectReasonOption } from './order-reject-reason-dialog';
 import { RejectReasonsApi } from './order-reject-reasons-api';
@@ -161,6 +163,8 @@ function configure(options: {
   couriersApi?: Partial<CouriersApi>;
   kitchenApi?: Partial<KitchenApi>;
   posExportApi?: Partial<OrderPosExportApi>;
+  newOrderApi?: Partial<NewOrderApi>;
+  channelsApi?: Partial<SalesChannelsApi>;
   scope?: typeof FAKE_SCOPE | null;
 }): void {
   TestBed.configureTestingModule({
@@ -226,6 +230,20 @@ function configure(options: {
         useValue: options.posExportApi ?? {
           forOrder: () => Promise.resolve({ posCapable: false, export: null }),
         },
+      },
+      // Wave 10 (rows 1.2c/2.1d): ADD_LINES's own search reuses NewOrderApi,
+      // CHANGE_PAYMENT_METHOD's own picker reuses SalesChannelsApi's matrix —
+      // every test not focused on either gets a harmless empty answer, the
+      // same rule OrderHandoverApi's own comment above states.
+      {
+        provide: NewOrderApi,
+        useValue: options.newOrderApi ?? {
+          searchItems: () => Promise.resolve({ items: [], nextCursor: null }),
+        },
+      },
+      {
+        provide: SalesChannelsApi,
+        useValue: options.channelsApi ?? { list: () => Promise.resolve([]) },
       },
     ],
   });
@@ -1565,7 +1583,7 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
     expect(host.querySelector('[data-testid="order-detail-cash-tendered-warning"]')).toBeNull();
   });
 
-  it('AMEND opens the same five-command menu the row’s own edit affordances use', async () => {
+  it('AMEND opens the eleven-command menu the row’s own edit affordances use', async () => {
     configure({
       get: apiGet({
         value: detail({
@@ -1586,9 +1604,11 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
     fixture.detectChanges();
 
     expect(host.querySelector('[data-testid="order-amend-menu"]')).not.toBeNull();
-    // The seven financial commands ADR 0039 declares and refuses by name never
-    // reach this menu — see `order-amend-menu.spec.ts` for the exhaustive check.
-    expect(host.querySelector('[data-testid="order-amend-menu-ADD_LINES"]')).toBeNull();
+    // Wave 10 (rows 1.2c/2.1d): six of the seven financial commands are built
+    // and do reach this menu now — only REMOVE_LINES, still refused by name,
+    // never does. See `order-amend-menu.spec.ts` for the exhaustive check.
+    expect(host.querySelector('[data-testid="order-amend-menu-ADD_LINES"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="order-amend-menu-REMOVE_LINES"]')).toBeNull();
 
     (
       host.querySelector('[data-testid="order-amend-menu-SET_KITCHEN_NOTE"]') as HTMLButtonElement
@@ -1596,6 +1616,182 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
     fixture.detectChanges();
 
     expect(host.querySelector('[data-testid="order-note-dialog"]')).not.toBeNull();
+  });
+
+  it('wires ADD_LINES: search via NewOrderApi, propose applyImmediately:false, then confirm-and-apply', async () => {
+    const addLines = vi.fn().mockReturnValue(
+      of(
+        amendmentResult({
+          status: 'PRICED',
+          deltaTotalMinor: 18_000,
+          requiresApproval: false,
+          amendmentVersion: 1,
+        }),
+      ),
+    );
+    const confirm = vi.fn().mockReturnValue(of(amendmentResult({ status: 'APPLIED' })));
+    const searchItems = vi.fn().mockResolvedValue({
+      items: [
+        {
+          variantId: 'variant-1',
+          productName: 'Лагман',
+          category: 'Горячие блюда',
+          available: true,
+          trackingMode: null,
+        },
+      ],
+      nextCursor: null,
+    });
+    configure({
+      get: apiGet({
+        value: detail({
+          summary: { ...detail().summary, status: 'CONFIRMED', actions: [{ action: 'AMEND' }] },
+        }),
+        version: 3,
+      }),
+      amendmentsApi: { addLines, confirm },
+      newOrderApi: { searchItems },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-primary-action"]') as HTMLButtonElement
+    )?.click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="order-amend-menu-ADD_LINES"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="order-add-lines-dialog"]')).not.toBeNull();
+
+    // `q-combobox` debounces `search` by 250ms real time (its own doc) — fake
+    // timers only around the debounce itself, real ones again for the
+    // resulting promise chain, matching `combobox.spec.ts`'s own pattern.
+    const searchField = host.querySelector('[data-testid="q-combobox-input"]') as HTMLInputElement;
+    vi.useFakeTimers();
+    searchField.value = 'Лагман';
+    searchField.dispatchEvent(new Event('input'));
+    vi.advanceTimersByTime(250);
+    vi.useRealTimers();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    expect(searchItems).toHaveBeenCalled();
+
+    searchField.dispatchEvent(new Event('focus'));
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="q-combobox-option"]') as HTMLLIElement).click();
+    fixture.detectChanges();
+    (
+      host.querySelector('[data-testid="order-add-lines-dialog-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(addLines).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 3, [
+      { variantId: 'variant-1', quantity: 1, modifierOptionIds: [] },
+    ]);
+    // The propose call never applied it (applyImmediately: false) — the
+    // priced-delta confirmation dialog is what the pane opens next.
+    expect(host.querySelector('[data-testid="order-amendment-confirm-dialog"]')).not.toBeNull();
+    expect(
+      host.querySelector('[data-testid="order-amendment-confirm-delta"]')?.textContent,
+    ).toContain('18');
+
+    (
+      host.querySelector('[data-testid="order-amendment-confirm-submit"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(confirm).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'amendment-1', 1, 'PHONE');
+  });
+
+  it('wires CHANGE_FULFILLMENT_TIME as a direct apply, no confirmation step', async () => {
+    const changeFulfillmentTime = vi.fn().mockReturnValue(of(amendmentResult()));
+    configure({
+      get: apiGet({
+        value: detail({
+          summary: { ...detail().summary, status: 'CONFIRMED', actions: [{ action: 'AMEND' }] },
+        }),
+        version: 3,
+      }),
+      amendmentsApi: { changeFulfillmentTime },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-primary-action"]') as HTMLButtonElement
+    )?.click();
+    fixture.detectChanges();
+    (
+      host.querySelector(
+        '[data-testid="order-amend-menu-CHANGE_FULFILLMENT_TIME"]',
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    const input = host.querySelector(
+      '[data-testid="order-change-time-dialog-input"]',
+    ) as HTMLInputElement;
+    input.value = '2026-10-01T18:00';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (
+      host.querySelector('[data-testid="order-change-time-dialog-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(changeFulfillmentTime).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'order-1',
+      3,
+      new Date('2026-10-01T18:00').toISOString(),
+    );
+    expect(host.querySelector('[data-testid="order-amendment-confirm-dialog"]')).toBeNull();
+  });
+
+  it('wires the RESOLVE row action to reopen the confirmation dialog for a still-pending amendment', async () => {
+    const confirm = vi.fn().mockReturnValue(of(amendmentResult({ status: 'APPLIED' })));
+    const history = vi.fn().mockResolvedValue([
+      amendmentResult({
+        amendmentId: 'amendment-9',
+        status: 'PRICED',
+        deltaTotalMinor: 25_000,
+        requiresApproval: false,
+        amendmentVersion: 2,
+        commandDetails: [{ type: 'ADD_LINES', text: null }],
+        actions: ['RESOLVE'],
+      }),
+    ]);
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      amendmentsApi: { confirm, history },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector(
+        '[data-testid="order-detail-amendment-history-toggle"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const resolveButton = host.querySelector(
+      '[data-testid="order-detail-amendment-history-resolve"]',
+    ) as HTMLButtonElement;
+    expect(resolveButton).not.toBeNull();
+    resolveButton.click();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="order-amendment-confirm-dialog"]')).not.toBeNull();
+
+    (
+      host.querySelector('[data-testid="order-amendment-confirm-submit"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(confirm).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'amendment-9', 2, 'PHONE');
   });
 });
 
@@ -1809,14 +2005,12 @@ describe('OrderDetailPane: call an external courier (gap map rows 1.2e/2.1c)', (
       customerDeliveryFeeMinor: 12_000,
       deltaMinor: 0,
     });
-    const decideExternalCourier = vi
-      .fn()
-      .mockResolvedValue({
-        applied: true,
-        abandoned: false,
-        planVersion: 3,
-        shipmentId: 'shipment-1',
-      });
+    const decideExternalCourier = vi.fn().mockResolvedValue({
+      applied: true,
+      abandoned: false,
+      planVersion: 3,
+      shipmentId: 'shipment-1',
+    });
     configure({
       get: apiGet({ value: detail(), version: 3 }),
       deliveryApi: {

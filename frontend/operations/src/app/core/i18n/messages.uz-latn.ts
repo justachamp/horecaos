@@ -242,43 +242,34 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.dialog.amendMenu.title': 'Nimani oʻzgartirmoqchisiz?',
 
   'orders.dialog.amendConfirm.title': 'Oʻzgarishni tasdiqlang',
-  'orders.dialog.amendConfirm.increase':
-    'Bu summani {amount} ga oshiradi. Tasdiqlashdan oldin mijoz qanday rozi boʻlganini qayd eting.',
-  'orders.dialog.amendConfirm.decrease': 'Bu summani {amount} ga kamaytiradi.',
-  'orders.dialog.amendConfirm.noChange': 'Buyurtma summasi oʻzgarmaydi.',
-  'orders.dialog.amendConfirm.requiresApproval':
-    'Bu oʻzgarish kuchga kirishidan oldin rahbar tasdigʻini ham talab qiladi.',
+  'orders.dialog.amendConfirm.increase': '{amount} qoʻshadi — mijoz qanday rozi boʻlganini yozing.',
+  'orders.dialog.amendConfirm.decrease': 'Summani {amount} ga kamaytiradi.',
+  'orders.dialog.amendConfirm.noChange': 'Summa oʻzgarmaydi.',
+  'orders.dialog.amendConfirm.requiresApproval': 'Rahbar tasdigʻini ham talab qiladi.',
   'orders.dialog.amendConfirm.channel': 'Mijoz qanday rozi boʻldi?',
   'orders.dialog.amendConfirm.channel.PHONE': 'Telefon orqali',
   'orders.dialog.amendConfirm.channel.IN_PERSON': 'Shaxsan',
   'orders.dialog.amendConfirm.channel.SMS': 'SMS/ilova orqali',
   'orders.dialog.amendConfirm.confirm': 'Tasdiqlash va qoʻllash',
 
-  'orders.dialog.changeTime.title': 'Vaʻda qilingan vaqtni oʻzgartirish',
   'orders.dialog.changeTime.label': 'Yangi vaʻda qilingan vaqt',
 
-  'orders.dialog.changeContact.title': 'Qabul qiluvchi ism/telefonini oʻzgartirish',
   'orders.dialog.changeContact.name': 'Qabul qiluvchi ismi',
   'orders.dialog.changeContact.phone': 'Qabul qiluvchi telefoni',
 
-  'orders.dialog.changePaymentMethod.title': 'Toʻlov usulini oʻzgartirish',
   'orders.dialog.changePaymentMethod.label': 'Yangi toʻlov usuli',
-  'orders.dialog.changePaymentMethod.empty': 'Bu kanal uchun hech qanday toʻlov usuli yoqilmagan.',
+  'orders.dialog.changePaymentMethod.empty': 'Kanal uchun toʻlov usuli yoqilmagan.',
 
-  'orders.dialog.changeQuantity.title': 'Pozitsiya miqdorini oʻzgartirish',
   'orders.dialog.changeQuantity.line': 'Pozitsiya',
   'orders.dialog.changeQuantity.newQuantity': 'Yangi miqdor (kamida {min})',
 
-  'orders.dialog.changeAddress.title': 'Yetkazib berish manzilini oʻzgartirish',
   'orders.dialog.changeAddress.line2': 'Manzil, 2-qator',
   'orders.dialog.changeAddress.city': 'Shahar',
   'orders.dialog.changeAddress.district': 'Tuman',
   'orders.dialog.changeAddress.latitude': 'Kenglik',
   'orders.dialog.changeAddress.longitude': 'Uzunlik',
 
-  'orders.dialog.addLines.title': 'Pozitsiya qoʻshish',
-  'orders.dialog.addLines.noModifiers':
-    'Modifikatorsiz — asosiy taomni qoʻshing va modifikatorni oshxona uchun izohda koʻrsating.',
+  'orders.dialog.addLines.noModifiers': 'Modifikatorsiz — oshxona uchun izohda koʻrsating.',
   'orders.dialog.addLines.searchPlaceholder': 'Menyudan qidirish…',
   'orders.dialog.addLines.empty': 'Hali hech narsa tanlanmagan.',
   'orders.dialog.addLines.remove': 'Olib tashlash',
@@ -496,6 +487,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.comments.history.hide': 'Tarixni yashirish',
   'orders.detail.comments.history.error': 'Oʻzgarishlar tarixini yuklab boʻlmadi',
   'orders.detail.comments.history.empty': 'Hali oʻzgarish yoʻq',
+  'orders.detail.comments.history.resolve': 'Hal qilish',
   'orders.amendment.warning.CASH_TENDERED_INSUFFICIENT':
     '«Qancha pul bilan keladi» endi umumiy summadan kam — mijoz qoʻshib toʻlashi mumkin.',
   'orders.amendment.warning.acknowledge': 'Tushunarli',

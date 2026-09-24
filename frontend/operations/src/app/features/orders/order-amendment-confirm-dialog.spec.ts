@@ -30,7 +30,7 @@ describe('OrderAmendmentConfirmDialog', () => {
     const { fixture } = render({ deltaMinor: 15_000 });
     const host: HTMLElement = fixture.nativeElement;
     const text = host.querySelector('[data-testid="order-amendment-confirm-delta"]')?.textContent;
-    expect(text).toContain('adds');
+    expect(text).toContain('Adds');
     // U+00A0 NO-BREAK SPACE groups thousands (`money.ts`'s own doc) — never a comma.
     expect(text).toContain('15 000');
   });
@@ -39,7 +39,7 @@ describe('OrderAmendmentConfirmDialog', () => {
     const { fixture } = render({ deltaMinor: -5_000 });
     const host: HTMLElement = fixture.nativeElement;
     const text = host.querySelector('[data-testid="order-amendment-confirm-delta"]')?.textContent;
-    expect(text).toContain('lowers');
+    expect(text).toContain('Lowers');
     expect(text).toContain('5 000');
     expect(text).not.toContain('−5 000');
   });
@@ -49,7 +49,7 @@ describe('OrderAmendmentConfirmDialog', () => {
     const host: HTMLElement = fixture.nativeElement;
     expect(
       host.querySelector('[data-testid="order-amendment-confirm-delta"]')?.textContent,
-    ).toContain('does not change');
+    ).toContain('No change');
   });
 
   it('shows the approval notice only when requiresApproval is true', () => {

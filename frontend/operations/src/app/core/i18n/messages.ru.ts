@@ -240,43 +240,34 @@ export const messagesRu: MessageCatalogue = {
   'orders.dialog.amendMenu.title': 'Что нужно изменить?',
 
   'orders.dialog.amendConfirm.title': 'Подтвердите изменение',
-  'orders.dialog.amendConfirm.increase':
-    'Это увеличивает сумму на {amount}. Прежде чем подтвердить, зафиксируйте, как клиент согласился.',
-  'orders.dialog.amendConfirm.decrease': 'Это уменьшает сумму на {amount}.',
-  'orders.dialog.amendConfirm.noChange': 'Сумма заказа не меняется.',
-  'orders.dialog.amendConfirm.requiresApproval':
-    'Это изменение также требует подтверждения руководителя, прежде чем вступит в силу.',
+  'orders.dialog.amendConfirm.increase': 'Добавляет {amount} — укажите, как клиент согласился.',
+  'orders.dialog.amendConfirm.decrease': 'Уменьшает сумму на {amount}.',
+  'orders.dialog.amendConfirm.noChange': 'Сумма не меняется.',
+  'orders.dialog.amendConfirm.requiresApproval': 'Также требует подтверждения руководителя.',
   'orders.dialog.amendConfirm.channel': 'Как клиент согласился?',
   'orders.dialog.amendConfirm.channel.PHONE': 'По телефону',
   'orders.dialog.amendConfirm.channel.IN_PERSON': 'Лично',
   'orders.dialog.amendConfirm.channel.SMS': 'По SMS/приложению',
   'orders.dialog.amendConfirm.confirm': 'Подтвердить и применить',
 
-  'orders.dialog.changeTime.title': 'Изменить обещанное время',
   'orders.dialog.changeTime.label': 'Новое обещанное время',
 
-  'orders.dialog.changeContact.title': 'Изменить имя/телефон получателя',
   'orders.dialog.changeContact.name': 'Имя получателя',
   'orders.dialog.changeContact.phone': 'Телефон получателя',
 
-  'orders.dialog.changePaymentMethod.title': 'Изменить способ оплаты',
   'orders.dialog.changePaymentMethod.label': 'Новый способ оплаты',
-  'orders.dialog.changePaymentMethod.empty': 'Для этого канала не включён ни один способ оплаты.',
+  'orders.dialog.changePaymentMethod.empty': 'Для канала не включён ни один способ оплаты.',
 
-  'orders.dialog.changeQuantity.title': 'Изменить количество позиции',
   'orders.dialog.changeQuantity.line': 'Позиция',
   'orders.dialog.changeQuantity.newQuantity': 'Новое количество (не менее {min})',
 
-  'orders.dialog.changeAddress.title': 'Изменить адрес доставки',
   'orders.dialog.changeAddress.line2': 'Адрес, строка 2',
   'orders.dialog.changeAddress.city': 'Город',
   'orders.dialog.changeAddress.district': 'Район',
   'orders.dialog.changeAddress.latitude': 'Широта',
   'orders.dialog.changeAddress.longitude': 'Долгота',
 
-  'orders.dialog.addLines.title': 'Добавить позиции',
-  'orders.dialog.addLines.noModifiers':
-    'Без модификаторов — добавьте базовую позицию и укажите модификатор в заметке для кухни.',
+  'orders.dialog.addLines.noModifiers': 'Без модификаторов — укажите их в заметке для кухни.',
   'orders.dialog.addLines.searchPlaceholder': 'Поиск по меню…',
   'orders.dialog.addLines.empty': 'Позиции ещё не выбраны.',
   'orders.dialog.addLines.remove': 'Убрать',
@@ -491,6 +482,7 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.comments.history.hide': 'Скрыть историю',
   'orders.detail.comments.history.error': 'Не удалось загрузить историю изменений',
   'orders.detail.comments.history.empty': 'Пока нет изменений',
+  'orders.detail.comments.history.resolve': 'Решить',
   'orders.amendment.warning.CASH_TENDERED_INSUFFICIENT':
     '«Сдача с» теперь меньше итоговой суммы — клиент может доплатить.',
   'orders.amendment.warning.acknowledge': 'Понятно',
