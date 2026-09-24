@@ -56637,7 +56637,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/customers/{accountId}/orders/{orderId}/reorder" : {
       "get" : {
-        "description" : "The New Order screen's own «Повторить» (gap map rows 1.3f/1.3a): the same read as GET .../brands/{brandId}/customers/{accountId}/orders/{orderId}/reorder, reached with ORDER_READ at this LOCATION rather than the whole BRAND, and resolved against this location's own menu, offering rows and stock rather than the order's original branch — an operator standing at this counter is about to build the new cart here, not there. `accountId` scopes the read exactly as the brand-scoped twin does: an orderId that is not this account's own answers 404, identically to an order that does not exist at all.",
+        "description" : "The New Order screen's own «Повторить» (gap map rows 1.3f/1.3a): the same read as GET .../brands/{brandId}/customers/{accountId}/orders/{orderId}/reorder, reached with ORDER_READ at this LOCATION rather than the whole BRAND, and resolved against this location's own menu, offering rows and stock rather than the order's original branch — an operator standing at this counter is about to build the new cart here, not there. `accountId` scopes the read exactly as the brand-scoped twin does: an orderId that is not this account's own, or not this path's own brand's, answers 404, identically to an order that does not exist at all.",
         "operationId" : "reorderPlan",
         "parameters" : [ {
           "in" : "path",

@@ -39,6 +39,14 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * New Order screen is about to build a cart against. A dish available at
  * the order's original branch and withdrawn here answers {@code WITHDRAWN}
  * here, correctly, rather than a plan the operator cannot actually place.
+ *
+ * <p><strong>Blocker fix.</strong> {@code brandId} is checked against the
+ * order's own snapshot brand: a {@code LOCATION}-scoped {@code ORDER_READ}
+ * grant never widens past its own brand (ADR 0025), and skipping this check
+ * would let this route return another brand's order in full — line items,
+ * quantities and what the customer paid — to an operator who holds no grant
+ * on that brand at all. See {@link ReorderPlanService#planForAtLocation}'s
+ * own doc for the full argument.
  */
 @RestController
 @RequestMapping(
@@ -63,8 +71,8 @@ public class CustomerOrderReorderController {
                     + "stock rather than the order's original branch — an operator standing at "
                     + "this counter is about to build the new cart here, not there. `accountId` "
                     + "scopes the read exactly as the brand-scoped twin does: an orderId that is "
-                    + "not this account's own answers 404, identically to an order that does not "
-                    + "exist at all.")
+                    + "not this account's own, or not this path's own brand's, answers 404, "
+                    + "identically to an order that does not exist at all.")
     public StorefrontOrderingController.ReorderPlanResponse reorderPlan(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -72,7 +80,7 @@ public class CustomerOrderReorderController {
             @PathVariable UUID accountId,
             @PathVariable UUID orderId) {
         return StorefrontOrderingController.ReorderPlanResponse.of(reorderPlans
-                .planForAtLocation(tenantId, orderId, accountId, locationId)
+                .planForAtLocation(tenantId, brandId, orderId, accountId, locationId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order")));
     }
 }

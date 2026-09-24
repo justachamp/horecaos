@@ -5436,7 +5436,7 @@ class CartCheckoutAndOrderTests {
         // against the location it was given, never silently fall back to the
         // order's own the way a copy-pasted planFor would.
         var plan = reorderPlans
-                .planForAtLocation(TENANT, order, CUSTOMER, OTHER_LOCATION)
+                .planForAtLocation(TENANT, BRAND, order, CUSTOMER, OTHER_LOCATION)
                 .orElseThrow();
         assertThat(plan.locationId()).isEqualTo(OTHER_LOCATION);
         assertThat(plan.verdict()).isEqualTo(ReorderPlanService.Verdict.UNAVAILABLE);
@@ -5444,6 +5444,34 @@ class CartCheckoutAndOrderTests {
                 .singleElement()
                 .extracting(ReorderPlanService.PlannedLine::status)
                 .isEqualTo(ReorderPlanService.LineStatus.WITHDRAWN);
+    }
+
+    @Test
+    @DisplayName(
+            "a LOCATION-scoped reorder plan refuses another brand's order, even at a location in this same tenant (blocker)")
+    void aPlanAtLocationRefusesAnOrderFromAnotherBrand() {
+        publishBurger();
+        offer(burgerVariant, "AVAILABLE");
+        UUID order = orderIdOf(placeOrder("idem-reorder-cross-brand"));
+
+        // CustomerOrderReorderController is reached with ORDER_READ granted at
+        // one LOCATION only (ADR 0025) -- a grant that never widens past its
+        // own brand. requiredBrandId must be the order's own BRAND, not some
+        // other brand the caller's location happens to share a tenant with;
+        // ANOTHER_BRAND need not exist as a row here, since the check compares
+        // it to the order's own snapshot brandId and never uses it to query
+        // anything itself.
+        UUID anotherBrand = UUID.randomUUID();
+        assertThat(reorderPlans.planForAtLocation(TENANT, anotherBrand, order, CUSTOMER, LOCATION))
+                .as("the order belongs to BRAND, not anotherBrand -- must not leak its lines, "
+                        + "quantities or prices to a caller granted only on anotherBrand's own location")
+                .isEmpty();
+
+        // The identical order, asked about with its own brand, still resolves --
+        // proving the assertion above is the brand check and not some other
+        // reason every plan here would come back empty.
+        assertThat(reorderPlans.planForAtLocation(TENANT, BRAND, order, CUSTOMER, LOCATION))
+                .isPresent();
     }
 
     @Test
