@@ -454,6 +454,14 @@ export const messagesRu: MessageCatalogue = {
   'orders.amendment.warning.acknowledge': 'Понятно',
   'orders.detail.amend.blockedByPosExport': 'Изменение недоступно: ожидается подтверждение POS',
 
+  'orders.amendment.command.ADD_LINES': 'Добавить позиции',
+  'orders.amendment.command.CHANGE_LINE_QUANTITY': 'Изменить количество позиции',
+  'orders.amendment.command.REMOVE_LINES': 'Удалить позиции',
+  'orders.amendment.command.CHANGE_PAYMENT_METHOD': 'Изменить способ оплаты',
+  'orders.amendment.command.CHANGE_DELIVERY_ADDRESS': 'Изменить адрес доставки',
+  'orders.amendment.command.CHANGE_FULFILLMENT_TIME': 'Изменить обещанное время',
+  'orders.amendment.command.CHANGE_CONTACT': 'Изменить имя/телефон получателя',
+
   'orders.detail.section.revisions': 'Ревизии ({count})',
   'orders.detail.revisions.show': 'Показать ревизии',
   'orders.detail.revisions.hide': 'Скрыть ревизии',

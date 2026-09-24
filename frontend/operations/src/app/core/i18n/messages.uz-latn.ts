@@ -459,6 +459,14 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.amendment.warning.acknowledge': 'Tushunarli',
   'orders.detail.amend.blockedByPosExport': 'Tahrirlash mavjud emas: POS tasdiqlanishi kutilmoqda',
 
+  'orders.amendment.command.ADD_LINES': 'Pozitsiya qoʻshish',
+  'orders.amendment.command.CHANGE_LINE_QUANTITY': 'Pozitsiya miqdorini oʻzgartirish',
+  'orders.amendment.command.REMOVE_LINES': 'Pozitsiyalarni olib tashlash',
+  'orders.amendment.command.CHANGE_PAYMENT_METHOD': 'Toʻlov usulini oʻzgartirish',
+  'orders.amendment.command.CHANGE_DELIVERY_ADDRESS': 'Yetkazib berish manzilini oʻzgartirish',
+  'orders.amendment.command.CHANGE_FULFILLMENT_TIME': 'Vaʻda qilingan vaqtni oʻzgartirish',
+  'orders.amendment.command.CHANGE_CONTACT': 'Qabul qiluvchi ism/telefonini oʻzgartirish',
+
   'orders.detail.section.revisions': 'Revizialar ({count})',
   'orders.detail.revisions.show': 'Revizialarni koʻrsatish',
   'orders.detail.revisions.hide': 'Revizialarni yashirish',

@@ -470,6 +470,16 @@ export const messagesEn = {
   'orders.amendment.warning.acknowledge': 'Got it',
   'orders.detail.amend.blockedByPosExport': 'Editing unavailable: waiting on the POS',
 
+  // Wave 10 financial commands (gap map rows 1.2c/2.1d) — command labels, shared by
+  // the amend menu and a history row's own label (`amendmentCommandLabel`).
+  'orders.amendment.command.ADD_LINES': 'Add items',
+  'orders.amendment.command.CHANGE_LINE_QUANTITY': 'Change item quantity',
+  'orders.amendment.command.REMOVE_LINES': 'Remove items',
+  'orders.amendment.command.CHANGE_PAYMENT_METHOD': 'Change payment method',
+  'orders.amendment.command.CHANGE_DELIVERY_ADDRESS': 'Change delivery address',
+  'orders.amendment.command.CHANGE_FULFILLMENT_TIME': 'Change promised time',
+  'orders.amendment.command.CHANGE_CONTACT': 'Change recipient name/phone',
+
   'orders.detail.section.revisions': 'Revisions ({count})',
   'orders.detail.revisions.show': 'Show revisions',
   'orders.detail.revisions.hide': 'Hide revisions',
