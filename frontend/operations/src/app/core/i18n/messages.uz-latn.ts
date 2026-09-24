@@ -2503,6 +2503,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.ticket.targetReady': '{time} gacha tayyor',
   'kitchen.ticket.courierEta': 'Kuryer {time} da',
   'kitchen.ticket.kitchenNote': 'Oshxonaga izoh: {note}',
+  'kitchen.ticket.changePaymentMethod': 'Toʻlovni oʻzgartirish',
   'kitchen.ticket.status.HELD': 'Buferda',
   'kitchen.ticket.status.FIRED': 'Ishga tushirilgan',
   'kitchen.ticket.status.IN_PRODUCTION': 'Tayyorlanmoqda',

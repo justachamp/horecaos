@@ -2513,6 +2513,7 @@ export const messagesEn = {
   'kitchen.ticket.targetReady': 'Ready by {time}',
   'kitchen.ticket.courierEta': 'Courier ETA {time}',
   'kitchen.ticket.kitchenNote': 'Kitchen note: {note}',
+  'kitchen.ticket.changePaymentMethod': 'Change payment',
   'kitchen.ticket.status.HELD': 'Held',
   'kitchen.ticket.status.FIRED': 'Fired',
   'kitchen.ticket.status.IN_PRODUCTION': 'In production',

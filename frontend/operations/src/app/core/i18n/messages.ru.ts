@@ -2482,6 +2482,7 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.ticket.targetReady': 'Готово к {time}',
   'kitchen.ticket.courierEta': 'Курьер к {time}',
   'kitchen.ticket.kitchenNote': 'Комментарий кухне: {note}',
+  'kitchen.ticket.changePaymentMethod': 'Изменить оплату',
   'kitchen.ticket.status.HELD': 'В буфере',
   'kitchen.ticket.status.FIRED': 'Запущен',
   'kitchen.ticket.status.IN_PRODUCTION': 'Готовится',

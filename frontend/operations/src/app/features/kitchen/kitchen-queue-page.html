@@ -116,6 +116,20 @@
             </div>
           }
 
+          <!-- «Изменить оплату» (wave 10, row 2.1d) — any fulfilment mode, not
+               only delivery: CHANGE_PAYMENT_METHOD has no such restriction. -->
+          <div class="ticket__payment-change">
+            <button
+              type="button"
+              class="ticket__assign-toggle"
+              [disabled]="isPaymentChangeOpen(ticket)"
+              (click)="openPaymentChangeDialog(ticket)"
+              data-testid="kitchen-change-payment-method"
+            >
+              {{ 'kitchen.ticket.changePaymentMethod' | t }}
+            </button>
+          </div>
+
           @if (isDeliveryTicket(ticket)) {
             <div class="ticket__assign">
               <button
@@ -279,6 +293,17 @@
       (accepted)="acceptExternalBooking($event)"
       (abandoned)="abandonExternalBooking($event)"
       (dismiss)="closeExternalCourierDialog()"
+    />
+  }
+
+  <!-- «Изменить оплату» (wave 10, row 2.1d) -- the same dialog component
+       `order-detail-pane.ts` renders for row 1.2c, over `CHANGE_PAYMENT_METHOD`. -->
+  @if (paymentChangeTicketId()) {
+    <q-order-change-payment-method-dialog
+      [methods]="paymentChangeMethods()"
+      [busy]="paymentChangeBusy()"
+      (confirm)="onPaymentChangeConfirm($event)"
+      (dismiss)="closePaymentChangeDialog()"
     />
   }
 </div>

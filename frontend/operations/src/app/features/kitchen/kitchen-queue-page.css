@@ -286,7 +286,8 @@
   color: var(--q-info-text);
 }
 
-.ticket__assign {
+.ticket__assign,
+.ticket__payment-change {
   position: relative;
   padding: 0 12px 8px;
 }
