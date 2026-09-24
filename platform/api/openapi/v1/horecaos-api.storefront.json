@@ -197,6 +197,12 @@
       },
       "CartLineResponse" : {
         "properties" : {
+          "commentPresetCodes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "hasCustomerNote" : {
             "type" : "boolean"
           },
@@ -339,6 +345,23 @@
               "type" : "string"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "CommentPresetOption" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "labelEn" : {
+            "type" : "string"
+          },
+          "labelRu" : {
+            "type" : "string"
+          },
+          "labelUz" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -657,6 +680,22 @@
         },
         "type" : "object"
       },
+      "HostnameLookupView" : {
+        "properties" : {
+          "channelId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "verified" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "LocationProfile" : {
         "properties" : {
           "addressLine" : {
@@ -809,6 +848,12 @@
           "code" : {
             "type" : "string"
           },
+          "commentPresets" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CommentPresetOption"
+            },
+            "type" : "array"
+          },
           "description" : {
             "type" : "string"
           },
@@ -854,6 +899,9 @@
             "type" : "integer"
           },
           "isDefault" : {
+            "type" : "boolean"
+          },
+          "onSaleNow" : {
             "type" : "boolean"
           },
           "orderable" : {
@@ -1059,6 +1107,24 @@
           },
           "nextCursor" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PageView" : {
+        "properties" : {
+          "body" : {
+            "type" : "string"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "slug" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -1298,6 +1364,14 @@
       },
       "PutLineRequest" : {
         "properties" : {
+          "commentPresetCodes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "maxItems" : 20,
+            "minItems" : 0,
+            "type" : "array"
+          },
           "customerNote" : {
             "maxLength" : 500,
             "minLength" : 0,
@@ -1580,6 +1654,21 @@
             "type" : "string"
           },
           "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "StorefrontChannelSetupControllerPresentationView" : {
+        "properties" : {
+          "ogImageAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "seoDescription" : {
+            "type" : "string"
+          },
+          "seoTitle" : {
             "type" : "string"
           }
         },
@@ -1907,6 +1996,34 @@
   },
   "openapi" : "3.1.0",
   "paths" : {
+    "/api/v1/storefront/channel-hostnames/{hostname}" : {
+      "get" : {
+        "description" : "Not-found for an unclaimed hostname and for a claimed-but-unverified one alike -- ChannelSetupService#resolveHostname's own doc explains why an unverified custom domain must not resolve.",
+        "operationId" : "resolve_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "hostname",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HostnameLookupView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant and channel this hostname answers on",
+        "tags" : [ "Storefront channel hostname lookup" ]
+      }
+    },
     "/api/v1/storefront/dine-in/qr/token-exchanges" : {
       "post" : {
         "description" : "Scanning authorises nothing by itself. The printed token is exchanged once for a short-lived, table-scoped token, and that is what every subsequent call carries. Rotating the table's code revokes every token minted from it in the same transaction. Every failure — unknown, rotated, archived, branch not configured — answers identically, so a caller holding a guessed value learns nothing from the difference.",
@@ -4700,6 +4817,92 @@
         "tags" : [ "Storefront terms of service" ]
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/channels/{channel}/pages/{slug}" : {
+      "get" : {
+        "description" : "Always the highest published version -- a client cannot ask for an older one. Not-found when this channel has never published this page, or has published it but not in the requested locale.",
+        "operationId" : "page",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One static page, in the requested language",
+        "tags" : [ "Storefront channel presentation" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/channels/{channel}/presentation" : {
+      "get" : {
+        "description" : "The OG image, if set, is an asset id -- render it through StorefrontMediaController's /media/{assetId} redirect, the same path the menu already uses for product photos.",
+        "operationId" : "presentation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StorefrontChannelSetupControllerPresentationView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This channel's SEO title/description and OG image",
+        "tags" : [ "Storefront channel presentation" ]
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/media/{assetId}" : {
       "get" : {
         "description" : "302 to a short-lived signed URL. Only a PUBLIC, displayable asset resolves; anything else is not found, and private, missing and unverified are one answer so an id cannot be probed.",
@@ -4766,8 +4969,14 @@
     "description" : "Scanning a table code, and the bill it leads to",
     "name" : "QR dine-in"
   }, {
+    "description" : "Row 10.5: resolve a Host header to a tenant and channel",
+    "name" : "Storefront channel hostname lookup"
+  }, {
     "description" : "A branch's own published name and address",
     "name" : "Storefront location profile"
+  }, {
+    "description" : "Row 10.5: a channel's public SEO facts and static pages",
+    "name" : "Storefront channel presentation"
   }, {
     "description" : "A customer's own referral code, and redeeming a friend's",
     "name" : "Referrals"

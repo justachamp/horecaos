@@ -1175,7 +1175,7 @@
             "type" : "string"
           },
           "entityType" : {
-            "enum" : [ "PRODUCT", "PAYMENT_TYPE", "DISCOUNT", "COURIER", "CANCELLATION_REASON", "CHANNEL_POS_CODE" ],
+            "enum" : [ "PRODUCT", "PAYMENT_TYPE", "DISCOUNT", "COURIER", "CANCELLATION_REASON", "CHANNEL_POS_CODE", "VARIANT", "MODIFIER" ],
             "type" : "string"
           }
         },
@@ -1470,6 +1470,28 @@
           "timeDeltaSeconds" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CapabilityCatalogueView" : {
+        "properties" : {
+          "capabilities" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "category" : {
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "OTHER" ],
+            "type" : "string"
+          },
+          "installationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "providerType" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -1774,6 +1796,34 @@
               "type" : "string"
             },
             "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
+      "ChannelPagesControllerPublishRequest" : {
+        "properties" : {
+          "contentsByLocale" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "minProperties" : 1,
+            "type" : "object"
+          }
+        },
+        "required" : [ "contentsByLocale" ],
+        "type" : "object"
+      },
+      "ChannelSetupControllerPresentationView" : {
+        "properties" : {
+          "ogImageAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "seoDescription" : {
+            "type" : "string"
+          },
+          "seoTitle" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -2493,7 +2543,7 @@
             "type" : "string"
           },
           "entityType" : {
-            "enum" : [ "PRODUCT", "PAYMENT_TYPE", "DISCOUNT", "COURIER", "CANCELLATION_REASON", "CHANNEL_POS_CODE" ],
+            "enum" : [ "PRODUCT", "PAYMENT_TYPE", "DISCOUNT", "COURIER", "CANCELLATION_REASON", "CHANNEL_POS_CODE", "VARIANT", "MODIFIER" ],
             "type" : "string"
           },
           "externalEntityId" : {
@@ -2825,6 +2875,17 @@
             "type" : "integer"
           }
         },
+        "type" : "object"
+      },
+      "CustomHostnameRequest" : {
+        "properties" : {
+          "hostname" : {
+            "maxLength" : 253,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "hostname" ],
         "type" : "object"
       },
       "CustomerLookupResult" : {
@@ -3173,6 +3234,15 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "averageChequeAmount" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "averageChequeCurrency" : {
+            "pattern" : "[A-Z]{3}",
+            "type" : "string"
+          },
           "city" : {
             "maxLength" : 120,
             "minLength" : 0,
@@ -3197,6 +3267,12 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "hasParking" : {
+            "type" : "boolean"
+          },
+          "hasPlayground" : {
+            "type" : "boolean"
+          },
           "landmark" : {
             "maxLength" : 200,
             "minLength" : 0,
@@ -3209,12 +3285,34 @@
             "minimum" : -90.0,
             "type" : "number"
           },
+          "locales" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LocationLocaleRequest"
+            },
+            "type" : "array"
+          },
           "longitude" : {
             "example" : 69.240562,
             "format" : "double",
             "maximum" : 180.0,
             "minimum" : -180.0,
             "type" : "number"
+          },
+          "seats" : {
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "virtualTourUrl" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "pattern" : "https?://.+",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -4207,6 +4305,23 @@
         },
         "type" : "object"
       },
+      "HostnameView" : {
+        "properties" : {
+          "baseDomain" : {
+            "type" : "string"
+          },
+          "configured" : {
+            "type" : "boolean"
+          },
+          "hostname" : {
+            "type" : "string"
+          },
+          "verified" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "ImportRequest" : {
         "properties" : {
           "content" : {
@@ -4702,6 +4817,41 @@
         },
         "type" : "object"
       },
+      "LocationLocaleRequest" : {
+        "properties" : {
+          "description" : {
+            "maxLength" : 2000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "displayName" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "locale" : {
+            "maxLength" : 16,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "locale" ],
+        "type" : "object"
+      },
+      "LocationLocaleView" : {
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "locale" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "LocationSetRequest" : {
         "properties" : {
           "locationIds" : {
@@ -4718,6 +4868,13 @@
       "LocationView" : {
         "properties" : {
           "addressLine" : {
+            "type" : "string"
+          },
+          "averageChequeAmount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "averageChequeCurrency" : {
             "type" : "string"
           },
           "brandId" : {
@@ -4743,6 +4900,12 @@
           "district" : {
             "type" : "string"
           },
+          "hasParking" : {
+            "type" : "boolean"
+          },
+          "hasPlayground" : {
+            "type" : "boolean"
+          },
           "id" : {
             "format" : "uuid",
             "type" : "string"
@@ -4754,12 +4917,26 @@
             "format" : "double",
             "type" : "number"
           },
+          "locales" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LocationLocaleView"
+            },
+            "type" : "array"
+          },
           "longitude" : {
             "format" : "double",
             "type" : "number"
           },
+          "seats" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
           "slug" : {
             "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
           },
           "status" : {
             "enum" : [ "DRAFT", "ACTIVE", "SUSPENDED", "ARCHIVED" ],
@@ -4775,6 +4952,9 @@
           "version" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "virtualTourUrl" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -6137,6 +6317,68 @@
         },
         "type" : "object"
       },
+      "PageVersionSummaryView" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locales" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array",
+            "uniqueItems" : true
+          },
+          "publishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "publishedBy" : {
+            "type" : "string"
+          },
+          "slug" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "PageVersionView" : {
+        "properties" : {
+          "contentsByLocale" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "published" : {
+            "type" : "boolean"
+          },
+          "publishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "publishedBy" : {
+            "type" : "string"
+          },
+          "slug" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "PageWalletEntryView" : {
         "properties" : {
           "items" : {
@@ -6737,6 +6979,25 @@
           }
         },
         "required" : [ "bindingId" ],
+        "type" : "object"
+      },
+      "PresentationRequest" : {
+        "properties" : {
+          "ogImageAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "seoDescription" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "seoTitle" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "PresetResponse" : {
@@ -7542,6 +7803,24 @@
         "required" : [ "reason" ],
         "type" : "object"
       },
+      "ReorderRequest" : {
+        "properties" : {
+          "kind" : {
+            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "type" : "string"
+          },
+          "orderedReasonIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "kind", "orderedReasonIds" ],
+        "type" : "object"
+      },
       "ResetInspection" : {
         "properties" : {
           "console" : {
@@ -8150,6 +8429,10 @@
           },
           "name" : {
             "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -8853,6 +9136,17 @@
             "type" : "integer"
           }
         },
+        "type" : "object"
+      },
+      "SubdomainRequest" : {
+        "properties" : {
+          "slug" : {
+            "maxLength" : 63,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "slug" ],
         "type" : "object"
       },
       "Suggestion" : {
@@ -11833,7 +12127,7 @@
     },
     "/api/v1/control-plane/onboarding-templates/{templateId}" : {
       "get" : {
-        "operationId" : "get_6",
+        "operationId" : "get_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "templateId",
@@ -12031,7 +12325,7 @@
     "/api/v1/control-plane/reference-data" : {
       "get" : {
         "description" : "Countries this platform trades in with their default currency and timezone, the locales the staff consoles ship, and each country's public holidays.",
-        "operationId" : "get_5",
+        "operationId" : "get_6",
         "responses" : {
           "200" : {
             "content" : {
@@ -13485,7 +13779,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/publications" : {
       "post" : {
         "description" : "A rejected publication is still recorded with its report, so \"why did publishing fail an hour ago\" has an answer.",
-        "operationId" : "publish",
+        "operationId" : "publish_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -14213,6 +14507,44 @@
           }
         },
         "summary" : "The empty import template",
+        "tags" : [ "Catalog import" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/imports/template.xlsx" : {
+      "get" : {
+        "description" : "Row 4.5b: an Import sheet (header row only), an Examples sheet with two filled rows, and a Reference sheet naming the closed vocabularies status and unit_code accept. Upload it back, filled, to POST /imports -- the same dry-run/apply pipeline the CSV template already goes through.",
+        "operationId" : "templateWorkbook",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The empty import template, as a workbook",
         "tags" : [ "Catalog import" ]
       }
     },
@@ -15984,7 +16316,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/publications" : {
       "get" : {
         "description" : "Newest first, every status including REJECTED — a rejected publication is recorded on purpose so 'why did publishing fail an hour ago' has an answer.",
-        "operationId" : "history_1",
+        "operationId" : "history_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -17077,7 +17409,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Record where a location is, and how to reach it",
+        "summary" : "Record where a location is, how to reach it, and its venue facts (10.2b)",
         "tags" : [ "SaaS control plane" ]
       }
     },
@@ -17690,7 +18022,89 @@
         "tags" : [ "Price authoring" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/tax-profiles" : {
+      "get" : {
+        "description" : "Gap map row 4.8a: the tax-profile screen's list, read before an operator opens the editor for one jurisdiction, so a rate is never overwritten blind.",
+        "operationId" : "listTaxProfiles",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/TaxProfileResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every jurisdiction this brand has a VAT rate in force for",
+        "tags" : [ "Price authoring" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/tax-profiles/{jurisdictionCode}" : {
+      "get" : {
+        "description" : "Gap map row 4.8a: shown before the edit form, so an operator sees what is currently in force instead of overwriting it blind.",
+        "operationId" : "readTaxProfile",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "jurisdictionCode",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TaxProfileResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Read the brand's in-force VAT rate for a jurisdiction",
+        "tags" : [ "Price authoring" ]
+      },
       "put" : {
         "description" : "Basis points: 1200 is 12%. INCLUSIVE (the default) means the price set through the variant/modifier endpoints is what the customer pays and tax is extracted from it; EXCLUSIVE means that amount is what the customer pays before tax and tax is added on top. Without a profile every cart in the brand refuses with NO_TAX_PROFILE.",
         "operationId" : "setTaxProfile",
@@ -18067,6 +18481,52 @@
           }
         },
         "summary" : "Close a date, or give it replacement hours",
+        "tags" : [ "Service schedules" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules/{scheduleId}/exceptions/{date}" : {
+      "delete" : {
+        "description" : "If-Match carries the owning schedule's version, since a dated exception has none of its own.",
+        "operationId" : "deleteException",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "scheduleId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "date",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Delete a dated exception",
         "tags" : [ "Service schedules" ]
       }
     },
@@ -19196,6 +19656,43 @@
         "tags" : [ "Provider integrations" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/capability-catalogue" : {
+      "get" : {
+        "description" : "Never a per-credential fact -- the same declaration ceiling ProviderCapabilityReconciliationService#reconcile caps live evidence at, read here before any reconciliation has run. Backs the branch-binding dialog's own capability-assignment picker: a POS or DELIVERY installation returns its real capability codes; a category with no wired catalogue (or no adapter for this installation's own provider type) answers an empty list rather than a guess.",
+        "operationId" : "capabilityCatalogue",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CapabilityCatalogueView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The vendor ceiling this installation's own provider declares (gap-map row 10.8a)",
+        "tags" : [ "Provider integrations" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/capability-reconciliation" : {
       "post" : {
         "description" : "Records append-only preflight evidence: the secret reference must resolve and the wired adapter must declare each capability. POS uses its specialised live discovery endpoint instead.",
@@ -19906,7 +20403,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/current" : {
       "get" : {
-        "operationId" : "current",
+        "operationId" : "current_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19964,7 +20461,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}" : {
       "get" : {
         "description" : "Blocked steps are listed with the decision that would unblock them, so a tenant that is live without a check is visible rather than implied.",
-        "operationId" : "get_4",
+        "operationId" : "get_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20385,6 +20882,48 @@
         "tags" : [ "Order outcome reasons" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/reorder" : {
+      "put" : {
+        "description" : "Whole-set: orderedReasonIds must name every currently active reason of this kind exactly once. If-Match carries the highest version among those reasons — there is no separate list-level aggregate to version — the same value the caller can compute from the list it already rendered. Returns the reordered list, each reason's version now bumped, so the caller never needs a second read before its next write.",
+        "operationId" : "reorder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReorderRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ReasonResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rank every active reason of one kind (gap-map row 10.10a)",
+        "tags" : [ "Order outcome reasons" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/{reasonId}" : {
       "delete" : {
         "description" : "Archived, never deleted. Outcomes recorded under it must still resolve, and the active-name uniqueness index frees the name for a replacement.",
@@ -20707,7 +21246,7 @@
           "name" : "entityType",
           "required" : true,
           "schema" : {
-            "enum" : [ "PRODUCT", "PAYMENT_TYPE", "DISCOUNT", "COURIER", "CANCELLATION_REASON", "CHANNEL_POS_CODE" ],
+            "enum" : [ "PRODUCT", "PAYMENT_TYPE", "DISCOUNT", "COURIER", "CANCELLATION_REASON", "CHANNEL_POS_CODE", "VARIANT", "MODIFIER" ],
             "type" : "string"
           }
         }, {
@@ -20850,7 +21389,7 @@
           "name" : "entityType",
           "required" : true,
           "schema" : {
-            "enum" : [ "PRODUCT", "PAYMENT_TYPE", "DISCOUNT", "COURIER", "CANCELLATION_REASON", "CHANNEL_POS_CODE" ],
+            "enum" : [ "PRODUCT", "PAYMENT_TYPE", "DISCOUNT", "COURIER", "CANCELLATION_REASON", "CHANNEL_POS_CODE", "VARIANT", "MODIFIER" ],
             "type" : "string"
           }
         } ],
@@ -21837,6 +22376,509 @@
         },
         "summary" : "Resume sales on a suspended channel",
         "tags" : [ "Sales channels" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/hostname" : {
+      "delete" : {
+        "operationId" : "clearHostname",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Release this channel's hostname",
+        "tags" : [ "Channel setup" ]
+      },
+      "get" : {
+        "description" : "configured: false with no hostname when the channel has not set one yet -- the console shows 'not configured' rather than treating an unset facet as an error.",
+        "operationId" : "hostname",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HostnameView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This channel's own hostname, if it has claimed one",
+        "tags" : [ "Channel setup" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/hostname/custom" : {
+      "put" : {
+        "description" : "Stored unverified. The automated DNS-TXT challenge is not built -- see ChannelSetupService's own doc -- so an operator confirms ownership out of band and a capability-holder marks it verified through the /verify action.",
+        "operationId" : "setCustomHostname",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CustomHostnameRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HostnameView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Claim a tenant's own custom domain",
+        "tags" : [ "Channel setup" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/hostname/subdomain" : {
+      "put" : {
+        "description" : "slug becomes <slug>.<the platform's base domain>, verified immediately -- the platform's own DNS already answers for it. Refused if the slug is malformed or on the reserved list (ReservedSubdomains).",
+        "operationId" : "setSubdomain",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SubdomainRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HostnameView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Claim a platform-issued subdomain",
+        "tags" : [ "Channel setup" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/hostname/verify" : {
+      "post" : {
+        "operationId" : "verify",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HostnameView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Mark the channel's current hostname verified",
+        "tags" : [ "Channel setup" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/pages" : {
+      "get" : {
+        "operationId" : "history_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PageVersionSummaryView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This channel's page publishing history, every slug, newest first",
+        "tags" : [ "Channel static pages" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/pages/{slug}" : {
+      "post" : {
+        "description" : "Creates a new version; never edits a prior one. At least one language is required. A language omitted from this version simply has no translation -- the storefront answers 'not available in this language' for it, never an older or newer version's text.",
+        "operationId" : "publish",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ChannelPagesControllerPublishRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageVersionView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Publish the next version of this page",
+        "tags" : [ "Channel static pages" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/pages/{slug}/current" : {
+      "get" : {
+        "description" : "published: false with empty contents when this channel has never published this page -- the storefront's /pages/{slug} answers not-found for the same channel.",
+        "operationId" : "current",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageVersionView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The version of this page currently in force",
+        "tags" : [ "Channel static pages" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/pages/{slug}/{version}" : {
+      "get" : {
+        "operationId" : "get_4",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "version",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageVersionView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One historical version of this page, exactly as it was published",
+        "tags" : [ "Channel static pages" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/presentation" : {
+      "get" : {
+        "operationId" : "presentation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChannelSetupControllerPresentationView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This channel's SEO title/description and OG image",
+        "tags" : [ "Channel setup" ]
+      },
+      "put" : {
+        "description" : "Full replace, like update() on the channel itself -- omitted or null clears a field rather than leaving it unchanged.",
+        "operationId" : "setPresentation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PresentationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChannelSetupControllerPresentationView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace this channel's SEO presentation",
+        "tags" : [ "Channel setup" ]
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/social-links" : {
@@ -24589,6 +25631,9 @@
     "description" : "The maker-checker thresholds that decide when an action needs a second signature",
     "name" : "Approval policies"
   }, {
+    "description" : "Row 10.5: a channel's hostname and SEO presentation",
+    "name" : "Channel setup"
+  }, {
     "description" : "Why orders are cancelled and how they are completed, per tenant",
     "name" : "Order outcome reasons"
   }, {
@@ -24651,6 +25696,9 @@
   }, {
     "description" : "Where each tenant trades, and what kind of business it is",
     "name" : "Tenant residency and business type"
+  }, {
+    "description" : "Row 10.5: about, contacts, delivery terms, privacy/offer",
+    "name" : "Channel static pages"
   }, {
     "description" : "Capability grants and session context",
     "name" : "Authorization"
@@ -24736,11 +25784,11 @@
     "description" : "Row 4.4a — a copyable, bindable assortment",
     "name" : "Named menus"
   }, {
-    "description" : "The maker-checker queue: actions waiting for a second signature",
-    "name" : "Approval requests"
-  }, {
     "description" : "Named, reusable opening timetables",
     "name" : "Service schedules"
+  }, {
+    "description" : "The maker-checker queue: actions waiting for a second signature",
+    "name" : "Approval requests"
   }, {
     "description" : "A staff member who forgot their password (ADR 0098)",
     "name" : "Staff password resets"
