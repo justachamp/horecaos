@@ -12,6 +12,7 @@ function line(overrides: Partial<OrderLine> = {}): OrderLine {
     quantity: 2,
     finalAmountMinor: 40_000,
     modifiers: [],
+    commentPresets: [],
     lineId: 'line-1',
     hasNote: false,
     ...overrides,
