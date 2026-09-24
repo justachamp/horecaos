@@ -1271,11 +1271,14 @@ public class TenantControlPlaneService {
             boolean clearLandmark,
             @Nullable Integer sortOrder,
             @Nullable Integer seats,
+            boolean clearSeats,
             @Nullable Long averageChequeAmount,
             @Nullable String averageChequeCurrency,
+            boolean clearAverageCheque,
             @Nullable Boolean hasParking,
             @Nullable Boolean hasPlayground,
             @Nullable String virtualTourUrl,
+            boolean clearVirtualTourUrl,
             @Nullable List<LocationLocaleInput> locales) {
 
         /**
@@ -1335,18 +1338,35 @@ public class TenantControlPlaneService {
          *                 hasPlayground} are boxed {@link Boolean} rather than
          *                 {@code boolean} for exactly this reason: a console
          *                 write that never opened the venue section must not
-         *                 read as "clear every flag".
+         *                 read as "clear every flag". {@code clearSeats},
+         *                 {@code clearAverageCheque} and {@code
+         *                 clearVirtualTourUrl} are {@code clearLandmark}'s own
+         *                 escape hatch, one per field (or field pair): an
+         *                 emptied form field collapses to an absent key on the
+         *                 wire, indistinguishable from "never touched", so
+         *                 without an explicit clear signal the silent-carry-
+         *                 through below kept a blanked field's stale value
+         *                 forever — {@code averageChequeAmount} and {@code
+         *                 averageChequeCurrency} share one flag because {@link
+         *                 LocationVenue}'s own invariant requires them to be
+         *                 both null or both set.
          */
         public LocationVenue toVenue(LocationVenue existing) {
             Objects.requireNonNull(existing, "Existing location venue is required");
             return new LocationVenue(
                     sortOrder != null ? sortOrder : existing.sortOrder(),
-                    seats != null ? seats : existing.seats(),
-                    averageChequeAmount != null ? averageChequeAmount : existing.averageChequeAmount(),
-                    averageChequeCurrency != null ? averageChequeCurrency : existing.averageChequeCurrency(),
+                    clearSeats ? null : (seats != null ? seats : existing.seats()),
+                    clearAverageCheque
+                            ? null
+                            : (averageChequeAmount != null ? averageChequeAmount : existing.averageChequeAmount()),
+                    clearAverageCheque
+                            ? null
+                            : (averageChequeCurrency != null
+                                    ? averageChequeCurrency
+                                    : existing.averageChequeCurrency()),
                     hasParking != null ? hasParking : existing.hasParking(),
                     hasPlayground != null ? hasPlayground : existing.hasPlayground(),
-                    virtualTourUrl != null ? virtualTourUrl : existing.virtualTourUrl());
+                    clearVirtualTourUrl ? null : (virtualTourUrl != null ? virtualTourUrl : existing.virtualTourUrl()));
         }
     }
 
