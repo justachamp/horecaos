@@ -336,7 +336,7 @@ describe('ReferenceDataPage', () => {
 
   // Row 10.10a: reasons can be reordered.
 
-  it('moves a reason down and persists the whole new order, with the highest version as If-Match', async () => {
+  it('moves a reason down and persists the whole new order, with the version sum as If-Match', async () => {
     (
       fixture.nativeElement.querySelector(
         '[data-testid="reason-move-down-CANCELLATION"]',
@@ -344,7 +344,9 @@ describe('ReferenceDataPage', () => {
     ).click();
     await flushMicrotasks();
 
-    expect(api.reorder).toHaveBeenCalledWith(SCOPE, 'CANCELLATION', ['reason-1b', 'reason-1'], 3);
+    // reason-1 is version 1, reason-1b is version 3 -- the sum (4), not the
+    // max (3), is what catches a concurrent edit to either one.
+    expect(api.reorder).toHaveBeenCalledWith(SCOPE, 'CANCELLATION', ['reason-1b', 'reason-1'], 4);
   });
 
   it('renders the server’s reordered list, versions already bumped, without a second read', async () => {

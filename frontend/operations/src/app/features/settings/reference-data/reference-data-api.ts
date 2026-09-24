@@ -112,11 +112,15 @@ export class ReferenceDataApi {
 
   /**
    * Row 10.10a — ranks every active reason of one kind, in the order given.
-   * `expectedVersion` is the highest `version` among the reasons being
-   * reordered — the caller (the drag-reorder list, which already holds
-   * every row's own version from `list`) computes it with
-   * `Math.max(...reasons.map(r => r.version))`, the same "there is no
-   * separate list aggregate to version" rule the endpoint's own doc names.
+   * `expectedVersion` is the **sum** of `version` across the reasons being
+   * reordered, not the highest one — the caller (the drag-reorder list,
+   * which already holds every row's own version from `list`) computes it
+   * with `reasons.reduce((sum, r) => sum + r.version, 0)`, the same "there
+   * is no separate list aggregate to version" rule the endpoint's own doc
+   * names. A sum, not a max: `version` only ever increments, so the sum
+   * strictly increases whenever any one reason changes underneath the
+   * caller, whichever row it is — the max alone misses a concurrent edit to
+   * a reason that never held the highest version.
    * Returns the reordered list, versions already bumped, so the caller
    * never needs a second read before its next write.
    */

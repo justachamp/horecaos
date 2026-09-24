@@ -435,9 +435,11 @@ export class ReferenceDataPage {
   /**
    * Row 10.10a: moves one reason from `from` to `to` in the local draft, then
    * persists the whole new order over `PUT .../reorder`. `expectedVersion`
-   * is the highest `version` among the reasons of this kind — see
-   * `ReferenceDataApi.reorder`'s own doc for why there is no separate list
-   * aggregate to version instead.
+   * is the **sum** of `version` across the reasons of this kind, not the
+   * highest one — see `ReferenceDataApi.reorder`'s own doc for why there is
+   * no separate list aggregate to version instead, and for why a sum is what
+   * actually catches a concurrent edit of any one reason (the max alone
+   * misses an edit to a reason that never held the highest version).
    *
    * <p>Optimistic: the local list reorders immediately, and a refused write
    * (a concurrent edit or reorder elsewhere) reloads the server's own order
@@ -457,7 +459,7 @@ export class ReferenceDataPage {
     signalFor.set(reordered);
 
     this.reorderError.set(null);
-    const expectedVersion = current.reduce((max, reason) => Math.max(max, reason.version), 0);
+    const expectedVersion = current.reduce((sum, reason) => sum + reason.version, 0);
     try {
       const saved = await this.api.reorder(
         scope,

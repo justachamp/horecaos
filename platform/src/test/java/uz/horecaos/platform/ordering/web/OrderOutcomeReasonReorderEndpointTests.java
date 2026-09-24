@@ -131,7 +131,7 @@ class OrderOutcomeReasonReorderEndpointTests {
         MvcResult reordered = mvc.perform(put(REASONS + "/reorder")
                         .with(tokenFor(OWNER))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "reorder-ok")
-                        .header("If-Match", "W/\"1\"")
+                        .header("If-Match", "W/\"3\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"kind":"CANCELLATION","orderedReasonIds":["%s","%s","%s"]}
@@ -155,7 +155,7 @@ class OrderOutcomeReasonReorderEndpointTests {
         MvcResult refused = mvc.perform(put(REASONS + "/reorder")
                         .with(tokenFor(OWNER))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "reorder-partial")
-                        .header("If-Match", "W/\"1\"")
+                        .header("If-Match", "W/\"3\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"kind":"CANCELLATION","orderedReasonIds":["%s","%s"]}
@@ -194,7 +194,7 @@ class OrderOutcomeReasonReorderEndpointTests {
         MvcResult refused = mvc.perform(put(REASONS + "/reorder")
                         .with(tokenFor(DISPATCHER))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "reorder-refused")
-                        .header("If-Match", "W/\"1\"")
+                        .header("If-Match", "W/\"3\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"kind":"CANCELLATION","orderedReasonIds":["%s","%s","%s"]}

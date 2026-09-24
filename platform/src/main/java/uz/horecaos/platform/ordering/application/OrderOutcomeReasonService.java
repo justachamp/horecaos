@@ -159,13 +159,20 @@ public class OrderOutcomeReasonService {
      * <p>{@code expectedVersion} guards the whole list rather than one row:
      * a dated exception's delete borrows its owning schedule's version for
      * the same reason ({@code ServiceScheduleService#deleteException}) —
-     * there is no separate "the list itself" aggregate to version, so the
-     * highest version among the reasons being reordered stands in for it.
-     * The console already holds every reason's own version from the list it
-     * rendered and computes this by taking the max itself; a concurrent
-     * edit, archive or reorder of any one of them changes that number and
-     * the whole reorder is refused rather than partially applied over stale
-     * data.
+     * there is no separate "the list itself" aggregate to version, so a
+     * single number computed from every reason being reordered stands in
+     * for it. That number is the <strong>sum</strong> of their versions,
+     * not the max: {@code version} only ever increments by one row's own
+     * write ({@code update}, {@code archive}, {@code setDisplayOrder} — see
+     * {@code JdbcOutcomeReasonStore}), never decrements, so the sum strictly
+     * increases whenever any one active reason changes, whichever row it is
+     * — a concurrent rename of a reason that happens not to hold the
+     * current max would otherwise still read as "nothing changed" and let a
+     * stale reorder through, which the max alone could not catch. The
+     * console already holds every reason's own version from the list it
+     * rendered and computes this the same way; a concurrent edit, archive
+     * or reorder of any one of them changes the sum and the whole reorder
+     * is refused rather than partially applied over stale data.
      */
     @Transactional
     public void reorder(UUID tenantId, OutcomeReasonKind kind, List<UUID> orderedReasonIds, int expectedVersion) {
@@ -181,9 +188,9 @@ public class OrderOutcomeReasonService {
                     "A reorder must name every active reason of this kind exactly once — reload the list and retry");
         }
 
-        int currentMax = active.stream().mapToInt(ReasonRow::version).max().orElse(0);
-        if (currentMax != expectedVersion) {
-            throw new StaleReasonException(expectedVersion, currentMax);
+        int currentFingerprint = active.stream().mapToInt(ReasonRow::version).sum();
+        if (currentFingerprint != expectedVersion) {
+            throw new StaleReasonException(expectedVersion, currentFingerprint);
         }
 
         Instant now = clock.instant();
