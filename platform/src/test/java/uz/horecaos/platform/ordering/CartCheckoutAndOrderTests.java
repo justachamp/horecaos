@@ -5272,6 +5272,35 @@ class CartCheckoutAndOrderTests {
     }
 
     @Test
+    @DisplayName("the New Order screen's own reorder plan resolves against its own branch, not the order's (1.3f/1.3a)")
+    void aPlanAtAnotherLocationResolvesAgainstThatLocationsOwnOffering() {
+        publishBurger();
+        offer(burgerVariant, "AVAILABLE");
+        UUID order = orderIdOf(placeOrder("idem-reorder-cross-location"));
+
+        // The premise: LOCATION (where the order was placed, and offer() only ever
+        // inserts at LOCATION) offers the burger, so the order's own plan is READY.
+        assertThat(reorderPlans.planFor(TENANT, order, CUSTOMER).orElseThrow().verdict())
+                .isEqualTo(ReorderPlanService.Verdict.READY);
+
+        // OTHER_LOCATION has never had this variant offered at all. The honest rule
+        // CustomerOrderReorderController exists for (gap map 1.3f/1.3a): an operator
+        // standing at a different branch sees that branch's own menu and stock, not
+        // the order's original branch's — planForAtLocation must actually resolve
+        // against the location it was given, never silently fall back to the
+        // order's own the way a copy-pasted planFor would.
+        var plan = reorderPlans
+                .planForAtLocation(TENANT, order, CUSTOMER, OTHER_LOCATION)
+                .orElseThrow();
+        assertThat(plan.locationId()).isEqualTo(OTHER_LOCATION);
+        assertThat(plan.verdict()).isEqualTo(ReorderPlanService.Verdict.UNAVAILABLE);
+        assertThat(plan.lines())
+                .singleElement()
+                .extracting(ReorderPlanService.PlannedLine::status)
+                .isEqualTo(ReorderPlanService.LineStatus.WITHDRAWN);
+    }
+
+    @Test
     @DisplayName("another customer's order has no plan at all")
     void aPlanIsScopedToItsOwner() {
         publishBurger();

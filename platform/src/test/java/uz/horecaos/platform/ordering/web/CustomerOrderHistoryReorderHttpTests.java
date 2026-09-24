@@ -50,6 +50,18 @@ import uz.horecaos.platform.support.TestDatabase;
  * through to {@link uz.horecaos.platform.ordering.application.ReorderPlanService}
  * — {@code ReorderPlanService}'s own resolution logic is that class's concern,
  * not this wrapper's.
+ *
+ * <p><b>Wave 10, rows {@code 1.3f}/{@code 1.3a}.</b> {@code
+ * aLocationScopedOrderReadGrantDoesNotSatisfyTheBrandScopedWrapper} above
+ * documents the exact gap those rows named: {@code LOCATION_STAFF}, the New
+ * Order screen's primary persona, holds {@code ORDER_READ} only at {@code
+ * LOCATION} scope and so 403s against the {@code BRAND}-scoped wrapper. The
+ * tests below prove the fix — {@link
+ * uz.horecaos.platform.ordering.web.CustomerOrderReorderController}, a second,
+ * {@code LOCATION}-scoped route to the identical read — actually closes that
+ * gap for that exact grant shape, and that its scope check is bound to the
+ * request's own {@code locationId} path segment rather than to the grant
+ * existing anywhere at all.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -58,6 +70,9 @@ class CustomerOrderHistoryReorderHttpTests {
     private static final UUID TENANT = UUID.fromString("018fc300-4000-7000-8000-0000000000a1");
     private static final UUID BRAND = UUID.fromString("018fc300-4000-7000-8000-0000000000b1");
     private static final UUID LOCATION = UUID.fromString("018fc300-4000-7000-8000-0000000000c1");
+    /** A second branch of the same brand — never granted to {@link #LOCATION_STAFF_SUBJECT}. */
+    private static final UUID OTHER_LOCATION = UUID.fromString("018fc300-4000-7000-8000-0000000000c2");
+
     private static final UUID ACCOUNT = UUID.fromString("018fc300-4000-7000-8000-0000000000d1");
     private static final UUID MISSING_ORDER = UUID.fromString("018fc300-4000-7000-8000-0000000000e1");
 
@@ -72,6 +87,14 @@ class CustomerOrderHistoryReorderHttpTests {
 
     private static final String REORDER_PATH = "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/customers/"
             + ACCOUNT + "/orders/" + MISSING_ORDER + "/reorder";
+
+    /** {@link CustomerOrderReorderController}'s own path, at {@link #LOCATION}. */
+    private static final String LOCATION_SCOPED_REORDER_PATH = "/api/v1/tenants/" + TENANT + "/brands/" + BRAND
+            + "/locations/" + LOCATION + "/customers/" + ACCOUNT + "/orders/" + MISSING_ORDER + "/reorder";
+
+    /** The identical path, naming {@link #OTHER_LOCATION} instead — a branch nobody here is granted at. */
+    private static final String OTHER_LOCATION_SCOPED_REORDER_PATH = "/api/v1/tenants/" + TENANT + "/brands/" + BRAND
+            + "/locations/" + OTHER_LOCATION + "/customers/" + ACCOUNT + "/orders/" + MISSING_ORDER + "/reorder";
 
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
@@ -155,6 +178,59 @@ class CustomerOrderHistoryReorderHttpTests {
         // by whichever suite owns that service, not this one.
         assertThat(result.getResponse().getStatus()).isEqualTo(404);
         assertThat(result.getResponse().getContentAsString()).contains("RESOURCE_NOT_FOUND");
+    }
+
+    /**
+     * Gap map rows {@code 1.3f}/{@code 1.3a}, the fix: the exact grant shape
+     * {@link #aLocationScopedOrderReadGrantDoesNotSatisfyTheBrandScopedWrapper}
+     * proves is refused above now reaches {@link CustomerOrderReorderController}'s
+     * own {@code LOCATION}-scoped route — the New Order screen's «Повторить»,
+     * for {@code LOCATION_STAFF} at the branch it actually holds a grant on.
+     * Not 403: the capability gate let the request through. Not 200: no such
+     * order exists for this account, exactly as the brand-scoped positive case
+     * above proves for its own wrapper.
+     */
+    @Test
+    void aLocationScopedOrderReadGrantReachesTheLocationScopedReorderEndpoint() throws Exception {
+        MvcResult result = mvc.perform(get(LOCATION_SCOPED_REORDER_PATH).with(tokenFor(LOCATION_STAFF_SUBJECT)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(404);
+        assertThat(result.getResponse().getContentAsString()).contains("RESOURCE_NOT_FOUND");
+    }
+
+    /**
+     * The scope check is bound to the request's own {@code locationId} path
+     * segment, not to the grant existing anywhere at all: {@link
+     * #LOCATION_STAFF_SUBJECT} holds {@code ORDER_READ} at {@link #LOCATION}
+     * only, so the identical route naming {@link #OTHER_LOCATION} still
+     * refuses it — the same {@code scope().covers(scope)} narrowing {@link
+     * #aLocationScopedOrderReadGrantDoesNotSatisfyTheBrandScopedWrapper}
+     * already proves widens, never narrows, exercised here against two
+     * {@code LOCATION}-scoped grants instead of a {@code LOCATION} grant
+     * against a {@code BRAND} requirement.
+     */
+    @Test
+    void aLocationScopedGrantAtOneBranchDoesNotReachTheReorderEndpointAtAnother() throws Exception {
+        MvcResult refused = mvc.perform(get(OTHER_LOCATION_SCOPED_REORDER_PATH).with(tokenFor(LOCATION_STAFF_SUBJECT)))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.ORDER_READ.code());
+    }
+
+    /** {@link #UNGRANTED} holds no grant at all, so the location-scoped route refuses it too. */
+    @Test
+    void refusesAPrincipalWithNoOrderReadAtAllOnTheLocationScopedEndpoint() throws Exception {
+        MvcResult refused = mvc.perform(get(LOCATION_SCOPED_REORDER_PATH).with(tokenFor(UNGRANTED)))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.ORDER_READ.code());
     }
 
     // ------------------------------------------------------------------ fixtures
