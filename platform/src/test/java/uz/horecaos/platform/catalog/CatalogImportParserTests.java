@@ -254,8 +254,47 @@ class CatalogImportParserTests {
                 .isInstanceOf(CatalogImportParser.CatalogImportFormatException.class);
     }
 
+    @Test
+    @DisplayName("row 4.5b: decoded .xlsx content above the size cap refuses before a workbook is ever opened")
+    void oversizedXlsxContentRefusesBeforeOpeningTheWorkbook() {
+        // Not a real workbook at all -- the point is that the size check
+        // runs before ReadableWorkbook is ever constructed from these bytes,
+        // so it does not matter that they are not a valid zip.
+        byte[] tooLarge = new byte[CatalogImportParser.MAX_DECODED_XLSX_BYTES + 1];
+        String base64 = Base64.getEncoder().encodeToString(tooLarge);
+
+        assertThatThrownBy(() -> parser.parse("upload.xlsx", base64))
+                .isInstanceOf(CatalogImportParser.CatalogImportFormatException.class)
+                .hasMessageContaining("larger than");
+    }
+
+    @Test
+    @DisplayName("row 4.5b: an .xlsx with more rows than the cap refuses instead of materializing them all -- "
+            + "the DEFLATE-amplification guard a small, highly compressed upload could otherwise defeat")
+    void tooManyXlsxRowsRefusesRatherThanMaterializingThemAll() throws IOException {
+        String base64 = Base64.getEncoder().encodeToString(manyRowWorkbook(CatalogImportParser.MAX_XLSX_ROWS + 1));
+
+        assertThatThrownBy(() -> parser.parse("upload.xlsx", base64))
+                .isInstanceOf(CatalogImportParser.CatalogImportFormatException.class)
+                .hasMessageContaining("more than")
+                .hasMessageContaining(String.valueOf(CatalogImportParser.MAX_XLSX_ROWS));
+    }
+
     private static List<org.dhatim.fastexcel.reader.Row> rowsOf(Sheet sheet) throws IOException {
         return sheet.read();
+    }
+
+    /** A header row plus {@code dataRows} minimal, one-cell data rows. */
+    private static byte[] manyRowWorkbook(int dataRows) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (Workbook workbook = new Workbook(out, "Test", "1.0")) {
+            Worksheet sheet = workbook.newWorksheet("Import");
+            sheet.value(0, 0, "product_code");
+            for (int r = 1; r <= dataRows; r++) {
+                sheet.value(r, 0, "P-" + r);
+            }
+        }
+        return out.toByteArray();
     }
 
     private static byte[] oneRowWorkbook() {

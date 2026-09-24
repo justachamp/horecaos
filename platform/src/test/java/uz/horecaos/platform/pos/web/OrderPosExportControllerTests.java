@@ -263,6 +263,71 @@ class OrderPosExportControllerTests {
         assertThat(export.lastErrorCode()).isEqualTo("MODIFIER_UNMAPPED");
     }
 
+    /**
+     * Row 1.2i's deep link must resolve for a comment-preset gap exactly as
+     * it does for a variant or modifier gap: {@code prepare()} already
+     * refuses this same shape of order with {@code MODIFIER_UNMAPPED}
+     * ({@link #anUnmappedCommentPresetRefusesTheExport}), and the live
+     * re-check {@code findUnmappedEntity} runs for that same code
+     * ({@code OrderPosExportController#unmappedEntityFor}). If that re-check
+     * only ever probes {@code VARIANT} and {@code MODIFIER}, an operator
+     * whose only gap is a comment preset gets a refusal with no target to
+     * map, and every retry fails identically.
+     */
+    @Test
+    @DisplayName(
+            "a MODIFIER_UNMAPPED refusal caused by an unmapped comment preset still carries a deep-link target (row 1.2i)")
+    void readCarriesTheUnmappedCommentPresetForTheDeepLink() {
+        UUID orderId = insertConfirmedOrder("A-3021");
+
+        var json = JsonMapper.builder().build();
+        TransactionTemplate unitOfWork = new TransactionTemplate(new DataSourceTransactionManager(db.dataSource()));
+        // Maps everything except COMMENT_PRESET -- the one gap this fixture's
+        // own StubProviderEntityMappingLookup never has.
+        PosOrderExportService serviceWithNoPresetMapping = new PosOrderExportService(
+                new PosAdapterRegistry(List.of(adapter)),
+                installations,
+                new ProviderEntityMappingLookup() {
+                    @Override
+                    public Optional<String> externalIdFor(UUID bindingId, String entityType, UUID horecaosEntityId) {
+                        return "COMMENT_PRESET".equals(entityType)
+                                ? Optional.empty()
+                                : Optional.of("ext-" + horecaosEntityId);
+                    }
+
+                    @Override
+                    public Optional<UUID> horecaosIdFor(UUID bindingId, String entityType, String externalId) {
+                        return Optional.empty();
+                    }
+                },
+                new JdbcPosBindingConfiguration(jdbc, json),
+                exportStore,
+                new JdbcPosCapabilityStore(jdbc, json),
+                new StubPosOrderSource(),
+                (tenantId, brandId, priceableIds) -> Map.of(),
+                event -> {},
+                new RecordingProviderActivityRecorder(),
+                clock,
+                unitOfWork);
+        var controllerWithNoPresetMapping = new OrderPosExportController(
+                new StubOrderDirectory(),
+                installations,
+                serviceWithNoPresetMapping,
+                exportStore,
+                new JdbcAuditRecorder(jdbc, json),
+                () -> new AuthenticatedActor("operator-1", Set.of(), Map.of()),
+                clock);
+
+        controllerWithNoPresetMapping.push(TENANT, orderId, new OrderPosExportController.PushRequest("test push"));
+
+        var response = Objects.requireNonNull(
+                controllerWithNoPresetMapping.forOrder(TENANT, orderId).getBody());
+        var export = Objects.requireNonNull(response.export());
+        assertThat(export.lastErrorCode()).isEqualTo("MODIFIER_UNMAPPED");
+        assertThat(export.unmappedEntityType()).isEqualTo("COMMENT_PRESET");
+        assertThat(export.unmappedHorecaosEntityId()).isEqualTo(COMMENT_PRESET);
+    }
+
     @Test
     @DisplayName(
             "a LINE_UNMAPPED refusal's read carries the live-unmapped variant id, for the console's deep link into the mapping screen (row 1.2i)")

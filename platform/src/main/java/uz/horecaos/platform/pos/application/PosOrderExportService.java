@@ -768,14 +768,27 @@ public class PosOrderExportService {
                     return Optional.of(new UnmappedEntity("MODIFIER", optionId));
                 }
             }
+            // Row 2.1b: a comment preset travels to the till as a modifier
+            // code through COMMENT_PRESET_ENTITY, the same table prepare()
+            // checks before refusing an export with MODIFIER_UNMAPPED — this
+            // live re-check has to see the identical gap, or the console's
+            // deep link dead-ends whenever a preset is the actual cause.
+            for (UUID presetId : line.commentPresetIds()) {
+                if (mappings.externalIdFor(bindingId, COMMENT_PRESET_ENTITY, presetId)
+                        .isEmpty()) {
+                    return Optional.of(new UnmappedEntity("COMMENT_PRESET", presetId));
+                }
+            }
         }
         return Optional.empty();
     }
 
     /**
-     * @param entityType     {@code "VARIANT"} or {@code "MODIFIER"} — matches
+     * @param entityType     {@code "VARIANT"}, {@code "MODIFIER"} or {@code
+     *                       "COMMENT_PRESET"} — matches
      *                       {@link uz.horecaos.platform.integration.api.provider.MappingEntityType#VARIANT}
-     *                       and {@code #MODIFIER}'s own {@code storedAs()}
+     *                       and {@code #MODIFIER}'s own {@code storedAs()}, and
+     *                       {@link #COMMENT_PRESET_ENTITY}
      * @param horecaosEntityId never a provider id or free text — an internal
      *                         id only, safe for a URL query string (ADR 0029)
      */
