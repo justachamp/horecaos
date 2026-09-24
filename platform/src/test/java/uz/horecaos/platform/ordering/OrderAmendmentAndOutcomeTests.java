@@ -1436,6 +1436,62 @@ class OrderAmendmentAndOutcomeTests {
                         .isEqualTo("LINE_MODIFIERS_NOT_SUPPORTED"));
     }
 
+    /**
+     * ADR 0039's own Testing section: "An amendment whose added line is
+     * unavailable applies nothing: no reservation, no quote acceptance, no
+     * revision." {@code reserveIncrease}'s {@code INVENTORY_UNAVAILABLE}
+     * refusal implements this, but nothing exercised an out-of-stock
+     * scenario through {@code apply} before this test.
+     */
+    @Test
+    @DisplayName("ADD_LINES applies nothing when the added variant goes unavailable between propose and apply")
+    void addLinesAppliesNothingWhenInventoryGoesUnavailable() {
+        UUID orderId = orderIdOf(placeOrder("idem-unavail-1"));
+
+        var proposed = proposeOnly(
+                orderId,
+                "k-unavail-1",
+                OrderAmendmentService.AmendmentCommand.addLines(
+                        List.of(new OrderAmendmentService.AmendmentCommand.LineRequest(burgerVariant, 1, List.of()))));
+        assertThat(proposed.amendment().status()).isEqualTo(AmendmentStatus.PRICED);
+        assertThat(proposed.amendment().deltaTotalMinor()).isPositive();
+
+        // The kitchen sells out between the operator pricing the addition and
+        // the customer agreeing to it.
+        inventory.setAvailability(TENANT, LOCATION, burgerVariant, false, "SOLD_OUT", null);
+
+        int amendmentVersion = amendmentStore
+                .find(TENANT, proposed.amendment().id())
+                .orElseThrow()
+                .version();
+        tx(() -> amendments.attestConfirmation(TENANT, proposed.amendment().id(), amendmentVersion, "sharif", "PHONE"));
+
+        int orderVersion = orderStore.find(TENANT, orderId).orElseThrow().version();
+        assertThatThrownBy(() -> tx(() -> amendments.apply(
+                        TENANT, orderId, proposed.amendment().id(), orderVersion, "USER", "sharif", "confirmed", null)))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("INVENTORY_UNAVAILABLE"));
+
+        assertThat(orderStore.lines(TENANT, orderId))
+                .as("no order_lines row was inserted for the unavailable addition")
+                .hasSize(1);
+        assertThat(orderQuery.revisions(TENANT, orderId))
+                .as("apply's own transaction rolled back; only the base revision exists")
+                .hasSize(1);
+        assertThat(jdbc.sql("SELECT count(*) FROM inventory.reservations WHERE owner_id = :id")
+                        .param("id", proposed.amendment().quoteId())
+                        .query(Integer.class)
+                        .single())
+                .as("no reservation was ever held for the amendment's own quote")
+                .isZero();
+        assertThat(amendmentStore
+                        .find(TENANT, proposed.amendment().id())
+                        .orElseThrow()
+                        .status())
+                .isEqualTo(AmendmentStatus.PRICED);
+    }
+
     @Test
     @DisplayName("CHANGE_LINE_QUANTITY increases, closes the old line and appends the new one")
     void changeLineQuantityIncreaseClosesAndAppends() {
