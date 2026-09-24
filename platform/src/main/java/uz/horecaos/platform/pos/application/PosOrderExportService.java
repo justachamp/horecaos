@@ -776,7 +776,7 @@ public class PosOrderExportService {
             for (UUID presetId : line.commentPresetIds()) {
                 if (mappings.externalIdFor(bindingId, COMMENT_PRESET_ENTITY, presetId)
                         .isEmpty()) {
-                    return Optional.of(new UnmappedEntity("COMMENT_PRESET", presetId));
+                    return Optional.of(new UnmappedEntity("COMMENT_PRESET", presetId, bindingId));
                 }
             }
         }
